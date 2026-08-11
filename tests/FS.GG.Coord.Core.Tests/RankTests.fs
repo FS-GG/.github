@@ -521,7 +521,7 @@ module RankTests =
         // THE FIX, AT THE FOLD. Under candidate-derived counts the hub and the ordinary row both rank at
         // blocking 0 and the issue NUMBER decides — the pre-#1598 ordering wearing a rank's clothes.
         let scopedResult =
-            Batch.scheduleWith wholeBoardCounts false None [] scopedToGithub
+            Batch.scheduleWith Set.empty wholeBoardCounts false None [] scopedToGithub
 
         match scopedResult with
         | Green r ->
@@ -533,7 +533,7 @@ module RankTests =
         | other -> failwith $"the batch must be schedulable — got %A{other}"
 
         // The old spelling, on the same candidates, still says zero. That is the delta this item is.
-        match Batch.schedule false None [] scopedToGithub with
+        match Batch.schedule Set.empty false None [] scopedToGithub with
         | Green r ->
             let hub = r.Decisions |> List.find (fun d -> d.Item.Ref.Number = 10)
             Assert.Equal(0, hub.Rank.Blocking)
@@ -551,11 +551,11 @@ module RankTests =
 
         Assert.Equal<int list>(
             [ 10; 11 ],
-            consideredOrder (Batch.scheduleWith wholeBoardCounts false None [] candidates)
+            consideredOrder (Batch.scheduleWith Set.empty wholeBoardCounts false None [] candidates)
         )
 
         // Candidate-derived: the defect wins, because the hub's three dependents are invisible.
-        Assert.Equal<int list>([ 11; 10 ], consideredOrder (Batch.schedule false None [] candidates))
+        Assert.Equal<int list>([ 11; 10 ], consideredOrder (Batch.schedule Set.empty false None [] candidates))
 
     [<Fact>]
     let ``#1628 AC5 --explain prints the count the ordering actually used`` () =
@@ -563,7 +563,7 @@ module RankTests =
         // guards is specific: a fix that changed the SORT but left `--explain` printing the old
         // candidate-derived number would leave every driver reading "blocking 0" beside an item that led
         // the batch, and concluding the scheduler was broken.
-        match Batch.scheduleWith wholeBoardCounts false None [] scopedToGithub with
+        match Batch.scheduleWith Set.empty wholeBoardCounts false None [] scopedToGithub with
         | Green r ->
             let hubLine =
                 Batch.explainRanking r |> List.find (fun l -> l.Contains ".github#10")
@@ -576,9 +576,9 @@ module RankTests =
         // `schedule` survives for `decide --snapshot`, which is handed a document and nothing wider. It
         // must be the SAME fold: a second copy would be free to drift, and #485 is this repo's standing
         // verdict on one question with more than one implementation.
-        let viaWrapper = Batch.schedule false None [] wholeBoard
+        let viaWrapper = Batch.schedule Set.empty false None [] wholeBoard
 
         let viaExplicit =
-            Batch.scheduleWith (Rank.blockingCounts wholeBoard) false None [] wholeBoard
+            Batch.scheduleWith Set.empty (Rank.blockingCounts wholeBoard) false None [] wholeBoard
 
         Assert.Equal<int list>(consideredOrder viaWrapper, consideredOrder viaExplicit)

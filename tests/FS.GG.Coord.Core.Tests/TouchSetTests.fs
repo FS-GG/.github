@@ -280,6 +280,100 @@ module TouchSetTests =
             TouchSet.scopedConflicts "FS-GG" "FS.GG.Audio" "FS-GG" "FS.GG.Audio" a b
         )
 
+    // ---- .github#2305 / ADR-0044: generated, CI-gated artifacts are not reservable ------------------
+    // `verify-paths` already excludes a repo's generated artifacts from DRIFT (ADR-0044, #309, #498).
+    // That exemption never reached the RESERVATION side: `widen` granted a real reservation on a
+    // generated manifest exactly as though it were authored, and the reservation serialised a second,
+    // genuinely disjoint worker behind the first for a file neither of them authors — the row's own
+    // measured instance, `.github#2254`/`.github#2248` colliding on `registry/driver-skill-manifest.json`.
+
+    [<Fact>]
+    let ``#2305 generatedTokens is empty when nothing requested is generated`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        Assert.Empty(TouchSet.generatedTokens generated [ "src/Scene/Types.fs"; "docs/reports" ])
+
+    [<Fact>]
+    let ``#2305 generatedTokens names an exact match`` () =
+        let generated =
+            Set.ofList [ "registry/driver-skill-manifest.json"; "registry/coordination-kit-skill-manifest.json" ]
+
+        let requested = [ ".claude/skills/drive-board/SKILL.md"; "registry/driver-skill-manifest.json" ]
+
+        Assert.Equal<string list>([ "registry/driver-skill-manifest.json" ], TouchSet.generatedTokens generated requested)
+
+    [<Fact>]
+    let ``#2305 generatedTokens does NOT catch a directory-prefix request — the #309 trap stays open for real claims`` () =
+        // Declaring the generated file's PARENT is a real claim over everything under it, generated or
+        // not (the same reasoning `#309 declaring a PARENT reserves...` pins above). `generatedTokens`
+        // must not treat `registry/**` as though it named `registry/driver-skill-manifest.json` — a
+        // worker who genuinely means to touch the whole directory is not exempted.
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        Assert.Empty(TouchSet.generatedTokens generated [ "registry/**" ])
+
+    [<Fact>]
+    let ``#2305 generatedTokens is a no-op against the FS.GG.Kit Version field — it is absent from the generated roster`` () =
+        // AC-4's distinction, proven rather than merely asserted: the kit csproj is a genuine
+        // single-writer semantic field (check-kit-published-coherence), not a generated artifact, so it
+        // must never be caught here — this is what keeps it colliding normally.
+        let generated =
+            Set.ofList [ "registry/driver-skill-manifest.json"; "registry/coordination-kit-skill-manifest.json" ]
+
+        Assert.Empty(TouchSet.generatedTokens generated [ "src/FS.GG.Kit/FS.GG.Kit.csproj" ])
+
+    [<Fact>]
+    let ``#2305 excludeGenerated drops a pair where both sides exactly name the same generated artifact`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        let pairs = [ ("registry/driver-skill-manifest.json", "registry/driver-skill-manifest.json") ]
+        Assert.Empty(TouchSet.excludeGenerated generated pairs)
+
+    [<Fact>]
+    let ``#2305 excludeGenerated keeps a pair that shares no generated token`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        let pairs = [ ("src/Scene/Types.fs", "src/Scene/Types.fs") ]
+        Assert.Equal<(string * string) list>(pairs, TouchSet.excludeGenerated generated pairs)
+
+    [<Fact>]
+    let ``#2305 excludeGenerated keeps an ASYMMETRIC pair — a directory claim over a generated file still collides`` () =
+        // The other half of the #309 guard: one side names the generated file exactly, the other
+        // declares its parent directory. That is a real claim (the parent side may touch other, real
+        // files too), so the pair must NOT be dropped even though one stem is in `generated`.
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        let pairs = [ ("registry/driver-skill-manifest.json", "registry/**") ]
+        Assert.Equal<(string * string) list>(pairs, TouchSet.excludeGenerated generated pairs)
+
+    [<Fact>]
+    let ``#2305 excludeGenerated is a no-op against the FS.GG.Kit Version field pair — genuinely serialises`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        let pairs = [ ("src/FS.GG.Kit/FS.GG.Kit.csproj", "src/FS.GG.Kit/FS.GG.Kit.csproj") ]
+        Assert.Equal<(string * string) list>(pairs, TouchSet.excludeGenerated generated pairs)
+
+    [<Fact>]
+    let ``#2305 equivalent constructed pair — two disjoint skill edits sharing only a generated manifest token are DISJOINT`` () =
+        // The row's own measured instance, reconstructed: `.github#2254` edited a driver skill and
+        // regenerated `registry/driver-skill-manifest.json`; `.github#2248` edited a pnext-item
+        // reference and needed the same regeneration. Their REAL subjects never overlapped — only the
+        // generated token did — and this is the acceptance-criterion-1 demonstration that they can now
+        // lane concurrently.
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+
+        let a =
+            Declared [ Matchable ".claude/skills/drive-board/SKILL.md"; Matchable "registry/driver-skill-manifest.json" ]
+
+        let b =
+            Declared
+                [ Matchable ".claude/skills/pnext-item/references/independent-review.md"
+                  Matchable "registry/driver-skill-manifest.json" ]
+
+        Assert.NotEmpty(TouchSet.conflicts a b) // raw conflicts still fires on the shared generated token today
+        Assert.Empty(TouchSet.conflicts a b |> TouchSet.excludeGenerated generated) // the remedy clears it
+
+    [<Fact>]
+    let ``#2305 a genuinely shared non-generated path still reports OVERLAP after exclusion`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        let a = Declared [ Matchable "src/FS.GG.Kit/FS.GG.Kit.csproj" ]
+        let b = Declared [ Matchable "src/FS.GG.Kit/FS.GG.Kit.csproj" ]
+        Assert.NotEmpty(TouchSet.conflicts a b |> TouchSet.excludeGenerated generated)
+
     // ---- properties ---------------------------------------------------------------------------------
 
     [<Property>]

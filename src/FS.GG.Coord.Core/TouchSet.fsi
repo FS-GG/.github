@@ -193,6 +193,40 @@ module TouchSet =
         right: TouchSet ->
             (string * string) list
 
+    /// The subset of `tokens` that EXACTLY name one of `generated`'s artifact paths (stemmed).
+    ///
+    /// `.github#2305`/ADR-0044: `verify-paths` already excludes a repo's generated, CI-gated artifacts
+    /// from DRIFT — nobody authors them, so a collision there is a rebase, not a decision (#309/#498).
+    /// That exemption never reached the RESERVATION side: `widen` granted a real reservation on
+    /// `registry/driver-skill-manifest.json` exactly as though it were authored, and the reservation
+    /// then serialised a second, genuinely disjoint worker behind the first for a file neither of them
+    /// authors (the row's own measured instance, `.github#2254`/`.github#2248`). A non-empty result
+    /// here is the input a `widen`/`set-paths` caller refuses the WHOLE update over, before any PATCH —
+    /// the all-or-nothing shape `Writes.validate` already uses for a flag-shaped or sentinel-mixed
+    /// token — never a silent per-token drop, which would leave a worker believing they declared
+    /// something they did not.
+    ///
+    /// NEVER a directory-prefix containment: `registry/**` (stem `registry`) does not match the exact
+    /// generated file `registry/driver-skill-manifest.json`. That asymmetry is deliberate — see
+    /// `tokensOverlap`'s doc above on the ADR-0044 #309 parent-directory trap: a directory declaration
+    /// is a real claim over everything under it, generated or not, and must keep colliding.
+    val generatedTokens: generated: Set<string> -> tokens: string list -> string list
+
+    /// Drop a conflict PAIR — as `conflicts`/`scopedConflicts` report it — when BOTH sides stem to the
+    /// SAME generated artifact. An asymmetric pair (one side the exact generated file, the other a
+    /// directory prefix that merely covers it) is left exactly as reported — the same #309 reason
+    /// `generatedTokens` states.
+    ///
+    /// This is the READ-SIDE half of the `.github#2305` remedy: it clears a collision attributable
+    /// solely to a generated token even for a declaration that predates `generatedTokens`' refusal (a
+    /// legacy `widen` written before this change existed), so an old declaration self-heals at the next
+    /// `activeCollisions`/`overlap` read rather than needing a repo-wide rewrite. `Lanes.fs` and
+    /// `Schedulability.fs` deliberately do not call this: once `generatedTokens` stops a generated token
+    /// from ever entering a NEW declaration, the scheduler's own lane partitioning never sees the
+    /// collision to begin with, and filtering it there too would be dead code for a case already
+    /// prevented upstream.
+    val excludeGenerated: generated: Set<string> -> pairs: (string * string) list -> (string * string) list
+
     /// Whether a proposed `Paths:` update — from `widen` or `set-paths` — may be COMMITTED.
     type UpdateDecision =
         /// The update may be written as one whole: either no collision was found, or a real one, but not

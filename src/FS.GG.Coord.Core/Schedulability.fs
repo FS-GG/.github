@@ -56,7 +56,14 @@ module Schedulability =
         | WithBacklogOptIn -> "with-backlog-opt-in"
         | NeverStartable -> "never"
 
-    let schedulable (allowBacklog: bool) (inFlight: TouchSet list) (item: Item) : Schedulability =
+    /// `generated` is `.github#2305`/ADR-0044's set of generated, CI-gated artifact paths (from
+    /// `scripts/generated-paths`, exact repo-relative paths — the same shape `TouchSet.excludeGenerated`
+    /// takes). It is the FIRST parameter so every call site reads as "against THIS repo's generated
+    /// roster" before the rest of the question. `Set.empty` is always safe to pass — it makes step 6
+    /// below identical to the pre-#2305 behaviour, never MORE restrictive — so a caller with no roster to
+    /// hand (an offline/pure decision path with no filesystem, e.g. `lanes`/`decide`'s snapshot-only
+    /// input) degrades to the old answer rather than refusing or guessing one.
+    let schedulable (generated: Set<string>) (allowBacklog: bool) (inFlight: TouchSet list) (item: Item) : Schedulability =
 
         // ORDER IS PART OF THE SPEC, not an implementation detail. Each check must come before every
         // check whose answer it would make meaningless — and it must come AFTER any check that
@@ -227,7 +234,19 @@ module Schedulability =
         | None ->
 
         // 6. DISJOINTNESS, last: it is the only check that depends on other items.
-        let hits = inFlight |> List.collect (TouchSet.conflicts item.TouchSet)
+        //
+        // .github#2305 — a hit attributable SOLELY to a generated, CI-gated artifact both sides declare
+        // is excluded here, the same rule `activeCollisions`/`overlapCmd` (`FS.GG.Coord.Cli/Client.fs`)
+        // already apply: `excludeGenerated` drops a pair only when BOTH sides stem to the SAME entry in
+        // `generated`, never a directory-prefix declaration that merely covers one (the ADR-0044 #309
+        // parent-directory trap stays caught — see `TouchSet.excludeGenerated`'s doc). Before this, `take`
+        // and `overlap` could disagree about the identical pair (#485's shape): `overlap` already excluded
+        // the hit, `schedulable` did not, so a live `take`/`batch` still refused two items whose real
+        // subjects never collided.
+        let hits =
+            inFlight
+            |> List.collect (TouchSet.conflicts item.TouchSet)
+            |> TouchSet.excludeGenerated generated
 
         match hits with
         | _ :: _ -> OverlapsInFlight hits

@@ -153,7 +153,15 @@ module Schedulability =
     /// `allowBacklog` mirrors `batch --include-backlog`: `next`/`take` fall back to Backlog when no
     /// Ready item is startable, and pretending otherwise is how a full queue read as an empty one
     /// (#440). It is the opt-in `ColumnStartability.WithBacklogOptIn` names.
-    val schedulable: allowBacklog: bool -> inFlight: TouchSet list -> item: Item -> Schedulability
+    ///
+    /// `generated` is `.github#2305`/ADR-0044's repo-relative set of generated, CI-gated artifact paths
+    /// (`scripts/generated-paths`'s subtractable set). A disjointness hit (step 6) attributable SOLELY to
+    /// a shared entry of `generated` is excluded — see `TouchSet.excludeGenerated`'s doc for the
+    /// exact-stem-only rule that keeps a directory-prefix declaration colliding exactly as before.
+    /// `Set.empty` reproduces the pre-#2305 answer exactly: passing it is always safe, and it is what a
+    /// caller with no filesystem to ask (a pure snapshot-only decision path) must pass, since it has no
+    /// roster to hand — see the callers in `Program.fs`'s `lanes` command.
+    val schedulable: generated: Set<string> -> allowBacklog: bool -> inFlight: TouchSet list -> item: Item -> Schedulability
 
     /// The verdict's WIRE KIND — the token the divergence log speaks and `facts` documents, spelled ONCE
     /// (#865).

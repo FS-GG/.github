@@ -558,7 +558,9 @@ module Client =
     /// touch-set, lock, or the route itself still could — so the real receipt is read for real (AC3: the
     /// gate still fails closed for a genuinely schedulable row with a missing/stale/unreadable receipt).
     let private routeCannotChangeVerdict (allowBacklog: bool) (item: Item) : bool =
-        match Schedulability.schedulable allowBacklog [] { item with DeliveryRoute = offlineDeliveryRoute } with
+        // .github#2305 — `inFlight = []` here (see the doc above: this preview never reaches step 6), so
+        // no disjointness hit can ever occur and `generated` cannot change the answer either way. `Set.empty`.
+        match Schedulability.schedulable Set.empty allowBacklog [] { item with DeliveryRoute = offlineDeliveryRoute } with
         | Schedulability.IssueClosed
         | Schedulability.WrongStatus _
         | Schedulability.BlockedBy _
@@ -758,6 +760,15 @@ module Client =
     /// truncated. Not `private`, because AC2 asks for a fixture that ranks a cross-repo hub from a
     /// `--repo`-scoped batch, and only this composition — real `Scan.snapshot` bytes, the real enrichment,
     /// the real fold — can answer that. A fixture built on the pieces would pass while the wiring rotted.
+
+    // `renderLiveDecision`, `verifyPaths`, and `delivery` all ask the same question: which changed paths
+    // are generated and therefore intentionally absent from an item's authored touch-set / reservable
+    // surface (ADR-0044, #498, .github#2305)? The collector is initialized below, beside its bounded
+    // process implementation (`generatedPaths`), before this module can serve a command — this forward
+    // declaration is what lets every earlier consumer in file order (this one is now the EARLIEST) reuse
+    // that one fail-closed collector instead of acquiring a second, weaker list of generated paths.
+    let mutable private generatedPathCollector: string -> Set<string> = fun _ -> Set.empty
+
     let renderLiveDecision (ctx: Context) (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
@@ -768,8 +779,20 @@ module Client =
         | Ok parsed ->
             let request = parsed |> enrichBoardFacts rows |> enrichDeliveryRoutes ctx
 
+            // .github#2305/ADR-0044 — THIS is the live `take`/`batch`/`next` path (see this function's
+            // doc), and it DOES have IO: the same `generatedPathCollector`/`KitDigest.kitRoot()` seam
+            // `updateTouchSet`/`activeCollisions`/`overlapCmd` already use. Wiring the real roster HERE is
+            // what closes the practical gap the pure `Set.empty` call sites (`Program.fs`'s `lanes`/
+            // `decide`, `renderDecision` below) cannot: a live `take`/`batch` no longer refuses two items
+            // whose real subjects never collided, only a generated artifact neither of them authors.
+            let generated =
+                match KitDigest.kitRoot () with
+                | Some root -> generatedPathCollector root
+                | None -> Set.empty
+
             match
                 Batch.scheduleWith
+                    generated
                     (boardBlockingCounts rows)
                     request.AllowBacklog
                     request.Limit
@@ -799,7 +822,8 @@ module Client =
             let request =
                 parsed |> enrichBoardFacts rows
                 |> fun r -> { r with Candidates = r.Candidates |> List.map (fun c -> { c with Item = { c.Item with DeliveryRoute = offlineDeliveryRoute } }) }
-            match Batch.scheduleWith (boardBlockingCounts rows) request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map _.Item) with
+            // .github#2305 — offline/pure, same reasoning as `Program.fs`'s `lanes`/`decide`: `Set.empty`.
+            match Batch.scheduleWith Set.empty (boardBlockingCounts rows) request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map _.Item) with
             | Green result -> Ok result
             | Red reasons -> reasons |> List.iter (fun r -> eprint $"  %s{r}"); Result.Error ExitRed
             | Verdict.NoVerdict reason -> eprint $"UNDETERMINED — %s{reason}"; Result.Error ExitNoVerdict
@@ -1561,13 +1585,6 @@ module Client =
     // Bound after `doneCmd` is defined. The delivery adapter precedes the established completion
     // transaction in this file, while F# binds values top-to-bottom.
     let mutable private completeDelivery: Context -> Options -> int = fun _ _ -> failwith "delivery completion is not initialized"
-
-    // `verifyPaths` and `delivery` ask the same question: which changed paths are generated and therefore
-    // intentionally absent from an item's authored touch-set?  The collector is initialized below, beside
-    // its bounded process implementation, before this module can serve a command.  Keeping the indirection
-    // here lets the earlier delivery adapter reuse that one fail-closed collector instead of acquiring a
-    // second, weaker list of generated paths.
-    let mutable private generatedPathCollector: string -> Set<string> = fun _ -> Set.empty
 
     /// The delivery receipt and `verify-paths` both exclude generated, CI-gated artifacts from the
     /// authored touch-set boundary.  The collector fails closed, so an unreadable generator can only
@@ -5744,6 +5761,17 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | _, Error e, _ -> Error e
         | _, _, Error e -> Error e
         | Ok targetPathRepo, Ok openIssues, Ok closedIssues ->
+            // .github#2305/ADR-0044 — resolved ONCE for the whole scan, reusing the same
+            // `generatedPathCollector` seam `deliveryPathsVerified`/`updateTouchSet` already pay for (one
+            // local process invocation, no extra REST/GraphQL). A conflict pair attributable solely to a
+            // shared generated, CI-gated artifact is cleared below — see `TouchSet.excludeGenerated`'s doc
+            // for the exact-stem-only rule that keeps a directory-prefix declaration (the ADR-0044 #309
+            // parent-directory trap) colliding exactly as before.
+            let generated =
+                match KitDigest.kitRoot () with
+                | Some root -> generatedPathCollector root
+                | None -> Set.empty
+
             // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
             // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
             // a row whose declaration cannot collide is discarded before anything is spent on it.
@@ -5776,7 +5804,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // Scope is carried by the reservation marker, which is deliberately read only
                             // after this cheap token shortlist. The unscoped comparison cannot create a
                             // collision by itself; the marker-backed scope check below is authoritative.
-                            match TouchSet.conflicts ts (TouchSet.parse body) with
+                            //
+                            // .github#2305 — a pair attributable SOLELY to a shared generated artifact is
+                            // excluded here, before the marker-backed scope check below ever runs: neither
+                            // side authors that file, so it is not a real reservation to defend.
+                            match TouchSet.conflicts ts (TouchSet.parse body) |> TouchSet.excludeGenerated generated with
                             | [] -> None
                             | pairs -> Some(other, Choice1Of2 pairs))
 
@@ -5979,6 +6011,32 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             eprint $"fsgg-coord-engine: %s{msg}"
                             ExitError
                         | Ok validated ->
+                            // .github#2305/ADR-0044 — a requested token that EXACTLY names a generated,
+                            // CI-gated artifact is refused here, before the body is even read and before
+                            // any collision scan runs: nobody authors such a file (a checked-in generator
+                            // emits it and CI reds on any diff), so declaring it is not input this command
+                            // accepts — the same all-or-nothing input refusal `Writes.validate` just gave a
+                            // flag-shaped or sentinel-mixed token, never a silent per-token drop (a drop
+                            // would leave the caller believing they declared something they did not).
+                            // `TouchSet.generatedTokens` compares STEMS and requires an EXACT match, so a
+                            // directory-prefix request (`registry/**`) is NOT caught here — see its doc for
+                            // why the ADR-0044 #309 parent-directory trap must keep colliding.
+                            let generated =
+                                match KitDigest.kitRoot () with
+                                | Some root -> generatedPathCollector root
+                                | None -> Set.empty
+
+                            let notDeclarable = TouchSet.generatedTokens generated validated.Tokens
+
+                            if not (List.isEmpty notDeclarable) then
+                                let joined = String.Join(", ", notDeclarable)
+
+                                eprint
+                                    $"fsgg-coord-engine: %s{verb} refuses %s{joined} — generated, CI-gated artifact(s) are not declarable (ADR-0044): nobody authors them, a checked-in generator emits them, and reserving one only serialises a worker who does not need its content. Regenerate and commit it instead; verify-paths already exempts the resulting drift."
+
+                                ExitError
+                            else
+
                             match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
                             | Error e -> fail e
                             | Ok body ->
@@ -6332,7 +6390,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             match touchSetOf rb with
                             | Error e -> failSchedule rb e
                             | Ok tsb ->
-                                match TouchSet.scopedConflicts ra.Owner (pathRepoOf ra) rb.Owner (pathRepoOf rb) tsa tsb with
+                                // .github#2305/ADR-0044 — the same exact-stem exclusion `activeCollisions`
+                                // applies: a pair attributable solely to a shared generated, CI-gated
+                                // artifact is not a real reservation either side needs defended.
+                                let generated =
+                                    match KitDigest.kitRoot () with
+                                    | Some root -> generatedPathCollector root
+                                    | None -> Set.empty
+
+                                match
+                                    TouchSet.scopedConflicts ra.Owner (pathRepoOf ra) rb.Owner (pathRepoOf rb) tsa tsb
+                                    |> TouchSet.excludeGenerated generated
+                                with
                                 | [] ->
                                     printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
                                     ExitGreen
@@ -8005,6 +8074,38 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         Some($"its Paths: declaration strictly contains {names}. A directory token reserves future files beneath it too, so this is a lane of one; narrow the holding declaration or sequence the work.")
 
                 laneOfOneWarning |> Option.iter (fun warning -> eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
+
+                // .github#2305/ADR-0044 — ADVISORY, not a refusal, and DELIBERATELY not the same shape as
+                // `updateTouchSet`'s hard refusal. `add` boards a body ALREADY WRITTEN on GitHub (`gh issue
+                // create`, or a human/host editor); there is no `--paths` write for this command to refuse
+                // — the declaration to react to already exists. Refusing to board it entirely would strand
+                // an authored issue off every scheduler until somebody edits the live issue body to fix
+                // it, and an issue-body edit invalidates that item's delivery-route receipt `subjectRevision`
+                // (`pnext-item`'s own binding rule) — a strictly worse remedy than a stderr note for what
+                // is, today, silent: `.github#2216` is open right now with both
+                // `registry/driver-skill-manifest.json` and `registry/coordination-kit-skill-manifest.json`
+                // verbatim in its live `Paths:`, filed before this warning existed and unnoticed until the
+                // critic's repair-1 review found it. This closes that half of the gap — a filer/host now
+                // learns immediately, on the same stderr surface `laneOfOneWarning` already uses — while
+                // `widen`/`set-paths` (`updateTouchSet` above) remain the hard gate against a NEW
+                // declaration, which is the door this engine actually controls.
+                let generatedTokenWarning =
+                    let generated =
+                        match KitDigest.kitRoot () with
+                        | Some root -> generatedPathCollector root
+                        | None -> Set.empty
+
+                    match TouchSet.generatedTokens generated (declaredPathTokens (TouchSet.parse body)) with
+                    | [] -> None
+                    | tokens ->
+                        let named = String.concat ", " tokens
+
+                        Some(
+                            $"its Paths: declaration names {named} — a generated, CI-gated artifact (ADR-0044): nobody authors it, so declaring it reserves nothing, and a later widen naming it will be refused for the same reason. Narrow the Paths: line on the issue."
+                        )
+
+                generatedTokenWarning
+                |> Option.iter (fun warning -> eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
 
                 match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                 | Error e -> fail e

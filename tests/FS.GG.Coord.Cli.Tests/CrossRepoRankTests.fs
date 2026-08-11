@@ -135,7 +135,7 @@ let ``#1628 the SCOPED candidate list still cannot see those edges — the fixtu
 
     let candidates = request.Candidates |> List.map (fun c -> c.Item)
 
-    match Batch.schedule request.AllowBacklog request.Limit request.InFlight candidates with
+    match Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight candidates with
     | Green r -> Assert.Equal(0, (decisionFor r 10).Rank.Blocking)
     | other -> failwith $"the batch must be schedulable — got %A{other}"
 

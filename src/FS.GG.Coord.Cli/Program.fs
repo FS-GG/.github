@@ -126,12 +126,19 @@ let private lanes (opts: Options) =
 
     | Ok request ->
         let items = request.Candidates |> List.map (fun c -> c.Item)
-        let partition = Lanes.partition items
+
+        // .github#2305/ADR-0044 — `lanes` reads a caller-SUPPLIED snapshot from stdin and has no
+        // filesystem of its own to ask `scripts/generated-paths` of (this command is in the pure
+        // DECISION half of the CLI, alongside `decide`; see the module header). `Set.empty` is the
+        // documented, always-safe answer for a caller with no roster to hand — it reproduces the
+        // pre-#2305 partition exactly, never a MORE permissive one. The live, IO-backed `take`/`batch`/
+        // `next` path (`Client.renderLiveDecision`) resolves and passes the real roster instead.
+        let partition = Lanes.partition Set.empty items
 
         // STARTABILITY IS THE SCHEDULER'S CALL, NOT THE LANE MODULE'S. `Lanes.free` takes the predicate
         // rather than deriving one, so "is this item startable?" keeps exactly one implementation.
         let startable (item: Item) =
-            Schedulability.schedulable request.AllowBacklog [] item = Schedulability.Startable
+            Schedulability.schedulable Set.empty request.AllowBacklog [] item = Schedulability.Startable
 
         match opts.Render with
         | Json -> printfn "%s" (Snapshot.renderLanes startable partition)
@@ -273,8 +280,13 @@ let private decide (opts: Options) =
         ExitError
 
     | Ok request ->
+        // .github#2305/ADR-0044 — `decide` is the pure, snapshot-only counterpart of `lanes` (see its
+        // comment above): no filesystem to ask `scripts/generated-paths` of, so `Set.empty` is the
+        // documented, always-safe answer. The live `take`/`batch`/`next` path resolves the real roster
+        // in `Client.renderLiveDecision` instead.
         let decision =
             Batch.schedule
+                Set.empty
                 request.AllowBacklog
                 request.Limit
                 request.InFlight

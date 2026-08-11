@@ -288,6 +288,51 @@ module TouchSet =
         else
             []
 
+    // ---- .github#2305 / ADR-0044: generated, CI-gated artifacts are not reservable ------------------
+    //
+    // `verify-paths` already excludes a repo's generated, CI-gated artifacts from DRIFT — nobody
+    // authors them, a checked-in generator emits them and CI reds on any diff, so a collision there is
+    // a rebase, not a decision (ADR-0044, #309, #498). That exemption never reached the RESERVATION
+    // side: `widen` granted a reservation on `registry/driver-skill-manifest.json` exactly as though it
+    // were an authored file, and the reservation then serialised a second, genuinely disjoint worker
+    // behind the first for a file neither of them authors (`.github#2305`'s own measured instance —
+    // `.github#2254` and `.github#2248`). This section is the fix, stated as two PURE functions so it
+    // is testable without IO; the IO edge that resolves "what is generated right now" is
+    // `scripts/generated-paths`, already read by `FS.GG.Coord.Cli`'s `generatedPathCollector`.
+    //
+    // BOTH FUNCTIONS COMPARE STEMS, AND BOTH REQUIRE AN EXACT MATCH — never a directory-prefix
+    // containment. That is deliberate, and it is the other half of ADR-0044's own caution
+    // (`tokensOverlap`'s doc above): declaring a generated artifact's PARENT DIRECTORY is a real claim
+    // over everything under it, generated or not, and must keep colliding. Only a token that names the
+    // generated artifact ITSELF — the exact subtree a generator's `--list` names — is ever exempted.
+
+    /// The subset of `tokens` that EXACTLY name one of `generated`'s artifact paths (stemmed, so a
+    /// `foo.json/**`-shaped token still compares on the subtree it names). Never a directory prefix
+    /// that merely CONTAINS a generated artifact — see the section doc above.
+    ///
+    /// This is the `widen`/`set-paths` REFUSAL rule (#2305 PD-002): a non-empty result names tokens the
+    /// caller asked to declare that are not declarable at all under ADR-0044, and the whole update must
+    /// be refused before any PATCH — the same all-or-nothing shape `Writes.validate` already uses for a
+    /// flag-shaped or sentinel-mixed token, not a silent per-token drop (a silent drop would leave a
+    /// worker believing they declared something they did not).
+    let generatedTokens (generated: Set<string>) (tokens: string list) : string list =
+        tokens |> List.filter (fun t -> Set.contains (stem t) generated)
+
+    /// Drop a conflict PAIR — as `conflicts`/`scopedConflicts` report it — when BOTH sides stem to the
+    /// SAME generated artifact. An asymmetric pair (one side the exact generated file, the other a
+    /// directory prefix that merely covers it) is left exactly as `conflicts` reported it: see the
+    /// section doc above for why that asymmetry must keep colliding.
+    ///
+    /// This is the `activeCollisions`/`overlap` READ-SIDE rule (#2305 PD-003): it clears a collision
+    /// attributable solely to a generated token even for a declaration that predates `generatedTokens`'
+    /// refusal (a legacy `widen` written before this change), so an old declaration self-heals at the
+    /// next read rather than needing a repo-wide rewrite.
+    let excludeGenerated (generated: Set<string>) (pairs: (string * string) list) : (string * string) list =
+        pairs
+        |> List.filter (fun (x, y) ->
+            let sx, sy = stem x, stem y
+            not (sx = sy && Set.contains sx generated))
+
     /// Whether a proposed `Paths:` update — from `widen` or `set-paths` — may be committed.
     type UpdateDecision =
         /// No requested path collided with a live claim: write the proposed declaration.

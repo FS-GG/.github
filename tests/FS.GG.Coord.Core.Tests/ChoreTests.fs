@@ -640,7 +640,7 @@ module ChoreTests =
 
                         Assert.Equal<Schedulability.Schedulability>(
                             Schedulability.Startable,
-                            Schedulability.schedulable false [] { i with Status = column }
+                            Schedulability.schedulable Set.empty false [] { i with Status = column }
                         )
                 | _ -> ()
 

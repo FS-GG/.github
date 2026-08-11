@@ -139,7 +139,14 @@ module Lanes =
     /// token pair — the same predicate the scheduler reserves against, so a lane cannot disagree with
     /// the batch about what collides. Lanes are the transitive closure of that: A—B and B—C put A and C
     /// in one lane even though they do not touch, because B serialises them.
-    val partition: items: Item list -> Partition
+    ///
+    /// `generated` is `.github#2305`/ADR-0044's repo-relative set of generated, CI-gated artifact paths
+    /// (`scripts/generated-paths`'s subtractable set): a joining pair attributable SOLELY to a shared
+    /// entry of `generated` does not glue two lanes — see `TouchSet.excludeGenerated`'s doc for the
+    /// exact-stem-only rule that keeps a directory-prefix declaration (the ADR-0044 #309 parent-directory
+    /// trap) joining lanes exactly as before. `Set.empty` reproduces the pre-#2305 partition exactly, and
+    /// is what a caller with no filesystem to ask must pass.
+    val partition: generated: Set<string> -> items: Item list -> Partition
 
     /// The lanes that hold startable work and nobody is standing in — i.e. how many MORE workers this
     /// board can absorb right now.
