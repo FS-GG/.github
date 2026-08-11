@@ -3045,6 +3045,84 @@ module ApplicationServiceTests =
             Assert.Contains("pageInfo", err)
             Assert.False(world.Logged "--id PVTI_external96", $"%s{label} reached the mutation")
 
+    /// .github#2382: a board whose rows are all SETTLED — closed, and already `Done`.
+    ///
+    /// `commentReads` records every issue-comment thread the pass actually fetches, because that is the
+    /// whole subject. A settled row's thread can change no reconcile outcome (`LifecycleProjection.project`
+    /// answers `Project(Done)`, which `Chore.lifecycleProjection` drops on `item.Status = destination`, or
+    /// `Withheld`), so every one of those reads is pure budget — and they are the population that GROWS,
+    /// one row per item the fleet ever completes.
+    ///
+    /// The rows carry a `body` deliberately. `Scan.parseRow` sweeps a closed/`Done`/unclassed row's body
+    /// off the reconciling board document itself, and falls back to a REST `issueBody` read per row when
+    /// that scalar is missing — a second per-row REST cost that would mask the one under test.
+    let private settledDoneWorld (count: int) (commentReads: ResizeArray<string>) =
+        let items () =
+            [ 1..count ]
+            |> List.map (fun n ->
+                $"""{{"status":{{"name":"Done"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"settled item %d{n}","body":"Class: hardening","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
+            |> String.concat ","
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) ->
+                    if document.Contains "projectsV2" then
+                        ok
+                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "fields(first" then
+                        ok
+                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "items(first" then
+                        ok
+                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    else
+                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | "GET", path when path.EndsWith "/comments" ->
+                commentReads.Add path
+                ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    [<Fact>]
+    let ``#2382 a settled Done row's comment thread is never read`` () =
+        let commentReads = ResizeArray<string>()
+        let code, _, err = runReconcile (settledDoneWorld 3 commentReads) (reconcileArgs [ "--json" ])
+        let threads = String.Join(", ", commentReads)
+
+        Assert.Equal(0, code)
+
+        Assert.True(
+            commentReads.Count = 0,
+            $"a settled (closed and already Done) row can change no reconcile outcome, so its thread must \
+not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
+        )
+
+    /// THE DEFECT ITSELF, AS AN INVARIANT: reconcile's REST cost must not scale with the board's closed
+    /// history. Measured on the live board before this bound (2026-08-11), it did — 2,159 of 2,181 rows were
+    /// closed and one dry run spent 2,050+ billed REST requests against a 5,000/hr budget, so a four-scan
+    /// `check-board` pass could not complete inside one hour. A count assertion, not a threshold: the two
+    /// boards differ ONLY in how much finished work they carry.
+    [<Fact>]
+    let ``#2382 reconcile's REST cost does not grow with the board's closed history`` () =
+        let small = settledDoneWorld 1 (ResizeArray<string>())
+        let large = settledDoneWorld 40 (ResizeArray<string>())
+
+        let smallCode, _, _ = runReconcile small (reconcileArgs [ "--json" ])
+        let largeCode, _, _ = runReconcile large (reconcileArgs [ "--json" ])
+
+        Assert.Equal(0, smallCode)
+        Assert.Equal(0, largeCode)
+
+        Assert.True(
+            small.RestCalls = large.RestCalls,
+            $"REST cost scaled with settled history: 1 closed row cost %d{small.RestCalls} REST calls, \
+40 cost %d{large.RestCalls}. That is .github#2382 — the per-row read is back."
+        )
+
     [<Fact>]
     let ``#2157 partial BLOCKER-CLEARED receipt retains both freshly observed values`` () =
         let code, out, err = runApplyJson (partialBlockerReconcileWorld ())
