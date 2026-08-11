@@ -105,6 +105,35 @@ module Landable =
         let names = live |> List.map (fun c -> c.Name) |> Set.ofList
         required |> List.filter (fun name -> not (names.Contains name))
 
+    /// Check-run names `scoreRequired` never scores as `bad`/`pending` UNLESS the caller explicitly names
+    /// one in `required` (#2373). Every OTHER non-required check IS scored — `bad`'s own comment explains
+    /// why that is deliberate (`registry-coherence` on the skill-registry-autofix bot's PR, #642/#425, is
+    /// not in branch protection's required set either, and its redness must still gate that bot's merge).
+    /// This is the ONE narrow carve-out, and it exists because the FIRST subsystem — not this one — already
+    /// promised it: `scripts/check-claim-generation.py`'s own docstring and `.github/workflows/coherence.yml`
+    /// both say, in as many words, "a red verdict from this job does not block a merge — it is observed,
+    /// not enforced" (`.github#2342` AC6), and neither ever wired `claim-generation` into branch protection's
+    /// required-status-check list to make that true. `scoreRequired` scoring every live check unconditionally
+    /// meant `landable` enforced it anyway — RED for a check its own owner had already, explicitly, on the
+    /// record, declared advisory (`.github#2373`, reproduced live across three PRs in one wave: the PR
+    /// without a hand-added `fsgg:pr-authorization` marker read `landable` RED, the otherwise-identical PR
+    /// with one read GREEN). The two subsystems must agree about what is enforced; `check-claim-generation.py`
+    /// is the one with the documented, reviewed, AC6-ratified design decision, so THIS module is the one that
+    /// was wrong, and this set is the repair.
+    ///
+    /// A name here is EXCLUDED from `bad` and `pending` and does not count toward `total` either — its own
+    /// GitHub check-run conclusion is untouched (still visibly `failure` in the Checks tab: "observed"), but
+    /// `landable`'s verdict never depends on it (not "enforced") — UNLESS the caller opts back in by naming
+    /// it in `required`, which still only makes it a PRESENCE assertion (`missingFrom`), never restores it to
+    /// the `bad`/`pending` rollup; nothing today calls `--require claim-generation`, and doing so would not
+    /// re-arm this exemption. It is the ONE lever that does: removing the name.
+    ///
+    /// REMOVING A NAME HERE is exactly the branch-protection-arming administrative action `#2342`'s design
+    /// doc (§9.1) already names as the way to turn this on for real — do it in the SAME change that adds
+    /// the context to `branches/main/protection/required_status_checks`, so the two subsystems move together
+    /// and cannot drift back out of agreement the way they did to produce #2373.
+    let private advisoryCheckNames: Set<string> = Set.ofList [ "claim-generation" ]
+
     /// A subject (run or check) is a FINDING unless it COMPLETED and concluded `success` or `skipped`.
     let private isPending (status: string) = status <> "completed"
 
@@ -151,23 +180,36 @@ module Landable =
             let live, _ = supersede runs
             let liveChecks = liveChecks runs checks
 
+            // `advisoryCheckNames` (#2373) are excluded from the bad/pending/total rollup UNLESS the
+            // caller explicitly named them in `required` — an opt-in override, never a silent one. This
+            // filters only the ROLLUP's own inputs; `missingFrom` below is still handed the FULL
+            // `liveChecks`, so a `--require`d advisory name is still satisfied by its presence exactly as
+            // any other required name would be — only its `bad`/`pending` contribution is what the
+            // advisory carve-out withholds by default.
+            let requiredSet = Set.ofList required
+
+            let scoredChecks =
+                liveChecks
+                |> List.filter (fun c -> not (advisoryCheckNames.Contains c.Name) || requiredSet.Contains c.Name)
+
             // The rollup is over BOTH lists (#606): a run can fail with no check-runs at all
             // (`startup_failure`), and a check-run can fail while its run SUCCEEDS (job-level
             // `continue-on-error`). Neither list alone is the truth.
             let pending =
                 (live |> List.filter (fun r -> isPending r.Status) |> List.length)
-                + (liveChecks |> List.filter (fun c -> isPending c.Status) |> List.length)
+                + (scoredChecks |> List.filter (fun c -> isPending c.Status) |> List.length)
 
             let bad =
                 (live |> List.filter (fun r -> isBad r.Status r.Conclusion) |> List.length)
-                + (liveChecks |> List.filter (fun c -> isBad c.Status c.Conclusion) |> List.length)
+                + (scoredChecks |> List.filter (fun c -> isBad c.Status c.Conclusion) |> List.length)
 
-            let total = List.length live + List.length liveChecks
+            let total = List.length live + List.length scoredChecks
 
             // A `--require`d check that is not among the LIVE check-runs has not reported. Matched on the
             // live set, so a superseded suite's copy cannot satisfy it — the check that was cancelled is
             // exactly the one whose verdict we do not have. Same derivation `missing` reports from, so the
-            // verdict and its reason cannot disagree.
+            // verdict and its reason cannot disagree. Uses the UNFILTERED `liveChecks`, not `scoredChecks`
+            // — an advisory check the caller `--require`d is still satisfied by its mere presence.
             let missingRequired = missingFrom required liveChecks
 
             // ZERO SUBJECTS IS NOT GREEN (#606). "Every check passed" and "CI never started" are the same

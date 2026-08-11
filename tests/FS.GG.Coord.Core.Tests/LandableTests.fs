@@ -347,6 +347,86 @@ module LandableTests =
         let checks = [ named "registry-coherence" (Some 1L) "completed" (Some "success") ]
         Assert.Empty(missing [ "registry-coherence" ] [ greenRun ] checks)
 
+    // ---- advisory checks: a named check's failure does not gate the verdict (#2373) ------------------
+    //
+    // `claim-generation`'s own design doc (`.github#2342` AC6) says a red verdict from that job is
+    // "observed, not enforced" — but `scoreRequired` used to score EVERY live check unconditionally, so
+    // its FINDING conclusion turned `landable` red anyway. Reproduced live across three PRs in one wave
+    // (`.github#2373`'s host-authored comment): the PR without a hand-added `fsgg:pr-authorization`
+    // marker read `landable` RED; an otherwise-identical PR with one read GREEN. These tests hold the
+    // fix to that corpus.
+
+    [<Fact>]
+    let ``a FAILED claim-generation check does not red the verdict — it is advisory, not required (#2373)`` () =
+        let checks = [ named "claim-generation" (Some 2L) "completed" (Some "failure") ]
+        Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``an advisory check's failure does not count toward the subject total either`` () =
+        let checks = [ named "claim-generation" (Some 2L) "completed" (Some "failure") ]
+        // Only the one live run is counted; the failing advisory check contributes nothing to `n`.
+        Assert.Equal((PrGreen, 1), scoreN (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``an advisory check STILL RUNNING does not hold the verdict at pending either`` () =
+        let checks = [ named "claim-generation" (Some 2L) "in_progress" None ]
+        Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``a REAL required check's failure is unaffected by the advisory carve-out — it still reds`` () =
+        // The carve-out is a NAMED, narrow set — not "ignore anything non-required". A genuinely failing,
+        // ordinary (non-advisory) check must still red the PR exactly as before.
+        let checks =
+            [ named "claim-generation" (Some 2L) "completed" (Some "failure")
+              named "build" (Some 3L) "completed" (Some "failure") ]
+        Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``a caller that explicitly --requires claim-generation opts back into scoring its failure`` () =
+        // The one lever that re-arms the exemption for a single caller: name it in `required`. A missing
+        // OR failing named check both stop being invisible to the rollup once asked for by name.
+        let checks = [ named "claim-generation" (Some 2L) "completed" (Some "failure") ]
+        let state, _ = scoreRequired [ "claim-generation" ] (Some true) [ greenRun ] checks
+        Assert.Equal(PrRed, state)
+
+    [<Fact>]
+    let ``--require claim-generation still treats its ABSENCE as pending, not as invisible`` () =
+        let state, _ = scoreRequired [ "claim-generation" ] (Some true) [ greenRun ] []
+        Assert.NotEqual(PrGreen, state)
+        Assert.NotEqual(PrRed, state)
+        Assert.Equal<string list>([ "claim-generation" ], missing [ "claim-generation" ] [ greenRun ] [])
+
+    [<Fact>]
+    let ``an advisory check that PASSES is unaffected — green stays green either way`` () =
+        let checks = [ named "claim-generation" (Some 2L) "completed" (Some "success") ]
+        Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``a check that only SHARES A PREFIX with an advisory name is still scored, and still reds (#2373 repair 1)`` () =
+        // The exemption is a NAMED, EXACT set — not a prefix/substring match. `claim-generation-v2` is a
+        // DIFFERENT check that merely happens to share a prefix with the one advisory entry
+        // (`claim-generation`); nothing about this fix's own reasoning extends the "observed, not
+        // enforced" promise to it, and it must still gate the merge like any other ordinary check.
+        //
+        // This is the boundary the independent critic's own mutation found undefended: broadening
+        // `advisoryCheckNames.Contains c.Name` (exact) to
+        // `advisoryCheckNames |> Set.exists (fun a -> c.Name.StartsWith(a: string))` (prefix) left the
+        // whole 729-test suite green, because no existing case used a name that shares a prefix with
+        // `"claim-generation"` without BEING it. This test is written to fail under that broadening and
+        // pass under the current exact match — both directions demonstrated below.
+        let checks = [ named "claim-generation-v2" (Some 2L) "completed" (Some "failure") ]
+        Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``a check whose name merely CONTAINS an advisory name as a substring is still scored, and still reds`` () =
+        // The substring-broadening sibling of the prefix case above: `advisoryCheckNames |> Set.exists
+        // (fun a -> c.Name.Contains(a: string))` would ALSO match a name like
+        // `pre-claim-generation-suffix`, which shares no prefix with `claim-generation` but does contain
+        // it. Held apart from the prefix test so a repair that fixes one broadening but not the other is
+        // still caught.
+        let checks = [ named "pre-claim-generation-suffix" (Some 2L) "completed" (Some "failure") ]
+        Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
+
     // ---- settled: the --wait break-vs-keep-waiting decision (#724) -----------------------------------
 
     [<Fact>]

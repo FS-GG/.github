@@ -88,6 +88,15 @@ module Landable =
     /// and its replacement registering — which a bot that force-pushes manufactures on every run, #710), and
     /// `pending` never settles, so `--wait` rides out the transient case and refuses the permanent one when
     /// its tries run out. It ranks BELOW a red, so a real failure is still reported at once.
+    ///
+    /// A NAMED HANDFUL OF CHECKS ARE EXCLUDED FROM `bad`/`pending` BY DEFAULT (#2373): checks whose own
+    /// design doc already says "observed, not enforced" (`claim-generation`, `.github#2342` AC6) and were
+    /// never wired into branch protection's required set to make that true. `scoreRequired` used to score
+    /// every live check unconditionally, so their FINDING conclusion turned `landable` red anyway — enforcing
+    /// a promise their own owner had explicitly declined to make yet. The caller can still opt back in by
+    /// naming such a check in `required` (a presence assertion only; it does not restore the check to the
+    /// rollup). Every OTHER non-required check remains scored, unconditionally — that is deliberate, and
+    /// is what lets `registry-coherence` gate the skill-registry-autofix bot's own merge.
     val scoreRequired:
         required: string list ->
         mergeable: bool option ->
