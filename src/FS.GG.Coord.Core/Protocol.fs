@@ -72,6 +72,107 @@ module Protocol =
           ReviewSlots: int
           ConsolidationThreshold: int }
 
+    // ---- MARKER GRAMMAR TYPES (.github#2399) ----------------------------------------------------------
+    // See Protocol.fsi for the design rationale. `occurrences` is a fresh, directly-tested
+    // implementation of the same rule `Driver.fs`'s private `leadingMarkerBlock`/`canonicalOccurrences`/
+    // `competingMarker` enforce for `LeadingBlock`, plus the `LeadingLine` rule #83758ec3/#d86ded2a
+    // fixed for the delivery markers — Driver.fs itself is out of this item's `Paths:` and is not
+    // rewired to call this; `ProtocolTests` pins this function's `LeadingBlock` behaviour against
+    // `Driver.parseReviewComments`'s OWN observed behaviour so the two cannot silently disagree.
+    type MarkerId = string
+
+    type MarkerAnchor =
+        | LeadingLine
+        | LeadingBlock
+        | AnywhereInBody
+
+    type MarkerOccurrence =
+        | Live of raw: string
+        | Quoted
+        | Competing of raw: string
+
+    type Marker = { Id: MarkerId; Anchor: MarkerAnchor }
+
+    let markerWireText (id: MarkerId) = $"<!-- fsgg:%s{id}:v1 -->"
+
+    let private bodyLines (body: string) =
+        body.Replace("\r\n", "\n").Split '\n' |> Array.toList
+
+    let occurrences (knownMarkerTexts: string list) (marker: Marker) (body: string) : MarkerOccurrence list =
+        let wireText = markerWireText marker.Id
+        let lines = bodyLines body
+
+        match marker.Anchor with
+        | LeadingLine ->
+            // The anchor region is exactly the body's own first TRIMMED line (#83758ec3, #d86ded2a) —
+            // never the whole body, which is the defect this anchor exists to prevent.
+            let firstLine = lines |> List.tryHead |> Option.map (fun line -> line.Trim())
+
+            lines
+            |> List.mapi (fun index line ->
+                if index = 0 then
+                    match firstLine with
+                    | Some text when text = wireText -> Some(Live wireText)
+                    | _ -> None
+                elif line.Trim() = wireText then
+                    Some Quoted
+                else
+                    None)
+            |> List.choose id
+        | LeadingBlock ->
+            // The leading block is the run of lines from byte 0 that are each exactly one KNOWN
+            // marker's canonical text — mirrors `Driver.fs`'s `leadingMarkerBlock` exactly (untrimmed
+            // line equality), so a family that shares markers with `Driver.fs`'s own family behaves
+            // identically.
+            let leadingBlock = lines |> List.takeWhile (fun line -> List.contains line knownMarkerTexts)
+            let leadingCount = List.length leadingBlock
+            let canonicalInBlock = leadingBlock |> List.filter ((=) wireText) |> List.length
+
+            lines
+            |> List.mapi (fun index line ->
+                if line <> wireText then
+                    None
+                elif index < leadingCount then
+                    if canonicalInBlock > 1 then Some(Competing wireText) else Some(Live wireText)
+                else
+                    Some Quoted)
+            |> List.choose id
+        | AnywhereInBody ->
+            // Legacy/unanchored: every canonical whole-line occurrence anywhere in the body counts, and
+            // more than one is refused as competing rather than resolved by position.
+            let canonicalCount = lines |> List.filter ((=) wireText) |> List.length
+
+            lines
+            |> List.map (fun line ->
+                if line <> wireText then
+                    None
+                elif canonicalCount > 1 then
+                    Some(Competing wireText)
+                else
+                    Some(Live wireText))
+            |> List.choose id
+
+    /// Reproduces the exact prose `d58577ec` projected for `QuotedMarkerRule`, dispatched over
+    /// `MarkerAnchor` rather than stored as a free string — so removing the field from
+    /// `ReviewPolicyDoc` moves no bytes `generate-projections` (out of this item's `Paths:`, left
+    /// unchanged) reads via the `reviewPolicy.quotedMarkerRule` JSON key.
+    let renderMarkerAnchorRule (anchor: MarkerAnchor) : string =
+        match anchor with
+        | LeadingBlock ->
+            "A marker counts only as a canonical whole line inside a comment's own leading marker \
+             block — the run of lines from byte 0 that are each exactly one known marker's text. A \
+             marker occurring elsewhere as a quotation (inside a fence, an indented code block, or \
+             prose that only mentions it) is inert: it carries no evidence and raises no error by \
+             itself. The same marker kind occurring more than once within one comment's leading block \
+             is a competing marker and is refused — a marker kind has exactly one meaning, so no \
+             comment may carry it twice."
+        | LeadingLine ->
+            "A marker counts only as the comment's own first trimmed line. A marker occurring on any \
+             other line is inert: it carries no evidence and raises no error by itself."
+        | AnywhereInBody ->
+            "A marker counts as any canonical whole line anywhere in the comment body. The same marker \
+             occurring more than once anywhere in the body is a competing marker and is refused."
+
     /// Marker vocabulary and bounded review policy enforced by `Driver`.
     type ReviewPolicyDoc =
         { InitialMarker: string
@@ -81,11 +182,11 @@ module Protocol =
           RepairPhaseMarker: string
           MaxAutomatedRepairRounds: int
           RepairPhaseMaxRounds: int
-          /// The quoted-versus-competing marker rule (#2221, #2248): a quotation is inert, and a
-          /// canonical marker repeated in one comment's leading block is a competing marker. Stated
-          /// here so the `fsgg-protocol:review-policy` projection carries it FROM `Driver.fs`'s own
-          /// behaviour rather than as hand-written prose beside it.
-          QuotedMarkerRule: string }
+          /// Every marker name field above, paired with the `MarkerAnchor` `occurrences` checks it
+          /// against. Replaces `QuotedMarkerRule`'s hand-projected prose (.github#2399).
+          MarkerAnchors: Marker list }
+
+    type MarkerFieldGrammarDoc = { MarkerId: MarkerId; RequiredFields: string list }
 
     /// Facts that determine whether an item can move between lifecycle stages.
     type LifecyclePolicyDoc =
@@ -680,17 +781,14 @@ module Protocol =
           RepairPhaseMarker = "independent-review-repair-phase"
           MaxAutomatedRepairRounds = 3
           RepairPhaseMaxRounds = 10
-          // #2221's own rule, stated once so the projection can carry it FROM here rather than
-          // restate it beside `Driver.parseReviewCommentsCore`'s `competingMarker`/`leadingMarkerBlock`
-          // (#2248). Keep this the plain-language mirror of that code, not a second design decision.
-          QuotedMarkerRule =
-            "A marker counts only as a canonical whole line inside a comment's own leading marker \
-             block — the run of lines from byte 0 that are each exactly one known marker's text. A \
-             marker occurring elsewhere as a quotation (inside a fence, an indented code block, or \
-             prose that only mentions it) is inert: it carries no evidence and raises no error by \
-             itself. The same marker kind occurring more than once within one comment's leading block \
-             is a competing marker and is refused — a marker kind has exactly one meaning, so no \
-             comment may carry it twice." }
+          // Every marker in the family anchors `LeadingBlock` today (#2221/#2248); `occurrences` is the
+          // rule now, this is its input (.github#2399 — replaces `QuotedMarkerRule`'s prose string).
+          MarkerAnchors =
+            [ { Id = "independent-review"; Anchor = LeadingBlock }
+              { Id = "independent-review-confirmation"; Anchor = LeadingBlock }
+              { Id = "review-accepted"; Anchor = LeadingBlock }
+              { Id = "independent-review-escalation"; Anchor = LeadingBlock }
+              { Id = "independent-review-repair-phase"; Anchor = LeadingBlock } ] }
 
     let lifecyclePolicy =
         { RequiredHousekeeping =
@@ -698,6 +796,24 @@ module Protocol =
               "reconcile"; "triage" ]
           TerminalActions = [ "merge"; "post-merge-obligations"; "done-stamp" ]
           HostAcceptanceFields = [ "accepted-head"; "initial-review"; "latest-confirmation" ] }
+
+    /// The review family's field grammar (.github#2369) — mirrors `Driver.fs`'s private
+    /// `markerFieldGrammar` function value-for-value; `ProtocolTests` pins this list against
+    /// `Driver.parseReviewComments`'s own observed enforcement so the two cannot silently disagree.
+    /// Escalation and repair-phase carry no field grammar in `Driver.fs` — an omission `Driver.fs`
+    /// documents as deliberate, not something this list should invent.
+    let markerFieldGrammar: MarkerFieldGrammarDoc list =
+        [ { MarkerId = reviewPolicy.InitialMarker
+            RequiredFields = [ "critic"; "reviewed-head"; "verdict" ] }
+          { MarkerId = reviewPolicy.ConfirmationMarker
+            RequiredFields =
+              [ "initial-review"; "critic"; "round"; "preceding-review"; "reviewed-head"; "verdict" ] }
+          { MarkerId = reviewPolicy.AcceptanceMarker
+            RequiredFields = lifecyclePolicy.HostAcceptanceFields }
+          { MarkerId = reviewPolicy.EscalationMarker
+            RequiredFields = [] }
+          { MarkerId = reviewPolicy.RepairPhaseMarker
+            RequiredFields = [] } ]
 
     let ledgerPolicy =
         { Schema = "fsgg.coord.planning-receipt/3"
@@ -748,7 +864,11 @@ module Protocol =
     ///
     /// /2 `takeExitCodes` (#889) · /3 `landableExitCodes` (#900) · /4 `filingRules` (#889) ·
     /// /5 `reconcileRules` (#889) · /6 `blockerStates` (#889) · /8 `snapshotDocument` (#889/#1058) ·
-    /// /9 `driverRules` (#889/#1059) · /10 `releaseColumns` (#889/#1099).
+    /// /9 `driverRules` (#889/#1059) · /10 `releaseColumns` (#889/#1099) ·
+    /// /12 `reviewPolicy.markerAnchors`/`reviewPolicy.markerFieldGrammar` (.github#2399) — additive to
+    /// an EXISTING section rather than a new top-level key, but still a documented shape change: the
+    /// bump says the surface now states the anchor and field grammar, not merely that an old reader
+    /// (which ignores unknown members) survives it.
     ///
     /// Each bump is additive for a reader that ignores unknown members, and the number is bumped anyway:
     /// it says what the surface IS, not merely whether an old reader survives it.
@@ -762,7 +882,7 @@ module Protocol =
     /// NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
     /// file too (FS0034), and nothing consumes this at compile time. The old one could afford the
     /// attribute because it was `private` and had no signature entry to keep in step.
-    let factsSchema = "fsgg.coord.protocol/11"
+    let factsSchema = "fsgg.coord.protocol/12"
 
     /// The snapshot document's schema string — the `schema` member `Scan.snapshot` writes and
     /// `Snapshot.parse` refuses a document without.

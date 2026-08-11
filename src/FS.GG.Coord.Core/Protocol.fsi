@@ -197,6 +197,79 @@ module Protocol =
           ReviewSlots: int
           ConsolidationThreshold: int }
 
+    // ---- MARKER GRAMMAR TYPES (.github#2399) ----------------------------------------------------------
+    //
+    // Before this, the review-marker family was six independent `string` fields plus a rule stated as
+    // PROSE INSIDE A STRING (`QuotedMarkerRule`) — not a function the compiler can check, so every
+    // reader that needed "is this occurrence live, quoted, or competing" re-derived it by hand
+    // (`Driver.fs`'s own scanner, and the hand-projected copy `d58577ec` had to write beside it). The
+    // types below give the question a total answer instead: WHERE a marker is permitted to count
+    // (`MarkerAnchor`), and WHAT one physical occurrence of it means (`MarkerOccurrence`), with
+    // `occurrences` as the one function that decides both from a `Marker` and a body.
+
+    /// A marker's stable name — e.g. `"independent-review"` — NOT its rendered wire text. Use
+    /// `markerWireText` to get the `<!-- fsgg:%s{id}:v1 -->` form `occurrences` actually scans for.
+    type MarkerId = string
+
+    /// Where in a comment body a canonical marker occurrence is permitted to count as LIVE. Every
+    /// marker in the family declares exactly one.
+    type MarkerAnchor =
+        /// The marker must BE the comment's own first trimmed line (.github#83758ec3, #d86ded2a): the
+        /// delivery-obligation/receipt/none and delivery-route markers anchor here in production, in
+        /// `src/FS.GG.Coord.Cli/DeliveryApplication.fs` and `Client.fs` (out of this item's `Paths:`,
+        /// unchanged) — the marker family declared HERE does not currently use this anchor, but
+        /// `occurrences` implements and tests it so the type is total over the real anchor vocabulary
+        /// rather than only the cases this item happens to touch.
+        | LeadingLine
+        /// The marker may appear anywhere within the comment's LEADING marker block — the run of lines
+        /// from byte 0 that are each exactly one KNOWN marker's canonical text (.github#2221, #2248).
+        /// All five `ReviewPolicyDoc` markers anchor here today.
+        | LeadingBlock
+        /// Legacy/explicitly-unanchored: every canonical whole-line occurrence anywhere in the body
+        /// counts. This is exactly the defect class #83758ec3/#d86ded2a fixed for the delivery markers
+        /// (a marker checked against a whole body rather than a specific line) — a new marker choosing
+        /// this arm is a deliberate, reviewed exception, and its declaration site must carry a comment
+        /// saying why. No marker in this file declares it.
+        | AnywhereInBody
+
+    /// The disposition of one canonical whole-line occurrence of a marker's wire text within a body.
+    /// No "maybe" arm: `occurrences` classifies every such line as exactly one of these three. A line
+    /// that does not match the marker's wire text at all produces no `MarkerOccurrence` — it is not an
+    /// occurrence of anything.
+    type MarkerOccurrence =
+        /// A canonical occurrence inside the marker's anchor region, and the only one there — the
+        /// occurrence a reader acts on.
+        | Live of raw: string
+        /// A canonical occurrence OUTSIDE the marker's anchor region — a fenced/quoted example, prose
+        /// that mentions the marker, or (for `LeadingLine`/`LeadingBlock`) any line the anchor does not
+        /// reach. Inert: never evidence, never an error by itself.
+        | Quoted
+        /// A second (or later) canonical occurrence of the SAME marker INSIDE its own anchor region. A
+        /// marker kind has exactly one meaning per comment, so every occurrence in the region is
+        /// `Competing` when more than one is present — refused rather than resolved by "first wins".
+        | Competing of raw: string
+
+    /// One marker's identity and the anchor `occurrences` checks its occurrences against.
+    type Marker = { Id: MarkerId; Anchor: MarkerAnchor }
+
+    /// A marker's rendered wire text — the SAME `<!-- fsgg:%s{id}:v1 -->` wrapping
+    /// `Driver.fs`'s (private) `markerText` has always used. `occurrences` scans a body for this, not
+    /// for the bare `MarkerId`.
+    val markerWireText: MarkerId -> string
+
+    /// Classify every physical line of `body` against `marker`. `knownMarkerTexts` is the closed family
+    /// of wire texts `LeadingBlock` needs to know the leading block's extent — a leading run mixing two
+    /// different known markers is still one leading block (.github#2221) — and is ignored by
+    /// `LeadingLine`/`AnywhereInBody`, which need no family context. Total: this is the
+    /// quoted-versus-competing rule of #2221/#2248 and the leading-line rule of #83758ec3/#d86ded2a,
+    /// stated once as a function instead of re-derived prose per call site.
+    val occurrences: knownMarkerTexts: string list -> marker: Marker -> body: string -> MarkerOccurrence list
+
+    /// Renders the prose equivalent of `marker`'s anchor rule, dispatched over `MarkerAnchor` rather
+    /// than stored as a free string. For `LeadingBlock` this is byte-identical to the string
+    /// `d58577ec` projected as `ReviewPolicyDoc.QuotedMarkerRule` — the removed field's replacement.
+    val renderMarkerAnchorRule: MarkerAnchor -> string
+
     type ReviewPolicyDoc =
         { InitialMarker: string
           ConfirmationMarker: string
@@ -205,11 +278,23 @@ module Protocol =
           RepairPhaseMarker: string
           MaxAutomatedRepairRounds: int
           RepairPhaseMaxRounds: int
-          /// The quoted-versus-competing marker rule (#2221, #2248): a quotation is inert, and a
-          /// canonical marker repeated in one comment's leading block is a competing marker. Stated
-          /// here so the `fsgg-protocol:review-policy` projection carries it FROM `Driver.fs`'s own
-          /// behaviour rather than as hand-written prose beside it.
-          QuotedMarkerRule: string }
+          /// Every marker name field above, paired with the `MarkerAnchor` `occurrences` checks it
+          /// against. Replaces `QuotedMarkerRule`'s hand-projected prose: the rule is `occurrences`,
+          /// and this is its input for the review-protocol family.
+          MarkerAnchors: Marker list }
+
+    /// The plain column-0 fields a marker's own comment must additionally carry (.github#2369) — e.g.
+    /// `fsgg:independent-review:v1` requires `critic`, `reviewed-head`, `verdict`. Read off this value
+    /// as data instead of re-deriving `Driver.fs`'s private `markerFieldGrammar` function by hand. An
+    /// empty list is a marker with NO field grammar (escalation, repair-phase) — not an omission; see
+    /// `Driver.fs`'s own comment on why that omission is deliberate.
+    type MarkerFieldGrammarDoc = { MarkerId: MarkerId; RequiredFields: string list }
+
+    /// The review-protocol family's field grammar, one entry per `ReviewPolicyDoc` marker name field,
+    /// in the same order. `ProtocolTests` pins this against `Driver.parseReviewComments`'s own observed
+    /// enforcement (the source of truth `Driver.fs`'s private function encodes), so it cannot drift
+    /// from what the engine actually requires without a red test.
+    val markerFieldGrammar: MarkerFieldGrammarDoc list
 
     type LifecyclePolicyDoc =
         { RequiredHousekeeping: string list
