@@ -21,7 +21,15 @@ permissions:
   contents: read
 
 jobs:
+  # .github#2354: this job id is `reconcile` for historical/grep reasons, but a bare top-level job
+  # with no job-level `name:` produces a check-run literally named `reconcile` — indistinguishable to
+  # GitHub, and to branch protection's required-context matching, from coord-board-reconcile.yml's own
+  # `reconcile` job (the one branch protection actually means) and from feed-autofix.yml's. This
+  # `name:` is the fix: it makes THIS job's check-run report as "architecture-map reconcile", so a
+  # green/red here can never be mistaken for — or silently satisfy — the required board-reconciliation
+  # check. Do not remove this override without re-reading .github#2354's root cause.
   reconcile:
+    name: architecture-map reconcile
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

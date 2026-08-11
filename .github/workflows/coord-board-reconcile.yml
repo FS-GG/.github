@@ -40,6 +40,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # .github#2354: this job id/name is deliberately left as the bare `reconcile` — no override. This
+  # is the ONE job of the three that branch protection's required `reconcile` context actually means
+  # (`architecture-map.yml` and `feed-autofix.yml` each carry their own unrelated `reconcile` job id;
+  # #2354 gave THOSE two a disambiguating job-level `name:` instead, rather than renaming this one and
+  # having to re-point `branches/main/protection`'s required-status-check list to match). If this job
+  # is ever renamed, branch protection's required context MUST be updated in the same change, or the
+  # required check silently stops being satisfiable by real board reconciliation.
   reconcile:
     # .github#2352 AC-1: the protocol's OWN comments are the dominant source of `issue_comment` volume —
     # delivery-route receipts, obligation declarations/receipts, independent-review markers, host
