@@ -1,0 +1,176 @@
+schemaVersion: 1
+work:
+  id: 2366-product-tree-feedback-report-materialization
+  title: "Product Tree Feedback Report Materialization"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2366-product-tree-feedback-report-materialization/spec.md
+  sourceClarifications: work/2366-product-tree-feedback-report-materialization/clarifications.md
+  sourceChecklist: work/2366-product-tree-feedback-report-materialization/checklist.md
+  sourcePlan: work/2366-product-tree-feedback-report-materialization/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2366-product-tree-feedback-report-materialization/spec.md
+    digest: 1ffe0462d7b9b4732eef632073980227f04c6b55d48749fa254623d0a34bb91d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2366-product-tree-feedback-report-materialization/clarifications.md
+    digest: 1e74cf203fe90087c5414b31067e56b3c384ca698d595b83f78a2b51cbb9a146
+    schemaVersion: 1
+  - label: checklist
+    path: work/2366-product-tree-feedback-report-materialization/checklist.md
+    digest: ce8d3bc75a05318a052af90357b66987faf614b5647dd62f26e2e292a4f515bc
+    schemaVersion: 1
+  - label: plan
+    path: work/2366-product-tree-feedback-report-materialization/plan.md
+    digest: 8f159149cf3db947b4b0d09cec1a93fe338c3988cf9dcb31681745498c277455
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, AC-002, AC-003, FR-001, PD-001, PD-002, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-004, AC-005, FR-002, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-006, FR-003, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement clarification decision DEC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Update contract surface PC-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-004]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Update contract surface PC-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-003, PD-005]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-002, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Record verification evidence VO-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-002, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Record verification evidence VO-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-002, VO-003]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Record verification evidence VO-004
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-004, VO-004]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Record verification evidence VO-005
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-005, VO-005]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV013]
+  - id: T014
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-002, PD-003]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV014]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2366-product-tree-feedback-report-materialization."

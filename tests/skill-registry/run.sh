@@ -1210,6 +1210,137 @@ run --registry "$SREG" --repos-root "$SROOT" >/dev/null \
 echo "   ok"
 
 # =================================================================================================
+# CHECK 7 — CROSS-REFERENCES (.github#2366). AC-1: "Add the missing-fs-gg-feedback-report case as a
+# negative fixture so the gate is shown to fail, not merely to pass." `xref-driver` plays
+# `work-roadmap`'s role (materializes-when: always, references a sibling's path in its
+# references/**); `xref-product` plays `fs-gg-feedback-report`'s. Isolated in its own --repos-root,
+# and its own registry + `.github` driver-skill-manifest so predicates()/completeness() stay
+# coherent throughout and the ONLY finding a mutation below produces is the one under test.
+# =================================================================================================
+XROOT="$WORK/xref-repos"
+mkdir -p "$XROOT/.github/.claude/skills/xref-driver/references" \
+         "$XROOT/.github/.claude/skills/xref-product" \
+         "$XROOT/.github/.claude/skills/xref-inert/references" \
+         "$XROOT/.github/registry"
+printf 'xref driver body\n'  > "$XROOT/.github/.claude/skills/xref-driver/SKILL.md"
+printf 'xref product body\n' > "$XROOT/.github/.claude/skills/xref-product/SKILL.md"
+printf 'xref inert body\n'   > "$XROOT/.github/.claude/skills/xref-inert/SKILL.md"
+XDRIVER="$(sha "$XROOT/.github/.claude/skills/xref-driver/SKILL.md")"
+XPRODUCT="$(sha "$XROOT/.github/.claude/skills/xref-product/SKILL.md")"
+XINERT="$(sha "$XROOT/.github/.claude/skills/xref-inert/SKILL.md")"
+XREG="$WORK/xref-skills.yml"
+
+# `xref-inert` (materializes-when: "false", mirroring `lane-steward`) always references an
+# UNREGISTERED sibling — this is the vacuous/unsatisfiable-referencer case (case 64 below). Its own
+# predicate can never hold, so it must NEVER be flagged, in every state this section exercises.
+cat > "$XROOT/.github/.claude/skills/xref-inert/references/notes.md" <<'EOF'
+See .agents/skills/xref-nonexistent/HELPME.md for context that never applies.
+EOF
+
+# `write_xref_registry <xref-product when>` — the registry AND its manifest declare the SAME
+# predicate for xref-product, so mutating it never also trips `predicate-matches`; the only check
+# that can fire from these mutations is `cross-references`.
+write_xref_registry() {
+  local product_when="$1"
+  cat > "$XREG" <<YAML
+schemaVersion: 3
+updated: "2026-08-11"
+parameters: [profile, lifecycle, feedback, designSystem]
+skills:
+  - { id: xref-driver,  scope: driver,   owner: .github, source: .github/.claude/skills/xref-driver/SKILL.md,  sha256: $XDRIVER,  materializes-when: always }
+  - { id: xref-product, scope: product,  owner: .github, source: .github/.claude/skills/xref-product/SKILL.md, sha256: $XPRODUCT, materializes-when: "$product_when" }
+  - { id: xref-inert,   scope: operator, owner: .github, source: .github/.claude/skills/xref-inert/SKILL.md,   sha256: $XINERT,   materializes-when: "false" }
+YAML
+  cat > "$XROOT/.github/registry/driver-skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "xref-driver",  "scope": "driver",   "sha256": "$XDRIVER",  "supplied-by": ".claude/skills/xref-driver",  "materializes-when": "always" },
+  { "id": "xref-product", "scope": "product",  "sha256": "$XPRODUCT", "supplied-by": ".claude/skills/xref-product", "materializes-when": "$product_when" },
+  { "id": "xref-inert",   "scope": "operator", "sha256": "$XINERT",   "supplied-by": ".claude/skills/xref-inert",   "materializes-when": "false" }
+] }
+JSON
+}
+
+# `write_xref_driver_refs <extra-line-or-empty>` — xref-driver's references/feedback-contract.md
+# always references xref-product's path; an optional second line adds an UNREGISTERED reference.
+write_xref_driver_refs() {
+  {
+    echo 'Run: `dotnet fsi .agents/skills/xref-product/scripts/tool.fsx -- validate`'
+    if [ -n "${1:-}" ]; then printf '%s\n' "$1"; fi
+  } > "$XROOT/.github/.claude/skills/xref-driver/references/feedback-contract.md"
+}
+
+echo "== 62. cross-references: an always-referencing skill whose sibling's predicate narrows is caught (.github#2366 AC-1) =="
+write_xref_driver_refs ""
+
+# (a) POSITIVE CONTROL: xref-product is ALSO always — both predicates agree, exactly like the real
+# work-roadmap -> fs-gg-feedback-report pair on `main` today. Fully coherent: zero findings at all.
+write_xref_registry "always"
+out="$(run --registry "$XREG" --repos-root "$XROOT" || true)"
+run --registry "$XREG" --repos-root "$XROOT" >/dev/null \
+  || { echo "FAIL: the coherent always/always xref fixture was not accepted"; echo "$out"; exit 1; }
+grep -q "\[cross-references\]" <<<"$out" && { echo "FAIL: cross-references fired on an implied reference"; echo "$out"; exit 1; }
+
+# (b) THE MUTATION — AC-1's named case. Narrow xref-product's predicate away from `always`, the
+# missing-fs-gg-feedback-report shape: a driver that is unconditionally present assumes a sibling
+# that is not. This is the SUBJECT of check 7 broken, not its predicate: it proves the gate can go
+# RED, not merely that it can pass.
+write_xref_registry "profile in [game]"
+out="$(run --registry "$XREG" --repos-root "$XROOT" || true)"
+run --registry "$XREG" --repos-root "$XROOT" >/dev/null 2>&1 \
+  && { echo "FAIL: expected non-zero exit once xref-product narrowed away from xref-driver's always"; exit 1; }
+grep -q "\[cross-references\] xref-driver" <<<"$out" \
+  || { echo "FAIL: narrowing xref-product's predicate did not trip cross-references"; echo "$out"; exit 1; }
+grep -q "xref-product" <<<"$out" || { echo "FAIL: the finding does not name the referenced id"; echo "$out"; exit 1; }
+grep -q "profile in \[game\]" <<<"$out" \
+  || { echo "FAIL: the finding does not echo xref-product's actual (mutated) predicate"; echo "$out"; exit 1; }
+
+# (c) RESTORED: back to always/always, and the finding is gone again — this is what "shown to fail,
+# not merely to pass" requires: the SAME fixture, the SAME assertion, both directions.
+write_xref_registry "always"
+out="$(run --registry "$XREG" --repos-root "$XROOT" || true)"
+run --registry "$XREG" --repos-root "$XROOT" >/dev/null \
+  || { echo "FAIL: restoring xref-product to always did not restore coherence"; echo "$out"; exit 1; }
+grep -q "\[cross-references\]" <<<"$out" && { echo "FAIL: cross-references still fired after the predicate was restored"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 63. cross-references: a path reference to an UNREGISTERED sibling id is caught =="
+write_xref_registry "always"
+
+# (a) Add a second reference line naming an id NO registry row declares.
+write_xref_driver_refs 'Also see `.agents/skills/xref-ghost/notes.md` for more.'
+out="$(run --registry "$XREG" --repos-root "$XROOT" || true)"
+grep -q "\[cross-references\] xref-driver" <<<"$out" \
+  || { echo "FAIL: a reference to an unregistered id was not caught"; echo "$out"; exit 1; }
+grep -q "xref-ghost" <<<"$out" || { echo "FAIL: the finding does not name the unregistered id"; echo "$out"; exit 1; }
+grep -q "no registry row declares" <<<"$out" || { echo "FAIL: the finding does not explain WHY"; echo "$out"; exit 1; }
+
+# (b) Remove the ghost reference and the finding disappears — both directions, again.
+write_xref_driver_refs ""
+out="$(run --registry "$XREG" --repos-root "$XROOT" || true)"
+run --registry "$XREG" --repos-root "$XROOT" >/dev/null \
+  || { echo "FAIL: removing the ghost reference did not restore coherence"; echo "$out"; exit 1; }
+grep -q "\[cross-references\]" <<<"$out" && { echo "FAIL: cross-references still fired with no ghost reference"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 64. cross-references: an unsatisfiable referencer (materializes-when: false) is NEVER flagged, even beside a REAL violation (.github#2366 AC-3) =="
+# xref-inert (materializes-when: "false", mirroring the live lane-steward -> pnext-item shape)
+# permanently references an unregistered sibling in its OWN references/notes.md (set up above, never
+# touched by this case). If the vacuous-referencer suppression were broken — or simply absent — this
+# would ALSO fire, every time. Prove it is silent even in the SAME run where xref-driver's own
+# reference is a REAL, live violation, so the suppression is not accidentally swallowing real ones.
+write_xref_registry "profile in [game]"   # xref-driver (always) -> xref-product (narrowed): a REAL violation
+out="$(run --registry "$XREG" --repos-root "$XROOT" || true)"
+grep -q "\[cross-references\] xref-driver" <<<"$out" \
+  || { echo "FAIL: the real xref-driver violation went unreported alongside xref-inert"; echo "$out"; exit 1; }
+grep -q "\[cross-references\] xref-inert" <<<"$out" \
+  && { echo "FAIL: xref-inert (materializes-when: false) was flagged — an unsatisfiable referencer can never surface this failure mode"; echo "$out"; exit 1; }
+grep -q "xref-nonexistent" <<<"$out" \
+  && { echo "FAIL: xref-inert's reference to the unregistered xref-nonexistent leaked into the findings"; echo "$out"; exit 1; }
+# Restore the shared xref fixture to its coherent state for any case added after this one.
+write_xref_registry "always"
+echo "   ok"
+
+# =================================================================================================
 # THE TRIGGER SET (.github#1606) — this workflow's OTHER gate must be reachable from its own filter.
 #
 # `skill-registry-coherence.yml` runs `generate-driver-manifest --check`, and it is the ONLY

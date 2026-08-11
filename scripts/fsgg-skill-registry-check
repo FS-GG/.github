@@ -64,6 +64,30 @@ neither -- the emission condition:
                      The row's `owner:` picks which manifest is authoritative. If two declarers
                      disagree with EACH OTHER, the row is reported and `--write` refuses to guess.
 
+  7. CROSS-REFERENCES
+                     a materialized skill's own text must not depend on a SIBLING the same
+                     materialization can legitimately drop (.github#2366). `work-roadmap`/
+                     `work-board` (`materializes-when: always`) instruct a worker to run
+                     `.agents/skills/fs-gg-feedback-report/scripts/feedback-tool.fsx` — a path that
+                     belongs to a DIFFERENT row. Checks 1-6 are each a predicate over ONE row (its
+                     bytes, its presence, its own predicate against its own manifest); nothing
+                     compared TWO rows' predicates to EACH OTHER, so two individually-coherent rows
+                     could still combine unsafely with nothing here to say so. For every row whose
+                     own `materializes-when` is satisfiable (an unreachable predicate, e.g. an
+                     operator skill's `"false"`, can never surface this failure mode and is
+                     skipped), this scans its `SKILL.md` and every file under its `references/` for
+                     a path-shaped reference to a sibling id and asserts the referencing row's
+                     predicate IMPLIES the referenced row's — checked by enumeration over the
+                     domain of parameter values the registry's OWN `materializes-when` corpus
+                     already uses (a scaffold's actual, but registry-external, effectiveParameters
+                     are `skill-union-assert.sh --params`'s business, not this check's; see that
+                     script's `eval_clause`/`eval_and`/`eval_condition`, whose grammar this mirrors
+                     rather than re-inventing). A referenced id absent from the registry entirely is
+                     the same failure by construction (an unregistered target is trivially never
+                     guaranteed present). Registry-internal and requires no live scaffolded product
+                     tree — this is exactly what lets `.github`'s own CI catch the class of drift
+                     before it ever reaches one.
+
 ADR-0022 §6's frozen-mirror field and byte-comparison family were retired at P6 by .github#1862
 after Rendering removed the second copies (Rendering#1147). This checker now answers only catalog,
 digest, and materialization-predicate questions. It deliberately ignores legacy producer-manifest
@@ -145,6 +169,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -492,6 +517,207 @@ def completeness(rows: list[dict], declarers: dict[str, list[dict]]) -> list[dic
     return findings
 
 
+# ---------------------------------------------------------------------------------------------
+# CHECK 7: CROSS-REFERENCES (.github#2366). See the module docstring's "CROSS-REFERENCES" section
+# for the finding this proves and why it is registry-internal. The grammar below is a deliberate,
+# minimal PORT of `scripts/skill-union-assert.sh`'s `eval_clause`/`eval_and`/`eval_condition`
+# (lines ~304-355 there) — same tokens, same precedence — so a predicate reads the same way in
+# both checkers rather than this file inventing a second grammar to drift against the first.
+# ---------------------------------------------------------------------------------------------
+
+_WHEN_IN_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\[([^\]]*)\]")
+_WHEN_CMP_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)\s*(?:==|!=)\s*("(?:[^"\\]|\\.)*"|[^\s]+)')
+
+# A path-shaped reference to ANOTHER skill's directory, e.g. `.agents/skills/fs-gg-feedback-report/
+# scripts/feedback-tool.fsx`. Deliberately narrow (AC-001's own wording: "a sibling skill path"),
+# not a bare-name/backtick mention — a doc that merely NAMES another skill in prose is not a
+# dependency on that skill's presence the way a path a worker is told to RUN is.
+_SIBLING_PATH_RE = re.compile(r"\.(?:agents|claude)/skills/([a-z][a-z0-9-]*)/")
+
+
+def _unquote_when(token: str) -> str:
+    token = token.strip()
+    if len(token) >= 2 and token[0] == '"' and token[-1] == '"':
+        return token[1:-1]
+    return token
+
+
+def eval_clause(clause: str, params: dict[str, str]) -> bool:
+    """One comparison clause. Mirrors `skill-union-assert.sh`'s `eval_clause`."""
+    text = clause.strip()
+    if text in ("always", "true"):
+        return True
+    if text == "false":
+        return False
+    if " in [" in text:
+        key, _, rest = text.partition(" in [")
+        rhs = rest[:-1] if rest.endswith("]") else rest
+        for item in rhs.split(","):
+            item_t = _unquote_when(item)
+            if item_t and params.get(key.strip(), "") == item_t:
+                return True
+        return False
+    if "!=" in text:
+        key, _, rhs = text.partition("!=")
+        return params.get(key.strip(), "") != _unquote_when(rhs)
+    if "==" in text:
+        key, _, rhs = text.partition("==")
+        return params.get(key.strip(), "") == _unquote_when(rhs)
+    raise ValueError(f"unparseable materializes-when clause: {clause!r}")
+
+
+def eval_and(conjunction: str, params: dict[str, str]) -> bool:
+    """Clauses joined by ` and ` — all must hold. Mirrors `skill-union-assert.sh`'s `eval_and`."""
+    return all(eval_clause(part, params) for part in conjunction.split(" and "))
+
+
+def eval_when(expr: str, params: dict[str, str]) -> bool:
+    """A full predicate: conjunctions joined by ` or ` — any may hold. Empty ⇒ always (defensive;
+    absent ⇒ "always" upstream, per `when_of`/DEFAULT_WHEN). Mirrors `eval_condition`."""
+    text = expr.strip()
+    if not text:
+        return True
+    return any(eval_and(part, params) for part in text.split(" or "))
+
+
+def _relevant_keys(*exprs: str) -> set[str]:
+    keys: set[str] = set()
+    for expr in exprs:
+        keys.update(key for key, _ in _WHEN_IN_RE.findall(expr))
+        keys.update(key for key, _ in _WHEN_CMP_RE.findall(expr))
+    return keys
+
+
+def when_domains(rows: list[dict]) -> dict[str, set[str]]:
+    """{parameter: observed value set} over EVERY row's `materializes-when`, plus the unset/empty
+    string every key admits (a param absent from a scaffold's --params reads as "", matching
+    `skill-union-assert.sh`'s `PARAM[$key]-` default). CORPUS-DERIVED, not a declared enum: sound
+    whenever every legal value of every referenced parameter already appears somewhere in the
+    registry's own predicates — true today by inspection (clarifications.md DEC-001), and a bounded,
+    stated guarantee rather than a silent one if that ever stops holding.
+    """
+    domains: dict[str, set[str]] = {}
+    for row in rows:
+        when = normalize_when(row.get("materializes-when", DEFAULT_WHEN))
+        for key, rhs in _WHEN_IN_RE.findall(when):
+            values = domains.setdefault(key, {""})
+            values.update(_unquote_when(item) for item in rhs.split(",") if _unquote_when(item))
+        for key, rhs in _WHEN_CMP_RE.findall(when):
+            domains.setdefault(key, {""}).add(_unquote_when(rhs))
+    return domains
+
+
+def _combinations(keys: set[str], domains: dict[str, set[str]]):
+    if not keys:
+        yield {}
+        return
+    ordered = sorted(keys)
+    value_lists = [sorted(domains.get(key, {""})) for key in ordered]
+    for combo in itertools.product(*value_lists):
+        yield dict(zip(ordered, combo))
+
+
+def when_implies(referencing_when: str, referenced_when: str, domains: dict[str, set[str]]):
+    """(bool, witness). True iff every parameter combination that satisfies `referencing_when` also
+    satisfies `referenced_when`, checked by enumeration over `domains` (see `when_domains`). On
+    failure, `witness` is the first combination where the referencing predicate holds and the
+    referenced one does not.
+    """
+    keys = _relevant_keys(referencing_when, referenced_when)
+    for params in _combinations(keys, domains):
+        if eval_when(referencing_when, params) and not eval_when(referenced_when, params):
+            return False, params
+    return True, None
+
+
+def when_satisfiable(when: str, domains: dict[str, set[str]]) -> bool:
+    """Whether ANY parameter combination makes `when` true. `"false"` (or any predicate equivalent
+    to it) is not — and a row whose own predicate can never hold never materializes into any
+    product tree, so nothing it references can ever go missing FOR IT (.github#2366 AC-003)."""
+    keys = _relevant_keys(when)
+    return any(eval_when(when, params) for params in _combinations(keys, domains))
+
+
+def _skill_files(skill_dir: str) -> list[str]:
+    """`SKILL.md` plus every file under `references/` — the same surface a materialized product
+    tree actually delivers for this skill (the `source:` field alone names only `SKILL.md`)."""
+    files = []
+    skill_md = os.path.join(skill_dir, "SKILL.md")
+    if os.path.isfile(skill_md):
+        files.append(skill_md)
+    references_dir = os.path.join(skill_dir, "references")
+    if os.path.isdir(references_dir):
+        for root, _dirs, names in sorted(os.walk(references_dir)):
+            for name in sorted(names):
+                files.append(os.path.join(root, name))
+    return files
+
+
+def cross_references(rows: list[dict], repos_root: str) -> list[dict]:
+    """Check 7. See the module docstring and this section's header comment."""
+    findings: list[dict] = []
+    domains = when_domains(rows)
+    by_id = {row["id"]: row for row in rows}
+
+    for row in rows:
+        skill_id = row["id"]
+        referencing_when = normalize_when(row.get("materializes-when", DEFAULT_WHEN))
+        if not when_satisfiable(referencing_when, domains):
+            continue
+
+        source = row.get("source")
+        if not isinstance(source, str):
+            continue
+        skill_dir = os.path.dirname(os.path.join(repos_root, source))
+        if not os.path.isdir(skill_dir):
+            continue  # a missing/unreadable source is already `source-exists`'s finding to make
+
+        referenced_ids: set[str] = set()
+        for path in _skill_files(skill_dir):
+            raw = read_bytes(path)
+            if raw is None:
+                continue
+            text = raw.decode("utf-8", errors="replace")
+            referenced_ids.update(_SIBLING_PATH_RE.findall(text))
+
+        for referenced_id in sorted(referenced_ids - {skill_id}):
+            target = by_id.get(referenced_id)
+            if target is None:
+                findings.append(
+                    {
+                        "id": skill_id,
+                        "check": "cross-references",
+                        "declared": referenced_id,
+                        "detail": (
+                            f"references `.../skills/{referenced_id}/…` but no registry row "
+                            f"declares id {referenced_id!r} — the reference cannot be guaranteed "
+                            "to resolve in any tree that materializes this skill"
+                        ),
+                    }
+                )
+                continue
+
+            referenced_when = normalize_when(target.get("materializes-when", DEFAULT_WHEN))
+            implied, witness = when_implies(referencing_when, referenced_when, domains)
+            if implied:
+                continue
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "cross-references",
+                    "declared": referenced_id,
+                    "detail": (
+                        f"references `.../skills/{referenced_id}/…` (materializes-when: "
+                        f"`{referenced_when}`) but this skill's own materializes-when "
+                        f"(`{referencing_when}`) does not imply it — e.g. under {witness!r} this "
+                        f"skill would materialize and {referenced_id!r} would not"
+                    ),
+                }
+            )
+
+    return findings
+
+
 def _load_registry(registry_path: str) -> dict:
     try:
         import yaml
@@ -550,6 +776,7 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
     findings.extend(predicates(registry["skills"], declarers))
     findings.extend(manifest_findings)
     findings.extend(completeness(registry["skills"], declarers))
+    findings.extend(cross_references(registry["skills"], repos_root))
     return findings
 
 

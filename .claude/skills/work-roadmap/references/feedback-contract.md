@@ -4,6 +4,12 @@ The worker must explicitly invoke `fs-gg-feedback-report` and keep one stable lo
 `roadmap-<roadmap-slug>-m<milestone>-<slug>`. Give that id to the worker in its initial brief; do not
 derive a different id after work begins.
 
+> If `.agents/skills/fs-gg-feedback-report/` (and its `.claude/` twin) is absent even though
+> `fs-gg-sdd-*` is present, this tree is a **partial product materialization**, not the wrong tree —
+> see `deep-detail.md`'s "Where this runs" for the exact, non-blocking remedy (do not stop, do not
+> fabricate a substitute out-of-workspace tool path; record the zero-event reason below and
+> raise/dedupe one finding against the tree's scaffold provenance, `.github#2366`).
+
 At onboarding/first build, lifecycle authoring, the first implementation-test-evidence loop, and
 verify/ship/PR orchestration, invoke the feedback skill and decide whether a material checkpoint
 qualifies. Append qualifying friction, rework, capability gaps, documentation defects, orchestration
