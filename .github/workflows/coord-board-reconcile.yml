@@ -36,7 +36,7 @@ permissions:
   contents: read
 
 # .github#2361 (measured residual of #2352): a REPO-WIDE group is what actually manufactures the
-# cancellations, not the job-level `if` above. GitHub Actions holds at most one RUNNING and one
+# cancellations, not the job-level `if` below. GitHub Actions holds at most one RUNNING and one
 # PENDING run per concurrency group; a newer run for that same group evicts the pending one — this
 # happens BEFORE any job's `if` is evaluated, and it happens regardless of `cancel-in-progress`
 # (that setting only governs whether a newer run may cancel a currently-RUNNING one; it has no
@@ -45,30 +45,51 @@ permissions:
 # unrelated issue_comment traffic silently blocked PR #2383 (`reconcile` context went MISSING, not
 # red — see the issue's evidence comments).
 #
-# `${{ github.repository }}` alone puts EVERY event this workflow answers to — every marker/receipt
-# comment on every open issue and PR, every `issues`/`pull_request`/`pull_request_review` event, the
-# hourly `schedule`, every `workflow_dispatch` — into that one shared group. A `drive-board` wave
-# generates dozens of `issue_comment` events spread across many DIFFERENT issues/PRs in the same few
-# minutes; none of that traffic is related to any other item, yet it all contends for the same one
-# pending slot.
+# ROUND-2 REPAIR (independent review, same item): the first cut of this fix keyed the group by the
+# triggering issue/PR number for EVERY event, which fixed the cancellation but broke a DIFFERENT
+# invariant this same file documents twice below (search `no fan-out for a shared id`): the
+# `reconcile` job scans and writes the WHOLE board on every real run, not just the triggering item,
+# and posts `Writes.lifecycleWatermark` comments with no dedup/CAS guard
+# (`src/FS.GG.Coord.GitHub/Writes.fs:933-934` is a blind `postComment`). Keying by issue/PR number
+# would have let a PR's own push (group `…-2372`), an unrelated `issues` edit (group `…-500`), and
+# the hourly `schedule` (group `…-periodic`) all run their full board-write step CONCURRENTLY —
+# exactly the fan-out the job's fixed `--worker coord-board-reconcile` id below was reasoned to be
+# safe FROM. That would have traded one measured defect for an unmeasured one.
 #
-# Keying the group by the issue/PR the event actually targets removes that unrelated contention:
-# comments on issue #A no longer evict a pending run for PR #B. `pull_request`/`pull_request_review`
-# carry `github.event.pull_request.number`; `issues`/`issue_comment` carry `github.event.issue.number`
-# (which equals the PR number when the comment is ON a PR, so a PR's own review-marker traffic stays
-# correctly serialized with that PR's own push-triggered runs — only truly UNRELATED issues/PRs are
-# separated). `schedule`/`workflow_dispatch` carry neither, so they fall back to one fixed literal
-# group shared only among themselves (unaffected by any issue/PR traffic, and still serialized
-# against each other so two full-board scans never overlap).
+# THE ACTUAL SHAPE OF THE PROBLEM: only `issue_comment` volume manufactures the burst (a
+# `drive-board` wave posts dozens of marker comments across many different issues/PRs in minutes),
+# and the job's own `if:` below ALREADY proves most of that volume does nothing — every marker
+# comment (`startsWith(github.event.comment.body, '<!-- fsgg:')`) skips the job outright without
+# reaching the write step. So the group only needs to stop ISOLATING THOSE SPECIFIC, PROVABLY-INERT
+# runs from each other; every event that could ever reach `Reconcile lifecycle projection` — every
+# `issues`/`pull_request`/`pull_request_review` event, `schedule`, `workflow_dispatch`, and any
+# GENUINE (non-marker) `issue_comment` — must keep sharing ONE group, preserving full serialisation
+# for anything that writes, unmodified from before this issue.
+#
+# The expression below mirrors the job's `if:` predicate EXACTLY (`github.event_name !=
+# 'issue_comment' || !startsWith(github.event.comment.body, '<!-- fsgg:')` — literally the same
+# condition, not a look-alike): when that predicate is true (this run WILL reach the write step, or
+# is not an issue_comment at all), the group resolves to the fixed literal `main`, identical to
+# every other such run, so they stay serialised together exactly as before. Only when the predicate
+# is false — a marker comment the job is ABOUT to skip regardless — does the group fall through to
+# `github.event.issue.number`, isolating that guaranteed no-op from `main` and from unrelated
+# issues' own no-ops, which is the entire and only source of the measured cancellations. A genuine
+# comment on a PR still lands in `main` together with that PR's own pushes, same as before.
+#
+# `reconcile-concurrency-scope-coherence.yml`/`scripts/check-reconcile-concurrency-scope.py` assert
+# this mechanically: every representative non-skip event resolves to the SAME group, every
+# skip-guaranteed marker event resolves to a group distinct from `main` and from every other issue's
+# — so a future edit that lets real work fan out, or that stops isolating the marker noise, both
+# fail CI rather than silently reintroducing either defect.
 #
 # `cancel-in-progress: false` is UNCHANGED and must stay false: `src/FS.GG.Coord.Core/Landable.fs:56-59`
 # (`#698`) requires that a run which starts is allowed to finish rather than being killed mid-scan by
-# a newer trigger — this fix narrows WHO contends for the slot, not whether an in-progress run may be
-# cancelled by a legitimate successor in its own, now-narrower group.
+# a newer trigger — this fix narrows WHICH runs share `main`'s queue, not whether an in-progress run
+# in that queue may be cancelled by a legitimate successor.
 concurrency:
   group: >-
-    coord-board-reconcile-${{ github.repository }}-${{ github.event.pull_request.number ||
-    github.event.issue.number || 'periodic' }}
+    coord-board-reconcile-${{ github.repository }}-${{ (github.event_name != 'issue_comment' ||
+    !startsWith(github.event.comment.body, '<!-- fsgg:')) && 'main' || github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
