@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2402-coherent-set-versioning/spec.md
-    digest: ac69db5b7e169126290348ef659815b0d67d773f71ac1497af4ed52da7d58ddd
+    digest: 67614d1a9979dc5c5b57c1133cb7c9c9e6166ded766fea7974cee505d47240be
     schemaVersion: 1
   - label: clarifications
     path: work/2402-coherent-set-versioning/clarifications.md
-    digest: a29ea750302b37735fbb3c0e4f8da929dafae0b38ed518b9f852da5ebb5481f7
+    digest: ea049660f72de8c06d6fe8e7de79d0d6bbbe6ff24ddfcf92ab71c311e9895e49
     schemaVersion: 1
   - label: checklist
     path: work/2402-coherent-set-versioning/checklist.md
-    digest: df71f699fb74b9270722205caaae2a181105f1eee4f5132a8825ba09744746d3
+    digest: f619684d6fb6b8967b4b636b7c3cd141bd27737fc9fde333ddd716195b669422
     schemaVersion: 1
   - label: plan
     path: work/2402-coherent-set-versioning/plan.md
-    digest: 183e52191152ba891ac09cd386490a1987b6d498ee52aeaa865cefaf2a4d69f1
+    digest: d903b773cdaff0d896e80242f86da11a335b0232a1dc5ec31ceed05c6962580e
     schemaVersion: 1
 tasks:
   - id: T001
@@ -178,6 +178,26 @@ tasks:
     sourceIds: [GV-001, PD-001, PD-002]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV016]
+  - id: T017
+    title: Implement requirement FR-005
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-001, FR-005, PD-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV017]
+  - id: T018
+    title: Implement clarification decision DEC-004
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-004]
+    sourceIds: [DEC-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV018]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

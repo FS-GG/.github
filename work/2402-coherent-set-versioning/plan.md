@@ -16,15 +16,15 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2402-coherent-set-versioning/spec.md sha256:ac69db5b7e169126290348ef659815b0d67d773f71ac1497af4ed52da7d58ddd schemaVersion:1
-- clarifications: work/2402-coherent-set-versioning/clarifications.md sha256:a29ea750302b37735fbb3c0e4f8da929dafae0b38ed518b9f852da5ebb5481f7 schemaVersion:1
-- checklist: work/2402-coherent-set-versioning/checklist.md sha256:df71f699fb74b9270722205caaae2a181105f1eee4f5132a8825ba09744746d3 schemaVersion:1
+- spec: work/2402-coherent-set-versioning/spec.md sha256:67614d1a9979dc5c5b57c1133cb7c9c9e6166ded766fea7974cee505d47240be schemaVersion:1
+- clarifications: work/2402-coherent-set-versioning/clarifications.md sha256:ea049660f72de8c06d6fe8e7de79d0d6bbbe6ff24ddfcf92ab71c311e9895e49 schemaVersion:1
+- checklist: work/2402-coherent-set-versioning/checklist.md sha256:f619684d6fb6b8967b4b636b7c3cd141bd27737fc9fde333ddd716195b669422 schemaVersion:1
 
 ## Plan Scope
 - Work item 2402-coherent-set-versioning is planned from the current specification, clarification, and checklist facts.
-- Requirement count: 4.
-- Clarification decision count: 3.
-- Checklist result count: 4.
+- Requirement count: 5.
+- Clarification decision count: 4.
+- Checklist result count: 5.
 
 ## Plan Decisions
 - PD-001 [AC-001] [FR-001] complete: Add one MSBuild property `<FsggCoherentSetVersion>` to
@@ -76,6 +76,16 @@ Prose status: planned
   the parent issue) are explicitly OUT of this plan, filed as follow-up FS-GG/.github#2409 per DEC-003.
   This plan's `Paths:` therefore touches none of `release-kit.yml`, `release-drivers.yml`,
   `release-coord-engine.yml`, or the feed.
+- PD-006 [AC-001] [FR-005] complete (repair round 1, critic finding): Answer the parent issue's AC4
+  in DEC-004 and in the PR body — "unaffected", grounded in `.github#2249`'s own AC3/AC4 text: both
+  read only `registry/dependencies.yml`'s `coord-engine` row, a field this plan's `Paths:` never
+  writes (the deferred release-cut decision above; the "known consequence" contract-impact entry
+  below), and no receiver pins FS.GG.Kit or FS.GG.Drivers by version at all
+  (`#2249`'s own observed evidence names only `tools["fs.gg.coord.cli"]`). The one real consequence
+  for the eventual real release — a larger one-time receiver jump than `#2396`'s permitted-lag bound
+  was reasoned about — is named as a rollout note for `.github#2409` rather than resolved here.
+  No production code changes for this decision; it is a stated finding, delivered in `clarifications.md`
+  DEC-004 and the PR body.
 
 ## Contract Impact
 - PC-001 [PD-001] [PD-002] production code: `Directory.Build.props` gains one new MSBuild property;

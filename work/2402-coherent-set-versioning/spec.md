@@ -20,6 +20,7 @@ Ship FS.GG.Kit, FS.GG.Drivers and coord-engine from one shared version scalar so
 - SB-002: A new regression gate, with gate-inversion (mutation) evidence, that reds if any of the three projects reintroduces an independent <Version> literal that disagrees with the shared property.
 - SB-003: A migration note recording the set's starting version (the max of the three current versions, so no member appears to downgrade) and the explicit reconciliation with the competing .github#2396 proposal: #2396's permitted lag governs receiver pins outside the set; this item removes lag inside the set.
 - SB-004: An evidence-based accounting of every coherence gate named in this item's evidence section (source-coherence, feed-coherence, pin-coherence, engine-pin-coherence, kit-published-coherence, lock-range-coherence, contract-coherence), stating its true subject and whether the shared version scalar makes it redundant or why it is justified to keep.
+- SB-006: A stated, evidenced answer to .github#2402's own AC4 — whether .github#2249's receiver-pin lag (and its #2396 fix) becomes simpler or is unaffected by this coherent-set version — grounded in #2249's actual acceptance criteria text, not asserted.
 
 ## Non-Goals
 - SB-005: Consolidating release-kit.yml, release-drivers.yml and release-coord-engine.yml into one workflow that actually cuts and publishes all three packages together, and cutting + verifying that real release across both feeds, is deferred to a follow-up item: rewriting the fleet's sole distribution mechanism for its coordination engine, and performing a real multi-package publish, is a larger and higher-risk change than one bounded worker session should attempt unilaterally without a maintainer decision on sequencing.
@@ -35,6 +36,7 @@ Ship FS.GG.Kit, FS.GG.Drivers and coord-engine from one shared version scalar so
 - FR-002: A hermetic test proves the shared-version mechanism by mutation: reverting any one of the three project files to an independent literal <Version> is caught red by the new regression gate, and the unmodified tree is green. (Stories: US-001; Acceptance: AC-001)
 - FR-003: The migration note states the set's starting version, shows it is greater than or equal to max(0.49.0, 0.18.0, 0.23.0), and states the .github#2396 reconciliation explicitly. (Stories: US-001; Acceptance: AC-001)
 - FR-004: Every coherence gate named in this item's evidence section is evaluated against its own source, and the PR states for each whether the shared version scalar makes it redundant (and it is deleted) or why it is justified to keep (one line). (Stories: US-001; Acceptance: AC-001)
+- FR-005: The PR body and clarifications.md state, with reasoning grounded in .github#2249's own acceptance-criteria text, whether .github#2249's receiver-pin lag fix (AC3's gate, AC4's #2396 permitted-lag route) becomes simpler or is unaffected by this coherent-set version — never asserted without the reasoning. (Stories: US-001; Acceptance: AC-001)
 
 ## Ambiguities
 No material ambiguities recorded.

@@ -75,13 +75,38 @@ No clarification answers recorded.
   It is filed as follow-up FS-GG/.github#2409 so the maintainer can decide deliberately, per the
   same "state it explicitly rather than letting it land implicitly" instruction this item's own
   Evidence section gives for the #2396 split.
+- DEC-004 (repair round 1, critic finding): `.github#2402`'s own AC4 — "`.github#2249`'s
+  receiver-pin lag is expressible against the set version, and the PR states whether that item's
+  fix becomes simpler or is unaffected" — is answered here: **unaffected**, grounded in `#2249`'s
+  own text, not asserted. `#2249`'s AC3 is "a gate compares each receiver's pinned `fs.gg.coord.cli`
+  against the registry's declared `coord-engine` version"; AC4's fallback (implemented as
+  `.github#2396`) is "criterion 3's gate encodes the permitted lag instead of equality". Both read
+  exactly ONE field: `registry/dependencies.yml`'s `coord-engine` row (`version`/`package-version`
+  at `registry/dependencies.yml:900-902`) — the same field `scripts/repos-audit.sh`'s engine-pin
+  sweep already reads today, unchanged. Two facts make the set-version property invisible to that
+  comparison: (1) `#2249`'s own observed evidence is that a receiver's `.config/dotnet-tools.json`
+  pins `tools["fs.gg.coord.cli"]` ONLY — no receiver pins FS.GG.Kit or FS.GG.Drivers by version at
+  all, so there is no receiver-side subject for those two members to begin with; (2) this item does
+  NOT flip `registry/dependencies.yml`'s `coord-engine` row (DEC-003/PC-002 — that is
+  `.github#2409`'s scope, deliberately), so the field `#2249`/`#2396` read is byte-identical before
+  and after this PR. "Expressible against the set version" is trivially true (`coord-engine`'s
+  version now EQUALS `$(FsggCoherentSetVersion)` by construction, since it is one of the three
+  members), but that equality is invisible to the sweep, which never reads Kit's or Drivers' version
+  and would behave identically if `coord-engine` were still independently versioned. Neither the
+  sweep's subject, its predicate, nor `#2396`'s permitted-lag encoding changes in shape or
+  complexity — "unaffected" is the honest answer, not "simpler."
+  One real, distinct consequence for the FOLLOW-UP (`.github#2409`), named there rather than left
+  implicit: when a real coherent-set release is eventually cut and the registry is flipped, every
+  receiver's next required bump is to whatever the coherent set's first published version is — a
+  larger one-time jump than the incremental per-release cadence `#2396`'s permitted-lag bound was
+  reasoned about (that decision compared receivers 1-2 minors behind a single-package release
+  cadence, not a one-time cross-package realignment). That is a ROLLOUT consideration for
+  `#2409`'s real release, not a change to `#2249`/`#2396`'s gate design, and this item is not the
+  one that resolves it.
 
 ## Accepted Deferrals
 - The workflow-consolidation and real dual-feed release (SB-005 / .github#2402's AC2 and AC7) are
   accepted deferrals to follow-up FS-GG/.github#2409, per DEC-003.
-
-## Accepted Deferrals
-No accepted deferrals recorded.
 
 ## Remaining Ambiguity
 No blocking ambiguity remains.

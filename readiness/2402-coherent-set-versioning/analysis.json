@@ -41,7 +41,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "df71f699fb74b9270722205caaae2a181105f1eee4f5132a8825ba09744746d3"
+        "value": "f619684d6fb6b8967b4b636b7c3cd141bd27737fc9fde333ddd716195b669422"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "a29ea750302b37735fbb3c0e4f8da929dafae0b38ed518b9f852da5ebb5481f7"
+        "value": "ea049660f72de8c06d6fe8e7de79d0d6bbbe6ff24ddfcf92ab71c311e9895e49"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "183e52191152ba891ac09cd386490a1987b6d498ee52aeaa865cefaf2a4d69f1"
+        "value": "d903b773cdaff0d896e80242f86da11a335b0232a1dc5ec31ceed05c6962580e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "ac69db5b7e169126290348ef659815b0d67d773f71ac1497af4ed52da7d58ddd"
+        "value": "67614d1a9979dc5c5b57c1133cb7c9c9e6166ded766fea7974cee505d47240be"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "d69f0e56d11d5e908ad776937f56a2d4689de5d9fb9b65257b92727e04cf11d9"
+        "value": "543b2ad60b3e9ddb142521242536e6e7728b81f2308fc286542c219bff991c2b"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -151,6 +151,16 @@
     {
       "id": "AR007",
       "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "DEC-004",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
       "targetPath": "work/2402-coherent-set-versioning/plan.md",
       "sourceId": null,
       "targetId": null,
@@ -159,7 +169,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR008",
+      "id": "AR009",
       "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": null,
@@ -169,7 +179,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR009",
+      "id": "AR010",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "PC-001",
@@ -179,7 +189,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR010",
+      "id": "AR011",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "PC-002",
@@ -189,7 +199,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR012",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "GV-001",
@@ -199,7 +209,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR013",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "PM-001",
@@ -209,7 +219,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR014",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "PD-001",
@@ -219,7 +229,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR015",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "PD-002",
@@ -229,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR016",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "PD-003",
@@ -239,7 +249,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR017",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "PD-004",
@@ -249,7 +259,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR018",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "PD-005",
@@ -259,7 +269,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR019",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PD-006",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": null,
@@ -269,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR021",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "VO-001",
@@ -279,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR022",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "VO-002",
@@ -289,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR023",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "VO-003",
@@ -299,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR024",
       "sourcePath": "work/2402-coherent-set-versioning/plan.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "VO-004",
@@ -309,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR025",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "AC-001",
@@ -319,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR026",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/checklist.md",
       "sourceId": null,
@@ -329,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR027",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/plan.md",
       "sourceId": null,
@@ -339,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR028",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "FR-001",
@@ -349,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR029",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "FR-002",
@@ -359,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR030",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "FR-003",
@@ -369,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR031",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "FR-004",
@@ -379,7 +399,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR032",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "FR-005",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR033",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/clarifications.md",
       "sourceId": null,
@@ -389,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR034",
       "sourcePath": "work/2402-coherent-set-versioning/spec.md",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": null,
@@ -399,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR035",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T005",
@@ -409,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR036",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T006",
@@ -419,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR037",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T007",
@@ -429,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR038",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T008",
@@ -439,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR039",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T009",
@@ -449,7 +479,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR040",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T010",
@@ -459,7 +489,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR041",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T011",
@@ -469,7 +499,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR039",
+      "id": "AR042",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T012",
@@ -479,7 +509,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR040",
+      "id": "AR043",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T013",
@@ -489,7 +519,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR041",
+      "id": "AR044",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T014",
@@ -499,10 +529,20 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR042",
+      "id": "AR045",
       "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
       "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
       "sourceId": "T016",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR046",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T018",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -511,7 +551,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 42,
+    "readyCount": 46,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,
