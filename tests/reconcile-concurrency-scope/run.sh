@@ -65,11 +65,13 @@ job_stub() {
     echo "    steps: [{ run: 'true' }]"; }
 }
 
-REAL="$REPO_ROOT/.github/workflows/coord-board-reconcile.yml"
-
 # =============================================================================================
 # 1. REGRESSION — the real, shipped file passes.
 # =============================================================================================
+# `check-reconcile-concurrency-scope.py --root <dir>` joins WORKFLOW_REL
+# (.github/workflows/coord-board-reconcile.yml) onto whatever directory it is given, so passing
+# `$REPO_ROOT` here already reads the exact real, shipped file — there is no separate file-path
+# variable to wire in without duplicating that join.
 expect "REGRESSION: the real coord-board-reconcile.yml is fan-out-safe" 0 "OK —" "$REPO_ROOT"
 
 # =============================================================================================
