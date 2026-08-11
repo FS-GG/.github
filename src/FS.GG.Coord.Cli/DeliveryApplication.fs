@@ -163,8 +163,26 @@ module DeliveryApplication =
     let private receiptFields =
         Regex($"^<!-- fsgg:delivery-receipt id=(?<id>{fieldValue}) head=(?<head>{fieldValue}) evidence=(?<evidence>{fieldValue}) -->$", RegexOptions.Compiled)
 
+    // THE LEADING-LINE RULE (.github#2347), applying `.github#2221`'s established correction
+    // ("a marker is evidence only as a WHOLE LINE inside the comment's LEADING MARKER BLOCK", never
+    // the comment's entire body) to the three delivery markers, which never received it. A delivery
+    // marker carries all of its fields inline on one line — unlike a review marker, which pairs a
+    // bare marker line with separate `key: value` field lines below it — so its "leading marker
+    // block" is exactly the comment's first line: the run of lines, from byte 0, that could be this
+    // one marker is never longer than one line for a marker whose own grammar is single-line. Prose
+    // that follows on later lines (the org's universal delivery-obligation/receipt writing style —
+    // marker line, blank line, explanation) is therefore never part of the marker and is never
+    // matched against it. A marker merely quoted later in the body — not the comment's own leading
+    // line — still fails this match and stays inert, preserving the `.github#2264` round-1 anchoring
+    // fix for the sibling read path.
+    let private leadingLine (text: string) =
+        let trimmed = text.Trim().Replace("\r\n", "\n")
+        match trimmed.IndexOf '\n' with
+        | -1 -> trimmed
+        | index -> trimmed.Substring(0, index)
+
     let private malformedField (comment: Driver.ReviewComment) (kind: string) (fields: Regex) =
-        let matched = fields.Match(comment.Body.Trim())
+        let matched = fields.Match(leadingLine comment.Body)
         if not matched.Success then Error $"delivery {kind} comment {comment.Id} has malformed body"
         elif not (Regex($"^{obligationId}$").IsMatch(matched.Groups.["id"].Value)) then Error $"delivery {kind} comment {comment.Id} has malformed id"
         elif kind = "obligation declaration" && not (Regex($"^{obligationKind}$").IsMatch(matched.Groups.["kind"].Value)) then Error $"delivery {kind} comment {comment.Id} has malformed kind"
@@ -175,8 +193,8 @@ module DeliveryApplication =
         let declarations = comments |> List.filter (fun comment -> comment.Body.StartsWith "<!-- fsgg:delivery-obligation")
         let receipts = comments |> List.filter (fun comment -> comment.Body.StartsWith "<!-- fsgg:delivery-receipt")
         let none = $"<!-- fsgg:delivery-obligations none head=%s{headSha} -->"
-        if declarations |> List.exists (fun comment -> comment.Body.Trim() = none) then
-            if declarations |> List.exists (fun comment -> comment.Body.Trim() <> none) || not (List.isEmpty receipts) then
+        if declarations |> List.exists (fun comment -> leadingLine comment.Body = none) then
+            if declarations |> List.exists (fun comment -> leadingLine comment.Body <> none) || not (List.isEmpty receipts) then
                 Error "the no-obligations declaration cannot be combined with obligation declarations or receipts"
             else Ok []
         elif List.isEmpty declarations then Error "delivery obligations are undeclared"
@@ -184,7 +202,7 @@ module DeliveryApplication =
             let parsedDeclarations =
                 declarations
                 |> List.map (fun comment ->
-                    let matched = obligationDeclaration.Match(comment.Body.Trim())
+                    let matched = obligationDeclaration.Match(leadingLine comment.Body)
                     if not matched.Success then malformedField comment "obligation declaration" declarationFields
                     elif matched.Groups.["head"].Value <> headSha then Error "a delivery obligation declaration is stale"
                     else Ok(matched.Groups.["id"].Value, matched.Groups.["kind"].Value))
@@ -199,7 +217,7 @@ module DeliveryApplication =
                     let parsedReceipts =
                         receipts
                         |> List.map (fun comment ->
-                            let matched = obligationReceipt.Match(comment.Body.Trim())
+                            let matched = obligationReceipt.Match(leadingLine comment.Body)
                             if not matched.Success then malformedField comment "obligation receipt" receiptFields
                             elif matched.Groups.["head"].Value <> headSha then Error "a delivery obligation receipt is stale"
                             else Ok(matched.Groups.["id"].Value, matched.Groups.["evidence"].Value))
