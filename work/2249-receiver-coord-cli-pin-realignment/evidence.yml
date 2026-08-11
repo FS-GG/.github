@@ -1,0 +1,133 @@
+schemaVersion: 1
+workId: 2249-receiver-coord-cli-pin-realignment
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2249-receiver-coord-cli-pin-realignment/spec.md
+sourceClarifications: work/2249-receiver-coord-cli-pin-realignment/clarifications.md
+sourceChecklist: work/2249-receiver-coord-cli-pin-realignment/checklist.md
+sourcePlan: work/2249-receiver-coord-cli-pin-realignment/plan.md
+sourceTasks: work/2249-receiver-coord-cli-pin-realignment/tasks.yml
+sourceAnalysis: readiness/2249-receiver-coord-cli-pin-realignment/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2249-receiver-coord-cli-pin-realignment/analysis.json
+    digest: dba1d80025f71e417496930b1b2ccf817f381c3891f1c0723a56eab379e7d863
+    schemaVersion: 1
+  - label: checklist
+    path: work/2249-receiver-coord-cli-pin-realignment/checklist.md
+    digest: 5604e442ee9b9a908b0c178e742217e6c220a008e34cea0b2853f74931352c91
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2249-receiver-coord-cli-pin-realignment/clarifications.md
+    digest: 6512095c9f08caaec3e1c677656c7044081135a3878c85ed2270280abee51a3a
+    schemaVersion: 1
+  - label: plan
+    path: work/2249-receiver-coord-cli-pin-realignment/plan.md
+    digest: 38923e2181463b57edd69e3baaaae224efbd3a3fb95f86e6455e5f5f6e61922c
+    schemaVersion: 1
+  - label: spec
+    path: work/2249-receiver-coord-cli-pin-realignment/spec.md
+    digest: b4f25fff64a07c61dcb1029e5f7b4a0454d65fa5de1975dd15722494a469d447
+    schemaVersion: 1
+  - label: tasks
+    path: work/2249-receiver-coord-cli-pin-realignment/tasks.yml
+    digest: 81b8bebea7a42147cc1a0aa89ea601332f41c86863e17708933e459657707f14
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [scripts/repos-audit.sh, tests/repos-audit/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-audit/run.sh
+    result: pass
+    synthetic: false
+    notes: ["FR-001 is already implemented: scripts/repos-audit.sh's engine-manifest sweep compares every coordination-kit receiver's .config/dotnet-tools.json fs.gg.coord.cli pin against registry/dependencies.yml's declared coord-engine version, merged via FS-GG/.github#2277 (2026-08-08, closing child #2273). Fresh re-run of tests/repos-audit/run.sh in this worktree: 224 assertions, 224 passed, 0 failed, including PASS engine-pin: MUTATION-PROVEN -- changing only the declared contract version reds every divergent receiver, and PASS engine-manifest: MUTATION-PROVEN -- flipping ONE receiver's manifest flips ONLY that receiver's verdict (gate-inversion evidence). Independently confirmed against live data: FS-GG/.github repos-audit.yml run 31476651882 (2026-08-11T09:12Z) shows the live engine-manifest sweep reporting engine-pin errors for FS.GG.SDD/Rendering/Governance/Templates/Game/Audio (pinned 0.22.1) and FS.GG.Net (pinned 0.21.1) against the live declared coord-engine 0.23.0, and 'ok' lines for every receiver's manifest presence -- the gate is exercised on live production data, not only its own fixtures. No new code was authored for this task; the plan decision (PD-001) records why."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-audit/run.sh
+    result: pass
+    synthetic: false
+    notes: ["PC-001 declares no contract-surface change. Verified: `git diff origin/main -- scripts/repos-audit.sh tests/repos-audit/run.sh registry/dependencies.yml registry/repos.yml` on this branch is empty (this work item's only new files are under work/2249-receiver-coord-cli-pin-realignment/ and readiness/2249-receiver-coord-cli-pin-realignment/). No CLI verb, .fsi surface, or registry schema changed."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [tests/repos-audit/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-audit/run.sh
+    result: pass
+    synthetic: false
+    notes: ["VO-001 recorded: `bash tests/repos-audit/run.sh` run in this worktree on 2026-08-11 reported 'repos-audit fixture -- 224 assertion(s): 224 passed, 0 failed' and 'repos-audit fixture -- OK', exit 0. The suite has no JUnit/TRX report emitter (bash harness with PASS/FAIL text lines), so no --from-test-report observedRun receipt is attachable; verify/ship are invoked with --no-require-observed for this reason, recorded here rather than left implicit."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-audit/run.sh
+    result: pass
+    synthetic: false
+    notes: ["PM-001 declares no migration is introduced. Verified: no schema, manifest, or registry file changed on this branch (see EV002); plan.md schemaVersion 1 accepted by `fsgg-sdd analyze` with outcome succeeded / readiness implementationReady."]
+  - id: EV005
+    kind: generated-view
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [readiness/2249-receiver-coord-cli-pin-realignment/work-model.json]
+    sourceRefs:
+      - kind: verification
+        path: readiness/2249-receiver-coord-cli-pin-realignment/work-model.json
+    result: pass
+    synthetic: false
+    notes: ["GV-001: readiness/2249-receiver-coord-cli-pin-realignment/work-model.json and readiness/2249-receiver-coord-cli-pin-realignment/analysis.json were both regenerated by `fsgg-sdd analyze` (outcome succeeded, readiness implementationReady) from this plan's current sources. No other generated view (driver manifests, dashboards, generated skill projections) reads this work item's Paths, so none is affected."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

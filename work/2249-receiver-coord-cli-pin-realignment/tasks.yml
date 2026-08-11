@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 2249-receiver-coord-cli-pin-realignment
+  title: "Receiver fs.gg.coord.cli pin realignment"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2249-receiver-coord-cli-pin-realignment/spec.md
+  sourceClarifications: work/2249-receiver-coord-cli-pin-realignment/clarifications.md
+  sourceChecklist: work/2249-receiver-coord-cli-pin-realignment/checklist.md
+  sourcePlan: work/2249-receiver-coord-cli-pin-realignment/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2249-receiver-coord-cli-pin-realignment/spec.md
+    digest: b4f25fff64a07c61dcb1029e5f7b4a0454d65fa5de1975dd15722494a469d447
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2249-receiver-coord-cli-pin-realignment/clarifications.md
+    digest: 6512095c9f08caaec3e1c677656c7044081135a3878c85ed2270280abee51a3a
+    schemaVersion: 1
+  - label: checklist
+    path: work/2249-receiver-coord-cli-pin-realignment/checklist.md
+    digest: 5604e442ee9b9a908b0c178e742217e6c220a008e34cea0b2853f74931352c91
+    schemaVersion: 1
+  - label: plan
+    path: work/2249-receiver-coord-cli-pin-realignment/plan.md
+    digest: 38923e2181463b57edd69e3baaaae224efbd3a3fb95f86e6455e5f5f6e61922c
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2249-receiver-coord-cli-pin-realignment."
