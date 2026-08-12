@@ -443,7 +443,7 @@
     "status": "implementationReady",
     "readyCount": 35,
     "advisoryCount": 0,
-    "warningCount": 0,
+    "warningCount": 1,
     "blockingCount": 0,
     "staleSourceCount": 0,
     "missingDispositionCount": 0,
@@ -451,13 +451,38 @@
     "generatedViewFindingCount": 0,
     "acceptedDeferralCount": 0
   },
-  "findings": [],
+  "findings": [
+    {
+      "id": "AF001",
+      "category": "warning",
+      "severity": "warning",
+      "state": "open",
+      "path": "readiness/2409-coherent-set-release/work-model.json",
+      "relatedIds": [
+        "readiness/2409-coherent-set-release/work-model.json",
+        "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "workModelInconsistent",
+        "workModelInconsistent",
+        "workModelInconsistent",
+        "workModelInconsistent",
+        "workModelInconsistent"
+      ],
+      "message": "Generated view \u0027readiness/2409-coherent-set-release/work-model.json\u0027 was not written: the derived work model has blocking diagnostics.",
+      "correction": "Resolve the named lifecycle diagnostics, then re-run to generate the work model view."
+    }
+  ],
   "generatedViews": [
     {
       "path": "readiness/2409-coherent-set-release/work-model.json",
       "kind": "workModel",
       "currency": "missing",
-      "diagnosticIds": []
+      "diagnosticIds": [
+        "workModelNotGenerated"
+      ]
     }
   ],
   "optionalBoundaryFacts": [
@@ -483,7 +508,28 @@
       "diagnosticIds": []
     }
   ],
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "id": "workModelNotGenerated",
+      "severity": "warning",
+      "artifact": "readiness/2409-coherent-set-release/work-model.json",
+      "message": "Generated view \u0027readiness/2409-coherent-set-release/work-model.json\u0027 was not written: the derived work model has blocking diagnostics.",
+      "correction": "Resolve the named lifecycle diagnostics, then re-run to generate the work model view.",
+      "relatedIds": [
+        "readiness/2409-coherent-set-release/work-model.json",
+        "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "workModelInconsistent",
+        "workModelInconsistent",
+        "workModelInconsistent",
+        "workModelInconsistent",
+        "workModelInconsistent"
+      ]
+    }
+  ],
   "nextAction": {
     "actionId": "analysis.next.implement",
     "command": null,

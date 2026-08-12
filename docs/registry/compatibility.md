@@ -127,7 +127,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `fs-gg-audio` | FS.GG.Audio | `0.5.0` | `0.5.0` |
 | `fs-gg-net` | FS.GG.Net | `0.5.0` | `0.5.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
-| `coord-engine` | FS-GG/.github | `0.23.0` | `0.23.0` |
+| `coord-engine` | FS-GG/.github | `0.50.0` | `0.50.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.9.0` | `0.9.0` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.8.1` | `0.8.1` |
 | `game-skills` | FS.GG.Game | `0.8.0` | `0.8.0` |
@@ -248,12 +248,37 @@ every one of the seven receivers, not a wait for Renovate/dashboard-tick alone �
 `.github#2396` eventually decides. This is stated explicitly per this item's own acceptance criteria
 rather than left implicit or silently assumed unnecessary.
 
-**The real cut itself remains a post-merge obligation of `.github#2409`, not yet executed as of this
-note:** pushing `kit/v0.50.0`, `drivers/v0.50.0` and `coord-engine/v0.50.0` together, observing all
-three feeds publish, flipping `registry/dependencies.yml`'s `coord-engine` row to `0.50.0` with live
-feed/restore evidence (not inferred from a green workflow run), and the coordinated receiver fan-out
-above. This entry will be extended with that evidence once it executes; until then, `coord-engine`'s
-registry row correctly continues to read `0.23.0`.
+**The real cut, executed (2026-08-12).** `kit/v0.50.0`, `drivers/v0.50.0` and `coord-engine/v0.50.0`
+were pushed together in one `git push` at commit `248435375cc6be0554e5c93552fd5cf44c128fd8`. Each of
+the three workflows' sibling-tag precondition passed (all three tags already existed at that same
+commit when each precondition ran) and all three completed: run
+[31607040051](https://github.com/FS-GG/.github/actions/runs/31607040051) (kit),
+[31607040112](https://github.com/FS-GG/.github/actions/runs/31607040112) (drivers),
+[31607040033](https://github.com/FS-GG/.github/actions/runs/31607040033) (coord-engine), each logging
+`Your package was pushed.` on both the org GitHub Packages feed and nuget.org. Every non-signature,
+non-psmdcp payload entry between the two feeds is byte-identical for all three packages (downloaded
+both artifacts and compared per-entry SHA-256 after unzip). `scripts/check-release-coherence.py`
+(`.github#2445`) reports `ok: no coherent-set completion gap found` against this exact release — its
+first non-vacuous run since landing.
+
+**Restore verified for real, not inferred from a source build.** A fresh, isolated `dotnet tool
+install FS.GG.Coord.Cli --version 0.50.0` (empty tool manifest, both feeds configured) succeeds and
+`dotnet fsgg-coord-engine --version` reports `0.50.0.0`. In the same isolated environment,
+`dotnet add package FS.GG.Kit --version 0.50.0` and `dotnet add package FS.GG.Drivers --version
+0.50.0` followed by `dotnet restore` both resolve from nuget.org, confirmed in the generated
+`project.assets.json` (`FS.GG.Kit/0.50.0`, `FS.GG.Drivers/0.50.0`). `registry/dependencies.yml`'s
+`coord-engine` row is flipped to `0.50.0` on both `version` and `package-version`, with the full
+evidence trail (feed SHA-256 per package, run ids, dashboard-tick result) in that row's own comment
+and in `registry/CHANGELOG.md`'s matching entry.
+
+**The coordinated receiver fan-out remains a post-merge obligation, not yet executed.** Every one of
+the 7 receivers reads `fs.gg.coord.cli` at `0.22.1` (`FS.GG.Net` at `0.21.1`) as of this cut (checked
+live 2026-08-12 against each receiver's `.config/dotnet-tools.json`) — a 28–29 minor jump to `0.50.0`,
+confirming the "no plausible permitted-lag bound covers this release" finding above now that the real
+numbers are in. The bump PR to every receiver, in the shape `.github#2249`'s own AC1/AC2 describe, is
+tracked as this item's own post-merge obligation rather than performed inside this registry-only PR:
+it touches 7 repositories outside `.github#2409`'s declared `Paths:`, and is genuinely separate,
+sequenceable work.
 
 ## Skill-registry row counts
 

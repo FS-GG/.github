@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 2409-coherent-set-release
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/2409-coherent-set-release/spec.md
 sourceClarifications: work/2409-coherent-set-release/clarifications.md
 sourceChecklist: work/2409-coherent-set-release/checklist.md
@@ -9,404 +9,282 @@ sourcePlan: work/2409-coherent-set-release/plan.md
 sourceTasks: work/2409-coherent-set-release/tasks.yml
 sourceAnalysis: readiness/2409-coherent-set-release/analysis.json
 sourceSnapshots:
-- label: analysis
-  path: readiness/2409-coherent-set-release/analysis.json
-  digest: ed405fb833a8dfebc904bebdd3100865cfdd22f73682c6487e9f5073629537ca
-  schemaVersion: 1
-- label: checklist
-  path: work/2409-coherent-set-release/checklist.md
-  digest: 3f0ddc9d2931308942b0e79cfdeb623b4d51f34d5f4e6fe9886afc0874e1655a
-  schemaVersion: 1
-- label: clarifications
-  path: work/2409-coherent-set-release/clarifications.md
-  digest: ec250b3c79824e44f6f1f6ee277eb73eabc325aca936f67f1340bf4d4948e931
-  schemaVersion: 1
-- label: plan
-  path: work/2409-coherent-set-release/plan.md
-  digest: a9d3408c8c20817f4d59120feb87eb0e6bf2744dad289d23b3bac1d588131d8a
-  schemaVersion: 1
-- label: spec
-  path: work/2409-coherent-set-release/spec.md
-  digest: 3a6026d172a968f8de051d59c5bb221bd957187fc1b7cbc56f77d641a6d38f28
-  schemaVersion: 1
-- label: tasks
-  path: work/2409-coherent-set-release/tasks.yml
-  digest: 59c084db482ba1af8b0989178667c17656cc15216e02f52d9b153e3889cb3354
-  schemaVersion: 1
+  - label: analysis
+    path: readiness/2409-coherent-set-release/analysis.json
+    digest: 352dbb459646f3f621e041d96f53f16de0c51c6ba90c33209ac1a388e5b9a756
+    schemaVersion: 1
+  - label: checklist
+    path: work/2409-coherent-set-release/checklist.md
+    digest: 3f0ddc9d2931308942b0e79cfdeb623b4d51f34d5f4e6fe9886afc0874e1655a
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2409-coherent-set-release/clarifications.md
+    digest: ec250b3c79824e44f6f1f6ee277eb73eabc325aca936f67f1340bf4d4948e931
+    schemaVersion: 1
+  - label: plan
+    path: work/2409-coherent-set-release/plan.md
+    digest: a9d3408c8c20817f4d59120feb87eb0e6bf2744dad289d23b3bac1d588131d8a
+    schemaVersion: 1
+  - label: spec
+    path: work/2409-coherent-set-release/spec.md
+    digest: 3a6026d172a968f8de051d59c5bb221bd957187fc1b7cbc56f77d641a6d38f28
+    schemaVersion: 1
+  - label: tasks
+    path: work/2409-coherent-set-release/tasks.yml
+    digest: 59c084db482ba1af8b0989178667c17656cc15216e02f52d9b153e3889cb3354
+    schemaVersion: 1
 evidence:
-- id: EV001
-  kind: deferral
-  subject:
-    type: task
-    id: T001
-  taskRefs:
-  - T001
-  requirementRefs:
-  - FR-001
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs:
-  - PD-001
-  obligationRefs:
-  - EV001
-  artifacts:
-  - .github/workflows/release-kit.yml
-  - .github/workflows/release-drivers.yml
-  - .github/workflows/release-coord-engine.yml
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'FR-001 (the sibling-tag precondition, PD-001) is implemented in all three workflow files.
-    Verified by: (1) `bash -n` syntax-checking every `run:` block in all three files via a python/yaml
-    extraction script (all OK); (2) a hermetic gate-inversion test against a real local git remote with
-    lightweight and annotated tags on two different commits, exercising the exact `git ls-remote`+`awk`
-    logic used in the workflows: matching tags on the same commit PASS (both lightweight and annotated/peeled
-    forms); a sibling tag on the wrong commit REFUSES; a missing sibling tag REFUSES. This is gate-inversion
-    evidence for a new gate, not a formal CI-produced TRX/JUnit report, so it is recorded as a deferral
-    rather than a digest-tracked `verification` — the real CI run (`shell-lint.yml`''s YAML load plus
-    the workflow actually executing on a tag push) is the formal report this obligation ultimately depends
-    on.'
-  owner: github
-  scope: the sibling-tag precondition's correctness
-  laterLifecycleVisibility: Exercised for real the first time the coherent-set tags are pushed together
-    (PD-002); a malformed precondition would refuse or wrongly permit a publish visibly at that point.
-- id: EV002
-  kind: deferral
-  subject:
-    type: task
-    id: T002
-  taskRefs:
-  - T002
-  requirementRefs:
-  - FR-002
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs:
-  - PD-002
-  obligationRefs:
-  - EV002
-  artifacts:
-  - registry/dependencies.yml
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: FR-002 (the real coherent-set release cut, publish verification, and registry flip, PD-002)
-    is NOT executed by this PR — pushing the coherent-set tags is a post-merge action (the workflow precondition
-    it depends on does not exist on `main` until this PR merges), recorded in this item's Accepted Deferrals.
-    `registry/dependencies.yml`'s `coord-engine` row correctly still reads `0.23.0` as of this evidence
-    entry.
-  owner: github
-  scope: the real dual-feed publish and registry flip
-  laterLifecycleVisibility: Tracked as this item's explicit post-merge obligation; the issue is reopened/kept
-    open until the cut executes and is verified, per this item's own acceptance criteria.
-- id: EV003
-  kind: deferral
-  subject:
-    type: task
-    id: T003
-  taskRefs:
-  - T003
-  requirementRefs:
-  - FR-003
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs:
-  - PD-003
-  obligationRefs:
-  - EV003
-  artifacts:
-  - docs/registry/compatibility.md
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'FR-003 (gate re-confirmation write-up, PD-003) is implemented: `docs/registry/compatibility.md`''s
-    "Coherent-set versioning" section gained a new subsection naming all eight now-relevant gates (the
-    seven .github#2402 DEC-002 gates plus check-coherent-set-version.py) with keep-and-why for each, and
-    DEC-003''s rollout finding verbatim. Independently re-run against the changed tree: tests/coherent-set-version,
-    tests/engine-pin, tests/feed-coherence, tests/lock-range-coherence, tests/pin-coherence, tests/source-coherence
-    — all green, confirming none is made redundant.'
-  owner: github
-  scope: the migration-note and gate re-confirmation accuracy
-  laterLifecycleVisibility: Extended again once the real cut (PD-002) executes, with feed/restore evidence.
-- id: EV004
-  kind: deferral
-  subject:
-    type: task
-    id: T004
-  taskRefs:
-  - T004
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs: []
-  obligationRefs:
-  - EV004
-  artifacts:
-  - work/2409-coherent-set-release/clarifications.md
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'DEC-001 (dependency-publish order) is recorded in clarifications.md: no ProjectReference/PackageReference
-    exists among the three packages (verified by grep across all three project files), so no functional
-    ordering requirement exists; the sibling-tag precondition (DEC-004) makes ordering moot by construction.'
-  owner: github
-  scope: DEC-001's factual basis
-  laterLifecycleVisibility: Re-verifiable at any time by the same grep.
-- id: EV005
-  kind: deferral
-  subject:
-    type: task
-    id: T005
-  taskRefs:
-  - T005
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs: []
-  obligationRefs:
-  - EV005
-  artifacts:
-  - work/2409-coherent-set-release/clarifications.md
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: DEC-002 (gate re-confirmation) is recorded in clarifications.md and independently re-run
-    (see EV003's six green gate suites); zero of the eight now-relevant gates are deletable or redundant.
-  owner: github
-  scope: DEC-002's evidence
-  laterLifecycleVisibility: Re-run by CI on every future PR touching these gates.
-- id: EV006
-  kind: deferral
-  subject:
-    type: task
-    id: T006
-  taskRefs:
-  - T006
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs: []
-  obligationRefs:
-  - EV006
-  artifacts:
-  - work/2409-coherent-set-release/clarifications.md
-  - docs/registry/compatibility.md
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'DEC-003 (rollout fit against .github#2396''s permitted lag) is recorded: .github#2396 is
-    not implemented (verified: no lag-bound logic in scripts/repos-audit.sh, issue filed Blocked on: human/decision);
-    the 27-32 minor jump exceeds any plausible bound, so a coordinated fan-out per .github#2249 AC1/AC2
-    is owed regardless of #2396''s eventual decision. Stated in the migration note.'
-  owner: github
-  scope: DEC-003's rollout finding
-  laterLifecycleVisibility: Becomes actionable once PD-002 executes; the fan-out itself is out of this
-    item's Paths.
-- id: EV007
-  kind: deferral
-  subject:
-    type: task
-    id: T007
-  taskRefs:
-  - T007
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs: []
-  obligationRefs:
-  - EV007
-  artifacts:
-  - .github/workflows/release-kit.yml
-  - .github/workflows/release-drivers.yml
-  - .github/workflows/release-coord-engine.yml
-  - work/2409-coherent-set-release/clarifications.md
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'DEC-004 (final workflow-shape decision, after two revisions triggered by re-reading source
-    workflow headers in full and finding the nuget.org OIDC filename binding and the kit-bump-shape tag-namespace
-    dependency) is implemented exactly as recorded: zero filename/tag-namespace/workflow_dispatch changes,
-    one new sibling-tag precondition per file. See EV001 for its gate-inversion evidence.'
-  owner: github
-  scope: DEC-004's implementation fidelity
-  laterLifecycleVisibility: Verified by EV001's gate-inversion test and by CI YAML validation on this
-    PR.
-- id: EV008
-  kind: deferral
-  subject:
-    type: task
-    id: T008
-  taskRefs:
-  - T008
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs: []
-  obligationRefs:
-  - EV008
-  artifacts:
-  - work/2409-coherent-set-release/clarifications.md
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'DEC-005 (dependency-publish order restated against the final design) is recorded: unchanged
-    conclusion (no ordering requirement), restated against the sibling-tag-precondition mechanism rather
-    than the earlier parallel-jobs draft.'
-  owner: github
-  scope: DEC-005's consistency with DEC-001/DEC-004
-  laterLifecycleVisibility: none beyond this record.
-- id: EV009
-  kind: deferral
-  subject:
-    type: task
-    id: T009
-  taskRefs:
-  - T009
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs:
-  - PD-001
-  obligationRefs:
-  - EV009
-  artifacts:
-  - work/2409-coherent-set-release/plan.md
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'PC-001 (contract impact) is recorded: filenames, tag namespaces and workflow_dispatch inputs
-    are byte-for-byte unchanged, preserving the nuget.org OIDC binding and kit-bump-shape resolution;
-    grepped scripts/, tests/, docs/ for other consumers of the tag patterns (none found in this tree).'
-  owner: github
-  scope: PC-001's grep evidence
-  laterLifecycleVisibility: none beyond this record; the kit-bump-shape consumer lives outside this repo
-    and is not independently re-verifiable from here.
-- id: EV010
-  kind: deferral
-  subject:
-    type: task
-    id: T010
-  taskRefs:
-  - T010
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs:
-  - PD-001
-  obligationRefs:
-  - EV010
-  artifacts:
-  - .github/workflows/release-kit.yml
-  - .github/workflows/release-drivers.yml
-  - .github/workflows/release-coord-engine.yml
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'VO-001 (verification obligations) is discharged for the parts executable pre-merge: YAML
-    well-formedness (python yaml.safe_load, all three OK), bash syntax (bash -n over every run: block,
-    all OK), gate-inversion evidence for the new precondition (EV001), and the eight DEC-002 gate suites
-    re-run green (EV003/EV005). PD-002''s real-release-execution verification (live feed queries, real
-    dotnet tool restore) is not yet performed — see EV002.'
-  owner: github
-  scope: VO-001's pre-merge-executable obligations
-  laterLifecycleVisibility: PD-002's live-evidence obligation remains open post-merge.
-- id: EV011
-  kind: deferral
-  subject:
-    type: task
-    id: T011
-  taskRefs:
-  - T011
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs: []
-  obligationRefs:
-  - EV011
-  artifacts:
-  - work/2409-coherent-set-release/plan.md
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'PM-001 (migration posture) is recorded: no new tag namespace is introduced by the final
-    design, so no new repository-level tag ruleset is owed — a smaller migration footprint than the superseded
-    drafts would have required.'
-  owner: github
-  scope: PM-001's accuracy against the final DEC-004 design
-  laterLifecycleVisibility: none beyond this record.
-- id: EV012
-  kind: deferral
-  subject:
-    type: task
-    id: T012
-  taskRefs:
-  - T012
-  requirementRefs: []
-  acceptanceScenarioRefs: []
-  clarificationDecisionRefs: []
-  checklistResultRefs: []
-  planDecisionRefs:
-  - PD-001
-  obligationRefs:
-  - EV012
-  artifacts:
-  - readiness/2409-coherent-set-release/analysis.json
-  - readiness/2409-coherent-set-release/work-model.json
-  sourceRefs: []
-  result: deferred
-  synthetic: false
-  notes:
-  - 'Recorded as a deferral: this worker''s checks are direct/hermetic, not a CI-produced digest-tracked
-    TRX/JUnit report; see rationale for exactly what was run.'
-  rationale: 'GV-001 (generated view refresh) is discharged: `fsgg-sdd analyze` regenerated readiness/2409-coherent-set-release/
-    from the current plan sources, reaching analysisReadiness: implementationReady with zero blocking
-    findings.'
-  owner: github
-  scope: GV-001's currency
-  laterLifecycleVisibility: Re-generated by any future fsgg-sdd analyze/refresh run.
+  - id: EV001
+    kind: deferral
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-drivers.yml", ".github/workflows/release-kit.yml"]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "FR-001 (the sibling-tag precondition, PD-001) is implemented in all three workflow files. Verified by: (1) `bash -n` syntax-checking every `run:` block in all three files via a python/yaml extraction script (all OK); (2) a hermetic gate-inversion test against a real local git remote with lightweight and annotated tags on two different commits, exercising the exact `git ls-remote`+`awk` logic used in the workflows: matching tags on the same commit PASS (both lightweight and annotated/peeled forms); a sibling tag on the wrong commit REFUSES; a missing sibling tag REFUSES. This is gate-inversion evidence for a new gate, not a formal CI-produced TRX/JUnit report, so it is recorded as a deferral rather than a digest-tracked `verification` — the real CI run (`shell-lint.yml`'s YAML load plus the workflow actually executing on a tag push) is the formal report this obligation ultimately depends on."
+    owner: github
+    scope: "the sibling-tag precondition's correctness"
+    laterLifecycleVisibility: "Exercised for real the first time the coherent-set tags are pushed together (PD-002); a malformed precondition would refuse or wrongly permit a publish visibly at that point."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV002
+    kind: deferral
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [registry/dependencies.yml]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "FR-002 (the real coherent-set release cut, publish verification, and registry flip, PD-002) is NOT executed by this PR — pushing the coherent-set tags is a post-merge action (the workflow precondition it depends on does not exist on `main` until this PR merges), recorded in this item's Accepted Deferrals. `registry/dependencies.yml`'s `coord-engine` row correctly still reads `0.23.0` as of this evidence entry."
+    owner: github
+    scope: the real dual-feed publish and registry flip
+    laterLifecycleVisibility: "Tracked as this item's explicit post-merge obligation; the issue is reopened/kept open until the cut executes and is verified, per this item's own acceptance criteria."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV003
+    kind: deferral
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [docs/registry/compatibility.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "FR-003 (gate re-confirmation write-up, PD-003) is implemented: `docs/registry/compatibility.md`'s \"Coherent-set versioning\" section gained a new subsection naming all eight now-relevant gates (the seven .github#2402 DEC-002 gates plus check-coherent-set-version.py) with keep-and-why for each, and DEC-003's rollout finding verbatim. Independently re-run against the changed tree: tests/coherent-set-version, tests/engine-pin, tests/feed-coherence, tests/lock-range-coherence, tests/pin-coherence, tests/source-coherence — all green, confirming none is made redundant."
+    owner: github
+    scope: the migration-note and gate re-confirmation accuracy
+    laterLifecycleVisibility: "Extended again once the real cut (PD-002) executes, with feed/restore evidence."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV004
+    kind: deferral
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [work/2409-coherent-set-release/clarifications.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-001 (dependency-publish order) is recorded in clarifications.md: no ProjectReference/PackageReference exists among the three packages (verified by grep across all three project files), so no functional ordering requirement exists; the sibling-tag precondition (DEC-004) makes ordering moot by construction."
+    owner: github
+    scope: "DEC-001's factual basis"
+    laterLifecycleVisibility: Re-verifiable at any time by the same grep.
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV005
+    kind: deferral
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [work/2409-coherent-set-release/clarifications.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-002 (gate re-confirmation) is recorded in clarifications.md and independently re-run (see EV003's six green gate suites); zero of the eight now-relevant gates are deletable or redundant."
+    owner: github
+    scope: "DEC-002's evidence"
+    laterLifecycleVisibility: Re-run by CI on every future PR touching these gates.
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV006
+    kind: deferral
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [docs/registry/compatibility.md, work/2409-coherent-set-release/clarifications.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-003 (rollout fit against .github#2396's permitted lag) is recorded: .github#2396 is not implemented (verified: no lag-bound logic in scripts/repos-audit.sh, issue filed Blocked on: human/decision); the 27-32 minor jump exceeds any plausible bound, so a coordinated fan-out per .github#2249 AC1/AC2 is owed regardless of #2396's eventual decision. Stated in the migration note."
+    owner: github
+    scope: "DEC-003's rollout finding"
+    laterLifecycleVisibility: "Becomes actionable once PD-002 executes; the fan-out itself is out of this item's Paths."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV007
+    kind: deferral
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-drivers.yml", ".github/workflows/release-kit.yml", work/2409-coherent-set-release/clarifications.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-004 (final workflow-shape decision, after two revisions triggered by re-reading source workflow headers in full and finding the nuget.org OIDC filename binding and the kit-bump-shape tag-namespace dependency) is implemented exactly as recorded: zero filename/tag-namespace/workflow_dispatch changes, one new sibling-tag precondition per file. See EV001 for its gate-inversion evidence."
+    owner: github
+    scope: "DEC-004's implementation fidelity"
+    laterLifecycleVisibility: "Verified by EV001's gate-inversion test and by CI YAML validation on this PR."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV008
+    kind: deferral
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [work/2409-coherent-set-release/clarifications.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-005 (dependency-publish order restated against the final design) is recorded: unchanged conclusion (no ordering requirement), restated against the sibling-tag-precondition mechanism rather than the earlier parallel-jobs draft."
+    owner: github
+    scope: "DEC-005's consistency with DEC-001/DEC-004"
+    laterLifecycleVisibility: none beyond this record.
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV009
+    kind: deferral
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [work/2409-coherent-set-release/plan.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "PC-001 (contract impact) is recorded: filenames, tag namespaces and workflow_dispatch inputs are byte-for-byte unchanged, preserving the nuget.org OIDC binding and kit-bump-shape resolution; grepped scripts/, tests/, docs/ for other consumers of the tag patterns (none found in this tree)."
+    owner: github
+    scope: "PC-001's grep evidence"
+    laterLifecycleVisibility: "none beyond this record; the kit-bump-shape consumer lives outside this repo and is not independently re-verifiable from here."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV010
+    kind: deferral
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-drivers.yml", ".github/workflows/release-kit.yml"]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "VO-001 (verification obligations) is discharged for the parts executable pre-merge: YAML well-formedness (python yaml.safe_load, all three OK), bash syntax (bash -n over every run: block, all OK), gate-inversion evidence for the new precondition (EV001), and the eight DEC-002 gate suites re-run green (EV003/EV005). PD-002's real-release-execution verification (live feed queries, real dotnet tool restore) is not yet performed — see EV002."
+    owner: github
+    scope: "VO-001's pre-merge-executable obligations"
+    laterLifecycleVisibility: "PD-002's live-evidence obligation remains open post-merge."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV011
+    kind: deferral
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [work/2409-coherent-set-release/plan.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "PM-001 (migration posture) is recorded: no new tag namespace is introduced by the final design, so no new repository-level tag ruleset is owed — a smaller migration footprint than the superseded drafts would have required."
+    owner: github
+    scope: "PM-001's accuracy against the final DEC-004 design"
+    laterLifecycleVisibility: none beyond this record.
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+  - id: EV012
+    kind: deferral
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [readiness/2409-coherent-set-release/analysis.json, readiness/2409-coherent-set-release/work-model.json]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "GV-001 (generated view refresh) is discharged: `fsgg-sdd analyze` regenerated readiness/2409-coherent-set-release/ from the current plan sources, reaching analysisReadiness: implementationReady with zero blocking findings."
+    owner: github
+    scope: "GV-001's currency"
+    laterLifecycleVisibility: Re-generated by any future fsgg-sdd analyze/refresh run.
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
 lifecycleNotes:
-- 'Next lifecycle action: verify.'
+  - "Next lifecycle action: verify."
