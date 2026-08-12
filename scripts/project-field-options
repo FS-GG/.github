@@ -307,23 +307,60 @@ def roster_ids(path: Path) -> list[str]:
     return [repo_id for repo_id, _ in roster_pairs(path)]
 
 
-def compare_resolver(roster: Path, resolver: Path) -> None:
+def resolver_arms(resolver: Path) -> dict[str, str]:
+    """Parse RepoScope.resolve's short-id -> repo-name match arms from F# source text.
+
+    `.github#2411`: the previous implementation captured `resolve`'s ENTIRE body with one
+    `re.search(..., re.DOTALL)` anchored to end-of-file, then read every arm out of that block in
+    the exact line layout the author happened to write. That coupled a roster/resolver AGREEMENT
+    check to the incidental shape of one match expression — during `.github#2398`'s own development
+    (PR #2404, commit `e4a0a650`), wrapping every arm's right-hand side in `Repository` (a change to
+    what the arm RETURNS, not to the mapping) made the whole-body regex miss every arm and report a
+    total false drift (CI run .../actions/runs/31521527951, `missing=[everything]`).
+    #2398 patched the symptom (made the wrapper optional); this fixes the cause.
+
+    This scans arm-by-arm instead of parsing the function as one block: each `| "<id>" -> ...` arm
+    is located independently, so ARM ORDER never matters, and the mapped value is read as the LAST
+    quoted string literal in that arm's right-hand side — the position the literal lands in whether
+    it is bare (`"X"`), `Repository`-wrapped (`Repository "X"`), or wrapped again by an otherwise
+    inert helper (`noop (Repository "X")`), because a no-op wrapper introduces no quoted text of its
+    own. `NonRepository` arms (`cross-repo`) are still never captured: their payload is a bound
+    variable (`raw`/`token`), never a quoted literal, so no reformat can make one masquerade as a
+    roster entry.
+
+    This is NOT immune to every conceivable reformat — an active-pattern rewrite or hoisting the
+    match into a differently-named helper would still need a compiled check to survive, per
+    `.github#2411`'s "Impact" note — but it does cover the two mutations that item's acceptance
+    criteria requires: RHS-wrapping and arm reordering.
+    """
     try:
         text = resolver.read_text()
     except OSError as exc:
         raise Refused(f"cannot read embedded repo resolver {resolver}: {exc}") from exc
-    match = re.search(r"let resolve \(raw: string\).*?=\s*(.*?)\n\s*$", text, re.DOTALL)
-    if not match:
+    header = re.search(r"^( *)let resolve \(raw: string\)[^\n]*=[ \t]*\n", text, re.MULTILINE)
+    if not header:
         raise Refused("could not isolate RepoScope.resolve; refusing a partial resolver check")
-    # Each roster arm returns `Repository "<name>"` (`.github#2398`'s closed `Scope` union), not a bare
-    # string — the `Repository` wrapper is OPTIONAL in this pattern so a resolver still shaped the
-    # pre-#2398 way (a stale fixture, a future revert) is not silently unreadable. `NonRepository`
-    # arms (`cross-repo`) are never captured here: the roster comparison is about repositories, and
-    # `NonRepository`'s payload is a bound variable (`raw`/`token`), never a quoted literal this pattern
-    # matches — so the sentinel cannot masquerade as a roster entry by construction, not by exclusion.
-    actual = dict(
-        re.findall(r'^\s*\|\s*"([^"]+)"\s*->\s*(?:Repository\s*)?"([^"]+)"', match.group(1), re.MULTILINE)
-    )
+    indent = header.group(1)
+    body_start = header.end()
+    # Bound the body to `resolve` alone: the next module-level member at the SAME indentation (e.g.
+    # `orFallback`), or end of file if `resolve` is the last member. Anchoring to the next sibling
+    # rather than end-of-file means a later member can never leak into this scan.
+    next_member = re.search(rf"\n{re.escape(indent)}let \w", text[body_start:])
+    body = text[body_start : body_start + next_member.start()] if next_member else text[body_start:]
+    arm_starts = list(re.finditer(r'^\s*\|\s*"([^"]+)"\s*->', body, re.MULTILINE))
+    if not arm_starts:
+        raise Refused("could not isolate RepoScope.resolve; refusing a partial resolver check")
+    arms: dict[str, str] = {}
+    for i, arm in enumerate(arm_starts):
+        rhs_end = arm_starts[i + 1].start() if i + 1 < len(arm_starts) else len(body)
+        rhs_values = re.findall(r'"([^"]+)"', body[arm.end() : rhs_end])
+        if rhs_values:
+            arms[arm.group(1)] = rhs_values[-1]
+    return arms
+
+
+def compare_resolver(roster: Path, resolver: Path) -> None:
+    actual = resolver_arms(resolver)
     expected = {
         repo_id: full.split("/", 1)[1]
         for repo_id, full in roster_pairs(roster)
