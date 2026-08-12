@@ -4034,6 +4034,38 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | Some n -> printfn "pending board writes: %d — replay them with `flush` (#862)" n
                 | None -> printfn "pending board writes: UNKNOWN — the deferral queue could not be read"
 
+                // WHO SPENT IT (#2418). The meter above says how much is left; it has never said what took
+                // it. When the budget died twice inside one board run, the drain could not be attributed —
+                // not from the meter, and not from reading the engine either, because the one function that
+                // parsed `rateLimit { cost }` had no caller. This is that answer, and it is a MEASUREMENT:
+                // every row is GitHub's own `cost`, summed per command, never our estimate of one.
+                let window = TimeSpan.FromHours 1.0
+
+                match Budget.recentSpend window with
+                | [] ->
+                    printfn
+                        "GraphQL spend (last hour): no attribution recorded — no invocation has billed a GraphQL call since the ledger was last written. This is 'nothing measured', NOT 'nothing spent': a fleet whose engine predates #2418 records nothing at all."
+                | records ->
+                    let byCommand = Budget.spendByCommand records
+                    let total = records |> List.sumBy (fun r -> r.Points)
+                    let calls = records |> List.sumBy (fun r -> r.Calls)
+
+                    printfn
+                        "GraphQL spend (last hour): %d point(s) over %d billed call(s), %d invocation(s) — dearest first:"
+                        total
+                        calls
+                        (List.length records)
+
+                    for command, points, callCount in byCommand |> List.truncate 10 do
+                        printfn "  %-16s %5d pt  %4d call(s)" command points callCount
+
+                    // MUTATIONS ARE MISSING FROM THIS TOTAL, and saying so is the point. `rateLimit` is a
+                    // field of the query root, so a mutation cannot carry it: every `set-field` write is
+                    // billed the 1-point floor by GitHub and reported here as nothing. A total presented as
+                    // complete would be a confident number with a known hole in it.
+                    printfn
+                        "  (queries only — a mutation carries no `rateLimit`, so board WRITES are billed the 1-pt floor and are not counted above)"
+
             if meter.Remaining < Budget.WarnBelow then
                 eprint $"fsgg-coord-engine: WARNING — only %d{meter.Remaining} GraphQL points remain (< %d{Budget.WarnBelow}); the fleet shares one 5,000/hr budget (#418)."
 

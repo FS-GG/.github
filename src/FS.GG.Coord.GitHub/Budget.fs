@@ -271,6 +271,185 @@ module Budget =
             // from bytes it could not read.
             None
 
+    // ---- what THIS invocation spent -------------------------------------------------------------------
+
+    /// GraphQL points this process has spent, and how many billed calls it took.
+    ///
+    /// `readMeter` parsed `rateLimit { cost }` correctly, was unit-tested, and — until #2418 — had NO
+    /// PRODUCTION CALLER. Fourteen query documents across four files select `rateLimit { cost remaining }`,
+    /// so the fleet PAID to transmit a number that was then dropped on the floor. The visible consequence
+    /// was not a wrong answer, it was the absence of one: when the budget died twice in a two-hour board
+    /// run, nobody could say what had spent it, and reading the source could not answer either — two
+    /// separate source-level hypotheses about the drain were wrong by 30x before the missing wiring was
+    /// found. An unattributable budget is diagnosed by guessing.
+    type Spend =
+        { Points: int
+          Calls: int
+          /// The meter's own `remaining` from the LAST billed call — GitHub's number, never our arithmetic.
+          LastRemaining: int option }
+
+    let private spendGate = obj ()
+    let mutable private spentPoints = 0
+    let mutable private spentCalls = 0
+    let mutable private lastRemaining: int option = None
+
+    let private debugEnabled () =
+        match Environment.GetEnvironmentVariable "FSGG_COORD_DEBUG" with
+        | null
+        | "" -> false
+        | value -> not (value.Equals("0", StringComparison.Ordinal))
+
+    /// Record one GraphQL response's meter.
+    ///
+    /// Called for every 2xx GraphQL body. A body with no `rateLimit` (every MUTATION — `rateLimit` is a
+    /// field of the query root) reads as `None` and is NOT counted: a mutation's cost is real but the
+    /// server does not report it here, and inventing the 1-point floor would make this ledger a mix of
+    /// measured and assumed numbers. `Calls` therefore means BILLED CALLS THE METER SPOKE FOR, and the
+    /// mutation gap is stated in `docs/coordination/graphql-budget.md` rather than papered over.
+    let observeGraphQlBody (body: string) =
+        match readMeter body with
+        | None -> ()
+        | Some meter ->
+            lock spendGate (fun () ->
+                spentPoints <- spentPoints + meter.Cost
+                spentCalls <- spentCalls + 1
+                lastRemaining <- Some meter.Remaining)
+
+            // The recipe `docs/coordination/graphql-budget.md` has documented since it was written —
+            // `FSGG_COORD_DEBUG=1 … | grep 'graphql cost='`. It named an environment variable that
+            // existed in NO engine (the same shape as #883's autoflush myth: a documented affordance
+            // nobody had implemented). This line is what makes that recipe true.
+            if debugEnabled () then
+                eprintfn "fsgg-coord-engine: graphql cost=%d remaining=%d" meter.Cost meter.Remaining
+
+    /// What this process has spent so far.
+    let graphQlSpend () : Spend =
+        lock spendGate (fun () ->
+            { Points = spentPoints
+              Calls = spentCalls
+              LastRemaining = lastRemaining })
+
+    /// Reset the counter. Tests only — a process spends once and exits.
+    let resetGraphQlSpend () =
+        lock spendGate (fun () ->
+            spentPoints <- 0
+            spentCalls <- 0
+            lastRemaining <- None)
+
+    // ---- the cross-process ledger ---------------------------------------------------------------------
+
+    /// One invocation's spend, appended when the process exits.
+    ///
+    /// A per-process counter alone cannot answer the question that matters, because the fleet is N SHORT-LIVED
+    /// PROCESSES sharing one budget: `take`, `claim`, `done` and the host's own `reconcile` each run, spend,
+    /// print, and die. "What drained the 5,000?" is a question ABOUT THE WINDOW, not about any one process, so
+    /// the number has to outlive the process that measured it.
+    type SpendRecord =
+        { Command: string
+          Points: int
+          Calls: int
+          Worker: string option
+          ObservedAt: DateTimeOffset }
+
+    let private spendLedgerFile () = Path.Combine(observationRoot (), "graphql-spend.jsonl")
+
+    /// Append this invocation's spend. NEVER throws and never fails a command: telemetry that can break the
+    /// tool it measures is worse than no telemetry. A zero-call invocation writes nothing — the overwhelming
+    /// majority of commands touch no GraphQL at all, and a ledger padded with zeroes buries the rows that
+    /// spent.
+    let recordSpend (command: string) =
+        try
+            let spend = graphQlSpend ()
+
+            if spend.Calls > 0 then
+                let worker =
+                    match Environment.GetEnvironmentVariable "FSGG_WORKER" with
+                    | null
+                    | "" -> None
+                    | value -> Some value
+
+                let line =
+                    JsonSerializer.Serialize
+                        {| command = command
+                           points = spend.Points
+                           calls = spend.Calls
+                           worker = worker |> Option.toObj
+                           observedAt = DateTimeOffset.UtcNow.ToString("o") |}
+
+                let file = spendLedgerFile ()
+                Directory.CreateDirectory(Path.GetDirectoryName file) |> ignore
+
+                // O_APPEND on a line-sized write is atomic enough for concurrent workers; `FileShare.ReadWrite`
+                // keeps a reader (`budget`) from refusing a writer mid-wave.
+                use stream =
+                    new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)
+
+                use writer = new StreamWriter(stream, Encoding.UTF8)
+                writer.WriteLine line
+        with _ ->
+            ()
+
+    /// Read the ledger back, newest first, keeping only records inside `window`.
+    ///
+    /// Returns `[]` on any unreadable ledger rather than throwing — but note this is NOT the #266 shape it
+    /// resembles. An empty ledger is not being reported as a clean board; it is reported by `budget` as
+    /// "no attribution recorded", which is the honest reading of a file nobody has written yet.
+    let recentSpend (window: TimeSpan) : SpendRecord list =
+        try
+            let file = spendLedgerFile ()
+
+            if not (File.Exists file) then
+                []
+            else
+
+            let cutoff = DateTimeOffset.UtcNow - window
+
+            File.ReadAllLines file
+            |> Array.toList
+            |> List.choose (fun line ->
+                if String.IsNullOrWhiteSpace line then
+                    None
+                else
+                    try
+                        use doc = JsonDocument.Parse line
+                        let root = doc.RootElement
+
+                        let str (name: string) =
+                            match root.TryGetProperty name with
+                            | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
+                            | _ -> None
+
+                        let num (name: string) =
+                            match root.TryGetProperty name with
+                            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                            | _ -> None
+
+                        match str "command", num "points", num "calls", str "observedAt" with
+                        | Some command, Some points, Some calls, Some observedAt ->
+                            match DateTimeOffset.TryParse(observedAt: string) with
+                            | true, at when at >= cutoff ->
+                                Some
+                                    { Command = command
+                                      Points = points
+                                      Calls = calls
+                                      Worker = str "worker"
+                                      ObservedAt = at }
+                            | _ -> None
+                        | _ -> None
+                    with :? JsonException ->
+                        None)
+            |> List.sortByDescending (fun r -> r.ObservedAt)
+        with _ ->
+            []
+
+    /// Aggregate a window's records by command, dearest first. This is the attribution answer.
+    let spendByCommand (records: SpendRecord list) : (string * int * int) list =
+        records
+        |> List.groupBy (fun r -> r.Command)
+        |> List.map (fun (command, rows) ->
+            command, rows |> List.sumBy (fun r -> r.Points), rows |> List.sumBy (fun r -> r.Calls))
+        |> List.sortByDescending (fun (_, points, _) -> points)
+
     /// Pull the reset instant out of a rate-limit response BODY (a GraphQL `resetAt`).
     ///
     /// This is the FALLBACK. The header is the primary source and `readReset` below prefers it — this

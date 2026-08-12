@@ -467,3 +467,62 @@ let ``the API base is read from the environment - the mechanism C1 specified`` (
         Assert.Equal("https://api.github.com", apiBaseFromEnv ())
     finally
         Environment.SetEnvironmentVariable("FSGG_GITHUB_API_BASE", previous)
+
+// ---- #2418: the meter is observed ON THE WIRE ---------------------------------------------------------
+
+[<Fact>]
+let ``#2418 a GraphQL response's rateLimit cost is ACCUMULATED by the real adapter`` () =
+    // THIS TEST EXISTS BECAUSE THE UNIT TESTS COULD NOT SEE THE BUG.
+    //
+    // `Budget.readMeter` was correct, and unit-tested, from the day it was written — and had NO PRODUCTION
+    // CALLER until #2418. Every query document pays to select `rateLimit { cost remaining }`; the answer was
+    // parsed by nothing and dropped. A parser test cannot catch that: it proves the function works, never
+    // that anything calls it. The accumulator tests in `BudgetTests` have the same blind spot — with the
+    // `Budget.observeGraphQlBody` call deleted from `HttpTransport`, all 489 of them still pass.
+    //
+    // So this drives the REAL adapter against a REAL server and asserts the spend moved. Delete the wiring
+    // in `Transport.fs` and this test — and only this test — goes red.
+    Budget.resetGraphQlSpend ()
+
+    use server = new Server()
+    server.On(fun _ res -> server.Json res 200 """{"data":{"rateLimit":{"cost":13,"remaining":4987}}}""" [])
+
+    use transport = new HttpTransport(server.Base, "t")
+    let t = transport :> IGitHubTransport
+
+    let query =
+        { Method = "POST"
+          Path = "graphql"
+          Query = []
+          Body = Query("query { rateLimit { cost remaining } }", [])
+          Budget = GraphQl
+          IfNoneMatch = None
+          Subject = "meter" }
+
+    match t.Send query with
+    | Ok _ ->
+        let spend = Budget.graphQlSpend ()
+        Assert.Equal(13, spend.Points)
+        Assert.Equal(1, spend.Calls)
+        Assert.Equal(Some 4987, spend.LastRemaining)
+    | Error e -> failwith $"the query must succeed — got %A{e}"
+
+[<Fact>]
+let ``#2418 a REST response is NOT counted against the GraphQL meter`` () =
+    // The two budgets are not interchangeable (ADR-0034 §3), and a REST body that happened to contain the
+    // word `rateLimit` must not be billed to GraphQL. The adapter gates on `request.Budget`, not on the
+    // shape of the body — so this asserts the gate, not the parser.
+    Budget.resetGraphQlSpend ()
+
+    use server = new Server()
+    server.On(fun _ res -> server.Json res 200 """{"data":{"rateLimit":{"cost":99,"remaining":1}}}""" [])
+
+    use transport = new HttpTransport(server.Base, "t")
+    let t = transport :> IGitHubTransport
+
+    match t.Send(get "repos/o/r/issues") with
+    | Ok _ ->
+        let spend = Budget.graphQlSpend ()
+        Assert.Equal(0, spend.Points)
+        Assert.Equal(0, spend.Calls)
+    | Error e -> failwith $"the REST read must succeed — got %A{e}"

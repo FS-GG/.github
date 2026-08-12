@@ -713,3 +713,110 @@ let ``a body that is not JSON yields NO meter reading - never a reading of zero`
     // parse failure is the confident-empty-answer, one more time, in the one place that reports how much
     // room is left.
     Assert.True((Budget.readMeter "<html>502 Bad Gateway</html>").IsNone)
+
+// ---- #2418: the meter is ACCUMULATED, not merely parseable ------------------------------------------
+//
+// The tests above pinned `readMeter` from the day it was written, and every one of them passed for the
+// whole time the function had NO PRODUCTION CALLER. That is the gap they could not see: a parser can be
+// perfectly correct and still be wired to nothing, and a unit test of the parser cannot tell you which.
+// These tests assert the ACCUMULATION — the behaviour that makes an exhausted budget attributable.
+
+[<Fact>]
+let ``a query body's cost accumulates into this process's spend`` () =
+    Budget.resetGraphQlSpend ()
+    Budget.observeGraphQlBody """{"data":{"rateLimit":{"cost":7,"remaining":4993}}}"""
+    Budget.observeGraphQlBody """{"data":{"rateLimit":{"cost":3,"remaining":4990}}}"""
+
+    let spend = Budget.graphQlSpend ()
+    Assert.Equal(10, spend.Points)
+    Assert.Equal(2, spend.Calls)
+    // `remaining` is GitHub's own number from the LAST billed call, never 5000 minus our running total:
+    // the fleet shares this budget, so our arithmetic would be wrong the moment another worker spends.
+    Assert.Equal(Some 4990, spend.LastRemaining)
+
+[<Fact>]
+let ``a mutation and an unparseable body add NOTHING - a call the meter did not speak for is not a zero`` () =
+    Budget.resetGraphQlSpend ()
+    Budget.observeGraphQlBody """{"data":{"rateLimit":{"cost":5,"remaining":4995}}}"""
+    Budget.observeGraphQlBody """{"data":{"updateProjectV2ItemFieldValue":{}}}"""
+    Budget.observeGraphQlBody "<html>502 Bad Gateway</html>"
+
+    let spend = Budget.graphQlSpend ()
+    // Still one call, still five points. Counting the mutation as a call with 0 points would make `Calls`
+    // a lie in the more dangerous direction: it would report a fleet spending less per call than it does.
+    Assert.Equal(5, spend.Points)
+    Assert.Equal(1, spend.Calls)
+
+[<Fact>]
+let ``THE INVERSION - unaccumulated meters leave spend at zero, which is exactly the pre-2418 state`` () =
+    // This is the gate-inversion for this fix. If `observeGraphQlBody` were ever unwired again — the
+    // precise defect #2418 repairs — spend would read zero while real calls were billed, and the ledger
+    // would report an idle fleet during a drain. Parsing alone must NOT move the counter.
+    Budget.resetGraphQlSpend ()
+
+    let parsedButNotObserved =
+        Budget.readMeter """{"data":{"rateLimit":{"cost":42,"remaining":4958}}}"""
+
+    Assert.True parsedButNotObserved.IsSome
+    Assert.Equal(42, parsedButNotObserved.Value.Cost)
+
+    // The parser saw 42 points. Nothing observed them, so the process has spent nothing it can report —
+    // which is the whole failure this fix exists to end.
+    let spend = Budget.graphQlSpend ()
+    Assert.Equal(0, spend.Points)
+    Assert.Equal(0, spend.Calls)
+    Assert.Equal(None, spend.LastRemaining)
+
+[<Fact>]
+let ``the ledger attributes spend BY COMMAND, dearest first`` () =
+    let records: Budget.SpendRecord list =
+        [ { Command = "reconcile"
+            Points = 22
+            Calls = 22
+            Worker = Some "shrike-556b"
+            ObservedAt = DateTimeOffset.UtcNow }
+          { Command = "take"
+            Points = 3
+            Calls = 1
+            Worker = Some "heron-37a2"
+            ObservedAt = DateTimeOffset.UtcNow }
+          { Command = "reconcile"
+            Points = 20
+            Calls = 20
+            Worker = Some "shrike-556b"
+            ObservedAt = DateTimeOffset.UtcNow } ]
+
+    match Budget.spendByCommand records with
+    | ("reconcile", 42, 42) :: ("take", 3, 1) :: [] -> ()
+    | other -> failwithf "expected reconcile ahead of take, got %A" other
+
+[<Fact>]
+let ``a spend record outside the window is not counted`` () =
+    // The question is always "what drained THIS window". A ledger that never forgets would blame a command
+    // for points GitHub has already given back at the reset.
+    let cacheDir =
+        Path.Combine(Path.GetTempPath(), "fsgg-spend-" + Guid.NewGuid().ToString "N")
+
+    Directory.CreateDirectory cacheDir |> ignore
+    let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+    Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cacheDir)
+
+    try
+        let stale = DateTimeOffset.UtcNow.AddHours(-3.0).ToString "o"
+        let fresh = DateTimeOffset.UtcNow.ToString "o"
+
+        File.WriteAllLines(
+            Path.Combine(cacheDir, "graphql-spend.jsonl"),
+            [ $"""{{"command":"lint","points":70,"calls":48,"worker":null,"observedAt":"{stale}"}}"""
+              $"""{{"command":"ready","points":22,"calls":22,"worker":null,"observedAt":"{fresh}"}}"""
+              "not json at all — a torn line must be skipped, not throw" ]
+        )
+
+        match Budget.recentSpend (TimeSpan.FromHours 1.0) with
+        | [ single ] ->
+            Assert.Equal("ready", single.Command)
+            Assert.Equal(22, single.Points)
+        | other -> failwithf "expected only the in-window record, got %A" other
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
+        try Directory.Delete(cacheDir, true) with _ -> ()

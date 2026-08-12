@@ -1146,7 +1146,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
     /// The argv spelling of a command — the word a refusal must name, because it is the word the caller
     /// typed. Total over `Command`, so a new verb cannot be named `%A` by accident.
-    let private commandName (c: Command) : string =
+    let commandName (c: Command) : string =
         match c with
         | Decide -> "decide"
         | DeliveryCmd -> "delivery"
