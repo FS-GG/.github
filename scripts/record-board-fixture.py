@@ -59,7 +59,9 @@ import argparse
 import http.client
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -201,13 +203,20 @@ COMMANDS = {
 }
 
 
-def run_engine_command(engine, command_args, api_base, owner, project, token_env):
+def run_engine_command(engine, command_args, api_base, owner, project, token_env, cache_dir):
     env = dict(os.environ)
     env["FSGG_GITHUB_API_BASE"] = api_base
     env["FSGG_COORD_OWNER"] = owner
     env["FSGG_COORD_PROJECT"] = project
     env["FSGG_COORD_SCAN_TTL_SEC"] = "0"  # every capture pass must actually hit the proxy
-    env.pop("FSGG_COORD_CACHE", None)
+    # ISOLATED, not merely unset. `FSGG_COORD_CACHE` unset falls back to `Cache.root()`'s default —
+    # `$XDG_CACHE_HOME/fsgg-coord` (usually `~/.cache/fsgg-coord`) — which is PERSISTENT and SHARED
+    # across every invocation on the machine. An operator capturing more than once, or capturing
+    # right after running the engine for any other reason, would silently mix a stale cached read
+    # into what should be a fresh transcript — the same isolation `tests/coord-engine-e2e/run.sh`
+    # gives its own runs a `mktemp -d` for. `--commands` share the one directory this call is handed,
+    # matching how one real `fsgg-coord` session behaves.
+    env["FSGG_COORD_CACHE"] = cache_dir
     if token_env not in env or not env[token_env].strip():
         print(
             f"record-board-fixture: ${token_env} is not set. The engine requires SOME token to send "
@@ -216,7 +225,7 @@ def run_engine_command(engine, command_args, api_base, owner, project, token_env
             file=sys.stderr,
         )
         sys.exit(1)
-    return __import__("subprocess").run(
+    return subprocess.run(
         [engine] + command_args, env=env, capture_output=True, text=True, timeout=180
     )
 
@@ -260,21 +269,23 @@ def main():
     server, port = start_proxy(args.upstream)
     api_base = f"http://127.0.0.1:{port}"
 
-    outputs = {}
-    failures = []
-    for name in wanted:
-        proc = run_engine_command(
-            engine, COMMANDS[name](args.repo), api_base, args.owner, args.project, args.token_env
-        )
-        if proc.returncode != 0:
-            failures.append((name, proc.returncode, proc.stderr.strip()))
-            continue
-        try:
-            parsed = json.loads(proc.stdout)
-        except json.JSONDecodeError:
-            failures.append((name, proc.returncode, f"non-JSON stdout: {proc.stdout[:200]!r}"))
-            continue
-        outputs[name] = lib.strip_volatile_output(parsed)
+    with tempfile.TemporaryDirectory(prefix="record-board-fixture-cache-") as cache_dir:
+        outputs = {}
+        failures = []
+        for name in wanted:
+            proc = run_engine_command(
+                engine, COMMANDS[name](args.repo), api_base, args.owner, args.project,
+                args.token_env, cache_dir,
+            )
+            if proc.returncode != 0:
+                failures.append((name, proc.returncode, proc.stderr.strip()))
+                continue
+            try:
+                parsed = json.loads(proc.stdout)
+            except json.JSONDecodeError:
+                failures.append((name, proc.returncode, f"non-JSON stdout: {proc.stdout[:200]!r}"))
+                continue
+            outputs[name] = lib.strip_volatile_output(parsed)
 
     server.shutdown()
 

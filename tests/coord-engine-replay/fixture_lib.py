@@ -110,7 +110,17 @@ def normalize_body(parsed):
 # `observedAt`. Nothing else this suite compares carries a capture-time clock reading. Strip these
 # before a fixture's expected output is EITHER written or compared — never before only one of the two,
 # or a capture would embed a clock reading a later replay run can never reproduce.
-_VOLATILE_OUTPUT_KEYS = {"renderedAt", "observedAt"}
+#
+# `sourceSha` (top-level and per-transition) is volatile for a DIFFERENT reason, found by this suite's
+# own CI leg failing on a build that reproduced every other field byte-for-byte: it is a hash that
+# folds in `Reflection.Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId`
+# (`src/FS.GG.Coord.Cli/Client.fs`, the `driver --events` planning-receipt hash) — a GUID .NET mints
+# fresh for EVERY COMPILATION, by design, so a planning receipt computed under one engine build can
+# never read as fresh under another. That makes `sourceSha` a function of WHICH BINARY IS RUNNING, not
+# of the board it read: two builds of byte-identical source get two different values, so a fixture
+# captured on one machine and replayed against a build on another (exactly what CI vs. a contributor's
+# workstation is) can never reproduce it. It carries no board fact this suite is trying to freeze.
+_VOLATILE_OUTPUT_KEYS = {"renderedAt", "observedAt", "sourceSha"}
 
 
 def strip_volatile_output(value):

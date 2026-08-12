@@ -61,9 +61,142 @@
       "method": "POST",
       "path": "/graphql",
       "requestBody": {
+        "query": "query($owner: String!) { organization(login: $owner) { projectsV2(first: 50) { nodes { number title id } } } rateLimit { cost remaining } }",
+        "variables": {
+          "owner": "FS-GG"
+        }
+      },
+      "responseBody": {
+        "data": {
+          "organization": {
+            "projectsV2": {
+              "nodes": [
+                {
+                  "id": "PVT_coord",
+                  "number": 12,
+                  "title": "Coordination"
+                }
+              ]
+            }
+          }
+        },
+        "rateLimit": {
+          "cost": 1,
+          "remaining": 4999
+        }
+      },
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/graphql",
+      "requestBody": {
+        "query": "query($owner: String!, $number: Int!) { organization(login: $owner) { projectV2(number: $number) { fields(first: 50) { nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { id name dataType options { id name } } } } } } rateLimit { cost remaining } }",
+        "variables": {
+          "number": 12,
+          "owner": "FS-GG"
+        }
+      },
+      "responseBody": {
+        "data": {
+          "organization": {
+            "projectV2": {
+              "fields": {
+                "nodes": [
+                  {
+                    "dataType": "SINGLE_SELECT",
+                    "id": "PVTSSF_status",
+                    "name": "Status",
+                    "options": [
+                      {
+                        "id": "opt_ready",
+                        "name": "Ready"
+                      },
+                      {
+                        "id": "opt_wip",
+                        "name": "In progress"
+                      },
+                      {
+                        "id": "opt_done",
+                        "name": "Done"
+                      },
+                      {
+                        "id": "opt_blocked",
+                        "name": "Blocked"
+                      },
+                      {
+                        "id": "opt_review",
+                        "name": "In review"
+                      },
+                      {
+                        "id": "opt_backlog",
+                        "name": "Backlog"
+                      }
+                    ]
+                  },
+                  {
+                    "dataType": "SINGLE_SELECT",
+                    "id": "PVTSSF_class",
+                    "name": "Class",
+                    "options": [
+                      {
+                        "id": "opt_hardening",
+                        "name": "hardening"
+                      }
+                    ]
+                  },
+                  {
+                    "dataType": "SINGLE_SELECT",
+                    "id": "PVTSSF_phase",
+                    "name": "Phase",
+                    "options": [
+                      {
+                        "id": "opt_execution",
+                        "name": "execution"
+                      }
+                    ]
+                  },
+                  {
+                    "dataType": "SINGLE_SELECT",
+                    "id": "PVTSSF_severity",
+                    "name": "Severity",
+                    "options": [
+                      {
+                        "id": "opt_high",
+                        "name": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "dataType": "TEXT",
+                    "id": "PVTF_blocked",
+                    "name": "Blocked by"
+                  }
+                ]
+              }
+            }
+          },
+          "rateLimit": {
+            "cost": 1,
+            "remaining": 4999
+          }
+        }
+      },
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/graphql",
+      "requestBody": {
         "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt body repository { nameWithOwner } } ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }",
         "variables": {
-          "number": 1,
+          "number": 12,
           "owner": "FS-GG"
         }
       },
@@ -114,7 +247,7 @@
       "requestBody": {
         "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt repository { nameWithOwner } } ... on PullRequest { id number title state createdAt repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }",
         "variables": {
-          "number": 1,
+          "number": 12,
           "owner": "FS-GG"
         }
       },

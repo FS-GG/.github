@@ -78,7 +78,13 @@ common_env() {
   export FSGG_COORD_OWNER="FS-GG"
   export FSGG_COORD_PROJECT="Coordination"
   export FSGG_COORD_SCAN_TTL_SEC=0
-  unset FSGG_COORD_CACHE
+  # ISOLATED, not merely unset. `FSGG_COORD_CACHE` unset falls back to `Cache.root()`'s default —
+  # `$XDG_CACHE_HOME/fsgg-coord`, PERSISTENT across every invocation on the runner — and every fixture
+  # here plus the self-check leg name the SAME repo (`FS.GG.SDD`). A shared or leaked cache would let
+  # one leg's read answer another's, exactly the isolation `tests/coord-engine-e2e/run.sh` gives its
+  # own run with `mktemp -d`; this is that same fix, called fresh before EVERY leg below rather than
+  # once for the whole script, so no two legs — self-check, smoke, 2216-oscillation — ever share one.
+  export FSGG_COORD_CACHE="$(mktemp -d -p "$TMP_ROOT")"
 }
 
 # ---- leg 0: self-check — a DIRECT hermetic connection must equal the smoke fixture's expectation ----

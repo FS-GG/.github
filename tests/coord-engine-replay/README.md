@@ -23,13 +23,13 @@ This directory does not replace either of those suites and deletes nothing from 
 - `fixtures/<name>/manifest.json` *(optional)* — names commands allowed to mismatch
   (`expectFailure.commands`) and why. Used by `fixtures/2216-oscillation/` only.
 
-## Fixtures (2, ~132 KB total — see `du -sh fixtures/*` to recheck)
+## Fixtures (2, ~164 KB total — see `du -sh fixtures/*` to recheck)
 
-- **`smoke`** (~48 KB, 20 recorded requests) — captured from `tests/coord-engine-e2e/stateful_server.py`,
+- **`smoke`** (~52 KB, 22 recorded requests) — captured from `tests/coord-engine-e2e/stateful_server.py`,
   the existing hermetic multi-item board. `run.sh`'s leg 0 also drives the engine DIRECTLY against that
   same server and asserts the direct answer equals this fixture's checked-in expectation — proving the
   capture→replay round trip is faithful, not merely self-consistent.
-- **`2216-oscillation`** (~48 KB, 5 recorded requests) — a small, synthetic, one-item board
+- **`2216-oscillation`** (~52 KB, 7 recorded requests) — a small, synthetic, one-item board
   (`scenario_server.py`, committed alongside it) modeling the shape `.github#2216` tabulated: one
   unclaimed, `OPEN`, `In review` row with a genuinely open implementation PR on its own branch. Today's
   engine deterministically proposes `Status=Ready` for it — the wrong half of `.github#2216`'s tabulated
