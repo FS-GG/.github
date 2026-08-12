@@ -255,7 +255,15 @@ module Budget =
 
             let rateLimit =
                 match root.TryGetProperty "data" with
-                | true, data ->
+                // `TryGetProperty` says the KEY exists, never what kind of value it holds — so `data`
+                // must be proved an object before it is asked for a property, exactly as the root was.
+                // `{"data":"oops"}`, `{"data":5}`, `{"data":[1,2,3]}`, `{"data":true}` and `{"data":null}`
+                // all clear the root guard and then throw the same uncaught `InvalidOperationException`
+                // one line deeper. Found by the independent critic on PR #2419 round 1, after the round-0
+                // root guard: the first repair fixed the escape that was reported rather than the SHAPE
+                // that produced it, which is why the same class survived one call site down. The
+                // `rateLimit` arm below has always guarded its own kind; these two now match it.
+                | true, data when data.ValueKind = JsonValueKind.Object ->
                     match data.TryGetProperty "rateLimit" with
                     | true, rl when rl.ValueKind = JsonValueKind.Object -> Some rl
                     | _ -> None

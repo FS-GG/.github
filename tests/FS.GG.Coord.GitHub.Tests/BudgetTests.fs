@@ -843,3 +843,29 @@ let ``#2419 a valid-JSON body that is NOT an object is no meter - and does not t
     let spend = Budget.graphQlSpend ()
     Assert.Equal(0, spend.Points)
     Assert.Equal(0, spend.Calls)
+
+[<Fact>]
+let ``#2419 round 1 - a non-object 'data' is no meter either, at every depth`` () =
+    // Round-0 guarded the ROOT and stopped there. The critic found the identical unguarded shape one
+    // line deeper: `TryGetProperty` reports that a KEY exists, never what kind of value it holds, so
+    // `data` must be proved an object before it is asked for `rateLimit`. Each of these clears the root
+    // guard — the root really is an object — and then threw the same uncaught InvalidOperationException.
+    //
+    // The lesson worth keeping: round 0 repaired the reported ESCAPE rather than the SHAPE that produced
+    // it. This test pins the shape at both depths so a third instance cannot appear quietly.
+    Assert.True((Budget.readMeter """{"data":"oops"}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":5}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":[1,2,3]}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":true}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":null}""").IsNone)
+
+    // The real shapes still read correctly — the guards reject malformed bodies, not valid ones.
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":2,"remaining":4998}}}""").IsSome)
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":"not-an-object"}}""").IsNone)
+
+    // And none of them may move the accumulator or throw through it.
+    Budget.resetGraphQlSpend ()
+    for body in [ """{"data":"oops"}"""; """{"data":5}"""; """{"data":[1,2,3]}"""; """{"data":null}""" ] do
+        Budget.observeGraphQlBody body
+
+    Assert.Equal(0, (Budget.graphQlSpend ()).Calls)
