@@ -7320,6 +7320,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         let verdict = Done.verify opts.Pr opts.Evidence facts
                         printfn "%s" (Done.render ref verdict)
 
+                        // .github#2444 — `.github#2427`'s own acceptance criterion, and #733's precedent
+                        // (a candidate that existed but was not chosen rides stderr, never the stdout
+                        // verdict): printed exactly ONCE here, regardless of how many times `Done.render`/
+                        // `Done.renderReceipt` are called below for this SAME verdict.
+                        Done.passedOverForeignNote ref verdict
+                        |> Option.iter (fun note -> eprint $"fsgg-coord-engine: %s{note}")
+
                         match verdict with
                         | Verdict.NoVerdict _ -> ExitNoVerdict
                         | Red _ -> ExitRed
@@ -7327,7 +7334,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // Write durable evidence before the mutable Project projection.  If the latter
                             // is deferred, the scheduled lifecycle reconciler can later prove that this was
                             // a verified terminal transition rather than guessing from issue closure.
-                            match Writes.doneReceipt ctx.Transport ref (Done.render ref verdict) with
+                            // `renderReceipt`, not `render`: the durable comment deliberately keeps the
+                            // passed-over-foreign-closer note for provenance even though stdout no longer
+                            // does (.github#2444).
+                            match Writes.doneReceipt ctx.Transport ref (Done.renderReceipt ref verdict) with
                             | Error e ->
                                 eprint $"fsgg-coord-engine: verified done but could not record its lifecycle receipt: %s{Errors.explain e}"
                             | Ok() -> ()

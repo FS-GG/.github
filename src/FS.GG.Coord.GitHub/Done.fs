@@ -256,24 +256,32 @@ module Done =
                         [ why
                           "If it was resolved WITHOUT a pull request (obsolete, a duplicate, resolved by other work, a decision recorded elsewhere), say so with evidence — that is a green path, not a workaround (#600)." ]
 
+    /// The bare passed-over-foreign-closer sentence (.github#2427), with no leading newline or indent — the
+    /// caller decides which channel it rides. `None` unless a foreign-repository true closer existed and
+    /// was passed over in favor of a same-repository one (`Done.verify` never sets this from an explicit
+    /// `--pr` override, which is a choice, not a silent one).
+    let passedOverForeignNote (ref: Ref) (verdict: Verdict<Closure>) =
+        match verdict with
+        | Green(ClosedByPullRequest(pr, _, _, Some(foreignPr, foreignRepo))) ->
+            Some
+                $"a foreign-repository closer was passed over: %s{foreignRepo}#%d{foreignPr} also closes this issue, but %s{ref.Owner}/%s{ref.Repo}'s own PR #%d{pr} is preferred (.github#2427)."
+        | _ -> None
+
+    /// The one-line stamp a worker reads. Green stamps and red stamps do not look alike, on purpose.
+    ///
+    /// .github#2444 — restored to naming ONLY the winning PR, its shape from before #2427. `.github#2427`'s
+    /// own acceptance criteria put the passed-over-foreign-closer note on STDERR, never folded into this
+    /// stdout value: `stamp`'s stdout print is a single-line value some caller may `grep` or diff exactly
+    /// (the same rule #733's `AfterDone` chore offer keeps, `tests/coord-engine-e2e/writes.sh:456-462` — a
+    /// candidate that existed but was not chosen rides stderr, and the verdict a caller depends on does
+    /// not). `passedOverForeignNote` above carries the note for a caller that wants it printed once on
+    /// stderr; `renderReceipt` below carries it for the durable receipt comment.
     let render (ref: Ref) (verdict: Verdict<Closure>) =
         match verdict with
-        | Green(ClosedByPullRequest(pr, oid, day, passedOverForeign)) ->
+        | Green(ClosedByPullRequest(pr, oid, day, _)) ->
             let sha = if String.IsNullOrEmpty oid then "?" else oid
             let dsuffix = if String.IsNullOrEmpty day then "" else $" (%s{day})"
-            let stamp = $"✓✓ FSGG-DONE   %s{ref.Short}  ·  merged PR #%d{pr} @ %s{sha}%s{dsuffix}"
-
-            // .github#2427 — NEVER a silent choice. A foreign-repository closer that was passed over in
-            // favor of this same-repository one is named on its own line, so the cross-repo link stays
-            // visible rather than disappearing behind the winning PR's number. This travels with the render
-            // text into BOTH places it is used (the console line and the durable done-receipt comment), so
-            // the passed-over link survives in the issue's own provenance record, not only a scrolled-past
-            // terminal line.
-            match passedOverForeign with
-            | Some(foreignPr, foreignRepo) ->
-                stamp
-                + $"\n  a foreign-repository closer was passed over: %s{foreignRepo}#%d{foreignPr} also closes this issue, but %s{ref.Owner}/%s{ref.Repo}'s own PR #%d{pr} is preferred (.github#2427)."
-            | None -> stamp
+            $"✓✓ FSGG-DONE   %s{ref.Short}  ·  merged PR #%d{pr} @ %s{sha}%s{dsuffix}"
         | Green(ResolvedWithoutPr evidence) -> $"✓✓ FSGG-DONE   %s{ref.Short}  ·  resolved without a PR: %s{evidence}"
         | Green ClosedByNobody
         | Green StillOpen ->
@@ -286,6 +294,18 @@ module Done =
             $"✗✗ FSGG-NOT-DONE  %s{ref.Short}%s{lines}"
 
         | NoVerdict reason -> $"?? FSGG-UNVERIFIED %s{ref.Short}\n  %s{reason}"
+
+    /// The durable `done-receipt` comment's text (.github#2444) — DELIBERATELY DIVERGES from `render`'s
+    /// stdout stamp when a foreign closer was passed over. The issue's own comment thread is not the
+    /// single-line-value channel `render` protects; it is the item's durable provenance record, so the
+    /// cross-repo link .github#2427 wanted visible stays there even though it no longer doubles up on the
+    /// console line or repeats via a second stderr print.
+    let renderReceipt (ref: Ref) (verdict: Verdict<Closure>) =
+        let stamp = render ref verdict
+
+        match passedOverForeignNote ref verdict with
+        | Some note -> $"%s{stamp}\n  %s{note}"
+        | None -> stamp
 
     // ---- the one query ------------------------------------------------------------------------------
 
