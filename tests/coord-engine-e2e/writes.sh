@@ -962,6 +962,7 @@ no_mutation_verdict "landable" 4 run landable 500 --repo FS.GG.SDD
 no_mutation "overlap" run overlap FS.GG.SDD#42 FS.GG.SDD#44
 no_mutation "verify-paths" run verify-paths --pr 500 --repo FS.GG.SDD
 no_mutation "item-id" run item-id FS.GG.SDD#42
+no_mutation "body-edits" run body-edits FS.GG.SDD#42
 no_mutation "lint" run lint --repo .github
 no_mutation "whoami" run whoami
 

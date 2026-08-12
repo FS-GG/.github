@@ -278,6 +278,20 @@ def graphql(query: str, variables: dict):
             "data": {"repository": {"issue": {"comments": {"nodes": [{"body": c["body"]} for c in recent]}}}},
             "rateLimit": RATE_LIMIT,
         }
+    if "userContentEdits" in query:
+        # .github#2477: body-edit provenance (`Reads.contentEditProvenance`, `body-edits <ref>`). Keyed
+        # on the requested number; no fixture issue models an actual body edit, so this answers the
+        # GENUINE-zero case — `writes.sh`'s `#1569` ledger only proves the wire never mutates, exactly
+        # like every other `no_mutation` row. The FAILS-CLOSED cases (null `issueOrPullRequest`,
+        # non-object root, 200-with-`errors`, ...) are exercised at the unit level in `ReadTests.fs`,
+        # which this hermetic e2e fixture does not duplicate.
+        n = int(variables.get("number", 0))
+        if n not in ISSUES or off_board(n):
+            return {"data": {"repository": {"issueOrPullRequest": None}}, "rateLimit": RATE_LIMIT}
+        return {
+            "data": {"repository": {"issueOrPullRequest": {"userContentEdits": {"totalCount": 0, "nodes": []}}}},
+            "rateLimit": RATE_LIMIT,
+        }
     if "issue(number" in query and "projectItems" not in query:
         return {"data": {"repository": {"issue": {"id": "I_contract_probe"}}, "rateLimit": RATE_LIMIT}}
     if "projectsV2" in query:
