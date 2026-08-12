@@ -48,9 +48,29 @@ module Review =
           NewCriticIdentity: string
           CandidateHeadSha: string }
 
+    /// The accountable, out-of-band grant that recovers a chain whose critic despawned mid-round
+    /// (.github#2417) — the same "external fact the pure engine cannot observe itself" pattern as
+    /// `RepairPhaseReceipt` (clarifications DEC-002): never inferred from silence, only ever consumed
+    /// when a caller supplies it. `GrantedBy` is the accountable identity (typically the host) attesting
+    /// the original critic is unavailable; `SuccessorCriticIdentity` is the fresh critic who performs a
+    /// genuinely new, full review of the current head rather than a "confirmation" — so the property the
+    /// same-critic rule protects is preserved either by the same critic confirming or by the chain being
+    /// honestly restarted, never by a stranger silently continuing it.
+    type CriticSuccessionReceipt =
+        { OriginalCriticIdentity: string
+          SuccessorCriticIdentity: string
+          GrantedBy: string
+          Reason: string
+          CandidateHeadSha: string }
+
     /// Facts read live by the caller — PR comments, check state, and the two facts this pure engine
     /// cannot observe itself (clarifications DEC-002): whether a fresh repair phase has already been
     /// granted, and whether a repair route (fresh critic/worker capacity) is available at all.
+    ///
+    /// A critic-succession grant (.github#2417) is deliberately NOT a third field here: `Facts` is built
+    /// as a record literal at call sites this module does not own (most importantly the live
+    /// `review <ref> --pr N` path in `Client.fs`), and a required field would force every one of them to
+    /// name it. `inspect`/`advance` take it as their own explicit parameter instead.
     type Facts =
         { Comments: Driver.ReviewComment list
           Checks: PrState
@@ -91,7 +111,10 @@ module Review =
           DiffAuditHead: string option }
 
     /// The closed set of typed next actions (acceptance 3) — one constructor per named action in the
-    /// issue.
+    /// issue. `EnterCriticSuccession` (.github#2417) is returned in place of `ResumeSameCritic` only when
+    /// `inspect`/`advance`'s `successionGranted` parameter carries a receipt that validates against the
+    /// exact stuck critic and head; absent a valid receipt, `ResumeSameCritic` is unconditionally the
+    /// answer.
     type NextAction =
         | DispatchCritic
         | ResumeImplementer of reason: string
@@ -99,6 +122,7 @@ module Review =
         | AwaitChecks
         | RequestHostAcceptance
         | EnterRepairPhase of RepairPhaseReceipt
+        | EnterCriticSuccession of CriticSuccessionReceipt
         | Accept of AcceptedReceipt
         | Park of reason: string
 
@@ -117,11 +141,19 @@ module Review =
     /// Inspect live facts into exactly one typed state and next action, or a fail-closed list of
     /// reasons (acceptance 2). Never returns a permissive/absent-review state for unreadable or
     /// contradictory facts. Fails closed before any state classification when the critic identity
-    /// equals the implementer identity (acceptance 5).
-    val inspect: Binding -> Facts -> Result<Verdict, string list>
+    /// equals the implementer identity (acceptance 5). `successionGranted` (.github#2417) is the
+    /// explicit, out-of-band critic-succession grant, if any; every caller that never grants one passes
+    /// `None` and observes byte-for-byte the same behavior as before this parameter existed.
+    val inspect: Binding -> Facts -> successionGranted: CriticSuccessionReceipt option -> Result<Verdict, string list>
 
     /// Confirm that a caller is still advancing the exact verdict it inspected (acceptance 9). A
-    /// changed binding or facts — including a new head SHA — invalidates the token/key pair and this
-    /// returns `Error`; a stale replay can never dispatch a duplicate critic, mint a second repair
-    /// phase, or accept the wrong head.
-    val advance: freshnessToken: string -> actionKey: string -> Binding -> Facts -> Result<Verdict, string list>
+    /// changed binding, facts, or succession grant — including a new head SHA — invalidates the
+    /// token/key pair and this returns `Error`; a stale replay can never dispatch a duplicate critic,
+    /// mint a second repair phase or succession, or accept the wrong head.
+    val advance:
+        freshnessToken: string ->
+        actionKey: string ->
+        Binding ->
+        Facts ->
+        successionGranted: CriticSuccessionReceipt option ->
+            Result<Verdict, string list>

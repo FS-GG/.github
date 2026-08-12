@@ -102,12 +102,38 @@ module ReviewApplication =
         | JsonValueKind.Object -> Some(repairPhaseReceipt value)
         | _ -> invalidArg "repairPhaseGranted" "must be an object or null"
 
+    /// UNLIKE `required`, absence is not an error here — `criticSuccessionGranted` is additive
+    /// (.github#2417 FR-005): a snapshot producer that predates this field, or one that simply has no
+    /// grant to report, omits the key entirely, and that MUST parse exactly as it always has rather than
+    /// forcing every existing caller to start emitting an explicit `"criticSuccessionGranted": null`.
+    let private optionalProperty (name: string) (element: JsonElement) : JsonElement option =
+        match element.TryGetProperty name with
+        | true, value when value.ValueKind <> JsonValueKind.Null -> Some value
+        | _ -> None
+
+    let private criticSuccessionReceipt (element: JsonElement) : Review.CriticSuccessionReceipt =
+        { OriginalCriticIdentity = readString "originalCriticIdentity" element
+          SuccessorCriticIdentity = readString "successorCriticIdentity" element
+          GrantedBy = readString "grantedBy" element
+          Reason = readString "reason" element
+          CandidateHeadSha = readString "candidateHeadSha" element }
+
+    let private criticSuccessionGranted (element: JsonElement) : Review.CriticSuccessionReceipt option =
+        match optionalProperty "criticSuccessionGranted" element with
+        | Some value when value.ValueKind = JsonValueKind.Object -> Some(criticSuccessionReceipt value)
+        | Some _ -> invalidArg "criticSuccessionGranted" "must be an object or null"
+        | None -> None
+
     /// `DiffAuditTrusted` is not yet on this wire contract — the pure snapshot path this command serves
     /// (a worker or the #2135 event projection asking "what next") does not need the live, engine-
     /// recomputed diff-audit inventory `Driver.parseReviewCommentsWithFacts` optionally consumes; a
     /// caller that mechanically requires the diff-audit gate goes through `Driver.parseReviewCommentsWithAudit`
     /// directly, as the existing live `delivery` path already does. Always `None` here; a future cut can
     /// add the field additively without breaking this one.
+    ///
+    /// `criticSuccessionGranted` (.github#2417) is read from the SAME `facts` JSON object on the wire —
+    /// callers author it alongside `repairPhaseGranted` — but it is NOT a `Review.Facts` field (see that
+    /// type's own doc comment for why); it is threaded separately below as its own tuple member.
     let private facts (element: JsonElement) : Review.Facts =
         { Comments = comments element
           Checks = checks "checks" element
@@ -115,7 +141,9 @@ module ReviewApplication =
           RepairRouteAvailable = readBoolean "repairRouteAvailable" element
           DiffAuditTrusted = None }
 
-    let private snapshot (raw: string) : Result<Review.Binding * Review.Facts, string> =
+    let private snapshot
+        (raw: string)
+        : Result<Review.Binding * Review.Facts * Review.CriticSuccessionReceipt option, string> =
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
@@ -124,7 +152,7 @@ module ReviewApplication =
             if bindingElement.ValueKind <> JsonValueKind.Object then invalidArg "binding" "must be an object"
             let factsElement = required "facts" root
             if factsElement.ValueKind <> JsonValueKind.Object then invalidArg "facts" "must be an object"
-            Ok(binding bindingElement, facts factsElement)
+            Ok(binding bindingElement, facts factsElement, criticSuccessionGranted factsElement)
         with error -> Error error.Message
 
     let private stateName (value: Review.State) =
@@ -170,6 +198,7 @@ module ReviewApplication =
         | Review.AwaitChecks -> "awaitChecks"
         | Review.RequestHostAcceptance -> "requestHostAcceptance"
         | Review.EnterRepairPhase _ -> "enterRepairPhase"
+        | Review.EnterCriticSuccession _ -> "enterCriticSuccession"
         | Review.Accept _ -> "accept"
         | Review.Park _ -> "park"
 
@@ -189,6 +218,13 @@ module ReviewApplication =
            newCriticIdentity = receipt.NewCriticIdentity
            candidateHeadSha = receipt.CandidateHeadSha |}
 
+    let private criticSuccessionJson (receipt: Review.CriticSuccessionReceipt) =
+        {| originalCriticIdentity = receipt.OriginalCriticIdentity
+           successorCriticIdentity = receipt.SuccessorCriticIdentity
+           grantedBy = receipt.GrantedBy
+           reason = receipt.Reason
+           candidateHeadSha = receipt.CandidateHeadSha |}
+
     let private acceptedJson (receipt: Review.AcceptedReceipt) =
         {| headSha = receipt.HeadSha
            criticIdentity = receipt.CriticIdentity
@@ -198,8 +234,20 @@ module ReviewApplication =
            diffAuditRequired = receipt.DiffAuditRequired
            diffAuditHead = receipt.DiffAuditHead |}
 
-    let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
-        match Review.inspect binding facts with
+    /// `render`'s own public 3-arg shape (`Options -> Review.Binding -> Review.Facts -> int`) is a fixed
+    /// contract other callers depend on positionally — most importantly `Client.review`'s live
+    /// `review <ref> --pr N` path, which calls `ReviewApplication.render opts binding facts` as a tail
+    /// expression whose type must be `int`. This private helper carries the actual rendering logic plus
+    /// the one extra fact (.github#2417) that path never supplies; `render` below is a thin wrapper that
+    /// always passes `None`, and `run` (the `--snapshot` path, which DOES parse a grant) calls this
+    /// directly with the parsed value — so neither existing caller's signature changes.
+    let private renderVerdict
+        (opts: Options)
+        (binding: Review.Binding)
+        (facts: Review.Facts)
+        (successionGranted: Review.CriticSuccessionReceipt option)
+        : int =
+        match Review.inspect binding facts successionGranted with
         | Error reasons ->
             match opts.Render with
             | Json ->
@@ -224,6 +272,10 @@ module ReviewApplication =
                         match verdict.NextAction with
                         | Review.EnterRepairPhase receipt -> Some(receiptJson receipt)
                         | _ -> None
+                       criticSuccessionReceipt =
+                        match verdict.NextAction with
+                        | Review.EnterCriticSuccession receipt -> Some(criticSuccessionJson receipt)
+                        | _ -> None
                        acceptedReceipt =
                         match verdict.NextAction with
                         | Review.Accept receipt -> Some(acceptedJson receipt)
@@ -233,6 +285,11 @@ module ReviewApplication =
                 printfn "%s" (JsonSerializer.Serialize payload)
             | Text -> printfn "%s — %s" (stateName verdict.State) (actionName verdict.NextAction)
             ExitCode.toInt ExitCode.Green
+
+    /// The live path's entrypoint — always `None` for the succession grant; see `renderVerdict`'s doc
+    /// comment for why this stays a fixed 3-arg wrapper rather than growing a parameter.
+    let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
+        renderVerdict opts binding facts None
 
     let run (opts: Options) : int =
         let raw = input opts
@@ -244,4 +301,4 @@ module ReviewApplication =
             | Error error ->
                 eprint $"fsgg-coord-engine: review snapshot is malformed: %s{error}"
                 ExitCode.toInt ExitCode.Error
-            | Ok(binding, facts) -> render opts binding facts
+            | Ok(binding, facts, successionGranted) -> renderVerdict opts binding facts successionGranted

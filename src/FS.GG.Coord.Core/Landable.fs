@@ -1,5 +1,15 @@
 namespace FS.GG.Coord
 
+/// NOT WIRED TO THE REVIEW-PROTOCOL CHAIN, AND THAT IS THE STATED CONTRACT (`.github#2360`,
+/// `.github#2417`). Everything below scores GitHub check-run/workflow-run state alone — it reads no PR
+/// comment, no review marker, no critic identity, and no `Review.NextAction`. `.github#2417` adds a
+/// critic-succession recovery path to `Review.fs` that changes WHO may produce an accepted review
+/// chain when a chain's critic despawns mid-round; it changes nothing here. A granted critic succession
+/// is never itself evidence of a green build, and a green verdict from this module is never itself
+/// evidence of a satisfied review chain — the accepted-head `fsgg:review-accepted:v1` host-acceptance
+/// marker and a green verdict from `scoreRequired` remain two independently required facts before
+/// merge, exactly as before this module gained the advisory-check exemption (#2373/#2400) and exactly
+/// as before the review protocol gained a repair phase or, now, critic succession.
 module Landable =
 
     open Types
