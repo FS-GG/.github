@@ -42,7 +42,7 @@ def row(**kw):
     return base
 
 def plan(rows, days=30):
-    a, s = mod.plan(rows, NOW, days, "FS-GG/.github")
+    a, s = mod.plan(rows, NOW, days)
     return [(r["repo"], r["number"]) for r in a], [why for _, why in s]
 
 results = {}

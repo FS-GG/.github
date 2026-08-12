@@ -142,7 +142,7 @@ def protected_refs(rows: list[dict]) -> tuple[set[tuple[str, int]], set[int]]:
     return qualified, unresolvable
 
 
-def plan(rows: list[dict], now: _dt.datetime, retention_days: int, default_repo: str | None = None
+def plan(rows: list[dict], now: _dt.datetime, retention_days: int
          ) -> tuple[list[dict], list[tuple[dict, str]]]:
     """Split the board into (archive, skipped-with-reason). PURE — no IO, so the guards are testable.
 
@@ -278,8 +278,6 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default=None, help=f"ProjectV2 node id (or ${PROJECT_ENV})")
     ap.add_argument("--retention-days", type=int, default=30)
-    ap.add_argument("--default-repo", default="FS-GG/.github",
-                    help="repo a bare `#123` blocker ref resolves against")
     ap.add_argument("--execute", action="store_true", help="archive; without it this is a dry run")
     ap.add_argument("--manifest", default=None, help="append every archived id here, for reversal")
     ap.add_argument("--min-graphql", type=int, default=500,
@@ -308,7 +306,7 @@ def main() -> int:
 
     rows, pages, spent = scan(project)
     now = _dt.datetime.now(_dt.timezone.utc)
-    archive, skipped = plan(rows, now, args.retention_days, args.default_repo)
+    archive, skipped = plan(rows, now, args.retention_days)
 
     print(f"scanned {len(rows)} row(s) over {pages} page(s) for {spent} GraphQL point(s)")
     print(f"plan: archive {len(archive)}, keep {len(rows) - len(archive)} "
