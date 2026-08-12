@@ -169,6 +169,8 @@ added, removed or re-spelled. This is a patch-line cut.
 
 PRIOR 0.50.0.
 
+0.50.0 — VERSIONING-SCHEME CHANGE, NOT A BEHAVIOR CUT (.github#2402):
+
 FS.GG.Coord.Cli's `&lt;Version&gt;` is no longer this project's own independent literal. FS.GG.Kit,
 FS.GG.Drivers and this engine are now released from one shared MSBuild property
 ($(FsggCoherentSetVersion), Directory.Build.props), so a bump to any one of the three moves all
