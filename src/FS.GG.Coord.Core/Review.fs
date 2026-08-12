@@ -151,11 +151,13 @@ module Review =
 
     /// A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
     /// one route shares (`fsgg-critic-normal`, or any future `fsgg-critic-<route>`) rather than a
-    /// minted, distinguishing identity (.github#2451). Byte-identical to `Driver.fs`'s own private
+    /// minted, distinguishing identity (.github#2451). The SAME RULE as `Driver.fs`'s own private
     /// `isGenericCriticIdentity` — kept as two small, deliberate copies rather than one shared export
     /// because `.github#2451`'s declared `Paths:` does not include `Driver.fsi`, and widening a
-    /// signature file for a single boolean helper is out of proportion. If this predicate's rule ever
-    /// changes, update both.
+    /// signature file for a single boolean helper is out of proportion. Not byte-identical text: this
+    /// file already has `open System` in scope, so it spells `String`/`StringComparison` unqualified
+    /// where `Driver.fs` spells them `System.String`/`System.StringComparison` to match its own file's
+    /// convention. If this predicate's rule ever changes, update both.
     let private isGenericCriticIdentity (identity: string) =
         not (String.IsNullOrWhiteSpace identity)
         && identity.Trim().StartsWith("fsgg-critic-", StringComparison.OrdinalIgnoreCase)

@@ -199,10 +199,12 @@ module Driver =
     /// minted, distinguishing identity the way a worker's `whoami --mint` id is (.github#2451). Measured
     /// live: two separate critics dispatched during one run both posted `critic: fsgg-critic-normal`.
     ///
-    /// PRIVATE, and `Review.fs` carries its own copy of this exact one-line predicate rather than this
-    /// module exposing it through `Driver.fsi` (`Review.isGenericCriticIdentity`, kept byte-identical by
-    /// comment) — `.github#2451`'s own declared `Paths:` does not include `Driver.fsi`, and widening a
-    /// signature file for a single boolean helper is out of proportion to the file it would touch. Two
+    /// PRIVATE, and `Review.fs` carries its own copy of this exact predicate (`Review.isGenericCriticIdentity`,
+    /// same rule, same rename discipline if it ever changes — NOT byte-identical text: each file spells
+    /// `System.String`/`System.StringComparison` fully-qualified or unqualified to match its own file's
+    /// `open System` convention) rather than this module exposing it through `Driver.fsi` —
+    /// `.github#2451`'s own declared `Paths:` does not include `Driver.fsi`, and widening a signature
+    /// file for a single boolean helper is out of proportion to the file it would touch. Two
     /// markers that both carry this shape can never be treated as proof of "the same critic": every
     /// critic ever dispatched at that route satisfies the string equality, whether or not it is the same
     /// instance, so the equality proves nothing about identity. The check is a prefix, not a fixed list,

@@ -81,8 +81,14 @@
        among receivers). This is exactly the "repo-specific override goes below the import" escape
        hatch the comment above already describes, used for the first time.
        ════════════════════════════════════════════════════════════════════════════ -->
+  <!-- 0.50.0 to 0.50.1 (.github#2451): a same-line patch bump. Required so check-kit-published
+       coherence.py's PR arm sees a version STRICTLY GREATER than 0.50.0, already published on both
+       feeds — this PR edits independent-review.md, a "kit:" source in registry/repos.yml. This PR
+       also changes src/FS.GG.Coord.Core/Driver.fs and Review.fs, so coord-engine genuinely changes
+       too; moving the whole coherent set together is honest rather than incidental, per the property
+       group above's own rule (advancing this scalar is the ONLY way to bump any of the three). -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.50.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.50.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
