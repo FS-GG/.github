@@ -930,6 +930,14 @@ module Snapshot =
             w.WriteNumber("consolidationThreshold", policy.ConsolidationThreshold)
             w.WriteEndObject()
 
+        // .github#2399: the wire name for each `Protocol.MarkerAnchor` case, used by both
+        // `markerAnchors` (new) and the `quotedMarkerRule` string (kept byte-identical below).
+        let markerAnchorWireName =
+            function
+            | Protocol.LeadingLine -> "leading-line"
+            | Protocol.LeadingBlock -> "leading-block"
+            | Protocol.AnywhereInBody -> "anywhere-in-body"
+
         let writeReviewPolicy (key: string) (policy: Protocol.ReviewPolicyDoc) =
             w.WriteStartObject(key)
             w.WriteString("initialMarker", policy.InitialMarker)
@@ -939,7 +947,32 @@ module Snapshot =
             w.WriteString("repairPhaseMarker", policy.RepairPhaseMarker)
             w.WriteNumber("maxAutomatedRepairRounds", policy.MaxAutomatedRepairRounds)
             w.WriteNumber("repairPhaseMaxRounds", policy.RepairPhaseMaxRounds)
-            w.WriteString("quotedMarkerRule", policy.QuotedMarkerRule)
+            // `QuotedMarkerRule` is no longer a stored field (.github#2399) — the SAME prose is
+            // rendered from `MarkerAnchor` on demand, byte-identical to what `d58577ec` projected, so
+            // this key and value are unchanged from before this item.
+            w.WriteString("quotedMarkerRule", Protocol.renderMarkerAnchorRule Protocol.LeadingBlock)
+            // Additive (.github#2399): every marker's declared anchor, and the field grammar #2369
+            // asked for — new keys, existing keys/values above are untouched.
+            w.WriteStartArray("markerAnchors")
+
+            for marker in policy.MarkerAnchors do
+                w.WriteStartObject()
+                w.WriteString("id", marker.Id)
+                w.WriteString("anchor", markerAnchorWireName marker.Anchor)
+                w.WriteEndObject()
+
+            w.WriteEndArray()
+            w.WriteStartArray("markerFieldGrammar")
+
+            for entry in Protocol.markerFieldGrammar do
+                w.WriteStartObject()
+                w.WriteString("id", entry.MarkerId)
+                w.WriteStartArray("requiredFields")
+                entry.RequiredFields |> List.iter w.WriteStringValue
+                w.WriteEndArray()
+                w.WriteEndObject()
+
+            w.WriteEndArray()
             w.WriteEndObject()
 
         let writeLifecyclePolicy (key: string) (policy: Protocol.LifecyclePolicyDoc) =

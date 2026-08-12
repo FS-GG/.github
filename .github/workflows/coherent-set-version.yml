@@ -1,0 +1,61 @@
+# Gate FS.GG.Kit, FS.GG.Drivers and coord-engine as ONE coherent-set version (.github#2402).
+#
+# scripts/check-coherent-set-version.py asserts: (1) each of the three project files' `<Version>`
+# ELEMENT is authored as exactly `$(FsggCoherentSetVersion)` — no independent literal, the AC1
+# requirement literally — and (2) all three EVALUATE (dotnet msbuild -getProperty:Version, never a
+# grep) to the same value as Directory.Build.props's own declared `FsggCoherentSetVersion`. Either
+# check alone is insufficient: (1) without (2) would not prove the reference actually resolves;
+# (2) without (1) would pass three independent literals that merely happen to agree today — the
+# exact shape that let FS.GG.Kit and FS.GG.Drivers diverge from coord-engine on 2026-08-10
+# (commits f26da6ed/d48e1ec2, twenty minutes apart, .github#2402's own evidence).
+#
+# No schedule: the subject is entirely git-tracked files in THIS repo (three project files plus
+# Directory.Build.props) — nothing external can stale it between pushes, the same reasoning
+# kit-bump-shape.yml and lock-range-coherence.yml's static leg give for the same shape.
+#
+# The `paths:` lists on pull_request and push are IDENTICAL, and must stay so — check-paths-coherence.py
+# (.github#899) fails this workflow if they drift.
+name: coherent-set-version
+
+on:
+  pull_request:
+    paths:
+      - "Directory.Build.props"
+      - "src/FS.GG.Kit/FS.GG.Kit.csproj"
+      - "src/FS.GG.Drivers/FS.GG.Drivers.csproj"
+      - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      - "scripts/check-coherent-set-version.py"
+      - "tests/coherent-set-version/**"
+      - ".github/workflows/coherent-set-version.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Directory.Build.props"
+      - "src/FS.GG.Kit/FS.GG.Kit.csproj"
+      - "src/FS.GG.Drivers/FS.GG.Drivers.csproj"
+      - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      - "scripts/check-coherent-set-version.py"
+      - "tests/coherent-set-version/**"
+      - ".github/workflows/coherent-set-version.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coherent-set-version-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Prove the gate reds on a reintroduced independent literal, and on the semantic/property fail-closed shapes
+        run: bash tests/coherent-set-version/run.sh
+      - name: Require FS.GG.Kit, FS.GG.Drivers and coord-engine to share one version
+        run: python3 scripts/check-coherent-set-version.py

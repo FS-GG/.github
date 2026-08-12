@@ -22,6 +22,12 @@ module Landable =
     /// dropped with it. `Path`/`Event`/`HeadBranch`/`PrNumbers` are the concurrency-group key #720 keys
     /// supersession on — NOT `Path` alone, which would let a `workflow_dispatch` run license the drop of a
     /// `pull_request` run and count a vacuous green (#703).
+    ///
+    /// `RunRow` CARRIES NO NAME TO CLASSIFY ADVISORY-NESS BY (#2400): `.Path` is the WORKFLOW file, and one
+    /// workflow commonly hosts both advisory and ordinary jobs — `coherence.yml` runs `claim-generation`
+    /// (advisory, #2373) alongside `contract-coherence`/`projection`/`roster-closure` (not). `scoreRequired`
+    /// instead derives a run's advisory-ness from `CheckSuiteId` — the check-runs it produced — the same
+    /// data this field already carries for supersession.
     type RunRow =
         { Path: string
           Event: string
@@ -97,6 +103,15 @@ module Landable =
     /// naming such a check in `required` (a presence assertion only; it does not restore the check to the
     /// rollup). Every OTHER non-required check remains scored, unconditionally — that is deliberate, and
     /// is what lets `registry-coherence` gate the skill-registry-autofix bot's own merge.
+    ///
+    /// THE SAME EXEMPTION NOW REACHES THE CONTAINING WORKFLOW RUN, NOT JUST THE CHECK-RUN (#2400/#2379): a
+    /// run whose every live check-run is advisory is itself excluded from `bad`/`pending` — closing the gap
+    /// where a `coherence` run concluded `failure` SOLELY because its advisory `claim-generation` job did,
+    /// and that run's own (unfiltered) redness still gated the merge after #2373 filtered only the check-run
+    /// half. A run with NO live check-runs (`startup_failure`) or with even ONE genuinely non-advisory bad
+    /// check-run (the `registry-coherence` case) is unaffected and still gates exactly as before. Both halves
+    /// are now decided by one internal classification (`Blocking`/`Advisory`) that `score`/`scoreN`/
+    /// `scoreRequired` match on rather than a `Set<string>.Contains` consulted ad hoc inside the rollup.
     val scoreRequired:
         required: string list ->
         mergeable: bool option ->

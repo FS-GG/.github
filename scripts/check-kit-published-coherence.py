@@ -312,7 +312,6 @@ LOCK = "registry/repos.lock"
 # proposes to ship is authored. Neither is restated anywhere in this file or in the workflow.
 ROSTER = "registry/repos.yml"
 KIT_CSPROJ = "src/FS.GG.Kit/FS.GG.Kit.csproj"
-_VERSION_ELEMENT = re.compile(r"<Version>\s*([^<\s][^<]*?)\s*</Version>")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STAGE_KIT = os.path.join(REPO_ROOT, "src", "FS.GG.Kit", "stage-kit.sh")
 REPOS_TOOL = os.path.join(REPO_ROOT, "scripts", "repos.sh")
@@ -1452,18 +1451,40 @@ def touched_kit_sources(changed: list[str], sources: list[str]) -> list[tuple[st
 
 
 def declared_kit_version(csproj_path: str) -> str:
-    """The single `<Version>` FS.GG.Kit.csproj authors. Zero or many is a GateError, not a guess."""
+    """The EVALUATED `<Version>` FS.GG.Kit.csproj publishes. Never a grep (.github#2402).
+
+    FS.GG.Kit, FS.GG.Drivers and coord-engine became a coherent set in .github#2402: `<Version>`
+    resolves from a shared `$(FsggCoherentSetVersion)` MSBuild property (Directory.Build.props)
+    rather than a literal in this file, exactly the same shape `check-engine-freshness.py` and
+    `check-engine-release-notes.py` already read via `dotnet msbuild -getProperty:Version` — "never
+    a grep" is `release-coord-engine.yml`'s own header text for the identical reason. A regex over
+    the raw XML would capture the literal token `$(FsggCoherentSetVersion)`, not a version, and
+    silently mis-parse every comparison downstream.
+    """
+    # A SINGLE `-getProperty:` prints the bare value as plain text; `dotnet msbuild` only switches to
+    # the `{"Properties": {...}}` JSON document (what check-engine-release-notes.py's two-property
+    # call receives) once TWO OR MORE are requested (verified directly: `-getProperty:Version` alone
+    # on this project prints `0.49.0`, no braces). One property is all this arm needs, so this reads
+    # the plain-text form rather than requesting an unused second property just to get JSON.
     try:
-        text = open(csproj_path, encoding="utf-8").read()
-    except OSError as e:
-        raise GateError(f"cannot read {csproj_path!r} to learn the version this PR ships: {e}") from e
-    found = _VERSION_ELEMENT.findall(text)
-    if len(found) != 1:
-        raise GateError(
-            f"{csproj_path} declares {len(found)} <Version> element(s); this arm needs exactly one to "
-            f"know what a merge would publish."
+        run = subprocess.run(
+            ["dotnet", "msbuild", csproj_path, "-getProperty:Version"],
+            capture_output=True,
+            text=True,
+            check=False,
         )
-    return found[0]
+    except OSError as e:
+        raise GateError(f"cannot run dotnet msbuild to evaluate {csproj_path!r}: {e}") from e
+    if run.returncode != 0:
+        detail = run.stderr.strip() or run.stdout.strip() or "(no diagnostic)"
+        raise GateError(f"dotnet msbuild could not evaluate {csproj_path!r}: {detail}")
+    version = run.stdout.strip()
+    if not version:
+        raise GateError(
+            f"{csproj_path} evaluates to an empty Version; this arm needs exactly one to know what a "
+            f"merge would publish."
+        )
+    return version
 
 
 def run_pr_arm(

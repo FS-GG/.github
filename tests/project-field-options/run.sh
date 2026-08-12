@@ -112,7 +112,7 @@ fi
 
 # State 2: the documented table row is present but the RepoScope.resolve case is absent. The SECOND
 # failure — the one that caught this item out, reachable only once state 1's comparison passes.
-grep -v '| "sir" -> "S.I.R."' "$ROOT/src/FS.GG.Coord.Core/RepoScope.fs" >"$WORK/no-resolver-case.fs"
+grep -v '| "sir" -> Repository "S.I.R."' "$ROOT/src/FS.GG.Coord.Core/RepoScope.fs" >"$WORK/no-resolver-case.fs"
 out="$(run_tool check --schema "$SCHEMA" --resolver "$WORK/no-resolver-case.fs" 2>&1)" && rc=0 || rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "embedded --repo resolver drift: missing=['sir']"; then
   pass "Repo Scope check refuses when the RepoScope.resolve case for sir is absent"

@@ -315,7 +315,15 @@ def compare_resolver(roster: Path, resolver: Path) -> None:
     match = re.search(r"let resolve \(raw: string\).*?=\s*(.*?)\n\s*$", text, re.DOTALL)
     if not match:
         raise Refused("could not isolate RepoScope.resolve; refusing a partial resolver check")
-    actual = dict(re.findall(r'^\s*\|\s*"([^"]+)"\s*->\s*"([^"]+)"', match.group(1), re.MULTILINE))
+    # Each roster arm returns `Repository "<name>"` (`.github#2398`'s closed `Scope` union), not a bare
+    # string — the `Repository` wrapper is OPTIONAL in this pattern so a resolver still shaped the
+    # pre-#2398 way (a stale fixture, a future revert) is not silently unreadable. `NonRepository`
+    # arms (`cross-repo`) are never captured here: the roster comparison is about repositories, and
+    # `NonRepository`'s payload is a bound variable (`raw`/`token`), never a quoted literal this pattern
+    # matches — so the sentinel cannot masquerade as a roster entry by construction, not by exclusion.
+    actual = dict(
+        re.findall(r'^\s*\|\s*"([^"]+)"\s*->\s*(?:Repository\s*)?"([^"]+)"', match.group(1), re.MULTILINE)
+    )
     expected = {
         repo_id: full.split("/", 1)[1]
         for repo_id, full in roster_pairs(roster)

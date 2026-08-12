@@ -134,6 +134,64 @@ authored `Version` cells of the Versioned contracts table (#748).*
 
 <!-- END GENERATED: fsgg-contract-versions -->
 
+## Coherent-set versioning: FS.GG.Kit, FS.GG.Drivers, coord-engine (.github#2402)
+
+`FS.GG.Kit`, `FS.GG.Drivers` and `coord-engine` (`FS.GG.Coord.Cli`) are **not** individually tracked
+contracts above — neither `FS.GG.Kit` nor `FS.GG.Drivers` carries a `registry/dependencies.yml` row
+at all (only `coord-engine` does, at `coord-engine` above), because their consumers are the receiver
+roster (`registry/repos.yml`), not this repo's cross-repo contract graph. They are nonetheless three
+packages `.github` publishes that frequently ship the same change, and until 2026-08-11 each carried
+its own independently hand-advanced `<Version>` literal — a shape that produced exactly the drift
+this migration removes: `FS.GG.Kit` bumped to `0.49.0` and `FS.GG.Drivers` to `0.18.0` for the
+**same** item (.github#2135), twenty minutes apart, while `coord-engine` stayed at `0.23.0`
+(commits `f26da6ed` / `d48e1ec2`), with no gate comparing any two of the three to each other.
+
+**The migration.** One MSBuild property, `$(FsggCoherentSetVersion)` (declared once in
+`Directory.Build.props`), now carries all three packages' `<Version>`. A bump to any one of them
+moves the property, which moves all three together — the three cannot diverge from each other again
+by construction, and `scripts/check-coherent-set-version.py` (`coherent-set-version.yml`) gates both
+that no project reintroduces an independent literal and that all three actually evaluate equal.
+
+**Starting version: `0.50.0`.** One MINOR above `max(FS.GG.Kit 0.49.0, FS.GG.Drivers 0.18.0,
+FS.GG.Coord.Cli 0.23.0)` = `0.49.0` — the highest of the three prior independent versions at the
+time the set was declared, so adopting the shared scalar does not make any member appear to
+downgrade. It is deliberately not `0.49.0` itself: that was already the newest FS.GG.Kit published
+on nuget.org, and `check-kit-published-coherence.py`'s PR arm requires any PR that edits
+`FS.GG.Kit.csproj` — which adopting this property necessarily does — to declare a version strictly
+greater than what is already published; `0.50.0` satisfies both constraints. This is a
+**source-tree-only** migration: no release workflow ran as part of it, so as of this note no package
+has actually been *published* at `0.50.0` — `coord-engine` above still correctly reads `0.23.0` on
+both axes until a real coherent-set release is cut (tracked as FS-GG/.github#2409). Consequently
+this repo's own freshness gates correctly report a release owed for `coord-engine` from the moment
+this migration merges (the version-scalar bump is itself an unreleased commit) — that is the accurate
+signal, not a regression.
+
+**Reconciliation with `.github#2396`.** `.github#2396` (replacing the engine-pin gate's strict
+equality with a recorded permitted lag) governs drift between a **receiver's own** `fs.gg.coord.cli`
+pin — in a repository outside this coherent set (FS.GG.SDD, Rendering, Governance, Templates, Game,
+Audio, Net) — and the registry's declared `coord-engine` version. This migration governs drift
+**inside** the set, between FS.GG.Kit, FS.GG.Drivers and coord-engine's own declared `<Version>`
+scalars. The two are disjoint subjects: no receiver pin is a member of this coherent set, and no
+member of this coherent set is a receiver of itself. Neither's fix touches the other's `Paths:`.
+
+**Deferred to a follow-up, deliberately.** Consolidating `release-kit.yml`, `release-drivers.yml`
+and `release-coord-engine.yml` into one workflow that actually cuts and dual-feed-publishes all three
+packages together, and the real receiver-restore verification that would then become possible, are
+**not** part of this migration. Those three workflows collectively implement the sole distribution
+path the entire fleet depends on to run `fsgg-coord` at all; redesigning that mechanism, and
+performing a real multi-package publish, is a maintainer sequencing decision this migration
+deliberately leaves to a follow-up (FS-GG/.github#2409) rather than making unilaterally under time
+pressure. Direct
+inspection of every coherence gate this migration's originating issue named as evidence of
+gate-per-pair sprawl (`check-source-coherence.py`, `check-feed-coherence.py`, `check-pin-coherence.py`,
+`check-engine-pin.py`, `check-kit-published-coherence.py`, `check-lock-ranges.py`, and
+`contract-coherence.yml`'s registry-schema validation) found that **none of their subjects is drift
+between FS.GG.Kit, FS.GG.Drivers and coord-engine's own version scalars** — each is a per-package
+registry/source/feed/pin lattice entry (replicated across *different* packages, e.g. `fsgg-contracts`
+for source-coherence), never a cross-package assertion between these three. No gate is deleted by
+this migration as a result; each is justified to keep, and that evaluation is this migration's answer
+to "which gates collapse" rather than an invented deletion.
+
 ## Skill-registry row counts
 
 The authoritative count of the `skill-registry` catalog ([`registry/skills.yml`](../../registry/skills.yml)), broken down by `scope` and `owner` — the machine-owned half of what the `skill-registry` contract row and the `skill-registry-published` coherence state describe in prose. Formerly hand-maintained and drift-prone ([.github#486](https://github.com/FS-GG/.github/issues/486) reconciled it once by hand; [.github#1206](https://github.com/FS-GG/.github/issues/1206) turned it into this projection). Prose that states a count cites this block rather than restating it.

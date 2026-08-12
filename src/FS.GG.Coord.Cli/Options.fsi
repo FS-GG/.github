@@ -303,13 +303,17 @@ module Options =
     /// under-advertised four of the fourteen honouring commands while `scopeOf` over-advertised twenty.
     val renderSupport: c: Command -> RenderSupport
 
-    /// A `--repo` token → the repo NAME board rows carry: a registry short-id maps (`sdd` → `FS.GG.SDD`), an
-    /// `owner/repo` keeps its repo part, a literal name passes through. `parse` applies this to `--repo`, so
-    /// `Options.Repo` is ALWAYS resolved and no verb can be left out of it (#962).
+    /// A `--repo` token → the `RepoScope.Scope` board rows resolve to: a registry short-id maps
+    /// (`sdd` → `FS.GG.SDD`), an `owner/repo` keeps its repo part, a literal name passes through, and
+    /// the board's one non-roster value (`cross-repo`) comes back tagged `NonRepository` rather than a
+    /// bare string a caller could mistake for a repository (#2398). `parse` applies this to `--repo`
+    /// (flattening explicitly, by arm, to the plain string `Options.Repo` still carries — a `--repo`
+    /// filter value is always a repository token, never the sentinel), so `Options.Repo` is ALWAYS
+    /// resolved and no verb can be left out of it (#962).
     ///
     /// PUBLIC so the git-remote scope can resolve through the SAME map (`Client.scopedRepo` reads a remote,
     /// not an argument, so the parser never sees it), and to be tested directly.
-    val resolveRepo: raw: string -> string
+    val resolveRepo: raw: string -> FS.GG.Coord.RepoScope.Scope
 
     /// An owner + repo → the CLOSED issue whose comments are that repo's CHORE-LOCK CAS subject (ADR-0041),
     /// resolved through the SAME map as `--repo` (so `sdd`, `FS-GG/FS.GG.SDD` and `FS.GG.SDD` agree).

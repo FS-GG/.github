@@ -1,0 +1,49 @@
+# The failure legs of coord-board-reconcile's "Check REST budget before scanning" pre-flight
+# (`id: budget`), .github#2352 AC-3, corrected .github#2355.
+#
+# .github#894 and .github#907 measured, independently, twice, that `GET /rate_limit`'s JSON BODY
+# (`resources.core.remaining`) disagrees with reality on this account — a healthy-looking body while a
+# real REST call 403'd with `remaining: 0` in the same window. The original AC-3 pre-flight
+# (.github#2352, PR #2353) trusted that body, so it could read "healthy" and let a ~2000-item board scan
+# START against a budget that was already dead. .github#2355 replaced the source with a real REST call's
+# own `X-RateLimit-Remaining` response header — the honest signal `docs/coordination/graphql-budget.md`
+# names — and this fixture is what keeps that fix from silently regressing.
+#
+# Per epic #266's ratified rule — A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE — this drives the
+# `budget` step's script EXTRACTED FROM THE REAL WORKFLOW across the boundary/failure truth table, and
+# asserts the reason on every leg, not merely a non-zero exit. The structural legs (S1-S4) are the point:
+# a truth table proves the script is correct today; it cannot prove a future edit does not quietly
+# reintroduce the untrustworthy `/rate_limit` body read this fixture exists to catch.
+name: rest-budget-preflight-selftest
+
+on:
+  pull_request:
+    paths:
+      - "tests/rest-budget-preflight/**"
+      - ".github/workflows/coord-board-reconcile.yml"
+      - ".github/workflows/rest-budget-preflight-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/rest-budget-preflight/**"
+      - ".github/workflows/coord-board-reconcile.yml"
+      - ".github/workflows/rest-budget-preflight-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # The fixture parses the real coord-board-reconcile.yml rather than a re-typed copy of it — a
+      # copy would keep passing after someone edits the workflow, which is the very fails-open shape
+      # this gate exists to close.
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Run the rest-budget-preflight failure-leg fixture
+        run: bash tests/rest-budget-preflight/run.sh
