@@ -179,19 +179,33 @@ module Landable =
         else
             Blocking
 
-    /// A workflow run's `Gating` (#2400, closing #2379): a run is `Advisory` only when its `CheckSuiteId` has
-    /// at least one live check-run AND every one of them is itself `Advisory` — the run's own redness is then
-    /// wholly attributable to jobs its own owner already declared "observed, not enforced". This is the
-    /// "advisory check's containing workflow run" fix #2379 asked for: `coherence.yml`'s run concluding
-    /// `failure` solely because its `claim-generation` job did is no longer scored, without touching a run
-    /// whose failure has ANY other cause.
+    /// A subject (run or check) is a FINDING unless it COMPLETED and concluded `success` or `skipped`.
+    let private isPending (status: string) = status <> "completed"
+
+    let private isBad (status: string) (conclusion: string option) =
+        status = "completed" && conclusion <> Some "success" && conclusion <> Some "skipped"
+
+    /// A workflow run's `Gating` (#2400/#2454, closing #2379): a run is `Advisory` only when EVERY check-run
+    /// in its suite that is itself a FINDING — `isBad` or still `isPending` — is `Advisory`. A check-run that
+    /// already PASSED takes no part in the decision; the run's own redness is then wholly attributable to
+    /// findings its own owner already declared "observed, not enforced" (#2373's `advisoryCheckNames`).
+    ///
+    /// `.github#2454`: the FIRST shipped version of this rule surveyed suite MEMBERSHIP instead of findings —
+    /// every check-run in the suite, passing ones included, had to be advisory-NAMED for the run to qualify.
+    /// That keyed the decision on whether a non-advisory check-run EXISTS, never on whether one FAILED, so
+    /// `coherence.yml`'s real shape (`claim-generation` advisory and failing, five ordinary jobs green) still
+    /// read `Blocking` — the five PASSING jobs' mere presence held the run's own `failure` conclusion in the
+    /// rollup, even though none of them was bad. Filtering to FINDINGS first is what makes "solely because
+    /// its advisory job did" actually mean solely, rather than "and nothing else is present".
     ///
     /// A run with NO live check-runs in its suite stays `Blocking` (#2379 AC3) — that is `startup_failure`:
     /// GitHub failed the run before any job could report, so there is no check-run to attribute the failure
     /// to, and calling that "advisory" would silently swallow a whole class of genuine failures that #606
-    /// exists to catch. A MIXED suite (one advisory job, one genuinely failing ordinary job — the
-    /// `registry-coherence` case, #642/#425) also stays `Blocking` (#2379 AC2): one non-advisory check-run in
-    /// the suite is enough to keep the run a real finding.
+    /// exists to catch. A run whose OWN check-runs are all finding-free (every one already passed) also stays
+    /// `Blocking` — nothing in its suite explains a bad or pending run status, so leaving it scored is the
+    /// conservative answer. A MIXED suite of findings (one advisory job, one genuinely failing ordinary job —
+    /// the `registry-coherence` case, #642/#425) also stays `Blocking` (#2379 AC2): one non-advisory FINDING
+    /// in the suite is enough to keep the run a real finding.
     let private runGating (required: Set<string>) (liveChecksAll: CheckRow list) (r: RunRow) : Gating =
         match r.CheckSuiteId with
         | None -> Blocking
@@ -199,20 +213,17 @@ module Landable =
             match liveChecksAll |> List.filter (fun c -> c.CheckSuiteId = Some suiteId) with
             | [] -> Blocking
             | ownChecks ->
-                let allAdvisory =
-                    ownChecks
-                    |> List.forall (fun c ->
-                        match checkGating required c with
-                        | Advisory -> true
-                        | Blocking -> false)
+                match ownChecks |> List.filter (fun c -> isPending c.Status || isBad c.Status c.Conclusion) with
+                | [] -> Blocking
+                | findings ->
+                    let allAdvisory =
+                        findings
+                        |> List.forall (fun c ->
+                            match checkGating required c with
+                            | Advisory -> true
+                            | Blocking -> false)
 
-                if allAdvisory then Advisory else Blocking
-
-    /// A subject (run or check) is a FINDING unless it COMPLETED and concluded `success` or `skipped`.
-    let private isPending (status: string) = status <> "completed"
-
-    let private isBad (status: string) (conclusion: string option) =
-        status = "completed" && conclusion <> Some "success" && conclusion <> Some "skipped"
+                    if allAdvisory then Advisory else Blocking
 
     /// The verdict AND the number of subjects it was scored over — runs plus check-runs, after the
     /// superseded suites are dropped. `--wait` needs that count and the verdict is not enough: a `red` over
