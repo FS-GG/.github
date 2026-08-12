@@ -149,25 +149,128 @@ jobs:
             esac
           }
           # END kit-csproj-version
-          # Find the merged PR that introduced the evaluated version, rather
-          # than assuming main's latest commit is that PR.  Every candidate is
-          # checked at its immutable merge commit and PR head.
-          provenance='{}'
-          while IFS=$'\t' read -r number merge head; do
-            [ -n "$number" ] || continue
-            introduced="$(csproj_version "$merge" src/FS.GG.Kit/FS.GG.Kit.csproj)"
-            base="$(csproj_version "$merge^" src/FS.GG.Kit/FS.GG.Kit.csproj)"
-            [ "$introduced" = "$version" ] && [ "$base" != "$version" ] || continue
+          # BEGIN kit-provenance-search
+          # Mirrors `observe_feed()`'s `curl --retry 2 --connect-timeout 10` convention (above in
+          # this same step) for the `gh` CLI calls this loop makes, none of which carried ANY retry
+          # before .github#2443: a single transient network/TLS blip on `gh run view` (observed live
+          # at 4bb788e6, https://github.com/FS-GG/.github/actions/runs/31588955946) fell straight
+          # through this loop's `|| continue` and read exactly like a verified-absent pr-arm job,
+          # escalating the wrong refusal reason (`merged-pr-provenance-missing` instead of the real,
+          # differently-refusing state). A call that RECOVERS on retry now gets its real answer
+          # instead of being silently read as absent; a call that is genuinely, persistently
+          # unreachable still returns non-zero once retries exhaust, so a REAL absence is unchanged.
+          #
+          # `gh_retry` keeps only the LAST attempt's stderr (earlier retries' noise is discarded) — a
+          # genuinely exhausted failure must still print the real diagnostic (the TLS error text this
+          # very issue quotes as evidence), or a future recurrence of this or any other persistent `gh`
+          # failure here leaves no trace in the job log (round-1 review repair 2).
+          #
+          # Emits `$out` WITH a trailing newline (round-2 review repair 3), even though `$(...)`
+          # already stripped whatever the wrapped command originally ended with. `gh_retry` is piped
+          # directly into `find_provenance`'s `while read` loop at the bottom of this file
+          # (`gh_retry gh pr list ... | find_provenance "$version"`), and bash's `read` silently drops
+          # the FINAL record of its input when that input's last line has no trailing newline — it
+          # still populates the loop variables for that partial line, but returns failure, so the loop
+          # body never runs for it. A bare `printf '%s' "$out"` reproduced that missing-newline shape
+          # on EVERY call, silently discarding whichever PR happened to be listed last — which, in the
+          # single-candidate case (exactly one merged PR introduced the evaluated version — the common
+          # case), is the one and only real match: `find_provenance` would see nothing at all and
+          # complete normally with `provenance={}`, rather than failing loudly OR finding the evidence.
+          gh_retry() {
+            local attempt=0 max_retries=2 rc=0 out err_file
+            err_file="$(mktemp)"
+            while :; do
+              if out="$("$@" 2>"$err_file")"; then
+                rm -f "$err_file"
+                printf '%s\n' "$out"
+                return 0
+              else
+                # NOT a bare `rc=$?` after the `if ...; fi` above — bash's own `if` exits 0 in that
+                # shape whenever the then-branch does not run, regardless of the condition's real
+                # status, so `rc` would silently stay 0 on every failure and this function would
+                # never actually report one. Capturing inside `else` is what makes the real exit
+                # code visible (the same fix as `provenance_evidence`/`find_provenance` below).
+                rc=$?
+              fi
+              attempt=$((attempt + 1))
+              if [ "$attempt" -gt "$max_retries" ]; then
+                cat "$err_file" >&2
+                rm -f "$err_file"
+                return "$rc"
+              fi
+              sleep 1
+            done
+          }
+          # Evidence for ONE already version-matched candidate PR: is its
+          # `kit-published-coherence.yml` run's `pr-arm` job a success, and is the merge commit
+          # reachable from `origin/main`?  Split out of the calling while-loop below so it is
+          # unit-testable against a stubbed `gh` in isolation from PR listing and `csproj_version`
+          # matching — see tests/kit-auto-publish/run.sh.
+          #
+          # Returns 0 with the evidence JSON on stdout when found; 1 when this candidate is
+          # POSITIVELY VERIFIED to lack evidence (a `gh`/`git` call answered and the answer was
+          # negative); 2 when a `gh` call could not be completed even after retry. An INCONCLUSIVE
+          # check (2) must never be folded into the same outcome as a verified absence (1) — that IS
+          # the loud-crash-to-silent-refusal regression round 1 of review caught in this fix's first
+          # draft: wrapping `gh run list`'s previously-UNGUARDED, previously loudly `set -e`-crashing
+          # call in a uniform `|| return 1` made a persistent failure on it indistinguishable from
+          # "provenance genuinely absent" — a call for which that ambiguity did not exist before this
+          # fix (round-1 review repair 1). Every assignment below that can fail is inside an `if`/`||`
+          # guard specifically so a failure is inspectable rather than tripping this step's own
+          # `set -e` before the distinction can be drawn.
+          provenance_evidence() {
+            local number="$1" merge="$2" head="$3" version="$4" run_id run_view_out
             # This is provenance for the already-merged authoring PR, not a
             # replacement merge gate.  Read the named workflow run and its
             # `pr-arm` job rather than re-implementing the check-run rollup;
             # PR merging itself remains exclusively `fsgg-coord landable`.
-            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow kit-published-coherence.yml --commit "$head" --event pull_request --status success --limit 20 --json databaseId --jq '.[0].databaseId // empty')"
-            [ -n "$run_id" ] || continue
-            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "pr-arm" and .conclusion == "success") | .databaseId' | grep -q . || continue
-            git merge-base --is-ancestor "$merge" origin/main || continue
-            provenance="$(jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$introduced" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}')"; break
-          done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv')
+            if ! run_id="$(gh_retry gh run list --repo "$GITHUB_REPOSITORY" --workflow kit-published-coherence.yml --commit "$head" --event pull_request --status success --limit 20 --json databaseId --jq '.[0].databaseId // empty')"; then
+              echo "::error::gh run list failed for PR #$number after retries; refusing to fold an UNCHECKED candidate into a verified-absent refusal (.github#2443)" >&2
+              return 2
+            fi
+            [ -n "$run_id" ] || return 1
+            if ! run_view_out="$(gh_retry gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "pr-arm" and .conclusion == "success") | .databaseId')"; then
+              echo "::error::gh run view failed for run $run_id (PR #$number) after retries; refusing to fold an UNCHECKED candidate into a verified-absent refusal (.github#2443)" >&2
+              return 2
+            fi
+            printf '%s' "$run_view_out" | grep -q . || return 1
+            git merge-base --is-ancestor "$merge" origin/main || return 1
+            jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$version" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}'
+          }
+          # Walks candidate merged PRs (TSV on stdin: number, merge-commit, head — already MERGED,
+          # per `gh pr list --state merged`), matching each against `$1` (the evaluated version) via
+          # `csproj_version`, and prints the first one `provenance_evidence` confirms, or `{}` when
+          # every checked candidate genuinely lacked evidence. A candidate that matched the version but
+          # could NOT be checked (`provenance_evidence` rc 2) exits this whole step LOUDLY (annotated,
+          # non-zero) instead of silently moving on — see the rc-2 doc comment above.
+          find_provenance() {
+            local version="$1" number merge head introduced base evidence ev_rc
+            while IFS=$'\t' read -r number merge head; do
+              [ -n "$number" ] || continue
+              introduced="$(csproj_version "$merge" src/FS.GG.Kit/FS.GG.Kit.csproj)"
+              base="$(csproj_version "$merge^" src/FS.GG.Kit/FS.GG.Kit.csproj)"
+              [ "$introduced" = "$version" ] && [ "$base" != "$version" ] || continue
+              if evidence="$(provenance_evidence "$number" "$merge" "$head" "$introduced")"; then
+                printf '%s' "$evidence"
+                return 0
+              else
+                # NOT `ev_rc=$?` after a bare `if ...; fi` with no matching branch — bash's own `if`
+                # exits 0 in that shape regardless of the condition's real status (only the taken
+                # branch's status propagates). Capturing inside `else` is what makes 1 vs 2 visible.
+                ev_rc=$?
+              fi
+              if [ "$ev_rc" -eq 2 ]; then
+                echo "::error::provenance check for the matching candidate PR #$number could not complete after retries — refusing rather than reporting a possibly-wrong refuse reason (.github#2443)" >&2
+                exit 1
+              fi
+            done
+            printf '{}'
+          }
+          # END kit-provenance-search
+          # Find the merged PR that introduced the evaluated version, rather
+          # than assuming main's latest commit is that PR.  Every candidate is
+          # checked at its immutable merge commit and PR head.
+          provenance="$(gh_retry gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv' | find_provenance "$version")"
           # Artifact identity is the commit the tag will point at; authoring
           # provenance remains separately bound in `.provenance.mergeCommit`.
           # For an ALREADY-tagged version that is what the tag already points

@@ -382,4 +382,373 @@ checks=$((checks + 1))
   || { echo "gate-inversion (provenance): the naive form must NOT resolve to the real version" >&2; exit 1; }
 checks=$((checks + 1))
 
+# ---- 11. `provenance_evidence`/`gh_retry`/`find_provenance`: RETRY ROOT CAUSE (.github#2443) PLUS
+#          its round-1 review repairs. A transient TLS/network blip on `gh run list`/`gh run view`
+#          inside the provenance loop previously fell straight through the loop's `|| continue` and
+#          read exactly like a verified-absent `pr-arm` job. Round 1 of independent review caught two
+#          regressions in the first draft's retry wrapper: (1) folding `gh run list`'s call — which was
+#          previously UNGUARDED and so crashed the whole job LOUDLY on any failure under `set -e` —
+#          into the same `|| return 1` as everything else made a persistent, genuinely-unreachable `gh`
+#          call read exactly like a verified-absent candidate; (2) `gh_retry`'s `2>/dev/null` discarded
+#          the real diagnostic (the TLS error text this very issue quotes as evidence) even on the
+#          FINAL, exhausted attempt. `provenance_evidence` now returns THREE distinguishable outcomes
+#          (0 = evidence found, 1 = verified absent, 2 = could not verify) and `gh_retry` preserves the
+#          last attempt's stderr — this extracts the REAL functions out of the REAL workflow (between
+#          the `kit-provenance-search` markers) and runs them against a stubbed `gh` that can be told to
+#          fail its first N calls of a given kind before succeeding, plus a REAL synthetic git repo for
+#          the `git merge-base --is-ancestor` check. ----
+extract_provenance_retry_fns() {
+  awk '/^[[:space:]]*# BEGIN kit-provenance-search$/{flag=1; next} /^[[:space:]]*# END kit-provenance-search$/{flag=0} flag' \
+    "$root/.github/workflows/kit-auto-publish.yml" > "$1"
+  grep -q 'gh_retry()' "$1" \
+    || { echo "gh_retry() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
+  grep -q 'provenance_evidence()' "$1" \
+    || { echo "provenance_evidence() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
+  grep -q 'find_provenance()' "$1" \
+    || { echo "find_provenance() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
+}
+
+prov_work="$esc_work/provenance"
+mkdir -p "$prov_work/bin" "$prov_work/repo"
+git -C "$prov_work" init -q repo
+git -C "$prov_work/repo" config user.email test@example.test
+git -C "$prov_work/repo" config user.name test
+git -C "$prov_work/repo" commit -q --allow-empty -m init
+prov_merge_sha="$(git -C "$prov_work/repo" rev-parse HEAD)"
+# A REAL two-commit version bump for `find_provenance`'s own `csproj_version` matching (11h/11i,
+# below): base introduces 0.27.0, the child ("real match") introduces 0.27.1 — this is the ONE
+# candidate `find_provenance` should find for version 0.27.1.
+mkdir -p "$prov_work/repo/src/FS.GG.Kit"
+printf '<Project><PropertyGroup><Version>0.27.0</Version></PropertyGroup></Project>' > "$prov_work/repo/src/FS.GG.Kit/FS.GG.Kit.csproj"
+git -C "$prov_work/repo" add -A && git -C "$prov_work/repo" commit -q -m base
+printf '<Project><PropertyGroup><Version>0.27.1</Version></PropertyGroup></Project>' > "$prov_work/repo/src/FS.GG.Kit/FS.GG.Kit.csproj"
+git -C "$prov_work/repo" add -A && git -C "$prov_work/repo" commit -q -m 'real match'
+prov_real_match_sha="$(git -C "$prov_work/repo" rev-parse HEAD)"
+# `origin/main` here is a plain local ref standing in for the real remote-tracking ref the live
+# workflow's checkout provides; `merge-base --is-ancestor` only cares that it resolves and is
+# reachable, and a commit is its own ancestor, so pointing it at the same commit is sufficient.
+git -C "$prov_work/repo" update-ref refs/remotes/origin/main "$prov_real_match_sha"
+
+prov_fn="$prov_work/provenance_evidence.sh"
+extract_provenance_retry_fns "$prov_fn"
+
+# A stub `gh` driven by two env vars, `RUN_LIST_FAIL`/`RUN_VIEW_FAIL`: the first N calls of that kind
+# fail with a message shaped like the live TLS blip this fix targets, then every call after succeeds.
+# Per-kind call counts persist under `$STUB_DIR` so retries within one `provenance_evidence` call are
+# visible afterward.
+cat > "$prov_work/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$STUB_DIR/calls.log"
+if [ "$1" = "run" ] && [ "$2" = "list" ]; then
+  n_file="$STUB_DIR/run_list_n"; n=0; [ -f "$n_file" ] && n="$(cat "$n_file")"; n=$((n + 1)); printf '%s' "$n" > "$n_file"
+  if [ "$n" -le "${RUN_LIST_FAIL:-0}" ]; then
+    echo "failed to get run: tls: failed to verify certificate: x509: certificate is not valid for any names, but wanted to match api.github.com" >&2
+    exit 1
+  fi
+  printf '999'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "view" ]; then
+  n_file="$STUB_DIR/run_view_n"; n=0; [ -f "$n_file" ] && n="$(cat "$n_file")"; n=$((n + 1)); printf '%s' "$n" > "$n_file"
+  if [ "$n" -le "${RUN_VIEW_FAIL:-0}" ]; then
+    echo "failed to get run: tls: failed to verify certificate: x509: certificate is not valid for any names, but wanted to match api.github.com" >&2
+    exit 1
+  fi
+  printf '12345'
+  exit 0
+fi
+# `PR_LIST_TSV` stands in for `gh pr list --jq '.[] | [...] | @tsv'`'s real output — jq's raw output
+# terminates EVERY emitted record with `\n`, including the last, so a trailing `\n` here (not just
+# between rows) is load-bearing: it is what round-2 review repair 3 (11h/11i below) checks survives
+# `gh_retry`'s own re-emission.
+if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
+  printf '%s\n' "${PR_LIST_TSV:-}"
+  exit 0
+fi
+echo "unstubbed gh invocation: $*" >&2
+exit 99
+STUB
+chmod +x "$prov_work/bin/gh"
+
+# run_provenance_evidence <dir> <script> <run-list-fail> <run-view-fail> -> exit code; stdout/stderr
+# and per-kind call counts land under <dir> so a scenario can assert on them afterward. Sourced under
+# the SAME `set -euo pipefail` the real workflow step runs under — that option is exactly what makes
+# an unguarded failing assignment crash instead of silently falling through, which is the crux of
+# round-1 review repair 1, so a test that ran the extracted function WITHOUT it could pass on a
+# reintroduced regression that only bites in the real step.
+run_provenance_evidence() {
+  local dir="$1" script="$2" rl="$3" rv="$4" rc=0
+  mkdir -p "$dir"
+  rm -f "$dir/calls.log" "$dir/run_list_n" "$dir/run_view_n"
+  ( cd "$prov_work/repo" \
+    && STUB_DIR="$dir" PATH="$prov_work/bin:$PATH" \
+       RUN_LIST_FAIL="$rl" RUN_VIEW_FAIL="$rv" GITHUB_REPOSITORY=FS-GG/.github \
+       bash -c "set -euo pipefail; source '$script'; provenance_evidence '123' '$prov_merge_sha' 'deadbeef' '0.27.1'" \
+  ) >"$dir/stdout.log" 2>"$dir/stderr.log" || rc=$?
+  return "$rc"
+}
+
+# run_find_provenance <dir> <script> <pr-list-tsv> -> exit code; stdout/stderr land under <dir>.
+# Exercises `find_provenance` THROUGH THE REAL PIPE — `gh_retry gh pr list ... | find_provenance
+# "$version"` — the exact production wiring at the bottom of kit-auto-publish.yml, rather than calling
+# `find_provenance` directly with a pre-split argument list. Round-2 review repair 3 (11h/11i) is
+# invisible to any test that does not go through this pipe: `gh_retry`'s missing trailing newline only
+# bites `find_provenance`'s `while read` on the LAST record of exactly this kind of piped input.
+# `find_provenance` calls `csproj_version` (a DIFFERENT extracted block, `kit-csproj-version` —
+# section 9/10 above), so `$csproj_version_fn` is sourced alongside `$script` here.
+run_find_provenance() {
+  local dir="$1" script="$2" pr_list_tsv="$3" rc=0
+  mkdir -p "$dir"
+  rm -f "$dir/calls.log" "$dir/run_list_n" "$dir/run_view_n"
+  ( cd "$prov_work/repo" \
+    && STUB_DIR="$dir" PATH="$prov_work/bin:$PATH" \
+       RUN_LIST_FAIL=0 RUN_VIEW_FAIL=0 PR_LIST_TSV="$pr_list_tsv" GITHUB_REPOSITORY=FS-GG/.github \
+       bash -c "set -euo pipefail; source '$csproj_version_fn'; source '$script'; \
+         gh_retry gh pr list --repo \"\$GITHUB_REPOSITORY\" --state merged --limit 100 \
+           --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv' \
+         | find_provenance '0.27.1'" \
+  ) >"$dir/stdout.log" 2>"$dir/stderr.log" || rc=$?
+  return "$rc"
+}
+
+# 11a. Baseline: `gh` never fails -> evidence is found on the first attempt of each call.
+d="$prov_work/baseline"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 0 0 || rc=$?
+[ "$rc" -eq 0 ] || { echo "provenance_evidence baseline: expected exit 0, got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .prArm "$d/stdout.log")" = pass ] \
+  || { echo "provenance_evidence baseline: expected prArm=pass, got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# 11b. RETRY RECOVERS: `gh run list`'s first call fails transiently, its second succeeds. The FIXED
+#      function must still find evidence — the exact case that misread as `merged-pr-provenance-missing`
+#      live at 4bb788e6.
+d="$prov_work/run-list-transient"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 1 0 || rc=$?
+[ "$rc" -eq 0 ] || { echo "provenance_evidence run-list-transient: expected exit 0 (retry recovers), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .prArm "$d/stdout.log")" = pass ] \
+  || { echo "provenance_evidence run-list-transient: expected recovered evidence, got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(grep -c '^run list' "$d/calls.log")" -eq 2 ] \
+  || { echo "provenance_evidence run-list-transient: expected exactly 2 'gh run list' calls (1 failure + 1 retry), got: $(cat "$d/calls.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# 11c. Same shape for `gh run view`'s transient failure.
+d="$prov_work/run-view-transient"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 0 1 || rc=$?
+[ "$rc" -eq 0 ] || { echo "provenance_evidence run-view-transient: expected exit 0 (retry recovers), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .prArm "$d/stdout.log")" = pass ] \
+  || { echo "provenance_evidence run-view-transient: expected recovered evidence, got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# 11d. A PERSISTENT (not transient) `gh run list` failure still gives up, bounded (no infinite retry
+#      loop) — but per round-1 repair 1 it must now report 2 (COULD NOT VERIFY), distinguishable from 1
+#      (verified absent), and per repair 2 the real TLS diagnostic must survive to stderr.
+d="$prov_work/run-list-persistent"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 99 0 || rc=$?
+[ "$rc" -eq 2 ] || { echo "provenance_evidence run-list-persistent: expected exit 2 (inconclusive, distinguishable from verified-absent), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(grep -c '^run list' "$d/calls.log")" -eq 3 ] \
+  || { echo "provenance_evidence run-list-persistent: expected exactly 3 attempts (1 + 2 retries), got: $(cat "$d/calls.log")" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qi 'tls' "$d/stderr.log" \
+  || { echo "provenance_evidence run-list-persistent: expected the real TLS diagnostic to survive to stderr (repair 2), got: $(cat "$d/stderr.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# 11d2. The same shape for a PERSISTENT `gh run view` failure — repair 1/2 apply symmetrically to both
+#       calls, not just the one round 1 happened to name first.
+d="$prov_work/run-view-persistent"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 0 99 || rc=$?
+[ "$rc" -eq 2 ] || { echo "provenance_evidence run-view-persistent: expected exit 2 (inconclusive), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qi 'tls' "$d/stderr.log" \
+  || { echo "provenance_evidence run-view-persistent: expected the real TLS diagnostic to survive to stderr, got: $(cat "$d/stderr.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11e. GATE-INVERSION EVIDENCE (pnext-item §3) for the RETRY mechanism itself: strip `gh_retry`
+#           back out of a copy of the real functions — reproducing pre-.github#2443 bare `gh run
+#           list`/`gh run view` calls textually — and show the IDENTICAL one-shot transient blip (11c's
+#           scenario) now costs a LOUD, avoidable job failure (2) instead of a clean recovery (0): even
+#           with repair 1/2's 1-vs-2 distinction in place, retry is still what tells a one-off blip
+#           apart from something worth failing loudly over. A test that cannot fail on the pre-#2443
+#           shape has not tested the retry fix. ----
+mutate_to_no_retry() {
+  python3 - "$1" "$2" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+mutated = text.replace("gh_retry gh run list", "gh run list").replace("gh_retry gh run view", "gh run view")
+if mutated == text:
+    sys.exit("mutate_to_no_retry: nothing to strip — gh_retry call sites are GONE")
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+}
+prov_buggy_fn="$prov_work/provenance_evidence_no_retry.sh"
+mutate_to_no_retry "$prov_fn" "$prov_buggy_fn"
+
+d="$prov_work/gate-inversion-run-view"
+rc=0; run_provenance_evidence "$d" "$prov_buggy_fn" 0 1 || rc=$?
+[ "$rc" -eq 2 ] \
+  || { echo "gate-inversion (retry): pre-#2443 bare gh call on a one-shot transient blip should cost an avoidable inconclusive failure (2), got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(grep -c '^run view' "$d/calls.log")" -eq 1 ] \
+  || { echo "gate-inversion (retry): pre-#2443 must make exactly ONE 'gh run view' call — no retry — got: $(cat "$d/calls.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11f. GATE-INVERSION EVIDENCE for ROUND-1 REPAIR 1: reproduce the exact shape independent review
+#           flagged in this fix's FIRST draft — `gh_retry gh run list ...` folded into a uniform
+#           `|| return 1`, the same outcome as a verified-absent candidate — and show a PERSISTENT
+#           failure (11d's scenario) now reads 1 instead of 2: indistinguishable from genuine absence,
+#           reproducing the regression the critic caught before this repair existed. ----
+prov_round1_fn="$prov_work/provenance_evidence_round1.sh"
+{
+  awk '/^[[:space:]]*gh_retry\(\) \{$/,/^[[:space:]]*\}$/' "$prov_fn"
+  cat <<'ROUND1'
+provenance_evidence() {
+  local number="$1" merge="$2" head="$3" version="$4" run_id
+  run_id="$(gh_retry gh run list --repo "$GITHUB_REPOSITORY" --workflow kit-published-coherence.yml --commit "$head" --event pull_request --status success --limit 20 --json databaseId --jq '.[0].databaseId // empty')" || return 1
+  [ -n "$run_id" ] || return 1
+  gh_retry gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "pr-arm" and .conclusion == "success") | .databaseId' | grep -q . || return 1
+  git merge-base --is-ancestor "$merge" origin/main || return 1
+  jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$version" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}'
+}
+ROUND1
+} > "$prov_round1_fn"
+grep -q 'gh_retry()' "$prov_round1_fn" \
+  || { echo "gate-inversion (repair 1): failed to carry gh_retry() into the round-1 fixture — awk extraction shape changed upstream" >&2; exit 1; }
+
+d="$prov_work/gate-inversion-repair1"
+rc=0; run_provenance_evidence "$d" "$prov_round1_fn" 99 0 || rc=$?
+[ "$rc" -eq 1 ] \
+  || { echo "gate-inversion (repair 1): round-1 shape must read a persistent gh run list failure as verified-absent (1), not inconclusive (2) — got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11g. GATE-INVERSION EVIDENCE for ROUND-1 REPAIR 2: reproduce `gh_retry`'s original
+#           unconditional `2>/dev/null` (discards the real diagnostic even on the final, exhausted
+#           attempt) with EVERY OTHER control-flow fix (including the `else`-branch `rc=$?` fix this
+#           very repair round also needed inside `gh_retry` itself — see the doc comment on the real
+#           function) held constant, isolating stderr handling as the ONLY variable under test. Paired
+#           with the CURRENT (post-repair-1) `provenance_evidence`, the SAME persistent-failure scenario
+#           (11d) must still leave stderr EMPTY — the diagnostic this issue itself cites as evidence is
+#           gone, exactly what a future recurrence would leave no trace of. ----
+prov_no_stderr_fn="$prov_work/provenance_evidence_no_stderr.sh"
+cat > "$prov_no_stderr_fn" <<GHRETRY
+gh_retry() {
+  local attempt=0 max_retries=2 rc=0 out
+  while :; do
+    if out="\$("\$@" 2>/dev/null)"; then
+      printf '%s' "\$out"
+      return 0
+    else
+      rc=\$?
+    fi
+    attempt=\$((attempt + 1))
+    [ "\$attempt" -gt "\$max_retries" ] && return "\$rc"
+    sleep 1
+  done
+}
+GHRETRY
+awk '/^[[:space:]]*provenance_evidence\(\) \{$/,/^[[:space:]]*\}$/' "$prov_fn" >> "$prov_no_stderr_fn"
+grep -q 'provenance_evidence()' "$prov_no_stderr_fn" \
+  || { echo "gate-inversion (repair 2): failed to carry provenance_evidence() into the no-stderr fixture — awk extraction shape changed upstream" >&2; exit 1; }
+
+d="$prov_work/gate-inversion-repair2"
+rc=0; run_provenance_evidence "$d" "$prov_no_stderr_fn" 99 0 || rc=$?
+[ "$rc" -eq 2 ] \
+  || { echo "gate-inversion (repair 2): expected exit 2 (provenance_evidence itself is unchanged), got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+# `provenance_evidence`'s OWN `::error::` annotation still fires on rc 2 regardless of `gh_retry`'s
+# stderr handling, so the assertion is specifically the ABSENCE of the underlying `gh` diagnostic text
+# — not overall stderr emptiness (that would also pass on the annotation alone and prove nothing).
+grep -qi 'tls' "$d/stderr.log" \
+  && { echo "gate-inversion (repair 2): pre-fix gh_retry must NOT surface the underlying TLS diagnostic on the final exhausted attempt — got: $(cat "$d/stderr.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11h/11i/11j. ROUND-2 REPAIR 3 (.github#2443, review round 2): `find_provenance` was never
+#      EXECUTED by this file before round 2 — only `grep -q`'d for by name (11's earlier
+#      `extract_provenance_retry_fns` check). That is precisely how two review rounds missed a defect
+#      a single execution reveals: `gh_retry`'s success path was `printf '%s' "$out"` (no trailing
+#      newline — `$(...)` already stripped whatever the wrapped command originally ended with), and
+#      piped straight into `find_provenance`'s `while read` loop (the real production wiring,
+#      `gh_retry gh pr list ... | find_provenance "$version"`), bash's `read` silently drops the FINAL
+#      record of input with no trailing newline. In the realistic single-candidate case (exactly one
+#      merged PR introduced the version), that dropped record IS the real match, so `find_provenance`
+#      completed normally with `provenance={}` — no error, no exit code, just the wrong, silently
+#      empty answer. These legs run `find_provenance` FOR REAL, through the real pipe, against a REAL
+#      two-commit git history (0.27.0 -> 0.27.1) so `csproj_version`'s own matching is exercised too. ----
+
+# 11h. Single candidate (the realistic shape) — this is the record round-2 review found DROPPED.
+prov_single_tsv="42	$prov_real_match_sha	deadbeefhead"
+d="$prov_work/find-provenance-single"
+rc=0; run_find_provenance "$d" "$prov_fn" "$prov_single_tsv" || rc=$?
+[ "$rc" -eq 0 ] || { echo "find_provenance single-candidate: expected exit 0, got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .prArm "$d/stdout.log" 2>/dev/null)" = pass ] \
+  || { echo "find_provenance single-candidate: expected the real match's evidence, got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# 11i. Two candidates, real match FIRST and a non-matching decoy LAST (the decoy has no
+#      FS.GG.Kit.csproj at all, so `csproj_version` resolves empty and it never matches `0.27.1`
+#      regardless). This is the ordering round-2 review's own repro noted as accidentally "working"
+#      even on the buggy code, because the record dropped by the missing newline is the decoy the loop
+#      was always going to skip — included so the suite documents exactly why this escaped twice
+#      rather than only proving the fix in the one ordering that exposes it.
+prov_two_tsv="42	$prov_real_match_sha	deadbeefhead
+99	$prov_merge_sha	decoyhead"
+d="$prov_work/find-provenance-two-decoy-last"
+rc=0; run_find_provenance "$d" "$prov_fn" "$prov_two_tsv" || rc=$?
+[ "$rc" -eq 0 ] || { echo "find_provenance two-candidate (decoy last): expected exit 0, got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .prArm "$d/stdout.log" 2>/dev/null)" = pass ] \
+  || { echo "find_provenance two-candidate (decoy last): expected the real match's evidence, got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11j. GATE-INVERSION EVIDENCE (pnext-item §3) for round-2 repair 3: restore the exact pre-repair
+#           mutation — `printf '%s\n' "$out"` back to `printf '%s' "$out"` — and show 11h's
+#           single-candidate scenario goes RED (silently wrong: exit 0 but `provenance={}`, the real
+#           match dropped), then restore and show it goes GREEN again. Named, red, restore, green — a
+#           test that cannot fail on the exact reverted line has not tested this repair. ----
+mutate_drop_trailing_newline() {
+  python3 - "$1" "$2" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+target = "printf '%s\\n' \"$out\"\n"
+replacement = "printf '%s' \"$out\"\n"
+if target not in text:
+    sys.exit("mutate_drop_trailing_newline: the fixed \"printf '%s\\n' \\\"$out\\\"\" line is GONE from gh_retry")
+mutated = text.replace(target, replacement, 1)
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+}
+prov_no_newline_fn="$prov_work/provenance_evidence_no_newline.sh"
+mutate_drop_trailing_newline "$prov_fn" "$prov_no_newline_fn"
+
+# RED: the named mutation reverts exactly round-2 repair 3 — the single-candidate case must now
+# silently lose its only record.
+d="$prov_work/gate-inversion-repair3-red"
+rc=0; run_find_provenance "$d" "$prov_no_newline_fn" "$prov_single_tsv" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo "gate-inversion (repair 3, RED phase): pre-fix gh_retry should complete NORMALLY (exit 0) while silently losing the record, got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+observed_red="$(cat "$d/stdout.log")"
+[ "$observed_red" = '{}' ] \
+  || { echo "gate-inversion (repair 3, RED phase): expected the pre-fix mutation to silently drop the real match and emit '{}', got: $observed_red" >&2; exit 1; }
+checks=$((checks + 1))
+
+# GREEN (restore): the unmutated, currently-shipped function on the IDENTICAL scenario finds the
+# real match, per 11h above — re-asserted here beside the red observation so both halves of the
+# named-mutation/red/restore/green sequence live together.
+d="$prov_work/gate-inversion-repair3-green"
+rc=0; run_find_provenance "$d" "$prov_fn" "$prov_single_tsv" || rc=$?
+[ "$rc" -eq 0 ] || { echo "gate-inversion (repair 3, GREEN/restore phase): expected exit 0, got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+observed_green="$(jq -r .prArm "$d/stdout.log" 2>/dev/null)"
+[ "$observed_green" = pass ] \
+  || { echo "gate-inversion (repair 3, GREEN/restore phase): expected the restored function to find the real match (prArm=pass), got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
 echo "kit auto-publish state machine: $checks passed"
