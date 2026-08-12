@@ -131,7 +131,15 @@ module ClaimOverlapTests =
     /// `other` is `Some (number, holder, otherPaths)` — a SECOND open issue in the SAME repo carrying a
     /// live claim marker for `holder`, declaring `otherPaths`. `other = None` is the disjoint control:
     /// no second item exists on the board OR the open-issues listing at all.
-    let private world (paths: string) (other: (int * string * string) option) (thread: Thread) =
+    ///
+    /// `scanFails` (round-1 repair, review comment
+    /// https://github.com/FS-GG/.github/pull/2463#issuecomment-5269036122) makes the `#353` scan itself
+    /// UNREADABLE: `Reads.openIssues`'s own REST endpoint (`GET .../issues`, read above `other`'s own
+    /// per-item shaping) answers a transport error instead of a list, so `collisionScan()` in `Client.fs`
+    /// resolves to `Error _` regardless of `other`. This is a DIFFERENT failure surface than `other`
+    /// (which shapes a successfully-read candidate set) — the two are independent knobs on purpose, so a
+    /// scan-failure leg cannot be confused with a disjoint- or colliding-candidate leg by accident.
+    let private world (paths: string) (other: (int * string * string) option) (scanFails: bool) (thread: Thread) =
         let otherComments (holder: string) =
             let ts = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
 
@@ -181,7 +189,10 @@ module ClaimOverlapTests =
                     | None -> Error(Errors.NotFound "the fixture serves no board WRITE — the lock is what is under test")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            // `Reads.openIssues` — the #353 token shortlist's candidate universe.
+            // `Reads.openIssues` — the #353 token shortlist's candidate universe. `scanFails` makes THIS
+            // read fail — a transient 500, not a 404 — the one call `collisionScan()` cannot get past.
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" when scanFails ->
+                Error(Errors.Transport "fixture: the #353 candidate-issue list is UNREADABLE (round-1 repair)")
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
                 match other with
                 | Some(number, _, otherPaths) ->
@@ -273,7 +284,7 @@ module ClaimOverlapTests =
     let ``#2459 claim warns on an OVERLAP by default and STILL claims (exit green)`` () =
         let thread = Thread()
         let paths = "Paths: src/Thing.fs"
-        let transport = world paths (Some(43, "smew-e1d9", paths)) thread
+        let transport = world paths (Some(43, "smew-e1d9", paths)) false thread
 
         let code, out, err = runClaim transport (claimArgs [])
 
@@ -305,7 +316,7 @@ module ClaimOverlapTests =
     let ``#2459 claim --refuse-overlap REFUSES an overlapping claim instead of warning`` () =
         let thread = Thread()
         let paths = "Paths: src/Thing.fs"
-        let transport = world paths (Some(43, "smew-e1d9", paths)) thread
+        let transport = world paths (Some(43, "smew-e1d9", paths)) false thread
 
         let code, _, err = runClaim transport (claimArgs [ "--refuse-overlap" ])
 
@@ -324,7 +335,7 @@ module ClaimOverlapTests =
         let thread1 = Thread()
 
         let transport1 =
-            world "Paths: src/Thing.fs" (Some(43, "smew-e1d9", "Paths: src/Other.fs")) thread1
+            world "Paths: src/Thing.fs" (Some(43, "smew-e1d9", "Paths: src/Other.fs")) false thread1
 
         let code1, out1, err1 = runClaim transport1 (claimArgs [])
 
@@ -337,7 +348,7 @@ module ClaimOverlapTests =
         let thread2 = Thread()
 
         let transport2 =
-            world "Paths: src/Thing.fs" (Some(43, "smew-e1d9", "Paths: src/Other.fs")) thread2
+            world "Paths: src/Thing.fs" (Some(43, "smew-e1d9", "Paths: src/Other.fs")) false thread2
 
         let code2, _, err2 = runClaim transport2 (claimArgs [ "--refuse-overlap" ])
 
@@ -347,7 +358,7 @@ module ClaimOverlapTests =
     [<Fact>]
     let ``#2459 claim with no other live claim at all never warns`` () =
         let thread = Thread()
-        let transport = world "Paths: src/Thing.fs" None thread
+        let transport = world "Paths: src/Thing.fs" None false thread
 
         let code, out, err = runClaim transport (claimArgs [])
 
@@ -356,3 +367,86 @@ module ClaimOverlapTests =
 
         let receipt = JsonDocument.Parse(out.Trim()).RootElement
         Assert.Empty(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
+
+    // ---- Round-1 repair (review https://github.com/FS-GG/.github/pull/2463#issuecomment-5269036122) --
+    // ---- Client.fs:4928-4935 — an UNREADABLE scan is a THIRD outcome, distinct from "no collision" and
+    // ---- "collision found", and it is where the AC2/AC3 polarity actually lives: the guard on
+    // ---- `opts.RefuseOverlap` at the scan-error arm is what keeps `claim` degrading to a WARNING (never
+    // ---- a refusal) by default, and what makes `--refuse-overlap` refuse rather than claim blind. The
+    // ---- critic reproduced a SURGICAL polarity swap here (`Error e when opts.RefuseOverlap ->` to
+    // ---- `Error e when not opts.RefuseOverlap ->`) and the full 767-test suite still passed — these two
+    // ---- legs are what makes that inversion visible. See the gate-inversion note below the second leg.
+
+    [<Fact>]
+    let ``#2459 round-1: an UNREADABLE collision scan still WARNS-and-claims by default (AC2)`` () =
+        let thread = Thread()
+
+        let transport =
+            world "Paths: src/Thing.fs" (Some(43, "smew-e1d9", "Paths: src/Thing.fs")) true thread
+
+        let code, out, err = runClaim transport (claimArgs [])
+
+        // AC2, over a DEGRADED scan specifically: `claim` must keep working (exit green, marker posted)
+        // rather than fail closed on a scan it could not run — orphan recovery is the entire reason
+        // `claim` exists outside the scheduler (#2459's own "Why anyone uses `claim`" section), and this
+        // very repair chain adopted a stranded item (`.github#2216`) through exactly that path today.
+        Assert.Equal(0, code)
+        Assert.Contains("could not run", err)
+        Assert.Contains("claiming", err)
+        Assert.Contains("anyway", err)
+        Assert.Contains("--refuse-overlap", err)
+        // NOT an OVERLAP line: the scan never reached a verdict, so it must not report one it does not
+        // have — "I could not look" is never laundered into "I looked, and it collides" either.
+        Assert.DoesNotContain("OVERLAP", err)
+
+        let receipt = JsonDocument.Parse(out.Trim()).RootElement
+        Assert.True(receipt.GetProperty("converged").GetBoolean())
+        // `[]` here is NOT a claim of disjointness — the scan never ran — but it is what the wire
+        // contract has to say today: `ClaimReceipt.Collisions`'s own `.fsi` doc names this exact case.
+        Assert.Empty(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
+
+        // The lock actually landed: a marker was posted on #42.
+        Assert.NotEmpty(thread.Posted)
+
+    [<Fact>]
+    let ``#2459 round-1: claim --refuse-overlap REFUSES on an UNREADABLE collision scan (AC3)`` () =
+        let thread = Thread()
+
+        let transport =
+            world "Paths: src/Thing.fs" (Some(43, "smew-e1d9", "Paths: src/Thing.fs")) true thread
+
+        let code, _, err = runClaim transport (claimArgs [ "--refuse-overlap" ])
+
+        // `--refuse-overlap` cannot GUARANTEE disjointness over a scan it never completed, so it refuses
+        // rather than claim blind (#523's doctrine, applied to `claim` too). This is Errors.exitCode's
+        // ordinary `Transport` mapping (`Client.ExitError`, 1) — NOT `ExitContended` (6), which is
+        // reserved for a scan that COMPLETED and found a real collision. An unreadable scan is not a
+        // collision, and conflating the two exit codes would make a caller unable to tell "definitely
+        // overlaps" from "could not check" from the number alone.
+        Assert.Equal(Client.ExitError, code)
+        Assert.Contains("could not reach GitHub", err)
+        Assert.Contains("UNREADABLE (round-1 repair)", err)
+        Assert.DoesNotContain("OVERLAP", err)
+
+        // Nothing landed: no marker on #42, no notice on #43 — there was nothing yet to coordinate around.
+        Assert.Empty(thread.Posted)
+        Assert.False(transport.Logged "comment-post FS-GG/FS.GG.SDD 43")
+
+    // GATE-INVERSION EVIDENCE (round-1 repair, recorded by hand at review time, per the critic's own
+    // surgical-mutation method — a blanket mutation "can fail tests for incidental reasons and give a
+    // false sense of coverage", per review comment 5269036122, quoting the `.github#2454` lesson).
+    //
+    // MUTATION: in `src/FS.GG.Coord.Cli/Client.fs`, swap the scan-error arm's guard —
+    //     | Error e when opts.RefuseOverlap ->        (before)
+    //     | Error e when not opts.RefuseOverlap ->    (after — the critic's own surgical swap)
+    // OBSERVED RED, both new legs above, against the mutated binary:
+    //   - "an UNREADABLE collision scan still WARNS-and-claims by default (AC2)": the DEFAULT call now
+    //     hits the (originally --refuse-overlap-only) `failWith` arm and REFUSES — `Assert.Equal(0, code)`
+    //     fails (`Client.ExitError` observed instead), and the marker is never posted
+    //     (`Assert.NotEmpty(thread.Posted)` fails on an empty list).
+    //   - "claim --refuse-overlap REFUSES on an UNREADABLE collision scan (AC3)": `--refuse-overlap` now
+    //     hits the (originally default-only) warn arm and CLAIMS BLIND — `Assert.Equal(Client.ExitError,
+    //     code)` fails (`0` observed instead), and `Assert.Empty(thread.Posted)` fails (a marker WAS
+    //     posted).
+    // RESTORED, rebuilt, both legs green again — matching the four pre-existing `ClaimOverlapTests` legs,
+    // which the same mutation does not touch (they never exercise `collisionScan()` returning `Error`).
