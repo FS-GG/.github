@@ -1331,8 +1331,26 @@ module Scan =
                         | Error _ -> w.WriteBoolean("itemPrUnreadable", true)
                         | _ -> ()
 
+                    // .github#2384 — THE MARKERLESS MATE OF #2450, ONE CONSUMER LATER AGAIN. `In review` was
+                    // never a member of THIS arm's population either: an UNCLAIMED, `Open`, `In review` row
+                    // fell to `| _ -> ()` exactly as a CLAIMED one did before #2450, so `ItemPr` was absent
+                    // for it too. `LifecycleProjection.project` (`Client.fs`) reads the same `itemPr` fact
+                    // for a markerless row precisely as it does for a claimed one — `Claim.Value = None` only
+                    // changes which branch of `project` decides the destination, not whether `PullRequest`
+                    // must be populated to decide it correctly. Unprobed, `PullRequest.Value = None` and an
+                    // unclaimed `In review` row with a genuinely open PR falls through `project`'s cascade
+                    // straight to its `Ready` default — flipping a row that is correctly `In review` back to
+                    // `Ready`, and since `Ready` IS probed, the very next pass finds the same open PR and
+                    // flips forward to `In review` again. Each state is again the other's trigger: this is
+                    // `.github#2216`'s oscillation (the issue's own repro), not a new one.
+                    //
+                    // THE BOUND IS UNCHANGED IN SHAPE: one more named column, not `| Open, _ ->`. The extra
+                    // cost is at most one REST request per row that is UNCLAIMED, `Open`, and currently
+                    // `In review` — exactly the population a review left parked with no live claim (a
+                    // released or reaped lease during review) puts there, and no more. `Blocked` keeps its
+                    // own `Blockers.cleared`-gated arm below; every other column stays unprobed.
                     match row.State, row.Status with
-                    | Open, (Ready | Backlog) -> probe ()
+                    | Open, (Ready | Backlog | InReview) -> probe ()
                     | Open, Blocked when Blockers.cleared blockers -> probe ()
                     | _ -> ()
 

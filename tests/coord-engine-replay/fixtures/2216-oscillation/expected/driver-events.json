@@ -3,7 +3,7 @@
   "schema": "fsgg.coord.driver-events/1",
   "transitions": [
     {
-      "evidence": "board-status:InReview",
+      "evidence": "pr:777",
       "previous": null,
       "reason": "no live claim; unclaimed and schedulable",
       "ref": "FS-GG/FS.GG.SDD#500",

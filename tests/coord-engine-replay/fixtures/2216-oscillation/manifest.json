@@ -1,8 +1,0 @@
-{
-  "schema": "fsgg.coord.board-recording-manifest/1",
-  "description": "One unclaimed, OPEN, In-review row with a genuinely open implementation PR on its own branch — the shape .github#2216 tabulated across three live reconcile runs. expected/reconcile.json asserts the CORRECT no-op verdict, not what capture recorded (see scenario_server.py's docstring); today's engine deterministically proposes Status=Ready instead.",
-  "expectFailure": {
-    "commands": ["reconcile"],
-    "reason": "reproduces the wrong half of .github#2216's tabulated LIFECYCLE-PROJECTION-LAG verdict; tracked at .github#2384. Do not remove this marker by editing expected/reconcile.json back to match the engine — remove it only once .github#2384 is fixed and this fixture genuinely passes."
-  }
-}
