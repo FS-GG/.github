@@ -91,6 +91,46 @@ arch, _ = plan(rows)
 results["a Done row's blocker edge does NOT protect"] = (
     sorted(arch) == [("FS-GG/.github", 204), ("FS-GG/.github", 205)], arch)
 
+# 5b. GUARD 3, CROSS-REPO — the round-1 review finding, as its own permanent leg.
+#     `Blockers.canonToken` (Blockers.fs:126-149) resolves a bare `#n` against the REFERRING ROW'S OWN
+#     repo. The first version of this script resolved it against one global default, so on a genuinely
+#     multi-repo board `FS-GG/FS.GG.SDD#9 blocked by #8` protected `FS-GG/.github#8` and left the REAL
+#     `FS-GG/FS.GG.SDD#8` archivable. The fixture never varied `repo` across rows, so it sailed through.
+rows = [row(number=8, repo="FS-GG/FS.GG.SDD"),
+        row(number=9, repo="FS-GG/FS.GG.SDD", status="Ready", state="OPEN", closedAt=None,
+            blockedBy="#8")]
+arch, _ = plan(rows)
+results["a bare #n resolves against the REFERRING row's repo, not a global default"] = (arch == [], arch)
+
+#     ...and the same bare `#8` must NOT protect a same-numbered row in a DIFFERENT repo, or the guard
+#     becomes an indiscriminate number-blocker that pins unrelated rows forever.
+rows = [row(number=8, repo="FS-GG/.github"),
+        row(number=9, repo="FS-GG/FS.GG.SDD", status="Ready", state="OPEN", closedAt=None,
+            blockedBy="#8")]
+arch, _ = plan(rows)
+results["a bare #n does NOT protect the same number in another repo"] = (
+    arch == [("FS-GG/.github", 8)], arch)
+
+# 5c. The other two canonical forms the engine accepts, which the first version did not parse at all.
+rows = [row(number=10, repo="FS-GG/FS.GG.SDD"),
+        row(number=11, repo="FS-GG/.github", status="Ready", state="OPEN", closedAt=None,
+            blockedBy="https://github.com/FS-GG/FS.GG.SDD/issues/10")]
+arch, _ = plan(rows)
+results["a URL issue ref protects"] = (arch == [], arch)
+
+rows = [row(number=12, repo="FS-GG/FS.GG.SDD"),
+        row(number=13, repo="FS-GG/.github", status="Ready", state="OPEN", closedAt=None,
+            blockedBy="FS.GG.SDD#12")]
+arch, _ = plan(rows)
+results["a repo#n ref protects, owner defaulting to the referring row's"] = (arch == [], arch)
+
+# 5d. FAIL-CLOSED — a bare `#n` on a row whose own repo is unreadable cannot be resolved to one
+#     repository, so it protects that number EVERYWHERE rather than being guessed into one.
+rows = [row(number=14, repo="FS-GG/FS.GG.SDD"), row(number=14, repo="FS-GG/.github"),
+        row(number=15, repo=None, status="Ready", state="OPEN", closedAt=None, blockedBy="#14")]
+arch, _ = plan(rows)
+results["an unresolvable bare #n protects that number in EVERY repo"] = (arch == [], arch)
+
 # 6. GUARD 4 — unreadable is never archived. "I could not look" is not "I looked" (#266).
 arch, _ = plan([row(number=None), row(repo=None, number=300), row(number=301, status=None),
                 row(number=302, state=None), row(number=303, closedAt=None),

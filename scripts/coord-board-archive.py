@@ -70,36 +70,86 @@ import sys
 PROJECT_ENV = "FSGG_COORD_PROJECT_ID"
 BATCH = 50
 
-# `owner/repo#123` or a bare `#123` (which the board writes relative to `.github`).
-_REF = re.compile(r"([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)#(\d+)|#(\d+)")
+# THE FOUR CANONICAL FORMS, mirroring `Blockers.canonToken` (src/FS.GG.Coord.Core/Blockers.fs:126-149)
+# rather than inventing a second grammar beside it. Round-1 review finding on PR #2421: the first
+# version understood two of the four, and — worse — resolved a bare `#n` against ONE GLOBAL default
+# repo. The engine resolves it against the REFERRING ROW'S OWN repo, and this board is genuinely
+# multi-repo, so on `FS-GG/FS.GG.SDD#9 blocked by #8` the global default resolved to
+# `FS-GG/.github#8` and left the real `FS-GG/FS.GG.SDD#8` unprotected and archivable.
+_URL = re.compile(r"https?://github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)")
+_FULL = re.compile(r"(?<![\w./-])([\w.-]+)/([\w.-]+)#(\d+)")
+_REPO_N = re.compile(r"(?<![\w./-])([\w.-]+)#(\d+)")
+_BARE = re.compile(r"(?<![\w./-])#(\d+)")
 
 
-def protected_refs(rows: list[dict], default_repo: str) -> set[tuple[str, int]]:
-    """Every ref a LIVE row declares as a blocker, however it is spelled.
+def protected_refs(rows: list[dict]) -> tuple[set[tuple[str, int]], set[int]]:
+    """Every ref a LIVE row declares as a blocker, in every form the engine accepts.
 
-    Deliberately computed from non-`Done` rows only: a blocker edge on an already-finished row cannot
-    strand anything, and treating it as protective would pin the whole graph permanently on-board.
+    Returns `(qualified, unresolvable_numbers)`. The second set is the FAIL-CLOSED half: when a live
+    row declares a bare `#n` but its own repo could not be read, the ref cannot be resolved to one
+    repository — so the number is protected in EVERY repository rather than guessed into one. Guessing
+    is exactly the defect this replaces.
+
+    Computed from non-`Done` rows only: a blocker edge on an already-finished row cannot strand
+    anything, and treating it as protective would pin the whole historical graph on-board forever.
     """
-    out: set[tuple[str, int]] = set()
+    qualified: set[tuple[str, int]] = set()
+    unresolvable: set[int] = set()
+
     for row in rows:
         if row.get("status") == "Done":
             continue
-        for match in _REF.finditer(row.get("blockedBy") or ""):
-            if match.group(1):
-                out.add((match.group(1), int(match.group(2))))
-            else:
-                out.add((default_repo, int(match.group(3))))
-    return out
+        text = row.get("blockedBy") or ""
+        if not text:
+            continue
+
+        # The referring row's OWN owner/repo is the default, exactly as `canonToken` uses the blocked
+        # item's. `None` when unreadable, which routes to `unresolvable` below rather than to a guess.
+        own = row.get("repo")
+        own_owner = own.split("/")[0] if own and "/" in own else None
+
+        consumed: list[tuple[int, int]] = []
+
+        def take(match: re.Match) -> bool:
+            """Longer forms win: `owner/repo#n` must not be re-read as `repo#n` or `#n`."""
+            for start, end in consumed:
+                if match.start() >= start and match.end() <= end:
+                    return False
+            consumed.append((match.start(), match.end()))
+            return True
+
+        for m in _URL.finditer(text):
+            if take(m):
+                qualified.add((f"{m.group(1)}/{m.group(2)}", int(m.group(3))))
+        for m in _FULL.finditer(text):
+            if take(m):
+                qualified.add((f"{m.group(1)}/{m.group(2)}", int(m.group(3))))
+        for m in _REPO_N.finditer(text):
+            if take(m):
+                # `repo#n` — the OWNER defaults to the referring row's owner.
+                if own_owner:
+                    qualified.add((f"{own_owner}/{m.group(1)}", int(m.group(2))))
+                else:
+                    unresolvable.add(int(m.group(2)))
+        for m in _BARE.finditer(text):
+            if take(m):
+                # `#n` — adopts the referring row's OWN owner/repo.
+                if own:
+                    qualified.add((own, int(m.group(1))))
+                else:
+                    unresolvable.add(int(m.group(1)))
+
+    return qualified, unresolvable
 
 
-def plan(rows: list[dict], now: _dt.datetime, retention_days: int, default_repo: str
+def plan(rows: list[dict], now: _dt.datetime, retention_days: int, default_repo: str | None = None
          ) -> tuple[list[dict], list[tuple[dict, str]]]:
     """Split the board into (archive, skipped-with-reason). PURE — no IO, so the guards are testable.
 
     The reason string is part of the contract: a row that is not archived must say why, or a silent
     skip becomes indistinguishable from a silent archive.
     """
-    protected = protected_refs(rows, default_repo)
+    protected, unresolvable = protected_refs(rows)
     cutoff = now - _dt.timedelta(days=retention_days)
 
     archive: list[dict] = []
@@ -134,6 +184,13 @@ def plan(rows: list[dict], now: _dt.datetime, retention_days: int, default_repo:
 
         if (repo, number) in protected:
             skipped.append((row, "named by a live row's `Blocked by`"))
+            continue
+        if number in unresolvable:
+            # A live row named `#n` but its own repo was unreadable, so the ref cannot be pinned to one
+            # repository. Protect the number everywhere rather than guess a repo — guessing is the
+            # round-1 defect, and over-protecting only leaves a row on the board one more day.
+            skipped.append((row, "a live row names `#%d` but its own repo is unreadable — protected "
+                                 "in every repo rather than guessed" % number))
             continue
 
         archive.append(row)
@@ -271,26 +328,37 @@ def main() -> int:
               f"{max(1, -(-(len(rows) - len(archive)) // 100))}.")
         return 0
 
-    if args.manifest:
-        stamp = now.isoformat()
-        with open(args.manifest, "a", encoding="utf-8") as fh:
-            for row in archive:
-                fh.write(json.dumps({**row, "archivedAt": stamp}) + "\n")
-        print(f"manifest: {args.manifest} (+{len(archive)} id(s), reversible with unarchiveProjectV2Item)")
-
+    # The manifest is written AFTER each batch lands, never before the loop. Round-1 review finding on
+    # PR #2421: writing it up-front recorded rows as archived that a mid-sweep failure then never
+    # touched, so the file claimed more than had happened. Board recovery was always fine — archiving is
+    # idempotent — but a REVERSAL manifest that overstates is worse than none, because it is consulted
+    # precisely when something has already gone wrong.
     archived, requests = 0, 0
-    for i in range(0, len(archive), BATCH):
-        chunk = archive[i:i + BATCH]
-        try:
-            archive_batch(project, chunk)
-        except RuntimeError as exc:
-            print(f"coord-board-archive: batch at {i} failed: {exc}", file=sys.stderr)
-            print(f"coord-board-archive: stopped after {archived}; archiving is idempotent, so the "
-                  f"next run resumes. Nothing is lost.", file=sys.stderr)
-            return 1
-        archived += len(chunk)
-        requests += 1
+    manifest_fh = open(args.manifest, "a", encoding="utf-8") if args.manifest else None
+    try:
+        for i in range(0, len(archive), BATCH):
+            chunk = archive[i:i + BATCH]
+            try:
+                archive_batch(project, chunk)
+            except RuntimeError as exc:
+                print(f"coord-board-archive: batch at {i} failed: {exc}", file=sys.stderr)
+                print(f"coord-board-archive: stopped after {archived}; archiving is idempotent, so the "
+                      f"next run resumes, and the manifest names exactly what landed.", file=sys.stderr)
+                return 1
 
+            archived += len(chunk)
+            requests += 1
+            if manifest_fh:
+                stamp = _dt.datetime.now(_dt.timezone.utc).isoformat()
+                for row in chunk:
+                    manifest_fh.write(json.dumps({**row, "archivedAt": stamp}) + "\n")
+                manifest_fh.flush()
+    finally:
+        if manifest_fh:
+            manifest_fh.close()
+
+    if args.manifest:
+        print(f"manifest: {args.manifest} ({archived} id(s), reversible with unarchiveProjectV2Item)")
     print(f"archived {archived} row(s) in {requests} aliased request(s) "
           f"(vs {archived} unaliased — .github#448's lever)")
     return 0
