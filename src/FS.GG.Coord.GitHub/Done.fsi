@@ -163,7 +163,20 @@ module Done =
     val verify: prOverride: int option -> resolvedWithoutPr: string option -> facts: Facts -> Verdict<Closure>
 
     /// The one-line stamp a worker reads. Green stamps and red stamps do not look alike, on purpose.
+    ///
+    /// .github#2444 — names ONLY the winning PR; it never folds in the passed-over-foreign-closer note.
+    /// That note rides `passedOverForeignNote` (for stderr) or `renderReceipt` (for the durable comment).
     val render: ref: Ref -> verdict: Verdict<Closure> -> string
+
+    /// The bare passed-over-foreign-closer sentence (.github#2427), with no leading newline or indent —
+    /// `None` unless a foreign-repository true closer existed and was passed over for a same-repository
+    /// one. The caller (`Client.doneCmd`) prints it to stderr exactly once per invocation.
+    val passedOverForeignNote: ref: Ref -> verdict: Verdict<Closure> -> string option
+
+    /// The durable `done-receipt` comment's text — `render`'s stamp, plus `passedOverForeignNote` appended
+    /// on its own line when present. Deliberately diverges from `render`'s stdout value (.github#2444): the
+    /// issue's own comment thread keeps the cross-repo provenance link, stdout stays a single-line value.
+    val renderReceipt: ref: Ref -> verdict: Verdict<Closure> -> string
 
     /// The children an epic's BODY declares that its sub-issue GRAPH does not contain — the
     /// EPIC-UNLINKED-CHILD set, shared by `lint` and the `done --flip` rollup so the rule is defined ONCE

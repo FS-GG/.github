@@ -320,15 +320,68 @@ let ``#2427 --pr can still name the foreign closer explicitly - the override ski
     | other -> failwith $"--pr must still be able to name the foreign PR when explicitly asked — got %A{other}"
 
 [<Fact>]
-let ``#2427 the render'd stamp names the passed-over foreign closer, not just the winner`` () =
+let ``#2444 render's stdout stamp names ONLY the winner - the passed-over note does not ride stdout`` () =
+    // .github#2444: `render`'s stdout value is a single-line value some caller may `grep` or diff exactly
+    // (`.github#2427`'s own acceptance criterion, and #733's precedent for a candidate that existed but
+    // was not chosen). Restored to its pre-#2427 single-purpose shape.
     let stamp = render aRef (Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R."))))
 
     Assert.Contains("FSGG-DONE", stamp)
     Assert.Contains("PR #413", stamp)
-    // NOT SILENT: the foreign closer that was passed over must be named, so the cross-repo link stays
-    // visible to whoever reads the stamp rather than disappearing behind the winning PR's number.
-    Assert.Contains("EHotwagner/S.I.R.#195", stamp)
-    Assert.Contains("passed over", stamp)
+    Assert.DoesNotContain("passed over", stamp)
+    Assert.DoesNotContain("EHotwagner/S.I.R.", stamp)
+
+[<Fact>]
+let ``#2444 gate-inversion: a stamp with NO passed-over closer never gains the note`` () =
+    // Inverting the intent (folding the note back into render's stdout shape unconditionally) would make
+    // THIS case red too — the None-branch must still print nothing extra.
+    let stamp = render aRef (Green(ClosedByPullRequest(399, "abc1234", "2026-01-01", None)))
+
+    Assert.DoesNotContain("passed over", stamp)
+
+[<Fact>]
+let ``#2444 passedOverForeignNote names the foreign closer that render's stdout omits`` () =
+    let verdict = Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R.")))
+
+    match passedOverForeignNote aRef verdict with
+    | Some note ->
+        Assert.Contains("EHotwagner/S.I.R.#195", note)
+        Assert.Contains("passed over", note)
+        Assert.Contains("PR #413", note)
+    | None -> failwith "a verdict WITH a passed-over foreign closer must produce a note"
+
+[<Fact>]
+let ``#2444 passedOverForeignNote is None when nothing was passed over`` () =
+    let verdict = Green(ClosedByPullRequest(399, "abc1234", "2026-01-01", None))
+
+    match passedOverForeignNote aRef verdict with
+    | None -> ()
+    | Some note -> failwith $"no foreign closer was passed over — got a note anyway: %s{note}"
+
+[<Fact>]
+let ``#2444 passedOverForeignNote is None off a red or unverified verdict`` () =
+    Assert.True((passedOverForeignNote aRef (Red [ "nope" ])).IsNone)
+    Assert.True((passedOverForeignNote aRef (NoVerdict "could not read")).IsNone)
+
+[<Fact>]
+let ``#2444 renderReceipt DELIBERATELY diverges from render - the durable comment keeps the note`` () =
+    let verdict = Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R.")))
+    let stdout = render aRef verdict
+    let receipt = renderReceipt aRef verdict
+
+    // stdout stays clean (re-asserted here so the divergence itself, not just each half, is pinned)...
+    Assert.DoesNotContain("passed over", stdout)
+    // ...while the durable receipt keeps both the stamp AND the provenance note.
+    Assert.Contains("FSGG-DONE", receipt)
+    Assert.Contains("PR #413", receipt)
+    Assert.Contains("EHotwagner/S.I.R.#195", receipt)
+    Assert.Contains("passed over", receipt)
+
+[<Fact>]
+let ``#2444 renderReceipt matches render exactly when nothing was passed over`` () =
+    let verdict = Green(ClosedByPullRequest(399, "abc1234", "2026-01-01", None))
+
+    Assert.Equal(render aRef verdict, renderReceipt aRef verdict)
 
 // ---- #583: open children ----------------------------------------------------------------------------
 
