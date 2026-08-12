@@ -124,9 +124,16 @@ module Chore =
     /// it exists for the identical reason. That projector derives its destination from mechanical facts
     /// (claim liveness, PR/review state, delivery obligations) that a human park does not clear — a parked
     /// row typically has none of them, so the projector's own fallthrough is `Ready`, and it was writing
-    /// that `Ready` straight over a coherent `Blocked` park with no gate reading the sentinel at all. Both
-    /// callers ask this SAME predicate rather than duplicating the three-way test, so they cannot reach
-    /// opposite answers about one row's park — the exact shape #1644/#1887 already argue for.
+    /// that `Ready` straight over a coherent `Blocked` park with no gate reading the sentinel at all.
+    ///
+    /// .github#2394 ROUND 1 — `CLAIM-REVIEW-LAG` (`choresFor`'s RESERVED branch) is the THIRD caller, and
+    /// it is the same defect through a second door. It calls the SAME `LifecycleProjection.project` over
+    /// the SAME kind of `Observation` as `lifecycleProjection` below, so a live claim plus an open
+    /// `item/<n>-*` PR on a parked `Blocked` row computed `InReview` and wrote it, unguarded, exactly as
+    /// the unclaimed path once wrote `Ready` unguarded — the critic's reproduction on round 1 of this PR's
+    /// review. All three callers ask this SAME predicate rather than duplicating (or drifting apart on) the
+    /// three-way test, so no two of them can reach opposite answers about one row's park — the exact shape
+    /// #1644/#1887 already argue for.
     ///
     /// `true` — the flip may proceed — only when the item is not a decision, declares no human sentinel,
     /// **and we read the body that would have carried either declaration**.
@@ -146,8 +153,8 @@ module Chore =
     /// RECEIPT, never as a touch-set: no path token is inspected and no declaration is judged. The match is
     /// TOTAL so a sixth `TouchSet` case must be classified here rather than defaulting to "the body was
     /// read" — which is the fail-open direction, and the only direction this function exists to make
-    /// unwritable. Two chores now CALL this one function (above); neither reads `TouchSet` a second, and
-    /// possibly disagreeing, way.
+    /// unwritable. Three chores now CALL this one function (above); none of them reads `TouchSet` a second,
+    /// and possibly disagreeing, way.
     ///
     /// **#620-SAFE, and that is the half the fixture pair pins.** An item with no parking record over a body
     /// we DID read is untouched: `None` + a readable touch-set flips exactly as it did before. That is the
@@ -366,10 +373,22 @@ module Chore =
               // CLAIM-STATUS-LAG. Only a LIVE lease, and only over the columns a claim should have
               // overwritten. `Blocked`/`In review` during a lease are the HOLDER's decisions and they still
               // win (#331) — reconciling those would overwrite somebody's judgement with a default.
+              //
+              // .github#2394 ROUND-1 REPAIR — THAT SENTENCE WAS ASPIRATIONAL UNTIL THIS GUARD EXISTED. A
+              // second door onto the SAME defect: this arm is the RESERVED-branch twin of
+              // `lifecycleProjection` below (both call `LifecycleProjection.project` over an `Observation`,
+              // both can compute `InReview` and hand it straight to a write), and it read `item.Status <>
+              // InReview` as its only hold — never `Blocked`, never `humanHoldAllowsFlip`. A live claim
+              // plus an open `item/<n>-*` PR on a coherently human-parked `Blocked` row therefore still
+              // flipped to `In review` unguarded (the critic's reproduction: `Status=Blocked`,
+              // `HumanBlock=Some AwaitingHumanAction`, `Claim=Some(_, LeaseHeld)`, `ItemPr=Some _`).  Same
+              // predicate, same reason, asked at the SAME two call sites `lifecycleProjection`'s own doc
+              // comment already names — this is that pair's second half, not a new gate.
               | LeaseHeld when
                   item.State = Open
                   && item.ItemPr.IsSome
                   && item.Status <> InReview
+                  && not (item.Status = Blocked && not (humanHoldAllowsFlip item))
                   ->
                   // Reconciliation is now routed through the typed lifecycle projector.  The scan
                   // supplied this PR fact; no missing PR/review fact is fabricated here.  This is the
