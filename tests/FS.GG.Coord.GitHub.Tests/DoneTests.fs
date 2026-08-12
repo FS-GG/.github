@@ -17,12 +17,15 @@ let private parentRef =
       Repo = "FS.GG.SDD"
       Number = 350 }
 
-/// A merged PR whose BODY names this issue — a true closer (`ClosesThis`), the ordinary case.
+/// A merged PR whose BODY names this issue — a true closer (`ClosesThis`), the ordinary case. Its `Repo`
+/// defaults to `aRef`'s own repository — the ordinary same-repo case — so cross-repo tests (#2427) override
+/// it explicitly rather than every other test needing to state the obvious.
 let private closer n =
     { Number = n
       Merged = true
       MergedAt = "2026-01-01T00:00:00Z"
       Oid = "abc1234"
+      Repo = "FS-GG/FS.GG.SDD"
       ClosesThis = true }
 
 /// A merged PR the issue's own CLOSED_EVENT names as the closer, whose BODY never named the issue — so
@@ -45,7 +48,7 @@ let private closedByPr =
 [<Fact>]
 let ``a closed issue with a merged PR is DONE`` () =
     match verify None None closedByPr with
-    | Green(ClosedByPullRequest(399, _, _)) -> ()
+    | Green(ClosedByPullRequest(399, _, _, _)) -> ()
     | other -> failwith $"a merged PR closes it — got %A{other}"
 
 [<Fact>]
@@ -71,7 +74,7 @@ let ``#928 the CLOSED_EVENT rescues a PR whose BODY never carried the keyword - 
             CloserPrs = [ eventCloser 399 ] }
 
     match verify None None facts with
-    | Green(ClosedByPullRequest(399, _, _)) -> ()
+    | Green(ClosedByPullRequest(399, _, _, _)) -> ()
     | other -> failwith $"the closing ACT must be honoured, not just the closing PROSE — got %A{other}"
 
 [<Fact>]
@@ -85,7 +88,7 @@ let ``#928 a LISTED PR whose body never carried the keyword is still rescued`` (
             CloserPrs = [ eventCloser 399 ] }
 
     match verify None None facts with
-    | Green(ClosedByPullRequest(399, _, _)) -> ()
+    | Green(ClosedByPullRequest(399, _, _, _)) -> ()
     | other -> failwith $"a listed non-ClosesThis closer named by the event is still a closer — got %A{other}"
 
 [<Fact>]
@@ -116,7 +119,7 @@ let ``#928 --pr names a closer the reference list never listed`` () =
             CloserPrs = [ eventCloser 399 ] }
 
     match verify (Some 399) None facts with
-    | Green(ClosedByPullRequest(399, _, _)) -> ()
+    | Green(ClosedByPullRequest(399, _, _, _)) -> ()
     | other -> failwith $"--pr must reach a closer the event named — got %A{other}"
 
 [<Fact>]
@@ -129,7 +132,7 @@ let ``#928 the union does not disturb #342 - the latest-merged closer still wins
             CloserPrs = [ { eventCloser 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
 
     match verify None None facts with
-    | Green(ClosedByPullRequest(95, "2222bbb", _)) -> ()
+    | Green(ClosedByPullRequest(95, "2222bbb", _, _)) -> ()
     | other -> failwith $"the latest-merged closer wins across BOTH records — got %A{other}"
 
 // ---- #600: the green path for work resolved WITHOUT a PR --------------------------------------------
@@ -185,7 +188,7 @@ let ``the evidence does NOT override a real PR - the record wins over the prose`
     // A worker who passes `--evidence` on an item that DID have a closing PR gets the PR named in the
     // stamp, not their own sentence. The stamp records what GitHub observed, not what anybody asserted.
     match verify None (Some "I say it is done") closedByPr with
-    | Green(ClosedByPullRequest(399, _, _)) -> ()
+    | Green(ClosedByPullRequest(399, _, _, _)) -> ()
     | other -> failwith $"the record outranks the assertion — got %A{other}"
 
 // ---- #342: provenance — the LATEST-merged true closer, never the first mention ----------------------
@@ -201,7 +204,7 @@ let ``#342 among two true closers the LATEST-merged wins, not the lowest-numbere
                   { closer 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
 
     match verify None None facts with
-    | Green(ClosedByPullRequest(95, "2222bbb", _)) -> ()
+    | Green(ClosedByPullRequest(95, "2222bbb", _, _)) -> ()
     | other -> failwith $"the latest-merged closer wins — got %A{other}"
 
 [<Fact>]
@@ -245,8 +248,87 @@ let ``#543 --pr names WHICH true closer to stamp, among several`` () =
                   { closer 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
 
     match verify (Some 89) None facts with
-    | Green(ClosedByPullRequest(89, "1111aaa", _)) -> ()
+    | Green(ClosedByPullRequest(89, "1111aaa", _, _)) -> ()
     | other -> failwith $"--pr names which true closer to stamp — got %A{other}"
+
+// ---- .github#2427: a same-repository closer outranks a foreign one, regardless of merge time ---------
+
+[<Fact>]
+let ``#2427 a same-repo true closer wins over a LATER-merged foreign-repo closer, and names what it passed over`` () =
+    // Measured on .github#2343: the source fix (.github#2413) merged FIRST, in this repo. A cross-repo
+    // receiver retrofit (EHotwagner/S.I.R.#195) merged ~13 minutes LATER and also registered as a true
+    // closer — its body's "Source fix: FS-GG/.github#2343" line was never meant as a closing keyword, but
+    // GitHub's parser matched `fix:` immediately before the cross-repo reference anyway. Pure latest-merged
+    // (#342) then picked the retrofit, stamping a PR in another repository as the source of the fix.
+    let facts =
+        { closedByPr with
+            ClosingPrs =
+                [ { closer 413 with
+                      MergedAt = "2026-08-12T08:06:28Z"
+                      Oid = "e605d37"
+                      Repo = "FS-GG/FS.GG.SDD" }
+                  { closer 195 with
+                      MergedAt = "2026-08-12T08:19:28Z"
+                      Oid = "938020f"
+                      Repo = "EHotwagner/S.I.R." } ] }
+
+    match verify None None facts with
+    | Green(ClosedByPullRequest(413, "e605d37", _, Some(195, "EHotwagner/S.I.R."))) -> ()
+    | other ->
+        failwith
+            $"the same-repo closer must win over a later-merged foreign one, and the stamp must name the foreign PR it passed over — got %A{other}"
+
+[<Fact>]
+let ``#2427 among two SAME-repo closers, latest-merged still wins - the repository preference does not soften #342`` () =
+    // The repository preference decides WHICH TIER wins; #342's latest-merged rule is unchanged for
+    // deciding among closers that share a tier.
+    let facts =
+        { closedByPr with
+            ClosingPrs =
+                [ { closer 89 with MergedAt = "2026-01-01T00:00:00Z"; Oid = "1111aaa"; Repo = "FS-GG/FS.GG.SDD" }
+                  { closer 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb"; Repo = "FS-GG/FS.GG.SDD" } ] }
+
+    match verify None None facts with
+    | Green(ClosedByPullRequest(95, "2222bbb", _, None)) -> ()
+    | other -> failwith $"latest-merged must still decide among same-repo closers, with nothing passed over — got %A{other}"
+
+[<Fact>]
+let ``#2427 with no same-repo closer at all, the foreign one wins and nothing is reported passed over`` () =
+    // There is no same-repo rival to prefer AWAY from, so the foreign closer legitimately wins and the
+    // stamp must not claim it "passed over" a closer that never competed.
+    let facts =
+        { closedByPr with
+            ClosingPrs = [ { closer 195 with Repo = "EHotwagner/S.I.R." } ] }
+
+    match verify None None facts with
+    | Green(ClosedByPullRequest(195, _, _, None)) -> ()
+    | other -> failwith $"a lone foreign closer still stamps green, with nothing passed over — got %A{other}"
+
+[<Fact>]
+let ``#2427 --pr can still name the foreign closer explicitly - the override skips the preference, not the provenance check`` () =
+    // `--pr` overrides WHICH pull request the stamp names, never whether it closed the issue (#543) — and
+    // that includes the repository preference: an operator who explicitly asks for the foreign PR by number
+    // gets it. Nothing is reported "passed over" because this was an explicit choice, not a silent one.
+    let facts =
+        { closedByPr with
+            ClosingPrs =
+                [ { closer 413 with Repo = "FS-GG/FS.GG.SDD" }
+                  { closer 195 with Repo = "EHotwagner/S.I.R." } ] }
+
+    match verify (Some 195) None facts with
+    | Green(ClosedByPullRequest(195, _, _, None)) -> ()
+    | other -> failwith $"--pr must still be able to name the foreign PR when explicitly asked — got %A{other}"
+
+[<Fact>]
+let ``#2427 the render'd stamp names the passed-over foreign closer, not just the winner`` () =
+    let stamp = render aRef (Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R."))))
+
+    Assert.Contains("FSGG-DONE", stamp)
+    Assert.Contains("PR #413", stamp)
+    // NOT SILENT: the foreign closer that was passed over must be named, so the cross-repo link stays
+    // visible to whoever reads the stamp rather than disappearing behind the winning PR's number.
+    Assert.Contains("EHotwagner/S.I.R.#195", stamp)
+    Assert.Contains("passed over", stamp)
 
 // ---- #583: open children ----------------------------------------------------------------------------
 
@@ -311,7 +393,7 @@ let ``an OPEN issue cannot be stamped - the stamp records that work is finished,
 
 [<Fact>]
 let ``a green stamp and a red stamp do not look alike`` () =
-    let green = render aRef (Green(ClosedByPullRequest(399, "abc1234", "2026-01-01")))
+    let green = render aRef (Green(ClosedByPullRequest(399, "abc1234", "2026-01-01", None)))
     let red = render aRef (Red [ "nope" ])
     let unverified = render aRef (NoVerdict "could not read")
 

@@ -56,7 +56,11 @@ module Done =
         ///
         /// Carries the merge commit's abbreviated `oid` and the merge `day` (`mergedAt[0:10]`), so the stamp
         /// names WHICH commit landed the work (#342): `merged PR #92 @ 09c836e (2026-01-15)`.
-        | ClosedByPullRequest of pr: int * oid: string * day: string
+        ///
+        /// `passedOverForeign`: `Some(pr, repo)` when a foreign-repository true closer existed but was not
+        /// chosen, because a same-repository closer is preferred over one in another repository regardless
+        /// of merge time (.github#2427). `render` names it rather than silently choosing.
+        | ClosedByPullRequest of pr: int * oid: string * day: string * passedOverForeign: (int * string) option
 
         /// Resolved with no PR, and with EVIDENCE (#600). Obsolete, duplicate, resolved-elsewhere, a
         /// decision item whose deliverable lives in another repo.
@@ -109,6 +113,9 @@ module Done =
           Merged: bool
           MergedAt: string
           Oid: string
+          /// This candidate's OWN `owner/repo`, "" if unknown — NOT the repository of an issue it claims to
+          /// close. Lets a same-repository closer be preferred over a foreign one (.github#2427).
+          Repo: string
           ClosesThis: bool }
 
     /// Everything the stamp needs, read in ONE query.

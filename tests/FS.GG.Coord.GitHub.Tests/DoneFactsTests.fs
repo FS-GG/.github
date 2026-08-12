@@ -127,7 +127,7 @@ let ``the CLOSED_EVENT closer is read WITH its merge facts, and it is not listed
         Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 399 && p.Merged && p.Oid = "c399")
 
         match verify None None f with
-        | Green(ClosedByPullRequest(399, "c399", _)) -> ()
+        | Green(ClosedByPullRequest(399, "c399", _, _)) -> ()
         | other -> failwith $"the closing ACT must rescue the stamp — got %A{other}"
     | Error e -> failwith $"parse failed — got %A{e}"
 
@@ -152,7 +152,7 @@ let ``a COMMIT closer resolves through to its associated PR (#558/#928)`` () =
         Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 926 && p.Merged)
 
         match verify None None f with
-        | Green(ClosedByPullRequest(926, "4cf06e1", "2026-07-16")) -> ()
+        | Green(ClosedByPullRequest(926, "4cf06e1", "2026-07-16", _)) -> ()
         | other -> failwith $"a commit closer must resolve through to its PR — got %A{other}"
     | Error e -> failwith $"parse failed — got %A{e}"
 
@@ -177,6 +177,79 @@ let ``an UNMERGED PR associated with the closing commit is read, but does not st
         match verify None None f with
         | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "#399" && r.Contains "MERGED")
         | other -> failwith $"an unmerged associated PR has closed nothing — got %A{other}"
+    | Error e -> failwith $"parse failed — got %A{e}"
+
+// ---- .github#2427: the candidate's OWN repository, distinct from the issue it claims to close -----------
+
+[<Fact>]
+let ``#2427 a closedByPullRequestsReferences node's OWN repository is read into Repo`` () =
+    // The .github#2343/EHotwagner-S.I.R.#195 shape: the retrofit PR's own `repository` is a DIFFERENT repo
+    // from the one whose issue it closes (that repo is read separately, via `closingIssuesReferences`, and
+    // is what `ClosesThis` already checked before this item). `verify`'s repository preference needs the
+    // FORMER, and until this fix nothing on the candidate node carried it at all.
+    let node =
+        """{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"abbreviatedOid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
+
+    let transport = serving (response "CLOSED" node "" noSubs "null")
+
+    match facts transport board ref with
+    | Ok f ->
+        match f.ClosingPrs with
+        | [ p ] ->
+            Assert.Equal("EHotwagner/S.I.R.", p.Repo)
+            // AND its own closingIssuesReferences still correctly names issue #350 in THIS repo, so
+            // `ClosesThis` is unaffected by reading the new field alongside it.
+            Assert.True p.ClosesThis
+        | other -> failwith $"expected exactly one closing PR — got %A{other}"
+    | Error e -> failwith $"parse failed — got %A{e}"
+
+[<Fact>]
+let ``#2427 the CLOSED_EVENT PullRequest closer's own repository is read too`` () =
+    let transport =
+        serving
+            (response
+                "CLOSED"
+                ""
+                """{"closer":{"__typename":"PullRequest","number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"abbreviatedOid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."}}}"""
+                noSubs
+                "null")
+
+    match facts transport board ref with
+    | Ok f -> Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 195 && p.Repo = "EHotwagner/S.I.R.")
+    | Error e -> failwith $"parse failed — got %A{e}"
+
+[<Fact>]
+let ``#2427 a COMMIT closer's associated PR carries its own repository too`` () =
+    let transport =
+        serving
+            (response
+                "CLOSED"
+                ""
+                """{"closer":{"__typename":"Commit","oid":"938020f","associatedPullRequests":{"nodes":[{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"abbreviatedOid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."}}]}}}"""
+                noSubs
+                "null")
+
+    match facts transport board ref with
+    | Ok f -> Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 195 && p.Repo = "EHotwagner/S.I.R.")
+    | Error e -> failwith $"parse failed — got %A{e}"
+
+[<Fact>]
+let ``#2427 end-to-end: facts read + verify prefer the same-repo closer over the later-merged retrofit`` () =
+    // THE INCIDENT, SERVED AS THE REAL SHAPE GITHUB RETURNED. Both are true closers per GitHub's own
+    // record; the retrofit merged later; the fix must still name the source PR.
+    let sourceFix =
+        """{"number":413,"merged":true,"mergedAt":"2026-08-12T08:06:28Z","mergeCommit":{"abbreviatedOid":"e605d37"},"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
+
+    let retrofit =
+        """{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"abbreviatedOid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
+
+    let transport = serving (response "CLOSED" $"{sourceFix},{retrofit}" "" noSubs "null")
+
+    match facts transport board ref with
+    | Ok f ->
+        match verify None None f with
+        | Green(ClosedByPullRequest(413, "e605d37", _, Some(195, "EHotwagner/S.I.R."))) -> ()
+        | other -> failwith $"the source fix must win over the later-merged cross-repo retrofit — got %A{other}"
     | Error e -> failwith $"parse failed — got %A{e}"
 
 // ---- the truncation check, at the read ----------------------------------------------------------------
