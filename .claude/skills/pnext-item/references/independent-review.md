@@ -153,13 +153,14 @@ The not-meaningful shape is:
 
 ```text
 route-applicability: not-meaningful
-route-not-meaningful-reason: <reason tied to this review subject, ≤ 500 characters>
+route-not-meaningful-reason: <bounded reason tied to this review subject>
 ```
 
-`route-not-meaningful-reason` is bounded to **≤ 500 characters**. Missing, duplicate, empty, unknown,
-mixed-shape, or overlong reason fields fail the live review-marker parser. A prose claim or
-`Verification:` line does not substitute for these fields; source-only review therefore cannot produce a
-valid passing chain when the critic declares the comparison meaningful.
+`route-not-meaningful-reason` is bounded to **≤ 500 characters** — the bound the field's own name
+promises. Missing, duplicate, empty, unknown, mixed-shape, or overlong reason fields fail the live
+review-marker parser. A prose claim or `Verification:` line does not substitute for these fields;
+source-only review therefore cannot produce a valid passing chain when the critic declares the
+comparison meaningful.
 
 This is reusable guidance, not an audio-specific recipe. Rogue3 exposed the shape when a built product
 route emitted `[]` while direct dispatch emitted `[PlaySfx (SoundId "floor-descend", 0.8)]`: the cue map
