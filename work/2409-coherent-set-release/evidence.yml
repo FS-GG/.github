@@ -71,11 +71,11 @@ evidence:
     sourceRefs: []
     result: deferred
     synthetic: false
-    rationale: "FR-002 (the real coherent-set release cut, publish verification, and registry flip, PD-002) is NOT executed by this PR — pushing the coherent-set tags is a post-merge action (the workflow precondition it depends on does not exist on `main` until this PR merges), recorded in this item's Accepted Deferrals. `registry/dependencies.yml`'s `coord-engine` row correctly still reads `0.23.0` as of this evidence entry."
+    rationale: "FR-002 (the real coherent-set release cut, publish verification, and registry flip, PD-002) IS EXECUTED and FULFILLED by this PR — `result: deferred` here means only that this entry's evidence is a direct/hermetic worker check rather than a CI-produced, digest-tracked TRX/JUnit report (see `notes`), never that the requirement itself is outstanding. `kit/v0.50.0`, `drivers/v0.50.0` and `coord-engine/v0.50.0` were pushed together in one `git push` at commit 248435375cc6be0554e5c93552fd5cf44c128fd8; each workflow's sibling-tag precondition passed and all three ran to completion (runs 31607040051 kit, 31607040112 drivers, 31607040033 coord-engine), each logging `Your package was pushed.` on both the org GitHub Packages feed and nuget.org. Every non-signature, non-psmdcp payload entry is byte-identical between the two feeds for all three packages (downloaded both artifacts, unzipped, compared per-entry SHA-256). `scripts/check-release-coherence.py` (.github#2445) reports `ok: no coherent-set completion gap found` against this exact release. Restore verified for real, not inferred from a source build: an isolated `dotnet tool install FS.GG.Coord.Cli --version 0.50.0` succeeds and `dotnet fsgg-coord-engine --version` reports `0.50.0.0`; `dotnet add package FS.GG.Kit --version 0.50.0` / `FS.GG.Drivers --version 0.50.0` both resolve from nuget.org into a fresh project's `project.assets.json`. `registry/dependencies.yml`'s `coord-engine` row is flipped to `0.50.0` on both `version` and `package-version`, with this evidence recorded in the row's own comment and in `registry/CHANGELOG.md`'s matching dated entry."
     owner: github
     scope: the real dual-feed publish and registry flip
-    laterLifecycleVisibility: "Tracked as this item's explicit post-merge obligation; the issue is reopened/kept open until the cut executes and is verified, per this item's own acceptance criteria."
-    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+    laterLifecycleVisibility: "Executed and verified within this PR; the item closes on merge. The one remaining obligation — a coordinated 7-receiver pin-bump fan-out (.github#2249's AC1/AC2 shape) — is tracked separately as a cross-repo post-merge obligation (fsgg:delivery-obligation id=receiver-fanout-0.50.0 on this PR), since it touches paths outside this item's declared Paths:."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report — the requirement itself is fulfilled; see rationale for exactly what was run and its evidence."]
   - id: EV003
     kind: deferral
     subject:
@@ -92,11 +92,11 @@ evidence:
     sourceRefs: []
     result: deferred
     synthetic: false
-    rationale: "FR-003 (gate re-confirmation write-up, PD-003) is implemented: `docs/registry/compatibility.md`'s \"Coherent-set versioning\" section gained a new subsection naming all eight now-relevant gates (the seven .github#2402 DEC-002 gates plus check-coherent-set-version.py) with keep-and-why for each, and DEC-003's rollout finding verbatim. Independently re-run against the changed tree: tests/coherent-set-version, tests/engine-pin, tests/feed-coherence, tests/lock-range-coherence, tests/pin-coherence, tests/source-coherence — all green, confirming none is made redundant."
+    rationale: "FR-003 (gate re-confirmation write-up, PD-003) is implemented: `docs/registry/compatibility.md`'s \"Coherent-set versioning\" section gained a new subsection naming all eight now-relevant gates (the seven .github#2402 DEC-002 gates plus check-coherent-set-version.py) with keep-and-why for each, and DEC-003's rollout finding verbatim. Independently re-run against the changed tree: tests/coherent-set-version, tests/engine-pin, tests/feed-coherence, tests/lock-range-coherence, tests/pin-coherence, tests/source-coherence — all green, confirming none is made redundant. The promised extension — 'once the real cut executes, with feed/restore evidence' — is now fulfilled too: this same PR executed that cut (see EV002) and `docs/registry/compatibility.md`'s migration note is extended with the real cut's tag/run/feed/restore evidence in a dedicated 'The real cut, executed (2026-08-12)' subsection, not left as a forward promise."
     owner: github
     scope: the migration-note and gate re-confirmation accuracy
-    laterLifecycleVisibility: "Extended again once the real cut (PD-002) executes, with feed/restore evidence."
-    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report; see rationale for exactly what was run."]
+    laterLifecycleVisibility: "Fulfilled within this PR — the real cut (PD-002/EV002) executed and the migration note was extended with its feed/restore evidence in the same PR, not deferred to a later one."
+    notes: ["Recorded as a deferral: this worker's checks are direct/hermetic, not a CI-produced digest-tracked TRX/JUnit report — the requirement itself is fulfilled; see rationale for exactly what was run."]
   - id: EV004
     kind: deferral
     subject:
