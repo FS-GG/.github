@@ -252,6 +252,68 @@ module BatchTests =
         Assert.Equal(Some(LiveClaim(WorkerId "w-bob", ref 9, 60, None)), (List.head r.Decisions).CollidedWith)
 
     // ================================================================================================
+    // .github#2363 criterion 5, at THIS scheduler — the one `batch`/`take` actually call
+    // (`Client.fs:805,837`), never `Lanes.partition` (which backs only the `lanes` diagnostic —
+    // `Program.fs:107-136` — and is a separate module with its own `RepoScope.resolve` call).
+    // ================================================================================================
+    // `schedule`/`scheduleWith` group reservations on the RAW `item.PathRepo` string (`inRepo`, above:
+    // `r.Owner = owner && r.Repo = repo`) — no `RepoScope.resolve` call of its own. That is deliberate:
+    // by the time a real board row reaches here, `enrich` (`Client.fs:692-702`) has ALREADY run
+    // `RepoScope.orFallback ref.Repo (RepoScope.resolve row.PathRepo)`, and `RepoScopeTests.fs` (this
+    // project) proves every `sir` spelling — `sir`, `Sir`, `SIR`, `S.I.R.` — converges through THAT
+    // exact composition to the identical string `"S.I.R."`. So the two facts compose: spellings
+    // converge before scheduling (`RepoScopeTests.fs`), and the scheduler excludes correctly once
+    // converged (below) — together, not merely observed once, they are what makes a live `S.I.R.` claim
+    // exclude an overlapping `sir` candidate from `batch`/`take` in production.
+
+    [<Fact>]
+    let ``.github#2363 criterion 5: a live claim in the POST-canonicalization repo excludes an overlapping candidate from schedule``
+        ()
+        =
+        // `here.Repo` and the candidate's `PathRepo` are both `"S.I.R."` — the ONE string `enrich`
+        // produces regardless of whether the board spelled the claimed item `sir` or `S.I.R.` itself
+        // (RepoScopeTests.fs). This is the shape a real `sir`/`S.I.R.` collision takes by the time it
+        // reaches `schedule`, and it is excluded exactly like any other same-repo collision.
+        let here =
+            { Owner = "FS-GG"
+              Repo = "S.I.R."
+              Paths = Declared [ Matchable "scripts/foo" ]
+              Holder = LiveClaim(WorkerId "tern-bac3", refIn "FS-GG" "S.I.R." 9, 60, None) }
+
+        let candidate =
+            { item 1 [ "scripts/foo" ] with
+                Ref = refIn "FS-GG" "S.I.R." 1
+                PathRepo = "S.I.R." }
+
+        let r = run [ here ] [ candidate ]
+
+        Assert.Empty(r.Chosen)
+
+        Assert.Equal(
+            Some(LiveClaim(WorkerId "tern-bac3", refIn "FS-GG" "S.I.R." 9, 60, None)),
+            (List.head r.Decisions).CollidedWith
+        )
+
+    /// Gate-inversion evidence, actually run: mutating `inRepo`'s `r.Repo = repo` to `r.Repo <> repo`
+    /// (inverting the repo half, so a reservation is "visible" to a candidate everywhere EXCEPT its own
+    /// repo) turned this test red — `dotnet test tests/FS.GG.Coord.Core.Tests --filter
+    /// FullyQualifiedName~BatchTests` reported `Failed: 24, Passed: 36`, including THIS test
+    /// (`Assert.Empty(r.Chosen)` failed — the candidate was admitted despite the live `S.I.R.` claim,
+    /// because the mutant no longer treats same-repo as visible) alongside `#312`/`#353` and every other
+    /// test that depends on `inRepo`'s repo-scoping, which the inversion breaks by construction (a first
+    /// pass with the repo half simply dropped left same-repo cases including this one accidentally still
+    /// colliding, so this stronger inversion — `<>` rather than deletion — is the one that actually
+    /// isolates this test's own claim). Restoring `inRepo` reran the full `BatchTests` suite green:
+    /// `Failed: 0, Passed: 60`.
+
+    /// NOT the same claim as the test above, recorded so a reader does not conflate them: this test shows
+    /// the scheduler correctly excludes once PathRepo is canonical. It does NOT show `schedule`/
+    /// `scheduleWith` independently resolves a `sir`-vs-`S.I.R.` raw spelling difference on its own — it
+    /// does not, by design (`inRepo` above is a bare string compare with no `RepoScope.resolve` call).
+    /// The full guarantee is the COMPOSITION with `RepoScopeTests.fs`, not this test in isolation; see the
+    /// module comment above.
+
+    // ================================================================================================
     // FAIL CLOSED: a reservation that reserves NOTHING refuses the whole batch.
     // ================================================================================================
     // A held item whose touch-set is unmatchable is the worst state in the domain: it OCCUPIES files

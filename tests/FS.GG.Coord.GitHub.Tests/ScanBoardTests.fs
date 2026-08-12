@@ -530,6 +530,48 @@ let ``#1732 canonical command scope selects a short-id Repo Scope`` () =
     Assert.Equal(row, List.head scoped.Rows)
     Assert.True(scoped.Advisory.IsNone)
 
+// ---- .github#2363 criterion 4: the receiver-fixture proof --------------------------------------------
+//
+// `#1732`'s test above proves ONE row, spelled ONE way, is found by ITS OWN canonical name. What #2363
+// asks is broader: a board can carry the SAME repo spelled differently across DIFFERENT rows (a human
+// editing `Repo Scope` by hand has no reason to spell it consistently), and `batch --repo sir`,
+// `batch --repo S.I.R.`, and the current-checkout default (which resolves to the same canonical name
+// before it ever reaches here — `Options.fs:1533-1542`, `.github#2398`) must all select the SAME set —
+// never a spelling-dependent subset that quietly drops a row the caller has every reason to expect.
+
+let private sirBoard =
+    [ { scopeRow "S.I.R." 1 with PathRepo = "sir" } // the roster short-id, as a human would type it
+      { scopeRow "S.I.R." 2 with PathRepo = "S.I.R." } // the canonical name, as `enrich` would write it
+      { scopeRow "S.I.R." 3 with PathRepo = "Sir" } // a casing a human would also type without thinking
+      scopeRow "FS.GG.SDD" 4 ] // control: a different repo must never be swept in
+
+[<Fact>]
+let ``.github#2363 criterion 4: --repo sir and --repo S.I.R. select the identical row set from a mixed-spelling board``
+    ()
+    =
+    // Every real `--repo` argument reaching `Scan.scope` is ALREADY canonical — `Options.resolveRepo`
+    // resolves it before the parser ever calls a verb (#962/#2398) — so a caller typing `sir` and one
+    // typing `S.I.R.` both hand `Scan.scope` the identical `Some "S.I.R."`. What this test isolates is
+    // the ROW side: that `Scan.scope`'s own `RepoScope.resolve r.PathRepo` finds a row no matter which of
+    // the three spellings the BOARD carries for it.
+    let scoped = Scan.scope (Some "S.I.R.") sirBoard
+
+    Assert.Equal(3, List.length scoped.Rows)
+    Assert.Equal<int list>([ 1; 2; 3 ], scoped.Rows |> List.map (fun r -> r.Ref.Number) |> List.sort)
+    Assert.True(scoped.Advisory.IsNone)
+
+/// Gate-inversion evidence, actually run: reverting `Scan.scope`'s row-side match from
+/// `RepoScope.resolve r.PathRepo |> function Repository n -> String.Equals(n, name, ...) | ... -> false`
+/// back to the pre-#2398 shape — comparing the RAW `r.PathRepo` token directly against `name`
+/// (`String.Equals(r.PathRepo, name, StringComparison.OrdinalIgnoreCase)`) — turned 2 tests red:
+/// `dotnet test tests/FS.GG.Coord.GitHub.Tests --filter FullyQualifiedName~ScanBoardTests` reported
+/// `Failed: 2, Passed: 45` — THIS test (1 row selected instead of 3: only the already-canonical
+/// `"S.I.R."`-spelled row matched the raw compare, `"sir"` and `"Sir"` did not) and the pre-existing
+/// `#1732 canonical command scope selects a short-id Repo Scope` test above (`audio` no longer matches
+/// `FS.GG.Audio` by raw compare either) — confirming the mutation is a genuine regression of #2398's own
+/// fix, not an artifact of this test alone. Restoring `RepoScope.resolve` reran green: `Failed: 0,
+/// Passed: 47`.
+
 [<Fact>]
 let ``#979 no --repo is the identity, and says nothing`` () =
     let scoped = Scan.scope None scopeBoard
