@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Fixture for scripts/check-reconcile-concurrency-scope.py (.github#2361, round 3).
+# Fixture for scripts/check-reconcile-concurrency-scope.py (.github#2361 round 3, .github#2416 check 4).
 #
 # Offline, and it needs no stub: the gate is static, string-only — it reads one committed workflow
 # file and checks its `concurrency` block against three literal facts (no per-event branching in
-# `group`, `queue: max`, `cancel-in-progress: false`). No API, no network, no live GitHub scheduler.
+# `group`, `queue: max`, `cancel-in-progress: false`), plus one `on:` trigger fact (.github#2416:
+# no `issue_comment`/`issues`). No API, no network, no live GitHub scheduler.
 #
 # Every negative leg asserts the REASON, not merely a non-zero exit. tests/feed-coherence/run.sh:10
 # names the trap: a "must fail" test whose non-zero exit came from a path guard rather than the thing
@@ -113,7 +114,52 @@ expect "GATE-INVERSION C: round 2's predicate-mirrored fan-out (genuine-vs-genui
   1 "the group varies by triggering event" "$RC"
 
 # =============================================================================================
-# 5. queue present but wrong, and cancel-in-progress: true (GitHub's own rejected combination).
+# 5. GATE-INVERSION D — .github#2416: `issue_comment`/`issues` reintroduced as triggers, everything
+#    else (group/queue/cancel-in-progress) otherwise fine. Isolates check 4 the same way section 5
+#    below isolates checks 2/3: only the one property under test should ever differ from a passing
+#    file. Comment traffic dwarfing every other trigger (42/45 measured runs) is what let a required
+#    `pull_request` context go ABSENT behind a saturated shared queue even with a perfect
+#    concurrency block — this is the run-creation defect itself, not the eviction defect checks 1-3
+#    already cover.
+# =============================================================================================
+RD="$(root "$WORK/defect-d-2416-issue-comment-reintroduced")"
+{ echo "name: w"
+  echo "on:"
+  echo "  issue_comment:"
+  echo "    types: [created, edited, deleted]"
+  echo "  workflow_dispatch:"
+  echo "jobs:"
+  echo "  reconcile:"
+  echo "    runs-on: ubuntu-latest"
+  echo "    timeout-minutes: 5"
+  echo "    steps: [{ run: 'true' }]"
+  echo "concurrency:"
+  echo "  group: coord-board-reconcile-\${{ github.repository }}"
+  echo "  cancel-in-progress: false"
+  echo "  queue: max"; } > "$RD/.github/workflows/coord-board-reconcile.yml"
+expect "GATE-INVERSION D: a reintroduced \`issue_comment\` trigger is caught even with a perfect concurrency block" \
+  1 "lists ['issue_comment']" "$RD"
+
+RE="$(root "$WORK/defect-e-2416-issues-reintroduced")"
+{ echo "name: w"
+  echo "on:"
+  echo "  issues:"
+  echo "    types: [opened, edited, closed, reopened]"
+  echo "  workflow_dispatch:"
+  echo "jobs:"
+  echo "  reconcile:"
+  echo "    runs-on: ubuntu-latest"
+  echo "    timeout-minutes: 5"
+  echo "    steps: [{ run: 'true' }]"
+  echo "concurrency:"
+  echo "  group: coord-board-reconcile-\${{ github.repository }}"
+  echo "  cancel-in-progress: false"
+  echo "  queue: max"; } > "$RE/.github/workflows/coord-board-reconcile.yml"
+expect "GATE-INVERSION E: a reintroduced \`issues\` trigger is caught even with a perfect concurrency block" \
+  1 "lists ['issues']" "$RE"
+
+# =============================================================================================
+# 6. queue present but wrong, and cancel-in-progress: true (GitHub's own rejected combination).
 # =============================================================================================
 RQ="$(root "$WORK/queue-single-explicit")"
 { job_stub
@@ -134,7 +180,7 @@ expect "\`cancel-in-progress: true\` (GitHub rejects this paired with queue: max
   1 "GitHub rejects \`queue: max\` paired with" "$RCIP"
 
 # =============================================================================================
-# 6. The fix must actually satisfy the gate: the file as this PR ships it, standalone.
+# 7. The fix must actually satisfy the gate: the file as this PR ships it, standalone.
 # =============================================================================================
 RFIXED="$(root "$WORK/fixed")"
 { job_stub
@@ -145,7 +191,7 @@ RFIXED="$(root "$WORK/fixed")"
 expect "the shipped shape (flat group, queue: max, cancel-in-progress: false) passes" 0 "OK —" "$RFIXED"
 
 # =============================================================================================
-# 7. Fail closed. "Nothing to check" is never green (epic #266).
+# 8. Fail closed. "Nothing to check" is never green (epic #266).
 # =============================================================================================
 REMPTY="$(root "$WORK/empty")"
 expect "no coord-board-reconcile.yml at all is exit 3, never a vacuous green" 3 "does not exist" "$REMPTY"
@@ -171,7 +217,7 @@ RNOGROUP="$(root "$WORK/nogroup")"
 expect "a \`concurrency\` block with no \`group\` is exit 3" 3 "not a non-empty string" "$RNOGROUP"
 
 # =============================================================================================
-# 8. The gate is STATIC — prove it, rather than asserting it in a comment. Its exit-code contract
+# 9. The gate is STATIC — prove it, rather than asserting it in a comment. Its exit-code contract
 #    omits 2 ("retryable") on the strength of this claim.
 # =============================================================================================
 if python3 - "$TOOL" <<'PY'
@@ -193,7 +239,7 @@ else bad "the gate imports a transport module — it can reach the network, and 
 fi
 
 # =============================================================================================
-# 9. The gate's own shipped surface.
+# 10. The gate's own shipped surface.
 # =============================================================================================
 COHERENCE_WF="$REPO_ROOT/.github/workflows/reconcile-concurrency-scope-coherence.yml"
 if [ -f "$COHERENCE_WF" ] && python3 - "$COHERENCE_WF" <<'PY'
