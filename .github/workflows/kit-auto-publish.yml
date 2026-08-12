@@ -126,14 +126,37 @@ jobs:
           [ -n "$org_latest" ] || org_latest=unknown; [ -n "$nuget_latest" ] || nuget_latest=unknown
           tag="kit/v${version}"; tag_exists=false
           git rev-parse -q --verify "refs/tags/$tag" >/dev/null && tag_exists=true || true
+          # Resolve <Version> at a given commit/path, following ONE level of MSBuild property
+          # indirection through Directory.Build.props.  .github#2410 (coherent-set versioning) made
+          # FS.GG.Kit.csproj's <Version> a property REFERENCE, `$(FsggCoherentSetVersion)`, not a
+          # literal.  A raw regex over the csproj alone reads that reference as its own literal text,
+          # which never matches the msbuild-resolved `$version` computed above — so the provenance
+          # search below found no match for ANY candidate merge from that commit forward, `provenance`
+          # stayed `{}` on every run, and the state machine refused every version forever
+          # (.github#2435).  Extracted between the BEGIN/END markers by tests/kit-auto-publish/run.sh.
+          # BEGIN kit-csproj-version
+          csproj_version() {
+            local commit="$1" path="$2" raw prop
+            raw="$(git show "$commit:$path" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1)"
+            case "$raw" in
+              '$('*')')
+                prop="${raw#\$\(}"; prop="${prop%\)}"
+                git show "$commit:Directory.Build.props" 2>/dev/null | sed -n 's:.*<'"$prop"'>\([^<]*\)</'"$prop"'>.*:\1:p' | tail -1
+                ;;
+              *)
+                printf '%s' "$raw"
+                ;;
+            esac
+          }
+          # END kit-csproj-version
           # Find the merged PR that introduced the evaluated version, rather
           # than assuming main's latest commit is that PR.  Every candidate is
           # checked at its immutable merge commit and PR head.
           provenance='{}'
           while IFS=$'\t' read -r number merge head; do
             [ -n "$number" ] || continue
-            introduced="$(git show "$merge:src/FS.GG.Kit/FS.GG.Kit.csproj" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1)"
-            base="$(git show "$merge^:src/FS.GG.Kit/FS.GG.Kit.csproj" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1)"
+            introduced="$(csproj_version "$merge" src/FS.GG.Kit/FS.GG.Kit.csproj)"
+            base="$(csproj_version "$merge^" src/FS.GG.Kit/FS.GG.Kit.csproj)"
             [ "$introduced" = "$version" ] && [ "$base" != "$version" ] || continue
             # This is provenance for the already-merged authoring PR, not a
             # replacement merge gate.  Read the named workflow run and its
@@ -187,7 +210,16 @@ jobs:
           ACTION: ${{ steps.observe.outputs.action }}
         run: |
           set -euo pipefail
-          marker='<!-- fsgg:kit-auto-publish-escalation -->'; issue=2106
+          marker='<!-- fsgg:kit-auto-publish-escalation -->'; issue=2106; streak_fail_threshold=3
+          # A refusal is not a failure: every step above leaves this job's own exit code at 0, so a
+          # persistent refusal is invisible to anything that reads run conclusions, and a sticky
+          # comment nobody is watching on a CLOSED issue is the only trace (.github#2435). Two
+          # independent fixes below close that gap: the escalation target is kept OPEN so it is
+          # reachable from an open-issue view, and a sustained streak fails THIS job so the refusal is
+          # visible without reading any issue at all. A one-off refusal staying green is intentional —
+          # only a streak at or beyond the bound reds.
+          issue_state="$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue" | jq -r .state)"
+          [ "$issue_state" = "open" ] || gh issue reopen "$issue" --repo "$GITHUB_REPOSITORY"
           comments="$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue/comments" --paginate)"
           existing="$(jq -r '.[] | select(.body | startswith("<!-- fsgg:kit-auto-publish-escalation -->")) | .id' <<<"$comments" | head -1)"
           previous=/tmp/previous-escalation.json
@@ -210,6 +242,15 @@ jobs:
           body="$(printf '%s\n\n```json\n%s\n```\n\nAuto-publish performed no tag, feed, or evidence-PR write. [Run](%s/%s/actions/runs/%s).' "$marker" "$state" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
           gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --add-label blocked
           if [ -n "$existing" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -f body="$body" >/dev/null; else gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$issue/comments" -f body="$body" >/dev/null; fi
+          # The sticky comment and label above are written FIRST, unconditionally — they are the
+          # durable record and must land even on a bounded-streak failure below. Only after they are
+          # written does a sustained streak fail the job itself, which is the mechanism a human or
+          # agent reading `gh pr checks` / run conclusions actually notices without opening #2106.
+          streak="$(jq -r '.streak' <<<"$state")"
+          if [ "$streak" -ge "$streak_fail_threshold" ]; then
+            echo "::error::kit-auto-publish streak bound reached: '$(jq -r .action <<<"$state")/$(jq -r .reason <<<"$state")' for $streak consecutive runs (>= $streak_fail_threshold) — failing this job so the refusal is visible without reading issue #$issue's comments. See the sticky comment above for the typed state."
+            exit 1
+          fi
       - name: Open or update the publish evidence PR
         if: steps.observe.outputs.action == 'openEvidencePr' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
         env:
