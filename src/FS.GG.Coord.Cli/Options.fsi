@@ -333,6 +333,12 @@ module Options =
     /// Parse argv. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Options, string>
 
+    /// The command's wire name — the same spelling `usage` and the command contract use.
+    ///
+    /// Public since #2418, which keys the GraphQL spend ledger by it. Attribution must name the command
+    /// an operator actually typed, so this stays the one spelling rather than a second table beside it.
+    val commandName: c: Command -> string
+
     /// The parser's accepted command/flag surface, emitted from the same `scopeOf` table that enforces
     /// the residue rule. This is machine input; documentation validators must not scrape `usage`.
     val renderCommandContract: unit -> string
