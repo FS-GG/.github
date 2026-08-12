@@ -1,10 +1,43 @@
 name: Coordinate board lifecycle projection
 
+# .github#2416: `issue_comment`/`issues` are DELIBERATELY ABSENT from this `on:` block — this
+# supersedes #2352 round 2's design (the `startsWith(..., '<!-- fsgg:')` job-level filter this file
+# used to carry). That filter answered "should THIS RUN'S job do work", evaluated only after GitHub
+# had already created the run and queued it in the group below. `concurrency.queue: max` (#2361 round
+# 3) stopped that queued run from EVICTING a pending sibling, but never stopped one from being CREATED
+# and taking a FIFO slot — and comment traffic dwarfs every other trigger here (42/45 runs measured
+# issue_comment; 22 pending -> 67 pending in 16 minutes, 2026-08-11T19:20Z-19:36Z). A required
+# `pull_request` context sharing that one FIFO queue with dozens of comment-triggered runs (marker AND
+# genuine — the old filter only ever skipped the marker ones) went ABSENT, not red, and silently
+# blocked seven independently-reviewed PRs (#2403/#2404/#2405/#2410/#2412/#2413/#2415) in that window.
+#
+# Removing the trigger, not narrowing its filter, is the only change available that stops RUN
+# CREATION rather than merely job execution — GitHub's `on:` cannot inspect a comment's body (no
+# `paths` for issue_comment/issues events), so nothing short of dropping the trigger keeps a genuine
+# (non-marker) comment from creating a full-scan run indistinguishable, at trigger time, from a marker
+# one. A second, narrower-`on:` workflow that dispatches this one back in for genuine comments was
+# considered and rejected: this job's `reconcile --apply` step can WRITE the whole board
+# (`src/FS.GG.Coord.GitHub/Writes.fs:933-934`'s `Writes.lifecycleWatermark` is a blind `postComment`,
+# no dedup/CAS guard), and the ONLY thing making that safe today is every run sharing this file's one
+# flat `concurrency.group` below — proven the hard way twice on this same item (#2361 rounds 1 and 2,
+# see `reconcile-concurrency-scope-coherence.yml`). A dispatched run reachable through a second trigger
+# path is still bound to that same one group, so it would not even buy PR runs their own lane — it
+# would only reintroduce comment volume into the shared queue by another door. Splitting the group
+# instead (keyed by event) was rejected for the identical reason: it reopens the exact double-write
+# hole `scripts/check-reconcile-concurrency-scope.py` exists to catch.
+#
+# DECISION RECORDED (.github#2416 AC-5): the protocol's own machine comments (claim markers, delivery
+# receipts, review markers, done stamps) no longer need to be "written somewhere that is not an
+# issue-comment event" to stop costing a run — they simply no longer trigger one, machine or genuine
+# alike, because the trigger itself is gone. Comment-observed board drift (a human closing an issue by
+# hand, an in-thread decision with no marker) is still caught, bounded to the top of the next hour by
+# the `schedule` trigger below, the same bound this file already accepts for the CI-completion gap
+# `check_suite`/`workflow_run` would have covered (see the comment on those two below) — genuinely
+# real-time comment reactivity was the cost, not a correctness gap: nothing here or in `Client.fs`
+# read `take`/`claim`/`done`'s own board-field writes FROM this workflow's projection; those commands
+# already write the board directly (see this run's own `take --json` output: `"statusWrite":"written"`
+# happens inline, not via a later reconcile pass).
 on:
-  issue_comment:
-    types: [created, edited, deleted]
-  issues:
-    types: [opened, edited, closed, reopened]
   pull_request:
     types: [opened, reopened, edited, synchronize, closed]
   pull_request_review:
@@ -99,22 +132,12 @@ jobs:
   # is ever renamed, branch protection's required context MUST be updated in the same change, or the
   # required check silently stops being satisfiable by real board reconciliation.
   reconcile:
-    # .github#2352 AC-1: the protocol's OWN comments are the dominant source of `issue_comment` volume —
-    # delivery-route receipts, obligation declarations/receipts, independent-review markers, host
-    # acceptance markers, and (heaviest of all) the claim marker, which is EDITED on every lease
-    # heartbeat/renewal rather than posted once. A single item moving through review posts a dozen or
-    # more of these, and every one used to schedule a full ~2000-item board scan. Every machine comment
-    # this protocol posts carries a leading `<!-- fsgg:...` marker line (SKILL.md's own vocabulary for
-    # them), so that prefix is the exact, already-load-bearing signal to filter on — not a heuristic
-    # invented for this fix. A genuine HUMAN issue/PR comment (no marker) still schedules a reconcile;
-    # only the trigger is filtered, never the `issues`/`pull_request`/`pull_request_review`/`schedule`/
-    # `workflow_dispatch` paths below, which this condition does not touch.
-    #
-    # GitHub evaluates `issue_comment.deleted` with the deleted comment's own `comment.body` still
-    # present in the payload, so the same prefix check covers created/edited/deleted uniformly.
-    if: >-
-      github.event_name != 'issue_comment' ||
-      !startsWith(github.event.comment.body, '<!-- fsgg:')
+    # .github#2352 AC-1's job-level `startsWith(..., '<!-- fsgg:')` filter lived here, retired by
+    # .github#2416: `issue_comment` is no longer one of this workflow's triggers (see the `on:` block
+    # comment above), so `github.event_name == 'issue_comment'` can no longer be true for any run this
+    # job sees — the predicate would be permanently vacuous dead weight, not a guard. No replacement
+    # `if:` is needed: every remaining trigger (`pull_request`, `pull_request_review`, `schedule`,
+    # `workflow_dispatch`) is real work this job should always do.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
