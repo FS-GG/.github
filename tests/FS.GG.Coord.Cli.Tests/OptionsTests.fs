@@ -848,6 +848,7 @@ module OptionsTests =
           "inbox", Text
           "predicate", Text
           "lint", Text
+          "body-edits", Text // .github#2477 — same polarity as who/budget: a human table by default
 
           // JSON only — stdout is a machine document whatever the flag says. Unchanged.
           "scan", Json

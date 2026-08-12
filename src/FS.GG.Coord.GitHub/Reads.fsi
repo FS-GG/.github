@@ -274,6 +274,33 @@ module Reads =
     /// that.
     val rateLimit: transport: IGitHubTransport -> IoResult<RateLimitSnapshot>
 
+    /// One recorded edit to an issue/PR's BODY, from GraphQL's `userContentEdits` connection.
+    type ContentEdit = { EditedAt: System.DateTimeOffset; EditorLogin: string option }
+
+    /// The provenance answer to "has this issue/PR body changed since X": the TOTAL edit count kept
+    /// apart from the visible nodes, exactly like `SubIssueSet` — the connection is capped at 100, so a
+    /// caller must be able to tell "5 edits, all listed" from "127 edits, 100 shown".
+    type ContentEditProvenance = { Total: int; Edits: ContentEdit list }
+
+    /// The GraphQL `userContentEdits` connection on an issue OR a pull request (`.github#2477`).
+    ///
+    /// `.github#2456`'s independent-review contract names this connection as the authoritative source
+    /// for "has this body changed since X" — REST's timeline carries no body-edit event at all, only
+    /// `renamed` for titles — and warns a critic off a hand-built `gh api graphql` call, which
+    /// `graphql-monopoly` refuses as an unmetered principal on the shared budget. This is the sanctioned,
+    /// metered way to ask the question the contract already tells every critic to ask.
+    ///
+    /// FAILS CLOSED, like every read here, and unusually LOUDLY for this one: a GraphQL response is
+    /// reported as an HTTP 200 carrying `errors` even on rate-limit exhaustion, so `errors` is read
+    /// BEFORE `data` is trusted — never as a fallback once extraction fails. A null
+    /// `issueOrPullRequest`, a malformed body, or an `errors` array are each an ERROR here, never an
+    /// empty connection. `.github#2456` exists because a REST-timeline "no edits found" is
+    /// `NOT_MEASURED`, not a negative result; a GraphQL read that silently degraded a failure into
+    /// `Ok { Total = 0; Edits = [] }` would manufacture exactly the false negative that contract was
+    /// written to prevent.
+    val contentEditProvenance:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<ContentEditProvenance>
+
     /// A pull request's HEAD ref (`.head.ref`), e.g. `item/42-the-thing`.
     ///
     /// FAILS CLOSED (#322): an unreadable head ref is an ERROR, never an empty string. verify-paths uses

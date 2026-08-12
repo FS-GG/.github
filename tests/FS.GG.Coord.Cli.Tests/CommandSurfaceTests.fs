@@ -81,6 +81,9 @@ module CommandSurfaceTests =
           "field-id", FieldId
           "option-id", OptionId
           "item-id", ItemId
+          // `.github#2477`: the metered `userContentEdits` read the independent-review contract's
+          // body-edit provenance check names as authoritative.
+          "body-edits", BodyEdits
 
           // The board-health gate (#496) and the REST listing (#446).
           "lint", LintCmd

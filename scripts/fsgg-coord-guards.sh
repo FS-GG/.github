@@ -241,7 +241,9 @@ BOARD_WRITES_CONDITIONAL="delivery delivery-route next reap reconcile"
 #   `board`/`bootstrap`/`field-id`/`option-id`/`item-id` are GraphQL QUERIES plus a per-user cache file under
 #   `$XDG_CACHE_HOME/fsgg-coord` — local, not the board. `decide`/`lanes`/`facts` never touch the transport
 #   at all; `whoami`/`followup`/`predicate` never touch the board (identity, a local queue, local registry
-#   files). `scan` POSTs to `graphql`, which is how a GraphQL READ is spelled.
+#   files). `scan` POSTs to `graphql`, which is how a GraphQL READ is spelled. `body-edits` (.github#2477)
+#   is the same shape as `scan`: one `userContentEdits` GraphQL QUERY through `Reads.contentEditProvenance`,
+#   never a mutation, and it writes no board field, cache, or claim.
 #
 # `--help`, `-h` and `--version` are deliberately absent: they are not verbs, and the engine's
 # `command-contract` excludes them for the same reason. They are exempted by GRAMMAR at the guard below
@@ -251,7 +253,7 @@ BOARD_WRITES_CONDITIONAL="delivery delivery-route next reap reconcile"
 # ONE LINE, AND NO SUBSTITUTION IN IT — the parity gate lifts these three assignments straight out of this
 # file and refuses any that is not a plain literal, so a `$…`/`$(…)`/continuation spelling would red §3b
 # rather than be evaluated. Long, therefore, on purpose.
-BOARD_READS="batch board bootstrap budget command-contract cycle decide diff-audit driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap predicate ready review scan verify-paths who whoami"
+BOARD_READS="batch board body-edits bootstrap budget command-contract cycle decide diff-audit driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap predicate ready review scan verify-paths who whoami"
 
 # STAT THE .dll, NOT THE APPHOST. `fsgg-coord-engine` is the .NET apphost — a fixed ~78 KB native stub,
 # BYTE-IDENTICAL across every build of every commit. The IL, which is the thing that goes stale, is in

@@ -8552,6 +8552,73 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             eprint "fsgg-coord-engine: item-id takes <ref>."
             ExitError
 
+    /// `body-edits <ref>` — "has this issue/PR body changed since X" (`.github#2477`).
+    ///
+    /// `.github#2456`'s independent-review contract names GraphQL's `userContentEdits` connection as the
+    /// authoritative source for this question — REST's timeline carries no body-edit event at all, only
+    /// `renamed` for titles — and warns a critic off a hand-built `gh api graphql` call, which
+    /// `graphql-monopoly` refuses as an unmetered principal on the shared budget. This is the sanctioned,
+    /// metered way to ask the contract's own question: one `Reads.contentEditProvenance` call through the
+    /// existing client path, so it is budget-attributed exactly like every other read.
+    ///
+    /// FAILS CLOSED ON BOTH PROJECTIONS. `Reads.contentEditProvenance` never degrades a read it could not
+    /// complete into an empty connection; this handler carries that all the way to the exit code and both
+    /// renderers via `failWith opts.Render`, so a rate-limited or unauthorized read prints as a FAILED
+    /// READ — non-zero exit, an error on stderr (`--text`) or in the failure document (`--json`) — and
+    /// NEVER as "0 edits". Silently reporting a failed read as a negative is exactly the false negative
+    /// `.github#2456` was written to prevent; this command exists so a critic never has to choose between
+    /// asking the authoritative question and obeying `graphql-monopoly`.
+    let bodyEditsCmd (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ refArg ] ->
+            match parseRef ctx refArg with
+            | Error msg ->
+                eprint $"fsgg-coord-engine: %s{msg}"
+                ExitError
+            | Ok ref ->
+                match Reads.contentEditProvenance ctx.Transport ref.Owner ref.Repo ref.Number with
+                | Error e -> failWith opts.Render e
+                | Ok provenance ->
+                    match opts.Render with
+                    | Json ->
+                        let doc =
+                            JsonSerializer.Serialize(
+                                {| ref = ref.Short
+                                   totalEdits = provenance.Total
+                                   edits =
+                                    provenance.Edits
+                                    |> List.map (fun edit ->
+                                        {| editedAt = edit.EditedAt.ToString "o"
+                                           editor = edit.EditorLogin |> Option.toObj |}) |}
+                            )
+
+                        printfn "%s" doc
+                    | Text ->
+                        if provenance.Total = 0 then
+                            printfn "%s: no body edits recorded (GraphQL userContentEdits totalCount 0)." ref.Short
+                        else
+                            printfn
+                                "%s: %d body edit(s) recorded (GraphQL userContentEdits totalCount):"
+                                ref.Short
+                                provenance.Total
+
+                            for edit in provenance.Edits do
+                                let who = edit.EditorLogin |> Option.defaultValue "(editor unknown)"
+                                printfn "  %s by %s" (edit.EditedAt.ToString "o") who
+
+                            // TRUNCATED, LIKE `subIssues`'s graph — the connection is capped at 100, and a
+                            // caller must be able to tell "5 edits, all listed" from "127 edits, 100 shown".
+                            if provenance.Total > List.length provenance.Edits then
+                                printfn
+                                    "  (only %d of %d shown — the connection is capped at 100)"
+                                    (List.length provenance.Edits)
+                                    provenance.Total
+
+                    ExitGreen
+        | _ ->
+            eprint "fsgg-coord-engine: body-edits takes <ref>."
+            ExitError
+
     /// The column `add` writes when the caller names none (.github#1823).
     ///
     /// **`Backlog`, and not `Ready`.** `Backlog` is visible to triage and NOT startable without a
@@ -9834,6 +9901,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | FieldId -> fieldId ctx opts
             | OptionId -> optionId ctx opts
             | ItemId -> itemIdCmd ctx opts
+            | BodyEdits -> bodyEditsCmd ctx opts
             | Add -> addCmd ctx opts
             | Flush -> flushCmd ctx opts
             | LintCmd -> lint ctx opts
