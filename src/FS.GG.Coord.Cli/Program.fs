@@ -303,124 +303,135 @@ let private decide (opts: Options) =
 
 [<EntryPoint>]
 let main argv =
+    // #2418: whatever this invocation spent, the ledger gets it — on the success path and the
+    // defect path alike. A command that died mid-wave still spent its points, and an attribution
+    // ledger that silently drops the failures is misleading exactly when someone is diagnosing a
+    // drain. `recordSpend` never throws and writes nothing when no GraphQL was billed.
+    let mutable invoked = "unknown"
+
     try
-        match Options.parse (List.ofArray argv) with
-        | Error message ->
-            eprint $"fsgg-coord-engine: %s{message}"
-            eprint ""
-            eprint Options.usage
-            ExitError
+        try
+            match Options.parse (List.ofArray argv) with
+            | Error message ->
+                eprint $"fsgg-coord-engine: %s{message}"
+                eprint ""
+                eprint Options.usage
+                ExitError
 
-        | Ok opts ->
-            match opts.Command with
-            | Help ->
-                printfn "%s" Options.usage
-                ExitGreen
+            | Ok opts ->
+                invoked <- Options.commandName opts.Command
 
-            | Version ->
-                let v =
-                    Assembly.GetExecutingAssembly().GetName().Version
-                    |> Option.ofObj
-                    |> Option.map string
-                    |> Option.defaultValue "0.0.0"
+                match opts.Command with
+                | Help ->
+                    printfn "%s" Options.usage
+                    ExitGreen
 
-                printfn "%s" v
-                ExitGreen
+                | Version ->
+                    let v =
+                        Assembly.GetExecutingAssembly().GetName().Version
+                        |> Option.ofObj
+                        |> Option.map string
+                        |> Option.defaultValue "0.0.0"
 
-            | Scan -> scan opts
+                    printfn "%s" v
+                    ExitGreen
 
-            | Decide -> decide opts
+                | Scan -> scan opts
 
-            | DeliveryCmd when opts.SnapshotFile.IsSome -> DeliveryApplication.run opts
-            | DeliveryCmd -> Client.run opts
+                | Decide -> decide opts
 
-            // .github#2175: the typed review/repair protocol, mirroring `delivery`'s exact split — the
-            // pure snapshot-JSON contract with `--snapshot`, the live `Client.review` adapter otherwise.
-            | ReviewCmd when opts.SnapshotFile.IsSome -> ReviewApplication.run opts
-            | ReviewCmd -> Client.run opts
+                | DeliveryCmd when opts.SnapshotFile.IsSome -> DeliveryApplication.run opts
+                | DeliveryCmd -> Client.run opts
 
-            | LanesView -> lanes opts
+                // .github#2175: the typed review/repair protocol, mirroring `delivery`'s exact split — the
+                // pure snapshot-JSON contract with `--snapshot`, the live `Client.review` adapter otherwise.
+                | ReviewCmd when opts.SnapshotFile.IsSome -> ReviewApplication.run opts
+                | ReviewCmd -> Client.run opts
 
-            | Facts -> facts opts
+                | LanesView -> lanes opts
 
-            | CommandContractCmd ->
-                printfn "%s" (Options.renderCommandContract ())
-                ExitGreen
+                | Facts -> facts opts
 
-            // `validate` is pure, but `apply` is the receipt-bound live transaction in `Client.intakeCmd`.
-            // Routing the whole verb through IntakeApplication made the public `apply` command a permanent
-            // refusal while unit tests that invoked Client.intakeCmd directly stayed green (#2134).
-            | IntakeCmd when opts.Args |> List.tryHead = Some "validate" -> IntakeApplication.run opts
-            | IntakeCmd -> Client.run opts
+                | CommandContractCmd ->
+                    printfn "%s" (Options.renderCommandContract ())
+                    ExitGreen
 
-            | RouteCmd -> Client.run opts
+                // `validate` is pure, but `apply` is the receipt-bound live transaction in `Client.intakeCmd`.
+                // Routing the whole verb through IntakeApplication made the public `apply` command a permanent
+                // refusal while unit tests that invoked Client.intakeCmd directly stayed green (#2134).
+                | IntakeCmd when opts.Args |> List.tryHead = Some "validate" -> IntakeApplication.run opts
+                | IntakeCmd -> Client.run opts
 
-            | DriverCmd -> Client.run opts
+                | RouteCmd -> Client.run opts
 
-            | CycleCmd -> CycleLedgerApplication.run opts
+                | DriverCmd -> Client.run opts
 
-            // `whoami` reads no board — identity is local, and `--mint` needs no token.
-            | WhoAmI -> Client.whoami opts
+                | CycleCmd -> CycleLedgerApplication.run opts
 
-            // `followup` is local for the same reason, and it is load-bearing here rather than incidental:
-            // the queue is a worker's own promise, and the state that most reliably strands one is an
-            // exhausted budget (#1063/§1). A promise you cannot pop without a board read is a promise that
-            // breaks exactly when it is needed.
-            | Followup ->
-                // Queue mutation stays local and available during a budget outage. Fleet audit is a
-                // different operation: it claims to distinguish an orphan from a worker that is still
-                // alive, so it must make the fresh GitHub reads that establish that fact.
-                match Followups.parse opts.Args with
-                | Ok Followups.Audit -> Client.followupAudit opts
-                | _ -> Followups.run opts
+                // `whoami` reads no board — identity is local, and `--mint` needs no token.
+                | WhoAmI -> Client.whoami opts
 
-            // `predicate` reads LOCAL files (registry + producer manifests) — no board, no token — so it is
-            // inline here, not a `Client.run` target. The ADR-0050 oracle, call-site A (.github#1202).
-            | Predicate -> Client.predicate opts
+                // `followup` is local for the same reason, and it is load-bearing here rather than incidental:
+                // the queue is a worker's own promise, and the state that most reliably strands one is an
+                // exhausted budget (#1063/§1). A promise you cannot pop without a board read is a promise that
+                // breaks exactly when it is needed.
+                | Followup ->
+                    // Queue mutation stays local and available during a budget outage. Fleet audit is a
+                    // different operation: it claims to distinguish an orphan from a worker that is still
+                    // alive, so it must make the fresh GitHub reads that establish that fact.
+                    match Followups.parse opts.Args with
+                    | Ok Followups.Audit -> Client.followupAudit opts
+                    | _ -> Followups.run opts
 
-            | DiffAudit -> SemanticDiffApplication.run opts
+                // `predicate` reads LOCAL files (registry + producer manifests) — no board, no token — so it is
+                // inline here, not a `Client.run` target. The ADR-0050 oracle, call-site A (.github#1202).
+                | Predicate -> Client.predicate opts
 
-            // The client command surface — the shim's targets. Each reads/writes GitHub through the typed
-            // IO layer; `Client.run` owns the token check, the transport lifetime, and the exit contract.
-            | Next
-            | BatchCmd
-            | Ready
-            | Reconcile
-            | Who
-            | Reap
-            | Budget
-            | Claim
-            | Adopt
-            | Landable
-            | Take
-            | Release
-            | Heartbeat
-            | SetField
-            | Child
-            | Widen
-            | SetPaths
-            | Overlap
-            | Say
-            | Inbox
-            | DoneCmd
-            | VerifyPaths
-            | Bootstrap
-            | BoardCmd
-            | FieldId
-            | OptionId
-            | ItemId
-            | Add
-            | Flush
-            | LintCmd
-            | RoomOpen
-            | Issues
-            | IntakeCmd -> Client.run opts
+                | DiffAudit -> SemanticDiffApplication.run opts
 
-    with e ->
-        // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine
-        // is broken" from "the caller is wrong" — because the first means the engine is untrustworthy
-        // and the second means the snapshot is. Collapsing them would hide a broken engine behind a
-        // stream of what look like bad inputs.
-        eprint $"fsgg-coord-engine: DEFECT — %s{e.GetType().Name}: %s{e.Message}"
-        eprint (string e.StackTrace)
-        ExitDefect
+                // The client command surface — the shim's targets. Each reads/writes GitHub through the typed
+                // IO layer; `Client.run` owns the token check, the transport lifetime, and the exit contract.
+                | Next
+                | BatchCmd
+                | Ready
+                | Reconcile
+                | Who
+                | Reap
+                | Budget
+                | Claim
+                | Adopt
+                | Landable
+                | Take
+                | Release
+                | Heartbeat
+                | SetField
+                | Child
+                | Widen
+                | SetPaths
+                | Overlap
+                | Say
+                | Inbox
+                | DoneCmd
+                | VerifyPaths
+                | Bootstrap
+                | BoardCmd
+                | FieldId
+                | OptionId
+                | ItemId
+                | Add
+                | Flush
+                | LintCmd
+                | RoomOpen
+                | Issues
+                | IntakeCmd -> Client.run opts
+
+        with e ->
+            // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine
+            // is broken" from "the caller is wrong" — because the first means the engine is untrustworthy
+            // and the second means the snapshot is. Collapsing them would hide a broken engine behind a
+            // stream of what look like bad inputs.
+            eprint $"fsgg-coord-engine: DEFECT — %s{e.GetType().Name}: %s{e.Message}"
+            eprint (string e.StackTrace)
+            ExitDefect
+    finally
+        FS.GG.Coord.GitHub.Budget.recordSpend invoked

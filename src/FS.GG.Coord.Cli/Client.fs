@@ -399,8 +399,87 @@ module Client =
     [<Literal>]
     let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
 
-    let private deliveryRouteRevision (body: string) =
-        body |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let private hashHex (text: string) =
+        text |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    /// SAME grammar `TouchSet`'s `Paths:`, `Class`'s `Class:`, and `HumanBlock`'s `Blocked on:`/
+    /// `Blocked by:` already parse (up to three leading spaces, either case — ADR-0045's one shape for
+    /// every body-line sentinel/declaration) — restated here, not re-decided: those three modules cannot
+    /// be asked directly because `Client.fs` sits in a different project and, inside `Core` itself,
+    /// `DeliveryRoute.fs` compiles AHEAD of `Markdown.fs`/`TouchSet.fs`/`Class.fs`/`HumanBlock.fs` in
+    /// `FS.GG.Coord.Core.fsproj`. .github#2392's declared `Paths:` licenses touching this file and
+    /// `DeliveryRoute.fs`, not reordering that compile graph or widening those modules' `.fsi` surfaces
+    /// to add a shared predicate — so this regex is a literal restatement of an existing decision, never
+    /// a second one.
+    let private volatileDeclarationLine =
+        Text.RegularExpressions.Regex(@"^ {0,3}([Pp]aths|[Cc]lass|[Bb]locked [Oo]n|[Bb]locked [Bb]y):.*$", Text.RegularExpressions.RegexOptions.Compiled)
+
+    /// The route-relevant SUBJECT of an issue body (.github#2392): every line the body carries, EXCLUDING
+    /// a `Paths:`, `Class:`, `Blocked on:`, or `Blocked by:` declaration OUTSIDE a fenced code block, and
+    /// excluding blank/whitespace-only lines. Those four lines are STATE the protocol itself is required
+    /// to rewrite — `widen`/`set-paths` rewrite `Paths:`, triage rewrites `Class:`, a park/unpark edits
+    /// `Blocked on:`, and a dependency edit rewrites `Blocked by:` — never a change to the scope,
+    /// contracts, or blast radius a delivery-route decision actually judges. A FENCED quotation of one of
+    /// these lines is left untouched and hashes normally: it is documentation prose (this org's own
+    /// protocol docs quote the grammar constantly), and editing it IS a genuine content change — the same
+    /// fenced/unfenced split `TouchSet`/`Class`/`HumanBlock` already apply to their own reads, via the
+    /// shared `Markdown.classify` walk, applied here without a second reading of the fence rule itself
+    /// (#972).
+    ///
+    /// LINES ARE DROPPED, NOT REDACTED IN PLACE, and blank lines are dropped too — a `Blocked on:` sentinel
+    /// is not merely EDITED by a park/unpark, it is INSERTED or REMOVED wholesale, together with whatever
+    /// blank-line spacing the append happened to use (.github#2392's own occurrence 3, a park sentinel
+    /// appended to an item body). Replacing a matched line's TEXT in place while keeping its POSITION would
+    /// still change the hash the moment a declaration line's very presence — not just its content — moved,
+    /// which is exactly the park/unpark shape. Filtering both kinds of line out entirely, rather than
+    /// substituting a placeholder, makes the subject insensitive to whether the mechanical line — or the
+    /// blank line around it — exists at all, while any OTHER content line moving, appearing, or
+    /// disappearing still changes the joined text and so still changes the hash (AC2).
+    ///
+    /// GROWTH IS NOT SPECIAL-CASED (.github#2392 AC3, decided deliberately, not a side effect of dropping
+    /// the line entirely): a `Paths:` widen that strictly grows the touch-set is, today, exactly as
+    /// invisible to this hash as one that narrows it or leaves it unchanged. The receipt's judgement is
+    /// about the SUBJECT — scope, contracts, blast radius — not the CURRENT WORKING SET a claimed worker
+    /// has reserved to implement it; a widen is a claim-time bookkeeping act, not a redefinition of what
+    /// the item is. Distinguishing "grew within the same contract/repo boundary" from "grew across one" is
+    /// real future work (recorded in the host's own follow-up evidence on this item) that would need a
+    /// semantic touch-set comparison this fix's declared `Paths:` does not reach; it is out of scope here
+    /// by that same declaration, not by oversight.
+    let private deliveryRouteSubject (body: string) : string =
+        Markdown.classify body
+        |> List.choose (fun (line, kind) ->
+            if kind = Markdown.Text && (volatileDeclarationLine.IsMatch line || String.IsNullOrWhiteSpace line) then None
+            else Some line)
+        |> String.concat "\n"
+
+    /// The CURRENT scheme (.github#2392): a hash of the canonical SUBJECT, not the raw body. This is the
+    /// only revision `record` will ever accept for a newly authored receipt (see the `record` arm of
+    /// `deliveryRouteCmd`) and the first candidate `decideDeliveryRoute` tries on every read.
+    let private deliveryRouteRevision (body: string) = hashHex (deliveryRouteSubject body)
+
+    /// The PRE-#2392 scheme: a hash of the raw, unredacted body — exactly what every receipt recorded
+    /// before this fix shipped carries as its `subjectRevision`. Never used to AUTHOR a new receipt (see
+    /// `deliveryRouteRevision` above); kept only as a READ-side migration bridge in `decideDeliveryRoute`
+    /// so an already-recorded receipt does not go stale the instant this fix ships merely because the
+    /// hash FORMULA changed under it, for as long as nothing in the body has actually moved since it was
+    /// recorded — precisely the guarantee that receipt had before this fix (AC5).
+    let private legacyDeliveryRouteRevision (body: string) = hashHex body
+
+    /// One `DeliveryRoute.Verdict` from up to two candidate revisions (.github#2392 AC5's migration
+    /// bridge): the canonical (post-fix) revision first, and — ONLY when that does not make the receipt
+    /// `Current` — the legacy (pre-fix, whole-body) revision. A receipt that is `Current` only under the
+    /// legacy revision remains bound to the WHOLE old body exactly as before this fix (a `Paths:`/
+    /// `Class:`/`Blocked on:`/`Blocked by:` edit still stales it) until it is re-recorded once under the
+    /// canonical scheme, after which future such edits no longer touch it. When NEITHER candidate is
+    /// current, the canonical verdict's reasons are reported: canonical is the scheme every future receipt
+    /// is authored against, so its explanation is the one worth showing an agent deciding what to do next.
+    let private decideDeliveryRoute (subject: string) (body: string) (receipt: DeliveryRoute.Receipt option) : DeliveryRoute.Verdict =
+        match DeliveryRoute.decide subject (Some(deliveryRouteRevision body)) receipt with
+        | DeliveryRoute.Current _ as current -> current
+        | canonicalVerdict ->
+            match DeliveryRoute.decide subject (Some(legacyDeliveryRouteRevision body)) receipt with
+            | DeliveryRoute.Current _ as current -> current
+            | _ -> canonicalVerdict
 
     /// Static receipt validation proves that an SDD route says which work package it governs.  Whether
     /// that package's files currently exist and are `implementationReady` is a SEPARATE, ADVISORY fact
@@ -511,7 +590,7 @@ module Client =
                     if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
-            DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt
+            decideDeliveryRoute target.Canonical body receipt
 
     /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
     /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
@@ -530,7 +609,7 @@ module Client =
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
 
-            match DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt with
+            match decideDeliveryRoute target.Canonical body receipt with
             | DeliveryRoute.Current route -> Ok route
             | DeliveryRoute.Stale reasons
             | DeliveryRoute.Unreadable reasons ->
@@ -688,7 +767,18 @@ module Client =
                             // `Repo Scope` is the authority for WHERE `Paths:` live; `Ref` remains the
                             // issue identity for every GitHub mutation.  The resolver is shared with
                             // `--repo`, so roster short-ids and canonical names cannot split a lane.
-                            PathRepo = Options.resolveRepo row.PathRepo
+                            //
+                            // `RepoScope.orFallback` (#2398): a `Repo Scope` of `cross-repo` — the
+                            // board's one deliberate non-roster value — names no repository, so it
+                            // behaves exactly like an absent one and falls back to the item's own
+                            // hosting repository, same as `.github#2351`'s `pathRepoOrFallback` policy
+                            // for `overlap`/`activeCollisions`. Before this, the sentinel flowed into
+                            // `Item.PathRepo` UNCHANGED and untagged, so two items in the SAME
+                            // repository whose Repo Scope merely disagreed (one `cross-repo`, one
+                            // rostered) compared unequal downstream and split a lane on the strength of
+                            // the sentinel alone, without either touch-set ever being read
+                            // (`.github#2386`).
+                            PathRepo = FS.GG.Coord.RepoScope.orFallback c.Item.Ref.Repo (Options.resolveRepo row.PathRepo)
                             Class =
                                 match c.Item.Class with
                                 | Some _ as declared -> declared
@@ -1634,6 +1724,143 @@ module Client =
             | Error _ -> true
         | _ -> true
 
+    /// THE MARKER THAT AUTHORIZES ACTING ON A CLAIM — `review`'s and `delivery`'s shared extension of
+    /// `Reads.winner`'s live-lease-only answer with the SAME proof-of-life the scheduler already trusts
+    /// for a `HeldByLiveWork` item (#581, `Schedulability.leaseAuthorizes`): an expired lease backed by
+    /// an OPEN `item/<n>-*` PR is not abandoned, it is a worker paused at the review handoff — stopped
+    /// between turns, unable to heartbeat because it is not running (#2378). One function, so the two
+    /// callers cannot silently disagree about what "live" means for the identical fact (#485's lesson).
+    ///
+    /// `liveness` is a THUNK, not an eager read: `Reads.winner` already answers most calls (a live lease
+    /// needs no PR probe), so the one extra REST call this adds is paid only on the path that actually
+    /// needs it — `Reads.prAlive`'s own doc comment states the same cost discipline ("only on the ONE
+    /// item about to be … reaped, never a scan").
+    ///
+    /// `Ok None` is a REAL, distinct answer — "no marker authorizes this claim" — kept apart from
+    /// `Error`, a read that could not be made. Callers choose their own refusal wording for `None`;
+    /// `review` and `delivery` worded it differently before this function existed and still do.
+    let authorizedMarker
+        (leaseMinutes: int)
+        (markers: Reads.Marker list)
+        (liveness: unit -> Errors.IoResult<Liveness>)
+        : Errors.IoResult<Reads.Marker option> =
+        match Reads.winner leaseMinutes markers with
+        | Some marker -> Ok(Some marker)
+        | None ->
+            match Reads.reserver leaseMinutes markers with
+            | None -> Ok None
+            | Some stale ->
+                match liveness () with
+                | Ok l when Schedulability.leaseAuthorizes l -> Ok(Some stale)
+                | Ok _ -> Ok None
+                | Error e -> Error e
+
+    /// `delivery`'s write-side counterpart to `scripts/check-claim-generation.py`'s read side
+    /// (.github#2395, design slice 3 of .github#1858, narrowed to the marker alone — the merge
+    /// election's `opkey=`/`grant=` stay out of this item's `Paths:`, exactly as that gate's own
+    /// docstring already documents for its read side).
+    ///
+    /// UNLIKE the delivery-obligation/receipt markers `DeliveryApplication.obligationsFromComments`
+    /// parses, this one is matched the SAME PERMISSIVE way `check-claim-generation.py`'s `AUTH_MARKER_RE`
+    /// matches it: DOTALL, anywhere in the body, not anchored to a comment's leading line. That gate is
+    /// this marker's only other reader, so this mirrors its tolerance rather than inventing a stricter
+    /// one of its own — a marker this function judges "present and current" must be one the gate would
+    /// also accept.
+    let private authorizationMarkerPattern =
+        System.Text.RegularExpressions.Regex(
+            @"<!--\s*fsgg:pr-authorization\s.*?-->",
+            System.Text.RegularExpressions.RegexOptions.Compiled
+            ||| System.Text.RegularExpressions.RegexOptions.Singleline
+        )
+
+    /// The exact marker text `delivery` writes: `v=1 item=<owner/repo>#<n> gen=<claim marker comment
+    /// id> head=<40-hex sha>`. The gate silently accepts (never rejects on) any ADDITIONAL `key=value`
+    /// pair, so this stays forward-compatible with a future `opkey=`/`grant=` without either side
+    /// having to change first.
+    let authorizationMarker (item: string) (gen: string) (head: string) : string =
+        $"<!-- fsgg:pr-authorization v=1 item=%s{item} gen=%s{gen} head=%s{head} -->"
+
+    /// The one write-worthy fact about a PR body: is its authorization already exactly what the live
+    /// claim/head demand, or does it need rebinding? `AuthorizationCurrent` lets the caller skip a PATCH
+    /// entirely — the common case on every `delivery --apply` call after the first — while
+    /// `AuthorizationRebound` carries the WHOLE new body, never a diff, so the caller cannot
+    /// accidentally PATCH a partial rewrite.
+    type AuthorizationRebind =
+        | AuthorizationCurrent
+        | AuthorizationRebound of body: string
+
+    /// Rewrite `body` so it carries EXACTLY ONE `fsgg:pr-authorization` marker, bound to the current
+    /// `item`/`gen`/`head`. Satisfies the item's owed properties directly, by construction rather than
+    /// by a separate check:
+    ///   - "replaces rather than duplicates" — every existing match (zero, one, or many) is stripped
+    ///     before the fresh marker is appended, so the result never carries more than one;
+    ///   - "rebinds on head change" — a single existing match whose text is not byte-identical to the
+    ///     freshly rendered marker (a stale head, a stale gen, or any other drift) is treated exactly
+    ///     like zero matches: stripped and replaced, never left in place or duplicated alongside a
+    ///     second, corrected one.
+    let rebindAuthorization (body: string) (item: string) (gen: string) (head: string) : AuthorizationRebind =
+        let desired = authorizationMarker item gen head
+        let matches = authorizationMarkerPattern.Matches body
+        if matches.Count = 1 && matches.[0].Value.Trim() = desired then
+            AuthorizationCurrent
+        else
+            let stripped = authorizationMarkerPattern.Replace(body, "").TrimEnd()
+            if String.IsNullOrWhiteSpace stripped then
+                AuthorizationRebound desired
+            else
+                AuthorizationRebound(stripped + "\n\n" + desired)
+
+    /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
+    /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
+    /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
+    /// elsewhere), the PR has already merged (nothing further to authorize), or the caller is not
+    /// applying a mutation (`--apply` gates every write this command makes, and this is one).
+    /// `rebindAuthorization`'s `AuthorizationCurrent` answer skips the PATCH entirely, so a routine
+    /// status check that changed nothing spends one read and zero writes — the common case on every call
+    /// after the first.
+    ///
+    /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
+    /// endpoint is the one GitHub documents for it.
+    ///
+    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` drives this directly
+    /// against a `Fake.Recorder`, the same "reuse the internal seam rather than restate the whole
+    /// `delivery` command's board-scan/PR-facts machinery" idiom `AuthorizedMarkerTests.fs` already uses
+    /// for `authorizedMarker`, above. This is what makes the LIVE wired IO (`Reads.prBody` then a
+    /// conditional `ctx.Transport.Send` PATCH) hermetically testable, not merely the pure
+    /// `rebindAuthorization` decision it wraps.
+    let ensureAuthorization
+        (ctx: Context)
+        (target: Ref)
+        (marker: Reads.Marker option)
+        (pr: int option)
+        (head: string)
+        (merged: bool)
+        (apply: bool)
+        : Errors.IoResult<unit> =
+        match apply, pr, marker, merged with
+        | true, Some prNumber, Some heldMarker, false ->
+            Reads.prBody ctx.Transport target.Owner target.Repo prNumber
+            |> Result.bind (fun body ->
+                match rebindAuthorization body target.Canonical (string heldMarker.Id) head with
+                | AuthorizationCurrent -> Ok()
+                | AuthorizationRebound rebound ->
+                    let payload =
+                        let o = System.Text.Json.Nodes.JsonObject()
+                        o.["body"] <- System.Text.Json.Nodes.JsonValue.Create rebound
+                        o.ToJsonString()
+
+                    let request: Request =
+                        { Method = "PATCH"
+                          Path = $"repos/%s{target.Owner}/%s{target.Repo}/pulls/%d{prNumber}"
+                          Query = []
+                          Body = Transport.Json payload
+                          Budget = Rest
+                          IfNoneMatch = None
+                          Subject = target.Short }
+
+                    ctx.Transport.Send request |> Result.map ignore)
+        | _ -> Ok()
+
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
@@ -1671,11 +1898,13 @@ module Client =
                         Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
                         |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
                         |> Result.bind (fun markers ->
-                            match Reads.winner opts.LeaseMinutes markers with
-                            | Some marker when marker.Worker.Value = w.Id -> Ok(Some marker)
-                            | Some marker -> Error(Errors.Malformed(target.Short, $"live claim belongs to worker '%s{marker.Worker.Value}', not '%s{w.Id}'"))
-                            | None when terminalBoardState -> Ok None
-                            | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize delivery")))
+                            authorizedMarker opts.LeaseMinutes markers (fun () ->
+                                Reads.prAlive ctx.Transport target.Owner target.Repo target.Number)
+                            |> Result.bind (function
+                                | Some marker when marker.Worker.Value = w.Id -> Ok(Some marker)
+                                | Some marker -> Error(Errors.Malformed(target.Short, $"live claim belongs to worker '%s{marker.Worker.Value}', not '%s{w.Id}'"))
+                                | None when terminalBoardState -> Ok None
+                                | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize delivery"))))
 
                     match liveClaim, Cache.pending () with
                     | Error error, _ -> fail error
@@ -1731,6 +1960,19 @@ module Client =
                                 | _, _, _, Error error, _, _
                                 | _, _, _, _, Error error, _
                                 | _, _, _, _, _, Error error -> Error error
+
+                        // Ensure the PR's `fsgg:pr-authorization` marker is current BEFORE deriving the
+                        // lifecycle facts below — a write to the PR body that no fact in
+                        // `Delivery.Snapshot` reads, so folding it into the same `Result` here cannot
+                        // change what `Delivery.inspect` decides; it only keeps the gate's read side
+                        // (`scripts/check-claim-generation.py`) from ever seeing a stale or absent
+                        // marker on the NEXT push (.github#2395).
+                        let branchAndPr =
+                            branchAndPr
+                            |> Result.bind (fun (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations) ->
+                                ensureAuthorization ctx target marker pr head merged opts.Apply
+                                |> Result.map (fun () ->
+                                    (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations)))
 
                         match branchAndPr with
                         | Error error -> fail error
@@ -1851,9 +2093,11 @@ module Client =
                         Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
                         |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
                         |> Result.bind (fun markers ->
-                            match Reads.winner opts.LeaseMinutes markers with
-                            | Some marker -> Ok marker
-                            | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize a review inspection")))
+                            authorizedMarker opts.LeaseMinutes markers (fun () ->
+                                Reads.prAlive ctx.Transport target.Owner target.Repo target.Number)
+                            |> Result.bind (function
+                                | Some marker -> Ok marker
+                                | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize a review inspection"))))
 
                     match liveClaim with
                     | Error error -> fail error
@@ -4023,6 +4267,38 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | Some n -> printfn "pending board writes: %d — replay them with `flush` (#862)" n
                 | None -> printfn "pending board writes: UNKNOWN — the deferral queue could not be read"
 
+                // WHO SPENT IT (#2418). The meter above says how much is left; it has never said what took
+                // it. When the budget died twice inside one board run, the drain could not be attributed —
+                // not from the meter, and not from reading the engine either, because the one function that
+                // parsed `rateLimit { cost }` had no caller. This is that answer, and it is a MEASUREMENT:
+                // every row is GitHub's own `cost`, summed per command, never our estimate of one.
+                let window = TimeSpan.FromHours 1.0
+
+                match Budget.recentSpend window with
+                | [] ->
+                    printfn
+                        "GraphQL spend (last hour): no attribution recorded — no invocation has billed a GraphQL call since the ledger was last written. This is 'nothing measured', NOT 'nothing spent': a fleet whose engine predates #2418 records nothing at all."
+                | records ->
+                    let byCommand = Budget.spendByCommand records
+                    let total = records |> List.sumBy (fun r -> r.Points)
+                    let calls = records |> List.sumBy (fun r -> r.Calls)
+
+                    printfn
+                        "GraphQL spend (last hour): %d point(s) over %d billed call(s), %d invocation(s) — dearest first:"
+                        total
+                        calls
+                        (List.length records)
+
+                    for command, points, callCount in byCommand |> List.truncate 10 do
+                        printfn "  %-16s %5d pt  %4d call(s)" command points callCount
+
+                    // MUTATIONS ARE MISSING FROM THIS TOTAL, and saying so is the point. `rateLimit` is a
+                    // field of the query root, so a mutation cannot carry it: every `set-field` write is
+                    // billed the 1-point floor by GitHub and reported here as nothing. A total presented as
+                    // complete would be a confident number with a known hole in it.
+                    printfn
+                        "  (queries only — a mutation carries no `rateLimit`, so board WRITES are billed the 1-pt floor and are not counted above)"
+
             if meter.Remaining < Budget.WarnBelow then
                 eprint $"fsgg-coord-engine: WARNING — only %d{meter.Remaining} GraphQL points remain (< %d{Budget.WarnBelow}); the fleet shares one 5,000/hr budget (#418)."
 
@@ -4116,7 +4392,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Error e -> Error e
             | Ok rows ->
                 rows
-                |> List.map (fun r -> r.Ref, Options.resolveRepo r.PathRepo)
+                // `RepoScope.orFallback` (#2398): a `cross-repo` Repo Scope names no repository, so it
+                // falls back to the row's own hosting repository — the doc above's "retain their own
+                // repository as the only truthful scope," now the same fallback `enrich`/`Lanes.partition`
+                // apply, rather than a raw resolve that could hand back the sentinel itself.
+                |> List.map (fun r -> r.Ref, FS.GG.Coord.RepoScope.orFallback r.Ref.Repo (Options.resolveRepo r.PathRepo))
                 |> Map.ofList
                 |> Ok
 
@@ -4684,6 +4964,67 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// and `--sha` names the head the caller MEANS (the bot force-pushes, and `pulls/{n}` lags). Each
     /// unsatisfied assertion is `pending`, so `--wait` rides out the transient case and refuses the
     /// permanent one; neither can produce a `green`.
+    ///
+    /// `--require fsgg:review-accepted:v1` (.github#2360) is a THIRD assertion in that same family, and
+    /// deliberately shaped as one: `--require` already means "an assertion the CALLER added, that the base
+    /// branch policy has no opinion about, and that nothing else would ever look at" (`Reads.Asserted`) —
+    /// which is exactly what the host's independent-review acceptance marker is to `landable`. Reusing the
+    /// channel rather than adding a new flag means no new option grammar, no new exit-code arm, and the
+    /// SAME reporting path (`asserted`, `state = PrPending` below) a caller and a poll loop already handle.
+    ///
+    /// WHY THIS IS OPT-IN, NOT THE DEFAULT. `landable` has exactly one other unattended caller today — the
+    /// skill-registry autofix bot (`skill-registry-autofix.yml`) — and it merges its OWN mechanical PRs
+    /// under `--require registry-coherence --sha <head>` with NO independent critic in the loop at all, by
+    /// design (that gate is a coherence check, not the worker/critic protocol). Making review-acceptance a
+    /// DEFAULT part of `landable`'s verdict would silently wedge that bot forever, because no PR of its
+    /// ever carries the marker. The token is therefore something a caller must NAME, exactly like
+    /// `registry-coherence` is — `pnext-item`'s merge-time recipe is the one meant to pass it.
+    ///
+    /// THE TOKEN IS NAMESPACED (`fsgg:review-accepted:v1`, the marker's own id) rather than a bare word
+    /// like `review-accepted`, because AC4 (.github#2360) is exactly `.github#2354`: a required check
+    /// satisfied by an UNRELATED job of the same name. A literal check run or workflow job cannot collide
+    /// with this token without also being spelled like an `fsgg:` protocol marker, which nothing in this
+    /// org's CI vocabulary is.
+    ///
+    /// FAIL CLOSED. An unreadable head, an unreadable comment thread, an absent or malformed review chain,
+    /// or a marker bound to a DIFFERENT sha than the one just read are all `Unmet` — AC2 requires the last
+    /// one explicitly: a stale-sha marker is treated as ABSENT, never as satisfaction, because a reader who
+    /// sees a marker at all is the reader most likely to stop looking.
+    let private reviewAcceptedRequireToken = "fsgg:review-accepted:v1"
+
+    /// The one extra assertion `landable --require fsgg:review-accepted:v1` folds into the rollup — see the
+    /// doc comment above `landable` for why this exists and why it is opt-in. Costs two REST reads
+    /// (the live head sha, the comment thread), paid ONLY when the caller asked for it AND every other
+    /// signal already reads green — never on the common "still waiting on CI" path.
+    let private reviewAcceptedUnmet (ctx: Context) (repoName: string) (pr: int) : Reads.Unmet list =
+        match Reads.prHeadSha ctx.Transport ctx.Owner repoName pr with
+        | Error _ ->
+            [ Reads.Asserted
+                  $"PR #%d{pr}'s current head SHA could not be read, so the host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) cannot be bound to it" ]
+        | Ok liveHead ->
+            match Reads.commentsWithIdentity ctx.Transport ctx.Owner repoName pr with
+            | Error _ ->
+                [ Reads.Asserted
+                      $"PR #%d{pr}'s comments could not be read, so the host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) cannot be found" ]
+            | Ok comments ->
+                let reviewComments =
+                    comments
+                    |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+
+                match Driver.parseReviewComments reviewComments with
+                | Error _ ->
+                    [ Reads.Asserted
+                          $"PR #%d{pr} carries no valid host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) — the review chain is absent, incomplete, or malformed" ]
+                | Ok chain ->
+                    match chain.HeadSha with
+                    | Some acceptedHead when acceptedHead = liveHead -> []
+                    | Some staleHead ->
+                        [ Reads.Asserted
+                              $"PR #%d{pr}'s host review-acceptance marker is bound to head `%s{staleHead}`, not the current head `%s{liveHead}` — a stale-sha marker is treated as ABSENT, never as satisfaction" ]
+                    | None ->
+                        [ Reads.Asserted
+                              $"PR #%d{pr}'s host review-acceptance marker did not resolve to a bound head SHA" ]
+
     let landable (ctx: Context) (opts: Options) : int =
         match opts.Repo with
         | None ->
@@ -4707,7 +5048,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // names the previous commit are both `pending` — "the evidence is not here yet" — so
                     // `--wait` rides out the transient case (registration, a superseded suite's replacement,
                     // GitHub catching up with a force-push) and refuses when the tries run out.
-                    let required = opts.Require
+                    //
+                    // `fsgg:review-accepted:v1` (.github#2360) is stripped out of `required` here: it is
+                    // NOT a check-run/workflow-run name for `Reads.prLandableRequire` to look for (it would
+                    // never report and this PR would poll forever for the wrong reason) — it is handled
+                    // below, after CI has settled, by `reviewAcceptedUnmet`.
+                    let requireReviewAccepted = opts.Require |> List.contains reviewAcceptedRequireToken
+                    let required = opts.Require |> List.filter (fun r -> r <> reviewAcceptedRequireToken)
                     let expected = opts.Sha
 
                     let read () =
@@ -4743,6 +5090,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     poll (i + 1) n
 
                             poll 1 -1
+
+                    // The review-acceptance assertion (.github#2360): checked ONCE, after CI has settled,
+                    // and ONLY when it settled green — an unmet CI check is already the reason for a
+                    // non-green verdict, and there is no reason to spend the two extra reads (head sha,
+                    // comment thread) on a PR that is not otherwise ready to land. An unmet assertion can
+                    // only ever REFUSE (same rule as `--require`/`--sha` above): it downgrades GREEN to
+                    // PENDING, never anything to RED, so it can never be confused with a failing check.
+                    let reviewUnmet =
+                        if requireReviewAccepted && state = PrGreen then
+                            reviewAcceptedUnmet ctx repoName pr
+                        else
+                            []
+
+                    let missing = missing @ reviewUnmet
+
+                    let state =
+                        if state = PrGreen && not (List.isEmpty reviewUnmet) then PrPending else state
 
                     printfn "%s" (Landable.name state)
 
@@ -7047,7 +7411,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     ///
     /// An explicit `--repo` is ALREADY resolved by the time it reaches this module, so it needs no call here.
     /// The remaining ones are idempotent and harmless: they resolve a name that may already be resolved.
-    let private resolveRepo (raw: string) : string = Options.resolveRepo raw
+    ///
+    /// ECHOES, same as `Options.resolveRepoName` (#2398): every caller of this alias resolves a git
+    /// remote, a positional repo argument, or an already-resolved name — none of them a board `Repo
+    /// Scope` read, so none can genuinely be the `cross-repo` sentinel in practice. Stated by an
+    /// exhaustive two-arm match rather than assumed, so the byte-identical prior behaviour ("a literal
+    /// name passes through") is preserved for whichever arm actually arrives.
+    let private resolveRepo (raw: string) : string =
+        match Options.resolveRepo raw with
+        | FS.GG.Coord.RepoScope.Repository name -> name
+        | FS.GG.Coord.RepoScope.NonRepository token -> token
 
     // ---- #480/#430: the repo a command scopes to — the checkout you are STANDING IN ------------------
     // Defined ABOVE verify-paths (and the worker-command `scopedRepo` below) because BOTH read the same
@@ -8780,7 +9153,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                           // reserves a receiver worktree. Consolidation is evidence about
                                           // overlapping files, so it partitions on `Repo Scope`, not the
                                           // repository that happens to host the coordination issue (#1732).
-                                          LintApplication.ConsolidationRow.Repo = Options.resolveRepo r.PathRepo
+                                          //
+                                          // `RepoScope.orFallback` (#2398): a `cross-repo` Repo Scope
+                                          // names no repository, so consolidation falls back to the
+                                          // issue's own hosting repository rather than grouping on the
+                                          // sentinel itself — the same policy `enrich`/`Lanes.partition`
+                                          // apply.
+                                          LintApplication.ConsolidationRow.Repo =
+                                            FS.GG.Coord.RepoScope.orFallback r.Ref.Repo (Options.resolveRepo r.PathRepo)
                                           LintApplication.ConsolidationRow.TouchSet = TouchSet.parse body }
                                         :: touchSets
                                     else
@@ -9126,7 +9506,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->
-            let revision = deliveryRouteRevision body
             let receipt =
                 comments
                 |> List.rev
@@ -9134,8 +9513,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
-            match DeliveryRoute.decide target.Canonical (Some revision) receipt with
-            | DeliveryRoute.Current valid -> Ok(valid, revision)
+            // The reported `subjectRevision` is the RECEIPT'S OWN stored value, not a freshly recomputed
+            // one: `Current` means it already equals whichever candidate (`deliveryRouteRevision` or, for
+            // a pre-#2392 receipt, `legacyDeliveryRouteRevision`) `decideDeliveryRoute` matched it
+            // against, so printing it back is exact either way and needs no second branch here.
+            match decideDeliveryRoute target.Canonical body receipt with
+            | DeliveryRoute.Current valid -> Ok(valid, valid.SubjectRevision)
             | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
             | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
 

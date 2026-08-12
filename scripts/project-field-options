@@ -307,15 +307,96 @@ def roster_ids(path: Path) -> list[str]:
     return [repo_id for repo_id, _ in roster_pairs(path)]
 
 
-def compare_resolver(roster: Path, resolver: Path) -> None:
+def _strip_fsharp_line_comments(text: str) -> str:
+    """Blank out `//` line comments, quote-aware, without shifting any line or column.
+
+    `.github#2411` round 1 (critic `kite-2ddb`, F1): a trailing `// was "FS.GG.OldSDD" before the
+    rename` comment on an otherwise-untouched arm put a SECOND quoted string on the line, and
+    `resolver_arms`'s "last quoted literal" heuristic picked the decoy out of the comment instead of
+    the real value before it — a false `wrong=['sdd']` refusal on a change that never touched the
+    mapping. An ordinary rename comment is a far more mundane trigger than either residual risk this
+    module already disclosed (active patterns, a hoisted helper), so it is fixed rather than noted.
+
+    Scans each line left to right tracking whether a `"` toggles it into/out of a string literal (an
+    escaped `\\"` does not toggle), and truncates at the first `//` seen OUTSIDE a string — the F#
+    rule for where a line comment begins. `//` inside a string (a URL, say) is left alone. Newlines
+    are preserved exactly so callers that slice by byte offset (`resolver_arms`'s arm-boundary maths)
+    stay valid against the stripped text.
+    """
+    out: list[str] = []
+    for line in text.splitlines(keepends=True):
+        body = line[:-1] if line.endswith("\n") else line
+        in_string = False
+        cut = len(body)
+        i = 0
+        while i < len(body) - 1:
+            ch = body[i]
+            if ch == '"' and (i == 0 or body[i - 1] != "\\"):
+                in_string = not in_string
+            elif not in_string and ch == "/" and body[i + 1] == "/":
+                cut = i
+                break
+            i += 1
+        out.append(body[:cut] + line[len(body) :])
+    return "".join(out)
+
+
+def resolver_arms(resolver: Path) -> dict[str, str]:
+    """Parse RepoScope.resolve's short-id -> repo-name match arms from F# source text.
+
+    `.github#2411`: the previous implementation captured `resolve`'s ENTIRE body with one
+    `re.search(..., re.DOTALL)` anchored to end-of-file, then read every arm out of that block in
+    the exact line layout the author happened to write. That coupled a roster/resolver AGREEMENT
+    check to the incidental shape of one match expression — during `.github#2398`'s own development
+    (PR #2404, commit `e4a0a650`), wrapping every arm's right-hand side in `Repository` (a change to
+    what the arm RETURNS, not to the mapping) made the whole-body regex miss every arm and report a
+    total false drift (CI run .../actions/runs/31521527951, `missing=[everything]`).
+    #2398 patched the symptom (made the wrapper optional); this fixes the cause.
+
+    This scans arm-by-arm instead of parsing the function as one block: each `| "<id>" -> ...` arm
+    is located independently, so ARM ORDER never matters, and the mapped value is read as the LAST
+    quoted string literal in that arm's right-hand side, with line comments stripped first
+    (`_strip_fsharp_line_comments`) so a comment's own quoted text can never outrank the real one —
+    the position the literal lands in whether it is bare (`"X"`), `Repository`-wrapped
+    (`Repository "X"`), or wrapped again by an otherwise inert helper (`noop (Repository "X")`),
+    because a no-op wrapper introduces no quoted text of its own. `NonRepository` arms (`cross-repo`)
+    are still never captured: their payload is a bound variable (`raw`/`token`), never a quoted
+    literal, so no reformat can make one masquerade as a roster entry.
+
+    This is NOT immune to every conceivable reformat — an active-pattern rewrite or hoisting the
+    match into a differently-named helper would still need a compiled check to survive, per
+    `.github#2411`'s "Impact" note — but it does cover the mutations that item's acceptance criteria
+    requires: RHS-wrapping, arm reordering, and (round 1) a comment carrying a decoy literal.
+    """
     try:
         text = resolver.read_text()
     except OSError as exc:
         raise Refused(f"cannot read embedded repo resolver {resolver}: {exc}") from exc
-    match = re.search(r"let resolve \(raw: string\).*?=\s*(.*?)\n\s*$", text, re.DOTALL)
-    if not match:
+    text = _strip_fsharp_line_comments(text)
+    header = re.search(r"^( *)let resolve \(raw: string\)[^\n]*=[ \t]*\n", text, re.MULTILINE)
+    if not header:
         raise Refused("could not isolate RepoScope.resolve; refusing a partial resolver check")
-    actual = dict(re.findall(r'^\s*\|\s*"([^"]+)"\s*->\s*"([^"]+)"', match.group(1), re.MULTILINE))
+    indent = header.group(1)
+    body_start = header.end()
+    # Bound the body to `resolve` alone: the next module-level member at the SAME indentation (e.g.
+    # `orFallback`), or end of file if `resolve` is the last member. Anchoring to the next sibling
+    # rather than end-of-file means a later member can never leak into this scan.
+    next_member = re.search(rf"\n{re.escape(indent)}let \w", text[body_start:])
+    body = text[body_start : body_start + next_member.start()] if next_member else text[body_start:]
+    arm_starts = list(re.finditer(r'^\s*\|\s*"([^"]+)"\s*->', body, re.MULTILINE))
+    if not arm_starts:
+        raise Refused("could not isolate RepoScope.resolve; refusing a partial resolver check")
+    arms: dict[str, str] = {}
+    for i, arm in enumerate(arm_starts):
+        rhs_end = arm_starts[i + 1].start() if i + 1 < len(arm_starts) else len(body)
+        rhs_values = re.findall(r'"([^"]+)"', body[arm.end() : rhs_end])
+        if rhs_values:
+            arms[arm.group(1)] = rhs_values[-1]
+    return arms
+
+
+def compare_resolver(roster: Path, resolver: Path) -> None:
+    actual = resolver_arms(resolver)
     expected = {
         repo_id: full.split("/", 1)[1]
         for repo_id, full in roster_pairs(roster)

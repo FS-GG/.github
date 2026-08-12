@@ -478,7 +478,22 @@
          version picks up a changed independent-review-and-repair PROTOCOL, not a reworded description
          of the existing one — this is new, receiver-visible worker behaviour. Packed member set and
          destinations unchanged. -->
-    <Version>0.49.0</Version>
+    <!-- 0.49.0 is now the LAST independent literal this project declares (.github#2402). FS.GG.Kit,
+         FS.GG.Drivers and coord-engine (FS.GG.Coord.Cli) are a coherent set: one MSBuild property,
+         $(FsggCoherentSetVersion) (Directory.Build.props), carries all three <Version> elements from
+         here on, so a bump to one moves all three and the three cannot diverge from each other again.
+         The set starts at 0.50.0, one MINOR above 0.49.0 (the highest of the three prior independent
+         versions, so adopting the shared scalar does not downgrade this package) — not 0.49.0 itself,
+         because 0.49.0 was ALREADY the newest FS.GG.Kit published on nuget.org, and any PR editing
+         this file must declare a version strictly greater than what is already published
+         (check-kit-published-coherence.py's PR arm). Future bump history for THIS package's own
+         receiver-visible content still belongs in a comment here, same as always — only the literal
+         moved, to Directory.Build.props. This item (.github#2216) changes packed pnext-item content
+         (the delivery-obligation rebinding rule) and the packed Client.fs/DeliveryApplication.fs
+         diagnostic, which is receiver-visible; under the coherent-set scheme (#2402) that bump belongs
+         to $(FsggCoherentSetVersion) in Directory.Build.props, not a literal here, and is scheduled by
+         `kit-auto-publish` rather than authored by this PR. -->
+    <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

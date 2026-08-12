@@ -134,6 +134,127 @@ authored `Version` cells of the Versioned contracts table (#748).*
 
 <!-- END GENERATED: fsgg-contract-versions -->
 
+## Coherent-set versioning: FS.GG.Kit, FS.GG.Drivers, coord-engine (.github#2402)
+
+`FS.GG.Kit`, `FS.GG.Drivers` and `coord-engine` (`FS.GG.Coord.Cli`) are **not** individually tracked
+contracts above — neither `FS.GG.Kit` nor `FS.GG.Drivers` carries a `registry/dependencies.yml` row
+at all (only `coord-engine` does, at `coord-engine` above), because their consumers are the receiver
+roster (`registry/repos.yml`), not this repo's cross-repo contract graph. They are nonetheless three
+packages `.github` publishes that frequently ship the same change, and until 2026-08-11 each carried
+its own independently hand-advanced `<Version>` literal — a shape that produced exactly the drift
+this migration removes: `FS.GG.Kit` bumped to `0.49.0` and `FS.GG.Drivers` to `0.18.0` for the
+**same** item (.github#2135), twenty minutes apart, while `coord-engine` stayed at `0.23.0`
+(commits `f26da6ed` / `d48e1ec2`), with no gate comparing any two of the three to each other.
+
+**The migration.** One MSBuild property, `$(FsggCoherentSetVersion)` (declared once in
+`Directory.Build.props`), now carries all three packages' `<Version>`. A bump to any one of them
+moves the property, which moves all three together — the three cannot diverge from each other again
+by construction, and `scripts/check-coherent-set-version.py` (`coherent-set-version.yml`) gates both
+that no project reintroduces an independent literal and that all three actually evaluate equal.
+
+**Starting version: `0.50.0`.** One MINOR above `max(FS.GG.Kit 0.49.0, FS.GG.Drivers 0.18.0,
+FS.GG.Coord.Cli 0.23.0)` = `0.49.0` — the highest of the three prior independent versions at the
+time the set was declared, so adopting the shared scalar does not make any member appear to
+downgrade. It is deliberately not `0.49.0` itself: that was already the newest FS.GG.Kit published
+on nuget.org, and `check-kit-published-coherence.py`'s PR arm requires any PR that edits
+`FS.GG.Kit.csproj` — which adopting this property necessarily does — to declare a version strictly
+greater than what is already published; `0.50.0` satisfies both constraints. This is a
+**source-tree-only** migration: no release workflow ran as part of it, so as of this note no package
+has actually been *published* at `0.50.0` — `coord-engine` above still correctly reads `0.23.0` on
+both axes until a real coherent-set release is cut (tracked as FS-GG/.github#2409). Consequently
+this repo's own freshness gates correctly report a release owed for `coord-engine` from the moment
+this migration merges (the version-scalar bump is itself an unreleased commit) — that is the accurate
+signal, not a regression.
+
+**Reconciliation with `.github#2396`.** `.github#2396` (replacing the engine-pin gate's strict
+equality with a recorded permitted lag) governs drift between a **receiver's own** `fs.gg.coord.cli`
+pin — in a repository outside this coherent set (FS.GG.SDD, Rendering, Governance, Templates, Game,
+Audio, Net) — and the registry's declared `coord-engine` version. This migration governs drift
+**inside** the set, between FS.GG.Kit, FS.GG.Drivers and coord-engine's own declared `<Version>`
+scalars. The two are disjoint subjects: no receiver pin is a member of this coherent set, and no
+member of this coherent set is a receiver of itself. Neither's fix touches the other's `Paths:`.
+
+**Deferred to a follow-up, deliberately.** Consolidating `release-kit.yml`, `release-drivers.yml`
+and `release-coord-engine.yml` into one workflow that actually cuts and dual-feed-publishes all three
+packages together, and the real receiver-restore verification that would then become possible, are
+**not** part of this migration. Those three workflows collectively implement the sole distribution
+path the entire fleet depends on to run `fsgg-coord` at all; redesigning that mechanism, and
+performing a real multi-package publish, is a maintainer sequencing decision this migration
+deliberately leaves to a follow-up (FS-GG/.github#2409) rather than making unilaterally under time
+pressure. Direct
+inspection of every coherence gate this migration's originating issue named as evidence of
+gate-per-pair sprawl (`check-source-coherence.py`, `check-feed-coherence.py`, `check-pin-coherence.py`,
+`check-engine-pin.py`, `check-kit-published-coherence.py`, `check-lock-ranges.py`, and
+`contract-coherence.yml`'s registry-schema validation) found that **none of their subjects is drift
+between FS.GG.Kit, FS.GG.Drivers and coord-engine's own version scalars** — each is a per-package
+registry/source/feed/pin lattice entry (replicated across *different* packages, e.g. `fsgg-contracts`
+for source-coherence), never a cross-package assertion between these three. No gate is deleted by
+this migration as a result; each is justified to keep, and that evaluation is this migration's answer
+to "which gates collapse" rather than an invented deletion.
+
+### The follow-up (FS-GG/.github#2409): one shared release trigger, real cut pending
+
+`.github#2409` picks up the three deferrals above. **Mechanism, not a rename.**
+`release-kit.yml`, `release-drivers.yml` and `release-coord-engine.yml` keep their exact filenames,
+tag namespaces (`kit/v*`, `drivers/v*`, `coord-engine/v*`) and `workflow_dispatch` shape — an earlier
+draft of this change consolidated them into one new workflow file/tag namespace, and was abandoned
+after re-reading each source workflow's own header in full: nuget.org's Trusted Publishing (OIDC)
+policy for each package is bound to the exact tuple (owner, repo, **workflow filename**, package id)
+and "renaming either invalidates the token exchange" (`.github#624`); a second draft that kept the
+filenames but still renamed the tag namespace was abandoned for the same reason one layer deeper — the
+receiver-side `kit-bump-shape` reporter resolves its bump-shape rule from the literal `kit/v<pin>` tag,
+a contract living in a receiver repository this item's `Paths:` cannot reach or verify. Both risks
+would have silently broken *this exact package's* nuget.org publish path — including `coord-engine`,
+the package the entire fleet restores `fsgg-coord` from — the next time a real release ran, invisibly
+(`ADR-0039`'s own thesis: "not an error, just an empty version list").
+
+**What actually changed:** each of the three workflows' "Resolve version + publish decision" step
+gained one new precondition, checked before every publish (tag-push and manual `workflow_dispatch`
+alike): `git ls-remote` the OTHER TWO packages' own tags at the same evaluated version, and refuse
+— fail closed, naming the missing tag and the remedy — unless both already exist and resolve to the
+SAME commit as the version being packed. A maintainer who tags and pushes `kit/v0.50.0` alone can no
+longer complete a publish; `drivers/v0.50.0` and `coord-engine/v0.50.0` must also exist at that commit
+first. Pushing all three tags in one `git push origin kit/vX drivers/vX coord-engine/vX` is the "one
+shared trigger" this follow-up's own acceptance criteria ask for, expressed as one push event over the
+three existing tag namespaces rather than a new one — zero bytes of the nuget.org OIDC binding or the
+`kit-bump-shape` resolution move. Gate-inversion evidence (a missing sibling tag, and a sibling tag on
+the wrong commit, both correctly refused; matching tags, lightweight and annotated, both correctly
+accepted) is attached to the implementing PR.
+
+**Residual gap, named rather than silently closed:** a maintainer can still `workflow_dispatch` exactly
+one of the three files with `publish: true`, independent of the other two — the sibling-tag
+precondition applies to that path too and will refuse it exactly as it refuses an incomplete tag push,
+so the residual gap is smaller than it was (an *attempted* single-package manual publish now fails
+rather than succeeding), not open in the way the tag path was before this change.
+
+**Gate re-confirmation against the new design (this item's own AC3):** re-running the evaluation above
+against the sibling-tag precondition (rather than the three untouched independent workflows it was
+first written against) changes no conclusion — the precondition reads only `git ls-remote` state over
+tag refs and each package's own evaluated `<Version>`; it does not touch any registry row, feed, pin,
+or lock range the seven gates above assert over. `scripts/check-coherent-set-version.py` (this
+migration's own gate, source-time only) is likewise unaffected — it runs pre-merge on every PR, not at
+release time. **Zero of the eight now-relevant gates are made redundant or deletable.**
+
+**Rollout fit against `.github#2396`'s permitted lag:** as of this note, `.github#2396` (the receiver
+engine-pin permitted-lag gate) is **not implemented** — `scripts/repos-audit.sh` carries no lag-bound
+logic, and that item is filed `Blocked on: human/decision`. Independent of whatever bound is
+eventually chosen: the coherent-set's `0.50.0` against the live registry's `coord-engine 0.23.0` is a
+**27-minor jump**, and against `FS.GG.Drivers`' pre-migration independent version (`0.18.0`) a
+**32-minor jump** — both far beyond any bound `.github#2396`'s own text contemplates (it frames "one
+minor" as the starting candidate and discusses whether a *2*-minor receiver outlier should instead be
+bumped). **No plausible permitted-lag bound covers this release.** This item's rollout therefore needs
+a coordinated fan-out in the shape `.github#2249`'s own AC1/AC2 describe — a deliberate bump PR to
+every one of the seven receivers, not a wait for Renovate/dashboard-tick alone — regardless of what
+`.github#2396` eventually decides. This is stated explicitly per this item's own acceptance criteria
+rather than left implicit or silently assumed unnecessary.
+
+**The real cut itself remains a post-merge obligation of `.github#2409`, not yet executed as of this
+note:** pushing `kit/v0.50.0`, `drivers/v0.50.0` and `coord-engine/v0.50.0` together, observing all
+three feeds publish, flipping `registry/dependencies.yml`'s `coord-engine` row to `0.50.0` with live
+feed/restore evidence (not inferred from a green workflow run), and the coordinated receiver fan-out
+above. This entry will be extended with that evidence once it executes; until then, `coord-engine`'s
+registry row correctly continues to read `0.23.0`.
+
 ## Skill-registry row counts
 
 The authoritative count of the `skill-registry` catalog ([`registry/skills.yml`](../../registry/skills.yml)), broken down by `scope` and `owner` — the machine-owned half of what the `skill-registry` contract row and the `skill-registry-published` coherence state describe in prose. Formerly hand-maintained and drift-prone ([.github#486](https://github.com/FS-GG/.github/issues/486) reconciled it once by hand; [.github#1206](https://github.com/FS-GG/.github/issues/1206) turned it into this projection). Prose that states a count cites this block rather than restating it.

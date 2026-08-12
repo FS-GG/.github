@@ -1,0 +1,56 @@
+# Prove the board-archive guards can say NO (.github#2420).
+#
+# `scripts/coord-board-archive.py` ARCHIVES ROWS OFF THE SHARED BOARD, so the property under test is
+# not "does it archive" — it is "does it refuse everything it must refuse". `tests/coord-board-archive/run.sh`
+# drives the planner's PURE `plan()` directly (no board, no token, no network) and every guard carries a
+# negative case, so deleting a guard turns a named leg red rather than leaving the suite quietly green:
+#
+#   * a non-`Done` row, and a `Done` row over an OPEN issue (the drift `lint` reports — archiving it
+#     would hide the finding rather than fix it);
+#   * a row inside the retention window, AND that `--retention-days` genuinely moves that boundary
+#     rather than being decorative;
+#   * a row named as a blocker by a LIVE row, both `owner/repo#123` and bare `#123` — off-board that
+#     edge renders `BlockerUnknown` (`Protocol.fs:406`), turning "closed, so clear" into "cannot tell";
+#   * the converse, that a DONE row's blocker edge is NOT protective, or the whole historical graph
+#     would pin itself on-board forever;
+#   * any row whose status/state/number/repo/closedAt could not be read — "I could not look" is not
+#     "I looked and it is terminal" (`.github#266`).
+#
+# No schedule: the subject is entirely git-tracked files in this repo, so nothing external can stale it
+# between pushes — the same reasoning coherent-set-version.yml gives for the same shape.
+#
+# The `paths:` lists on pull_request and push are IDENTICAL and must stay so — check-paths-coherence.py
+# (.github#899) fails this workflow if they drift.
+name: coord-board-archive-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/coord-board-archive.py"
+      - "tests/coord-board-archive/**"
+      - ".github/workflows/coord-board-archive.yml"
+      - ".github/workflows/coord-board-archive-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/coord-board-archive.py"
+      - "tests/coord-board-archive/**"
+      - ".github/workflows/coord-board-archive.yml"
+      - ".github/workflows/coord-board-archive-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coord-board-archive-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prove every archive guard can say NO
+        run: bash tests/coord-board-archive/run.sh

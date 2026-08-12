@@ -113,6 +113,94 @@ def validate_links(root: Path, names: set[str], errors: list[str]) -> None:
                     fail(errors, f"{source.relative_to(root)}: broken relative link {raw!r}")
 
 
+def kit_skill_ids(root: Path, errors: list[str]) -> set[str]:
+    """Every `kind: skill` id in `registry/repos.yml`'s `kit:` block — the directories a
+    coordination-kit receiver actually materializes (repos.yml's own `kit:` comment;
+    `scripts/coordination-sync`). Read, never restated: a new kit skill row is covered the day it
+    lands, with no second list to keep in step (mirrors `check-kit-published-coherence.py`'s
+    `kit_sources`, which answers the sibling "every kit source" question this narrows to skills).
+    """
+    path = root / "registry/repos.yml"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        fail(errors, f"cannot read {path}: {exc}")
+        return set()
+    try:
+        roster = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        fail(errors, f"{path} is not parsable as YAML: {exc}")
+        return set()
+    if not isinstance(roster, dict):
+        fail(errors, f"{path} is not a YAML mapping")
+        return set()
+    kit = roster.get("kit")
+    if not isinstance(kit, list) or not kit:
+        fail(errors, f"{path}: `kit:` is missing or not a non-empty list")
+        return set()
+    ids: set[str] = set()
+    for index, row in enumerate(kit):
+        if not isinstance(row, dict):
+            fail(errors, f"{path}: kit[{index}] is not a mapping")
+            continue
+        if row.get("kind") != "skill":
+            continue
+        source = row.get("source")
+        if not isinstance(source, str) or not source.strip():
+            fail(errors, f"{path}: kit[{index}] is kind: skill with no usable source")
+            continue
+        ids.add(Path(source.strip()).name)
+    return ids
+
+
+def validate_receiver_safe_links(root: Path, errors: list[str]) -> None:
+    """A coordination-kit receiver materializes ONLY the `kit:` skill directories
+    `registry/repos.yml` declares (repos.yml's own `kit:` comment; `scripts/coordination-sync`) —
+    never `docs/`, never a non-kit skill. `validate_links` above only proves a relative link
+    resolves somewhere in THIS checkout, which is exactly the gap .github#2343 fell through: a link
+    climbing out to `docs/coordination/...` or `docs/adr/...` resolves fine here and dangles in
+    every receiver, because `docs/` is never part of the kit transport. This proves the STRONGER,
+    receiver-true fact instead: every relative link inside a kit skill's markdown resolves inside
+    the union of kit-delivered skill directories under the SAME runtime root the link is read from
+    (a link to a sibling kit skill is fine — every kit skill ships together — a link to anything
+    else is not).
+    """
+    ids = kit_skill_ids(root, errors)
+    if not ids:
+        return
+    for runtime in ROOTS:
+        skill_root = root / runtime
+        allowed_roots = [(skill_root / kit_id).resolve() for kit_id in sorted(ids)]
+        for kit_id in sorted(ids):
+            directory = skill_root / kit_id
+            if not directory.is_dir():
+                continue  # validate_openai_metadata/the manifest gate already report absence
+            for source in directory.rglob("*.md"):
+                text = source.read_text(encoding="utf-8")
+                for raw in LINK.findall(text):
+                    target = raw.split("#", 1)[0].strip()
+                    if (
+                        not target
+                        or "…" in target
+                        or "://" in target
+                        or target.startswith(("mailto:", "/"))
+                    ):
+                        continue
+                    resolved = (source.parent / target).resolve()
+                    if not any(
+                        resolved == allowed or allowed in resolved.parents
+                        for allowed in allowed_roots
+                    ):
+                        fail(
+                            errors,
+                            f"{source.relative_to(root)}: receiver-unsafe relative link {raw!r} "
+                            f"resolves outside every kit-delivered {runtime}/<id> directory — a "
+                            "coordination-kit receiver never materializes that target, so this "
+                            "link would dangle there (rewrite to an absolute URL, or point at a "
+                            "sibling kit skill)",
+                        )
+
+
 def code_segments(text: str):
     fenced = False
     continued = ""
@@ -501,6 +589,7 @@ def main() -> int:
     contract_path = Path(args.contract).resolve()
     validate_openai_metadata(root, names, errors)
     validate_links(root, names, errors)
+    validate_receiver_safe_links(root, errors)
     validate_invocations(root, contract_path, errors)
     validate_semantics(root, contract_path, errors)
     validate_forward_corpus(root, names, errors)

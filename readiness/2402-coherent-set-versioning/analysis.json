@@ -1,0 +1,602 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2402-coherent-set-versioning",
+  "stage": "analyze",
+  "status": "implementationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2402-coherent-set-versioning/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "f619684d6fb6b8967b4b636b7c3cd141bd27737fc9fde333ddd716195b669422"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2402-coherent-set-versioning/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ea049660f72de8c06d6fe8e7de79d0d6bbbe6ff24ddfcf92ab71c311e9895e49"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2402-coherent-set-versioning/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "d903b773cdaff0d896e80242f86da11a335b0232a1dc5ec31ceed05c6962580e"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2402-coherent-set-versioning/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "67614d1a9979dc5c5b57c1133cb7c9c9e6166ded766fea7974cee505d47240be"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2402-coherent-set-versioning/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "543b2ad60b3e9ddb142521242536e6e7728b81f2308fc286542c219bff991c2b"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "sourceRelationships": [
+    {
+      "id": "AR001",
+      "sourcePath": "work/2402-coherent-set-versioning/checklist.md",
+      "targetPath": "work/2402-coherent-set-versioning/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR002",
+      "sourcePath": "work/2402-coherent-set-versioning/checklist.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR003",
+      "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
+      "targetPath": "work/2402-coherent-set-versioning/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR004",
+      "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "DEC-001",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR005",
+      "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "DEC-002",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR006",
+      "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "DEC-003",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR007",
+      "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "DEC-004",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
+      "targetPath": "work/2402-coherent-set-versioning/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/2402-coherent-set-versioning/clarifications.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PC-001",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PC-002",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "GV-001",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PM-001",
+      "targetId": null,
+      "relationship": "migrationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PD-001",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR015",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PD-005",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "PD-006",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourcePlan",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR021",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "VO-001",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "VO-002",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "VO-003",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/2402-coherent-set-versioning/plan.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "VO-004",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR025",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "AC-001",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR027",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR028",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "FR-001",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR030",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "FR-003",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR031",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR032",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "FR-005",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR033",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/clarifications.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "sourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR034",
+      "sourcePath": "work/2402-coherent-set-versioning/spec.md",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR035",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T005",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR036",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T006",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR037",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T007",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR038",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T008",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR039",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T009",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR040",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T010",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR041",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T011",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR042",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T012",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR043",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T013",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR044",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T014",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR045",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T016",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR046",
+      "sourcePath": "work/2402-coherent-set-versioning/tasks.yml",
+      "targetPath": "work/2402-coherent-set-versioning/tasks.yml",
+      "sourceId": "T018",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "readiness": {
+    "status": "implementationReady",
+    "readyCount": 46,
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0
+  },
+  "findings": [],
+  "generatedViews": [
+    {
+      "path": "readiness/2402-coherent-set-versioning/work-model.json",
+      "kind": "workModel",
+      "currency": "missing",
+      "diagnosticIds": []
+    }
+  ],
+  "optionalBoundaryFacts": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "reason": "Lifecycle sources are current and ready for implementation."
+  }
+}

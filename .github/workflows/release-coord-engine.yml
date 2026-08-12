@@ -108,6 +108,35 @@ jobs:
             *-*) echo "::error::version '$version' is a prerelease. The org's Renovate preset sets ignoreUnstable=true, so receivers would never see it. Publish a stable 0.x version."; exit 1 ;;
           esac
 
+          # SIBLING-TAG PRECONDITION (.github#2409 DEC-004). coord-engine, FS.GG.Kit and FS.GG.Drivers
+          # are a coherent set (.github#2402, $(FsggCoherentSetVersion)): their <Version> values can no
+          # longer diverge, but before this the RELEASE EVENTS still could — nothing stopped a
+          # maintainer tagging `coord-engine/v$version` alone. This closes that: refuse to publish
+          # unless BOTH siblings' own tags, at this SAME version, already resolve to this SAME commit.
+          # Push all three tags in one `git push` (kit/v$version, drivers/v$version,
+          # coord-engine/v$version) — no new tag namespace, no renamed workflow, so nuget.org's
+          # per-filename OIDC policy binding for THIS package — the one the entire fleet restores
+          # `fsgg-coord` from — is untouched. See release-kit.yml's header for the full reasoning
+          # (kept once there).
+          check_sibling_tag() {
+            local sibling_tag="$1"
+            local tagged
+            tagged="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
+                        "refs/tags/$sibling_tag" "refs/tags/$sibling_tag^{}" \
+                      | awk -v p="refs/tags/$sibling_tag^{}" -v b="refs/tags/$sibling_tag" \
+                          '$2==p {peeled=$1} $2==b {plain=$1} END {print (length(peeled) ? peeled : plain)}')"
+            if [ -z "$tagged" ]; then
+              echo "::error::refusing to publish FS.GG.Coord.Cli $version: sibling tag $sibling_tag does not exist yet. coord-engine, FS.GG.Kit and FS.GG.Drivers are a coherent set (.github#2402) and release together (.github#2409) — push all three tags (kit/v$version, drivers/v$version, coord-engine/v$version) at the same commit."
+              exit 1
+            fi
+            if [ "$tagged" != "$GITHUB_SHA" ]; then
+              echo "::error::refusing to publish FS.GG.Coord.Cli $version: sibling tag $sibling_tag points at $tagged, not the commit being packed ($GITHUB_SHA). All three coherent-set tags must name the same commit."
+              exit 1
+            fi
+          }
+          check_sibling_tag "kit/v$version"
+          check_sibling_tag "drivers/v$version"
+
           if [ "$EVENT" = "push" ]; then
             # The tag is a coherence check against the evaluated version, never the source of truth.
             tag_version="${REF#coord-engine/v}"
@@ -177,6 +206,14 @@ jobs:
             exit 1
           fi
           echo "packaged engine: installed and fail-closed on the mandatory delivery-route boundary" >> "$GITHUB_STEP_SUMMARY"
+
+      # RECORDED-BOARD REPLAY, BEFORE EVERY CUT (.github#2401 AC5). Same leg `coord-engine.yml` runs on
+      # every PR, run here against the freshly-built engine one more time before it ships: a cut cannot
+      # proceed on a projection whose recorded verdicts moved unexplained. Runs against the just-built
+      # `dotnet pack` output (Release), not the installed tool-path package, since it drives the raw
+      # executable exactly as tests/coord-engine-e2e/run.sh already does in the PR gate.
+      - name: Recorded-board replay — the engine reproduces facts it was actually asked, not invented ones
+        run: bash tests/coord-engine-replay/run.sh
 
       - name: Push to org GitHub Packages feed
         if: steps.v.outputs.push == 'true'

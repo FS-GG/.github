@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <Compile Include="TypesTests.fs" />
+    <Compile Include="RepoScopeTests.fs" />
     <Compile Include="MarkdownTests.fs" />
     <Compile Include="SemanticDiffTests.fs" />
     <Compile Include="TouchSetTests.fs" />

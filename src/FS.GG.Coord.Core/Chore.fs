@@ -108,8 +108,8 @@ module Chore =
         | Some(RegistryPredicate.Contradicts _)
         | Some(RegistryPredicate.Unknown _) -> false
 
-    /// THE HUMAN-PARK GATE — ADR-0045's sentinel and the item's decision class, respected by the one
-    /// chore that would overwrite them (.github#1644/#1887).
+    /// THE HUMAN-PARK GATE — ADR-0045's sentinel and the item's decision class, respected by every chore
+    /// that would overwrite them (.github#1644/#1887, widened by .github#2394).
     ///
     /// `BLOCKER-CLEARED` clears an item `Blocked → Ready` when its recorded blockers resolve. An item whose
     /// body carries `Class: decision`, `Blocked on: human/decision`, or `Blocked on: human/action` is
@@ -119,6 +119,21 @@ module Chore =
     /// `BLOCKED-NO-REASON` only watches a `Blocked` row so it stops watching the park, and
     /// `STATUS-NOT-BLOCKED` cannot push the row back because its blockers are all resolved. One write, and
     /// the parking record is a body line nothing on the board agrees with any more.
+    ///
+    /// .github#2394 — `LIFECYCLE-PROJECTION-LAG` (`lifecycleProjection`, below) is the SECOND caller, and
+    /// it exists for the identical reason. That projector derives its destination from mechanical facts
+    /// (claim liveness, PR/review state, delivery obligations) that a human park does not clear — a parked
+    /// row typically has none of them, so the projector's own fallthrough is `Ready`, and it was writing
+    /// that `Ready` straight over a coherent `Blocked` park with no gate reading the sentinel at all.
+    ///
+    /// .github#2394 ROUND 1 — `CLAIM-REVIEW-LAG` (`choresFor`'s RESERVED branch) is the THIRD caller, and
+    /// it is the same defect through a second door. It calls the SAME `LifecycleProjection.project` over
+    /// the SAME kind of `Observation` as `lifecycleProjection` below, so a live claim plus an open
+    /// `item/<n>-*` PR on a parked `Blocked` row computed `InReview` and wrote it, unguarded, exactly as
+    /// the unclaimed path once wrote `Ready` unguarded — the critic's reproduction on round 1 of this PR's
+    /// review. All three callers ask this SAME predicate rather than duplicating (or drifting apart on) the
+    /// three-way test, so no two of them can reach opposite answers about one row's park — the exact shape
+    /// #1644/#1887 already argue for.
     ///
     /// `true` — the flip may proceed — only when the item is not a decision, declares no human sentinel,
     /// **and we read the body that would have carried either declaration**.
@@ -134,10 +149,12 @@ module Chore =
     /// source. And the gate is not a no-op: `Scan` reads every OPEN candidate's body unconditionally, so a
     /// failed read reaches here as `Unreadable`, not as a missing field.
     ///
-    /// THIS IS THE ONE RULE THAT READS `TouchSet`, and it reads it as a BODY-READ RECEIPT, never as a
-    /// touch-set: no path token is inspected and no declaration is judged. The match is TOTAL so a sixth
-    /// `TouchSet` case must be classified here rather than defaulting to "the body was read" — which is the
-    /// fail-open direction, and the only direction this function exists to make unwritable.
+    /// THIS IS THE ONE FUNCTION THAT READS `TouchSet` FOR THIS PURPOSE, and it reads it as a BODY-READ
+    /// RECEIPT, never as a touch-set: no path token is inspected and no declaration is judged. The match is
+    /// TOTAL so a sixth `TouchSet` case must be classified here rather than defaulting to "the body was
+    /// read" — which is the fail-open direction, and the only direction this function exists to make
+    /// unwritable. Three chores now CALL this one function (above); none of them reads `TouchSet` a second,
+    /// and possibly disagreeing, way.
     ///
     /// **#620-SAFE, and that is the half the fixture pair pins.** An item with no parking record over a body
     /// we DID read is untouched: `None` + a readable touch-set flips exactly as it did before. That is the
@@ -356,10 +373,22 @@ module Chore =
               // CLAIM-STATUS-LAG. Only a LIVE lease, and only over the columns a claim should have
               // overwritten. `Blocked`/`In review` during a lease are the HOLDER's decisions and they still
               // win (#331) — reconciling those would overwrite somebody's judgement with a default.
+              //
+              // .github#2394 ROUND-1 REPAIR — THAT SENTENCE WAS ASPIRATIONAL UNTIL THIS GUARD EXISTED. A
+              // second door onto the SAME defect: this arm is the RESERVED-branch twin of
+              // `lifecycleProjection` below (both call `LifecycleProjection.project` over an `Observation`,
+              // both can compute `InReview` and hand it straight to a write), and it read `item.Status <>
+              // InReview` as its only hold — never `Blocked`, never `humanHoldAllowsFlip`. A live claim
+              // plus an open `item/<n>-*` PR on a coherently human-parked `Blocked` row therefore still
+              // flipped to `In review` unguarded (the critic's reproduction: `Status=Blocked`,
+              // `HumanBlock=Some AwaitingHumanAction`, `Claim=Some(_, LeaseHeld)`, `ItemPr=Some _`).  Same
+              // predicate, same reason, asked at the SAME two call sites `lifecycleProjection`'s own doc
+              // comment already names — this is that pair's second half, not a new gate.
               | LeaseHeld when
                   item.State = Open
                   && item.ItemPr.IsSome
                   && item.Status <> InReview
+                  && not (item.Status = Blocked && not (humanHoldAllowsFlip item))
                   ->
                   // Reconciliation is now routed through the typed lifecycle projector.  The scan
                   // supplied this PR fact; no missing PR/review fact is fabricated here.  This is the
@@ -556,8 +585,25 @@ module Chore =
     /// Make the one bounded Status write for a lifecycle projection.  The impure caller owns collecting
     /// facts and declines to call this on an unreadable/withheld observation; this constructor makes the
     /// resulting board mutation use the same verified reconcile dispatcher as every other chore.
+    ///
+    /// .github#2394 — A COHERENT HUMAN PARK MUST NOT BE PROJECTED AWAY. `LifecycleProjection.project` is
+    /// pure over mechanical facts (claim liveness, PR/review, delivery, issue state) and has never read
+    /// the body sentinel: a `Blocked` row parked on a human with no open PR, no live claim and no recorded
+    /// blocker computes straight through to its `Ready` fallthrough, and this constructor used to hand
+    /// that `Ready` to the SAME verified write path every other chore uses — the exact defect measured
+    /// three times on one row (.github#2394). `humanHoldAllowsFlip` is the gate `BLOCKER-CLEARED` already
+    /// trusts for the identical question one call up; asking it here, on the SAME item, for the SAME
+    /// reason, is what keeps the two mechanical writers from disagreeing about one row's park rather than
+    /// adding a second, possibly-different, sentinel test (see its doc comment above).
+    ///
+    /// Scoped to `item.Status = Blocked`: this is a park PROTECTION, not a park ENFORCEMENT. A sentinel
+    /// left over on a row that already moved off `Blocked` is not this function's business — nothing here
+    /// would send it BACK to `Blocked`, only refuse to move it FURTHER while it is still there. Removing
+    /// the sentinel (or a body read that starts succeeding) makes `humanHoldAllowsFlip` answer `true` again
+    /// and this resumes projecting normally on the very next pass — no separate "unpark" path is needed.
     let lifecycleProjection (item: Item) (destination: BoardStatus) : Chore option =
         if item.Status = destination || destination = NoStatus then None
+        elif item.Status = Blocked && not (humanHoldAllowsFlip item) then None
         else Chore(item.Ref, LifecycleProjectionLag destination, Quick) |> Some
 
     let offer (at: SafePoint) : Chore option =

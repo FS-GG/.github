@@ -1,0 +1,126 @@
+# job-uniqueness-coherence — a top-level job has no caller to disambiguate it, so two of them sharing
+# a check-run name is a hazard the moment either one is (or becomes) a required status check.
+#
+# .github#2354 AC-2, filed as .github#2374 by the independent review of PR #2371. `architecture-map.yml`,
+# `coord-board-reconcile.yml` and `feed-autofix.yml` all declared a bare job id `reconcile`, with no
+# job-level `name:`. GitHub names a plain job's check run after its `name:` if it has one, else its job
+# id — with no workflow-file prefix — so all three produced the SAME check-run name, and branch
+# protection's purely string-based matching let ANY of them satisfy a required `reconcile` context,
+# regardless of which one actually ran. Confirmed live twice (`.github#2352`'s PR #2353, and
+# `.github#2347`'s PR #2367). PR #2371 disambiguated two of the three; this gate stops it happening a
+# fourth time, or to any other name.
+#
+# THIS IS A NON-REGRESSION GATE (base vs head), NOT AN ABSOLUTE ONE — see
+# scripts/check-job-uniqueness.py's own docstring for the full reasoning and the measured reason: this
+# repo's `fixture`/`coherence`/`verify`/`selftest`/`audit`/`dogfood`/`freshness`/`monopoly` job ids are
+# ALREADY shared by 2+ workflows each, by long-standing convention, and none is a required status check
+# today. An absolute "no two ever" gate would be born red on ~65 jobs nobody just touched, and would then
+# red every future PR that edits any unrelated workflow file. This gate instead asserts the one thing
+# achievable without a disproportionate bulk rename: a name that was NOT already ambiguous at the
+# merge-base must not become ambiguous at head. That is exactly `.github#2354`'s two illustrative
+# regressions (reverting PR #2371's `name:` overrides; adding a fourth job named `reconcile`), and it is
+# exactly what leaves the current, accepted duplicates alone. `.github#2447` tracks closing that
+# residual gap (none of the 8 names is a required context today, so it is not yet exploitable).
+#
+# SISTER GATE: reusable-job-id-coherence.yml (.github#549) guards the analogous hazard for a job WITH
+# `uses:` — a reusable workflow's PUBLISHED `<caller> / <callee>` name. That gate's subject is jobs that
+# call a reusable workflow; this one's is every top-level job that does not, and the two together now
+# cover the whole surface AC-1 describes. Same base-vs-merge-base diff shape, on purpose — one place to
+# understand this class of gate rather than two.
+name: job-uniqueness-coherence
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check-job-uniqueness.py"
+      - "tests/job-uniqueness/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: job-uniqueness-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the job-uniqueness fixture (no network)
+        run: bash tests/job-uniqueness/run.sh
+
+  job-names-stable:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0     # the merge-base must be reachable
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Assert no top-level job's check-run name became newly ambiguous
+        id: check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Compare against the MERGE-BASE, not the base-branch tip: the change set must be this
+          # PR's own, independent of how far main has moved since the branch forked (#375, the same
+          # reason reusable-job-id-coherence.yml does this).
+          base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          rc=0
+          out="$(python scripts/check-job-uniqueness.py --root . --base "$base" 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320).
+      - name: 'OK: no top-level job name became newly ambiguous'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "job-uniqueness-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a check-run name is now shared by top-level jobs that did not share it before'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### job-uniqueness-coherence: two top-level jobs now share a check-run name"
+            echo
+            echo "GitHub names a plain job's check run after its \`name:\` if it has one, else its job"
+            echo "id — with NO workflow-file prefix. Branch protection's required-status-check matching"
+            echo "is purely string-based, so if this name is ever REQUIRED, any job that resolves to it"
+            echo "satisfies the requirement, regardless of which one actually ran. This is the exact"
+            echo "\`.github#2354\` defect: three jobs sharing the bare id \`reconcile\`."
+            echo
+            echo "Give every job but one an unambiguous job-level \`name:\`, as PR #2371 did for"
+            echo "\`architecture-map.yml\` and \`feed-autofix.yml\`. See the job log for which name and"
+            echo "which files."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=job-uniqueness-coherence: a check-run name became newly ambiguous::A top-level job's check-run name is now shared with another top-level job that did not share it at the merge-base. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a file a human must fix'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### job-uniqueness-coherence: no verdict"
+            echo
+            echo "A workflow would not parse, the merge-base could not be read, or this repo has no"
+            echo "top-level job at HEAD at all — and examining nothing is a failure to audit, not a"
+            echo "clean audit. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=job-uniqueness-coherence: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=job-uniqueness-coherence: inconclusive::check-job-uniqueness.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

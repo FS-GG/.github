@@ -328,6 +328,13 @@ module Transport =
                           ETag = etag
                           NextLink = None }
                 elif status >= 200 && status < 300 then
+                    // The GraphQL counterpart of `observeRestHeaders` above, and it was missing until #2418:
+                    // every query document selects `rateLimit { cost remaining }`, `Budget.readMeter` parsed
+                    // it correctly, and NOTHING CALLED IT. The fleet paid to transmit its own meter and threw
+                    // the reading away, which is why an exhausted budget could not be attributed to anything.
+                    if request.Budget = GraphQl then
+                        Budget.observeGraphQlBody body
+
                     Ok
                         { Status = status
                           Body = body

@@ -41,11 +41,11 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "38cae3929d4755477737d1c07db55c5f0b2f6fe0f9c0d23658678278637eeadd",
+      "tree-sha256": "81d1a7c850daca5a77e031a0aa3c4092a5f17811038b7b816120d30fe156dc93",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "3879f7391decfbd5ad9e5bfe8cab1d21633732d9b747c2b49eac95602cec527d",
+          "sha256": "222682e6b2b745bb891e2f5898181a562ff8945f807759a5b6cb064063ae047f",
           "executable": false
         },
         {
@@ -110,11 +110,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "7e6316a49aa1a477c62e5e9339a72709f7cc0f098369ff8611b50b1d2a3383c5",
+      "tree-sha256": "0ac604a30a566d144ea6bfb261022c971b6b328e33050704c7cd92ff34f6d324",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "f8ffc687f99bd7789deaa86ac114b495569a10dad39318409bbc5d79757ceee3",
+          "sha256": "3b8c4eccbabbc5a911e6dce873616bb683c4fcd7aecc140f4d086e06f1e31eee",
           "executable": false
         },
         {
@@ -124,7 +124,7 @@
         },
         {
           "path": "references/command-contracts.md",
-          "sha256": "50e929b9dbc703bdf5b73066666dc6592129ef5c73f282eef45b106fd4193822",
+          "sha256": "0da5070d147fd65691dd9de3009437bec991f64e0231163fce7a3ddc1b8b0113",
           "executable": false
         },
         {
@@ -134,7 +134,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "0174532db1c5615d4ed9a08fa2e0217fe00da9cfee26048f80497cfd7c6d849e",
+          "sha256": "141a04567a37eefc4138701688fb1ef19043864c2ed305a4d519de8e2b399f21",
           "executable": false
         },
         {
@@ -144,7 +144,7 @@
         },
         {
           "path": "references/independent-review.md",
-          "sha256": "fff4af7868bd40401c6d537935dd6bd4b048d989db653e052a8be41736f94b47",
+          "sha256": "71cb3d6da3ea4110283a24e5504e8ee277893b680274d5b7059b4683f93c369d",
           "executable": false
         },
         {

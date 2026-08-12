@@ -243,9 +243,27 @@ module Budget =
             // simply absent — and absent is not an error, it is the documented shape of a mutation.
             let root = doc.RootElement
 
+            // A ROOT THAT IS VALID JSON BUT NOT AN OBJECT — `[]`, `"text"`, `7` — is not a meter, and
+            // asking it for a property is not a parse failure but an `InvalidOperationException`, which
+            // the `JsonException` handler below does NOT catch. That crash was unreachable while nothing
+            // called `readMeter`; wiring it onto every live 2xx GraphQL response (#2418) is exactly what
+            // makes it reachable, so the guard lands with the wiring rather than after it. Found by the
+            // independent critic on PR #2419, reproduced end-to-end through the real transport.
+            if root.ValueKind <> JsonValueKind.Object then
+                None
+            else
+
             let rateLimit =
                 match root.TryGetProperty "data" with
-                | true, data ->
+                // `TryGetProperty` says the KEY exists, never what kind of value it holds — so `data`
+                // must be proved an object before it is asked for a property, exactly as the root was.
+                // `{"data":"oops"}`, `{"data":5}`, `{"data":[1,2,3]}`, `{"data":true}` and `{"data":null}`
+                // all clear the root guard and then throw the same uncaught `InvalidOperationException`
+                // one line deeper. Found by the independent critic on PR #2419 round 1, after the round-0
+                // root guard: the first repair fixed the escape that was reported rather than the SHAPE
+                // that produced it, which is why the same class survived one call site down. The
+                // `rateLimit` arm below has always guarded its own kind; these two now match it.
+                | true, data when data.ValueKind = JsonValueKind.Object ->
                     match data.TryGetProperty "rateLimit" with
                     | true, rl when rl.ValueKind = JsonValueKind.Object -> Some rl
                     | _ -> None
@@ -256,7 +274,15 @@ module Budget =
             | Some rl ->
                 let intOf (name: string) =
                     match rl.TryGetProperty name with
-                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                    // `ValueKind = Number` does NOT mean "an Int32". `GetInt32()` throws `FormatException`
+                    // — a third exception type again — on `7.5` or on anything outside Int32's range, so
+                    // the kind guard alone is not enough and `TryGetInt32` is what actually asks the
+                    // question. Round-2 finding on PR #2419; a cost of `7.5` is not a meter reading we
+                    // understand, and rounding one into an int would invent a number the server never sent.
+                    | true, v when v.ValueKind = JsonValueKind.Number ->
+                        match v.TryGetInt32() with
+                        | true, parsed -> Some parsed
+                        | _ -> None
                     | _ -> None
 
                 match intOf "cost", intOf "remaining" with
@@ -265,11 +291,205 @@ module Budget =
                 // half a meter as a whole one would be a confident number with nothing behind it.
                 | _ -> None
 
-        with :? JsonException ->
+        // THREE ROUNDS OF REVIEW FOUND THREE INSTANCES OF ONE SHAPE, so this handler stops naming a single
+        // exception type. `JsonException` is what a malformed DOCUMENT raises; the escapes actually found
+        // were `InvalidOperationException` (asking a non-object for a property, twice) and
+        // `FormatException` (`GetInt32()` on a non-Int32 number) — neither of which it caught.
+        //
+        // The typed guards above remain the primary mechanism and are not weakened by this: each one is
+        // precise about what it accepts, and a body this function cannot read still returns `None` rather
+        // than a fabricated number. This is belt-and-braces, not a substitute for the guards — a FOURTH
+        // instance of the shape must not be able to take down the command that merely made a GraphQL call,
+        // because #2418 wires this onto EVERY 2xx GraphQL response the fleet receives. Telemetry that can
+        // kill the tool it measures is worse than no telemetry.
+        with
+        | :? JsonException
+        | :? InvalidOperationException
+        | :? FormatException
+        | :? OverflowException ->
             // A body that does not parse is not a meter reading of zero. It is no reading at all, and the
             // caller's own malformed-body handling owns it — the meter does not get to invent a number
             // from bytes it could not read.
             None
+
+    // ---- what THIS invocation spent -------------------------------------------------------------------
+
+    /// GraphQL points this process has spent, and how many billed calls it took.
+    ///
+    /// `readMeter` parsed `rateLimit { cost }` correctly, was unit-tested, and — until #2418 — had NO
+    /// PRODUCTION CALLER. Fourteen query documents across four files select `rateLimit { cost remaining }`,
+    /// so the fleet PAID to transmit a number that was then dropped on the floor. The visible consequence
+    /// was not a wrong answer, it was the absence of one: when the budget died twice in a two-hour board
+    /// run, nobody could say what had spent it, and reading the source could not answer either — two
+    /// separate source-level hypotheses about the drain were wrong by 30x before the missing wiring was
+    /// found. An unattributable budget is diagnosed by guessing.
+    type Spend =
+        { Points: int
+          Calls: int
+          /// The meter's own `remaining` from the LAST billed call — GitHub's number, never our arithmetic.
+          LastRemaining: int option }
+
+    let private spendGate = obj ()
+    let mutable private spentPoints = 0
+    let mutable private spentCalls = 0
+    let mutable private lastRemaining: int option = None
+
+    let private debugEnabled () =
+        match Environment.GetEnvironmentVariable "FSGG_COORD_DEBUG" with
+        | null
+        | "" -> false
+        | value -> not (value.Equals("0", StringComparison.Ordinal))
+
+    /// Record one GraphQL response's meter.
+    ///
+    /// Called for every 2xx GraphQL body. A body with no `rateLimit` (every MUTATION — `rateLimit` is a
+    /// field of the query root) reads as `None` and is NOT counted: a mutation's cost is real but the
+    /// server does not report it here, and inventing the 1-point floor would make this ledger a mix of
+    /// measured and assumed numbers. `Calls` therefore means BILLED CALLS THE METER SPOKE FOR, and the
+    /// mutation gap is stated in `docs/coordination/graphql-budget.md` rather than papered over.
+    let observeGraphQlBody (body: string) =
+        match readMeter body with
+        | None -> ()
+        | Some meter ->
+            lock spendGate (fun () ->
+                spentPoints <- spentPoints + meter.Cost
+                spentCalls <- spentCalls + 1
+                lastRemaining <- Some meter.Remaining)
+
+            // The recipe `docs/coordination/graphql-budget.md` has documented since it was written —
+            // `FSGG_COORD_DEBUG=1 … | grep 'graphql cost='`. It named an environment variable that
+            // existed in NO engine (the same shape as #883's autoflush myth: a documented affordance
+            // nobody had implemented). This line is what makes that recipe true.
+            if debugEnabled () then
+                eprintfn "fsgg-coord-engine: graphql cost=%d remaining=%d" meter.Cost meter.Remaining
+
+    /// What this process has spent so far.
+    let graphQlSpend () : Spend =
+        lock spendGate (fun () ->
+            { Points = spentPoints
+              Calls = spentCalls
+              LastRemaining = lastRemaining })
+
+    /// Reset the counter. Tests only — a process spends once and exits.
+    let resetGraphQlSpend () =
+        lock spendGate (fun () ->
+            spentPoints <- 0
+            spentCalls <- 0
+            lastRemaining <- None)
+
+    // ---- the cross-process ledger ---------------------------------------------------------------------
+
+    /// One invocation's spend, appended when the process exits.
+    ///
+    /// A per-process counter alone cannot answer the question that matters, because the fleet is N SHORT-LIVED
+    /// PROCESSES sharing one budget: `take`, `claim`, `done` and the host's own `reconcile` each run, spend,
+    /// print, and die. "What drained the 5,000?" is a question ABOUT THE WINDOW, not about any one process, so
+    /// the number has to outlive the process that measured it.
+    type SpendRecord =
+        { Command: string
+          Points: int
+          Calls: int
+          Worker: string option
+          ObservedAt: DateTimeOffset }
+
+    let private spendLedgerFile () = Path.Combine(observationRoot (), "graphql-spend.jsonl")
+
+    /// Append this invocation's spend. NEVER throws and never fails a command: telemetry that can break the
+    /// tool it measures is worse than no telemetry. A zero-call invocation writes nothing — the overwhelming
+    /// majority of commands touch no GraphQL at all, and a ledger padded with zeroes buries the rows that
+    /// spent.
+    let recordSpend (command: string) =
+        try
+            let spend = graphQlSpend ()
+
+            if spend.Calls > 0 then
+                let worker =
+                    match Environment.GetEnvironmentVariable "FSGG_WORKER" with
+                    | null
+                    | "" -> None
+                    | value -> Some value
+
+                let line =
+                    JsonSerializer.Serialize
+                        {| command = command
+                           points = spend.Points
+                           calls = spend.Calls
+                           worker = worker |> Option.toObj
+                           observedAt = DateTimeOffset.UtcNow.ToString("o") |}
+
+                let file = spendLedgerFile ()
+                Directory.CreateDirectory(Path.GetDirectoryName file) |> ignore
+
+                // O_APPEND on a line-sized write is atomic enough for concurrent workers; `FileShare.ReadWrite`
+                // keeps a reader (`budget`) from refusing a writer mid-wave.
+                use stream =
+                    new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)
+
+                use writer = new StreamWriter(stream, Encoding.UTF8)
+                writer.WriteLine line
+        with _ ->
+            ()
+
+    /// Read the ledger back, newest first, keeping only records inside `window`.
+    ///
+    /// Returns `[]` on any unreadable ledger rather than throwing — but note this is NOT the #266 shape it
+    /// resembles. An empty ledger is not being reported as a clean board; it is reported by `budget` as
+    /// "no attribution recorded", which is the honest reading of a file nobody has written yet.
+    let recentSpend (window: TimeSpan) : SpendRecord list =
+        try
+            let file = spendLedgerFile ()
+
+            if not (File.Exists file) then
+                []
+            else
+
+            let cutoff = DateTimeOffset.UtcNow - window
+
+            File.ReadAllLines file
+            |> Array.toList
+            |> List.choose (fun line ->
+                if String.IsNullOrWhiteSpace line then
+                    None
+                else
+                    try
+                        use doc = JsonDocument.Parse line
+                        let root = doc.RootElement
+
+                        let str (name: string) =
+                            match root.TryGetProperty name with
+                            | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
+                            | _ -> None
+
+                        let num (name: string) =
+                            match root.TryGetProperty name with
+                            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                            | _ -> None
+
+                        match str "command", num "points", num "calls", str "observedAt" with
+                        | Some command, Some points, Some calls, Some observedAt ->
+                            match DateTimeOffset.TryParse(observedAt: string) with
+                            | true, at when at >= cutoff ->
+                                Some
+                                    { Command = command
+                                      Points = points
+                                      Calls = calls
+                                      Worker = str "worker"
+                                      ObservedAt = at }
+                            | _ -> None
+                        | _ -> None
+                    with :? JsonException ->
+                        None)
+            |> List.sortByDescending (fun r -> r.ObservedAt)
+        with _ ->
+            []
+
+    /// Aggregate a window's records by command, dearest first. This is the attribution answer.
+    let spendByCommand (records: SpendRecord list) : (string * int * int) list =
+        records
+        |> List.groupBy (fun r -> r.Command)
+        |> List.map (fun (command, rows) ->
+            command, rows |> List.sumBy (fun r -> r.Points), rows |> List.sumBy (fun r -> r.Calls))
+        |> List.sortByDescending (fun (_, points, _) -> points)
 
     /// Pull the reset instant out of a rate-limit response BODY (a GraphQL `resetAt`).
     ///

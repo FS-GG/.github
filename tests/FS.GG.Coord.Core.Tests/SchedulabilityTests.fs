@@ -215,6 +215,35 @@ module SchedulabilityTests =
         let dead = Some(claim "ghost-000", LeaseExpiredNoPr)
         Assert.Equal(Startable, ask { item 11 with Claim = dead })
 
+    // ================================================================================================
+    // #2378 — `leaseAuthorizes`: does an EXPIRED lease still authorize ACTING on the claim (`review`,
+    // `delivery`), not just RESERVING the item against a second worker? Same fact (`Liveness`), same
+    // rule as the `HeldByLiveWork` arm above, named once so the two questions cannot disagree.
+    // ================================================================================================
+
+    [<Fact>]
+    let ``#2378 a live lease authorizes`` () = Assert.True(leaseAuthorizes LeaseHeld)
+
+    [<Fact>]
+    let ``#2378 an expired lease with an OPEN item PR still authorizes — the worker is paused, not gone`` () =
+        Assert.True(leaseAuthorizes (LeaseExpiredPrOpen 433))
+
+    [<Fact>]
+    let ``#2378 an expired lease with NO open PR does not authorize — the negative control`` () =
+        // Without this, the assertion above is satisfied by a function that always returns true.
+        Assert.False(leaseAuthorizes LeaseExpiredNoPr)
+
+    [<Fact>]
+    let ``#2378 an expired lease with only a pushed branch does not authorize — weaker evidence than a PR`` () =
+        // #1055's branch-pushed signal is proof of life for SCHEDULING (it withholds the item rather than
+        // releasing it), but it is deliberately NOT strong enough to authorize acting on a claim: a
+        // pushed branch can be a stale leftover in a way an open PR cannot.
+        Assert.False(leaseAuthorizes LeaseExpiredBranchPushed)
+
+    [<Fact>]
+    let ``#2378 an unreadable liveness does not authorize — a failed probe is not proof of life`` () =
+        Assert.False(leaseAuthorizes LivenessUnknown)
+
     [<Fact>]
     let ``#651 a MARKERLESS item with an open item PR is NOT offered — an implementation is already in flight`` () =
         // No claim marker (Claim = None), but the scan found an open `item/<n>-*` PR. #581 read that

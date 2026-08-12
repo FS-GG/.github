@@ -740,3 +740,56 @@ let ``#2254 an ALREADY-CLASSED Done row costs reconcile nothing either - the bou
 
     Assert.Equal<string list>([], ids)
     Assert.Equal(0, bodyReads.Value)
+
+// ---- .github#2394 round 1 — the SAME defect through the RESERVED branch's second door -------------------
+//
+// Round 1 of independent review found the initial fix incomplete: `LifecycleProjection.project` has TWO
+// live call sites in `Chore.fs` (`choresFor`'s CLAIM-REVIEW-LAG arm, and the separate `lifecycleProjection`
+// function `ChoresTests`/`ApplicationServiceTests` already cover for the UNCLAIMED path), and only the
+// unclaimed one was gated. A live claim plus an open `item/<n>-*` PR on a coherently human-parked `Blocked`
+// row still flipped to `In review` unguarded — the critic's own reproduction.
+//
+// PURE, NOT END-TO-END, AND THAT IS DELIBERATE (mirrors `#2264`'s own CLAIM-REVIEW-LAG leg above `Chore
+// Tests.fs` in `FS.GG.Coord.Core.Tests`, restated here because these two legs live beside the rest of this
+// PR's `.github#2394` coverage). A real `Scan` probes `ItemPr` for a row under a LIVE claim only when
+// `row.Status = InProgress` (`Scan.fs`'s `Some _ when row.State = Open && row.Status = InProgress ->
+// probe ()`) — never `Blocked` — so today's live scan cannot actually manufacture this exact input. A test
+// that could only exercise `choresFor`'s gate on inputs Scan happens to produce today would be testing
+// Scan's current probe boundary, not the rule; the rule's own comment ("`Blocked`/`In review` during a
+// lease are the HOLDER's decisions and they still win, #331") makes no such exception, and `Scan`'s probe
+// boundary is free to widen later without anyone remembering to re-derive this gate. `Chore.derive` is
+// pure and total, so asking it directly is the correct and honest way to pin an invariant one layer
+// removed from whichever caller happens to supply it today.
+
+let private claimedParkedRow (humanBlock: HumanBlock option) =
+    { item
+          733
+          Blocked
+          Open
+          []
+          (Some(
+              { Worker = them
+                Session = None
+                AgeSeconds = 60
+                PreviousStatus = Some Ready },
+              LeaseHeld
+          )) with
+        ItemPr = Some 1911
+        HumanBlock = humanBlock }
+
+[<Fact>]
+let ``.github#2394 round 1 — CLAIM-REVIEW-LAG does not flip a human-parked Blocked row under a live claim with an open PR`` () =
+    Assert.Empty(Chore.derive [ claimedParkedRow (Some AwaitingHumanAction) ])
+
+[<Fact>]
+let ``.github#2394 round 1 — the human/decision sentinel gates the claimed path too, not only human/action`` () =
+    Assert.Empty(Chore.derive [ claimedParkedRow (Some AwaitingHumanDecision) ])
+
+[<Fact>]
+let ``.github#2394 round 1 AC3 — the SAME claimed row without the sentinel still derives CLAIM-REVIEW-LAG`` () =
+    // The release half: the round-1 guard must not have been written as "never flip a claimed Blocked row"
+    // — it must key on the sentinel exactly as the unclaimed path's guard does.
+    Assert.Equal<string list>(
+        [ "CLAIM-REVIEW-LAG" ],
+        Chore.derive [ claimedParkedRow None ] |> List.map (fun c -> c.Kind.RuleId)
+    )

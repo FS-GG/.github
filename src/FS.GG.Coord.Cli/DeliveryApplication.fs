@@ -204,7 +204,8 @@ module DeliveryApplication =
                 |> List.map (fun comment ->
                     let matched = obligationDeclaration.Match(leadingLine comment.Body)
                     if not matched.Success then malformedField comment "obligation declaration" declarationFields
-                    elif matched.Groups.["head"].Value <> headSha then Error "a delivery obligation declaration is stale"
+                    elif matched.Groups.["head"].Value <> headSha then
+                        Error $"delivery obligation declaration comment {comment.Id} is stale for head {headSha}; edit it in place or delete it, because adding a declaration cannot repair it"
                     else Ok(matched.Groups.["id"].Value, matched.Groups.["kind"].Value))
             let firstError values = values |> List.tryPick (function Error error -> Some error | Ok _ -> None)
             match parsedDeclarations |> firstError with

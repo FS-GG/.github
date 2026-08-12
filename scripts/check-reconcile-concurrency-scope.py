@@ -51,11 +51,22 @@ WHAT THIS SCRIPT CHECKS, entirely offline (no GitHub API, no live scheduler):
      (`#698`) requires a run that starts be allowed to finish rather than killed mid-scan by a newer
      trigger; GitHub also outright rejects `queue: max` combined with `cancel-in-progress: true`, so
      this is both a local correctness requirement and a workflow-validity requirement.
+  4. `on` does not list `issue_comment` or `issues` at all (.github#2416). `queue: max` (check 2)
+     stops a queued comment-triggered run from EVICTING a pending sibling, but never stopped GitHub
+     from CREATING one and giving it a FIFO slot in the one shared group check 1 protects — and
+     comment traffic was measured to dwarf every other trigger (42/45 runs, 22->67 pending in 16
+     minutes), so a required `pull_request` context sharing that queue went ABSENT, not red, and
+     silently blocked seven independently-reviewed PRs. GitHub's `on:` cannot inspect a comment's
+     body (no `paths` for issue_comment/issues events), so the job-level marker-prefix filter this
+     workflow used to carry (.github#2352 AC-1) answered "should the job DO work", never "should a
+     run be CREATED at all" — removing the trigger is the only way to stop run creation itself, and
+     this check makes "the trigger stays removed" a mechanically checked fact instead of a
+     read-the-comments one, the same shape check 1 already established for the group.
 
 Usage: check-reconcile-concurrency-scope.py [--root <dir>]
 Exit: 0 = the concurrency block is fan-out-safe; 1 = a finding (branching group, missing/wrong
-queue depth, or wrong cancel-in-progress); 3 = no verdict, PERMANENT — the workflow/concurrency
-block could not be read.
+queue depth, wrong cancel-in-progress, or a reintroduced issue_comment/issues trigger); 3 = no
+verdict, PERMANENT — the workflow/concurrency/trigger block could not be read.
 
 THIS GATE IS STATIC, so exit 2 is deliberately absent, matching check-workflow-timeouts.py's own
 reasoning: it reads one committed file and nothing else, so there is no transport failure it could
@@ -103,6 +114,14 @@ def main() -> int:
     if not isinstance(jobs.get(JOB_ID), dict):
         return fail(f"NO VERDICT (permanent) — no `{JOB_ID}` job in {path}", 3)
 
+    # PyYAML (YAML 1.1) parses the bare, unquoted `on` mapping key as the boolean `True`, not the
+    # string `"on"` — this is the same landmine GitHub's own docs warn workflow authors about
+    # (quote it, or read it back knowing this). `doc.get("on")` would silently return `None` here and
+    # make every workflow look like it has no triggers at all; `doc.get(True)` is the correct read.
+    on_block = doc.get(True)
+    if not isinstance(on_block, dict):
+        return fail("NO VERDICT (permanent) — no `on` trigger block in the workflow", 3)
+
     concurrency = doc.get("concurrency")
     if not isinstance(concurrency, dict):
         return fail("NO VERDICT (permanent) — no `concurrency` block in the workflow", 3)
@@ -149,6 +168,26 @@ def main() -> int:
             "rejects `queue: max` paired with `cancel-in-progress: true` as a validation error."
         )
 
+    # Check 4: `issue_comment`/`issues` must not be triggers at all (.github#2416). `queue: max`
+    # (check 2) only stops a queued comment-triggered run from evicting a pending sibling; it never
+    # stopped GitHub from creating one and giving it a FIFO slot in the one shared group check 1
+    # protects. Comment traffic dwarfs every other trigger this workflow has, so a required
+    # `pull_request` context sharing that queue can still go ABSENT behind comment volume even with
+    # every other check here passing. `on:` carries no `paths` for these two event types, so a
+    # types-narrowing or a job-level body filter (the retired .github#2352 AC-1 design) cannot
+    # distinguish a genuine comment from a marker one at trigger time — only removing the trigger
+    # stops the run from being created.
+    reintroduced = [k for k in ("issue_comment", "issues") if k in on_block]
+    if reintroduced:
+        findings.append(
+            f"`on` lists {reintroduced!r} as a trigger — comment/issue events create a full-scan run "
+            "sharing this workflow's one FIFO concurrency group (check 1) with `pull_request`, so a "
+            "required `pull_request` status context can again go ABSENT (not red) behind comment "
+            "traffic, the exact .github#2416 defect. `on:` cannot filter these events by body or "
+            "path, so narrowing `types:` or a job-level `if:` cannot fix this — the trigger itself "
+            "must stay removed."
+        )
+
     if findings:
         for f in findings:
             print(f"check-reconcile-concurrency-scope: FINDING — {f}", file=sys.stderr)
@@ -156,7 +195,7 @@ def main() -> int:
 
     print(
         "check-reconcile-concurrency-scope: OK — one constant, repo-scoped group; "
-        "queue: max; cancel-in-progress: false."
+        "queue: max; cancel-in-progress: false; no issue_comment/issues trigger."
     )
     return 0
 

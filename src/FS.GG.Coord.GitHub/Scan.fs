@@ -92,7 +92,15 @@ module Scan =
         | Some name ->
             let kept =
                 rows
-                |> List.filter (fun r -> String.Equals(RepoScope.resolve r.PathRepo, name, StringComparison.OrdinalIgnoreCase))
+                |> List.filter (fun r ->
+                    // A `NonRepository` scope (`cross-repo`, the board's one deliberate non-roster
+                    // value) never matches a `--repo NAME` filter — `NAME` always names a repository,
+                    // and the sentinel is not one (#2398). This used to compare the raw resolved
+                    // string against `name`, which happened to be correct only because the old
+                    // `resolve` handed `cross-repo` back unchanged rather than tagging it.
+                    match RepoScope.resolve r.PathRepo with
+                    | RepoScope.Repository n -> String.Equals(n, name, StringComparison.OrdinalIgnoreCase)
+                    | RepoScope.NonRepository _ -> false)
 
             let advisory =
                 // A row matched, so the request named something real: nothing to say.
@@ -108,7 +116,13 @@ module Scan =
                 else
                     let known =
                         rows
-                        |> List.map (fun r -> RepoScope.resolve r.PathRepo)
+                        // The `cross-repo` sentinel names nothing a `--repo` filter could ever select,
+                        // so it does not belong in the "the board knows" list either (#2398) — showing
+                        // it there would offer a value that can never itself satisfy the filter above.
+                        |> List.choose (fun r ->
+                            match RepoScope.resolve r.PathRepo with
+                            | RepoScope.Repository n -> Some n
+                            | RepoScope.NonRepository _ -> None)
                         |> List.distinctBy (fun r -> r.ToLowerInvariant())
                         |> List.sort
 
@@ -1281,12 +1295,28 @@ module Scan =
                 // the mechanism safe to run unattended. Closing it needs a receipt this wire fact cannot
                 // carry, so it is filed rather than bodged: see .github#1924.
                 match holder with
-                | Some _ when row.State = Open && row.Status = InProgress ->
-                    // A live claim can already have crossed the implementation/review boundary.
-                    // This is deliberately bounded to the one column whose next lifecycle projection is
-                    // `In review`; probing every held row would turn a scheduled reconciliation into an
-                    // unbounded REST sweep.  `prAlive` supplies either the actual item PR or an explicit
-                    // unreadable receipt, never a fabricated negative.
+                | Some _ when row.State = Open && (row.Status = InProgress || row.Status = InReview) ->
+                    // A live claim can already have crossed the implementation/review boundary — OR
+                    // ALREADY CROSSED IT (.github#2450). The bound used to be `InProgress` alone, on the
+                    // reasoning that it is "the one column whose next lifecycle projection is `In review`".
+                    // That reasoning covered `LifecycleProjectionLag`'s FIRST caller
+                    // (`Chore.choresFor`'s `ClaimReviewLag` arm, reserved branch, `In progress` ->
+                    // `In review`) and missed its SECOND: `Client.fs`'s lifecycle projector reads this SAME
+                    // `itemPr` field for a row that is ALREADY `In review`, to decide whether it STAYS
+                    // there. Unprobed, that read sees `None` — a live claim with no PR fact — and projects
+                    // the row BACKWARD to `In progress`, on every reconcile pass, for as long as the review
+                    // lasts (each state is then the other's trigger, since `In progress` IS probed). This
+                    // is the same failure shape `BLOCKER-CLEARED` hit at Scan.fs:1240-1246 one consumer
+                    // earlier: a probe bounded to the first consumer's column left a second, later consumer
+                    // blind to its own subject.
+                    //
+                    // THE BOUND IS STILL A BUDGET BOUND, NOT `| Open, _ ->`. Widening from one column to
+                    // two costs at most one additional REST request per row that is claimed, Open, and
+                    // currently `In review` — exactly the population the review handoff (required of every
+                    // worker, on every item, by this same protocol) puts there, and no more:
+                    // `Ready`/`Backlog`/cleared-`Blocked` keep their own narrower arms below, and
+                    // `Done`/other `Closed` rows are never probed here at all. `prAlive` supplies either
+                    // the actual item PR or an explicit unreadable receipt, never a fabricated negative.
                     match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
                     | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
                     | Ok LivenessUnknown

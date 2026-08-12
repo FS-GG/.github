@@ -713,3 +713,202 @@ let ``a body that is not JSON yields NO meter reading - never a reading of zero`
     // parse failure is the confident-empty-answer, one more time, in the one place that reports how much
     // room is left.
     Assert.True((Budget.readMeter "<html>502 Bad Gateway</html>").IsNone)
+
+// ---- #2418: the meter is ACCUMULATED, not merely parseable ------------------------------------------
+//
+// The tests above pinned `readMeter` from the day it was written, and every one of them passed for the
+// whole time the function had NO PRODUCTION CALLER. That is the gap they could not see: a parser can be
+// perfectly correct and still be wired to nothing, and a unit test of the parser cannot tell you which.
+// These tests assert the ACCUMULATION — the behaviour that makes an exhausted budget attributable.
+
+[<Fact>]
+let ``a query body's cost accumulates into this process's spend`` () =
+    Budget.resetGraphQlSpend ()
+    Budget.observeGraphQlBody """{"data":{"rateLimit":{"cost":7,"remaining":4993}}}"""
+    Budget.observeGraphQlBody """{"data":{"rateLimit":{"cost":3,"remaining":4990}}}"""
+
+    let spend = Budget.graphQlSpend ()
+    Assert.Equal(10, spend.Points)
+    Assert.Equal(2, spend.Calls)
+    // `remaining` is GitHub's own number from the LAST billed call, never 5000 minus our running total:
+    // the fleet shares this budget, so our arithmetic would be wrong the moment another worker spends.
+    Assert.Equal(Some 4990, spend.LastRemaining)
+
+[<Fact>]
+let ``a mutation and an unparseable body add NOTHING - a call the meter did not speak for is not a zero`` () =
+    Budget.resetGraphQlSpend ()
+    Budget.observeGraphQlBody """{"data":{"rateLimit":{"cost":5,"remaining":4995}}}"""
+    Budget.observeGraphQlBody """{"data":{"updateProjectV2ItemFieldValue":{}}}"""
+    Budget.observeGraphQlBody "<html>502 Bad Gateway</html>"
+
+    let spend = Budget.graphQlSpend ()
+    // Still one call, still five points. Counting the mutation as a call with 0 points would make `Calls`
+    // a lie in the more dangerous direction: it would report a fleet spending less per call than it does.
+    Assert.Equal(5, spend.Points)
+    Assert.Equal(1, spend.Calls)
+
+[<Fact>]
+let ``THE INVERSION - unaccumulated meters leave spend at zero, which is exactly the pre-2418 state`` () =
+    // This is the gate-inversion for this fix. If `observeGraphQlBody` were ever unwired again — the
+    // precise defect #2418 repairs — spend would read zero while real calls were billed, and the ledger
+    // would report an idle fleet during a drain. Parsing alone must NOT move the counter.
+    Budget.resetGraphQlSpend ()
+
+    let parsedButNotObserved =
+        Budget.readMeter """{"data":{"rateLimit":{"cost":42,"remaining":4958}}}"""
+
+    Assert.True parsedButNotObserved.IsSome
+    Assert.Equal(42, parsedButNotObserved.Value.Cost)
+
+    // The parser saw 42 points. Nothing observed them, so the process has spent nothing it can report —
+    // which is the whole failure this fix exists to end.
+    let spend = Budget.graphQlSpend ()
+    Assert.Equal(0, spend.Points)
+    Assert.Equal(0, spend.Calls)
+    Assert.Equal(None, spend.LastRemaining)
+
+[<Fact>]
+let ``the ledger attributes spend BY COMMAND, dearest first`` () =
+    let records: Budget.SpendRecord list =
+        [ { Command = "reconcile"
+            Points = 22
+            Calls = 22
+            Worker = Some "shrike-556b"
+            ObservedAt = DateTimeOffset.UtcNow }
+          { Command = "take"
+            Points = 3
+            Calls = 1
+            Worker = Some "heron-37a2"
+            ObservedAt = DateTimeOffset.UtcNow }
+          { Command = "reconcile"
+            Points = 20
+            Calls = 20
+            Worker = Some "shrike-556b"
+            ObservedAt = DateTimeOffset.UtcNow } ]
+
+    match Budget.spendByCommand records with
+    | ("reconcile", 42, 42) :: ("take", 3, 1) :: [] -> ()
+    | other -> failwithf "expected reconcile ahead of take, got %A" other
+
+[<Fact>]
+let ``a spend record outside the window is not counted`` () =
+    // The question is always "what drained THIS window". A ledger that never forgets would blame a command
+    // for points GitHub has already given back at the reset.
+    let cacheDir =
+        Path.Combine(Path.GetTempPath(), "fsgg-spend-" + Guid.NewGuid().ToString "N")
+
+    Directory.CreateDirectory cacheDir |> ignore
+    let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+    Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cacheDir)
+
+    try
+        let stale = DateTimeOffset.UtcNow.AddHours(-3.0).ToString "o"
+        let fresh = DateTimeOffset.UtcNow.ToString "o"
+
+        File.WriteAllLines(
+            Path.Combine(cacheDir, "graphql-spend.jsonl"),
+            [ $"""{{"command":"lint","points":70,"calls":48,"worker":null,"observedAt":"{stale}"}}"""
+              $"""{{"command":"ready","points":22,"calls":22,"worker":null,"observedAt":"{fresh}"}}"""
+              "not json at all — a torn line must be skipped, not throw" ]
+        )
+
+        match Budget.recentSpend (TimeSpan.FromHours 1.0) with
+        | [ single ] ->
+            Assert.Equal("ready", single.Command)
+            Assert.Equal(22, single.Points)
+        | other -> failwithf "expected only the in-window record, got %A" other
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
+        try Directory.Delete(cacheDir, true) with _ -> ()
+
+[<Fact>]
+let ``#2419 a valid-JSON body that is NOT an object is no meter - and does not throw`` () =
+    // Found by the independent critic on PR #2419. `TryGetProperty` on a non-object root raises
+    // `InvalidOperationException`, NOT the `JsonException` the handler catches — so this crashed rather
+    // than returning `None`. It was unreachable while `readMeter` had no caller; #2418 wires it onto
+    // every live 2xx GraphQL response, which is precisely what makes it reachable.
+    //
+    // A 200 carrying `[]` (a proxy, a misrouted endpoint, an error envelope) must read as "no meter",
+    // for the same reason a 502 HTML body does: the meter never invents a number, and it must never take
+    // the whole command down for a body it merely did not understand.
+    Assert.True((Budget.readMeter "[]").IsNone)
+    Assert.True((Budget.readMeter "\"a string\"").IsNone)
+    Assert.True((Budget.readMeter "7").IsNone)
+    Assert.True((Budget.readMeter "null").IsNone)
+
+    // And the accumulator stays untouched by all of them.
+    Budget.resetGraphQlSpend ()
+    Budget.observeGraphQlBody "[]"
+    Budget.observeGraphQlBody "null"
+    let spend = Budget.graphQlSpend ()
+    Assert.Equal(0, spend.Points)
+    Assert.Equal(0, spend.Calls)
+
+[<Fact>]
+let ``#2419 round 1 - a non-object 'data' is no meter either, at every depth`` () =
+    // Round-0 guarded the ROOT and stopped there. The critic found the identical unguarded shape one
+    // line deeper: `TryGetProperty` reports that a KEY exists, never what kind of value it holds, so
+    // `data` must be proved an object before it is asked for `rateLimit`. Each of these clears the root
+    // guard — the root really is an object — and then threw the same uncaught InvalidOperationException.
+    //
+    // The lesson worth keeping: round 0 repaired the reported ESCAPE rather than the SHAPE that produced
+    // it. This test pins the shape at both depths so a third instance cannot appear quietly.
+    Assert.True((Budget.readMeter """{"data":"oops"}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":5}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":[1,2,3]}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":true}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":null}""").IsNone)
+
+    // The real shapes still read correctly — the guards reject malformed bodies, not valid ones.
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":2,"remaining":4998}}}""").IsSome)
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":"not-an-object"}}""").IsNone)
+
+    // And none of them may move the accumulator or throw through it.
+    Budget.resetGraphQlSpend ()
+    for body in [ """{"data":"oops"}"""; """{"data":5}"""; """{"data":[1,2,3]}"""; """{"data":null}""" ] do
+        Budget.observeGraphQlBody body
+
+    Assert.Equal(0, (Budget.graphQlSpend ()).Calls)
+
+[<Fact>]
+let ``#2419 round 2 - a Number that is not an Int32 is no meter, and never a rounded one`` () =
+    // `ValueKind = Number` does NOT mean "an Int32". `GetInt32()` throws FormatException on a fractional
+    // value and on anything outside Int32's range — the THIRD distinct exception type this one shape has
+    // produced, after two InvalidOperationExceptions. Found by the critic at round 2 of PR #2419.
+    //
+    // The reading must be `None`, NOT a rounded or truncated int: a cost of `7.5` is not a number the
+    // server sent us, and inventing `7` or `8` from it is the confident-number-with-nothing-behind-it
+    // failure this module exists to refuse.
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":7.5,"remaining":4992}}}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":1,"remaining":99999999999}}}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":-2147483649,"remaining":10}}}""").IsNone)
+
+    // A NEGATIVE in-range value is still a Number the meter can read — the guard rejects unreadable
+    // values, not merely surprising ones, and must not quietly become a range policy of its own.
+    match Budget.readMeter """{"data":{"rateLimit":{"cost":-1,"remaining":4999}}}""" with
+    | Some m -> Assert.Equal(-1, m.Cost)
+    | None -> failwith "an in-range Int32 must still read, however odd its value"
+
+    // None of them may throw through the accumulator or move it.
+    Budget.resetGraphQlSpend ()
+    Budget.observeGraphQlBody """{"data":{"rateLimit":{"cost":7.5,"remaining":1}}}"""
+    Assert.Equal(0, (Budget.graphQlSpend ()).Calls)
+
+[<Fact>]
+let ``#2419 the handler is a BACKSTOP for the whole shape, not one exception type`` () =
+    // Three review rounds found three instances of one shape — an unguarded JsonElement call raising an
+    // exception the handler did not name. The typed guards are the primary mechanism; this asserts the
+    // fail-safe behind them, because #2418 puts `readMeter` on EVERY 2xx GraphQL response the fleet gets,
+    // and a fourth instance must not be able to kill a command that merely made a GraphQL call.
+    //
+    // Every one of these is a body the parser cannot read. NONE of them may throw, and none may produce a
+    // reading — "I could not read it" is the answer, never a fabricated number.
+    for body in
+        [ "[]"
+          "null"
+          """{"data":[1,2,3]}"""
+          """{"data":{"rateLimit":[]}}"""
+          """{"data":{"rateLimit":{"cost":"1","remaining":"2"}}}"""
+          """{"data":{"rateLimit":{"cost":7.5,"remaining":4992}}}"""
+          """{"data":{"rateLimit":{"cost":{},"remaining":{}}}}""" ] do
+        Assert.True((Budget.readMeter body).IsNone, $"expected no meter reading for %s{body}")

@@ -9,7 +9,10 @@ module Done =
     open Transport
 
     type Closure =
-        | ClosedByPullRequest of pr: int * oid: string * day: string
+        /// `passedOverForeign`: a foreign-repository true closer that existed but was NOT chosen, because a
+        /// same-repository closer is preferred regardless of merge time (.github#2427) — `Some(pr, repo)`
+        /// names it so the cross-repo link stays visible rather than silently dropped.
+        | ClosedByPullRequest of pr: int * oid: string * day: string * passedOverForeign: (int * string) option
         | ResolvedWithoutPr of evidence: string
         | ClosedByNobody
         | StillOpen
@@ -25,10 +28,16 @@ module Done =
     type ClosingPr =
         { Number: int
           Merged: bool
-          /// ISO-8601 merge time, "" if unknown — the LATEST-merged among true closers wins (#342).
+          /// ISO-8601 merge time, "" if unknown — the LATEST-merged among true closers wins (#342), but only
+          /// among closers that share a repository preference tier (.github#2427).
           MergedAt: string
           /// The merge commit's abbreviated oid, "" if unknown — named in the stamp.
           Oid: string
+          /// This candidate's OWN `owner/repo` (nameWithOwner), "" if unknown. NOT the repository of an issue
+          /// it claims to close (that is what `ClosesThis` checks) — the repository the PR itself lives in,
+          /// so a same-repository closer can be preferred over a foreign one (.github#2427: a cross-repo
+          /// retrofit PR merged 13 minutes after the source fix outranked it under pure latest-merged).
+          Repo: string
           /// Its own `closingIssuesReferences` names THIS issue (the `Closes #N` in the PR body).
           ClosesThis: bool }
 
@@ -145,19 +154,56 @@ module Done =
             facts.ClosingPrs
             @ (facts.CloserPrs |> List.filter (fun p -> not (listed.Contains p.Number)))
 
+        // .github#2427 — A SAME-REPOSITORY TRUE CLOSER OUTRANKS A FOREIGN ONE, REGARDLESS OF MERGE TIME.
+        //
+        // Measured on .github#2343: its source fix (.github#2413) merged first, in THIS repo. A cross-repo
+        // receiver retrofit (EHotwagner/S.I.R.#195) merged ~13 minutes later and ALSO registered as a true
+        // closer — its body's "Source fix: FS-GG/.github#2343" line was never meant as a closing keyword, but
+        // GitHub's parser matched `fix:` immediately before the cross-repo reference anyway. Pure
+        // latest-merged (#342) then picked the retrofit, and the stamp sent an auditor to a PR that does not
+        // contain the fix.
+        //
+        // #342's rule is preserved WITHIN a repository — it decides among same-repo closers, and among
+        // foreign-repo closers should more than one ever exist. It was designed and evaluated only against
+        // same-repo re-open/re-close sequences, never against a closer in a DIFFERENT repository, so
+        // extending it across repositories was never a considered decision.
+        let ownRepo = $"%s{facts.Ref.Owner}/%s{facts.Ref.Repo}"
+        let sameRepo (p: ClosingPr) = String.Equals(p.Repo, ownRepo, StringComparison.OrdinalIgnoreCase)
+
+        let trueClosers = candidates |> List.filter (fun p -> p.Merged && closes p)
+        let sameRepoClosers = trueClosers |> List.filter sameRepo
+        let foreignClosers = trueClosers |> List.filter (sameRepo >> not)
+
         let chosen =
             match prOverride with
+            // `--pr` still overrides WHICH pull request the stamp names, never whether it closed the issue —
+            // and that includes the repository preference: an operator who explicitly asks for the foreign
+            // PR by number gets it, without the provenance check (`Merged`, `closes`) being skipped (#543).
             | Some n -> candidates |> List.filter (fun p -> p.Number = n && p.Merged && closes p) |> List.tryHead
             | None ->
-                candidates
-                |> List.filter (fun p -> p.Merged && closes p)
+                // Same-repo closers are preferred as a POOL, not merely as a first choice: if any exist, the
+                // decision among THEM is still latest-merged (#342 unchanged within the tier). Only when no
+                // same-repo closer exists at all does a foreign one legitimately win.
+                let pool = if List.isEmpty sameRepoClosers then trueClosers else sameRepoClosers
+                pool |> List.sortBy (fun p -> p.MergedAt) |> List.tryLast
+
+        // A foreign closer was PASSED OVER only when the repository preference is what decided it: an
+        // override is an explicit choice (nothing was "passed over"), and a foreign winner with no same-repo
+        // rival was not preferred away from anything.
+        let passedOverForeign =
+            match prOverride, chosen with
+            | Some _, _ -> None
+            | None, Some c when sameRepo c && not (List.isEmpty foreignClosers) ->
+                foreignClosers
                 |> List.sortBy (fun p -> p.MergedAt)
                 |> List.tryLast
+                |> Option.map (fun p -> p.Number, p.Repo)
+            | _ -> None
 
         match chosen with
         | Some p ->
             let day = if p.MergedAt.Length >= 10 then p.MergedAt.Substring(0, 10) else p.MergedAt
-            Green(ClosedByPullRequest(p.Number, p.Oid, day))
+            Green(ClosedByPullRequest(p.Number, p.Oid, day, passedOverForeign))
 
         | None ->
             // #600 — THE GREEN PATH FOR WORK RESOLVED WITHOUT A PR.
@@ -212,10 +258,22 @@ module Done =
 
     let render (ref: Ref) (verdict: Verdict<Closure>) =
         match verdict with
-        | Green(ClosedByPullRequest(pr, oid, day)) ->
+        | Green(ClosedByPullRequest(pr, oid, day, passedOverForeign)) ->
             let sha = if String.IsNullOrEmpty oid then "?" else oid
             let dsuffix = if String.IsNullOrEmpty day then "" else $" (%s{day})"
-            $"✓✓ FSGG-DONE   %s{ref.Short}  ·  merged PR #%d{pr} @ %s{sha}%s{dsuffix}"
+            let stamp = $"✓✓ FSGG-DONE   %s{ref.Short}  ·  merged PR #%d{pr} @ %s{sha}%s{dsuffix}"
+
+            // .github#2427 — NEVER a silent choice. A foreign-repository closer that was passed over in
+            // favor of this same-repository one is named on its own line, so the cross-repo link stays
+            // visible rather than disappearing behind the winning PR's number. This travels with the render
+            // text into BOTH places it is used (the console line and the durable done-receipt comment), so
+            // the passed-over link survives in the issue's own provenance record, not only a scrolled-past
+            // terminal line.
+            match passedOverForeign with
+            | Some(foreignPr, foreignRepo) ->
+                stamp
+                + $"\n  a foreign-repository closer was passed over: %s{foreignRepo}#%d{foreignPr} also closes this issue, but %s{ref.Owner}/%s{ref.Repo}'s own PR #%d{pr} is preferred (.github#2427)."
+            | None -> stamp
         | Green(ResolvedWithoutPr evidence) -> $"✓✓ FSGG-DONE   %s{ref.Short}  ·  resolved without a PR: %s{evidence}"
         | Green ClosedByNobody
         | Green StillOpen ->
@@ -237,8 +295,8 @@ module Done =
          repository(owner: $owner, name: $repo) { \
            issue(number: $number) { \
              number state \
-             closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } closingIssuesReferences(first: 10) { nodes { number repository { nameWithOwner } } } } } \
-             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number merged mergedAt mergeCommit { abbreviatedOid } } ... on Commit { oid associatedPullRequests(first: 5) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } } } } } } } } \
+             closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } closingIssuesReferences(first: 10) { nodes { number repository { nameWithOwner } } } } } \
+             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } } ... on Commit { oid associatedPullRequests(first: 5) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } } } } } } } } \
              subIssues(first: 100) { totalCount nodes { number state } } \
              projectItems(first: 20) { nodes { project { number } status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } \
              parent { number repository { name owner { login } } } \
@@ -331,6 +389,14 @@ module Done =
                 | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "abbreviatedOid"
                 | _ -> ""
 
+            /// .github#2427 — the candidate's OWN `owner/repo`, read off its OWN `repository` field (a
+            /// PullRequest node, not the nested `closingIssuesReferences` used for `ClosesThis`). "" if
+            /// unknown, which `verify` treats as not-same-repo — never as a crash or a silent wrong repo.
+            let repoOf (n: JsonElement) =
+                match n.TryGetProperty "repository" with
+                | true, r when r.ValueKind = JsonValueKind.Object -> strOf r "nameWithOwner"
+                | _ -> ""
+
             /// A PR node named by the CLOSED_EVENT, WITH its merge facts (#928). `ClosesThis` is false by
             /// construction: this PR's claim on the issue is the close EVENT, not its own body — that is the
             /// entire case leg (B) exists for — and `verify` reads that claim out of `CloserPrs`, not here.
@@ -344,6 +410,7 @@ module Done =
                           Merged = mergedOf n
                           MergedAt = strOf n "mergedAt"
                           Oid = oidOf n
+                          Repo = repoOf n
                           ClosesThis = false }
                 | _ -> None
 
@@ -384,6 +451,7 @@ module Done =
                                       Merged = mergedOf n
                                       MergedAt = strOf n "mergedAt"
                                       Oid = oidOf n
+                                      Repo = repoOf n
                                       ClosesThis = closesThis }
                             | _ -> None)
                         |> List.ofSeq

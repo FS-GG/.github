@@ -670,7 +670,10 @@ fi
 
 # The target version is the hub's OWN canonical `<Version>` — the version the next bump carries, read
 # from the producer rather than typed here, so this section does not stale on the next kit release.
-TODAY_VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "$HUB/src/FS.GG.Kit/FS.GG.Kit.csproj" | head -1)"
+# EVALUATED, never a sed/grep (.github#2402): FS.GG.Kit's <Version> now resolves from the coherent
+# set's shared $(FsggCoherentSetVersion) MSBuild property (Directory.Build.props), so a raw text
+# extraction would read the literal token `$(FsggCoherentSetVersion)`, not a version.
+TODAY_VERSION="$(dotnet msbuild "$HUB/src/FS.GG.Kit/FS.GG.Kit.csproj" -getProperty:Version)"
 FROM_VERSION="0.0.0-previous"
 
 mkdir -p "$WORK/pkg-today/kit"

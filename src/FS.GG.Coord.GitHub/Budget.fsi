@@ -131,6 +131,51 @@ module Budget =
     /// wrong, and it would refuse work on an estimate.
     val readMeter: body: string -> Meter option
 
+    /// What one invocation spent, measured from the meter and never from arithmetic of our own.
+    type Spend =
+        { Points: int
+          Calls: int
+          LastRemaining: int option }
+
+    /// Record one 2xx GraphQL response's meter against this process's running total.
+    ///
+    /// #2418 wired this. `readMeter` was correct and unit-tested from the start, and had NO production
+    /// caller: every query document pays to select `rateLimit { cost remaining }` and the answer was
+    /// dropped. Under `FSGG_COORD_DEBUG=1` this also emits the per-call `graphql cost=` line that
+    /// `docs/coordination/graphql-budget.md` has always told operators to grep for — a recipe that named
+    /// an environment variable no engine implemented.
+    ///
+    /// A MUTATION carries no `rateLimit` (it is a field of the query root), so it is not counted. `Calls`
+    /// means billed calls the meter spoke for; the mutation gap is documented, not estimated away.
+    val observeGraphQlBody: body: string -> unit
+
+    /// This process's spend so far.
+    val graphQlSpend: unit -> Spend
+
+    /// Tests only.
+    val resetGraphQlSpend: unit -> unit
+
+    /// One invocation's spend, as persisted to the cross-process ledger.
+    type SpendRecord =
+        { Command: string
+          Points: int
+          Calls: int
+          Worker: string option
+          ObservedAt: System.DateTimeOffset }
+
+    /// Append this invocation's spend, keyed by command and `$FSGG_WORKER`.
+    ///
+    /// The fleet is N short-lived processes on one budget, so a per-process counter cannot answer "what
+    /// drained the window". Never throws, and writes nothing when the invocation spent no GraphQL.
+    val recordSpend: command: string -> unit
+
+    /// The window's records, newest first. `[]` when the ledger is absent or unreadable — reported by
+    /// `budget` as "no attribution recorded", never as "nothing was spent".
+    val recentSpend: window: System.TimeSpan -> SpendRecord list
+
+    /// Aggregate records by command, dearest first: the attribution answer.
+    val spendByCommand: records: SpendRecord list -> (string * int * int) list
+
     /// The warning threshold. Below this, the operator is told.
     ///
     /// 500 points is roughly 70 full-board scans' worth of headroom on the live 640-item board — enough to

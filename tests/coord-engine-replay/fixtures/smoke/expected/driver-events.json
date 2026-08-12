@@ -1,0 +1,48 @@
+{
+  "active": [],
+  "schema": "fsgg.coord.driver-events/1",
+  "transitions": [
+    {
+      "evidence": "board-status:Ready",
+      "previous": null,
+      "reason": "no live claim; unclaimed and schedulable",
+      "ref": "FS-GG/FS.GG.SDD#42",
+      "state": "ready"
+    },
+    {
+      "evidence": "board-status:Ready",
+      "previous": null,
+      "reason": "no live claim; unclaimed and schedulable",
+      "ref": "FS-GG/FS.GG.SDD#43",
+      "state": "ready"
+    },
+    {
+      "evidence": "board-status:InProgress",
+      "previous": null,
+      "reason": "no live claim; unclaimed and schedulable",
+      "ref": "FS-GG/FS.GG.SDD#44",
+      "state": "ready"
+    },
+    {
+      "evidence": "board-status:Ready",
+      "previous": null,
+      "reason": "no live claim; unclaimed and schedulable",
+      "ref": "FS-GG/FS.GG.SDD#45",
+      "state": "ready"
+    },
+    {
+      "evidence": "board-status:Blocked",
+      "previous": null,
+      "reason": "board status is Blocked",
+      "ref": "FS-GG/FS.GG.SDD#47",
+      "state": "blocked:board status Blocked"
+    },
+    {
+      "evidence": "board-status:InProgress",
+      "previous": null,
+      "reason": "no live claim; unclaimed and schedulable",
+      "ref": "FS-GG/FS.GG.SDD#99",
+      "state": "ready"
+    }
+  ]
+}
