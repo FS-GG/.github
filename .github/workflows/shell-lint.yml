@@ -57,7 +57,9 @@ env:
   SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
 
 jobs:
-  # Offline, and FIRST: prove the gate can still say NO before believing it when it says yes.
+  # Offline: prove the gate can still say NO before believing it when it says yes. Runs IN PARALLEL
+  # with `lint` below, deliberately (.github#2414) — see that job's comment for why a `needs:` edge
+  # between them is exactly the defect this gate had.
   #
   # Its headline leg is the hole this gate had while it was being WRITTEN — an extension-only sweep
   # finds 47 of 51 files and silently skips `scripts/fsgg-coord`, which is to say it skips the exact
@@ -84,11 +86,20 @@ jobs:
       - name: Run the shell-lint fixture (no network)
         run: bash tests/shell-lint/run.sh
 
+  # DELIBERATELY NOT `needs: fixture` (.github#2414). `fixture`'s own last leg ("this repo's own
+  # shell must be clean") re-runs `scripts/lint-shell.sh` against THIS repo's live tree as part of
+  # ITS self-test — so a real finding in this tree fails `fixture` for the same cause `lint` exists
+  # to report. With a `needs:` edge, that failure cascades: `fixture` shows `fail`, and `lint` — the
+  # job actually named for the whole-repo verdict, and the one a reader glances at — shows
+  # `skipping`, not `fail`. That is exactly how a real SC2034 in
+  # `tests/reconcile-concurrency-scope/run.sh` shipped on `main` visibly (`#2391`'s checks showed
+  # `fixture: fail` / `lint: skipping`) and unblocked, because neither job is a required context
+  # either. Running `lint` unconditionally, in parallel, means a real defect now produces its OWN
+  # independent `fail` here — not a same-cause downgrade to `skipping` riding on `fixture`'s verdict.
   lint:
     name: "Lint every shell file in the repo (pinned shellcheck)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: fixture
     steps:
       - uses: actions/checkout@v7
 
