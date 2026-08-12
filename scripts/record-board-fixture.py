@@ -230,13 +230,13 @@ def main():
     ap.add_argument("--upstream", default="https://api.github.com")
     ap.add_argument("--owner", default=os.environ.get("FSGG_COORD_OWNER", "FS-GG"))
     ap.add_argument("--project", default=os.environ.get("FSGG_COORD_PROJECT", "Coordination"))
-    ap.add_argument("--engine", default=None, help="path to the compiled fsgg-coord-engine binary")
+    ap.add_argument("--engine-bin", default=None, help="path to the compiled fsgg-coord-engine binary")
     ap.add_argument("--commands", default="reconcile,ready,driver-events")
     ap.add_argument("--token-env", default="GITHUB_TOKEN")
     args = ap.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
-    engine = args.engine or str(repo_root / "src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine")
+    engine = args.engine_bin or str(repo_root / "src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine")
     if not Path(engine).exists():
         print(
             f"record-board-fixture: the engine must be built first: "
