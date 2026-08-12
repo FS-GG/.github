@@ -51,6 +51,19 @@ expect() {  # expect <name> <want-rc> <needle> <root> <base>
   fi
 }
 
+expect_ctx() {  # expect_ctx <name> <want-rc> <needle> <root> <base> -- <--required-context ...>
+  local name="$1" want="$2" needle="$3" root="$4" base="$5"; shift 5
+  local out rc=0
+  out="$(python3 "$TOOL" --root "$root" --base "$base" "$@" 2>&1)" || rc=$?
+  if [ "$rc" -ne "$want" ]; then
+    bad "$name (exit $rc, want $want)" "$out"
+  elif [ -n "$needle" ] && ! grep -qF "$needle" <<<"$out"; then
+    bad "$name (exit $want, but not for the stated reason: want '$needle')" "$out"
+  else
+    ok "$name"
+  fi
+}
+
 job() {  # job <file> <job-id> [name-line]
   { echo "name: w"; echo "on: { pull_request: }"; echo "jobs:"; echo "  $2:"
     [ -n "${3:-}" ] && echo "    name: $3"
@@ -163,7 +176,48 @@ expect "a job GAINING a strategy.matrix is still one producer, not a collision" 
   0 "ok: no top-level job's check-run name became newly ambiguous" "$RM" "$BM"
 
 # =============================================================================================
-# 6. Fail closed. "I could not check" is never green, and never a finding either (#266/#320).
+# 6. `--required-context` (.github#2447): an ABSOLUTE tripwire for an explicit, small set of names.
+# =============================================================================================
+# An already-ambiguous name, UNCHANGED between base and head, is not flagged by default (leg 1's
+# first assertion already proves that). But if the CALLER marks that same name as a required
+# context, it must be flagged — unconditionally, not as a base-vs-head regression, because a
+# required context that is already ambiguous is a live exposure every day it stays that way.
+RQ="$(repo "$WORK/required-context")"
+job "$RQ/.github/workflows/architecture-map.yml" reconcile
+job "$RQ/.github/workflows/coord-board-reconcile.yml" reconcile
+BRQ="$(commit_base "$RQ")"
+
+expect_ctx "an already-ambiguous name, unchanged, stays green WITHOUT --required-context" \
+  0 "ok: no top-level job's check-run name became newly ambiguous" "$RQ" "$BRQ"
+
+expect_ctx "the SAME already-ambiguous name, unchanged, is flagged WITH --required-context naming it" \
+  1 "the REQUIRED status check 'reconcile' is produced by 2 top-level jobs at HEAD" \
+  "$RQ" "$BRQ" --required-context reconcile
+expect_ctx "...and it names both producing files" \
+  1 "architecture-map.yml:reconcile" "$RQ" "$BRQ" --required-context reconcile
+expect_ctx "...and it says this is LIVE today, not merely a future risk" \
+  1 "LIVE, today" "$RQ" "$BRQ" --required-context reconcile
+
+expect_ctx "--required-context naming an UNAMBIGUOUS name stays green" \
+  0 "ok: no top-level job's check-run name became newly ambiguous" \
+  "$RQ" "$BRQ" --required-context some-other-context
+
+expect_ctx "--required-context naming a name absent from HEAD entirely stays green (no KeyError)" \
+  0 "ok: no top-level job's check-run name became newly ambiguous" \
+  "$RQ" "$BRQ" --required-context this-name-does-not-exist-anywhere
+
+# A NEW regression (leg 1's shape) is still reported the same way even with an unrelated
+# --required-context passed alongside it — the two finding classes are independent.
+RQ2="$(repo "$WORK/required-context-and-regression")"
+job "$RQ2/.github/workflows/only.yml" drift
+BRQ2="$(commit_base "$RQ2")"
+job "$RQ2/.github/workflows/second.yml" drift
+expect_ctx "a NEW regression is still caught with an unrelated --required-context also passed" \
+  1 "the check-run name 'drift' is now produced by 2 top-level jobs" \
+  "$RQ2" "$BRQ2" --required-context reconcile
+
+# =============================================================================================
+# 7. Fail closed. "I could not check" is never green, and never a finding either (#266/#320).
 # =============================================================================================
 RE="$(repo "$WORK/empty")"
 echo "no workflows here" > "$RE/README.md"   # something to commit — an empty tree cannot be
@@ -192,7 +246,7 @@ expect "a workflow with no jobs: at HEAD is exit 3 — it cannot run" \
   3 "declares no \`jobs:\` mapping" "$RNoJobs" "$BNJ"
 
 # =============================================================================================
-# 7. The gate's own shipped surface.
+# 8. The gate's own shipped surface.
 # =============================================================================================
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 if python3 - "$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml" <<'PY'
@@ -204,10 +258,20 @@ body = "".join(str(s.get("run", "")) for j in d["jobs"].values() for s in j.get(
 assert "check-job-uniqueness.py" in body, "the gate workflow never runs the gate"
 assert "tests/job-uniqueness/run.sh" in body, "the gate workflow never runs this fixture"
 assert "merge-base" in body, "the gate must compare against the merge-base, not the base tip (#375)"
+# .github#2447: the shipped workflow must actually pass the live-required plain top-level contexts
+# through, or the new tripwire above is dead code nobody wires up.
+assert "--required-context" in body, "the gate workflow never passes --required-context (.github#2447)"
+for expected in ("projection", "roster-closure", "drift", "reconcile"):
+    assert expected in body, f"the gate workflow never names {expected!r} as a --required-context"
+assert "--required-context contract-coherence" not in body, (
+    "the nested contract-coherence / coherence context must NOT be passed as --required-context — "
+    "it can never match a top-level producer, and would be silently vacuous (see the workflow's own "
+    "header comment)"
+)
 for jid, j in d["jobs"].items():
     assert isinstance(j.get("timeout-minutes"), int), f"job {jid} does not bound itself (#541)"
 PY
-then ok "the shipped job-uniqueness-coherence.yml declares no invalid scope, bounds its jobs, diffs the merge-base, and runs both the gate and this fixture"
+then ok "the shipped job-uniqueness-coherence.yml declares no invalid scope, bounds its jobs, diffs the merge-base, wires --required-context, and runs both the gate and this fixture"
 else bad "the shipped job-uniqueness-coherence.yml is not the shape this fixture asserts"
 fi
 
