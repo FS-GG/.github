@@ -869,3 +869,46 @@ let ``#2419 round 1 - a non-object 'data' is no meter either, at every depth`` (
         Budget.observeGraphQlBody body
 
     Assert.Equal(0, (Budget.graphQlSpend ()).Calls)
+
+[<Fact>]
+let ``#2419 round 2 - a Number that is not an Int32 is no meter, and never a rounded one`` () =
+    // `ValueKind = Number` does NOT mean "an Int32". `GetInt32()` throws FormatException on a fractional
+    // value and on anything outside Int32's range — the THIRD distinct exception type this one shape has
+    // produced, after two InvalidOperationExceptions. Found by the critic at round 2 of PR #2419.
+    //
+    // The reading must be `None`, NOT a rounded or truncated int: a cost of `7.5` is not a number the
+    // server sent us, and inventing `7` or `8` from it is the confident-number-with-nothing-behind-it
+    // failure this module exists to refuse.
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":7.5,"remaining":4992}}}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":1,"remaining":99999999999}}}""").IsNone)
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":-2147483649,"remaining":10}}}""").IsNone)
+
+    // A NEGATIVE in-range value is still a Number the meter can read — the guard rejects unreadable
+    // values, not merely surprising ones, and must not quietly become a range policy of its own.
+    match Budget.readMeter """{"data":{"rateLimit":{"cost":-1,"remaining":4999}}}""" with
+    | Some m -> Assert.Equal(-1, m.Cost)
+    | None -> failwith "an in-range Int32 must still read, however odd its value"
+
+    // None of them may throw through the accumulator or move it.
+    Budget.resetGraphQlSpend ()
+    Budget.observeGraphQlBody """{"data":{"rateLimit":{"cost":7.5,"remaining":1}}}"""
+    Assert.Equal(0, (Budget.graphQlSpend ()).Calls)
+
+[<Fact>]
+let ``#2419 the handler is a BACKSTOP for the whole shape, not one exception type`` () =
+    // Three review rounds found three instances of one shape — an unguarded JsonElement call raising an
+    // exception the handler did not name. The typed guards are the primary mechanism; this asserts the
+    // fail-safe behind them, because #2418 puts `readMeter` on EVERY 2xx GraphQL response the fleet gets,
+    // and a fourth instance must not be able to kill a command that merely made a GraphQL call.
+    //
+    // Every one of these is a body the parser cannot read. NONE of them may throw, and none may produce a
+    // reading — "I could not read it" is the answer, never a fabricated number.
+    for body in
+        [ "[]"
+          "null"
+          """{"data":[1,2,3]}"""
+          """{"data":{"rateLimit":[]}}"""
+          """{"data":{"rateLimit":{"cost":"1","remaining":"2"}}}"""
+          """{"data":{"rateLimit":{"cost":7.5,"remaining":4992}}}"""
+          """{"data":{"rateLimit":{"cost":{},"remaining":{}}}}""" ] do
+        Assert.True((Budget.readMeter body).IsNone, $"expected no meter reading for %s{body}")

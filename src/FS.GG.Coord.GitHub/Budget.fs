@@ -274,7 +274,15 @@ module Budget =
             | Some rl ->
                 let intOf (name: string) =
                     match rl.TryGetProperty name with
-                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                    // `ValueKind = Number` does NOT mean "an Int32". `GetInt32()` throws `FormatException`
+                    // — a third exception type again — on `7.5` or on anything outside Int32's range, so
+                    // the kind guard alone is not enough and `TryGetInt32` is what actually asks the
+                    // question. Round-2 finding on PR #2419; a cost of `7.5` is not a meter reading we
+                    // understand, and rounding one into an int would invent a number the server never sent.
+                    | true, v when v.ValueKind = JsonValueKind.Number ->
+                        match v.TryGetInt32() with
+                        | true, parsed -> Some parsed
+                        | _ -> None
                     | _ -> None
 
                 match intOf "cost", intOf "remaining" with
@@ -283,7 +291,22 @@ module Budget =
                 // half a meter as a whole one would be a confident number with nothing behind it.
                 | _ -> None
 
-        with :? JsonException ->
+        // THREE ROUNDS OF REVIEW FOUND THREE INSTANCES OF ONE SHAPE, so this handler stops naming a single
+        // exception type. `JsonException` is what a malformed DOCUMENT raises; the escapes actually found
+        // were `InvalidOperationException` (asking a non-object for a property, twice) and
+        // `FormatException` (`GetInt32()` on a non-Int32 number) — neither of which it caught.
+        //
+        // The typed guards above remain the primary mechanism and are not weakened by this: each one is
+        // precise about what it accepts, and a body this function cannot read still returns `None` rather
+        // than a fabricated number. This is belt-and-braces, not a substitute for the guards — a FOURTH
+        // instance of the shape must not be able to take down the command that merely made a GraphQL call,
+        // because #2418 wires this onto EVERY 2xx GraphQL response the fleet receives. Telemetry that can
+        // kill the tool it measures is worse than no telemetry.
+        with
+        | :? JsonException
+        | :? InvalidOperationException
+        | :? FormatException
+        | :? OverflowException ->
             // A body that does not parse is not a meter reading of zero. It is no reading at all, and the
             // caller's own malformed-body handling owns it — the meter does not get to invent a number
             // from bytes it could not read.
