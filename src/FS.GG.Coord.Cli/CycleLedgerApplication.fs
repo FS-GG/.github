@@ -100,6 +100,17 @@ module CycleLedgerApplication =
             invalidOp $"trusted provider validator identity is unsupported: %s{fileName} sha256:%s{digest}"
         path
 
+    /// `FS.GG.SDD.Cli verify --dry-run` `toolVersion` identities this engine has explicitly vetted
+    /// against the #2133 provider-authority contract (validator identity must come from the engine,
+    /// never from the artifact or its caller). Adding a version here is a deliberate, reviewed act:
+    /// re-vet the target release's `verify` output against that contract first, then advance the
+    /// workflow install pins (`coord-engine.yml`, `contract-coherence.yml`) and the renovate
+    /// `allowedVersions` cap (`default.json`) to match in the SAME change (.github#2464, .github#2465).
+    /// An unlisted `toolVersion` fails closed with the exact value it reported, so a validator bump
+    /// that outruns this list surfaces as one specific, actionable refusal here — not as unrelated
+    /// downstream test failures a caller has to trace back to this comparison.
+    let private acceptedFsggSddValidatorVersions = [ "1.0.0" ]
+
     let private validateProviderArtifact expectedIdentity provider node =
         let root = providerRoot node
         let path = text "artifactPath" node
@@ -113,8 +124,12 @@ module CycleLedgerApplication =
             let result = report.RootElement
             let command = property "command" result
             let context = property "context" result
-            if text "toolVersion" result <> "1.0.0" || text "name" command <> "verify" || text "workId" context <> expectedIdentity then
-                invalidArg "artifactPath" "fsgg-sdd validator identity, version, command, or work binding is unsupported"
+            let reportedVersion = text "toolVersion" result
+            if not (List.contains reportedVersion acceptedFsggSddValidatorVersions) then
+                let accepted = String.concat ", " acceptedFsggSddValidatorVersions
+                invalidArg "artifactPath" $"fsgg-sdd validator toolVersion %s{reportedVersion} is not vetted; accepted: %s{accepted}"
+            if text "name" command <> "verify" || text "workId" context <> expectedIdentity then
+                invalidArg "artifactPath" "fsgg-sdd validator identity, command, or work binding is unsupported"
             if not (bool "coherent" result) || text "outcome" result <> "noChange" then
                 invalidArg "artifactPath" "fsgg-sdd verify did not confirm a coherent, byte-current provider view"
         | "critique" ->
