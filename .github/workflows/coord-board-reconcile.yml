@@ -216,6 +216,35 @@ jobs:
       # step below (EX_RATE/75 -> `::warning::` + `exit 0`) — if this honest-header check is ever wrong
       # anyway (a rate-limit reset landing between this read and the scan, for instance), THAT mapping is
       # what keeps a mid-scan budget exhaustion a soft defer rather than a hard failure, not this step.
+      #
+      # .github#2356: the `reserve=750` below was originally a fixed floor with NO documented
+      # relationship to what a scan actually costs — three consecutive live runs (2026-08-11) each
+      # passed this pre-flight and then ran the installation's REST budget to zero mid-scan anyway,
+      # because a full `reconcile --apply` pass was measured that day at 2,050+ REST requests: one
+      # uncached `GET /issues/{n}/comments` per CLOSED row (1,847 of 1,916 issues read), since
+      # `Client.fs`'s `needsDeliveryRead` paid that read for every `Closed`/`InReview` item regardless
+      # of whether `LifecycleProjection.project` (`LifecycleProjection.fs`) could reach a verdict
+      # without it.
+      #
+      # RAISING THIS NUMBER WAS NOT THE FIX. .github#2382/#2383 found and closed the actual root cause
+      # instead — bounding the delivery read to rows whose projection is still unsettled, since a
+      # `DoneStamped` or `Withheld` verdict for a closed row is reachable from free scan facts alone —
+      # and cut the identical dry run against the identical board from 2,050+ requests to 121
+      # (.github#2356, re-measured 2026-08-11T12:58:57Z, same logging-reverse-proxy method). 121 sits
+      # comfortably under 750 (~6x headroom): a bigger reserve would have masked the symptom the three
+      # live runs actually hit while leaving its cause in place, and a floor still unrelated to cost
+      # would not have made the guarantee this step exists for. 750 is being KEPT rather than
+      # re-derived from nothing, because that same measurement now gives it an explicit, traceable
+      # relationship to what a scan costs. If a future measurement shows unsettled-item volume has
+      # grown enough to erode that margin, re-run .github#2356's method and adjust this constant with
+      # the same evidence — do not raise it on suspicion alone, which is the failure mode this history
+      # exists to prevent.
+      #
+      # A second sizing question this issue's history raised — whether CONCURRENT scans multiply this
+      # cost past the reserve — is resolved by the `concurrency:` block above, not by this step: `queue:
+      # max` serialises every run of this workflow onto one FIFO queue, so only one reconcile scan is
+      # ever actually RUNNING at a time regardless of how many are pending. There is no concurrent
+      # multiplier for this reserve to size against.
       - name: Check REST budget before scanning
         id: budget
         env:
