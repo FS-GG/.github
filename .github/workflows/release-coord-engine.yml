@@ -178,6 +178,14 @@ jobs:
           fi
           echo "packaged engine: installed and fail-closed on the mandatory delivery-route boundary" >> "$GITHUB_STEP_SUMMARY"
 
+      # RECORDED-BOARD REPLAY, BEFORE EVERY CUT (.github#2401 AC5). Same leg `coord-engine.yml` runs on
+      # every PR, run here against the freshly-built engine one more time before it ships: a cut cannot
+      # proceed on a projection whose recorded verdicts moved unexplained. Runs against the just-built
+      # `dotnet pack` output (Release), not the installed tool-path package, since it drives the raw
+      # executable exactly as tests/coord-engine-e2e/run.sh already does in the PR gate.
+      - name: Recorded-board replay — the engine reproduces facts it was actually asked, not invented ones
+        run: bash tests/coord-engine-replay/run.sh
+
       - name: Push to org GitHub Packages feed
         if: steps.v.outputs.push == 'true'
         run: |

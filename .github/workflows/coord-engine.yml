@@ -30,7 +30,9 @@ on:
       - "tests/coord-engine-e2e/**"
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
+      - "tests/coord-engine-replay/**"
       - "scripts/fsgg-coord"
+      - "scripts/record-board-fixture.py"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -46,7 +48,9 @@ on:
       - "tests/coord-engine-e2e/**"
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
+      - "tests/coord-engine-replay/**"
       - "scripts/fsgg-coord"
+      - "scripts/record-board-fixture.py"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -115,6 +119,18 @@ jobs:
       # corpus's own contract, so the two cannot drift.
       - name: Parity — the engine matches the corpus's certified batch answer
         run: bash tests/coord-engine-parity/run.sh
+
+      # RECORDED-BOARD REPLAY (.github#2401). Every fixture above is HAND-AUTHORED — it encodes its
+      # author's belief about what GitHub returns, which is exactly the blind spot for the
+      # lifecycle/projection defect class (.github#2384, .github#2394): those bugs are about the engine
+      # meeting a board state its author never pictured, not about mishandling a response it expected.
+      # This leg drives the compiled engine against a RECORDED transcript instead
+      # (`tests/coord-engine-replay/`, `scripts/record-board-fixture.py`) and includes a fixture that
+      # reproduces the wrong half of .github#2216's tabulated verdict deterministically, marked
+      # expected-fail and tracked at .github#2384 — the leg proves the instrument catches the class
+      # without also fixing the projection here.
+      - name: Recorded-board replay — the engine reproduces facts it was actually asked, not invented ones
+        run: bash tests/coord-engine-replay/run.sh
 
       # CAN THE #1794 MUTATION MATRIX STILL BE RUN? (.github#1825) — seconds, not the ~50 minutes the
       # matrix itself costs. `tests/coord-engine-mutation/specs.yml` mutates guards by EXACT SOURCE TEXT,
