@@ -1,0 +1,112 @@
+# Gate POST-PUBLISH completion of the FS.GG.Kit / FS.GG.Drivers / coord-engine coherent set
+# (.github#2445, residual of .github#2409).
+#
+# `.github#2409` (PR #2441) put a sibling-tag PRECONDITION in each of release-kit.yml,
+# release-drivers.yml and release-coord-engine.yml: before publishing, each refuses unless the other
+# two packages' own tags, at the same version, already resolve to the commit being packed. That
+# proves sibling-tag CO-EXISTENCE at the moment the precondition runs, never sibling publish
+# CO-COMPLETION — the three workflows are independently triggered by the same tag-push event and
+# share no `needs:`/ordering after that check. Push all three tags together, have all three
+# preconditions pass, and then have ONE package's run fail downstream of it (a flaky check, a
+# transient nuget.org outage, a real build defect) and that package silently does not publish while
+# its two siblings do. Nothing watched for that divergence: `check-feed-coherence.py` compares the
+# registry's `package-version` to the feed, but only `coord-engine` carries a `registry/dependencies.yml`
+# row among the three (.github#2402 DEC-002) — FS.GG.Kit and FS.GG.Drivers carry none, so a
+# Kit/Drivers disagreement has no automated gate at all.
+#
+# scripts/check-release-coherence.py closes that. THE COMPARAND IS THE NEWEST FULLY-TAGGED TRIO, NOT
+# "EACH PACKAGE'S OWN NEWEST" — measured against the live feeds while building this gate: the three
+# packages' own newest versions disagree permanently today (Kit 0.49.0, Drivers 0.18.0, coord-engine
+# 0.23.0), simply because each carried an independent version line before .github#2402, and nothing
+# is broken. So the gate finds the newest version V for which `kit/vV`, `drivers/vV` and
+# `coord-engine/vV` ALL exist at one shared commit — exactly what the precondition above already
+# proves before any of the three publishes — and asserts every one of the three actually serves V, on
+# BOTH feeds this repository publishes to (org GitHub Packages + nuget.org). No coordinated release
+# yet is reported, loudly, but is NOT a failure — the subject genuinely does not exist yet. Separately
+# (and independent of any trio), each package's own org-feed newest must agree with its own
+# nuget.org newest — the OTHER way a single release can half-complete, catching a dual-publish gap
+# even between coordinated releases. Deliberately reads the feeds and tags directly rather than adding
+# `registry/dependencies.yml` rows for Kit/Drivers — see the gate's own docstring for why that would
+# restate .github#2402 DEC-002 rather than answer this item's question.
+#
+# THREE TRIGGERS, the three ways this can be found out:
+#   * workflow_run — fires within minutes of any one of the three release workflows completing, which
+#     is the fastest a sibling failure downstream of the precondition can be caught. Named explicitly
+#     (three files, rarely renamed) rather than left unfiltered — `workflow_run` REQUIRES a
+#     `workflows:` list to parse at all, unlike `pull_request`/`push`, which is why this cannot mirror
+#     `coord-board-reconcile.yml`'s decision to drop the trigger instead of maintaining one.
+#   * schedule — the fallback bound. A run that fails BEFORE any of the three workflows starts (queued
+#     but never dispatched), or a `workflow_run` GitHub itself drops, still gets caught within a day.
+#   * pull_request / push(main), path-filtered to this gate's own files — the AUTHORING obligation: a
+#     PR that breaks the gate script or its fixture is caught before merge, on the fixture job only
+#     (this gate's live subject is the feeds, not any PR's diff, exactly as feed-coherence.yml reasons
+#     about its own live job).
+#
+# FAILS CLOSED (epic #266): an unreadable feed, a 404 package, a missing token, or a feed serving zero
+# stable versions is an ERROR, never a skip. This workflow must never gain a `continue-on-error` or a
+# conditional that lets the live job be skipped into green.
+name: release-coherence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-release-coherence.py"
+      - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
+      - "tests/release-coherence/**"
+      - ".github/workflows/release-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-release-coherence.py"
+      - "scripts/fsgg_feed.py"
+      - "tests/release-coherence/**"
+      - ".github/workflows/release-coherence.yml"
+  workflow_run:
+    workflows: ["release-kit", "release-drivers", "release-coord-engine"]
+    types: [completed]
+  schedule:
+    # Daily, offset from the existing 06:xx coherence cluster (feed-coherence 06:17,
+    # permission-coherence 06:29, kit-published-coherence/publish-flags 06:37, pin-coherence/
+    # engine-freshness 06:43, engine-pin-coherence/source-coherence 06:53) so the feed reads do not
+    # contend with them.
+    - cron: "59 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read   # read the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
+
+concurrency:
+  group: release-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate goes red on every drift/fails-open condition before we trust its green.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the release-coherence fixture (no network)
+        run: bash tests/release-coherence/run.sh
+
+  # Online. The actual coherence signal — never runs on a pull_request, whose diff is not this
+  # gate's subject (mirrors feed-coherence.yml's `feed` job).
+  coherence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: fixture
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Does the newest coordinated coherent-set release fully publish, on both feeds?
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern (cf. architecture-map.yml, contract-coherence.yml, feed-coherence.yml). Reads the
+          # org feed (needs `packages: read`). `git ls-remote` against the public release tags below
+          # needs no credential at all — the same anonymous read release-kit.yml's own sibling-tag
+          # precondition already performs.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check-release-coherence.py
