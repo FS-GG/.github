@@ -46,13 +46,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-005]
     obligationRefs: [EV001]
-    artifacts: ["Directory.Build.props", "src/FS.GG.Kit/FS.GG.Kit.csproj", "src/FS.GG.Drivers/FS.GG.Drivers.csproj", "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"]
+    artifacts: [Directory.Build.props, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, src/FS.GG.Drivers/FS.GG.Drivers.csproj, src/FS.GG.Kit/FS.GG.Kit.csproj]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "FR-001 is implemented and merged (.github#2410, item/2402-coherent-set-versioning). `Directory.Build.props:85` declares exactly one `<FsggCoherentSetVersion>0.50.0</FsggCoherentSetVersion>` property. `git grep -n \"<Version>\" src/FS.GG.Kit/FS.GG.Kit.csproj src/FS.GG.Drivers/FS.GG.Drivers.csproj src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj` on HEAD (4efe2e9b18fd3fbb39fd36c76f7ef8df6d8a8b9e) shows only `<Version>$(FsggCoherentSetVersion)</Version>` in each of the three files — no independent literal remains. `dotnet msbuild <each project> -getProperty:Version` re-run by this worker evaluates `0.50.0` for all three (re-verifying VO-001, see EV010)."
     owner: github
-    scope: "the shared version property and its three consumers"
+    scope: the shared version property and its three consumers
     laterLifecycleVisibility: "Enforced continuously by scripts/check-coherent-set-version.py (EV002); any regression reds coherent-set-version.yml on the next PR."
     notes: ["Recorded as a deferral per this repo's evidence convention: a direct/hermetic worker re-check, not a fresh CI-produced digest-tracked TRX/JUnit report — the requirement itself is fulfilled and merged; see rationale for the re-verification performed by this worker."]
   - id: EV002
@@ -67,13 +67,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: ["scripts/check-coherent-set-version.py", ".github/workflows/coherent-set-version.yml", "tests/coherent-set-version/run.sh"]
+    artifacts: [".github/workflows/coherent-set-version.yml", scripts/check-coherent-set-version.py, tests/coherent-set-version/run.sh]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "FR-002's gate and its gate-inversion (mutation) fixture are implemented and merged. This worker re-ran `bash tests/coherent-set-version/run.sh` on HEAD (4efe2e9b): 13 passed, 0 failed, including two MUTATION legs (`MUTATION: one project reverted to an independent literal is red`, `MUTATION: the FIRST-checked project reverted to a literal is red`) both followed by a restore-and-green assertion, plus no-verdict legs for unreadable/duplicate-property/duplicate-Version malformed inputs, and a positive leg confirming the three real shipped project files are coherent today."
     owner: github
-    scope: "the coherent-set-version gate and its mutation coverage"
+    scope: the coherent-set-version gate and its mutation coverage
     laterLifecycleVisibility: "Runs on every PR, push and schedule via coherent-set-version.yml; a future independent-literal regression reds it before merge."
     notes: ["Recorded as a deferral: direct/hermetic worker re-run of the merged hermetic fixture, not a fresh CI-produced TRX/JUnit artifact; command and full pass/fail tally are in the rationale."]
   - id: EV003
@@ -88,7 +88,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: ["docs/registry/compatibility.md"]
+    artifacts: [docs/registry/compatibility.md]
     sourceRefs: []
     result: deferred
     synthetic: false
@@ -109,13 +109,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: ["docs/registry/compatibility.md", "work/2402-coherent-set-versioning/clarifications.md"]
+    artifacts: [docs/registry/compatibility.md, work/2402-coherent-set-versioning/clarifications.md]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "DEC-002 (clarifications.md) evaluates all seven named gates (check-source-coherence.py, check-feed-coherence.py, check-pin-coherence.py, check-engine-pin.py, check-kit-published-coherence.py, check-lock-ranges.py, contract-coherence.yml) and finds none asserts drift between FS.GG.Kit, FS.GG.Drivers and coord-engine's own version scalars — each is a per-package registry/source/feed/pin lattice entry. Zero gates deleted; each justified to keep, one line per gate, in both DEC-002 and docs/registry/compatibility.md's own \"Deferred to a follow-up, deliberately\" paragraph. The follow-up (.github#2409) independently re-ran this evaluation against its new sibling-tag-precondition design (compatibility.md's \"Gate re-confirmation against the new design\" paragraph) and reached the same conclusion: zero of the (now eight, +coherent-set-version.yml itself) relevant gates are made redundant or deletable."
     owner: github
-    scope: "the coherence-gate inventory evaluation"
+    scope: the coherence-gate inventory evaluation
     laterLifecycleVisibility: "A stated finding; a future PR that actually deletes one of the seven named gates without new evidence would contradict this record."
     notes: ["Recorded as a deferral: direct inspection of gate source plus the two written evaluations (DEC-002 and its #2409 re-confirmation), not a CI-produced report."]
   - id: EV005
@@ -130,7 +130,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV005]
-    artifacts: ["work/2402-coherent-set-versioning/clarifications.md"]
+    artifacts: [work/2402-coherent-set-versioning/clarifications.md]
     sourceRefs: []
     result: deferred
     synthetic: false
@@ -151,14 +151,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV006]
-    artifacts: ["work/2402-coherent-set-versioning/clarifications.md"]
+    artifacts: [work/2402-coherent-set-versioning/clarifications.md]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "DEC-002, see EV004 — same decision, task-level record for T006 (Implement clarification decision DEC-002)."
     owner: github
-    scope: "the coherence-gate inventory evaluation"
-    laterLifecycleVisibility: "See EV004."
+    scope: the coherence-gate inventory evaluation
+    laterLifecycleVisibility: See EV004.
     notes: ["Recorded as a deferral: see EV004."]
   - id: EV007
     kind: deferral
@@ -172,13 +172,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV007]
-    artifacts: ["work/2402-coherent-set-versioning/clarifications.md"]
+    artifacts: [work/2402-coherent-set-versioning/clarifications.md]
     sourceRefs: []
     result: deferred
     synthetic: false
-    rationale: "DEC-003 defers workflow consolidation and the real dual-feed release (SB-005, this item's own AC2/AC7) to follow-up FS-GG/.github#2409, filed as a maintainer sequencing decision. That follow-up is now itself complete: PR #2441 (`876a504752fb2511a445f0bb6d0b8bcde1ea304d`, merged) landed the sibling-tag precondition across all three release workflows, and PR #2461 (merged 2026-08-12T16:15:49Z, on HEAD 4efe2e9b) cut and published the real coherent-set release — `kit/v0.50.0`, `drivers/v0.50.0` and `coord-engine/v0.50.0` all pushed together at commit 248435375cc6be0554e5c93552fd5cf44c128fd8, both feeds verified byte-identical, `registry/dependencies.yml`'s coord-engine row flipped to 0.50.0 on both axes, and a real isolated `dotnet tool install`/`dotnet add package` restore verified for all three packages (registry/dependencies.yml:900-902's own evidence trail, read by this worker). This closes the loop DEC-003 opened: the deferral was honored, and the deferred work has since landed."
+    rationale: "DEC-003 defers workflow consolidation and the real dual-feed release (SB-005, this item's own AC2/AC7) to follow-up FS-GG/.github#2409, filed as a maintainer sequencing decision. That follow-up is now itself complete, but AC2 and AC7 were NOT both discharged the same way and this entry states each precisely rather than treating 'the follow-up landed' as a single fact. AC7 (the real dual-feed publish) IS discharged literally: PR #2461 (merged 2026-08-12T16:15:49Z, on HEAD 4efe2e9b) cut and published the real coherent-set release — `kit/v0.50.0`, `drivers/v0.50.0` and `coord-engine/v0.50.0` all pushed together at commit 248435375cc6be0554e5c93552fd5cf44c128fd8, both feeds verified byte-identical, `registry/dependencies.yml`'s coord-engine row flipped to 0.50.0 on both axes, and a real isolated `dotnet tool install`/`dotnet add package` restore verified for all three packages (registry/dependencies.yml:900-902's own evidence trail, read by this worker). AC2 (`release-kit.yml`, `release-drivers.yml` and `release-coord-engine.yml` replaced by one workflow, or reduced to thin callers of one reusable job`) is NOT discharged as literally written: PR #2441 (`876a504752fb2511a445f0bb6d0b8bcde1ea304d`, merged) left all three workflow files full and independent (417/236/319 lines, each with its own complete `jobs:` block) and instead added a sibling-tag precondition inside each unchanged file, so one shared trigger (pushing all three tags in one `git push`) is required before any of the three will publish. This is a deliberate, separately reviewed SUBSTITUTE for AC2's literal architecture, recorded and justified in `#2409`'s own `clarifications.md` DEC-004 with that item's independent critic's sign-off (the abandoned-consolidation and abandoned-tag-rename rationale — nuget.org's Trusted Publishing OIDC binds to the exact (owner, repo, workflow filename, package id) tuple, and a receiver-side `kit-bump-shape` reporter reads the literal `kit/v<pin>` tag namespace, so renaming either the workflow files or the tag namespaces would have silently broken the fleet's sole coord-engine distribution path). Its own residual gap (a maintainer could still `workflow_dispatch` exactly one of the three files) was named explicitly rather than silently closed, and filed/closed as `#2445`'s `release-coherence.yml` post-publish completion gate. Whether the literal AC2 architecture (true consolidation or thin callers) is still worth doing later, now that the substitute is proven in production by a real release, is an open judgement call this item does not resolve either way — it is neither claimed done nor filed as further work by this entry. This worker's own judgement: the substitute is a complete, evidenced answer to the RISK AC2 named (three release events able to diverge), verified in production by the real cut (EV007's own AC7 evidence), and re-litigating the architecture choice DEC-004's critic already reviewed is out of this item's scope — but that is this worker's assessment, not a fact silently substituted for AC2's literal text."
     owner: github
-    scope: "the SB-005 deferral and its resolution"
+    scope: the SB-005 deferral and its resolution
     laterLifecycleVisibility: "The follow-up's own remaining obligation — a coordinated 7-receiver pin-bump fan-out — is tracked on .github#2409, not this item, since it touches paths outside this item's declared Paths:."
     notes: ["Recorded as a deferral: direct reading of the follow-up item's merged PRs and the registry row's evidence trail, not a CI-produced report scoped to this item."]
   - id: EV008
@@ -193,14 +193,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002]
     obligationRefs: [EV008]
-    artifacts: ["Directory.Build.props", "src/FS.GG.Kit/FS.GG.Kit.csproj", "src/FS.GG.Drivers/FS.GG.Drivers.csproj", "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"]
+    artifacts: [Directory.Build.props, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, src/FS.GG.Drivers/FS.GG.Drivers.csproj, src/FS.GG.Kit/FS.GG.Kit.csproj]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "PC-001 (production code: one new MSBuild property, three project files change how <Version> resolves) is on HEAD — see EV001's re-verification. No package's next published version was held back by this change; the source-tree-only nature stated in PC-001 held true until the deferred follow-up (#2409) cut the real release, which has since happened (EV007)."
     owner: github
-    scope: "the production-code contract-impact surface"
-    laterLifecycleVisibility: "See EV001."
+    scope: the production-code contract-impact surface
+    laterLifecycleVisibility: See EV001.
     notes: ["Recorded as a deferral: direct re-verification, not a CI-produced report."]
   - id: EV009
     kind: deferral
@@ -214,13 +214,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV009]
-    artifacts: ["registry/dependencies.yml"]
+    artifacts: [registry/dependencies.yml]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "PC-002 (known consequence: coord-engine's source <Version> would disagree with the registry until the deferred release cuts, and check-engine-freshness.py would correctly begin reporting a release owed) is confirmed to have held and to still function correctly today. This worker re-ran `python3 scripts/check-engine-freshness.py --repo . --ref origin/main` on HEAD (4efe2e9b): it correctly resolves the CURRENT coherent-set tag `coord-engine/v0.50.0` (not the old v0.23.0) and reports `releaseOwed: true` with 3 unreleased commits since that tag (1 defect-class) — proving the detection mechanism tracks the coherent-set's own tag scheme correctly post-#2409's real cut, exactly the shape PC-002 predicted for the pre-cut window and DEC-004 predicted would continue to work post-cut. This is also this item's evidence for the parent issue's own AC5 (`.github#2381`'s release-owed detection still works against the set), which is out of this item's SDD-spec FR scope (SB-005 territory) but is answered here for completeness: the detection is unaffected in shape and confirmed still accurate against the real, cut set."
     owner: github
-    scope: "the release-owed detection mechanism against the coherent-set tag scheme"
+    scope: the release-owed detection mechanism against the coherent-set tag scheme
     laterLifecycleVisibility: "Continuously exercised by .github#2381-style tracking issues; the 3 unreleased commits observed here (unrelated to this item) are tracked by the board's own freshness signal, not by this item."
     notes: ["Recorded as a deferral: a real, freshly-run command against origin/main HEAD, not a CI-produced TRX/JUnit report. Full command and output are in the rationale."]
   - id: EV010
@@ -235,14 +235,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002]
     obligationRefs: [EV010]
-    artifacts: ["src/FS.GG.Kit/FS.GG.Kit.csproj", "src/FS.GG.Drivers/FS.GG.Drivers.csproj", "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"]
+    artifacts: [src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, src/FS.GG.Drivers/FS.GG.Drivers.csproj, src/FS.GG.Kit/FS.GG.Kit.csproj]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "VO-001, re-run by this worker on HEAD 4efe2e9b: `dotnet msbuild src/FS.GG.Kit/FS.GG.Kit.csproj -getProperty:Version` -> `0.50.0`; `dotnet msbuild src/FS.GG.Drivers/FS.GG.Drivers.csproj -getProperty:Version` -> `0.50.0`; `dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version` -> `0.50.0`. All three evaluate equal via the real evaluated-property technique, not a grep."
     owner: github
-    scope: "VO-001"
-    laterLifecycleVisibility: "Re-checkable at any time via the same three commands."
+    scope: VO-001
+    laterLifecycleVisibility: Re-checkable at any time via the same three commands.
     notes: ["Recorded as a deferral: a real, freshly-run command sequence, not a CI-produced TRX/JUnit report."]
   - id: EV011
     kind: deferral
@@ -256,13 +256,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV011]
-    artifacts: ["tests/coherent-set-version/run.sh"]
+    artifacts: [tests/coherent-set-version/run.sh]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "VO-002, re-run by this worker on HEAD 4efe2e9b: `bash tests/coherent-set-version/run.sh` -> `coherent-set-version fixture: 13 passed, 0 failed`, including both gate-inversion MUTATION legs and their restore-to-green follow-ups. See EV002 for the full pass list."
     owner: github
-    scope: "VO-002"
+    scope: VO-002
     laterLifecycleVisibility: "Re-checkable at any time via the same command; also runs in CI on every PR/push/schedule."
     notes: ["Recorded as a deferral: a real, freshly-run hermetic test suite, not a CI-produced TRX/JUnit report."]
   - id: EV012
@@ -277,13 +277,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-003]
     obligationRefs: [EV012]
-    artifacts: ["src/FS.GG.Kit/FS.GG.Kit.csproj", "src/FS.GG.Drivers/FS.GG.Drivers.csproj", "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"]
+    artifacts: [src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, src/FS.GG.Drivers/FS.GG.Drivers.csproj, src/FS.GG.Kit/FS.GG.Kit.csproj]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "VO-003, re-run by this worker on HEAD 4efe2e9b: `git grep -n \"<Version>\" src/FS.GG.Kit/FS.GG.Kit.csproj src/FS.GG.Drivers/FS.GG.Drivers.csproj src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj` shows exactly one `<Version>$(FsggCoherentSetVersion)</Version>` line per file (plus unrelated prose-comment occurrences of the literal string `<Version>` describing the mechanism) — no independent literal `<Version>` remains in any of the three files."
     owner: github
-    scope: "VO-003"
+    scope: VO-003
     laterLifecycleVisibility: "Re-checkable at any time via the same command; guarded continuously by scripts/check-coherent-set-version.py."
     notes: ["Recorded as a deferral: a real, freshly-run grep, not a CI-produced report."]
   - id: EV013
@@ -298,13 +298,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV013]
-    artifacts: ["src/FS.GG.Kit", "src/FS.GG.Drivers", "src/FS.GG.Coord.Cli"]
+    artifacts: [src/FS.GG.Coord.Cli, src/FS.GG.Drivers, src/FS.GG.Kit]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "VO-004, re-run by this worker on HEAD 4efe2e9b: `dotnet build src/FS.GG.Kit -c Release`, `dotnet build src/FS.GG.Drivers -c Release` and `dotnet build src/FS.GG.Coord.Cli -c Release` each report `Build succeeded. 0 Warning(s) 0 Error(s)` — the property substitution does not alter any other build behavior."
     owner: github
-    scope: "VO-004"
+    scope: VO-004
     laterLifecycleVisibility: "Re-checkable at any time via the same three commands; also exercised by this repo's own CI build gates."
     notes: ["Recorded as a deferral: a real, freshly-run build, not a CI-produced TRX/JUnit report (dotnet build produces no such artifact for a plain build)."]
   - id: EV014
@@ -319,14 +319,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV014]
-    artifacts: ["docs/registry/compatibility.md"]
+    artifacts: [docs/registry/compatibility.md]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "PM-001 (the migration note records the real migration: starting version 0.50.0, the max()+one-MINOR derivation, and that this item's own PR moved only source <Version>, not the published/registry/feed facts) is on HEAD — see EV003. The note has since been extended by #2409 with the actual cut's evidence, consistent with, not contradicting, PM-001's original scope boundary."
     owner: github
-    scope: "the migration posture record"
-    laterLifecycleVisibility: "See EV003."
+    scope: the migration posture record
+    laterLifecycleVisibility: See EV003.
     notes: ["Recorded as a deferral: direct documentation read, not a CI-produced report."]
   - id: EV016
     kind: deferral
@@ -340,13 +340,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002]
     obligationRefs: [EV016]
-    artifacts: ["readiness/2402-coherent-set-versioning/work-model.json"]
+    artifacts: [readiness/2402-coherent-set-versioning/work-model.json]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "GV-001: no generator input outside this work item's own SDD sources changes as part of this evidence/verify/ship pass (Directory.Build.props, the three project files, the gate script/workflow/test, and the migration note are all already on HEAD from the merged PR #2410; this pass only completes the SDD lifecycle bookkeeping). readiness/2402-coherent-set-versioning/work-model.json regenerates from this work item's own sources on the next fsgg-sdd stage command per GV-001's own statement; no other generated view (driver manifests, dashboards, skill-union bundle) is affected."
     owner: github
-    scope: "generated-view impact scoping"
+    scope: generated-view impact scoping
     laterLifecycleVisibility: "The work-model.json regeneration itself is this task's own deliverable, produced by fsgg-sdd tooling rather than hand-authored."
     notes: ["Recorded as a deferral: direct scoping check against the plan's own GV-001 statement, not a CI-produced report."]
   - id: EV017
@@ -361,7 +361,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV017]
-    artifacts: ["work/2402-coherent-set-versioning/clarifications.md"]
+    artifacts: [work/2402-coherent-set-versioning/clarifications.md]
     sourceRefs: []
     result: deferred
     synthetic: false
@@ -382,14 +382,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV018]
-    artifacts: ["work/2402-coherent-set-versioning/clarifications.md"]
+    artifacts: [work/2402-coherent-set-versioning/clarifications.md]
     sourceRefs: []
     result: deferred
     synthetic: false
     rationale: "DEC-004 (repair round 1, critic finding) — see EV017, same decision, task-level record for T018 (Implement clarification decision DEC-004)."
     owner: github
     scope: "the .github#2249/#2396 rollout-fit answer"
-    laterLifecycleVisibility: "See EV017."
+    laterLifecycleVisibility: See EV017.
     notes: ["Recorded as a deferral: see EV017."]
 lifecycleNotes:
   - "Next lifecycle action: verify."
