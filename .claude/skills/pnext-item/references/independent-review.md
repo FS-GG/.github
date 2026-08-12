@@ -269,16 +269,15 @@ nothing to say, not that no edit occurred; treating that absence as a confident 
 non-answer-graded-as-a-confident-negative shape **Gate-inversion evidence** above warns against. This
 was measured directly on `.github#2417`: its REST timeline returned zero `edited` events while GraphQL
 showed 5 real body edits, 3 of them after claim (`.github#2456`). The authoritative source for "has this
-body changed since X" is GraphQL `userContentEdits` (or `lastEditedAt`):
-
-```
-gh api graphql -f query='{repository(owner:"OWNER",name:"REPO"){issue(number:N){
-  createdAt lastEditedAt userContentEdits(first:20){totalCount nodes{editedAt editor{login}}}}}}'
-```
-
-Substitute `pullRequest(number:N)` for a PR body. A REST-timeline-only "no edits found" is `NOT_MEASURED`
-for this question, not a negative result — the same **Handoff-assertion provenance** discipline above
-applies: report what was actually checked rather than letting silence read as confirmation.
+body changed since X" is GraphQL's `userContentEdits` connection on the issue or pull request —
+`totalCount` plus, per edit, `editedAt` and `editor`; the simpler `lastEditedAt` scalar answers only
+"has it ever been edited," with no count or history. This repo's shared GraphQL budget is fleet-wide and
+worker-metered (`docs/coordination/graphql-budget.md`) — do not reach it with a hand-built `gh api
+graphql` call; that is the unmetered-principal shape `graphql-monopoly` exists to catch (`#418`, `#528`,
+`#538`). A REST-timeline-only "no edits found" is `NOT_MEASURED` for this question, not a negative
+result — the same **Handoff-assertion provenance** discipline above applies: report what was actually
+checked rather than letting silence read as confirmation, and route the GraphQL read through whatever
+metered access the org provides rather than around it.
 
 ## Root cause, dedupe, and materiality
 
