@@ -418,6 +418,7 @@ let main argv =
                 | FieldId
                 | OptionId
                 | ItemId
+                | BodyEdits
                 | Add
                 | Flush
                 | LintCmd

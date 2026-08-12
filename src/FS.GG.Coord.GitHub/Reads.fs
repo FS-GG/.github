@@ -1227,6 +1227,125 @@ module Reads =
                             )
                         )
 
+    // ---- body-edit provenance (.github#2477) -------------------------------------------------------
+
+    type ContentEdit = { EditedAt: DateTimeOffset; EditorLogin: string option }
+    type ContentEditProvenance = { Total: int; Edits: ContentEdit list }
+
+    [<Literal>]
+    let private ContentEditsDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issueOrPullRequest(number: $number) { ... on Comment { userContentEdits(first: 100) { totalCount nodes { editedAt editor { login } } } } } } rateLimit { cost remaining } }"
+
+    /// `.github#2477`: the metered read `.github#2456`'s independent-review contract names as the
+    /// authoritative source for "has this issue/PR body changed since X" — GraphQL's `userContentEdits`
+    /// connection, reached through the one metered transport rather than a hand-built `gh api graphql`
+    /// call `graphql-monopoly` refuses.
+    let contentEditProvenance
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<ContentEditProvenance> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} content-edit provenance"
+
+        let request =
+            { Method = "POST"
+              Path = "graphql"
+              Query = []
+              Body =
+                Transport.Query(
+                    ContentEditsDoc,
+                    [ "owner", Transport.VString owner
+                      "repo", Transport.VString repo
+                      "number", Transport.VNumber(double number) ]
+                )
+              Budget = GraphQl
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                // THE ORDER IS THE CONTRACT (`Board.graphQlData`): GitHub reports an exhausted GraphQL
+                // budget, and any other partial failure, as an HTTP 200 carrying `errors` — exactly like a
+                // genuinely partial response. `errors` is read BEFORE `data` is trusted, never reached as
+                // a fallback once extraction below fails, so a rate limit is reported AS a rate limit and
+                // not folded into the generic "malformed" arm.
+                let errors =
+                    match doc.RootElement.TryGetProperty "errors" with
+                    | true, e when e.ValueKind = JsonValueKind.Array && e.GetArrayLength() > 0 -> Some e
+                    | _ -> None
+
+                match errors with
+                | Some e ->
+                    let messages =
+                        e.EnumerateArray()
+                        |> Seq.map (fun err ->
+                            match err.TryGetProperty "message" with
+                            | true, m when m.ValueKind = JsonValueKind.String -> m.GetString()
+                            | _ -> "(no message)")
+                        |> List.ofSeq
+
+                    match Budget.ofGraphQlErrors messages with
+                    | Some limited -> Error limited
+                    | None -> Error(GraphQlErrors messages)
+
+                | None ->
+                    // FAILS CLOSED (#2456/#2477): a null `issueOrPullRequest` (not found, wrong type, or
+                    // not visible to this token), a response with no `userContentEdits`, or a `totalCount`
+                    // that is not a number are each a STRUCTURAL failure caught below as `Malformed` — an
+                    // ERROR, never `Ok { Total = 0; Edits = [] }`. `.github#2456` exists precisely because
+                    // a REST-timeline "no edits found" is `NOT_MEASURED`, not a negative result; degrading
+                    // an unreadable GraphQL response into an empty connection here would silently
+                    // manufacture that exact false negative through the "authoritative" path instead.
+                    try
+                        let editsNode =
+                            doc.RootElement
+                                .GetProperty("data")
+                                .GetProperty("repository")
+                                .GetProperty("issueOrPullRequest")
+                                .GetProperty("userContentEdits")
+
+                        let total = editsNode.GetProperty("totalCount").GetInt32()
+
+                        let edits =
+                            editsNode.GetProperty("nodes").EnumerateArray()
+                            |> Seq.choose (fun n ->
+                                match n.TryGetProperty "editedAt" with
+                                | true, v when v.ValueKind = JsonValueKind.String ->
+                                    match DateTimeOffset.TryParse(v.GetString()) with
+                                    | true, editedAt ->
+                                        let login =
+                                            match n.TryGetProperty "editor" with
+                                            | true, ed when ed.ValueKind = JsonValueKind.Object -> str ed "login"
+                                            | _ -> None
+
+                                        Some { EditedAt = editedAt; EditorLogin = login }
+                                    | _ -> None
+                                | _ -> None)
+                            |> List.ofSeq
+
+                        Ok { Total = total; Edits = edits }
+                    with
+                    | :? System.Collections.Generic.KeyNotFoundException
+                    | :? System.NullReferenceException
+                    // Same present-but-null case `subIssues` (#2365) and `recentCommentBodies` guard: a
+                    // `null` `data.repository` (or `.issueOrPullRequest`, or `.userContentEdits`) throws
+                    // `InvalidOperationException` from `GetProperty`, not `NullReferenceException`.
+                    | :? System.InvalidOperationException ->
+                        Error(
+                            Malformed(
+                                subject,
+                                "the content-edit response is missing `repository.issueOrPullRequest.userContentEdits` — a null or absent node here is a FAILED READ, never zero edits"
+                            )
+                        )
+
     let prHeadRef (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr}"

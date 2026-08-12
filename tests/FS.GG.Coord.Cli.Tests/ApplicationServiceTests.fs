@@ -4078,7 +4078,12 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
           // `review` refuses before any board/GitHub read: `--pr` is required (.github#2175 — there is
           // no review protocol before a PR exists), so this lands on that refusal deterministically,
           // the same way the four lock verbs above land on theirs.
-          Options.ReviewCmd, [ "review"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1 ]
+          Options.ReviewCmd, [ "review"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1
+          // `.github#2477`: the fixture answers no GraphQL document naming `userContentEdits` (its
+          // `graphqlAnswer` only knows the board-scan shapes), so `Reads.contentEditProvenance` gets a
+          // `NotFound` back and the read refuses at `Errors.exitCode NotFound` — 1, the same code the
+          // four lock verbs above land on for the same reason: the fixture has no answer for this call.
+          Options.BodyEdits, [ "body-edits"; "FS.GG.SDD#999"; "--json" ], 1 ]
 
     /// The `Json`-admitting verbs this fixture cannot reach, each with the reason and what reading their
     /// arms found. The reason lives HERE rather than in a PR body because that is the whole argument of
@@ -4168,6 +4173,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 | Options.Widen -> Client.widen ctx opts
                 | Options.SetPaths -> Client.setPaths ctx opts
                 | Options.ReviewCmd -> Client.review ctx opts
+                | Options.BodyEdits -> Client.bodyEditsCmd ctx opts
                 | other ->
                     failwithf
                         "the .github#1688 sweep has no dispatch for %A — add one to `runJsonArm`, or give the verb a reason in `notDriven`"

@@ -97,6 +97,11 @@ module Options =
         | OptionId
         /// The board item id for an issue (`item-id <ref>`) — 1 GraphQL, then cached forever.
         | ItemId
+        /// "Has this issue/PR body changed since X" (`body-edits <ref>`) — the metered GraphQL
+        /// `userContentEdits` read `.github#2456`'s independent-review contract names as authoritative,
+        /// reached through the one metered transport in place of a hand-built `gh api graphql` call
+        /// (`.github#2477`).
+        | BodyEdits
         /// Put an issue on the board, idempotently (`add <ref>`) — the metered verb the GraphQL monopoly
         /// rule (#586) names in place of `gh project item-add`, restored in #861.
         | Add

@@ -633,6 +633,137 @@ let ``refIsPullRequest is true iff the issues payload carries a pull_request obj
     | Ok false -> ()
     | other -> failwith $"a plain issue must probe false — got %A{other}"
 
+// ---- body-edit provenance (.github#2477) -------------------------------------------------------------
+
+[<Fact>]
+let ``contentEditProvenance reads the total apart from the visible edits, with each edit's time and editor`` () =
+    let transport =
+        serving
+            """{"data":{"repository":{"issueOrPullRequest":{"userContentEdits":{"totalCount":2,"nodes":[
+                 {"editedAt":"2026-08-01T10:00:00Z","editor":{"login":"alice"}},
+                 {"editedAt":"2026-08-02T11:30:00Z","editor":{"login":"bob"}}]}}}}}"""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Ok provenance ->
+        Assert.Equal(2, provenance.Total)
+
+        Assert.Equal<Reads.ContentEdit list>(
+            [ ({ EditedAt = System.DateTimeOffset.Parse "2026-08-01T10:00:00Z"
+                 EditorLogin = Some "alice" }: Reads.ContentEdit)
+              { EditedAt = System.DateTimeOffset.Parse "2026-08-02T11:30:00Z"
+                EditorLogin = Some "bob" } ],
+            provenance.Edits
+        )
+    | Error e -> failwith $"the provenance must resolve — got %A{e}"
+
+[<Fact>]
+let ``contentEditProvenance reports a genuine zero - measured, not defaulted`` () =
+    let transport =
+        serving """{"data":{"repository":{"issueOrPullRequest":{"userContentEdits":{"totalCount":0,"nodes":[]}}}}}"""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Ok provenance ->
+        Assert.Equal(0, provenance.Total)
+        Assert.Empty(provenance.Edits)
+    | Error e -> failwith $"a genuine zero must resolve, not refuse — got %A{e}"
+
+[<Fact>]
+let ``contentEditProvenance keeps a truncated connection honest - Total exceeds the visible nodes`` () =
+    // The 100-item cap on `userContentEdits(first: 100)` means a caller must be able to tell "5 edits, all
+    // listed" from "127 edits, 100 shown" — the same `SubIssueSet` distinction, over a different connection.
+    let transport =
+        serving
+            """{"data":{"repository":{"issueOrPullRequest":{"userContentEdits":{"totalCount":127,"nodes":[
+                 {"editedAt":"2026-08-01T10:00:00Z","editor":{"login":"alice"}}]}}}}}"""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Ok provenance -> Assert.True(provenance.Total > List.length provenance.Edits)
+    | Error e -> failwith $"the connection must resolve — got %A{e}"
+
+[<Fact>]
+let ``contentEditProvenance tolerates a deleted editor - a null actor is not a parse failure`` () =
+    let transport =
+        serving
+            """{"data":{"repository":{"issueOrPullRequest":{"userContentEdits":{"totalCount":1,"nodes":[
+                 {"editedAt":"2026-08-01T10:00:00Z","editor":null}]}}}}}"""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Ok provenance ->
+        Assert.Equal(1, provenance.Total)
+
+        Assert.Equal<Reads.ContentEdit list>(
+            [ ({ EditedAt = System.DateTimeOffset.Parse "2026-08-01T10:00:00Z"
+                 EditorLogin = None }: Reads.ContentEdit) ],
+            provenance.Edits
+        )
+    | Error e -> failwith $"a deleted editor must not fail the read — got %A{e}"
+
+// ---- AC4 (.github#2477): a failed or unauthorized read is a FAILED READ, never "no edits" -------------
+//
+// `.github#2456`'s whole point is that a REST-timeline "no edits found" is NOT_MEASURED, not a negative
+// result. A GraphQL read that folded any of these failures into `Ok { Total = 0; Edits = [] }` would
+// silently manufacture exactly that false negative through the "authoritative" path instead.
+
+[<Fact>]
+let ``#2477 contentEditProvenance FAILS CLOSED - a null issueOrPullRequest is an error, never zero edits`` () =
+    // Not found, wrong type, or not visible to this token — GraphQL answers with
+    // `data.repository.issueOrPullRequest: null`.
+    let transport = serving """{"data":{"repository":{"issueOrPullRequest":null}}}"""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 999999 with
+    | Error(Malformed _) -> ()
+    | Ok p -> failwith $"a null issueOrPullRequest must refuse, not report zero edits — got Total=%d{p.Total}"
+    | Error other -> failwith $"expected Malformed — got %A{other}"
+
+[<Fact>]
+let ``#2477 contentEditProvenance FAILS CLOSED - a null repository is an error, never zero edits`` () =
+    let transport = serving """{"data":{"repository":null}}"""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Error(Malformed _) -> ()
+    | Ok p -> failwith $"a null repository must refuse, not report zero edits — got Total=%d{p.Total}"
+    | Error other -> failwith $"expected Malformed — got %A{other}"
+
+[<Fact>]
+let ``#2477 contentEditProvenance FAILS CLOSED - an empty body is an error, never zero edits`` () =
+    let transport = serving ""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Error(Malformed _) -> ()
+    | Ok p -> failwith $"an unreadable body must refuse, not report zero edits — got Total=%d{p.Total}"
+    | Error other -> failwith $"expected Malformed — got %A{other}"
+
+[<Fact>]
+let ``#2477 contentEditProvenance FAILS CLOSED - a 200-with-errors rate limit is RateLimited, never zero edits`` () =
+    // GitHub reports an exhausted GraphQL budget as an HTTP 200 carrying `errors`, exactly like a
+    // genuinely partial response — the same shape `Board.graphQlData` guards. `errors` must be read
+    // BEFORE `data` is trusted, so this is a RateLimited error, not the generic Malformed the
+    // missing-data arm would produce if `errors` were never inspected first.
+    let transport =
+        serving
+            """{"data":null,"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded for installation ID 123."}]}"""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Error(RateLimited _) -> ()
+    | Ok p -> failwith $"a rate-limited response must refuse, not report zero edits — got Total=%d{p.Total}"
+    | Error other -> failwith $"expected RateLimited — got %A{other}"
+
+[<Fact>]
+let ``#2477 contentEditProvenance FAILS CLOSED - a generic GraphQL error is GraphQlErrors, never zero edits`` () =
+    let transport =
+        serving """{"data":null,"errors":[{"type":"FORBIDDEN","message":"Resource not accessible by integration"}]}"""
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Error(GraphQlErrors messages) -> Assert.Contains("Resource not accessible by integration", messages)
+    | Ok p -> failwith $"a forbidden response must refuse, not report zero edits — got Total=%d{p.Total}"
+    | Error other -> failwith $"expected GraphQlErrors — got %A{other}"
+
+[<Fact>]
+let ``#2477 contentEditProvenance FAILS CLOSED - a transport failure propagates as-is, never zero edits`` () =
+    match Reads.contentEditProvenance (failing (RateLimited(UnknownBudget, None))) "FS-GG" ".github" 2417 with
+    | Error(RateLimited _) -> ()
+    | Ok p -> failwith $"a transport failure must refuse, not report zero edits — got Total=%d{p.Total}"
+    | other -> failwith $"expected the transport's own error to propagate — got %A{other}"
 
 // ---- messages: the say/inbox channel ---------------------------------------------------------------
 

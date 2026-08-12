@@ -32,10 +32,21 @@ It has bitten twice, both times in the command least able to afford it:
 | `gh project item-edit` | `fsgg-coord set-field` | and it **queues** when the budget dies |
 | `gh issue view` / `list` | `fsgg-coord issues <repo>` | 2 pts → **0** (REST + ETag) |
 | `gh issue create`, any `gh pr …` | `gh api … repos/<o>/<r>/…` | GraphQL → **0** (REST) |
+| a hand-built `gh api graphql` `userContentEdits` query | **`fsgg-coord body-edits <ref>`** | metered, budget-attributed (`.github#2477`) |
 
 **`add` exists because of this rule.** Every recipe used to say `gh project item-add`, and the tool's
 own "not on board" message said it too — so the monopoly was unenforceable until the client could put
 an item on the board. A rule you cannot obey is not a rule, it is a reprimand.
+
+**`body-edits` exists for the same reason (`.github#2477`).** [`independent-review`](../../.claude/skills/pnext-item/references/independent-review.md)'s body-edit provenance check tells every critic that GraphQL's
+`userContentEdits` connection is the authoritative source for "has this body changed since X" — REST's
+timeline carries no body-edit event at all — and warns against a hand-built `gh api graphql` call. Until
+this command existed, `userContentEdits` appeared nowhere in this tree and this table had no "use this
+instead" row for the question, so a critic who followed the document could not perform the check, and a
+critic who performed it had to violate this rule to do so. `body-edits <ref>` closes that: one metered
+GraphQL query through the existing client path, budget-attributed like every other read, and it FAILS
+CLOSED — a read it cannot complete is reported as a failed read, never as "0 edits" (the exact false
+negative the contract's own warning exists to prevent).
 
 Two things are deliberately *not* in scope. **Prose that warns you off a command** is the opposite of
 a violation — the cost table below exists to say "never use `gh project item-list`" — so the gate
@@ -204,6 +215,7 @@ are deliberate:
 | `bootstrap [--refresh]` | (1) | Introspect project id + field/option ids **once** into a user-level cache (`~/.cache/fsgg-coord`). Refresh is only needed when the board's *schema* changes. |
 | `board` / `field-id` / `option-id` | (1) | Serve ids from cache — **zero** GraphQL calls. |
 | `item-id <issue>` | (2) | Resolve an issue's board item via `issue -> projectItems`, pick the matching board, cache it. One narrow call, then free. |
+| `body-edits <ref> [--json\|--text]` | (2) | "Has this issue/PR body changed since X" — one `userContentEdits(first:100)` query (`Reads.contentEditProvenance`), reading `totalCount` plus each edit's `editedAt`/`editor.login`. The connection is capped at 100, so `Total` is kept apart from the visible edits exactly like `subIssues`'s graph — a truncated answer says so rather than passing for a complete one. **Not cached**: unlike `item-id`, the answer can change on every subsequent edit, so there is nothing safe to memoise. FAILS CLOSED (`.github#2477`): a null `issueOrPullRequest`, a malformed body, or a 200-with-`errors` response are each reported as a failed read — never as `Ok` with zero edits, which would silently manufacture the exact `NOT_MEASURED`-vs-negative false negative `.github#2456`'s contract exists to prevent. |
 | `set-field <issue> <Field> <Value>` | (1)+(2) | Resolve project/field/item/option ids from cache and run **one** mutation, auto-routing by the field's `dataType` (single-select / date / number / text / iteration). No per-write introspection. One mutation per invocation, so `set-field <ref> <Field> <Value>` costs one point per field. **Lever 6 IS implemented** — use `set-field --batch <ref> A=1 B=2 …` to alias N fields into ONE document for ONE point ([#448](https://github.com/FS-GG/.github/issues/448), `Client.fs`'s `setFieldBatchCmd`). This cell read *"not yet implemented"* long after it shipped, which is worse than saying nothing: it sent readers to spend six points on the pass it makes cost one. |
 | `issues <repo> [--label L] [--jq E]` | (3) | List issues over **REST** with a stored **ETag**; an unchanged repeat 304s to cache. `--jq` projects the payload to trim what you read back. |
 | `ready [--repo R] [--status S] [--phase P] [--all]` | (4) | List the **actionable** board items (not `Done` by default). Projects v2 has no server-side item filter, so this is a full scan — but it selects only three fields per item (`Status`, `Phase`, `Blocked by`) via `fieldValueByName` (a **resolver** field, no node multiplication), not the `fieldValues(first:100)` nested inside `items(first:N)` that `gh project item-list` pays (**O(items × 100) ≈ 2,500 pts**). A 100-item page costs ~1 point. `--repo` takes a registry short-id (`sdd`/`rendering`/`governance`/`templates`/`.github`), an `owner/repo`, or a literal repo name. |
