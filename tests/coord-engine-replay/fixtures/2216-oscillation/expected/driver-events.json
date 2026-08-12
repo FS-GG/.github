@@ -1,0 +1,15 @@
+{
+  "active": [],
+  "schema": "fsgg.coord.driver-events/1",
+  "sourceSha": "5712f480a4cb13d3644d69f72e67279c7d93c4abf21b389ee8ea1da67e878c48",
+  "transitions": [
+    {
+      "evidence": "board-status:InReview",
+      "previous": null,
+      "reason": "no live claim; unclaimed and schedulable",
+      "ref": "FS-GG/FS.GG.SDD#500",
+      "sourceSha": "5712f480a4cb13d3644d69f72e67279c7d93c4abf21b389ee8ea1da67e878c48",
+      "state": "ready"
+    }
+  ]
+}

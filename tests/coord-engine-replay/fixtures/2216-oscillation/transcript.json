@@ -1,0 +1,167 @@
+{
+  "commands": [
+    "reconcile",
+    "ready",
+    "driver-events"
+  ],
+  "entries": [
+    {
+      "method": "GET",
+      "path": "/repos/FS-GG/FS.GG.SDD/issues",
+      "requestBody": null,
+      "responseBody": [
+        {
+          "body": "A row with a genuinely open, unclaimed implementation PR.\n\nPaths: src/Probe/**",
+          "number": 500,
+          "state": "open",
+          "title": "item 500"
+        }
+      ],
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/FS-GG/FS.GG.SDD/issues/500",
+      "requestBody": null,
+      "responseBody": {
+        "body": "A row with a genuinely open, unclaimed implementation PR.\n\nPaths: src/Probe/**",
+        "id": 1500,
+        "number": 500,
+        "state": "open"
+      },
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/FS-GG/FS.GG.SDD/issues/500/comments",
+      "requestBody": null,
+      "responseBody": [
+        {
+          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#500\",\"subjectRevision\":\"78785937e1a35c334217820a59690c085b4482c975d3e1c06fd8dbf22cc4f7c8\",\"route\":\"lightweight\",\"agent\":\"scenario-fixture\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"2216-oscillation scenario fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "created_at": "2026-01-01T00:00:00Z",
+          "id": 800500,
+          "updated_at": "2026-01-01T00:00:00Z",
+          "user": {
+            "login": "fixture"
+          }
+        }
+      ],
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/graphql",
+      "requestBody": {
+        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt body repository { nameWithOwner } } ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }",
+        "variables": {
+          "number": 1,
+          "owner": "FS-GG"
+        }
+      },
+      "responseBody": {
+        "data": {
+          "organization": {
+            "projectV2": {
+              "items": {
+                "nodes": [
+                  {
+                    "blockedBy": null,
+                    "class": null,
+                    "content": {
+                      "__typename": "Issue",
+                      "number": 500,
+                      "repository": {
+                        "nameWithOwner": "FS-GG/FS.GG.SDD"
+                      },
+                      "state": "OPEN",
+                      "title": "item 500"
+                    },
+                    "status": {
+                      "name": "In review"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "endCursor": null,
+                  "hasNextPage": false
+                }
+              }
+            }
+          },
+          "rateLimit": {
+            "cost": 1,
+            "remaining": 4999
+          }
+        }
+      },
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/graphql",
+      "requestBody": {
+        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt repository { nameWithOwner } } ... on PullRequest { id number title state createdAt repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }",
+        "variables": {
+          "number": 1,
+          "owner": "FS-GG"
+        }
+      },
+      "responseBody": {
+        "data": {
+          "organization": {
+            "projectV2": {
+              "items": {
+                "nodes": [
+                  {
+                    "blockedBy": null,
+                    "class": null,
+                    "content": {
+                      "__typename": "Issue",
+                      "number": 500,
+                      "repository": {
+                        "nameWithOwner": "FS-GG/FS.GG.SDD"
+                      },
+                      "state": "OPEN",
+                      "title": "item 500"
+                    },
+                    "status": {
+                      "name": "In review"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "endCursor": null,
+                  "hasNextPage": false
+                }
+              }
+            }
+          },
+          "rateLimit": {
+            "cost": 1,
+            "remaining": 4999
+          }
+        }
+      },
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    }
+  ],
+  "owner": "FS-GG",
+  "project": "Coordination",
+  "repo": "FS.GG.SDD",
+  "schema": "fsgg.coord.board-recording/1"
+}
