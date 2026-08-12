@@ -412,8 +412,10 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
   IFS="$(printf '\t')" read -r kind a b <<<"$drift"
 
   # THE REMEDY IS `merge --ff-only`, NOT `pull --ff-only` (.github#1664). The checkout `$top` names —
-  # the SHARED one, the only one this arm ever sends you to — is routinely on a DETACHED HEAD, and
-  # `git pull --ff-only` there does not fast-forward. It exits 1 with "You are not currently on a
+  # the SHARED one at tier 2b, or the CALLER'S OWN source build at tier 2 (.github#2471; this arm does
+  # NOT only ever send you to the shared one, whatever an earlier version of this comment claimed) — is
+  # routinely on a DETACHED HEAD, and `git pull --ff-only` there does not fast-forward. It exits 1 with
+  # "You are not currently on a
   # branch", having moved nothing. That is the worst failure available to THIS reader, because the
   # refusal it is attached to is fail-closed on every board write in the fleet (.github#1549): the
   # remedy runs, prints a git error about branches with no visible connection to engine staleness,
@@ -460,6 +462,33 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
   esac
 
   [ -n "$detail" ] || return 0                                       # the engine is current — say nothing
+
+  # .github#2402, LIVE: the shared checkout was `Already up to date`, and the refusal still stood,
+  # because the stale build lived under the WORKER'S OWN worktree (tier 2a) — a `dotnet build` run
+  # earlier in the item, before #2470/#2467 landed. Every clause above already names `$top` by absolute
+  # path (#931), so the checkout to fix was never mis-named. What was missing is the ONE fact that would
+  # have stopped the worker repairing the checkout that was never wrong: whether `$top` IS the shared
+  # checkout, or a build the worker's OWN worktree grew independently of it. Answer that here, once,
+  # rather than at every call site above — `shared_toplevel` is already defined by the time this file is
+  # sourced (`guards`, this file's one caller, is invoked after it), and paying its one `git worktree
+  # list` here costs nothing extra: this branch runs only when a refusal is ALREADY being composed, the
+  # slow path by construction, never on the silent common case measured in the file's header comment.
+  local shared
+  shared="$(shared_toplevel 2>/dev/null)"
+  if [ -n "$shared" ] && [ "$shared" != "$top" ]; then
+    detail="$detail
+
+            THIS IS NOT THE SHARED CHECKOUT. The shared one — the checkout every OTHER worker's
+            engine resolves through — lives at:
+              $shared
+            and may already be current; running its remedy fixes nothing here. The build above is a
+            SEPARATE source build under your OWN checkout, most likely a linked worktree where
+            \`dotnet build\` ran directly (tier 2a, .github#931) — it shadows the shared engine rather
+            than being it, and only rebuilding (or deleting the stale bin/obj under, then rebuilding)
+            THIS checkout — $top — clears the refusal. Do NOT merge \`origin/main\` into a feature
+            branch to fix this either: that moves a head an independent critic may already have
+            confirmed, which is authoring, not landing."
+  fi
 
   # `delivery-route` has both evidence reads and a receipt-ledger write.  Its verb remains in the
   # conditional-write partition, but these two grammar-anchored read arms may diagnose on stale code;

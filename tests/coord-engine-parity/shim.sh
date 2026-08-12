@@ -1088,6 +1088,26 @@ else
   bad "tier 2b: the caller's own build must outrank the shared one" "rc=$rc out=$out"
 fi
 
+# THE OWN BUILD CAN BE STALE WHILE THE SHARED CHECKOUT STAYS CURRENT (.github#2471, live on #2402).
+# `crake-8101` hit exit 69 with the SHARED checkout already `Already up to date` at `origin/main`'s
+# tip — the stale artifact was under their OWN worktree the whole time, built earlier in the item.
+# #931 already made the remedy name the checkout that owns the stale build by ABSOLUTE path, so `$top`
+# was never mis-named; what was missing is the one sentence that would have stopped the worker from
+# repairing the checkout that was never wrong. Age $WT's OWN source past its OWN build — $SH is
+# untouched here and stays current — and drive a BOARD WRITE from $WT.
+touch -d '1 hour ago' "$WT/$FIXSRC"   # newer than $OWN's build (2 hours ago) → $WT's OWN build STALE
+out="$(cd "$WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
+   && printf '%s' "$out" | grep -qi 'refused' \
+   && printf '%s' "$out" | grep -q "dotnet build $WT/src/FS.GG.Coord.Cli -c Release" \
+   && printf '%s' "$out" | grep -qi 'NOT THE SHARED CHECKOUT' \
+   && printf '%s' "$out" | grep -q "$SH" \
+   && printf '%s' "$out" | grep -qi 'not merge'; then
+  ok ".github#2471: a STALE tier-2a build beside a CURRENT shared checkout names ITS OWN toplevel, says plainly it is not the shared one (naming $SH), and does not send the reader to merge main into a feature branch"
+else
+  bad ".github#2471: the remedy must distinguish a stale own-build from a stale shared checkout, by absolute path, without sending the reader to merge main" "rc=$rc out=$out"
+fi
+
 ( cd "$SH" && git worktree remove --force "$WT" ) >/dev/null 2>&1
 rm -rf "$SH" "$WT"
 
