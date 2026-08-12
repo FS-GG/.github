@@ -2810,6 +2810,85 @@ module ApplicationServiceTests =
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    /// .github#2394 — a coherent `Blocked on: human/...` park must not be projected away by
+    /// `LIFECYCLE-PROJECTION-LAG`. One OPEN item, `Status=Blocked`, with NO recorded `Blocked by` ref at
+    /// all — deliberately, so `Blockers.cleared` is `false` and `BLOCKER-CLEARED` (and the
+    /// `humanHoldAllowsFlip` gate it already carried before this fix) is never even the rule in play. No
+    /// claim, no PR, no delivery obligation. Every mechanical fact `LifecycleProjection.project` reads
+    /// computes straight through to its final `Ready` fallthrough — exactly the reproduction recorded on
+    /// the issue three times on one row — so only the body sentinel `sentinel` toggles stands between that
+    /// computed destination and a board write.
+    ///
+    /// `sentinel = true` is the coherent park: the `updateProjectV2ItemFieldValue` branch below is
+    /// deliberately UNREACHABLE (`Errors.NotFound`), so an inverted fix — one that dropped the new gate, or
+    /// one that mistakenly keyed it off `Class: decision` instead of the sentinel itself (the exact
+    /// masking AC2 forbids relying on) — is caught by a loud fixture refusal, not merely a soft assertion.
+    /// `sentinel = false` is the SAME row with the ONE `Blocked on:` line removed: it must still project
+    /// `Ready` normally (AC3), so the new gate cannot have been written to hold `Blocked` unconditionally.
+    let private humanParkReconcileWorld (sentinel: bool) =
+        let mutable status = "Blocked"
+
+        let body =
+            if sentinel then
+                """{"number":47,"body":"Paths: src/A.fs\n\nBlocked on: human/action"}"""
+            else
+                """{"number":47,"body":"Paths: src/A.fs"}"""
+
+        let items () =
+            [ boardItemIn status 47 "a human-parked item" None "OPEN" ] |> String.concat ","
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, variables) ->
+                    if document.Contains "projectItems" then
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field =
+                            variables
+                            |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+
+                        let value =
+                            match field with
+                            | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                            | _ -> "null"
+
+                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
+                    elif document.Contains "updateProjectV2ItemFieldValue" then
+                        if sentinel then
+                            Error(
+                                Errors.NotFound
+                                    ".github#2394: a coherent human park must never reach a board write — \
+                                     if this fired, LIFECYCLE-PROJECTION-LAG stopped respecting the sentinel"
+                            )
+                        else
+                            status <- "Ready"
+                            ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                    elif document.Contains "projectsV2" then
+                        ok
+                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "fields(first" then
+                        ok
+                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "items(first" then
+                        ok
+                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    else
+                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" -> ok body
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+            // Only reached on the `sentinel = false` leg: a landed `LIFECYCLE-PROJECTION-LAG` write posts
+            // its durable ordering watermark (`LifecycleProjection.watermarkMarker`) right after the fresh
+            // verification read proves the Status mutation landed.
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
     /// Run `reconcile` against a throwaway cache root, capturing stdout AND stderr separately.
     ///
     /// Separately, because the whole question here is WHICH STREAM a fact went out on. A helper that merged
@@ -3327,6 +3406,130 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Equal(0, code)
         Assert.Equal(1, err.Split("board has no Class field").Length - 1)
         Assert.Contains("createProjectV2Field", err)
+
+    // ---- .github#2394 — a coherent human park is not reverted by LIFECYCLE-PROJECTION-LAG --------------
+    //
+    // GATE-INVERSION EVIDENCE, AS A PAIR. The first leg is the fix: `reconcile --apply` against a `Blocked`
+    // row carrying `Blocked on: human/action` derives NOTHING, and the fixture makes an attempted write
+    // fail loudly rather than merely asserting the wrong text. The second leg is #620/AC3's other half —
+    // the SAME row, sentinel removed, must still project `Ready` normally, so the fix cannot have been to
+    // hold every `Blocked` row unconditionally. Run one after the other, the pair pins the fix to the
+    // sentinel itself rather than to "reconcile fell silent."
+
+    [<Fact>]
+    let ``.github#2394 reconcile --apply derives nothing for a Blocked row carrying a human-action sentinel`` () =
+        let code, out, err = runReconcile (humanParkReconcileWorld true) (reconcileArgs [ "--apply" ])
+
+        Assert.Equal(0, code)
+        Assert.Equal("", err)
+        Assert.DoesNotContain("LIFECYCLE-PROJECTION-LAG", out)
+
+        let nl = Environment.NewLine
+
+        let expected =
+            "clean — no mechanical board repairs" + nl
+            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
+
+        Assert.Equal(expected, out)
+
+    [<Fact>]
+    let ``.github#2394 the same row with a human-decision sentinel is held too — both sentinel variants gate, not just Class: decision`` () =
+        // AC2: the fix must not depend on the incidental `Class: decision` projection. This row declares
+        // no `Class:` line at all — only `Blocked on: human/decision` — so if the gate secretly rode on
+        // `Class`, this leg would regress to the same board write the `human/action` leg above refuses.
+        let mutable status = "Blocked"
+
+        let items () =
+            [ boardItemIn status 47 "a human-parked item" None "OPEN" ] |> String.concat ","
+
+        let transport =
+            Fake.Recorder(fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        if document.Contains "projectItems" then
+                            ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "node(id: $itemId)" then
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+
+                            let value =
+                                match field with
+                                | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                                | _ -> "null"
+
+                            ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            Error(
+                                Errors.NotFound
+                                    ".github#2394: a coherent human/decision park must never reach a board write either"
+                            )
+                        elif document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                    ok """{"number":47,"body":"Paths: src/A.fs\n\nBlocked on: human/decision"}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+        let code, out, err = runReconcile transport (reconcileArgs [ "--apply" ])
+
+        // `Blocked on: human/decision` is ALSO evidence for `Class: decision` (ADR-0066,
+        // `Types.fsi`'s `HumanBlock` doc comment) — a real, separate, unrelated projection this board
+        // (deliberately, like `classWorld false`) declares no `Class` field for, so `CLASS-PROJECTION-LAG`
+        // fires and is withheld exactly as `#1625` pins. That row is NOT the assertion here: it is left
+        // running so this fixture cannot silently stop exercising the human/decision body shape. What
+        // matters is what is ABSENT — `LIFECYCLE-PROJECTION-LAG`/`Status=Ready` — proving the Status gate
+        // held on the sentinel itself, not on the Class row that happens to withhold for an unrelated
+        // reason (a board that DID declare a Class field would apply that row and still have to hold
+        // Status, which is exactly what AC2 requires the gate not to depend on).
+        Assert.Equal(0, code)
+        Assert.DoesNotContain("LIFECYCLE-PROJECTION-LAG", out)
+        Assert.DoesNotContain("Status=Ready", out)
+
+        let nl = Environment.NewLine
+
+        let expected =
+            "applying (1 mechanical finding(s))" + nl
+            + "  CLASS-PROJECTION-LAG     FS.GG.SDD#47             Class=decision" + nl
+            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
+
+        Assert.Equal(expected, out)
+        Assert.Contains("board has no Class field", err)
+
+    [<Fact>]
+    let ``.github#2394 AC3 — the sentinel removed, the SAME row projects Ready normally again`` () =
+        // The gate-inversion counterpart to the two legs above: this pins that the fix is a SENTINEL gate,
+        // not a blanket "never touch a Blocked row" regression that would just as silently break ordinary
+        // stale-Blocked reconciliation.
+        let code, out, err = runReconcile (humanParkReconcileWorld false) (reconcileArgs [ "--apply"; "--json" ])
+
+        Assert.Equal(0, code)
+        Assert.Equal("", err)
+
+        let rows = parsedArray out
+        Assert.Single rows |> ignore
+        let row = rows.[0]
+        Assert.Equal("LIFECYCLE-PROJECTION-LAG", row.GetProperty("rule").GetString())
+        Assert.Equal("Status", row.GetProperty("field").GetString())
+        Assert.Equal("Ready", row.GetProperty("value").GetString())
+        Assert.Equal("Status=Ready", row.GetProperty("remedy").GetString())
+        Assert.Equal("written", row.GetProperty("outcome").GetString())
 
     [<Fact>]
     let ``the dry-run --json projection is unchanged, alphabetical keys and all`` () =
