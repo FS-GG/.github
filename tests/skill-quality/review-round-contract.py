@@ -85,6 +85,24 @@ def main() -> None:
     ):
         require(literal in normalized, f"review contract is missing runtime-route evidence invariant: {literal}")
 
+    # .github#2485 — every literal pinned for the runtime-route evidence gate above pre-dates PR
+    # #2484's authoring-time block (independent-review.md:31-79), so deleting that block alone left
+    # this test green while silently reintroducing #2483's discovery-order defect: a critic would
+    # once again learn the route-applicability rule only ~90 lines further down, at the pre-existing
+    # "Runtime-route evidence gate" section. These literals are unique to the new block — neither
+    # occurs in that pre-existing section — so deleting the new block (leaving the pre-existing
+    # section intact) reds this contract test; deleting only the pre-existing section (leaving the
+    # new block intact) leaves this specific check green, proving the pin is independent of the
+    # runtime-route-evidence literals above rather than a duplicate of one of them.
+    for literal in (
+        "additionally requires exactly one `route-applicability` field on that same marker",
+        "Copyable, complete marker templates",
+    ):
+        require(
+            literal in normalized,
+            f"review contract is missing the authoring-time route-applicability pin: {literal}",
+        )
+
     # .github#2223 — ten measured instances in one run of a gate that passed green and could not fail
     # on the thing it claimed. The remedy is a NUMBERED critic step, not a virtue some critics happen
     # to have, so each acceptance criterion is pinned to a literal here: delete any one of them and
