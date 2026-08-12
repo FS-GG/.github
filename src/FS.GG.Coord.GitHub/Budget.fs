@@ -243,6 +243,16 @@ module Budget =
             // simply absent — and absent is not an error, it is the documented shape of a mutation.
             let root = doc.RootElement
 
+            // A ROOT THAT IS VALID JSON BUT NOT AN OBJECT — `[]`, `"text"`, `7` — is not a meter, and
+            // asking it for a property is not a parse failure but an `InvalidOperationException`, which
+            // the `JsonException` handler below does NOT catch. That crash was unreachable while nothing
+            // called `readMeter`; wiring it onto every live 2xx GraphQL response (#2418) is exactly what
+            // makes it reachable, so the guard lands with the wiring rather than after it. Found by the
+            // independent critic on PR #2419, reproduced end-to-end through the real transport.
+            if root.ValueKind <> JsonValueKind.Object then
+                None
+            else
+
             let rateLimit =
                 match root.TryGetProperty "data" with
                 | true, data ->

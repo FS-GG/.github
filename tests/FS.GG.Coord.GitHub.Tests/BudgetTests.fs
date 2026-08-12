@@ -820,3 +820,26 @@ let ``a spend record outside the window is not counted`` () =
     finally
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
         try Directory.Delete(cacheDir, true) with _ -> ()
+
+[<Fact>]
+let ``#2419 a valid-JSON body that is NOT an object is no meter - and does not throw`` () =
+    // Found by the independent critic on PR #2419. `TryGetProperty` on a non-object root raises
+    // `InvalidOperationException`, NOT the `JsonException` the handler catches — so this crashed rather
+    // than returning `None`. It was unreachable while `readMeter` had no caller; #2418 wires it onto
+    // every live 2xx GraphQL response, which is precisely what makes it reachable.
+    //
+    // A 200 carrying `[]` (a proxy, a misrouted endpoint, an error envelope) must read as "no meter",
+    // for the same reason a 502 HTML body does: the meter never invents a number, and it must never take
+    // the whole command down for a body it merely did not understand.
+    Assert.True((Budget.readMeter "[]").IsNone)
+    Assert.True((Budget.readMeter "\"a string\"").IsNone)
+    Assert.True((Budget.readMeter "7").IsNone)
+    Assert.True((Budget.readMeter "null").IsNone)
+
+    // And the accumulator stays untouched by all of them.
+    Budget.resetGraphQlSpend ()
+    Budget.observeGraphQlBody "[]"
+    Budget.observeGraphQlBody "null"
+    let spend = Budget.graphQlSpend ()
+    Assert.Equal(0, spend.Points)
+    Assert.Equal(0, spend.Calls)
