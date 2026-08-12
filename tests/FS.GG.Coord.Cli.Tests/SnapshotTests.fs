@@ -1,5 +1,6 @@
 namespace FS.GG.Coord.Cli.Tests
 
+open System.Text.Json
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -303,3 +304,49 @@ module SnapshotTests =
             |> ok
 
         Assert.Equal(None, r.Limit)
+
+    // ================================================================================================
+    // .github#2399: `facts --json`'s `reviewPolicy` object must keep every byte it emitted before this
+    // item (existing keys, including `quotedMarkerRule`'s STRING VALUE) while additively carrying the
+    // new `markerAnchors`/`markerFieldGrammar` keys #2369 asked for. This is the `facts --json`
+    // before/after check as a test rather than only a PR-body diff.
+    // ================================================================================================
+
+    [<Fact>]
+    let ``facts --json's reviewPolicy keeps quotedMarkerRule's value and additively carries markerAnchors/markerFieldGrammar`` () =
+        let json = Snapshot.renderFacts Protocol.factsDocument
+        use document = JsonDocument.Parse json
+        let reviewPolicy = document.RootElement.GetProperty("reviewPolicy")
+
+        // Unchanged existing keys/values — the "protocol bytes did not move" half of the check.
+        Assert.Equal(Protocol.reviewPolicy.InitialMarker, reviewPolicy.GetProperty("initialMarker").GetString())
+        Assert.Equal(Protocol.reviewPolicy.RepairPhaseMarker, reviewPolicy.GetProperty("repairPhaseMarker").GetString())
+        Assert.Equal(
+            Protocol.renderMarkerAnchorRule Protocol.LeadingBlock,
+            reviewPolicy.GetProperty("quotedMarkerRule").GetString())
+
+        // Additive: every MarkerAnchors entry appears, keyed by id and anchor.
+        let markerAnchors = reviewPolicy.GetProperty("markerAnchors").EnumerateArray() |> Seq.toList
+        Assert.Equal(List.length Protocol.reviewPolicy.MarkerAnchors, markerAnchors.Length)
+
+        for marker in Protocol.reviewPolicy.MarkerAnchors do
+            let entry =
+                markerAnchors
+                |> List.find (fun e -> e.GetProperty("id").GetString() = marker.Id)
+
+            Assert.Equal("leading-block", entry.GetProperty("anchor").GetString())
+
+        // Additive: every markerFieldGrammar entry appears, with its required fields in order.
+        let fieldGrammar = reviewPolicy.GetProperty("markerFieldGrammar").EnumerateArray() |> Seq.toList
+        Assert.Equal(List.length Protocol.markerFieldGrammar, fieldGrammar.Length)
+
+        let initialEntry =
+            fieldGrammar
+            |> List.find (fun e -> e.GetProperty("id").GetString() = Protocol.reviewPolicy.InitialMarker)
+
+        let initialFields =
+            initialEntry.GetProperty("requiredFields").EnumerateArray()
+            |> Seq.map (fun v -> v.GetString())
+            |> Seq.toList
+
+        Assert.Equal<string list>([ "critic"; "reviewed-head"; "verdict" ], initialFields)

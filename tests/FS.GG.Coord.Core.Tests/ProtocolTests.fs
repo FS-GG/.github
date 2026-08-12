@@ -33,15 +33,17 @@ module ProtocolTests =
         Assert.Equal(Schedulability.TouchSetGrammar, Protocol.touchSetGrammar.Statement)
 
     /// THE PROJECTED RULE MUST MATCH WHAT THE ENGINE ENFORCES (#2248), not merely read plausibly beside
-    /// it. `Protocol.reviewPolicy.QuotedMarkerRule` is the prose the `fsgg-protocol:review-policy` region
-    /// states; this pins its vocabulary against `Driver.parseReviewComments`' OWN behaviour for the two
-    /// cases the rule names — a quotation, and a competing canonical repeat — so a change to one that is
-    /// not also a change to the other reds here, rather than the projection drifting from #2221 silently
-    /// the way the hand-written prose it replaces would have.
+    /// it. `Protocol.renderMarkerAnchorRule Protocol.LeadingBlock` is the prose the
+    /// `fsgg-protocol:review-policy` region states (.github#2399 — replaces the removed
+    /// `ReviewPolicyDoc.QuotedMarkerRule` string field with a function dispatched over `MarkerAnchor`);
+    /// this pins its vocabulary against `Driver.parseReviewComments`' OWN behaviour for the two cases the
+    /// rule names — a quotation, and a competing canonical repeat — so a change to one that is not also a
+    /// change to the other reds here, rather than the projection drifting from #2221 silently the way the
+    /// hand-written prose it replaces would have.
     [<Fact>]
     let ``the quoted-marker rule text matches what Driver.parseReviewComments actually enforces`` () =
-        let rule = Protocol.reviewPolicy.QuotedMarkerRule
-        Assert.False(System.String.IsNullOrWhiteSpace rule, "reviewPolicy states no quoted-marker rule")
+        let rule = Protocol.renderMarkerAnchorRule Protocol.LeadingBlock
+        Assert.False(System.String.IsNullOrWhiteSpace rule, "renderMarkerAnchorRule states no quoted-marker rule")
         Assert.Contains("inert", rule)
         Assert.Contains("competing", rule)
         Assert.Contains("leading marker block", rule)
@@ -74,6 +76,270 @@ module ProtocolTests =
                 errors |> List.exists (fun e -> e.Contains "repeated in the leading marker block"),
                 $"a competing marker was not refused as the projected rule promises: %A{errors}"
             )
+
+    // ---- MARKER GRAMMAR TYPE TESTS (.github#2399) --------------------------------------------------
+    //
+    // `Protocol.occurrences` is the total function that replaced `QuotedMarkerRule`'s prose. These tests
+    // exercise it directly, one per `MarkerAnchor` case, rather than only through `Driver.parseReviewComments`
+    // — the point of the type is that a caller with no `Driver.fs` review-chain context can still get a
+    // correct, tested answer.
+
+    let private reviewFamilyWireTexts =
+        Protocol.reviewPolicy.MarkerAnchors |> List.map (fun m -> Protocol.markerWireText m.Id)
+
+    [<Fact>]
+    let ``markerWireText renders the same wrapping Driver.fs has always used`` () =
+        Assert.Equal("<!-- fsgg:independent-review:v1 -->", Protocol.markerWireText "independent-review")
+
+    /// CROSS-VALIDATED AGAINST THE ENGINE IT MODELS, NOT ONLY AGAINST ITSELF (.github#2399 repair
+    /// round 1). The round-1 version of this test asserted hardcoded `occurrences` expectations under a
+    /// name that promised a check against `Driver.parseReviewComments` — and never called it, so it
+    /// could not have caught `occurrences` disagreeing with the engine it replaces. It did: the first
+    /// implementation read EVERY out-of-block occurrence as `Quoted`/inert, where `Driver.fs`'s
+    /// `misplacedMarkerKinds` (.github#2221) refuses an unfenced, unindented one BY NAME as misplaced —
+    /// pinned at `DriverTests.fs`'s `` #2221 a misplaced marker is refused by name, not silently
+    /// dropped `` test, and reproduced live by the independent critic on this exact PR. Every case below
+    /// now asserts BOTH `occurrences`' verdict AND `Driver.parseReviewComments`' actual behaviour on the
+    /// SAME body, so a future disagreement reds here rather than only looking plausible.
+    [<Fact>]
+    let ``occurrences classifies a LeadingBlock marker exactly as Driver.parseReviewComments does`` () =
+        let marker: Protocol.Marker =
+            { Id = "independent-review-repair-phase"; Anchor = Protocol.LeadingBlock }
+
+        let wireText = Protocol.markerWireText marker.Id
+
+        let bystander body : Driver.ReviewComment =
+            { Id = 1L; Url = "https://reviews/bystander-1"; Body = body }
+
+        // A fenced quotation is inert to BOTH: occurrences reads Quoted, and Driver raises no error
+        // naming this marker at all.
+        let quotedBody = $"Post this:\n\n```\n%s{wireText}\n```\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Quoted ],
+            Protocol.occurrences reviewFamilyWireTexts marker quotedBody)
+
+        match Driver.parseReviewComments [ bystander quotedBody ] with
+        | Ok _ -> failwith "a lone bystander comment cannot itself satisfy the review chain"
+        | Error errors ->
+            Assert.False(
+                errors |> List.exists (fun e -> e.Contains "independent-review-repair-phase"),
+                $"Driver.parseReviewComments read the fenced quotation as live, disagreeing with occurrences' Quoted: %A{errors}")
+
+        // The SAME canonical marker, twice in the comment's own leading block: both Competing, and
+        // Driver refuses it by the same "repeated in the leading marker block" name.
+        let competingBody = $"%s{wireText}\n%s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Competing wireText; Protocol.Competing wireText ],
+            Protocol.occurrences reviewFamilyWireTexts marker competingBody)
+
+        match Driver.parseReviewComments [ bystander competingBody ] with
+        | Ok _ -> failwith "a repeated canonical leading marker must fail closed"
+        | Error errors ->
+            Assert.True(
+                errors |> List.exists (fun e -> e.Contains "repeated in the leading marker block"),
+                $"Driver.parseReviewComments did not refuse the marker occurrences classifies Competing: %A{errors}")
+
+        // A lone canonical marker as the comment's entire leading block: Live, and Driver raises no
+        // "misplaced" complaint about it (it fails for the unrelated reason that no chain is complete).
+        let liveBody = $"%s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Live wireText ],
+            Protocol.occurrences reviewFamilyWireTexts marker liveBody)
+
+        match Driver.parseReviewComments [ bystander liveBody ] with
+        | Ok _ -> failwith "a lone bystander comment cannot itself satisfy the review chain"
+        | Error errors ->
+            Assert.False(
+                errors |> List.exists (fun e -> e.Contains "leading marker"),
+                $"Driver.parseReviewComments read the sole leading marker as misplaced, disagreeing with occurrences' Live: %A{errors}")
+
+        // THE REPAIR ITSELF: an unfenced, unindented, OUT-OF-BLOCK canonical marker — the exact shape
+        // the independent critic measured `occurrences` and `Driver.parseReviewComments` disagreeing on.
+        // Both must now refuse it: occurrences as Misplaced, Driver by name as a marker that "stands on
+        // its own line but is not the comment's leading marker".
+        let misplacedBody = $"Some prose.\n%s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Misplaced wireText ],
+            Protocol.occurrences reviewFamilyWireTexts marker misplacedBody)
+
+        match Driver.parseReviewComments [ bystander misplacedBody ] with
+        | Ok _ -> failwith "a misplaced marker must fail closed, not be silently dropped as a quotation"
+        | Error errors ->
+            Assert.True(
+                errors |> List.exists (fun e -> e.Contains "is not the comment's leading marker"),
+                $"occurrences classifies this Misplaced but Driver.parseReviewComments did not refuse it: %A{errors}")
+
+        // ONE LEADING SPACE pushes the marker out of the leading block under UNTRIMMED equality (the
+        // block-membership test), but `Driver.fs`'s misplaced-detection compares the TRIMMED line — the
+        // exact #2221 "escape 1" shape (`DriverTests.fs`, one-leading-space confirmation marker).
+        // occurrences must agree it is still an occurrence, not silently invisible.
+        let oneSpaceBody = $" %s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Misplaced wireText ],
+            Protocol.occurrences reviewFamilyWireTexts marker oneSpaceBody)
+
+        match Driver.parseReviewComments [ bystander oneSpaceBody ] with
+        | Ok _ -> failwith "a one-leading-space misplaced marker must fail closed"
+        | Error errors ->
+            Assert.True(
+                errors |> List.exists (fun e -> e.Contains "is not the comment's leading marker"),
+                $"occurrences classifies this Misplaced but Driver.parseReviewComments did not refuse it: %A{errors}")
+
+        // A FOUR-SPACE indent is markdown's own way of showing the marker, not posting it — Driver.fs's
+        // `annotateQuotedRegions` reads it as quoted (Driver.fs:270's own comment: "four is somebody
+        // showing you the marker"), so occurrences must too, and Driver raises no complaint.
+        let indentedBody = $"Example:\n\n    %s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Quoted ],
+            Protocol.occurrences reviewFamilyWireTexts marker indentedBody)
+
+        match Driver.parseReviewComments [ bystander indentedBody ] with
+        | Ok _ -> failwith "a lone bystander comment cannot itself satisfy the review chain"
+        | Error errors ->
+            Assert.False(
+                errors |> List.exists (fun e -> e.Contains "independent-review-repair-phase"),
+                $"Driver.parseReviewComments read the 4-space-indented marker as live, disagreeing with occurrences' Quoted: %A{errors}")
+
+    /// THE REGRESSION #83758ec3/#d86ded2a FIXED, RECONSTRUCTED AGAINST THE TYPE. Both commits corrected
+    /// the SAME defect for the delivery-obligation/receipt/none and delivery-route markers: each was
+    /// anchored against a comment's WHOLE trimmed body, so the org's ordinary "marker line, blank line,
+    /// explanatory prose" writing style never matched. No marker in `ReviewPolicyDoc`'s own family uses
+    /// `LeadingLine` (that anchor lives in `src/FS.GG.Coord.Cli/DeliveryApplication.fs` and `Client.fs`,
+    /// outside this item's `Paths:`), so this test exercises a stand-in `Marker` to prove `occurrences`
+    /// implements the FIX — anchored against the first line only — rather than the bug it replaced. It
+    /// fails if `occurrences`' `LeadingLine` branch is ever widened back to a whole-body scan.
+    [<Fact>]
+    let ``occurrences anchors a LeadingLine marker to the comment's first line, not its whole body`` () =
+        let marker: Protocol.Marker = { Id = "sample-leading-line-marker"; Anchor = Protocol.LeadingLine }
+        let wireText = Protocol.markerWireText marker.Id
+
+        // The org's ordinary delivery-obligation writing style: marker, blank line, explanatory prose.
+        // Pre-#83758ec3 this failed a whole-body-equality match; `occurrences` must read it as Live.
+        let ordinaryBody = $"%s{wireText}\n\nThe obligation is discharged; see the linked release run.\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Live wireText ],
+            Protocol.occurrences [] marker ordinaryBody)
+
+        // The marker text appearing LATER in the body (not the first line) must never count as Live —
+        // this is the "leading LINE, not whole body" half of the rule, and the half a bulk `.Contains`
+        // match (the #2264 round-1 delivery finding) would get wrong.
+        let laterBody = $"Some unrelated prose first.\n%s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Quoted ],
+            Protocol.occurrences [] marker laterBody)
+
+    [<Fact>]
+    let ``occurrences treats AnywhereInBody as a whole-body scan, refusing more than one canonical line`` () =
+        let marker: Protocol.Marker = { Id = "sample-anywhere-marker"; Anchor = Protocol.AnywhereInBody }
+        let wireText = Protocol.markerWireText marker.Id
+
+        let singleBody = $"prose before\n%s{wireText}\nprose after\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Live wireText ],
+            Protocol.occurrences [] marker singleBody)
+
+        let doubleBody = $"%s{wireText}\nprose between\n%s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Competing wireText; Protocol.Competing wireText ],
+            Protocol.occurrences [] marker doubleBody)
+
+    [<Fact>]
+    let ``every ReviewPolicyDoc marker name field has exactly one MarkerAnchors entry, all LeadingBlock`` () =
+        let expectedIds =
+            [ Protocol.reviewPolicy.InitialMarker
+              Protocol.reviewPolicy.ConfirmationMarker
+              Protocol.reviewPolicy.AcceptanceMarker
+              Protocol.reviewPolicy.EscalationMarker
+              Protocol.reviewPolicy.RepairPhaseMarker ]
+
+        let actualIds = Protocol.reviewPolicy.MarkerAnchors |> List.map (fun m -> m.Id)
+        Assert.Equal<string list>(expectedIds, actualIds)
+
+        for marker in Protocol.reviewPolicy.MarkerAnchors do
+            Assert.Equal(Protocol.LeadingBlock, marker.Anchor)
+
+    /// THE FIELD GRAMMAR MUST MATCH WHAT `Driver.parseReviewComments` ACTUALLY REQUIRES (.github#2369).
+    /// `Driver.fs`'s own `markerFieldGrammar` is a private function; this pins `Protocol.markerFieldGrammar`
+    /// against its OBSERVED behaviour — removing each declared field, one at a time, from an otherwise
+    /// valid initial+acceptance chain, and requiring the engine to name exactly that field as missing —
+    /// so the two cannot silently disagree the way `QuotedMarkerRule` could have before #2399.
+    [<Fact>]
+    let ``markerFieldGrammar's initial-marker fields match what Driver.parseReviewComments requires`` () =
+        let entry =
+            Protocol.markerFieldGrammar
+            |> List.find (fun e -> e.MarkerId = Protocol.reviewPolicy.InitialMarker)
+
+        Assert.Equal<string list>([ "critic"; "reviewed-head"; "verdict" ], entry.RequiredFields)
+
+        let fields = Map [ "critic", "shrike"; "reviewed-head", "abc"; "verdict", "pass" ]
+
+        let initialBody (omit: string) =
+            let text =
+                fields
+                |> Map.toList
+                |> List.filter (fun (k, _) -> k <> omit)
+                |> List.map (fun (k, v) -> $"%s{k}: %s{v}")
+                |> String.concat "\n"
+
+            $"<!-- fsgg:independent-review:v1 -->\n%s{text}"
+
+        let accepted: Driver.ReviewComment =
+            { Id = 2L
+              Url = "https://reviews/accepted"
+              Body =
+                "<!-- fsgg:review-accepted:v1 -->\naccepted-head: abc\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/initial" }
+
+        for requiredField in entry.RequiredFields do
+            let initial: Driver.ReviewComment =
+                { Id = 1L; Url = "https://reviews/initial"; Body = initialBody requiredField }
+
+            match Driver.parseReviewComments [ initial; accepted ] with
+            | Ok _ -> failwith $"omitting '%s{requiredField}' from the initial marker should fail closed"
+            | Error errors ->
+                Assert.True(
+                    errors |> List.exists (fun e -> e.Contains $"required '%s{requiredField}' field"),
+                    $"markerFieldGrammar names '%s{requiredField}' but the engine did not: %A{errors}")
+
+    [<Fact>]
+    let ``markerFieldGrammar's acceptance-marker fields are Protocol.lifecyclePolicy.HostAcceptanceFields`` () =
+        let entry =
+            Protocol.markerFieldGrammar
+            |> List.find (fun e -> e.MarkerId = Protocol.reviewPolicy.AcceptanceMarker)
+
+        Assert.Equal<string list>(Protocol.lifecyclePolicy.HostAcceptanceFields, entry.RequiredFields)
+
+    [<Fact>]
+    let ``markerFieldGrammar declares no fields for escalation or repair-phase, matching Driver.fs's documented omission`` () =
+        for id in [ Protocol.reviewPolicy.EscalationMarker; Protocol.reviewPolicy.RepairPhaseMarker ] do
+            let entry = Protocol.markerFieldGrammar |> List.find (fun e -> e.MarkerId = id)
+            Assert.Equal<string list>([], entry.RequiredFields)
+
+    /// EVERY WIRE VALUE `Snapshot.fs` NOW EMITS FOR `quotedMarkerRule` MUST STAY BYTE-IDENTICAL TO WHAT
+    /// `d58577ec` PROJECTED, BECAUSE THAT FIELD IS THE OBSERVABLE `scripts/generate-projections` READS
+    /// (out of this item's `Paths:`, left unchanged) AND `.claude/skills/**/independent-review.md` IS
+    /// GENERATED FROM IT. Removing `QuotedMarkerRule` as a stored field must not move this byte.
+    [<Fact>]
+    let ``renderMarkerAnchorRule LeadingBlock is byte-identical to the prose d58577ec projected`` () =
+        let expected =
+            "A marker counts only as a canonical whole line inside a comment's own leading marker \
+             block — the run of lines from byte 0 that are each exactly one known marker's text. A \
+             marker occurring elsewhere as a quotation (inside a fence, an indented code block, or \
+             prose that only mentions it) is inert: it carries no evidence and raises no error by \
+             itself. The same marker kind occurring more than once within one comment's leading block \
+             is a competing marker and is refused — a marker kind has exactly one meaning, so no \
+             comment may carry it twice."
+
+        Assert.Equal(expected, Protocol.renderMarkerAnchorRule Protocol.LeadingBlock)
 
     /// EVERY VERDICT THE SCHEDULER CAN RETURN MUST BE DOCUMENTED, AND NOTHING ELSE MAY BE.
     ///
@@ -828,7 +1094,7 @@ module ProtocolTests =
             keys
         )
 
-        Assert.Equal("fsgg.coord.protocol/11", Protocol.factsSchema)
+        Assert.Equal("fsgg.coord.protocol/12", Protocol.factsSchema)
 
     /// THE FLOOR (#266, #436), and the vacuity every gate in this file refuses: an inventory that stated
     /// nothing would make the fold emit `{"schema": …}` and nothing else, and every projection would
