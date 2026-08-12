@@ -19,8 +19,23 @@
 # achievable without a disproportionate bulk rename: a name that was NOT already ambiguous at the
 # merge-base must not become ambiguous at head. That is exactly `.github#2354`'s two illustrative
 # regressions (reverting PR #2371's `name:` overrides; adding a fourth job named `reconcile`), and it is
-# exactly what leaves the current, accepted duplicates alone. `.github#2447` tracks closing that
-# residual gap (none of the 8 names is a required context today, so it is not yet exploitable).
+# exactly what leaves the current, accepted duplicates alone. `.github#2447` closed the residual gap —
+# a future admin promoting one of the 8 already-ambiguous names to a required status check, invisibly
+# to this base-vs-head diff — with an ABSOLUTE tripwire scoped to the small set below: see
+# `--required-context` on the `check-job-uniqueness.py` invocation, and that script's own docstring for
+# why it is passed explicitly rather than read live (this repo's own CI cannot read its own branch
+# protection — no `administration: read` credential is available to it, unlike the six receiver repos
+# `required-context-coherence.yml` covers).
+#
+# KEEP THE `--required-context` LIST BELOW IN SYNC WITH LIVE BRANCH PROTECTION. Whoever changes this
+# repo's own required status checks (`gh api -X PUT repos/FS-GG/.github/branches/main/protection/`
+# `required_status_checks/contexts …` — see `coherence.yml`'s `claim-generation` job for the exact form
+# that command takes) MUST update this list in the SAME reviewed PR. `contract-coherence / coherence`
+# (the fifth live-required context, verified via `gh api repos/FS-GG/.github/branches/main/protection
+# --jq '.required_status_checks.contexts'`) is deliberately NOT listed below: it is a nested
+# `<caller> / <callee>` name produced by a job WITH `uses:`, which this gate's whole model excludes
+# (that is `.github#549`'s subject, not this one's) — passing it here would be silently vacuous, never
+# able to match anything in `head`.
 #
 # SISTER GATE: reusable-job-id-coherence.yml (.github#549) guards the analogous hazard for a job WITH
 # `uses:` — a reusable workflow's PUBLISHED `<caller> / <callee>` name. That gate's subject is jobs that
@@ -65,7 +80,7 @@ jobs:
           fetch-depth: 0     # the merge-base must be reachable
       - uses: ./.github/actions/setup-policy-python
 
-      - name: Assert no top-level job's check-run name became newly ambiguous
+      - name: Assert no top-level job name became newly ambiguous, and no required one already is
         id: check
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -76,7 +91,15 @@ jobs:
           # reason reusable-job-id-coherence.yml does this).
           base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
           rc=0
-          out="$(python scripts/check-job-uniqueness.py --root . --base "$base" 2>&1)" || rc=$?
+          # --required-context: this repo's OWN currently-required plain top-level status checks
+          # (.github#2447). KEEP IN SYNC with live branch protection — see the header comment above
+          # for who updates this, and when. `contract-coherence / coherence` is deliberately absent;
+          # see the header comment for why.
+          out="$(python scripts/check-job-uniqueness.py --root . --base "$base" \
+                   --required-context projection \
+                   --required-context roster-closure \
+                   --required-context drift \
+                   --required-context reconcile 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
@@ -87,11 +110,11 @@ jobs:
         run: |
           echo "job-uniqueness-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 'FINDING: a check-run name is now shared by top-level jobs that did not share it before'
+      - name: 'FINDING: a check-run name is ambiguous — newly, or an already-required one'
         if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
         run: |
           {
-            echo "### job-uniqueness-coherence: two top-level jobs now share a check-run name"
+            echo "### job-uniqueness-coherence: a check-run name is ambiguous"
             echo
             echo "GitHub names a plain job's check run after its \`name:\` if it has one, else its job"
             echo "id — with NO workflow-file prefix. Branch protection's required-status-check matching"
@@ -99,11 +122,17 @@ jobs:
             echo "satisfies the requirement, regardless of which one actually ran. This is the exact"
             echo "\`.github#2354\` defect: three jobs sharing the bare id \`reconcile\`."
             echo
+            echo "THE JOB LOG SAYS WHICH OF TWO SHAPES THIS IS — they read almost identically but are"
+            echo "different repairs. (a) 'now produced by ... that did not all resolve to it at the"
+            echo "merge-base' is a NEW regression THIS PR introduced. (b) 'the REQUIRED status check ...'"
+            echo "(.github#2447) is an ALREADY-required context that is ALREADY ambiguous today — live,"
+            echo "not merely a future risk, regardless of what this PR touched."
+            echo
             echo "Give every job but one an unambiguous job-level \`name:\`, as PR #2371 did for"
             echo "\`architecture-map.yml\` and \`feed-autofix.yml\`. See the job log for which name and"
             echo "which files."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=job-uniqueness-coherence: a check-run name became newly ambiguous::A top-level job's check-run name is now shared with another top-level job that did not share it at the merge-base. See the job log."
+          echo "::error title=job-uniqueness-coherence: a check-run name is ambiguous::A top-level job's check-run name is either newly ambiguous, or an already-required context is already ambiguous. See the job log."
           exit 1
 
       - name: 'NO VERDICT (permanent): a file a human must fix'

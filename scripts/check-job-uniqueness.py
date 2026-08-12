@@ -57,6 +57,27 @@ appear in `required_status_checks.contexts`" — holds for free: this gate does 
 exclude any name, required or not; it grades every top-level job's effective name identically, so a
 required name inherits the exact same non-regression guarantee as everything else.
 
+THE RESIDUAL GAP, AND `--required-context` (.github#2447). None of the 8 names above is required today,
+but nothing stops an ORDINARY branch-protection edit — an admin action in GitHub's UI/API, not a
+reviewed workflow-YAML change — from requiring one tomorrow. The moment that happens, the exact
+`.github#2354` defect recurs, and this gate's own base-vs-head diff cannot see it: the name was already
+ambiguous before it became required, so neither the old nor the new state trips a 0/1 -> 2+ transition.
+Disambiguating all 65 (measured 2026-08-12: 70) jobs to close that residually was REJECTED — see
+`.github#2447` — as a disproportionate mechanical rename for a Low-severity, not-yet-exploitable gap.
+Instead, `--required-context NAME` (repeatable) names a check-run this repo's OWN branch protection
+CURRENTLY requires, and this gate then asserts, UNCONDITIONALLY (not merely as a regression), that name
+does not resolve to 2+ top-level producers at HEAD. This is deliberately NOT the absolute "no two jobs
+ever" gate rejected above — it only grades the small, explicit set the caller passes, so it stays green
+for every one of the 65 (70) accepted duplicates that is not required, and only reds if a name BOTH is
+required AND is ambiguous. The caller (`job-uniqueness-coherence.yml`) hardcodes today's required set,
+because this repo's own CI cannot read its own branch protection live: `administration: read` is not a
+valid `permissions:` scope for a workflow's `GITHUB_TOKEN` (`check-reusable-job-ids.py`'s own docstring),
+and the org dispatch App is not installed on `.github` itself (`required-context-coherence.yml`: the
+App's roster is the six receivers, not the authority that owns their callees). Whoever changes this
+repo's own required status checks MUST update that hardcoded set in the SAME reviewed PR — the existing
+practice this repo already follows for protection changes (see `coherence.yml`'s `claim-generation` job,
+which documents an admin `gh api -X PUT .../required_status_checks/contexts` command the same way).
+
 AN EFFECTIVE NAME is what GitHub actually uses for the check run: a job's `name:` if it has one, else
 its job id (job.get("name") or job.get("uses") on the CALLING side never applies here — a job WITH
 `uses:` publishes a nested `<caller> / <callee>` name instead, is #549's gate's subject, and is
@@ -70,9 +91,11 @@ matrix job's own combinations with an automatic ` (v1, v2)` suffix, so one matri
 require — this gate only needs to know how many DISTINCT jobs claim a base name).
 
 Usage:
-  check-job-uniqueness.py [--root <dir>] --base <git-ref>
-Exit: 0 = no name became newly ambiguous; 1 = at least one did (a real regression of this hazard);
-3 = no verdict, PERMANENT — a workflow that will not parse, or a base ref that cannot be read.
+  check-job-uniqueness.py [--root <dir>] --base <git-ref> [--required-context NAME ...]
+Exit: 0 = no name became newly ambiguous, and no given --required-context is ambiguous at HEAD;
+1 = at least one of those is true (a real regression, or an already-required name is already
+ambiguous — the log says which); 3 = no verdict, PERMANENT — a workflow that will not parse, or a
+base ref that cannot be read.
 
 "I could not check" must never share an exit code with "I checked, and it's fine" (#266) — nor with
 "I checked, and it's broken" (#320).
@@ -175,6 +198,19 @@ def base_files_and_texts(root: str, base: str) -> list[tuple[str, str]]:
 def main(argv: list[str]) -> int:
     ap = base_parser(__doc__.splitlines()[0])
     ap.add_argument("--base", required=True, help="the git ref to compare against (the merge-base)")
+    ap.add_argument(
+        "--required-context",
+        action="append",
+        default=[],
+        metavar="NAME",
+        dest="required_contexts",
+        help=(
+            "a check-run name this repo's OWN branch protection CURRENTLY requires (repeatable; "
+            ".github#2447). Graded unconditionally against HEAD alone — not as a base-vs-head "
+            "regression — because an already-required name that is already ambiguous is a live "
+            "exposure every day it stays that way, not something introduced by this PR."
+        ),
+    )
     args = ap.parse_args(argv)
 
     head = producers(head_files_and_texts(args.root))
@@ -204,12 +240,36 @@ def main(argv: list[str]) -> int:
             f"job-level `name:`, as PR #2371 did for `architecture-map.yml` and `feed-autofix.yml`."
         )
 
-    if findings:
+    # .github#2447: the ABSOLUTE tripwire for the small, explicit set of names this repo's OWN
+    # branch protection currently requires. Unconditional — not gated on the base comparison above —
+    # because an already-required, already-ambiguous name is a live exposure regardless of whether
+    # THIS PR introduced it. Deliberately narrow: only the names the caller passes are graded, so
+    # every other accepted duplicate (e.g. `fixture`) stays ungraded here, exactly as the docstring's
+    # "non-regression, not absolute" framing requires for the general case.
+    required_findings: list[str] = []
+    for name in sorted(set(args.required_contexts)):
+        required_producers = head.get(name, set())
+        if len(required_producers) < 2:
+            continue
+        where = ", ".join(f"{f}:{j}" for f, j in sorted(required_producers))
+        required_findings.append(
+            f"the REQUIRED status check {name!r} is produced by {len(required_producers)} top-level "
+            f"jobs at HEAD ({where}). This repo's OWN branch protection requires this exact context "
+            f"today, and GitHub's required-status-check matching is purely string-based, so ANY of "
+            f"these jobs satisfies it regardless of which one actually ran — the exact .github#2354 "
+            f"defect, LIVE, today (not merely a future risk). Disambiguate all producers but one "
+            f"before this can be green again."
+        )
+
+    if findings or required_findings:
         for f in findings:
+            print(f"::error::{NAME}: {f}", file=sys.stderr)
+        for f in required_findings:
             print(f"::error::{NAME}: {f}", file=sys.stderr)
         print(
             f"\n{len(findings)} check-run name(s) became newly ambiguous across top-level jobs in "
-            f"this repo's own workflows, comparing {args.base} to HEAD.",
+            f"this repo's own workflows, comparing {args.base} to HEAD, and {len(required_findings)} "
+            f"already-required check-run name(s) are already ambiguous at HEAD.",
             file=sys.stderr,
         )
         return int(ExitCode.FINDING)
@@ -223,6 +283,12 @@ def main(argv: list[str]) -> int:
             f"remain so — not re-graded here; see this gate's own docstring: "
             f"{', '.join(ambiguous_today)}."
             if ambiguous_today
+            else ""
+        )
+        + (
+            f" {len(args.required_contexts)} required context(s) checked, none ambiguous "
+            f"({', '.join(sorted(set(args.required_contexts)))})."
+            if args.required_contexts
             else ""
         )
     )
