@@ -4731,6 +4731,67 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// and `--sha` names the head the caller MEANS (the bot force-pushes, and `pulls/{n}` lags). Each
     /// unsatisfied assertion is `pending`, so `--wait` rides out the transient case and refuses the
     /// permanent one; neither can produce a `green`.
+    ///
+    /// `--require fsgg:review-accepted:v1` (.github#2360) is a THIRD assertion in that same family, and
+    /// deliberately shaped as one: `--require` already means "an assertion the CALLER added, that the base
+    /// branch policy has no opinion about, and that nothing else would ever look at" (`Reads.Asserted`) —
+    /// which is exactly what the host's independent-review acceptance marker is to `landable`. Reusing the
+    /// channel rather than adding a new flag means no new option grammar, no new exit-code arm, and the
+    /// SAME reporting path (`asserted`, `state = PrPending` below) a caller and a poll loop already handle.
+    ///
+    /// WHY THIS IS OPT-IN, NOT THE DEFAULT. `landable` has exactly one other unattended caller today — the
+    /// skill-registry autofix bot (`skill-registry-autofix.yml`) — and it merges its OWN mechanical PRs
+    /// under `--require registry-coherence --sha <head>` with NO independent critic in the loop at all, by
+    /// design (that gate is a coherence check, not the worker/critic protocol). Making review-acceptance a
+    /// DEFAULT part of `landable`'s verdict would silently wedge that bot forever, because no PR of its
+    /// ever carries the marker. The token is therefore something a caller must NAME, exactly like
+    /// `registry-coherence` is — `pnext-item`'s merge-time recipe is the one meant to pass it.
+    ///
+    /// THE TOKEN IS NAMESPACED (`fsgg:review-accepted:v1`, the marker's own id) rather than a bare word
+    /// like `review-accepted`, because AC4 (.github#2360) is exactly `.github#2354`: a required check
+    /// satisfied by an UNRELATED job of the same name. A literal check run or workflow job cannot collide
+    /// with this token without also being spelled like an `fsgg:` protocol marker, which nothing in this
+    /// org's CI vocabulary is.
+    ///
+    /// FAIL CLOSED. An unreadable head, an unreadable comment thread, an absent or malformed review chain,
+    /// or a marker bound to a DIFFERENT sha than the one just read are all `Unmet` — AC2 requires the last
+    /// one explicitly: a stale-sha marker is treated as ABSENT, never as satisfaction, because a reader who
+    /// sees a marker at all is the reader most likely to stop looking.
+    let private reviewAcceptedRequireToken = "fsgg:review-accepted:v1"
+
+    /// The one extra assertion `landable --require fsgg:review-accepted:v1` folds into the rollup — see the
+    /// doc comment above `landable` for why this exists and why it is opt-in. Costs two REST reads
+    /// (the live head sha, the comment thread), paid ONLY when the caller asked for it AND every other
+    /// signal already reads green — never on the common "still waiting on CI" path.
+    let private reviewAcceptedUnmet (ctx: Context) (repoName: string) (pr: int) : Reads.Unmet list =
+        match Reads.prHeadSha ctx.Transport ctx.Owner repoName pr with
+        | Error _ ->
+            [ Reads.Asserted
+                  $"PR #%d{pr}'s current head SHA could not be read, so the host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) cannot be bound to it" ]
+        | Ok liveHead ->
+            match Reads.commentsWithIdentity ctx.Transport ctx.Owner repoName pr with
+            | Error _ ->
+                [ Reads.Asserted
+                      $"PR #%d{pr}'s comments could not be read, so the host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) cannot be found" ]
+            | Ok comments ->
+                let reviewComments =
+                    comments
+                    |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+
+                match Driver.parseReviewComments reviewComments with
+                | Error _ ->
+                    [ Reads.Asserted
+                          $"PR #%d{pr} carries no valid host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) — the review chain is absent, incomplete, or malformed" ]
+                | Ok chain ->
+                    match chain.HeadSha with
+                    | Some acceptedHead when acceptedHead = liveHead -> []
+                    | Some staleHead ->
+                        [ Reads.Asserted
+                              $"PR #%d{pr}'s host review-acceptance marker is bound to head `%s{staleHead}`, not the current head `%s{liveHead}` — a stale-sha marker is treated as ABSENT, never as satisfaction" ]
+                    | None ->
+                        [ Reads.Asserted
+                              $"PR #%d{pr}'s host review-acceptance marker did not resolve to a bound head SHA" ]
+
     let landable (ctx: Context) (opts: Options) : int =
         match opts.Repo with
         | None ->
@@ -4754,7 +4815,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // names the previous commit are both `pending` — "the evidence is not here yet" — so
                     // `--wait` rides out the transient case (registration, a superseded suite's replacement,
                     // GitHub catching up with a force-push) and refuses when the tries run out.
-                    let required = opts.Require
+                    //
+                    // `fsgg:review-accepted:v1` (.github#2360) is stripped out of `required` here: it is
+                    // NOT a check-run/workflow-run name for `Reads.prLandableRequire` to look for (it would
+                    // never report and this PR would poll forever for the wrong reason) — it is handled
+                    // below, after CI has settled, by `reviewAcceptedUnmet`.
+                    let requireReviewAccepted = opts.Require |> List.contains reviewAcceptedRequireToken
+                    let required = opts.Require |> List.filter (fun r -> r <> reviewAcceptedRequireToken)
                     let expected = opts.Sha
 
                     let read () =
@@ -4790,6 +4857,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     poll (i + 1) n
 
                             poll 1 -1
+
+                    // The review-acceptance assertion (.github#2360): checked ONCE, after CI has settled,
+                    // and ONLY when it settled green — an unmet CI check is already the reason for a
+                    // non-green verdict, and there is no reason to spend the two extra reads (head sha,
+                    // comment thread) on a PR that is not otherwise ready to land. An unmet assertion can
+                    // only ever REFUSE (same rule as `--require`/`--sha` above): it downgrades GREEN to
+                    // PENDING, never anything to RED, so it can never be confused with a failing check.
+                    let reviewUnmet =
+                        if requireReviewAccepted && state = PrGreen then
+                            reviewAcceptedUnmet ctx repoName pr
+                        else
+                            []
+
+                    let missing = missing @ reviewUnmet
+
+                    let state =
+                        if state = PrGreen && not (List.isEmpty reviewUnmet) then PrPending else state
 
                     printfn "%s" (Landable.name state)
 
