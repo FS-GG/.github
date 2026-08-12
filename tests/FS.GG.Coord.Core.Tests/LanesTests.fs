@@ -188,6 +188,60 @@ module LanesTests =
 
         Assert.Equal(2, List.length p.Lanes)
 
+    // ---- .github#2386: the `cross-repo` sentinel never substitutes for a repository -------------
+
+    [<Fact>]
+    let ``#2386 a cross-repo Repo Scope sentinel never substitutes for a repository in the same-repo test`` () =
+        // Same host repo, same touch-set token — the ONLY difference is which of the pair carries the
+        // board's `cross-repo` sentinel (the one deliberate non-roster `Repo Scope` value,
+        // `docs/coordination/board-schema.md`) as its Repo Scope. Before the fix, `a.PathRepo =
+        // b.PathRepo` compared the literal string `"cross-repo"` against `"FS.GG.SDD"` bare and found
+        // them unequal, so this pair landed in SEPARATE lanes despite genuinely sharing a file —
+        // DISJOINT BY CONSTRUCTION, without either touch-set ever being read. Gate-inversion evidence:
+        // reverting `Lanes.pathRepoOf` to the pre-fix `a.PathRepo = b.PathRepo` bare comparison turns
+        // this red (`Assert.Equal(2, ...)` observed against the reverted source before this fix;
+        // restored and reconfirmed green here).
+        let host = refIn "FS-GG" "FS.GG.SDD" 0
+        let sentinel = { itemAt { host with Number = 1 } [ "scripts/foo" ] with PathRepo = "cross-repo" }
+        let rostered = itemAt { host with Number = 2 } [ "scripts/foo" ]
+
+        let p = partition Set.empty [ sentinel; rostered ]
+
+        Assert.Equal(1, List.length p.Lanes)
+        Assert.Equal(2, List.length (laneOf p 1).Items)
+
+    [<Fact>]
+    let ``cross-repo sentinels in genuinely different repos still land in different lanes`` () =
+        // The fallback is "behave like an absent scope and use the item's OWN hosting repo" — not
+        // "every cross-repo item shares one lane." Two items that both carry the sentinel but host in
+        // different repos must stay disjoint, or the fix would trade one erasure for another.
+        let a = { itemAt (refIn "FS-GG" "FS.GG.SDD" 1) [ "scripts/foo" ] with PathRepo = "cross-repo" }
+        let b = { itemAt (refIn "FS-GG" "FS.GG.Game" 2) [ "scripts/foo" ] with PathRepo = "cross-repo" }
+
+        let p = partition Set.empty [ a; b ]
+
+        Assert.Equal(2, List.length p.Lanes)
+
+    [<Fact>]
+    let ``.github#2363 cross-spelling never escapes the same-repo test: sir and S.I.R. collide`` () =
+        // The claim-exclusion half of #2363's criterion 5, at the layer #2398 governs: two items
+        // sharing a touch-set token, spelled differently in `Repo Scope` (one the roster short-id,
+        // one the canonical name), must land in ONE lane — never two, which is the shape that would
+        // let a `sir`-spelled item and an `S.I.R.`-spelled item be claimed concurrently over the same
+        // file. `pathRepoOf` resolves each independently through `RepoScope.resolve`, so this holds
+        // even though the live `enrich` pipeline already canonicalises `PathRepo` before Lanes ever
+        // sees it (#962) — this test pins the property at THIS layer, not just upstream of it.
+        // Gate-inversion evidence: reverting `pathRepoOf` to the pre-fix bare `item.PathRepo` (so
+        // `"sir"` and `"S.I.R."` compare as two different strings) turns this red — observed by hand
+        // against a scratch revert before this fix; restored and reconfirmed green here.
+        let a = { itemAt (refIn "FS-GG" "S.I.R." 1) [ "scripts/foo" ] with PathRepo = "sir" }
+        let b = { itemAt (refIn "FS-GG" "S.I.R." 2) [ "scripts/foo" ] with PathRepo = "S.I.R." }
+
+        let p = partition Set.empty [ a; b ]
+
+        Assert.Equal(1, List.length p.Lanes)
+        Assert.Equal(2, List.length (laneOf p 1).Items)
+
     // ---- occupancy and the ceiling ---------------------------------------------------------------
 
     [<Fact>]

@@ -1324,8 +1324,20 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     ///
     /// Idempotent, so a caller that resolves again for its own reasons gets the same answer: a resolved name
     /// has no slash and is not a short-id, so it maps to itself.
-    let resolveRepo (raw: string) : string =
+    let resolveRepo (raw: string) : FS.GG.Coord.RepoScope.Scope =
         FS.GG.Coord.RepoScope.resolve raw
+
+    /// The display-string ECHO policy: every caller below wants the resolved token back as a plain
+    /// string regardless of which arm it is — a `--repo` filter value, or a chore-lock repo comparison
+    /// — the same behaviour `resolveRepo` gave before it was tagged `Scope` (#2398). A `NonRepository`
+    /// token round-trips unchanged (`RepoScope.resolve`'s own doc), matching the pre-fix "literal name
+    /// passes through" contract byte-for-byte. An exhaustive two-arm match, not `Option.defaultValue`
+    /// or a wildcard, so a third `Scope` arm added later fails THIS build (FS0025) rather than silently
+    /// picking a string for it.
+    let private resolveRepoName (raw: string) : string =
+        match resolveRepo raw with
+        | FS.GG.Coord.RepoScope.Repository name -> name
+        | FS.GG.Coord.RepoScope.NonRepository token -> token
 
     /// An owner + repo → the CLOSED issue whose comments are that repo's CHORE-LOCK CAS subject (ADR-0041).
     /// `None` ⇒ `offer` refuses, which is the whole contract: a chore queue that cannot find its lock must
@@ -1385,13 +1397,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // still never handed one — the invariant that kept a foreign owner from a real-but-unrelated ref is
         // unchanged; the vendored tenant now brings its OWN refs rather than borrowing FS-GG's.
         let ownerLc = owner.ToLowerInvariant()
-        let repoLc = (resolveRepo repo).ToLowerInvariant()
+        let repoLc = (resolveRepoName repo).ToLowerInvariant()
 
         let fromExtra =
             extra
             |> List.tryFind (fun r ->
                 r.Owner.ToLowerInvariant() = ownerLc
-                && (resolveRepo r.Repo).ToLowerInvariant() = repoLc)
+                && (resolveRepoName r.Repo).ToLowerInvariant() = repoLc)
 
         match fromExtra with
         // The injected ref is already canonical (its repo was resolved when parsed) and carries its own
@@ -1524,7 +1536,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--repo" :: value :: t ->
                 flags
                     { acc with
-                        Repo = Some(resolveRepo value) }
+                        // `Options.Repo` stays a plain string — it is `--repo`'s FILTER value, always a
+                        // repository token, never the `cross-repo` sentinel a `--repo` argument could
+                        // not meaningfully name (#2398).
+                        Repo = Some(resolveRepoName value) }
                     t
             | [ "--repo" ] -> Error "--repo needs a value"
 
