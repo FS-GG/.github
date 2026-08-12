@@ -131,6 +131,22 @@ rows = [row(number=14, repo="FS-GG/FS.GG.SDD"), row(number=14, repo="FS-GG/.gith
 arch, _ = plan(rows)
 results["an unresolvable bare #n protects that number in EVERY repo"] = (arch == [], arch)
 
+# 3b. GUARD 1b, PULL REQUESTS — `MERGED` is a PR's terminal state and GraphQL reports it instead of
+#     `CLOSED`. Round-2 review observation: 8 of 36 post-sweep rows were merged PRs that could never
+#     be archived — a permanent, growing floor. Accepting it is SAFER than what is already allowed: a
+#     merged PR cannot be reopened, while a closed issue can.
+arch, _ = plan([row(number=108, state="MERGED")])
+results["archives a long-merged PR row"] = (arch == [("FS-GG/.github", 108)], arch)
+
+#     ...but a merged PR is still subject to every other guard — retention here.
+arch, _ = plan([row(number=109, state="MERGED", closedAt=RECENT)])
+results["a MERGED row still obeys the retention window"] = (arch == [], arch)
+
+#     ...and no OTHER state is terminal, however plausible it looks.
+arch, _ = plan([row(number=110, state="OPEN"), row(number=111, state="DRAFT"),
+                row(number=112, state="")])
+results["no state other than CLOSED/MERGED is terminal"] = (arch == [], arch)
+
 # 6. GUARD 4 — unreadable is never archived. "I could not look" is not "I looked" (#266).
 arch, _ = plan([row(number=None), row(repo=None, number=300), row(number=301, status=None),
                 row(number=302, state=None), row(number=303, closedAt=None),

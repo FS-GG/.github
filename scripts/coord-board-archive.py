@@ -39,9 +39,10 @@ board fields are derived data, recomputable, and the row itself is one mutation 
 THE GUARDS, ALL FAIL-CLOSED
 ===========================
 
-  1. **Terminal on BOTH axes.** Board `Status` must be `Done` AND the issue state must be `CLOSED`.
-     Either alone is insufficient — a `Done` column over an open issue is exactly the drift `lint`
-     reports, and archiving it would hide the drift instead of surfacing it.
+  1. **Terminal on BOTH axes.** Board `Status` must be `Done` AND the content must be terminal —
+     `CLOSED` for an issue, or `MERGED` for a pull request (GraphQL reports `MERGED` where REST says
+     `closed`). Either axis alone is insufficient: a `Done` column over an OPEN issue is exactly the
+     drift `lint` reports, and archiving it would hide the finding instead of surfacing it.
   2. **Aged past the retention window.** Closed at least `--retention-days` ago (default 30), so a
      just-finished item stays visible to reporting, to a re-open, and to a driver still holding it in
      a cursor.
@@ -165,8 +166,17 @@ def plan(rows: list[dict], now: _dt.datetime, retention_days: int
         if status != "Done":
             skipped.append((row, f"status is {status}, not Done"))
             continue
-        if state != "CLOSED":
-            skipped.append((row, f"Done but the issue state is {state}"))
+        # `MERGED` is a PULL REQUEST's terminal state, and GraphQL reports it instead of `CLOSED`
+        # (REST says `closed` for the same object — the two APIs disagree, which is how this was
+        # missed). Round-2 review observation on PR #2421: 8 of the board's 36 post-sweep rows are
+        # merged PRs, 22%, and a category that can NEVER be archived is a permanent floor that grows
+        # monotonically — precisely the regrowth this workflow exists to prevent.
+        #
+        # Accepting it is SAFER than what the guard already allows, not a loosening: a merged PR
+        # cannot be reopened, whereas a closed issue and a closed-unmerged PR both can. Merged PRs
+        # carry `closedAt` (equal to `mergedAt`), so the retention window applies to them unchanged.
+        if state not in ("CLOSED", "MERGED"):
+            skipped.append((row, f"Done but the state is {state}, which is not terminal"))
             continue
 
         closed_at = row.get("closedAt")
