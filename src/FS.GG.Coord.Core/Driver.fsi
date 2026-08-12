@@ -47,6 +47,11 @@ module Driver =
           CriticIdentity: string option
           ConfirmationCount: int
           LatestVerdict: string option
+          /// Populated only when `LatestVerdict = None`: every markdown-emphasised near-miss field
+          /// found in the comment `LatestVerdict` would have been read from. Empty whenever
+          /// `LatestVerdict` is readable, or no near miss was found (.github#2369) — this never widens
+          /// what the underlying field grammar accepts, only what a refusal can explain.
+          LatestVerdictNearMissHints: string list
           LatestReviewedHeadSha: string option
           EscalationPresent: bool
           RepairPhasePresent: bool

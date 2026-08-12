@@ -221,6 +221,70 @@ module ReviewTests =
             | other -> failwithf "expected MalformedEvidence or AwaitingInitialReview (competing marker is not canonical), got %A" other
         | Error e -> failwithf "%A" e
 
+    // ---- markdown-bolded field near miss (.github#2369) -----------------------------------------------
+    //
+    // The live shape: a faithful critic followed `independent-review.md`'s prose, which never states
+    // the field grammar is a literal column-0 `key: value` line, and wrote ordinary markdown instead.
+    // The marker itself is canonical (leading block, single occurrence) so it is never "misplaced" —
+    // only the FIELD lines are unreadable, and the pre-fix message named neither the field nor the fix.
+
+    [<Fact>]
+    let ``#2369 an initial marker with markdown-bolded fields is refused naming the expected column-0 form`` () =
+        // Reproduces PR #2367's actual comment shape byte-for-byte in kind (bold field labels), not the
+        // literal text — the fixture owns its own critic/head names.
+        let comments =
+            [ comment
+                  1L
+                  "https://reviews/1"
+                  "<!-- fsgg:independent-review:v1 -->\n**Critic:** kite\n**Reviewed-head:** head1\n**Verdict:** pass" ]
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) with
+        | Ok v ->
+            match v.State with
+            | MalformedEvidence errors ->
+                Assert.Contains(errors, fun e -> e.Contains "verdict: <value>")
+                Assert.Contains(errors, fun e -> e.Contains "**Verdict:** pass")
+            | other -> failwithf "expected MalformedEvidence naming the expected column-0 form, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2369 a confirmation with a markdown-bolded verdict field is refused naming the expected column-0 form`` () =
+        let comments =
+            [ initialChangesRequired "kite" "head0"
+              comment
+                  2L
+                  "https://reviews/2"
+                  "<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/1\ncritic: kite\nround: 1\npreceding-review: https://reviews/1\nreviewed-head: head1\n**Verdict:** pass" ]
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) with
+        | Ok v ->
+            match v.State with
+            | MalformedEvidence errors -> Assert.Contains(errors, fun e -> e.Contains "verdict: <value>")
+            | other -> failwithf "expected MalformedEvidence naming the expected column-0 form, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2369 a genuinely absent verdict field keeps the original unadorned reason -- no false near miss`` () =
+        // No verdict field at all, bolded or otherwise: the pre-#2369 message must be UNCHANGED, so this
+        // pins that the near-miss addition never fires on a case it does not apply to.
+        let comments =
+            [ comment 1L "https://reviews/1" "<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head1" ]
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) with
+        | Ok v ->
+            match v.State with
+            | MalformedEvidence errors ->
+                Assert.Contains("the latest review verdict is neither readable pass nor changes-required", errors)
+            | other -> failwithf "expected MalformedEvidence, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2369 Driver.reviewPhaseFacts itself carries the near-miss hint, not only Review.classify's message`` () =
+        // Pins the fact at its OWN layer (`Driver.fs`, in this item's declared Paths): a caller reading
+        // `ReviewPhaseFacts` directly — not only through `Review.inspect` — sees the same diagnosis.
+        let comments =
+            [ comment 1L "https://reviews/1" "<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head1\n**Verdict:** pass" ]
+        let phaseFacts = reviewPhaseFacts comments
+        Assert.True(phaseFacts.LatestVerdict.IsNone)
+        Assert.Contains(phaseFacts.LatestVerdictNearMissHints, fun h -> h.Contains "verdict: <value>")
+
     // ---- wrong critic / implementer-as-critic guard --------------------------------------------------
 
     [<Fact>]

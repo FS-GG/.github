@@ -87,6 +87,68 @@ module Driver =
     let private hasField key text =
         fieldValues key text |> List.isEmpty |> not
 
+    /// A field line whose KEY is wrapped in markdown emphasis — `**verdict:** pass` rather than
+    /// `verdict: pass` — so `field`/`fieldValues` above never see it as a match (.github#2369). This is
+    /// the exact live shape a faithful critic produced: `independent-review.md` shows `**Verdict:**
+    /// pass` nowhere near a warning, so a critic writing ordinary markdown for readability produces a
+    /// marker that LOOKS canonical and PARKS silently, with no signal about what to fix.
+    ///
+    /// Detected, never ACCEPTED: this only powers a more specific refusal message (`nearMissFieldHint`
+    /// below), and must not loosen `field`'s own grammar. Stripping is one layer of leading/trailing
+    /// `**`/`__` off the trimmed line, case-insensitive on the key — the exact decoration markdown
+    /// bold/strong produces, not a general markdown parser.
+    let private stripLeadingEmphasis (line: string) =
+        [ "**"; "__" ]
+        |> List.tryPick (fun m ->
+            if line.StartsWith(m: string) && line.TrimEnd().EndsWith m then
+                let inner = line.Substring(m.Length, line.Length - 2 * m.Length)
+                Some(inner.Trim())
+            else
+                None)
+
+    /// One line of `text`, if any, that names `key` only once markdown emphasis is stripped from a
+    /// leading `**key:**`/`__key:__` span — never when the RAW trimmed line already reads as the field
+    /// (that is a hit, not a near miss, and is `field`'s job to accept).
+    let private nearMissFieldHint (key: string) (text: string) : string option =
+        let prefix = key + ":"
+
+        commentLines text
+        |> List.tryPick (fun rawLine ->
+            let trimmed = rawLine.Trim()
+
+            if trimmed.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase) then
+                None // a genuine (if oddly-cased) field line — `field` itself already refuses that case
+            else
+                // The decoration may wrap only the "Key:" span, e.g. `**Verdict:** pass` — split off
+                // the first whitespace-delimited run and test THAT for the emphasis-stripped key.
+                let firstToken =
+                    match trimmed.IndexOf ' ' with
+                    | -1 -> trimmed
+                    | i -> trimmed.Substring(0, i)
+
+                match stripLeadingEmphasis firstToken with
+                | Some strippedToken when strippedToken.Equals(prefix, System.StringComparison.OrdinalIgnoreCase) ->
+                    Some
+                        $"field '%s{key}' must be a column-0 line '%s{prefix} <value>' — found markdown-emphasised '%s{trimmed}' instead"
+                | _ -> None)
+
+    /// Every near-miss hint `nearMissFieldHint` finds for `keys` in `text`, in declaration order —
+    /// `reviewPhaseFacts` calls this with the ONE marker's own required-field grammar
+    /// (`Protocol.markerFieldGrammar`), so a comment is never scored against a different marker kind's
+    /// fields.
+    let private nearMissFieldHints (keys: string list) (text: string) : string list =
+        keys |> List.choose (fun key -> nearMissFieldHint key text)
+
+    /// One marker id's required fields, straight from `Protocol.markerFieldGrammar` — the SAME list
+    /// `ProtocolTests` pins against this file's own `markerFieldGrammar` (the private function inside
+    /// `parseReviewCommentsCore` below), so a near-miss hint is generated for the same fields the
+    /// canonical parser actually enforces rather than a THIRD hand-copied list (.github#2369).
+    let private requiredFieldsFor (markerId: string) : string list =
+        Protocol.markerFieldGrammar
+        |> List.tryFind (fun g -> g.MarkerId = markerId)
+        |> Option.map (fun g -> g.RequiredFields)
+        |> Option.defaultValue []
+
     /// One comment sorted into every marker group it canonically carries — the SAME classification
     /// `parseReviewCommentsCore` has always computed (`ordered`/`initial`/`confirmations`/`escalations`/
     /// `repairPhases`/`acceptances`), now named and shared so a second caller (`reviewPhaseFacts`) reads
@@ -120,6 +182,12 @@ module Driver =
           CriticIdentity: string option
           ConfirmationCount: int
           LatestVerdict: string option
+          /// Populated only when `LatestVerdict = None`: every markdown-emphasised near-miss field
+          /// `nearMissFieldHints` found in the comment `LatestVerdict` would have been read from — the
+          /// initial marker's own comment when there is no confirmation yet, else the latest
+          /// confirmation's. Empty whenever `LatestVerdict` is readable, or no near miss was found
+          /// (.github#2369) — this never widens what `field` accepts, only what a refusal explains.
+          LatestVerdictNearMissHints: string list
           LatestReviewedHeadSha: string option
           EscalationPresent: bool
           RepairPhasePresent: bool
@@ -151,6 +219,20 @@ module Driver =
             | Some c -> field "reviewed-head" c.Body |> Result.toOption
             | None -> initialHeadSha
 
+        // .github#2369: only computed when `latestVerdict` is unreadable, against the SAME comment and
+        // the SAME marker's own required fields `latestVerdict` was read from — so a near-miss reported
+        // for a confirmation is never scored against the initial marker's grammar, or vice-versa.
+        let latestVerdictNearMissHints =
+            if latestVerdict.IsSome then
+                []
+            else
+                match latestConfirmation with
+                | Some c -> nearMissFieldHints (requiredFieldsFor Protocol.reviewPolicy.ConfirmationMarker) c.Body
+                | None ->
+                    initial
+                    |> Option.map (fun c -> nearMissFieldHints (requiredFieldsFor Protocol.reviewPolicy.InitialMarker) c.Body)
+                    |> Option.defaultValue []
+
         { InitialCount = List.length groups.Initial
           InitialPresent = not (List.isEmpty groups.Initial)
           InitialHeadSha = initialHeadSha
@@ -158,6 +240,7 @@ module Driver =
           CriticIdentity = criticIdentity
           ConfirmationCount = List.length groups.Confirmations
           LatestVerdict = latestVerdict
+          LatestVerdictNearMissHints = latestVerdictNearMissHints
           LatestReviewedHeadSha = latestReviewedHeadSha
           EscalationPresent = not (List.isEmpty groups.Escalations)
           RepairPhasePresent = not (List.isEmpty groups.RepairPhases)

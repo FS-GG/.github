@@ -157,6 +157,20 @@ module Review =
                 MalformedEvidence [ reason ], Park reason
             | errors, _ -> MalformedEvidence errors, Park(String.concat "; " errors)
 
+    /// The base "neither readable pass nor changes-required" reason, extended with the exact expected
+    /// column-0 field form whenever `Driver.reviewPhaseFacts` found a markdown-emphasised near miss —
+    /// `**Verdict:** pass` rather than `verdict: pass` (.github#2369). A faithful critic following
+    /// `independent-review.md`'s prose produced exactly that shape: the marker looked canonical and the
+    /// chain parked with no signal about which field was unreadable or what the fix was. The base
+    /// message is unchanged when no near miss is found, so every existing malformed-verdict case keeps
+    /// its prior wording.
+    let private malformedVerdictReason (phaseFacts: Driver.ReviewPhaseFacts) =
+        let baseReason = "the latest review verdict is neither readable pass nor changes-required"
+
+        match phaseFacts.LatestVerdictNearMissHints with
+        | [] -> baseReason
+        | hints -> baseReason + " (" + String.concat "; " hints + ")"
+
     let private classify (binding: Binding) (facts: Facts) : State * NextAction =
         let phaseFacts = Driver.reviewPhaseFacts facts.Comments
 
@@ -212,7 +226,7 @@ module Review =
                             RepairPhaseActive round,
                             ResumeSameCritic "a new commit landed after a changes-required verdict; the same critic must confirm it"
                     | _ ->
-                        let reason = "the latest review verdict is neither readable pass nor changes-required"
+                        let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason
             | Ordinary ->
                 if not phaseFacts.InitialPresent then
@@ -252,7 +266,7 @@ module Review =
                             AwaitingSameCriticConfirmation round,
                             ResumeSameCritic "a new commit landed after a changes-required verdict; the same critic must confirm it"
                     | _ ->
-                        let reason = "the latest review verdict is neither readable pass nor changes-required"
+                        let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason
 
     let inspect (binding: Binding) (facts: Facts) : Result<Verdict, string list> =

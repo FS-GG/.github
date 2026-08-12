@@ -17,6 +17,17 @@
 
 <!-- END GENERATED: fsgg-protocol:review-policy -->
 
+**Protocol field syntax.** Each marker's required fields are literal column-0 lines of the exact
+form `key: value` — not markdown-bolded (`**Verdict:** pass`), not indented, not a heading, and not
+restated as prose. The initial marker (`fsgg:independent-review:v1`) requires `critic`,
+`reviewed-head`, `verdict`; the confirmation marker (`fsgg:independent-review-confirmation:v1`)
+requires `initial-review`, `critic`, `round`, `preceding-review`, `reviewed-head`, `verdict`; the
+host-acceptance marker's fields are stated in the lifecycle contract below. A faithful critic who
+writes an otherwise-correct, canonically-placed marker but decorates its fields as ordinary markdown
+produces a marker the live engine cannot read — the parser refuses it and names the exact expected
+`key: value` form in the refusal (`.github#2369`) rather than parking with no signal about what to
+fix or which field was unreadable.
+
 <!-- BEGIN GENERATED: fsgg-protocol:lifecycle-policy -->
 *Generated lifecycle boundary. These are machine-owned prerequisites; judgement about the work remains authored.*
 
