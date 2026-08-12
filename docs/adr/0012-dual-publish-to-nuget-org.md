@@ -1,6 +1,6 @@
 # ADR-0012: Dual-publish FS-GG packages to nuget.org (public) alongside the org GitHub Packages feed
 
-- **Status:** Accepted — **§6 (push authentication / admin gate) superseded by [ADR-0013](0013-trusted-publishing-oidc-for-nuget-org.md)** (2026-07-01): the nuget.org push authenticates via **Trusted Publishing (OIDC)**, not a long-lived `NUGET_ORG_API_KEY` secret; login+push live in each producer's own workflow (no cross-repo reusable workflow). **§1's "the org feed stays the coherence source of truth" is amended by [ADR-0039](0039-nuget-org-is-the-read-path.md)** (2026-07-14): the READ path moved to nuget.org (#576) — Renovate resolves every `FS.GG.*` there, and five of six receivers restore from it. §2–§5 (scope, byte-identical, gated ordering, listing metadata) stand.
+- **Status:** Accepted — **§6 (push authentication / admin gate) superseded by [ADR-0013](0013-trusted-publishing-oidc-for-nuget-org.md)** (2026-07-01): the nuget.org push authenticates via **Trusted Publishing (OIDC)**, not a long-lived `NUGET_ORG_API_KEY` secret; login+push live in each producer's own workflow (no cross-repo reusable workflow). **§1's "the org feed stays the coherence source of truth" is amended by [ADR-0039](0039-nuget-org-is-the-read-path.md)** (2026-07-14): the READ path moved to nuget.org (#576) — Renovate resolves every `FS.GG.*` there, and five of six receivers restore from it. §2, §3 and §5 (scope, byte-identical, listing metadata) stand. **§4 (gated ordering) corrected 2026-08-12** (FS-GG/.github#2240): its unqualified "the push is safe to retry" was wrong — see §4's dated note.
 - **Date:** 2026-07-01
 - **Affects:** `.github` (registry, org provisioning, **and — since #624 — its own two producer workflows, which §2's scope does not yet name**), FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance (producer release workflows)
 
@@ -61,11 +61,50 @@ rename anything.
    (ApiCompat / Package Validation, the G1–G7 reference-gate-set guard). No separate
    build, so the gate-verified artifact is exactly what goes public.
 
-4. **Gated ordering within a release.** A producer's release job pushes to the org feed
-   first; **only after** that push and all gates are green does it push the identical
-   `.nupkg` to `https://api.nuget.org/v3/index.json` with `--skip-duplicate` (idempotent
-   retry). A failed nuget.org push **fails the release loud** but does not corrupt
-   coherence — the org feed remains authoritative and the push is safe to retry.
+4. **Gated ordering within a release, and the retry path is not "just retry."** A
+   producer's release job pushes to the org feed first; **only after** that push and all
+   gates are green does it push the identical `.nupkg` to
+   `https://api.nuget.org/v3/index.json`. A failed nuget.org push **fails the release
+   loud** and does not corrupt coherence within that run — the org feed remains
+   authoritative for the bytes it already holds.
+
+   > **Corrected 2026-08-12 (FS-GG/.github#2240) — "the push is safe to retry" was wrong.**
+   > `dotnet pack` is **not reproducible**: it writes the OPC core-properties part as
+   > `package/services/metadata/core-properties/<guid>.psmdcp` with a freshly generated
+   > `<guid>` on every invocation, so two packs of an identical, clean checkout produce
+   > `.nupkg` archives with different sha256 (`-p:ContinuousIntegrationBuild=true` does not
+   > change this — measured on FS.GG.Templates 0.8.0, FS-GG/FS.GG.Templates#349).
+   >
+   > Exactly **one** retry path is safe: GitHub Actions **"Re-run failed jobs,"** which
+   > skips the already-succeeded `pack` job and lets the failed `publish` job re-download
+   > the *original* uploaded artifact. It is safe only **within the artifact's retention
+   > window** (`retention-days` on the upload — 7 days in the producers measured); past
+   > that window even this path re-packs.
+   >
+   > **"Re-run all jobs" and re-pushing/re-tagging the release are NOT safe.** Both
+   > re-invoke `pack`, which mints a new `<guid>` and therefore new bytes. Because both the
+   > org-feed and nuget.org pushes carry `--skip-duplicate`, a re-packed retry after a
+   > partial success does not fail and does not no-op: the org feed silently **keeps** the
+   > first archive (already pushed; `--skip-duplicate` no-ops on it) while nuget.org
+   > **receives** the second, different one. The two feeds then permanently serve different
+   > bytes for one immutable version — the exact corruption this section originally said
+   > could not happen.
+   >
+   > **The correct fix is at the push, not at retry discipline.** A blind
+   > `--skip-duplicate` treats "the feed already has this id+version" as always safe to
+   > no-op past. It is only safe when the bytes match. The publish step must instead
+   > compare the artifact it is about to push against what the target feed already serves
+   > for that id+version and **fail closed** — non-zero exit, loud error — on any mismatch,
+   > exactly as §6 already requires for a missing credential. A duplicate push is safe to
+   > no-op **only when the bytes are identical**; everything else is a coherence break
+   > masquerading as an idempotent retry.
+   >
+   > No producer implements this compare-and-fail-closed guard today — every dual-push
+   > producer measured (`.github`'s own `release-kit.yml`, `release-drivers.yml`,
+   > `release-coord-engine.yml`, and the six external producers named in
+   > FS-GG/.github#2240) uses a blind `--skip-duplicate` on both legs. Implementing the
+   > guard is a release-workflow behavior change, not a documentation correction, and is
+   > tracked separately: FS-GG/.github#2428.
 
 5. **Package listing metadata.** nuget.org listing requires `PackageLicenseExpression`
    (or file), `PackageReadmeFile`, `RepositoryUrl`, and ideally an icon in each
@@ -112,6 +151,11 @@ rename anything.
 - **Reversibility:** none for the IDs — this ADR is a `contract-change`-class commitment.
   Changing scope later (e.g. un-publishing a package) is an unlist, not a delete; a
   future rename is a new ID + deprecation (ADR-0003 discipline), never an in-place edit.
+- **Retry safety (corrected 2026-08-12, FS-GG/.github#2240):** §4's "safe to retry" claim
+  was wrong and is corrected in place there. Implementing the compare-and-fail-closed
+  push guard §4 now calls for, across `.github`'s own three dual-push producer workflows
+  and the six external producers sharing the same pattern, is tracked in
+  FS-GG/.github#2428.
 
 <!-- Follow-up: reconcile docs/architecture.md (the feed/distribution picture) after the
 registry `nuget-org-published` entry lands and the first package resolves on nuget.org. -->
