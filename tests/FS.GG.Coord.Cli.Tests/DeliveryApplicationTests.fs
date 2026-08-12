@@ -227,6 +227,19 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         Assert.True(Client.outstandingObligations (Ok "head-a") (Ok staleHead))
 
     [<Fact>]
+    let ``#2216 stale declaration identifies its comment and append-proof repair`` () =
+        let comments =
+            [ commentWithId 41L "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
+              commentWithId 42L "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-b -->" ]
+
+        match DeliveryApplication.obligationsFromComments "head-b" comments with
+        | Error reason ->
+            Assert.Contains("comment 41", reason)
+            Assert.Contains("edit it in place or delete it", reason)
+            Assert.Contains("adding a declaration cannot repair it", reason)
+        | other -> failwithf "expected stale declaration repair refusal, got %A" other
+
+    [<Fact>]
     let ``#2131 delivery adapter refuses a stale claim generation before issuing a merge`` () =
         let facts = guardedLandingFacts "claim-generation-a"
         let transition =
