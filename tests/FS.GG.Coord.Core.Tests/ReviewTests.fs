@@ -571,6 +571,25 @@ module ReviewTests =
         | Error e -> failwithf "%A" e
 
     [<Fact>]
+    let ``#2451 a receipt naming the generic agent-type string as original critic is refused, even when it matches`` () =
+        // The negative case for succession: the stuck round's marker names critic
+        // `fsgg-critic-normal` — the bare agent-type string every critic dispatched at that route
+        // shares — and the receipt names the SAME string as `original-critic`. The equality holds
+        // textually, but it proves nothing: any critic at that route would satisfy it, so this can
+        // never be "the exact stuck critic" the guard's own doc comment promises. Must fall back to
+        // `ResumeSameCritic`, exactly like a receipt naming the wrong critic.
+        let comments = [ initialChangesRequired "fsgg-critic-normal" "head1" ]
+        let receipt = successionReceipt "fsgg-critic-normal" "fresh-critic" "host-9b63" "head2"
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) with
+        | Ok v ->
+            match v.NextAction with
+            | EnterCriticSuccession _ ->
+                failwith "GATE INVERSION: a generic agent-type critic identity was admitted as the exact stuck critic"
+            | ResumeSameCritic reason -> Assert.Contains("refused, not consumed", reason)
+            | other -> failwithf "expected ResumeSameCritic (receipt refused), got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
     let ``#2417 advance re-converges idempotently on a granted EnterCriticSuccession verdict`` () =
         let comments = [ initialChangesRequired "kite" "head1" ]
         let receipt = successionReceipt "kite" "fresh-critic" "host-9b63" "head2"

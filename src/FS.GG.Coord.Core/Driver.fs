@@ -194,6 +194,26 @@ module Driver =
           AcceptanceCount: int
           AcceptancePresent: bool }
 
+    /// A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
+    /// one route shares — `fsgg-critic-normal`, or any future `fsgg-critic-<route>` — rather than a
+    /// minted, distinguishing identity the way a worker's `whoami --mint` id is (.github#2451). Measured
+    /// live: two separate critics dispatched during one run both posted `critic: fsgg-critic-normal`.
+    ///
+    /// PRIVATE, and `Review.fs` carries its own copy of this exact predicate (`Review.isGenericCriticIdentity`,
+    /// same rule, same rename discipline if it ever changes — NOT byte-identical text: each file spells
+    /// `System.String`/`System.StringComparison` fully-qualified or unqualified to match its own file's
+    /// `open System` convention) rather than this module exposing it through `Driver.fsi` —
+    /// `.github#2451`'s own declared `Paths:` does not include `Driver.fsi`, and widening a signature
+    /// file for a single boolean helper is out of proportion to the file it would touch. Two
+    /// markers that both carry this shape can never be treated as proof of "the same critic": every
+    /// critic ever dispatched at that route satisfies the string equality, whether or not it is the same
+    /// instance, so the equality proves nothing about identity. The check is a prefix, not a fixed list,
+    /// because the dispatch convention (`fsgg-critic-<route>`) is what is actually stable — a route name
+    /// this module has no reason to enumerate.
+    let private isGenericCriticIdentity (identity: string) =
+        not (System.String.IsNullOrWhiteSpace identity)
+        && identity.Trim().StartsWith("fsgg-critic-", System.StringComparison.OrdinalIgnoreCase)
+
     let reviewPhaseFacts (comments: ReviewComment list) : ReviewPhaseFacts =
         let groups = classifyMarkers comments
 
@@ -499,6 +519,14 @@ module Driver =
                 let mutable valid = true
 
                 for expectedRound, confirmation in confirmations |> List.indexed |> List.map (fun (i, c) -> i + 1, c) do
+                    // .github#2451: the string equality below (`confirmationCritic = critic`) is
+                    // necessary but not SUFFICIENT proof of "the same critic" — every critic ever
+                    // dispatched at one route shares the bare agent-type string, so two DIFFERENT
+                    // critics that both never minted an identity satisfy it trivially. The generic-
+                    // identity arm below is checked FIRST (F# takes the first matching arm) so a
+                    // generic-identity match never falls into the accepting arm; it fails closed with a
+                    // distinct, named reason rather than the generic "does not continue" message, which
+                    // would wrongly suggest the fields themselves disagreed.
                     match
                         field "initial-review" confirmation.Body,
                         field "critic" confirmation.Body,
@@ -507,6 +535,20 @@ module Driver =
                         field "reviewed-head" confirmation.Body,
                         field "verdict" confirmation.Body
                     with
+                    | Ok initialUrl, Ok confirmationCritic, Ok round, Ok preceding, Ok reviewedHead, Ok verdict when
+                        initialUrl = first.Url
+                        && confirmationCritic = critic
+                        && isGenericCriticIdentity critic
+                        && round = string expectedRound
+                        && preceding = previousReviewUrl
+                        && not (System.String.IsNullOrWhiteSpace confirmation.Url)
+                        && confirmation.Id > previousReviewId
+                        && (verdict = "pass" || verdict = "changes-required")
+                        ->
+                        valid <- false
+
+                        errors.Add
+                            $"review confirmation round %d{expectedRound} names critic '%s{critic}', the bare agent-type string rather than a minted, distinguishing identity; the same-critic continuity requirement cannot be established from it (.github#2451)"
                     | Ok initialUrl, Ok confirmationCritic, Ok round, Ok preceding, Ok reviewedHead, Ok verdict when
                         initialUrl = first.Url
                         && confirmationCritic = critic
