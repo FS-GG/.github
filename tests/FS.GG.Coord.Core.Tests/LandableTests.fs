@@ -506,13 +506,17 @@ module LandableTests =
     [<Fact>]
     let ``AC1 (multi-check suite, #2454): an advisory-failing check ALONGSIDE genuinely GREEN non-advisory checks does not red — coherence.yml's real shape`` () =
         // `.github#2454`: this is the shape `coherence.yml` actually produces and the ORIGINAL #2400 fix did
-        // not cover — one suite carrying the advisory `claim-generation` (failing) plus several ordinary jobs
-        // that all PASSED. The first shipped `runGating` surveyed suite MEMBERSHIP: every check-run in the
-        // suite, passing ones included, had to be advisory-named for the run to qualify as `Advisory` — so
-        // the mere PRESENCE of these passing ordinary jobs kept `coherenceRun` `Blocking`, and its own
-        // `failure` conclusion (caused solely by the advisory job) still reded the verdict. The fix filters
-        // to FINDINGS (bad or pending) before asking whether everything left is advisory; a passing check-run
-        // is not a finding and cannot hold the run `Blocking` on its own.
+        // not cover — one suite carrying the advisory `claim-generation` (failing) plus the workflow's OTHER
+        // three jobs (`.github/workflows/coherence.yml`'s own `jobs:` list: `contract-coherence`,
+        // `projection`, `roster-closure`, `claim-generation` — four jobs, one suite; `drift` and `reconcile`
+        // are real check-run names on a PR but belong to entirely separate workflows and never share this
+        // suite, a correction made to #2454's own AC1 wording at review) that all PASSED. The first shipped
+        // `runGating` surveyed suite MEMBERSHIP: every check-run in the suite, passing ones included, had to
+        // be advisory-named for the run to qualify as `Advisory` — so the mere PRESENCE of these passing
+        // ordinary jobs kept `coherenceRun` `Blocking`, and its own `failure` conclusion (caused solely by the
+        // advisory job) still reded the verdict. The fix filters to FINDINGS (bad or pending) before asking
+        // whether everything left is advisory; a passing check-run is not a finding and cannot hold the run
+        // `Blocking` on its own.
         let coherenceRun =
             run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
 
@@ -520,36 +524,57 @@ module LandableTests =
         let ordinaryGreenA = named "contract-coherence" (Some 5L) "completed" (Some "success")
         let ordinaryGreenB = named "projection" (Some 5L) "completed" (Some "success")
         let ordinaryGreenC = named "roster-closure" (Some 5L) "completed" (Some "success")
-        let ordinaryGreenD = named "drift" (Some 5L) "completed" (Some "success")
-        let ordinaryGreenE = named "reconcile" (Some 5L) "completed" (Some "success")
 
         Assert.Equal(
             PrGreen,
-            score
-                (Some true)
-                [ greenRun; coherenceRun ]
-                [ advisoryFailing; ordinaryGreenA; ordinaryGreenB; ordinaryGreenC; ordinaryGreenD; ordinaryGreenE ]
+            score (Some true) [ greenRun; coherenceRun ] [ advisoryFailing; ordinaryGreenA; ordinaryGreenB; ordinaryGreenC ]
         )
 
     [<Fact>]
-    let ``AC2 (multi-check suite, #2454): List.forall over FINDINGS, not membership — ALL bad checks must be advisory, not ANY`` () =
-        // The `forall`-vs-`exists` distinction the old membership-based test used to police still matters
-        // under the new findings-based rule, but the shape that exercises it now needs at least two BAD
-        // check-runs in the same suite (a single bad check can't tell `forall` from `exists` apart). This
-        // reuses AC2's own shape — one advisory-and-failing check plus one genuinely non-advisory-and-failing
-        // check — which already asserts `PrRed`; a `forall` -> `exists` mutation there would flip it to
-        // `PrGreen` (the failing ordinary check's mere coexistence with an advisory one would be enough to
-        // call the suite all-advisory), so that test alone already catches the mutation this comment used to
-        // describe. Adding a passing ordinary check-run alongside both bad ones — never a finding, so never
-        // in scope for `findings`'s `forall` — proves the passing check plays no part in the decision either
-        // way, distinguishing this from AC2 rather than duplicating it.
+    let ``AC2 (multi-check suite, #2454): List.forall over FINDINGS still governs the SUBJECT COUNT, though not the verdict on its own`` () =
+        // CORRECTED AT REVIEW (`.github#2454` round 2): an earlier version of this test and comment claimed a
+        // `forall` -> `exists` mutation of `runGating`'s findings test would flip THIS shape's verdict. That
+        // claim was FALSE and the round-2 critic proved it: applying that exact mutation still leaves the
+        // full suite green, 806/806 — `dotnet fsi` against the built DLL confirms both the correct build and
+        // the mutant return `(PrRed, _)` for this fixture, never `PrGreen`.
+        //
+        // The reason is structural, not incidental to this fixture: `findings` and `scoredChecks` are BOTH
+        // derived from the SAME `checks` list, and `checkGating` classifies each check-run independent of
+        // whatever `runGating` decides for the run that contains it. `forall` and `exists` can only disagree
+        // when `findings` holds at least one `Advisory` AND at least one `Blocking` member — and that
+        // `Blocking` member, BEING a finding (bad or pending) and BEING non-advisory, is *always* also scored
+        // directly through `scoredChecks`, so it forces the same non-green verdict whether or not `runGating`
+        // additionally counts the RUN itself. Filtering to findings before the `forall` — this fix's own
+        // change — is what makes the run's own inclusion redundant with the check-level rollup whenever a
+        // real, non-advisory finding coexists with an advisory one; the OLD membership-based rule did not
+        // have this property (its differentiator, a check-run that had already PASSED, contributed nothing to
+        // `scoredChecks` on its own, which is exactly why the pre-fix `AC4` test — see history — could still
+        // observe a verdict flip that this one structurally cannot).
+        //
+        // What `forall` vs `exists` DOES still change: the SUBJECT COUNT `scoreN`/`scoreRequired` return
+        // alongside the verdict (`#606`/`#724`'s own reason that count is a first-class output, not a detail —
+        // see `scoreN`'s doc comment). Under the correct `forall`, `coherenceRun` stays `Blocking` and is
+        // itself a counted subject; under a mutant `exists`, it is wrongly excluded. Gate-inversion evidence,
+        // both directions measured directly against the built DLL via this exact fixture (`greenRun`;
+        // `coherenceRun` completed/failure; `advisoryFailing` = `claim-generation` failing; `realFailing` =
+        // `contract-coherence` failing; `ordinaryGreen` = `projection` passing — all on suite `5L` except
+        // `greenRun`, whose distinct suite `1L` is what keeps `total <> 0` whichever way this arm goes):
+        //   - correct `forall`:  `scoreN` = `(PrRed, 4)` — `greenRun` + `coherenceRun` + the two bad checks
+        //   - mutant  `exists`:  `scoreN` = `(PrRed, 3)` — `coherenceRun` dropped from the count, verdict held
+        // Both measured directly (not inferred) before this test was written; see the PR's round-2 discussion
+        // for the reproduction. The verdict assertion below therefore pins what a `forall`->`exists` mutation
+        // on its own CANNOT flip; the count assertion pins what it CAN and does.
         let coherenceRun =
             run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
 
         let advisoryFailing = named "claim-generation" (Some 5L) "completed" (Some "failure")
         let realFailing = named "contract-coherence" (Some 5L) "completed" (Some "failure")
         let ordinaryGreen = named "projection" (Some 5L) "completed" (Some "success")
-        Assert.Equal(PrRed, score (Some true) [ greenRun; coherenceRun ] [ advisoryFailing; realFailing; ordinaryGreen ])
+
+        Assert.Equal(
+            (PrRed, 4),
+            scoreN (Some true) [ greenRun; coherenceRun ] [ advisoryFailing; realFailing; ordinaryGreen ]
+        )
 
     [<Fact>]
     let ``a run whose only check-run is advisory and STILL RUNNING is not held at pending either`` () =
