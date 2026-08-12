@@ -120,6 +120,8 @@ module Options =
           Args: string list
           Worker: string option
           Force: bool
+          /// `claim --refuse-overlap` (.github#2459) — see the `.fsi` doc.
+          RefuseOverlap: bool
           Mint: bool
           Flip: bool
           Evidence: string option
@@ -365,16 +367,19 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              head you MEAN to gate, for a caller that just force-pushed (the
                                              PR object lags). Neither can green; both are pending (#737)
 
-  claim  <ref> [--worker W] [--force] [--json]
-                                             take the lock; --json emits a fresh marker/Status receipt.
-                                             --force STEALS: it takes an item another worker holds RIGHT
+  claim  <ref> [--worker W] [--force]        take the lock; --json emits a fresh marker/Status receipt.
+         [--refuse-overlap] [--json]         --force STEALS: it takes an item another worker holds RIGHT
                                              NOW, deleting their marker and posting the theft on the item
                                              so they and a later reader both see it (#1620 — the recovery
                                              route for a holder that died with an open PR and hours of
                                              lease left, which `reap` and `adopt` correctly refuse). It
                                              also lifts the #516 one-item-per-worker refusal. It does NOT
                                              override a twin marker (#419) or an unparseable one: those
-                                             are a broken identity, not a contested item
+                                             are a broken identity, not a contested item. `claim` reaches
+                                             items WITHOUT the scheduler's own overlap-avoidance, so it
+                                             runs the same #353 collision scan `widen`/`overlap --active`
+                                             use and WARNS (still claiming) on a live overlap (#2459);
+                                             --refuse-overlap turns that warning into a refusal instead
   take   [--repo NAME] [--worker W] [--json]
                                              schedule AND claim the next item, in one step. Ready only:
          [--include-backlog]                 a Backlog row is passed over AT THE COLUMN unless you ask for
@@ -702,6 +707,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FFresh
         | FIncludeBacklog
         | FForce
+        /// `claim --refuse-overlap` (.github#2459) — turn the #353 collision report into a refusal.
+        | FRefuseOverlap
         | FMint
         | FFlip
         | FLimit
@@ -810,6 +817,15 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // green throughout the defect's whole life.)
         | FForce -> Only [ Claim ]
 
+        // .github#2459 — `claim` ONLY. `take`/`adopt` both delegate to `Client.claim` internally, but
+        // NEITHER accepts this flag on its own argv: `take` never even reaches the collision scan this
+        // gates (it skips it entirely, having already run the scheduler's own overlap-avoidance), and
+        // `adopt` transfers a claim under the same permissive default `claim` itself uses. A caller that
+        // wants the strict guarantee for an adopted item runs `claim --refuse-overlap` directly once the
+        // orphan is identified, exactly as `claim --force` is already the steal primitive `adopt` does not
+        // expose on its own argv either.
+        | FRefuseOverlap -> Only [ Claim ]
+
         // Scheduling reads take their freshness from a `Cache.ReadIntent`, not from this flag, so
         // `batch --fresh` / `next --fresh` / `take --fresh` never did anything. Only these three read it.
         | FFresh -> Only [ Scan; Bootstrap; Issues ]
@@ -881,6 +897,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FFresh -> "--fresh", [ "--refresh" ]
         | FIncludeBacklog -> "--include-backlog", []
         | FForce -> "--force", []
+        | FRefuseOverlap -> "--refuse-overlap", []
         | FMint -> "--mint", []
         | FFlip -> "--flip", []
         | FLimit -> "-n", []
@@ -1126,6 +1143,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Fresh then FFresh
           if o.AllowBacklog then FIncludeBacklog
           if o.Force then FForce
+          if o.RefuseOverlap then FRefuseOverlap
           if o.Mint then FMint
           if o.Flip then FFlip
           if not (List.isEmpty o.Over) then FOver
@@ -1716,6 +1734,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--refresh" :: t -> flags { acc with Fresh = true } t
             | "--include-backlog" :: t -> flags { acc with AllowBacklog = true } t
             | "--force" :: t -> flags { acc with Force = true } t
+            | "--refuse-overlap" :: t -> flags { acc with RefuseOverlap = true } t
             | "--mint" :: t -> flags { acc with Mint = true } t
             | "--flip" :: t -> flags { acc with Flip = true } t
 
@@ -1773,6 +1792,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Args = []
               Worker = None
               Force = false
+              RefuseOverlap = false
               Mint = false
               Flip = false
               Evidence = None

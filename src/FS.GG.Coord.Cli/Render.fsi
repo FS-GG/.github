@@ -59,6 +59,23 @@ module Render =
           /// a lapsed one (so the `STALE` a human is about to `reap` is not free).
           Incomplete: string list }
 
+    /// ONE claim a path update — or, since .github#2459, a `claim` itself — now collides with (.github#1517)
+    /// — the same three facts the human OVERLAP branch prints (`OVERLAP — now collides with <ref> (worker
+    /// <holder>)` / `  <tokens>`), plus whether the courtesy notice posted on that holder's item actually
+    /// landed. The notify outcome is part of the receipt because a notice that FAILED still leaves a
+    /// standing collision: the human form says so on stderr, so the machine form must not have to infer it
+    /// from silence. Placed ahead of `ClaimReceipt` (.github#2459) because that receipt now carries a list
+    /// of these too, and an F# signature must declare a type before referring to it.
+    type PathCollision =
+        { Ref: Ref
+          Worker: string
+          /// The shared token STEMS. A LIST, rendered as an array — the human form joins them into one
+          /// stderr line, and a machine field shaped to that line would be a consumer splitting on ", ".
+          SharedTokens: string list
+          Notified: bool
+          /// Why the notice failed; `None` when it landed.
+          NotifyError: string option }
+
     /// The fresh postcondition emitted by `claim --json` and `take --json`. The lock and board column are
     /// separate observations; `Converged` is true only when both were read back successfully.
     type ClaimReceipt =
@@ -72,6 +89,14 @@ module Render =
           StatusRead: string
           StatusWrite: string
           PendingBoardWrites: int option
+          /// `claim`'s own #353 collision report (.github#2459) — every live claim THIS item's declared
+          /// touch-set collides with, in the same shape `PathUpdateReceipt.Collisions` already uses.
+          /// Empty when the scan found none, and also (best-effort) when the scan itself could not run —
+          /// `claim` must keep working through a degraded scan, so a caller cannot read `[]` here as proof
+          /// of disjointness; `--refuse-overlap` is the form that turns "could not check" into a refusal.
+          /// Purely advisory: it never participates in `Converged`, which is about THIS item's own lock
+          /// and board state, not about other items this claim happens to overlap.
+          Collisions: PathCollision list
           Converged: bool }
 
     /// The OTHER outcome of `take --json`: it looked, and it claimed nothing (.github#1525). A LOOK THAT
@@ -121,21 +146,6 @@ module Render =
           OwnerValue: string option
           Note: string option
           Reason: string option }
-
-    /// ONE claim a path update now collides with (.github#1517) — the same three facts the human OVERLAP
-    /// branch prints (`OVERLAP — now collides with <ref> (worker <holder>)` / `  <tokens>`), plus whether
-    /// the courtesy notice this command posts on that holder's item actually landed. The notify outcome is
-    /// part of the receipt because a notice that FAILED still leaves a standing collision: the human form
-    /// says so on stderr, so the machine form must not have to infer it from silence.
-    type PathCollision =
-        { Ref: Ref
-          Worker: string
-          /// The shared token STEMS. A LIST, rendered as an array — the human form joins them into one
-          /// stderr line, and a machine field shaped to that line would be a consumer splitting on ", ".
-          SharedTokens: string list
-          Notified: bool
-          /// Why the notice failed; `None` when it landed.
-          NotifyError: string option }
 
     /// The receipt `widen --json` and `set-paths --json` emit (.github#1517): the ref, the declaration the
     /// update RESULTED IN, and the #353 overlap verdict — all three in ONE object, so a machine consumer
