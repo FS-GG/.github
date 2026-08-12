@@ -307,6 +307,40 @@ def roster_ids(path: Path) -> list[str]:
     return [repo_id for repo_id, _ in roster_pairs(path)]
 
 
+def _strip_fsharp_line_comments(text: str) -> str:
+    """Blank out `//` line comments, quote-aware, without shifting any line or column.
+
+    `.github#2411` round 1 (critic `kite-2ddb`, F1): a trailing `// was "FS.GG.OldSDD" before the
+    rename` comment on an otherwise-untouched arm put a SECOND quoted string on the line, and
+    `resolver_arms`'s "last quoted literal" heuristic picked the decoy out of the comment instead of
+    the real value before it — a false `wrong=['sdd']` refusal on a change that never touched the
+    mapping. An ordinary rename comment is a far more mundane trigger than either residual risk this
+    module already disclosed (active patterns, a hoisted helper), so it is fixed rather than noted.
+
+    Scans each line left to right tracking whether a `"` toggles it into/out of a string literal (an
+    escaped `\\"` does not toggle), and truncates at the first `//` seen OUTSIDE a string — the F#
+    rule for where a line comment begins. `//` inside a string (a URL, say) is left alone. Newlines
+    are preserved exactly so callers that slice by byte offset (`resolver_arms`'s arm-boundary maths)
+    stay valid against the stripped text.
+    """
+    out: list[str] = []
+    for line in text.splitlines(keepends=True):
+        body = line[:-1] if line.endswith("\n") else line
+        in_string = False
+        cut = len(body)
+        i = 0
+        while i < len(body) - 1:
+            ch = body[i]
+            if ch == '"' and (i == 0 or body[i - 1] != "\\"):
+                in_string = not in_string
+            elif not in_string and ch == "/" and body[i + 1] == "/":
+                cut = i
+                break
+            i += 1
+        out.append(body[:cut] + line[len(body) :])
+    return "".join(out)
+
+
 def resolver_arms(resolver: Path) -> dict[str, str]:
     """Parse RepoScope.resolve's short-id -> repo-name match arms from F# source text.
 
@@ -321,22 +355,24 @@ def resolver_arms(resolver: Path) -> dict[str, str]:
 
     This scans arm-by-arm instead of parsing the function as one block: each `| "<id>" -> ...` arm
     is located independently, so ARM ORDER never matters, and the mapped value is read as the LAST
-    quoted string literal in that arm's right-hand side — the position the literal lands in whether
-    it is bare (`"X"`), `Repository`-wrapped (`Repository "X"`), or wrapped again by an otherwise
-    inert helper (`noop (Repository "X")`), because a no-op wrapper introduces no quoted text of its
-    own. `NonRepository` arms (`cross-repo`) are still never captured: their payload is a bound
-    variable (`raw`/`token`), never a quoted literal, so no reformat can make one masquerade as a
-    roster entry.
+    quoted string literal in that arm's right-hand side, with line comments stripped first
+    (`_strip_fsharp_line_comments`) so a comment's own quoted text can never outrank the real one —
+    the position the literal lands in whether it is bare (`"X"`), `Repository`-wrapped
+    (`Repository "X"`), or wrapped again by an otherwise inert helper (`noop (Repository "X")`),
+    because a no-op wrapper introduces no quoted text of its own. `NonRepository` arms (`cross-repo`)
+    are still never captured: their payload is a bound variable (`raw`/`token`), never a quoted
+    literal, so no reformat can make one masquerade as a roster entry.
 
     This is NOT immune to every conceivable reformat — an active-pattern rewrite or hoisting the
     match into a differently-named helper would still need a compiled check to survive, per
-    `.github#2411`'s "Impact" note — but it does cover the two mutations that item's acceptance
-    criteria requires: RHS-wrapping and arm reordering.
+    `.github#2411`'s "Impact" note — but it does cover the mutations that item's acceptance criteria
+    requires: RHS-wrapping, arm reordering, and (round 1) a comment carrying a decoy literal.
     """
     try:
         text = resolver.read_text()
     except OSError as exc:
         raise Refused(f"cannot read embedded repo resolver {resolver}: {exc}") from exc
+    text = _strip_fsharp_line_comments(text)
     header = re.search(r"^( *)let resolve \(raw: string\)[^\n]*=[ \t]*\n", text, re.MULTILINE)
     if not header:
         raise Refused("could not isolate RepoScope.resolve; refusing a partial resolver check")

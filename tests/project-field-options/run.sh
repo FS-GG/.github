@@ -163,6 +163,30 @@ else
   fail "resolver reformat tolerance" "rc=$rc out=$out"
 fi
 
+# State 4 (`.github#2411` round 1, critic `kite-2ddb` finding F1): a trailing LINE COMMENT holding a
+# decoy quoted string — an entirely ordinary rename comment, e.g. `// was "FS.GG.OldSDD" before the
+# rename` — must not defeat the "last quoted literal" reading. Before this fix such a comment on ONE
+# arm false-refused with `wrong=['sdd']`, a more mundane trigger than either residual risk this
+# check already discloses (active patterns, a hoisted helper). Built from the real RepoScope.fs; the
+# generator refuses loudly, rather than silently no-op, if the targeted arm's exact text ever changes.
+python3 - "$ROOT/src/FS.GG.Coord.Core/RepoScope.fs" "$WORK/comment-decoy-resolver.fs" <<'PY'
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+target = '| "sdd" -> Repository "FS.GG.SDD"'
+decoy = ' // was "FS.GG.OldSDD" before the rename'
+text = open(src).read()
+if text.count(target) != 1:
+    sys.exit(f"expected exactly one occurrence of {target!r}; fixture generator is stale")
+open(dst, "w").write(text.replace(target, target + decoy, 1))
+PY
+out="$(run_tool check --schema "$SCHEMA" --resolver "$WORK/comment-decoy-resolver.fs" 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -eq 0 ]; then
+  pass "Repo Scope check ignores a decoy quoted string in a trailing line comment (regression for .github#2411 round 1)"
+else
+  fail "resolver comment-decoy tolerance" "rc=$rc out=$out"
+fi
+
 reset_state
 if PROJECT_FIELD_OPTIONS_FAKE_BAD_TOTAL=1 run_tool snapshot --output "$WORK/partial.json" >/dev/null 2>&1; then
   fail "partial snapshot refusal" "mismatched totalCount was accepted"
