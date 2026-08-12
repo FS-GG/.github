@@ -95,6 +95,33 @@ jobs:
             *-*) echo "::error::version '$version' is a prerelease. The org's Renovate preset sets ignoreUnstable=true, so consumers would never see it. Publish a stable 0.x version."; exit 1 ;;
           esac
 
+          # SIBLING-TAG PRECONDITION (.github#2409 DEC-004). FS.GG.Drivers, FS.GG.Kit and coord-engine
+          # are a coherent set (.github#2402, $(FsggCoherentSetVersion)): their <Version> values can no
+          # longer diverge, but before this the RELEASE EVENTS still could — nothing stopped a
+          # maintainer tagging `drivers/v$version` alone. This closes that: refuse to publish unless
+          # BOTH siblings' own tags, at this SAME version, already resolve to this SAME commit. Push all
+          # three tags in one `git push` (kit/v$version, drivers/v$version, coord-engine/v$version) — no
+          # new tag namespace, no renamed workflow, so no external contract this package's own release
+          # depends on moves. See release-kit.yml's header for the full reasoning (kept once there).
+          check_sibling_tag() {
+            local sibling_tag="$1"
+            local tagged
+            tagged="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
+                        "refs/tags/$sibling_tag" "refs/tags/$sibling_tag^{}" \
+                      | awk -v p="refs/tags/$sibling_tag^{}" -v b="refs/tags/$sibling_tag" \
+                          '$2==p {peeled=$1} $2==b {plain=$1} END {print (length(peeled) ? peeled : plain)}')"
+            if [ -z "$tagged" ]; then
+              echo "::error::refusing to publish FS.GG.Drivers $version: sibling tag $sibling_tag does not exist yet. FS.GG.Drivers, FS.GG.Kit and coord-engine are a coherent set (.github#2402) and release together (.github#2409) — push all three tags (kit/v$version, drivers/v$version, coord-engine/v$version) at the same commit."
+              exit 1
+            fi
+            if [ "$tagged" != "$GITHUB_SHA" ]; then
+              echo "::error::refusing to publish FS.GG.Drivers $version: sibling tag $sibling_tag points at $tagged, not the commit being packed ($GITHUB_SHA). All three coherent-set tags must name the same commit."
+              exit 1
+            fi
+          }
+          check_sibling_tag "kit/v$version"
+          check_sibling_tag "coord-engine/v$version"
+
           if [ "$EVENT" = "push" ]; then
             # The tag is a coherence check against the evaluated version, never the source of truth.
             tag_version="${REF#drivers/v}"
