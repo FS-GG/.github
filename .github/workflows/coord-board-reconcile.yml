@@ -190,31 +190,53 @@ jobs:
       # this workflow onto one queue — so unlike a human/agent worker there is no fan-out for a shared id
       # to double-claim across.
       # .github#2352 AC-3: read a REST budget reserve and DEFER rather than compete for what is left.
-      # `/rate_limit` is documented by GitHub to cost nothing against `core` itself, so this check is
-      # free even on every run where the reserve turns out fine. A full reconcile of this repo's
-      # ~2000-item board is the single most expensive read this fleet's automation makes; refusing to
-      # START one below a comfortable floor is cheaper than starting one and running the budget to zero
-      # mid-scan, which is the exact shape .github#2352 observed (`gh run view 31429893232 --log-failed`
-      # → `budget EXHAUSTED … core`, exit 75). RESERVE is a floor, not a precisely tuned constant — it
-      # only has to be comfortably above what a single `claim`/`take` needs so a worker never finds the
-      # tank empty because this job ran first.
+      # `/rate_limit` is documented by GitHub to cost nothing against `core` itself, so that call looked
+      # like free money — but .github#894 and .github#907 measured, independently, twice, that its BODY
+      # disagrees with reality on this account: `core.remaining` reported 2431 (#894) and 2320 (#907)
+      # while a REAL REST call 403'd with `remaining: 0` in the same window
+      # (`docs/coordination/graphql-budget.md:170`). .github#2355 named this directly: a pre-flight built
+      # on `/rate_limit`'s body can read "healthy", set `defer=false`, and let a ~2000-item scan START
+      # against a budget that is already dead — burning the REST the fleet's live `claim`/`take`/
+      # `heartbeat` calls need, which is the exact shared resource this pre-flight exists to protect.
+      # `/rate_limit`'s over-report is always in the SAME direction (optimistic), which is the direction
+      # that matters here — a pessimistic lie would only cost an unnecessary defer.
+      #
+      # THE FIX is `graphql-budget.md`'s own conclusion, quoted verbatim: "The honest readings of REST
+      # are the 403's own X-RateLimit-* headers ... ". So this step reads a REAL REST call's OWN response
+      # headers — the same counter a live `claim`/`take` would see 403 against — instead of a separately
+      # computed `/rate_limit` body. `GET /repos/<owner>/<repo>` is the cheap real read: it costs 1 point
+      # against `core` even on the healthy path (unlike the free-to-call `/rate_limit`), and it needs no
+      # scope this job does not already have — "Metadata" read access ships with every GitHub App
+      # installation token regardless of which permissions were requested, so the App-token mint above
+      # covers it. One point spent honestly is cheaper than ~2000 spent on a scan gated by a number that
+      # can be off by thousands.
+      #
+      # NOTE (AC-3): this pre-flight is a best-effort floor, not the safety net. The load-bearing
+      # guarantee against a wrong verdict here is AC-2's mapping in the "Reconcile lifecycle projection"
+      # step below (EX_RATE/75 -> `::warning::` + `exit 0`) — if this honest-header check is ever wrong
+      # anyway (a rate-limit reset landing between this read and the scan, for instance), THAT mapping is
+      # what keeps a mid-scan budget exhaustion a soft defer rather than a hard failure, not this step.
       - name: Check REST budget before scanning
         id: budget
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set +e
-          remaining="$(curl -sS --max-time 10 --retry 2 -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" https://api.github.com/rate_limit | jq -r '.resources.core.remaining // empty')"
+          headers="$(curl -sS --max-time 10 --retry 2 -D - -o /dev/null \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}")"
+          remaining="$(printf '%s' "$headers" | tr -d '\r' | grep -i '^x-ratelimit-remaining:' | tail -1 | cut -d: -f2 | tr -d ' ')"
           reserve=750
           {
             echo "remaining=${remaining}"
             echo "reserve=${reserve}"
           } >> "$GITHUB_OUTPUT"
           if [ -z "$remaining" ]; then
-            echo "defer_reason=could not read the REST budget reserve before scanning (rate_limit read failed or returned no core.remaining)" >> "$GITHUB_OUTPUT"
+            echo "defer_reason=could not read the REST budget reserve before scanning (a real REST call's own X-RateLimit-Remaining header was missing or unreadable)" >> "$GITHUB_OUTPUT"
             echo "defer=true" >> "$GITHUB_OUTPUT"
           elif [ "$remaining" -lt "$reserve" ]; then
-            echo "defer_reason=REST core budget is low (${remaining} remaining, reserve is ${reserve}) before this run's own scan would even start" >> "$GITHUB_OUTPUT"
+            echo "defer_reason=REST core budget is low (${remaining} remaining per this call's own X-RateLimit-Remaining header, reserve is ${reserve}) before this run's own scan would even start" >> "$GITHUB_OUTPUT"
             echo "defer=true" >> "$GITHUB_OUTPUT"
           else
             echo "defer=false" >> "$GITHUB_OUTPUT"
