@@ -28,6 +28,31 @@ module Review =
           NewCriticIdentity: string
           CandidateHeadSha: string }
 
+    /// The accountable, out-of-band grant that lets a chain recover when its critic despawned mid-round
+    /// (.github#2417) — structurally the same "external fact the pure engine cannot observe itself"
+    /// pattern as `RepairPhaseReceipt` (.github#2175 clarifications DEC-002): the engine never infers
+    /// unavailability from silence, it only ever consumes a receipt the caller supplies. `GrantedBy` is
+    /// the accountable identity (typically the host) who attests the original critic is unavailable;
+    /// `SuccessorCriticIdentity` is the fresh critic who will perform a genuinely new, full review of the
+    /// current head rather than a "confirmation" of the despawned critic's finding — the property the
+    /// same-critic rule protects is preserved either by the same critic confirming, or by the chain being
+    /// honestly restarted, never by a stranger silently continuing it (`independent-review.md`).
+    type CriticSuccessionReceipt =
+        { OriginalCriticIdentity: string
+          SuccessorCriticIdentity: string
+          GrantedBy: string
+          Reason: string
+          CandidateHeadSha: string }
+
+    /// UNLIKE `RepairPhaseGranted`, the critic-succession grant is deliberately NOT a field on `Facts`
+    /// (.github#2417): `Facts` is constructed as a record literal at several sites this change does not
+    /// own — most importantly the live `review <ref> --pr N` path (`Client.fs`) — and adding a required
+    /// field would force every one of them to name it. `inspect`/`advance` instead take it as their own
+    /// explicit parameter, so every existing 2-arg call (the live path, and any caller that never grants
+    /// succession) is unaffected, exactly as `Client.fs` already documents `RepairPhaseGranted` staying
+    /// `None` on the live path today ("resolving that binding live is future work, not a silent wrong
+    /// answer"). This module's own callers within `ReviewApplication.fs` pass the parsed `--snapshot`
+    /// value through explicitly.
     type Facts =
         { Comments: Driver.ReviewComment list
           Checks: PrState
@@ -67,6 +92,7 @@ module Review =
         | AwaitChecks
         | RequestHostAcceptance
         | EnterRepairPhase of RepairPhaseReceipt
+        | EnterCriticSuccession of CriticSuccessionReceipt
         | Accept of AcceptedReceipt
         | Park of reason: string
 
@@ -123,6 +149,46 @@ module Review =
         | Ordinary -> Protocol.reviewPolicy.MaxAutomatedRepairRounds
         | Repair -> Protocol.reviewPolicy.RepairPhaseMaxRounds
 
+    /// The ONE guard both the ordinary and repair-phase `AwaitingSameCriticConfirmation`-shaped branches
+    /// consult (.github#2417 PD-002) — never two copies. A granted receipt is admitted only when it is
+    /// bound to the EXACT critic and head this round is stuck on, and neither the successor nor the
+    /// granter is the implementer: an implementer can never manufacture its own succession, and a stale
+    /// receipt left over from an earlier head or a different critic can never be silently reused
+    /// (acceptance AC-003/AC-004). Absent a receipt, or a receipt that fails any one of these, this
+    /// returns `None` and the caller's existing `ResumeSameCritic` behavior is completely unchanged
+    /// (acceptance AC-001) — the recovery path is never entered by inference, only by an explicit,
+    /// accountable grant.
+    let private criticSuccessionValid
+        (binding: Binding)
+        (successionGranted: CriticSuccessionReceipt option)
+        (currentCritic: string option)
+        =
+        match successionGranted, currentCritic with
+        | Some receipt, Some critic when
+            receipt.OriginalCriticIdentity = critic
+            && receipt.CandidateHeadSha = binding.HeadSha
+            && not (String.IsNullOrWhiteSpace receipt.SuccessorCriticIdentity)
+            && not (String.IsNullOrWhiteSpace receipt.GrantedBy)
+            && receipt.SuccessorCriticIdentity <> binding.ImplementerIdentity
+            && receipt.GrantedBy <> binding.ImplementerIdentity
+            ->
+            Some receipt
+        | _ -> None
+
+    /// DEC-001 (.github#2417 clarifications): a receipt that was SUPPLIED but failed the guard reads
+    /// differently from no receipt at all — the base reason is unchanged either way (so the pre-#2417
+    /// wording is stable for a caller that never grants succession), but a refused grant appends why, on
+    /// the same near-miss-naming convention `malformedVerdictReason` already uses for #2369.
+    let private resumeSameCriticReason (successionGranted: CriticSuccessionReceipt option) =
+        let baseReason = "a new commit landed after a changes-required verdict; the same critic must confirm it"
+
+        match successionGranted with
+        | Some _ ->
+            baseReason
+            + " (a critic-succession receipt was supplied but did not match this round's critic, head, or "
+            + "guard conditions; it was refused, not consumed)"
+        | None -> baseReason
+
     /// The shared acceptance path for both ordinary and repair-phase review: reuses
     /// `Driver.parseReviewCommentsWithFacts` (the terminal chain parser) and `Driver.validateReviewChain`
     /// (the FS-GG/.github#2136 generated round-ceiling policy) as the sole authorities — no marker text
@@ -171,7 +237,11 @@ module Review =
         | [] -> baseReason
         | hints -> baseReason + " (" + String.concat "; " hints + ")"
 
-    let private classify (binding: Binding) (facts: Facts) : State * NextAction =
+    let private classify
+        (binding: Binding)
+        (facts: Facts)
+        (successionGranted: CriticSuccessionReceipt option)
+        : State * NextAction =
         let phaseFacts = Driver.reviewPhaseFacts facts.Comments
 
         if phaseFacts.CriticIdentity = Some binding.ImplementerIdentity then
@@ -223,8 +293,11 @@ module Review =
                             RepairPhaseActive round,
                             ResumeImplementer "the critic requested changes at the current head; no new commit has landed yet"
                         | Some _ ->
-                            RepairPhaseActive round,
-                            ResumeSameCritic "a new commit landed after a changes-required verdict; the same critic must confirm it"
+                            match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
+                            | Some receipt -> RepairPhaseActive round, EnterCriticSuccession receipt
+                            | None ->
+                                RepairPhaseActive round,
+                                ResumeSameCritic (resumeSameCriticReason successionGranted)
                     | _ ->
                         let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason
@@ -263,22 +336,32 @@ module Review =
                             AwaitingImplementerRepair round,
                             ResumeImplementer "the critic requested changes at the current head; no new commit has landed yet"
                         | Some _ ->
-                            AwaitingSameCriticConfirmation round,
-                            ResumeSameCritic "a new commit landed after a changes-required verdict; the same critic must confirm it"
+                            match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
+                            | Some receipt -> AwaitingSameCriticConfirmation round, EnterCriticSuccession receipt
+                            | None ->
+                                AwaitingSameCriticConfirmation round,
+                                ResumeSameCritic (resumeSameCriticReason successionGranted)
                     | _ ->
                         let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason
 
-    let inspect (binding: Binding) (facts: Facts) : Result<Verdict, string list> =
+    /// `successionGranted` (.github#2417) is an explicit parameter, not a `Facts` field — see `Facts`'s
+    /// own doc comment for why. Every existing caller that never grants succession passes `None` and
+    /// observes byte-for-byte the same behavior as before this parameter existed (acceptance AC-001).
+    let inspect
+        (binding: Binding)
+        (facts: Facts)
+        (successionGranted: CriticSuccessionReceipt option)
+        : Result<Verdict, string list> =
         match validateBinding binding with
         | problems when not (List.isEmpty problems) ->
             Error(problems |> List.map (fun field -> $"review binding is incomplete: missing %s{field}"))
         | _ ->
-            let state, action = classify binding facts
+            let state, action = classify binding facts successionGranted
             Ok(makeVerdict binding state action)
 
-    let advance freshnessToken actionKey binding facts =
-        match inspect binding facts with
+    let advance freshnessToken actionKey binding facts successionGranted =
+        match inspect binding facts successionGranted with
         | Ok verdict when verdict.FreshnessToken = freshnessToken && verdict.ActionKey = actionKey -> Ok verdict
         | Ok _ -> Error [ "review verdict is stale or does not authorize this transition; re-inspect before advancing" ]
         | Error reasons -> Error reasons

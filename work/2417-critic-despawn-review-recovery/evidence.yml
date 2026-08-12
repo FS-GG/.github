@@ -1,0 +1,362 @@
+schemaVersion: 1
+workId: 2417-critic-despawn-review-recovery
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2417-critic-despawn-review-recovery/spec.md
+sourceClarifications: work/2417-critic-despawn-review-recovery/clarifications.md
+sourceChecklist: work/2417-critic-despawn-review-recovery/checklist.md
+sourcePlan: work/2417-critic-despawn-review-recovery/plan.md
+sourceTasks: work/2417-critic-despawn-review-recovery/tasks.yml
+sourceAnalysis: readiness/2417-critic-despawn-review-recovery/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2417-critic-despawn-review-recovery/analysis.json
+    digest: f52e8fcafc8bae393ac1162d453f5ba361e9776f1f39e3b5c17a98ae012d02af
+    schemaVersion: 1
+  - label: checklist
+    path: work/2417-critic-despawn-review-recovery/checklist.md
+    digest: 2990be29fbec6836e3fd66449515870d47a5c7bb4a5c5040bb4ddd656b991b53
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2417-critic-despawn-review-recovery/clarifications.md
+    digest: 20a4a5d5cd527c78b08fae8401389240e83765af48ca88bcae4093f6c1722585
+    schemaVersion: 1
+  - label: plan
+    path: work/2417-critic-despawn-review-recovery/plan.md
+    digest: ac0e4ea0406b808b398ecd0375cf20950d1359ac5e4e55f7ec8591f8d2f781c4
+    schemaVersion: 1
+  - label: spec
+    path: work/2417-critic-despawn-review-recovery/spec.md
+    digest: c07bc754cceca32c92b33929cf658d2a90efc9b4e441e187978d4b22dc564bae
+    schemaVersion: 1
+  - label: tasks
+    path: work/2417-critic-despawn-review-recovery/tasks.yml
+    digest: 4a2ba31846af62bd7fddec70a2b43a0fadac01f761dc0e22d6c51a0f9d823772
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:ea456093061dacda523aa25c0a3b76ffe64a79dcca19d4d876147845213fba3d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 38
+      failed: 0
+      skipped: 0
+    notes: ["tests/FS.GG.Coord.Core.Tests/ReviewTests.fs, module ReviewTests, #2417 test cases; dotnet test tests/FS.GG.Coord.Core.Tests --filter FullyQualifiedName~ReviewTests"]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

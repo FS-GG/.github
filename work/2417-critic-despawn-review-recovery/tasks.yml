@@ -1,0 +1,156 @@
+schemaVersion: 1
+work:
+  id: 2417-critic-despawn-review-recovery
+  title: "Critic Despawn Review Recovery"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2417-critic-despawn-review-recovery/spec.md
+  sourceClarifications: work/2417-critic-despawn-review-recovery/clarifications.md
+  sourceChecklist: work/2417-critic-despawn-review-recovery/checklist.md
+  sourcePlan: work/2417-critic-despawn-review-recovery/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2417-critic-despawn-review-recovery/spec.md
+    digest: c07bc754cceca32c92b33929cf658d2a90efc9b4e441e187978d4b22dc564bae
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2417-critic-despawn-review-recovery/clarifications.md
+    digest: 20a4a5d5cd527c78b08fae8401389240e83765af48ca88bcae4093f6c1722585
+    schemaVersion: 1
+  - label: checklist
+    path: work/2417-critic-despawn-review-recovery/checklist.md
+    digest: 2990be29fbec6836e3fd66449515870d47a5c7bb4a5c5040bb4ddd656b991b53
+    schemaVersion: 1
+  - label: plan
+    path: work/2417-critic-despawn-review-recovery/plan.md
+    digest: d87bb3bdec8dc5f851bc2583b9819640e4c9e762f75591f81921bfd5b92c6090
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, AC-005, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-006, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement requirement FR-006
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-006]
+    decisions: []
+    sourceIds: [AC-007, FR-006, PD-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement requirement FR-007
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-007]
+    decisions: []
+    sourceIds: [AC-008, FR-007, PD-007]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement clarification decision DEC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV012]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2417-critic-despawn-review-recovery."
