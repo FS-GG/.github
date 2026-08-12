@@ -1509,9 +1509,24 @@ def gather_bot_evidence(repo: str, token: str, dep_name: str, items=None) -> Bot
     )
 
 
-def diagnose_stale_pin(pin: Pin, top: str, ev: BotEvidence) -> str:
-    """WHY is the pin stale? Answered from evidence, never asserted."""
-    where = f"{pin.file}:{pin.line}: {pin.dep_name} is pinned at {pin.current_value!r} but the newest on the registry Renovate reads is {top!r}."
+def diagnose_stale_pin(pin: Pin, top: str, ev: BotEvidence, cap: "Cap | None" = None) -> str:
+    """WHY is the pin stale? Answered from evidence, never asserted.
+
+    `cap` is the `allowedVersions` cap governing this pin's dep, if any (.github#2464). When present,
+    `top` is already the newest version THE CAP ADMITS, not the feed's absolute newest — Renovate
+    itself would never propose past the cap, so comparing against the uncapped newest would red a pin
+    the bot is correctly refusing to bump. Say so, rather than let the generic "the bot is blind"
+    diagnoses below send a reader chasing a credential or a manager regex that isn't the cause.
+    """
+    if cap is not None:
+        where = (
+            f"{pin.file}:{pin.line}: {pin.dep_name} is pinned at {pin.current_value!r}, but "
+            f"{cap.where} caps it at `allowedVersions: {cap.allowed!r}`, whose newest ADMITTED "
+            f"published version is {top!r} — this compares against that ceiling, not the feed's "
+            f"absolute newest, because Renovate itself will never propose past the cap."
+        )
+    else:
+        where = f"{pin.file}:{pin.line}: {pin.dep_name} is pinned at {pin.current_value!r} but the newest on the registry Renovate reads is {top!r}."
 
     if not ev.detected:
         return (
@@ -1601,6 +1616,77 @@ def _resolve_newest(pin: Pin, resolve) -> str:
             f"This gate only reads that feed — extend it rather than reporting green."
         )
     return newest(resolve(pin.dep_name))
+
+
+# ---- A pin's coherence ceiling is CAP-ADMITTED newest, not feed-absolute newest (.github#2464) -----
+#
+# THE GAP THIS CLOSES. `load_caps` and `check_cap` re-check an `allowedVersions` cap's own EXPIRY
+# trigger — whether the cap has outlived its reason — but nothing before this connected a cap back to
+# the FRESHNESS comparison every FS.GG.* pin is judged against. `_resolve_newest` above answers "what
+# is newest on the registry", unconditionally; it does not know a cap exists. The only cap this repo
+# had ever carried (YoloDev.Expecto.TestSdk) never surfaced this gap, because `_resolve_newest`
+# refuses any package that is not `FS.GG.*` — a THIRD-PARTY cap's subject is categorically exempt from
+# the freshness check. A cap on an `FS.GG.*` pin this gate actually judges is new territory.
+#
+# Left unfixed, capping `FS.GG.SDD.Cli` below a real feed-newest release would make the FRESHNESS
+# check red forever: the pin equals what the cap admits, never what the registry's absolute newest
+# is, and those two are now permanently different by construction. That is not a residual finding to
+# route around — it is the cap being unable to do the one thing it exists for, on the only pin this
+# item is about.
+#
+# WHAT IT ASSERTS. A pin governed by an `allowedVersions` cap is coherent when it equals the newest
+# PUBLISHED version the cap ADMITS — exactly what Renovate itself would propose under that same
+# `allowedVersions` filter (`cap_allows`, ordering shared via `fsgg_feed.newest`). A pin with NO
+# governing cap is judged as before, against the feed's absolute newest. Two or more caps naming the
+# same package is refused rather than guessed at (which one bounds freshness would be undefined), and
+# a cap that admits NOTHING published leaves the pin unable to ever be coherent, which is also refused
+# rather than reported as a silent, permanent red with no actionable cause.
+def _governing_caps(pin: Pin, caps: list) -> list:
+    """Every cap in `caps` whose `matchPackageNames` names `pin.dep_name` (nocase — .github#660's own
+    plain-string minimatch semantics, restated in `default.json`'s FS.GG.* rule and Cap's docstring).
+    """
+    return [c for c in caps if any(p.casefold() == pin.dep_name.casefold() for p in c.packages)]
+
+
+def _effective_newest(pin: Pin, resolve, caps: list) -> "tuple[str, Cap | None]":
+    """The version `pin` must equal to be coherent, and the cap that says so — but ONLY when that cap
+    actually LOWERS the ceiling below the feed's absolute newest.
+
+    Absent a governing cap, or with one that does not currently exclude the feed's newest release
+    (e.g. a fresh cap written ahead of the release it targets), this is exactly `_resolve_newest` —
+    unconditional feed-absolute newest, the pre-#2464 behaviour — and the second return value is
+    `None`. A cap's admitted-newest can never exceed the feed's absolute newest (it is a filter over
+    the same population), so returning `None` whenever they are EQUAL is not losing information: the
+    cap is not the reason this pin is (or is not) coherent, and saying otherwise would misdirect a
+    reader toward the cap for a staleness the cap has nothing to do with. Only when the cap's admitted
+    newest is strictly lower does it become the operative ceiling, and Renovate itself would never
+    propose past it — comparing against the feed's absolute newest instead would red a pin the bot is
+    correctly refusing to advance.
+    """
+    top = _resolve_newest(pin, resolve)
+    governing = _governing_caps(pin, caps)
+    if not governing:
+        return top, None
+    if len(governing) > 1:
+        raise GateError(
+            f"{pin.file}:{pin.line}: {pin.dep_name} is named by {len(governing)} allowedVersions caps "
+            f"in the preset ({'; '.join(c.where for c in governing)}). Which one bounds this pin's "
+            f"coherence ceiling is undefined when more than one applies — narrow the caps' "
+            f"matchPackageNames so at most one governs {pin.dep_name}."
+        )
+    cap = governing[0]
+    admitted = [v for v in resolve(pin.dep_name) if cap_allows(cap.allowed, v)]
+    if not admitted:
+        raise GateError(
+            f"{cap.where}: `allowedVersions: {cap.allowed!r}` admits NO published version of "
+            f"{pin.dep_name} at all, so {pin.file}:{pin.line} can never be coherent under this cap. "
+            f"Either the cap excludes a version line that still contains real releases, or it needs "
+            f"narrowing."
+        )
+    admitted_top = newest(admitted)
+    if parse_version(admitted_top) >= parse_version(top):
+        return top, None
+    return admitted_top, cap
 
 
 # ---- Does the pin's versioning scheme make its literal a SINGLE version, or a range? (#576, #1122) --
@@ -1719,23 +1805,26 @@ def check_pin_bumpable(pin: Pin, scheme: str) -> str | None:
     )
 
 
-def check_pin(pin: Pin, resolve, evidence) -> str | None:
-    """None if the pin is at feed-newest, else the reason it is not — WITH the cause, evidenced.
+def check_pin(pin: Pin, resolve, evidence, caps: list | None = None) -> str | None:
+    """None if the pin is at its coherence ceiling, else the reason it is not — WITH the cause, evidenced.
 
     `evidence` is a callable (dep_name -> BotEvidence). It is consulted only when a pin is actually
-    stale, so the happy path costs no extra API calls.
+    stale, so the happy path costs no extra API calls. `caps` is every `allowedVersions` cap the
+    preset declares (default `[]`); a pin one of them governs is judged against that cap's admitted
+    newest, not the feed's absolute newest (.github#2464) — see `_effective_newest`.
     """
-    top = _resolve_newest(pin, resolve)
+    top, cap = _effective_newest(pin, resolve, caps or [])
     have, want = parse_version(pin.current_value), parse_version(top)
     if have == want:
         return None
     if have < want:
         # The old code asserted "the annotation manager did not bump it" here — a cause it never
         # verified (.github#566). Go and look instead.
-        return diagnose_stale_pin(pin, top, evidence(pin.dep_name))
+        return diagnose_stale_pin(pin, top, evidence(pin.dep_name), cap)
+    ceiling = "the cap-admitted" if cap else "the registry's"
     return (
         f"{pin.file}:{pin.line}: {pin.dep_name} is pinned at {pin.current_value!r}, which is AHEAD "
-        f"of the registry's newest {top!r}. The pin names a version no consumer can restore."
+        f"of {ceiling} newest {top!r}. The pin names a version no consumer can restore."
     )
 
 
@@ -1996,7 +2085,7 @@ def main(argv: list[str]) -> int:
             scheme = resolve_versioning(versioning_template, pin.versioning)
             problem = check_pin_bumpable(pin, scheme)
             if problem is None:
-                problem = check_pin(pin, resolve, evidence)
+                problem = check_pin(pin, resolve, evidence, caps)
         except GateError as e:
             # Could-not-look for this pin — a feed read that failed, or a literal/scheme that would
             # not parse — is a no-verdict, not a finding, and it aborts: if the feed was unreadable
@@ -2006,7 +2095,9 @@ def main(argv: list[str]) -> int:
         if problem:
             problems.append(problem)
         else:
-            print(f"  ok   {pin.file}:{pin.line:<4} {pin.dep_name:24} == {pin.current_value}  [versioning={scheme}]")
+            governing = _governing_caps(pin, caps)
+            capped_note = f"  [capped: {governing[0].allowed!r}]" if governing else ""
+            print(f"  ok   {pin.file}:{pin.line:<4} {pin.dep_name:24} == {pin.current_value}  [versioning={scheme}]{capped_note}")
 
     if problems:
         print()
