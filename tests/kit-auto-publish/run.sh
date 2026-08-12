@@ -382,4 +382,150 @@ checks=$((checks + 1))
   || { echo "gate-inversion (provenance): the naive form must NOT resolve to the real version" >&2; exit 1; }
 checks=$((checks + 1))
 
+# ---- 11. `provenance_evidence`/`gh_retry`: RETRY ROOT CAUSE (.github#2443). A transient TLS/network
+#          blip on `gh run list`/`gh run view` inside the provenance loop previously fell straight
+#          through the loop's `|| continue` and read exactly like a verified-absent `pr-arm` job. This
+#          extracts the REAL functions out of the REAL workflow (between the `kit-provenance-search`
+#          markers) and runs them against a stubbed `gh` that can be told to fail its first N calls of
+#          a given kind before succeeding, plus a REAL synthetic git repo for the `git merge-base
+#          --is-ancestor` check. ----
+extract_provenance_retry_fns() {
+  awk '/^[[:space:]]*# BEGIN kit-provenance-search$/{flag=1; next} /^[[:space:]]*# END kit-provenance-search$/{flag=0} flag' \
+    "$root/.github/workflows/kit-auto-publish.yml" > "$1"
+  grep -q 'gh_retry()' "$1" \
+    || { echo "gh_retry() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
+  grep -q 'provenance_evidence()' "$1" \
+    || { echo "provenance_evidence() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
+}
+
+prov_work="$esc_work/provenance"
+mkdir -p "$prov_work/bin" "$prov_work/repo"
+git -C "$prov_work" init -q repo
+git -C "$prov_work/repo" config user.email test@example.test
+git -C "$prov_work/repo" config user.name test
+git -C "$prov_work/repo" commit -q --allow-empty -m init
+prov_merge_sha="$(git -C "$prov_work/repo" rev-parse HEAD)"
+# `origin/main` here is a plain local ref standing in for the real remote-tracking ref the live
+# workflow's checkout provides; `merge-base --is-ancestor` only cares that it resolves and is
+# reachable, and a commit is its own ancestor, so pointing it at the same commit is sufficient.
+git -C "$prov_work/repo" update-ref refs/remotes/origin/main "$prov_merge_sha"
+
+prov_fn="$prov_work/provenance_evidence.sh"
+extract_provenance_retry_fns "$prov_fn"
+
+# A stub `gh` driven by two env vars, `RUN_LIST_FAIL`/`RUN_VIEW_FAIL`: the first N calls of that kind
+# fail with a message shaped like the live TLS blip this fix targets, then every call after succeeds.
+# Per-kind call counts persist under `$STUB_DIR` so retries within one `provenance_evidence` call are
+# visible afterward.
+cat > "$prov_work/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$STUB_DIR/calls.log"
+if [ "$1" = "run" ] && [ "$2" = "list" ]; then
+  n_file="$STUB_DIR/run_list_n"; n=0; [ -f "$n_file" ] && n="$(cat "$n_file")"; n=$((n + 1)); printf '%s' "$n" > "$n_file"
+  if [ "$n" -le "${RUN_LIST_FAIL:-0}" ]; then
+    echo "failed to get run: tls: failed to verify certificate: x509: certificate is not valid for any names, but wanted to match api.github.com" >&2
+    exit 1
+  fi
+  printf '999'
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "view" ]; then
+  n_file="$STUB_DIR/run_view_n"; n=0; [ -f "$n_file" ] && n="$(cat "$n_file")"; n=$((n + 1)); printf '%s' "$n" > "$n_file"
+  if [ "$n" -le "${RUN_VIEW_FAIL:-0}" ]; then
+    echo "failed to get run: tls: failed to verify certificate: x509: certificate is not valid for any names, but wanted to match api.github.com" >&2
+    exit 1
+  fi
+  printf '12345'
+  exit 0
+fi
+echo "unstubbed gh invocation: $*" >&2
+exit 99
+STUB
+chmod +x "$prov_work/bin/gh"
+
+# run_provenance_evidence <dir> <script> <run-list-fail> <run-view-fail> -> exit code; stdout/stderr
+# and per-kind call counts land under <dir> so a scenario can assert on them afterward.
+run_provenance_evidence() {
+  local dir="$1" script="$2" rl="$3" rv="$4" rc=0
+  mkdir -p "$dir"
+  rm -f "$dir/calls.log" "$dir/run_list_n" "$dir/run_view_n"
+  ( cd "$prov_work/repo" \
+    && STUB_DIR="$dir" PATH="$prov_work/bin:$PATH" \
+       RUN_LIST_FAIL="$rl" RUN_VIEW_FAIL="$rv" GITHUB_REPOSITORY=FS-GG/.github \
+       bash -c "source '$script'; provenance_evidence '123' '$prov_merge_sha' 'deadbeef' '0.27.1'" \
+  ) >"$dir/stdout.log" 2>"$dir/stderr.log" || rc=$?
+  return "$rc"
+}
+
+# 11a. Baseline: `gh` never fails -> evidence is found on the first attempt of each call.
+d="$prov_work/baseline"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 0 0 || rc=$?
+[ "$rc" -eq 0 ] || { echo "provenance_evidence baseline: expected exit 0, got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .prArm "$d/stdout.log")" = pass ] \
+  || { echo "provenance_evidence baseline: expected prArm=pass, got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# 11b. RETRY RECOVERS: `gh run list`'s first call fails transiently, its second succeeds. The FIXED
+#      function must still find evidence — the exact case that misread as `merged-pr-provenance-missing`
+#      live at 4bb788e6.
+d="$prov_work/run-list-transient"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 1 0 || rc=$?
+[ "$rc" -eq 0 ] || { echo "provenance_evidence run-list-transient: expected exit 0 (retry recovers), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .prArm "$d/stdout.log")" = pass ] \
+  || { echo "provenance_evidence run-list-transient: expected recovered evidence, got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(grep -c '^run list' "$d/calls.log")" -eq 2 ] \
+  || { echo "provenance_evidence run-list-transient: expected exactly 2 'gh run list' calls (1 failure + 1 retry), got: $(cat "$d/calls.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# 11c. Same shape for `gh run view`'s transient failure.
+d="$prov_work/run-view-transient"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 0 1 || rc=$?
+[ "$rc" -eq 0 ] || { echo "provenance_evidence run-view-transient: expected exit 0 (retry recovers), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .prArm "$d/stdout.log")" = pass ] \
+  || { echo "provenance_evidence run-view-transient: expected recovered evidence, got: $(cat "$d/stdout.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# 11d. A PERSISTENT (not transient) failure still gives up, bounded, and reports non-eligible —
+#      retries must not become an infinite loop on a genuinely unreachable API.
+d="$prov_work/run-list-persistent"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 99 0 || rc=$?
+[ "$rc" -eq 1 ] || { echo "provenance_evidence run-list-persistent: expected exit 1 (bounded retries exhaust), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(grep -c '^run list' "$d/calls.log")" -eq 3 ] \
+  || { echo "provenance_evidence run-list-persistent: expected exactly 3 attempts (1 + 2 retries), got: $(cat "$d/calls.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11e. GATE-INVERSION EVIDENCE (pnext-item §3): strip `gh_retry` back out of a copy of the real
+#           functions — reproducing the pre-fix bare `gh run list`/`gh run view` calls textually — and
+#           show the IDENTICAL run-view-transient scenario (11c) now reads a transient blip as
+#           verified-absent, exactly today's silent `|| continue`/`|| return 1`. A test that cannot
+#           fail on the original defect has not tested the fix. ----
+mutate_to_no_retry() {
+  python3 - "$1" "$2" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+mutated = text.replace("gh_retry gh run list", "gh run list").replace("gh_retry gh run view", "gh run view")
+if mutated == text:
+    sys.exit("mutate_to_no_retry: nothing to strip — gh_retry call sites are GONE")
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+}
+prov_buggy_fn="$prov_work/provenance_evidence_no_retry.sh"
+mutate_to_no_retry "$prov_fn" "$prov_buggy_fn"
+
+d="$prov_work/gate-inversion-run-view"
+rc=0; run_provenance_evidence "$d" "$prov_buggy_fn" 0 1 || rc=$?
+[ "$rc" -eq 1 ] \
+  || { echo "gate-inversion (provenance retry): pre-fix bare gh call must read the transient blip as absent (exit 1), got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(grep -c '^run view' "$d/calls.log")" -eq 1 ] \
+  || { echo "gate-inversion (provenance retry): pre-fix must make exactly ONE 'gh run view' call — no retry — got: $(cat "$d/calls.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
 echo "kit auto-publish state machine: $checks passed"

@@ -149,6 +149,47 @@ jobs:
             esac
           }
           # END kit-csproj-version
+          # BEGIN kit-provenance-search
+          # Mirrors `observe_feed()`'s `curl --retry 2 --connect-timeout 10` convention (above in
+          # this same step) for the `gh` CLI calls this loop makes, none of which carried ANY retry
+          # before .github#2443: a single transient network/TLS blip on `gh run view` (observed live
+          # at 4bb788e6, https://github.com/FS-GG/.github/actions/runs/31588955946) fell straight
+          # through this loop's `|| continue` and read exactly like a verified-absent pr-arm job,
+          # escalating the wrong refusal reason (`merged-pr-provenance-missing` instead of the real,
+          # differently-refusing state). A call that RECOVERS on retry now gets its real answer
+          # instead of being silently read as absent; a call that is genuinely, persistently
+          # unreachable still returns non-zero once retries exhaust, so a REAL absence is unchanged.
+          gh_retry() {
+            local attempt=0 max_retries=2 rc out
+            while :; do
+              if out="$("$@" 2>/dev/null)"; then
+                printf '%s' "$out"
+                return 0
+              fi
+              rc=$?
+              attempt=$((attempt + 1))
+              [ "$attempt" -gt "$max_retries" ] && return "$rc"
+              sleep 1
+            done
+          }
+          # Evidence for ONE already version-matched candidate PR: is its
+          # `kit-published-coherence.yml` run's `pr-arm` job a success, and is the merge commit
+          # reachable from `origin/main`?  Split out of the calling while-loop below so it is
+          # unit-testable against a stubbed `gh` in isolation from PR listing and `csproj_version`
+          # matching — see tests/kit-auto-publish/run.sh.
+          provenance_evidence() {
+            local number="$1" merge="$2" head="$3" version="$4" run_id
+            # This is provenance for the already-merged authoring PR, not a
+            # replacement merge gate.  Read the named workflow run and its
+            # `pr-arm` job rather than re-implementing the check-run rollup;
+            # PR merging itself remains exclusively `fsgg-coord landable`.
+            run_id="$(gh_retry gh run list --repo "$GITHUB_REPOSITORY" --workflow kit-published-coherence.yml --commit "$head" --event pull_request --status success --limit 20 --json databaseId --jq '.[0].databaseId // empty')" || return 1
+            [ -n "$run_id" ] || return 1
+            gh_retry gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "pr-arm" and .conclusion == "success") | .databaseId' | grep -q . || return 1
+            git merge-base --is-ancestor "$merge" origin/main || return 1
+            jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$version" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}'
+          }
+          # END kit-provenance-search
           # Find the merged PR that introduced the evaluated version, rather
           # than assuming main's latest commit is that PR.  Every candidate is
           # checked at its immutable merge commit and PR head.
@@ -158,16 +199,9 @@ jobs:
             introduced="$(csproj_version "$merge" src/FS.GG.Kit/FS.GG.Kit.csproj)"
             base="$(csproj_version "$merge^" src/FS.GG.Kit/FS.GG.Kit.csproj)"
             [ "$introduced" = "$version" ] && [ "$base" != "$version" ] || continue
-            # This is provenance for the already-merged authoring PR, not a
-            # replacement merge gate.  Read the named workflow run and its
-            # `pr-arm` job rather than re-implementing the check-run rollup;
-            # PR merging itself remains exclusively `fsgg-coord landable`.
-            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow kit-published-coherence.yml --commit "$head" --event pull_request --status success --limit 20 --json databaseId --jq '.[0].databaseId // empty')"
-            [ -n "$run_id" ] || continue
-            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "pr-arm" and .conclusion == "success") | .databaseId' | grep -q . || continue
-            git merge-base --is-ancestor "$merge" origin/main || continue
-            provenance="$(jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$introduced" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}')"; break
-          done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv')
+            evidence="$(provenance_evidence "$number" "$merge" "$head" "$introduced")" || continue
+            provenance="$evidence"; break
+          done < <(gh_retry gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv')
           # Artifact identity is the commit the tag will point at; authoring
           # provenance remains separately bound in `.provenance.mergeCommit`.
           # For an ALREADY-tagged version that is what the tag already points
