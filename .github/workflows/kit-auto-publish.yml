@@ -164,13 +164,25 @@ jobs:
           # genuinely exhausted failure must still print the real diagnostic (the TLS error text this
           # very issue quotes as evidence), or a future recurrence of this or any other persistent `gh`
           # failure here leaves no trace in the job log (round-1 review repair 2).
+          #
+          # Emits `$out` WITH a trailing newline (round-2 review repair 3), even though `$(...)`
+          # already stripped whatever the wrapped command originally ended with. `gh_retry` is piped
+          # directly into `find_provenance`'s `while read` loop at the bottom of this file
+          # (`gh_retry gh pr list ... | find_provenance "$version"`), and bash's `read` silently drops
+          # the FINAL record of its input when that input's last line has no trailing newline — it
+          # still populates the loop variables for that partial line, but returns failure, so the loop
+          # body never runs for it. A bare `printf '%s' "$out"` reproduced that missing-newline shape
+          # on EVERY call, silently discarding whichever PR happened to be listed last — which, in the
+          # single-candidate case (exactly one merged PR introduced the evaluated version — the common
+          # case), is the one and only real match: `find_provenance` would see nothing at all and
+          # complete normally with `provenance={}`, rather than failing loudly OR finding the evidence.
           gh_retry() {
             local attempt=0 max_retries=2 rc=0 out err_file
             err_file="$(mktemp)"
             while :; do
               if out="$("$@" 2>"$err_file")"; then
                 rm -f "$err_file"
-                printf '%s' "$out"
+                printf '%s\n' "$out"
                 return 0
               else
                 # NOT a bare `rc=$?` after the `if ...; fi` above — bash's own `if` exits 0 in that
