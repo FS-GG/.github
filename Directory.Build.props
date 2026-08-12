@@ -88,7 +88,7 @@
        too; moving the whole coherent set together is honest rather than incidental, per the property
        group above's own rule (advancing this scalar is the ONLY way to bump any of the three). -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.50.2</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.50.3</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

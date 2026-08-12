@@ -120,7 +120,14 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.50.2 — the completed coherent-set cut. FOUR DEFECT-CLASS ENGINE FIXES
+    <PackageReleaseNotes>0.50.3 — no engine behavior change. `.github#2471` edited kit-packed content
+(the `pnext-item` skill and the `stale_guard` shell module) after 0.50.2 had already published, so
+`check-kit-published-coherence`'s PR arm required this coherent-set scalar to advance again before that
+PR could land (0.50.2 is not STRICTLY GREATER than the already-published 0.50.2). This bump exists to
+satisfy that gate, not to announce a new engine fix; the engine source under `src/FS.GG.Coord.*` is
+byte-identical to 0.50.2. See 0.50.2's own notes below for the substantive engine changes.
+
+0.50.2 — the completed coherent-set cut. FOUR DEFECT-CLASS ENGINE FIXES
 plus two hardening changes, and the first version at which FS.GG.Kit, FS.GG.Drivers and this engine
 are all three published together since 0.50.0 (.github#2381).
 
