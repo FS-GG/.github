@@ -6,6 +6,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open Xunit
+open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
@@ -38,8 +39,34 @@ module DeliveryRouteCliTests =
               NextLink = None
               Headers = Map.empty }
 
-    let private revision (body: string) =
-        SHA256.HashData(Encoding.UTF8.GetBytes body) |> Convert.ToHexString |> _.ToLowerInvariant()
+    let private hashHex (text: string) =
+        SHA256.HashData(Encoding.UTF8.GetBytes text) |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    /// Mirrors `Client.volatileDeclarationLine`/`deliveryRouteSubject` (.github#2392): a `Paths:`,
+    /// `Class:`, `Blocked on:`, or `Blocked by:` line — up to three leading spaces, either case, OUTSIDE
+    /// a fenced code block — is DROPPED before hashing, and so is a blank/whitespace-only line. Duplicated
+    /// rather than called, because that helper is `private` to `Client`; this restates the same literal
+    /// grammar `TouchSet`/`Class`/`HumanBlock` already own (see the doc comment on the production copy for
+    /// why a fourth copy there is not an option), so a fixture built against it stays a faithful stand-in
+    /// for what a real caller gets back from `delivery-route show` after this fix, not a second decision
+    /// about the grammar.
+    let private volatileDeclarationLine =
+        Text.RegularExpressions.Regex(@"^ {0,3}([Pp]aths|[Cc]lass|[Bb]locked [Oo]n|[Bb]locked [Bb]y):.*$", Text.RegularExpressions.RegexOptions.Compiled)
+
+    let private canonicalSubject (body: string) =
+        Markdown.classify body
+        |> List.choose (fun (line, kind) ->
+            if kind = Markdown.Text && (volatileDeclarationLine.IsMatch line || String.IsNullOrWhiteSpace line) then None
+            else Some line)
+        |> String.concat "\n"
+
+    /// The CURRENT (.github#2392) `subjectRevision` scheme — what `delivery-route show` reports and
+    /// `record` requires today.
+    let private revision (body: string) = hashHex (canonicalSubject body)
+
+    /// The PRE-#2392 scheme: a hash of the raw, unredacted body — exactly what a receipt recorded before
+    /// this fix shipped carries as its `subjectRevision`. Used only by the migration-bridge legs below.
+    let private legacyRevision (body: string) = hashHex body
 
     let private issueBodyText = "Paths: src/Thing.fs"
     let private issueRevision = revision issueBodyText
@@ -464,3 +491,232 @@ module DeliveryRouteCliTests =
         Assert.NotEqual(0, code)
         Assert.DoesNotContain("claimed", out)
         Assert.Equal<string list>(refusedBeforeBootstrap, transport.Log)
+
+    // ---- .github#2392: the receipt binds to the route-relevant SUBJECT, not the whole body -----------
+    //
+    // Root cause (.github#2392): the pre-fix `subjectRevision` hashed the ENTIRE issue body, so a
+    // `Paths:`/`Class:`/`Blocked on:`/`Blocked by:` edit — every one of them a PROTOCOL-REQUIRED action
+    // (`widen`/`set-paths`, triage, a park/unpark, a dependency edit) — silently staled an otherwise
+    // still-valid route decision. The fix redacts exactly those four declaration lines (outside fences)
+    // before hashing (`Client.deliveryRouteSubject`); a genuine change anywhere else in the body still
+    // invalidates the receipt (AC2), and a receipt recorded before this fix keeps validating for as long
+    // as its body has not moved since (AC5's migration bridge, `Client.decideDeliveryRoute`).
+    //
+    // These tests need the served issue body to CHANGE between recording a receipt and reading it back —
+    // `world`'s `issueBodyText` is a compile-time constant, so this section gets its own fixture that
+    // reads the body from a mutable cell instead.
+
+    let private worldWithBody (body: string ref) (thread: Thread) =
+        Fake.Recorder(fun (req: Request) ->
+            let path = req.Path.Trim '/'
+
+            match req.Method, path with
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, variables) when document.Contains "comments(last:" ->
+                    let lastVar =
+                        variables
+                        |> List.tryFind (fun (k, _) -> k = "last")
+                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
+                    match lastVar with
+                    | Some last ->
+                        let recent =
+                            thread.Bodies
+                            |> List.rev
+                            |> List.truncate last
+                            |> List.rev
+                            |> List.map (fun b -> {| body = b |})
+                            |> JsonSerializer.Serialize
+
+                        let payload =
+                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                            + recent
+                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                        ok payload
+                    | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
+                | _ -> Error(Errors.NotFound "this fixture answers only the recent-comments GraphQL query")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok (JsonSerializer.Serialize {| number = 42; body = body.Value |})
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                let b =
+                    match req.Body with
+                    | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
+                    | _ -> ""
+
+                ok (sprintf """{"id":%d}""" (thread.Add b))
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private baseBody =
+        "A defect in the widget renderer causes flicker on every resize.\n\nPaths: src/Widget.fs\nClass: defect\n"
+
+    let private showIsCurrent (transport: Fake.Recorder) (root: string) =
+        let code, out = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+        code = 0 && JsonDocument.Parse(out.Trim()).RootElement.GetProperty("kind").GetString() = "current"
+
+    [<Fact>]
+    let ``#2392 AC1: a Paths:-only edit after recording does not invalidate an otherwise-current receipt`` () =
+        // Gate-inversion evidence: reverting `Client.deliveryRouteSubject` to hash the raw body (the
+        // pre-fix `deliveryRouteRevision`) makes this go RED — the widened body's whole-body hash no
+        // longer equals the receipt's recorded `subjectRevision`, so `show` reports `Stale`, not
+        // `current`. Confirmed by hand against the pre-fix `deliveryRouteRevision` during authoring.
+        let root = tempSddRoot ()
+
+        try
+            let bodyRef = ref baseBody
+            let thread = Thread [ DeliveryRouteMarker + "\n" + (lightweightReceipt (revision baseBody)) ]
+            let transport = worldWithBody bodyRef thread
+
+            Assert.True(showIsCurrent transport root)
+
+            // `widen`/`set-paths` rewrite exactly this line — the protocol-required action AC1 exists for.
+            bodyRef.Value <- "A defect in the widget renderer causes flicker on every resize.\n\nPaths: src/Widget.fs src/Other.fs\nClass: defect\n"
+
+            Assert.True(showIsCurrent transport root)
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``#2392 AC1: a Class:-only edit after recording does not invalidate an otherwise-current receipt`` () =
+        // Gate-inversion evidence: same as the `Paths:` leg above, with the class-raising edit in place of
+        // the widen — confirmed RED against the pre-fix `deliveryRouteRevision` during authoring.
+        let root = tempSddRoot ()
+
+        try
+            let bodyRef = ref baseBody
+            let thread = Thread [ DeliveryRouteMarker + "\n" + (lightweightReceipt (revision baseBody)) ]
+            let transport = worldWithBody bodyRef thread
+
+            Assert.True(showIsCurrent transport root)
+
+            // Triage raising severity by rewriting `Class:` (`backlog-triage`'s documented authority).
+            bodyRef.Value <- "A defect in the widget renderer causes flicker on every resize.\n\nPaths: src/Widget.fs\nClass: hardening\n"
+
+            Assert.True(showIsCurrent transport root)
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``#2392: a park/unpark Blocked on: sentinel edit does not invalidate an otherwise-current receipt`` () =
+        let root = tempSddRoot ()
+
+        try
+            let bodyRef = ref baseBody
+            let thread = Thread [ DeliveryRouteMarker + "\n" + (lightweightReceipt (revision baseBody)) ]
+            let transport = worldWithBody bodyRef thread
+
+            Assert.True(showIsCurrent transport root)
+
+            // A host parking the item on a human — the exact occurrence #3 evidence on .github#2392 (the
+            // sentinel that dead-ended a merge-ready PR's only recovery path).
+            bodyRef.Value <- baseBody + "\nBlocked on: human/action\n"
+            Assert.True(showIsCurrent transport root)
+
+            // ...and unparking it again.
+            bodyRef.Value <- baseBody
+            Assert.True(showIsCurrent transport root)
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``#2392 AC2: a genuinely route-relevant prose edit after recording DOES invalidate the receipt`` () =
+        // Gate-inversion evidence: over-widening the redaction (e.g. blanking every line, or matching on
+        // `.*` unconditionally) makes this go RED — `show` would keep reporting `current` over a body
+        // whose actual subject changed. Confirmed by hand during authoring: with the redaction widened to
+        // swallow the whole body, this test fails exactly where the AC1 legs above pass.
+        let root = tempSddRoot ()
+
+        try
+            let bodyRef = ref baseBody
+            let thread = Thread [ DeliveryRouteMarker + "\n" + (lightweightReceipt (revision baseBody)) ]
+            let transport = worldWithBody bodyRef thread
+
+            Assert.True(showIsCurrent transport root)
+
+            // The blast radius just changed — every window resizes now, not just some — which is exactly
+            // the kind of edit a route decision must be re-judged against.
+            bodyRef.Value <- "A defect in the widget renderer causes flicker on every resize AND every scroll.\n\nPaths: src/Widget.fs\nClass: defect\n"
+
+            Assert.False(showIsCurrent transport root)
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``#2392: claim no longer refuses on delivery-route staleness against a widened body`` () =
+        // The actual mutation boundary the bug was OBSERVED at (.github#2392 occurrence 2). This fixture
+        // does not model the rest of a successful `claim` (board bootstrap, project field writes — see
+        // `ForceStealTests` for that much larger fixture), so the assertion is exactly what this file CAN
+        // pin at the route-check boundary: `requireCurrentDeliveryRoute` no longer refuses a receipt
+        // recorded before a `Paths:` widen, and the run proceeds PAST it into board bootstrap, rather than
+        // stopping at the two-call `refusedBeforeBootstrap` sequence the three staleness legs above pin.
+        let bodyRef = ref "Paths: src/Thing.fs"
+        let thread = Thread [ DeliveryRouteMarker + "\n" + (lightweightReceipt (revision "Paths: src/Thing.fs")) ]
+        let transport = worldWithBody bodyRef thread
+
+        bodyRef.Value <- "Paths: src/Thing.fs src/Other.fs"
+
+        let _, out = runClaim transport claimArgs
+
+        Assert.DoesNotContain("delivery route is not current", out)
+        Assert.True(
+            transport.Log.Length > refusedBeforeBootstrap.Length,
+            $"expected claim to proceed past the route check (only %d{refusedBeforeBootstrap.Length} calls logged: %A{transport.Log})")
+
+    [<Fact>]
+    let ``#2392 AC5: a pre-fix (whole-body-hash) receipt stays current for as long as the body has not moved`` () =
+        // Migration bridge: a receipt recorded before this fix shipped carries the OLD whole-body hash as
+        // its `subjectRevision`. Nothing about the body has changed since, so it must keep validating —
+        // exactly the guarantee it had before this fix — without anybody re-recording it.
+        let root = tempSddRoot ()
+
+        try
+            let bodyRef = ref baseBody
+            let thread = Thread [ DeliveryRouteMarker + "\n" + (lightweightReceipt (legacyRevision baseBody)) ]
+            let transport = worldWithBody bodyRef thread
+
+            Assert.True(showIsCurrent transport root)
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``#2392 AC5: a pre-fix receipt still stales on a Paths edit until it is re-recorded`` () =
+        // The migration bridge is READ-side only and does not retroactively rewrite history: a receipt
+        // still bound to the OLD whole-body hash stays bound to that WHOLE old body, `Paths:` included,
+        // until it is re-recorded once under the new (canonical) scheme — the documented "migration path"
+        // AC5 accepts as an alternative to blanket automatic validity.
+        let root = tempSddRoot ()
+
+        try
+            let bodyRef = ref baseBody
+            let thread = Thread [ DeliveryRouteMarker + "\n" + (lightweightReceipt (legacyRevision baseBody)) ]
+            let transport = worldWithBody bodyRef thread
+
+            Assert.True(showIsCurrent transport root)
+
+            bodyRef.Value <- "A defect in the widget renderer causes flicker on every resize.\n\nPaths: src/Widget.fs src/Other.fs\nClass: defect\n"
+
+            Assert.False(showIsCurrent transport root)
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``#2392: record refuses a receipt authored against the legacy whole-body revision`` () =
+        // The migration bridge is a READ-side concession only: a NEW receipt must always be authored
+        // against the current canonical revision (what `show` reports), never the retired whole-body one,
+        // or every future receipt would silently re-adopt the bug this fix removes.
+        let root = tempSddRoot ()
+
+        try
+            let bodyRef = ref baseBody
+            let thread = Thread []
+            let transport = worldWithBody bodyRef thread
+            let path = Path.Combine(root, "receipt.json")
+            File.WriteAllText(path, lightweightReceipt (legacyRevision baseBody))
+
+            let code, _ = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+
+            Assert.NotEqual(0, code)
+            Assert.Empty(thread.Bodies)
+        finally
+            Directory.Delete(root, true)

@@ -93,7 +93,14 @@ run() { "$ENGINE" "$@" --worker vole-418; }
 route_body='A schedulable item.
 
 Paths: src/Thing/**'
-route_revision="$(printf '%s' "$route_body" | sha256sum | awk '{print $1}')"
+# .github#2392: `subjectRevision` is now a hash of the route-relevant SUBJECT, not the raw body —
+# `Client.deliveryRouteSubject` drops a `Paths:`/`Class:`/`Blocked on:`/`Blocked by:` declaration line
+# (outside a fence) AND every blank line before hashing. Mirrored here the same way
+# `DeliveryRouteCliTests.fs`'s `canonicalSubject` mirrors it: `route_body` has no fences, so a `grep -Ev`
+# drop of both line families reproduces it exactly (command substitution already strips the one trailing
+# newline `grep` would otherwise add, matching `String.concat "\n"` on a body with no trailing blank line).
+route_subject="$(printf '%s' "$route_body" | grep -Ev '^ {0,3}([Pp]aths|[Cc]lass|[Bb]locked [Oo]n|[Bb]locked [Bb]y):|^[[:space:]]*$')"
+route_revision="$(printf '%s' "$route_subject" | sha256sum | awk '{print $1}')"
 printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"lightweight\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful source-bound route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}" >"$ROUTE_RECEIPT"
 route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 route_out="$("$ENGINE" delivery-route record FS.GG.SDD#42 "$ROUTE_RECEIPT" 2>&1)"; route_rc=$?
