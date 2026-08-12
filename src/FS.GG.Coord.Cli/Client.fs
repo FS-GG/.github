@@ -399,8 +399,87 @@ module Client =
     [<Literal>]
     let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
 
-    let private deliveryRouteRevision (body: string) =
-        body |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let private hashHex (text: string) =
+        text |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    /// SAME grammar `TouchSet`'s `Paths:`, `Class`'s `Class:`, and `HumanBlock`'s `Blocked on:`/
+    /// `Blocked by:` already parse (up to three leading spaces, either case — ADR-0045's one shape for
+    /// every body-line sentinel/declaration) — restated here, not re-decided: those three modules cannot
+    /// be asked directly because `Client.fs` sits in a different project and, inside `Core` itself,
+    /// `DeliveryRoute.fs` compiles AHEAD of `Markdown.fs`/`TouchSet.fs`/`Class.fs`/`HumanBlock.fs` in
+    /// `FS.GG.Coord.Core.fsproj`. .github#2392's declared `Paths:` licenses touching this file and
+    /// `DeliveryRoute.fs`, not reordering that compile graph or widening those modules' `.fsi` surfaces
+    /// to add a shared predicate — so this regex is a literal restatement of an existing decision, never
+    /// a second one.
+    let private volatileDeclarationLine =
+        Text.RegularExpressions.Regex(@"^ {0,3}([Pp]aths|[Cc]lass|[Bb]locked [Oo]n|[Bb]locked [Bb]y):.*$", Text.RegularExpressions.RegexOptions.Compiled)
+
+    /// The route-relevant SUBJECT of an issue body (.github#2392): every line the body carries, EXCLUDING
+    /// a `Paths:`, `Class:`, `Blocked on:`, or `Blocked by:` declaration OUTSIDE a fenced code block, and
+    /// excluding blank/whitespace-only lines. Those four lines are STATE the protocol itself is required
+    /// to rewrite — `widen`/`set-paths` rewrite `Paths:`, triage rewrites `Class:`, a park/unpark edits
+    /// `Blocked on:`, and a dependency edit rewrites `Blocked by:` — never a change to the scope,
+    /// contracts, or blast radius a delivery-route decision actually judges. A FENCED quotation of one of
+    /// these lines is left untouched and hashes normally: it is documentation prose (this org's own
+    /// protocol docs quote the grammar constantly), and editing it IS a genuine content change — the same
+    /// fenced/unfenced split `TouchSet`/`Class`/`HumanBlock` already apply to their own reads, via the
+    /// shared `Markdown.classify` walk, applied here without a second reading of the fence rule itself
+    /// (#972).
+    ///
+    /// LINES ARE DROPPED, NOT REDACTED IN PLACE, and blank lines are dropped too — a `Blocked on:` sentinel
+    /// is not merely EDITED by a park/unpark, it is INSERTED or REMOVED wholesale, together with whatever
+    /// blank-line spacing the append happened to use (.github#2392's own occurrence 3, a park sentinel
+    /// appended to an item body). Replacing a matched line's TEXT in place while keeping its POSITION would
+    /// still change the hash the moment a declaration line's very presence — not just its content — moved,
+    /// which is exactly the park/unpark shape. Filtering both kinds of line out entirely, rather than
+    /// substituting a placeholder, makes the subject insensitive to whether the mechanical line — or the
+    /// blank line around it — exists at all, while any OTHER content line moving, appearing, or
+    /// disappearing still changes the joined text and so still changes the hash (AC2).
+    ///
+    /// GROWTH IS NOT SPECIAL-CASED (.github#2392 AC3, decided deliberately, not a side effect of dropping
+    /// the line entirely): a `Paths:` widen that strictly grows the touch-set is, today, exactly as
+    /// invisible to this hash as one that narrows it or leaves it unchanged. The receipt's judgement is
+    /// about the SUBJECT — scope, contracts, blast radius — not the CURRENT WORKING SET a claimed worker
+    /// has reserved to implement it; a widen is a claim-time bookkeeping act, not a redefinition of what
+    /// the item is. Distinguishing "grew within the same contract/repo boundary" from "grew across one" is
+    /// real future work (recorded in the host's own follow-up evidence on this item) that would need a
+    /// semantic touch-set comparison this fix's declared `Paths:` does not reach; it is out of scope here
+    /// by that same declaration, not by oversight.
+    let private deliveryRouteSubject (body: string) : string =
+        Markdown.classify body
+        |> List.choose (fun (line, kind) ->
+            if kind = Markdown.Text && (volatileDeclarationLine.IsMatch line || String.IsNullOrWhiteSpace line) then None
+            else Some line)
+        |> String.concat "\n"
+
+    /// The CURRENT scheme (.github#2392): a hash of the canonical SUBJECT, not the raw body. This is the
+    /// only revision `record` will ever accept for a newly authored receipt (see the `record` arm of
+    /// `deliveryRouteCmd`) and the first candidate `decideDeliveryRoute` tries on every read.
+    let private deliveryRouteRevision (body: string) = hashHex (deliveryRouteSubject body)
+
+    /// The PRE-#2392 scheme: a hash of the raw, unredacted body — exactly what every receipt recorded
+    /// before this fix shipped carries as its `subjectRevision`. Never used to AUTHOR a new receipt (see
+    /// `deliveryRouteRevision` above); kept only as a READ-side migration bridge in `decideDeliveryRoute`
+    /// so an already-recorded receipt does not go stale the instant this fix ships merely because the
+    /// hash FORMULA changed under it, for as long as nothing in the body has actually moved since it was
+    /// recorded — precisely the guarantee that receipt had before this fix (AC5).
+    let private legacyDeliveryRouteRevision (body: string) = hashHex body
+
+    /// One `DeliveryRoute.Verdict` from up to two candidate revisions (.github#2392 AC5's migration
+    /// bridge): the canonical (post-fix) revision first, and — ONLY when that does not make the receipt
+    /// `Current` — the legacy (pre-fix, whole-body) revision. A receipt that is `Current` only under the
+    /// legacy revision remains bound to the WHOLE old body exactly as before this fix (a `Paths:`/
+    /// `Class:`/`Blocked on:`/`Blocked by:` edit still stales it) until it is re-recorded once under the
+    /// canonical scheme, after which future such edits no longer touch it. When NEITHER candidate is
+    /// current, the canonical verdict's reasons are reported: canonical is the scheme every future receipt
+    /// is authored against, so its explanation is the one worth showing an agent deciding what to do next.
+    let private decideDeliveryRoute (subject: string) (body: string) (receipt: DeliveryRoute.Receipt option) : DeliveryRoute.Verdict =
+        match DeliveryRoute.decide subject (Some(deliveryRouteRevision body)) receipt with
+        | DeliveryRoute.Current _ as current -> current
+        | canonicalVerdict ->
+            match DeliveryRoute.decide subject (Some(legacyDeliveryRouteRevision body)) receipt with
+            | DeliveryRoute.Current _ as current -> current
+            | _ -> canonicalVerdict
 
     /// Static receipt validation proves that an SDD route says which work package it governs.  Whether
     /// that package's files currently exist and are `implementationReady` is a SEPARATE, ADVISORY fact
@@ -511,7 +590,7 @@ module Client =
                     if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
-            DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt
+            decideDeliveryRoute target.Canonical body receipt
 
     /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
     /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
@@ -530,7 +609,7 @@ module Client =
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
 
-            match DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt with
+            match decideDeliveryRoute target.Canonical body receipt with
             | DeliveryRoute.Current route -> Ok route
             | DeliveryRoute.Stale reasons
             | DeliveryRoute.Unreadable reasons ->
@@ -9273,7 +9352,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->
-            let revision = deliveryRouteRevision body
             let receipt =
                 comments
                 |> List.rev
@@ -9281,8 +9359,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
-            match DeliveryRoute.decide target.Canonical (Some revision) receipt with
-            | DeliveryRoute.Current valid -> Ok(valid, revision)
+            // The reported `subjectRevision` is the RECEIPT'S OWN stored value, not a freshly recomputed
+            // one: `Current` means it already equals whichever candidate (`deliveryRouteRevision` or, for
+            // a pre-#2392 receipt, `legacyDeliveryRouteRevision`) `decideDeliveryRoute` matched it
+            // against, so printing it back is exact either way and needs no second branch here.
+            match decideDeliveryRoute target.Canonical body receipt with
+            | DeliveryRoute.Current valid -> Ok(valid, valid.SubjectRevision)
             | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
             | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
 
