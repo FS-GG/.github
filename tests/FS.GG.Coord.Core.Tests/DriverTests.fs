@@ -393,6 +393,50 @@ module DriverTests =
               accepted "first" ]
 
     [<Fact>]
+    let ``#2451 a generic agent-type critic identity is not proof of the same critic, even when it repeats`` () =
+        // The negative case this row exists to prevent: two markers naming the bare agent-type string
+        // `fsgg-critic-normal` — the exact shape measured live during .github#2417's own review, where
+        // two DIFFERENT critics both posted it. Every OTHER field agrees perfectly (same initial URL,
+        // round, preceding-comment link, increasing id) — the ONLY thing that could make this look like
+        // "the same critic confirmed" is the string equality on `critic`, and that equality is
+        // satisfiable by any critic ever dispatched at that route, so it must never be accepted.
+        let initial =
+            comment
+                1L
+                "https://reviews/1"
+                "<!-- fsgg:independent-review:v1 -->\ncritic: fsgg-critic-normal\nreviewed-head: first\nverdict: changes-required"
+
+        let confirm =
+            comment
+                2L
+                "https://reviews/2"
+                ("<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/1\ncritic: fsgg-critic-normal\nround: 1\npreceding-review: https://reviews/1\nreviewed-head: second\nverdict: pass"
+                 + notMeaningful)
+
+        let accepted =
+            comment
+                3L
+                "https://reviews/3"
+                "<!-- fsgg:review-accepted:v1 -->\naccepted-head: second\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/2"
+
+        match parseReviewComments [ initial; confirm; accepted ] with
+        | Ok chain ->
+            failwithf
+                "GATE INVERSION: a generic agent-type critic identity was accepted as proof of same-critic continuity: %A"
+                chain
+        | Error errors -> Assert.True(saysThat "minted, distinguishing identity" errors, sprintf "%A" errors)
+
+    [<Fact>]
+    let ``#2451 isGenericCriticIdentity recognises the bare agent-type shape and not a minted one`` () =
+        Assert.True(isGenericCriticIdentity "fsgg-critic-normal")
+        Assert.True(isGenericCriticIdentity "fsgg-critic-best")
+        Assert.True(isGenericCriticIdentity "  fsgg-critic-normal  ")
+        Assert.False(isGenericCriticIdentity "brant-99e5")
+        Assert.False(isGenericCriticIdentity "shrike")
+        Assert.False(isGenericCriticIdentity "")
+        Assert.False(isGenericCriticIdentity null)
+
+    [<Fact>]
     let ``#2127 markers and acceptance links fail closed at the live parser`` () =
         let initial =
             comment

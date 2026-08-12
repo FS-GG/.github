@@ -158,6 +158,13 @@ module Review =
     /// returns `None` and the caller's existing `ResumeSameCritic` behavior is completely unchanged
     /// (acceptance AC-001) — the recovery path is never entered by inference, only by an explicit,
     /// accountable grant.
+    ///
+    /// `.github#2451`: `receipt.OriginalCriticIdentity = critic` alone is NOT proof this receipt names
+    /// the exact stuck critic when `critic` is the bare agent-type string (`Driver.isGenericCriticIdentity`)
+    /// — every critic ever dispatched at that route would satisfy the equality, so the "exact critic"
+    /// property `independent-review.md` states is never actually witnessed by a generic string. A
+    /// receipt whose current-round critic identity is generic is refused exactly like a mismatched one:
+    /// the caller falls back to `ResumeSameCritic`, never to a succession the marker text cannot support.
     let private criticSuccessionValid
         (binding: Binding)
         (successionGranted: CriticSuccessionReceipt option)
@@ -166,6 +173,7 @@ module Review =
         match successionGranted, currentCritic with
         | Some receipt, Some critic when
             receipt.OriginalCriticIdentity = critic
+            && not (Driver.isGenericCriticIdentity critic)
             && receipt.CandidateHeadSha = binding.HeadSha
             && not (String.IsNullOrWhiteSpace receipt.SuccessorCriticIdentity)
             && not (String.IsNullOrWhiteSpace receipt.GrantedBy)
