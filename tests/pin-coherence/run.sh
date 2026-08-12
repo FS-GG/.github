@@ -1137,6 +1137,51 @@ precomment_annotation "$ABOVE"
 must_pass "a version-shaped comment ABOVE the annotation does not shadow the pin (#1236 fix shape)" "$ABOVE"
 
 echo
+echo "--- an allowedVersions cap LOWERS a pin's coherence ceiling, but only when it actually excludes the feed's newest (.github#2464) ---"
+# The real preset now carries default.json's own FS.GG.SDD.Cli cap (<1.0.1) alongside the
+# YoloDev.Expecto one every leg above already re-checks — make_repo copies the REAL preset, so this
+# section proves the cap does not just sit there: it changes what "coherent" MEANS for the one pin it
+# governs, without silently turning the freshness check OFF for that pin (the gap #2464 closed:
+# `_resolve_newest` used to compare every FS.GG.* pin against the feed's ABSOLUTE newest, unconditionally,
+# and nothing before this connected a cap back to that comparison at all).
+CAPFEED="$(feed_with capfeed '["0.9.0", "1.0.0", "1.0.1"]')"
+
+# The pin at 1.0.0 — main's actual pin, today — is coherent even though the feed serves 1.0.1: the
+# cap admits up to (but not including) 1.0.1, so 1.0.0 is its ceiling. Without the cap-aware
+# comparison this fails outright, because 1.0.0 never equals the feed's absolute newest while 1.0.1
+# is published — which is exactly the state #2464 found `pin-coherence` stuck in.
+CAPPED_OK="$(make_repo capped-ok 1.0.0)"
+must_pass "a pin at the cap's admitted newest is coherent even though the FEED serves newer" \
+  "$CAPPED_OK" "$CAPFEED"
+
+# Gate-inversion (AC5): the cap must not simply disable freshness for this pin. A pin that drifts
+# BELOW the cap's own ceiling — never mind the feed's absolute newest — must still red, and the
+# diagnosis must name the CAP's ceiling, not the feed's absolute newest (which would send a reader
+# chasing the wrong number, or worse, toward hand-advancing past a ceiling the cap put there on
+# purpose).
+CAPPED_STALE="$(make_repo capped-stale 0.9.0)"
+must_fail "a pin below the cap's admitted newest still reds — the cap does not disable freshness" \
+  "$CAPPED_STALE" "$CAPFEED" \
+  'caps it at `allowedVersions: '"'"'<1.0.1'"'"'`, whose newest ADMITTED published version is '"'"'1.0.0'"'"''
+
+# A pin ADVANCED past what the cap admits (hand-edited to 1.0.1) is refused too — the cap is a
+# ceiling in both directions, exactly like the uncapped AHEAD leg earlier in this file.
+CAPPED_AHEAD="$(make_repo capped-ahead 1.0.1)"
+must_fail "a pin ahead of the cap's admitted newest fails, even though the feed serves it" \
+  "$CAPPED_AHEAD" "$CAPFEED" "AHEAD of the cap-admitted newest"
+
+# The correction half: a cap whose ceiling happens to EQUAL the feed's absolute newest (nothing
+# published today falls in the excluded range) must be invisible to the message. Mentioning a cap
+# that is not the reason a pin is stale would misdirect — so with a feed that serves nothing past
+# 1.0.0, the <1.0.1 cap excludes no PUBLISHED version and the comparison degrades to the ordinary,
+# pre-#2464 uncapped one.
+NOCEIL_FEED="$(feed_with noceil '["0.9.0", "1.0.0"]')"
+NOCEIL_STALE="$(make_repo noceil-stale 0.9.0)"
+must_fail "a cap that currently excludes nothing published leaves the ordinary uncapped message" \
+  "$NOCEIL_STALE" "$NOCEIL_FEED" \
+  "is pinned at '0.9.0' but the newest on the registry Renovate reads is '1.0.0'"
+
+echo
 echo "--- CI guard on the real repo (no network: structure only) ---"
 # Proves REQUIRED_PINS still names a pin that exists here, and that this repo's own routing is one
 # Renovate can actually read — the two things a refactor of this repo could quietly break. Feed
