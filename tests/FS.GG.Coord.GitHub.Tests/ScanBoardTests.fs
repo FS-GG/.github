@@ -1230,3 +1230,123 @@ let ``#2450 a CLAIMED, OPEN 'Blocked' row is NOT probed by this arm - the widene
 
         Assert.Equal(0, pullsReads ())
         Assert.False(fst (item.TryGetProperty "itemPr"))
+
+// ---- .github#2384: the MARKERLESS-ROW probe must cover 'In review' too, not just 'Ready'/'Backlog' -----
+//
+// The mate to #2450 above, one column left of it. `LIFECYCLE-PROJECTION-LAG`'s projector
+// (`LifecycleProjection.project` in `Client.fs`) reads `Item.ItemPr` the SAME way whether or not the row
+// is claimed — only `Claim.Value` differs. The probe at `Scan.fs:1334` used to fire only for
+// `Ready`/`Backlog`/cleared-`Blocked`, so an UNCLAIMED row already `In review` never had `ItemPr`
+// populated: the projector then read no claim and no PR fact and fell through to its `Ready` default,
+// flipping a row that is legitimately `In review` back to `Ready` on every reconcile pass — and because
+// `Ready` IS probed, the very next pass finds the same open PR and flips forward again. This is
+// `.github#2216`'s own repro: a `LIFECYCLE-PROJECTION-LAG` remedy oscillating `Ready` <-> `In review` with
+// no claim and nothing about the issue or its PR changing in between.
+//
+// These tests stay inside this project's boundary and prove the fact the probe COLLECTS, exactly as the
+// `#2450` tests above do for the claimed arm — the projector itself lives in the Cli project, outside this
+// item's declared `Paths:`.
+
+/// A markerless board row already sitting `In review` — the exact column the unclaimed probe used to skip.
+let private unclaimedInReviewRow: Scan.Row =
+    { scopeRow "FS.GG.SDD" 99 with Status = BoardStatus.InReview }
+
+/// A transport for the markerless-row legs. `/comments` answers with NO claim marker at all (holder =
+/// `None`), so these legs stay on the `| None ->` arm exactly as #2216's own repro was: an OPEN,
+/// `In review` row nobody currently holds. `pulls`/`matching-refs` are counted so a test can assert the
+/// probe fired exactly once, and no more.
+let private unclaimedRowTransport (openPrs: string) =
+    let mutable pullsReads = 0
+    let mutable matchingRefsReads = 0
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            match req.Path, req.Subject with
+            | "graphql", "fresh issue body and comment-count facts" ->
+                ok (nodeFactsResponse unclaimedInReviewRow.NodeId.Value "Paths: src/Board/**" 0)
+            | path, _ when path.EndsWith "/comments" -> ok "[]"
+            | path, _ when path.EndsWith "/issues" -> ok "[]"
+            | path, _ when path.Contains "/pulls" ->
+                pullsReads <- pullsReads + 1
+                ok openPrs
+            | path, _ when path.Contains "matching-refs" ->
+                matchingRefsReads <- matchingRefsReads + 1
+                ok "[]"
+            | _, _ -> Error(Http(500, "unexpected request")))
+
+    recorder, (fun () -> pullsReads), (fun () -> matchingRefsReads)
+
+[<Fact>]
+let ``#2384 an UNCLAIMED, OPEN row already 'In review' with an open item PR still populates ItemPr`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let openPrs = """[{"number":2216,"head":{"ref":"item/99-already-written"}}]"""
+    let transport, pullsReads, _ = unclaimedRowTransport openPrs
+
+    match Scan.snapshot transport [ unclaimedInReviewRow ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let item = doc.RootElement.GetProperty("items").[0]
+
+        Assert.Equal(1, pullsReads ())
+
+        // THE FIELD IS POPULATED — the half .github#2384 was filed over. Before the fix this arm matched
+        // `| _ -> ()` and `itemPr` never appeared, so the lifecycle projector read no claim and no PR fact
+        // and proposed `Ready` for a row that is legitimately `In review`.
+        match item.TryGetProperty "itemPr" with
+        | true, v -> Assert.Equal(2216, v.GetInt32())
+        | false, _ ->
+            failwith "an 'In review' unclaimed row with an open item PR must populate itemPr — this is .github#2384"
+
+[<Fact>]
+let ``#2384 an UNCLAIMED, OPEN row already 'In review' with NO open item PR is still probed - the mate`` () =
+    // The mate to the test above, over the real writer — without it, "the probe reaches the projector's
+    // column" is satisfied by a scan that always finds a PR, and a row that is genuinely PR-less (an
+    // anomaly, but not one this probe should special-case) would go untested.
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let transport, pullsReads, matchingRefsReads = unclaimedRowTransport "[]"
+
+    match Scan.snapshot transport [ unclaimedInReviewRow ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let item = doc.RootElement.GetProperty("items").[0]
+
+        Assert.Equal(1, pullsReads ())
+        Assert.Equal(1, matchingRefsReads ())
+        Assert.False(fst (item.TryGetProperty "itemPr"))
+
+[<Fact>]
+let ``#2384 an UNCLAIMED, OPEN 'Blocked' row with an unresolved blocker is NOT probed by this arm - the widened probe buys no request it need not``
+    ()
+    =
+    // THE BOUND, STATED AS A TEST. Widening from three columns to four costs at most one additional REST
+    // request per row that is unclaimed, Open, and currently `In review` — not one for every unclaimed row
+    // regardless of column. An unclaimed row parked `Blocked` with an unresolved blocker still falls to
+    // `| _ -> ()`, exactly as before this fix: this arm is not `| Open, _ ->`.
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    // `BlockedByRaw = ""` keeps `Blockers.cleared` false (it requires at least one blocker, every one
+    // resolved), so this is a `Blocked` row with no cleared blocker to promote — the population the
+    // existing `Blocked` arm already declines, unaffected by this fix.
+    let blockedRow =
+        { unclaimedInReviewRow with
+            Status = BoardStatus.Blocked
+            BlockedByRaw = "" }
+
+    let transport, pullsReads, _ =
+        unclaimedRowTransport """[{"number":2216,"head":{"ref":"item/99-already-written"}}]"""
+
+    match Scan.snapshot transport [ blockedRow ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let item = doc.RootElement.GetProperty("items").[0]
+
+        Assert.Equal(0, pullsReads ())
+        Assert.False(fst (item.TryGetProperty "itemPr"))

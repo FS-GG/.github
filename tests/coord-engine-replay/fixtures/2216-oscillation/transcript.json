@@ -1,6 +1,7 @@
 {
   "commands": [
     "reconcile",
+    "reconcile",
     "ready",
     "driver-events"
   ],
@@ -52,6 +53,51 @@
           }
         }
       ],
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/FS-GG/FS.GG.SDD/issues/777/comments",
+      "requestBody": null,
+      "responseBody": {
+        "message": "fixture: unhandled GET /repos/FS-GG/FS.GG.SDD/issues/777/comments"
+      },
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/repos/FS-GG/FS.GG.SDD/pulls",
+      "requestBody": null,
+      "responseBody": [
+        {
+          "head": {
+            "ref": "item/500-the-work"
+          },
+          "number": 777,
+          "state": "open"
+        }
+      ],
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/FS-GG/FS.GG.SDD/pulls/777",
+      "requestBody": null,
+      "responseBody": {
+        "head": {
+          "ref": "item/500-the-work"
+        },
+        "number": 777
+      },
       "responseHeaders": {
         "Content-Type": "application/json"
       },

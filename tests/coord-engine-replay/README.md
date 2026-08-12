@@ -21,7 +21,10 @@ This directory does not replace either of those suites and deletes nothing from 
 - `fixtures/<name>/expected/{reconcile,ready,driver-events}.json` — the checked-in expectation each is
   replayed against.
 - `fixtures/<name>/manifest.json` *(optional)* — names commands allowed to mismatch
-  (`expectFailure.commands`) and why. Used by `fixtures/2216-oscillation/` only.
+  (`expectFailure.commands`) and why. Not currently used by any checked-in fixture: it existed for
+  `fixtures/2216-oscillation/` until `.github#2384` fixed the defect that marker tracked; kept here as
+  the mechanism for the next fixture that needs to prove an instrument catches a bug this suite does not
+  yet fix.
 
 ## Fixtures (3, ~152 KB total — see `du -sh fixtures/*` to recheck)
 
@@ -29,16 +32,22 @@ This directory does not replace either of those suites and deletes nothing from 
   the existing hermetic multi-item board. `run.sh`'s leg 0 also drives the engine DIRECTLY against that
   same server and asserts the direct answer equals this fixture's checked-in expectation — proving the
   capture→replay round trip is faithful, not merely self-consistent.
-- **`2216-oscillation`** (~52 KB, 7 recorded requests) — a small, synthetic, one-item board
+- **`2216-oscillation`** (~52 KB, 10 recorded requests) — a small, synthetic, one-item board
   (`scenario_server.py`, committed alongside it) modeling the shape `.github#2216` tabulated: one
-  unclaimed, `OPEN`, `In review` row with a genuinely open implementation PR on its own branch. Today's
-  engine deterministically proposes `Status=Ready` for it — the wrong half of `.github#2216`'s tabulated
-  verdict — which `expected/reconcile.json` (deliberately set to the CORRECT no-op answer) catches as a
-  mismatch. `manifest.json` marks that command `expectFailure`, referencing `.github#2384`, the tracked
-  root cause (`Scan.fs`'s `itemPr` probe is never attempted for a markerless `In review` row — see
-  `scenario_server.py`'s docstring). This is NOT a raw live capture: the real `.github#2216` row is a
-  moving target this hermetic suite cannot depend on, so a small synthetic board reproducing the same
-  shape is used instead, and `scenario_server.py` documents exactly how to regenerate it.
+  unclaimed, `OPEN`, `In review` row with a genuinely open implementation PR on its own branch. Before
+  `.github#2384`'s fix, the engine deterministically proposed `Status=Ready` for it — the wrong half of
+  `.github#2216`'s tabulated verdict — which `expected/reconcile.json` (a deliberate override, asserting
+  the CORRECT no-op answer) caught as a mismatch under a `manifest.json` `expectFailure` marker. `.github
+  #2384` widened `Scan.fs`'s markerless-row `itemPr` probe to cover `In review`, not just
+  `Ready`/`Backlog`/cleared-`Blocked` (see `scenario_server.py`'s docstring for the root cause), so this
+  fixture's `expected/reconcile.json` is now what the FIXED engine actually outputs and `manifest.json` is
+  gone. `transcript.json`'s `commands` list names `reconcile` TWICE, exactly as `2450-claimed-review-lag`
+  does, so `run.sh` genuinely runs two consecutive `reconcile --json` passes through the fixed engine —
+  `.github#2384` AC1/AC2 ("two consecutive reconcile passes over an unchanged open row ... produce the
+  same Status remedy — or, correctly, no remedy on the second") proven end to end rather than asserted in
+  prose. This is NOT a raw live capture: the real `.github#2216` row is a moving target this hermetic
+  suite cannot depend on, so a small synthetic board reproducing the same shape is used instead, and
+  `scenario_server.py` documents exactly how to regenerate it.
 - **`2450-claimed-review-lag`** (~48 KB, 10 recorded requests) — the CLAIMED sibling of
   `2216-oscillation`: a live claim marker, `Status = In review`, and a genuinely open implementation PR
   on its own branch (`scenario_server.py`, committed alongside it). `.github#2450` — before its fix,

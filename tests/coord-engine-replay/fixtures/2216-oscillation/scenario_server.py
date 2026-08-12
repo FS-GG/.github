@@ -10,18 +10,26 @@ unclaimed, OPEN, `In review` row with a genuinely open implementation PR on its 
 deterministic, checked-in board, small enough to read in one sitting (contrast the 47 boards in
 `tests/coord-engine-parity/`, some 43KB).
 
-Run against TODAY's compiled engine, it reproduces the WRONG half of #2216's tabulated verdict
-deterministically, not intermittently: `reconcile --json` proposes `Status=Ready` for a row with a real
-open PR on it. Reading `src/FS.GG.Coord.GitHub/Scan.fs` around the `itemPr` probe (the block discussed
-in the comment beginning "AND THE `| _ -> ()` BELOW IS A KNOWN FAIL-OPEN WITH A NEW CONSUMER —
-.github#1924") shows why: the probe that would tell `LifecycleProjection.project` about this PR is only
-attempted for a markerless `Ready`/`Backlog` row, or a `Blocked` one whose blockers just cleared — never
-for a markerless `In review` row, which is exactly this fixture's shape. `Item.ItemPr` therefore reads
-`None`, `LifecycleProjection.project`'s open-PR rule (`elif ... pr.Open ...  -> Project(InReview, ...)`)
-never fires, and the projection falls through to `Ready`. `.github#1924` (closed) already named the same
-`ItemPr` collapse for a different consumer (`BLOCKER-CLEARED`); this is the `In review` sibling, and the
-evidence lives on `.github#2384`, the tracked umbrella for this class — see this fixture's
-`manifest.json` and the PR that added it for the pointer.
+Before `.github#2384`'s fix, running this against the compiled engine reproduced the WRONG half of
+#2216's tabulated verdict deterministically, not intermittently: `reconcile --json` proposed
+`Status=Ready` for a row with a real open PR on it. `src/FS.GG.Coord.GitHub/Scan.fs`'s markerless-row
+`itemPr` probe (the block discussed in the comment beginning "AND THE `| _ -> ()` BELOW IS A KNOWN
+FAIL-OPEN WITH A NEW CONSUMER — .github#1924") was only attempted for a markerless `Ready`/`Backlog` row,
+or a `Blocked` one whose blockers just cleared — never for a markerless `In review` row, which is exactly
+this fixture's shape. `Item.ItemPr` therefore read `None`, `LifecycleProjection.project`'s open-PR rule
+(`elif ... pr.Open ...  -> Project(InReview, ...)`) never fired, and the projection fell through to
+`Ready`. `.github#1924` (closed) already named the same `ItemPr` collapse for a different consumer
+(`BLOCKER-CLEARED`); this was the `In review` sibling.
+
+`.github#2384` widened that probe's `| Open, (Ready | Backlog) -> probe ()` arm to also cover `InReview`,
+mirroring `.github#2450`'s claimed-row twin. Run against the FIXED engine, `reconcile --json` returns
+`[]` for this row twice in a row (this fixture's `transcript.json` lists `reconcile` TWICE in its
+`commands`, so `run.sh` genuinely invokes the compiled engine binary a second time against the same
+running replay server) — `.github#2384`'s AC1/AC2 ("two consecutive reconcile passes over an unchanged
+open row ... produce the same Status remedy — or, correctly, no remedy on the second"), proven end to end
+rather than asserted in prose. Run against the PRE-FIX engine (`git stash` over just `Scan.fs`, or check
+out the parent commit), both passes instead propose `Status=Ready` — the gate-inversion evidence for this
+fixture.
 
 REGENERATING THIS FIXTURE
 
@@ -33,11 +41,10 @@ REGENERATING THIS FIXTURE
         --out tests/coord-engine-replay/fixtures/2216-oscillation
     kill $SRV_PID
 
-Capture overwrites `expected/reconcile.json` with whatever the CURRENT engine actually outputs — the
-committed one is deliberately NOT that. It asserts the CORRECT no-op verdict (an unclaimed `In review`
-row with a genuinely open PR should stay `In review`), so re-running the recipe above requires manually
-restoring `expected/reconcile.json` to `[]` afterward. That mismatch, preserved on purpose, is this
-fixture's entire point (see `manifest.json`'s `expectFailure`).
+Unlike before `.github#2384` landed, this fixture's checked-in `expected/reconcile.json` IS what capture
+records against the fixed engine — no manual override, no `manifest.json`. After regenerating, manually
+add a second `"reconcile"` entry to `transcript.json`'s top-level `"commands"` array (capture only ever
+runs each command once) so `run.sh` still exercises the two-pass claim this fixture exists to prove.
 """
 
 import json
