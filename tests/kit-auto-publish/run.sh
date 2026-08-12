@@ -382,13 +382,21 @@ checks=$((checks + 1))
   || { echo "gate-inversion (provenance): the naive form must NOT resolve to the real version" >&2; exit 1; }
 checks=$((checks + 1))
 
-# ---- 11. `provenance_evidence`/`gh_retry`: RETRY ROOT CAUSE (.github#2443). A transient TLS/network
-#          blip on `gh run list`/`gh run view` inside the provenance loop previously fell straight
-#          through the loop's `|| continue` and read exactly like a verified-absent `pr-arm` job. This
-#          extracts the REAL functions out of the REAL workflow (between the `kit-provenance-search`
-#          markers) and runs them against a stubbed `gh` that can be told to fail its first N calls of
-#          a given kind before succeeding, plus a REAL synthetic git repo for the `git merge-base
-#          --is-ancestor` check. ----
+# ---- 11. `provenance_evidence`/`gh_retry`/`find_provenance`: RETRY ROOT CAUSE (.github#2443) PLUS
+#          its round-1 review repairs. A transient TLS/network blip on `gh run list`/`gh run view`
+#          inside the provenance loop previously fell straight through the loop's `|| continue` and
+#          read exactly like a verified-absent `pr-arm` job. Round 1 of independent review caught two
+#          regressions in the first draft's retry wrapper: (1) folding `gh run list`'s call — which was
+#          previously UNGUARDED and so crashed the whole job LOUDLY on any failure under `set -e` —
+#          into the same `|| return 1` as everything else made a persistent, genuinely-unreachable `gh`
+#          call read exactly like a verified-absent candidate; (2) `gh_retry`'s `2>/dev/null` discarded
+#          the real diagnostic (the TLS error text this very issue quotes as evidence) even on the
+#          FINAL, exhausted attempt. `provenance_evidence` now returns THREE distinguishable outcomes
+#          (0 = evidence found, 1 = verified absent, 2 = could not verify) and `gh_retry` preserves the
+#          last attempt's stderr — this extracts the REAL functions out of the REAL workflow (between
+#          the `kit-provenance-search` markers) and runs them against a stubbed `gh` that can be told to
+#          fail its first N calls of a given kind before succeeding, plus a REAL synthetic git repo for
+#          the `git merge-base --is-ancestor` check. ----
 extract_provenance_retry_fns() {
   awk '/^[[:space:]]*# BEGIN kit-provenance-search$/{flag=1; next} /^[[:space:]]*# END kit-provenance-search$/{flag=0} flag' \
     "$root/.github/workflows/kit-auto-publish.yml" > "$1"
@@ -396,6 +404,8 @@ extract_provenance_retry_fns() {
     || { echo "gh_retry() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
   grep -q 'provenance_evidence()' "$1" \
     || { echo "provenance_evidence() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
+  grep -q 'find_provenance()' "$1" \
+    || { echo "find_provenance() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
 }
 
 prov_work="$esc_work/provenance"
@@ -445,7 +455,11 @@ STUB
 chmod +x "$prov_work/bin/gh"
 
 # run_provenance_evidence <dir> <script> <run-list-fail> <run-view-fail> -> exit code; stdout/stderr
-# and per-kind call counts land under <dir> so a scenario can assert on them afterward.
+# and per-kind call counts land under <dir> so a scenario can assert on them afterward. Sourced under
+# the SAME `set -euo pipefail` the real workflow step runs under — that option is exactly what makes
+# an unguarded failing assignment crash instead of silently falling through, which is the crux of
+# round-1 review repair 1, so a test that ran the extracted function WITHOUT it could pass on a
+# reintroduced regression that only bites in the real step.
 run_provenance_evidence() {
   local dir="$1" script="$2" rl="$3" rv="$4" rc=0
   mkdir -p "$dir"
@@ -453,7 +467,7 @@ run_provenance_evidence() {
   ( cd "$prov_work/repo" \
     && STUB_DIR="$dir" PATH="$prov_work/bin:$PATH" \
        RUN_LIST_FAIL="$rl" RUN_VIEW_FAIL="$rv" GITHUB_REPOSITORY=FS-GG/.github \
-       bash -c "source '$script'; provenance_evidence '123' '$prov_merge_sha' 'deadbeef' '0.27.1'" \
+       bash -c "set -euo pipefail; source '$script'; provenance_evidence '123' '$prov_merge_sha' 'deadbeef' '0.27.1'" \
   ) >"$dir/stdout.log" 2>"$dir/stderr.log" || rc=$?
   return "$rc"
 }
@@ -490,21 +504,37 @@ checks=$((checks + 1))
   || { echo "provenance_evidence run-view-transient: expected recovered evidence, got: $(cat "$d/stdout.log")" >&2; exit 1; }
 checks=$((checks + 1))
 
-# 11d. A PERSISTENT (not transient) failure still gives up, bounded, and reports non-eligible —
-#      retries must not become an infinite loop on a genuinely unreachable API.
+# 11d. A PERSISTENT (not transient) `gh run list` failure still gives up, bounded (no infinite retry
+#      loop) — but per round-1 repair 1 it must now report 2 (COULD NOT VERIFY), distinguishable from 1
+#      (verified absent), and per repair 2 the real TLS diagnostic must survive to stderr.
 d="$prov_work/run-list-persistent"
 rc=0; run_provenance_evidence "$d" "$prov_fn" 99 0 || rc=$?
-[ "$rc" -eq 1 ] || { echo "provenance_evidence run-list-persistent: expected exit 1 (bounded retries exhaust), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+[ "$rc" -eq 2 ] || { echo "provenance_evidence run-list-persistent: expected exit 2 (inconclusive, distinguishable from verified-absent), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
 [ "$(grep -c '^run list' "$d/calls.log")" -eq 3 ] \
   || { echo "provenance_evidence run-list-persistent: expected exactly 3 attempts (1 + 2 retries), got: $(cat "$d/calls.log")" >&2; exit 1; }
 checks=$((checks + 1))
+grep -qi 'tls' "$d/stderr.log" \
+  || { echo "provenance_evidence run-list-persistent: expected the real TLS diagnostic to survive to stderr (repair 2), got: $(cat "$d/stderr.log")" >&2; exit 1; }
+checks=$((checks + 1))
 
-# ---- 11e. GATE-INVERSION EVIDENCE (pnext-item §3): strip `gh_retry` back out of a copy of the real
-#           functions — reproducing the pre-fix bare `gh run list`/`gh run view` calls textually — and
-#           show the IDENTICAL run-view-transient scenario (11c) now reads a transient blip as
-#           verified-absent, exactly today's silent `|| continue`/`|| return 1`. A test that cannot
-#           fail on the original defect has not tested the fix. ----
+# 11d2. The same shape for a PERSISTENT `gh run view` failure — repair 1/2 apply symmetrically to both
+#       calls, not just the one round 1 happened to name first.
+d="$prov_work/run-view-persistent"
+rc=0; run_provenance_evidence "$d" "$prov_fn" 0 99 || rc=$?
+[ "$rc" -eq 2 ] || { echo "provenance_evidence run-view-persistent: expected exit 2 (inconclusive), got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qi 'tls' "$d/stderr.log" \
+  || { echo "provenance_evidence run-view-persistent: expected the real TLS diagnostic to survive to stderr, got: $(cat "$d/stderr.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11e. GATE-INVERSION EVIDENCE (pnext-item §3) for the RETRY mechanism itself: strip `gh_retry`
+#           back out of a copy of the real functions — reproducing pre-.github#2443 bare `gh run
+#           list`/`gh run view` calls textually — and show the IDENTICAL one-shot transient blip (11c's
+#           scenario) now costs a LOUD, avoidable job failure (2) instead of a clean recovery (0): even
+#           with repair 1/2's 1-vs-2 distinction in place, retry is still what tells a one-off blip
+#           apart from something worth failing loudly over. A test that cannot fail on the pre-#2443
+#           shape has not tested the retry fix. ----
 mutate_to_no_retry() {
   python3 - "$1" "$2" <<'PY'
 import sys
@@ -521,11 +551,80 @@ mutate_to_no_retry "$prov_fn" "$prov_buggy_fn"
 
 d="$prov_work/gate-inversion-run-view"
 rc=0; run_provenance_evidence "$d" "$prov_buggy_fn" 0 1 || rc=$?
-[ "$rc" -eq 1 ] \
-  || { echo "gate-inversion (provenance retry): pre-fix bare gh call must read the transient blip as absent (exit 1), got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+[ "$rc" -eq 2 ] \
+  || { echo "gate-inversion (retry): pre-#2443 bare gh call on a one-shot transient blip should cost an avoidable inconclusive failure (2), got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
 [ "$(grep -c '^run view' "$d/calls.log")" -eq 1 ] \
-  || { echo "gate-inversion (provenance retry): pre-fix must make exactly ONE 'gh run view' call — no retry — got: $(cat "$d/calls.log")" >&2; exit 1; }
+  || { echo "gate-inversion (retry): pre-#2443 must make exactly ONE 'gh run view' call — no retry — got: $(cat "$d/calls.log")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11f. GATE-INVERSION EVIDENCE for ROUND-1 REPAIR 1: reproduce the exact shape independent review
+#           flagged in this fix's FIRST draft — `gh_retry gh run list ...` folded into a uniform
+#           `|| return 1`, the same outcome as a verified-absent candidate — and show a PERSISTENT
+#           failure (11d's scenario) now reads 1 instead of 2: indistinguishable from genuine absence,
+#           reproducing the regression the critic caught before this repair existed. ----
+prov_round1_fn="$prov_work/provenance_evidence_round1.sh"
+{
+  awk '/^[[:space:]]*gh_retry\(\) \{$/,/^[[:space:]]*\}$/' "$prov_fn"
+  cat <<'ROUND1'
+provenance_evidence() {
+  local number="$1" merge="$2" head="$3" version="$4" run_id
+  run_id="$(gh_retry gh run list --repo "$GITHUB_REPOSITORY" --workflow kit-published-coherence.yml --commit "$head" --event pull_request --status success --limit 20 --json databaseId --jq '.[0].databaseId // empty')" || return 1
+  [ -n "$run_id" ] || return 1
+  gh_retry gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "pr-arm" and .conclusion == "success") | .databaseId' | grep -q . || return 1
+  git merge-base --is-ancestor "$merge" origin/main || return 1
+  jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$version" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}'
+}
+ROUND1
+} > "$prov_round1_fn"
+grep -q 'gh_retry()' "$prov_round1_fn" \
+  || { echo "gate-inversion (repair 1): failed to carry gh_retry() into the round-1 fixture — awk extraction shape changed upstream" >&2; exit 1; }
+
+d="$prov_work/gate-inversion-repair1"
+rc=0; run_provenance_evidence "$d" "$prov_round1_fn" 99 0 || rc=$?
+[ "$rc" -eq 1 ] \
+  || { echo "gate-inversion (repair 1): round-1 shape must read a persistent gh run list failure as verified-absent (1), not inconclusive (2) — got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 11g. GATE-INVERSION EVIDENCE for ROUND-1 REPAIR 2: reproduce `gh_retry`'s original
+#           unconditional `2>/dev/null` (discards the real diagnostic even on the final, exhausted
+#           attempt) with EVERY OTHER control-flow fix (including the `else`-branch `rc=$?` fix this
+#           very repair round also needed inside `gh_retry` itself — see the doc comment on the real
+#           function) held constant, isolating stderr handling as the ONLY variable under test. Paired
+#           with the CURRENT (post-repair-1) `provenance_evidence`, the SAME persistent-failure scenario
+#           (11d) must still leave stderr EMPTY — the diagnostic this issue itself cites as evidence is
+#           gone, exactly what a future recurrence would leave no trace of. ----
+prov_no_stderr_fn="$prov_work/provenance_evidence_no_stderr.sh"
+cat > "$prov_no_stderr_fn" <<GHRETRY
+gh_retry() {
+  local attempt=0 max_retries=2 rc=0 out
+  while :; do
+    if out="\$("\$@" 2>/dev/null)"; then
+      printf '%s' "\$out"
+      return 0
+    else
+      rc=\$?
+    fi
+    attempt=\$((attempt + 1))
+    [ "\$attempt" -gt "\$max_retries" ] && return "\$rc"
+    sleep 1
+  done
+}
+GHRETRY
+awk '/^[[:space:]]*provenance_evidence\(\) \{$/,/^[[:space:]]*\}$/' "$prov_fn" >> "$prov_no_stderr_fn"
+grep -q 'provenance_evidence()' "$prov_no_stderr_fn" \
+  || { echo "gate-inversion (repair 2): failed to carry provenance_evidence() into the no-stderr fixture — awk extraction shape changed upstream" >&2; exit 1; }
+
+d="$prov_work/gate-inversion-repair2"
+rc=0; run_provenance_evidence "$d" "$prov_no_stderr_fn" 99 0 || rc=$?
+[ "$rc" -eq 2 ] \
+  || { echo "gate-inversion (repair 2): expected exit 2 (provenance_evidence itself is unchanged), got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+# `provenance_evidence`'s OWN `::error::` annotation still fires on rc 2 regardless of `gh_retry`'s
+# stderr handling, so the assertion is specifically the ABSENCE of the underlying `gh` diagnostic text
+# — not overall stderr emptiness (that would also pass on the annotation alone and prove nothing).
+grep -qi 'tls' "$d/stderr.log" \
+  && { echo "gate-inversion (repair 2): pre-fix gh_retry must NOT surface the underlying TLS diagnostic on the final exhausted attempt — got: $(cat "$d/stderr.log")" >&2; exit 1; }
 checks=$((checks + 1))
 
 echo "kit auto-publish state machine: $checks passed"
