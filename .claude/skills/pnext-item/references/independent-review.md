@@ -259,6 +259,27 @@ verify that the `Verification:` field is present and contains either a reproduci
 checked. This requirement binds the host when relaying worker or critic claims onward, as well as the
 worker and critic who authored them.
 
+## Body-edit provenance — the REST timeline does not surface body edits
+
+When a check turns on whether an issue or PR **body** changed since some point — touch-set honesty,
+delivery-obligation staleness, `.github#2216`'s superseded-declaration hazard — `gh api
+repos/<owner>/<repo>/issues/<n>/timeline` (or its PR-number equivalent) is not evidence either way. That
+endpoint never emits an `edited` event for body edits, so zero results from it mean only that REST has
+nothing to say, not that no edit occurred; treating that absence as a confident "unedited" is the exact
+non-answer-graded-as-a-confident-negative shape **Gate-inversion evidence** above warns against. This
+was measured directly on `.github#2417`: its REST timeline returned zero `edited` events while GraphQL
+showed 5 real body edits, 3 of them after claim (`.github#2456`). The authoritative source for "has this
+body changed since X" is GraphQL `userContentEdits` (or `lastEditedAt`):
+
+```
+gh api graphql -f query='{repository(owner:"OWNER",name:"REPO"){issue(number:N){
+  createdAt lastEditedAt userContentEdits(first:20){totalCount nodes{editedAt editor{login}}}}}}'
+```
+
+Substitute `pullRequest(number:N)` for a PR body. A REST-timeline-only "no edits found" is `NOT_MEASURED`
+for this question, not a negative result — the same **Handoff-assertion provenance** discipline above
+applies: report what was actually checked rather than letting silence read as confirmation.
+
 ## Root cause, dedupe, and materiality
 
 For every candidate finding, the critic searches the relevant code and history for the cause, then
