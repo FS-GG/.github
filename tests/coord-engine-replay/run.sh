@@ -84,7 +84,9 @@ common_env() {
   # one leg's read answer another's, exactly the isolation `tests/coord-engine-e2e/run.sh` gives its
   # own run with `mktemp -d`; this is that same fix, called fresh before EVERY leg below rather than
   # once for the whole script, so no two legs — self-check, smoke, 2216-oscillation — ever share one.
-  export FSGG_COORD_CACHE="$(mktemp -d -p "$TMP_ROOT")"
+  local cache_dir
+  cache_dir="$(mktemp -d -p "$TMP_ROOT")"
+  export FSGG_COORD_CACHE="$cache_dir"
 }
 
 # ---- leg 0: self-check — a DIRECT hermetic connection must equal the smoke fixture's expectation ----
