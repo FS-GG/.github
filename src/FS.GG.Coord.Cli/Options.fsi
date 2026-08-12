@@ -54,7 +54,7 @@ module Options =
         /// Collect expired claims whose work is dead — refusing any with an open `item/<n>-*` PR
         /// (`reap [--repo] [--apply]`, #581). A DRY RUN without `--apply`.
         | Reap
-        /// Take an item's lock (`claim <ref> [--worker W] [--force]`).
+        /// Take an item's lock (`claim <ref> [--worker W] [--force] [--refuse-overlap]`).
         | Claim
         /// Take over an ORPHAN — a stale claim whose PR is FINISHED — and land it (`adopt <ref> [--worker W]`, #697).
         | Adopt
@@ -177,6 +177,12 @@ module Options =
           /// `--force` — steal a live lock (`claim`/`release`). A broken IDENTITY is never stealable; this
           /// is for a lock a human means to break.
           Force: bool
+          /// `--refuse-overlap` (`claim`, .github#2459) — turn `claim`'s own #353 collision report from a
+          /// WARNING that still claims into a REFUSAL. `claim` is the same lock as `take`/`batch` but
+          /// without their upstream overlap-avoidance (that is exactly why the orphan/recovery paths it
+          /// exists for can reach it), so the default stays permissive — this is the opt-in for a caller
+          /// that wants the scheduler's own guarantee without going through the scheduler.
+          RefuseOverlap: bool
           /// `--mint` (`whoami`) — print one fresh id line for `eval`.
           Mint: bool
           /// `--flip` (`done`) — roll the parent up when this child completes it.

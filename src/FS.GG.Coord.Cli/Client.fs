@@ -4400,6 +4400,371 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 |> Map.ofList
                 |> Ok
 
+    // #353 — two refs name the same repo. `Paths:` tokens are repo-relative, so a touch-set comparison
+    // is only meaningful within a repo; both `overlap` and `widen`'s re-check narrow the live set to this.
+    let private sameRepo (a: Ref) (b: Ref) =
+        String.Equals(a.Owner, b.Owner, StringComparison.OrdinalIgnoreCase)
+        && String.Equals(a.Repo, b.Repo, StringComparison.OrdinalIgnoreCase)
+
+    // The tokens a collision is named IN — the stem (`src/Scene/**` and `src/Scene` are one subtree, so
+    // the raw suffix beside a reservation that has none reads as two different things), deduped.
+    //
+    // #1517 — this returns the LIST and the human sites join it, rather than returning the joined string
+    // and leaving a machine consumer to split it back apart. `widen --json` emits these stems, and a
+    // comma-joined string beside a sibling `paths` ARRAY in the same object is a shape formatted for the
+    // stderr line it used to have only one caller for.
+    let private sharedTokens (pairs: (string * string) list) : string list =
+        pairs
+        |> List.collect (fun (a, b) -> [ TouchSet.stem a; TouchSet.stem b ])
+        |> List.distinct
+
+    let private sharedTokenText (tokens: string list) = String.Join(", ", tokens)
+
+    /// The #353 collision scan, shared by `overlap --active` and `widen`'s re-check: given an item's ref
+    /// and touch-set, every LIVE claim in the SAME repo whose touch-set collides with it, named with its
+    /// holder and the shared token stems. The repo scope IS the fix — a same-named repo-relative token in
+    /// another repo names a different file, so it is never a collision and its holder is never named. A
+    /// claim we could not read propagates as an Error: a claim we could not check is never a silent DISJOINT.
+    ///
+    /// ---- THE CANDIDATE SET IS KEYED ON THE **LOCK**, NEVER ON A PROJECTION OF IT (.github#1779) --------
+    ///
+    /// A touch-set reservation is carried by a CLAIM MARKER — a comment, posted by `claim`'s CAS. The
+    /// board's `Status` column is a PROJECTION of that marker, written afterwards, over a different
+    /// transport, on a different budget. Every way those two can disagree is a way this scan can print
+    /// `DISJOINT` over a live reservation, and **there is no CAS on a file**: nothing downstream re-decides
+    /// a false `DISJOINT`, nothing detects it, and the cost is two workers editing one file for as long as
+    /// they both work. `heldElsewhere`'s warrant — *"staleness costs a retry, not a double-claim"* — is
+    /// about the ITEM CAS and does not reach this consumer; #1740 is what borrowing it cost.
+    ///
+    /// `claim`'s own receipt enumerates the disagreements, and it exits GREEN on all four —
+    /// `converged:false` is a report, not a refusal. A column-derived candidate set misses the last three:
+    ///
+    /// | `statusWrite` | the column says | closed by a column-derived scan? |
+    /// |---|---|---|
+    /// | `written`, read fresh   | `In progress`     | yes |
+    /// | `written`, read stale   | the pre-claim column | only by a freshness tier (#1740 cause 1) |
+    /// | `deferred`              | the pre-claim column, until somebody runs `flush` | only by reading the deferral queue (#1740 cause 2) |
+    /// | `failed`                | the pre-claim column, **forever** — #510 never queues a permanent failure, because a write replayed forever is a promise nobody can keep | **no** |
+    /// | `not-on-board`          | nothing: there is no row | **no, by construction** |
+    ///
+    /// So the candidate set is not derived from the board at all. `Reads.openIssues` lists the repo's open
+    /// issues WITH their bodies in one paginated, unconditional call; the `Paths:` tokens are compared
+    /// PURELY; and a marker is read only for a row whose tokens actually collide. The column is never
+    /// consulted, so none of the four rows above can hide behind it, and the two `#1740` closed are closed
+    /// again here by a mechanism that does not depend on a cache tier or on a local queue file.
+    ///
+    /// **THE SWEEP IS THE SCHEDULER'S OWN, NOT A NEW ONE.** `Scan.snapshot` takes
+    /// `candidates = scoped.Rows` — every row, with NO column filter — reads body and markers for each OPEN
+    /// one, and then sweeps `Reads.openIssues` for *"a claim on an issue whose column flip failed (the board
+    /// says Ready, the lock says held), or on one that never reached the board at all"*. That is
+    /// `take`/`next`/`batch`, on every scheduling poll. So this reads what the scheduler already reads, on
+    /// a verb run far less often, which is what #353 was reaching for when it repo-scoped this call: a
+    /// `widen` that disagrees with `take` about who holds what is incoherent whichever way it errs.
+    ///
+    /// **THAT IS NOT THE SAME AS "THE SAME UNIVERSE", AND AN EARLIER DRAFT OF THIS COMMENT SAID IT WAS.**
+    /// Two differences survive, both listed under #266 below: `Scan.snapshot` reserves a stale-but-unreaped
+    /// marker (`reserver`, not `winner`) and it reserves a MARKERLESS `In progress` row as `RUnowned`. The
+    /// second is column-derived by construction, so a scan that never reads the column cannot reproduce it,
+    /// and no amount of care here would. Both predate this change; neither is fixed by it.
+    ///
+    /// **AND IT IS CHEAPER THAN THE COLUMN-DERIVED SCAN IT REPLACES — MEASURED, NOT ESTIMATED** (#1086 got
+    /// this same trade wrong by an order of magnitude by estimating; the first draft of `.github#1779` got
+    /// it wrong the other way, filing "~74 REST marker reads per `widen`" and declining the work over it).
+    /// Measured on the live Coordination board, 2026-07-28 — 74 open issues in `FS-GG/.github`, five rows
+    /// `In progress` — by reading the GraphQL budget either side of one `overlap .github#1688 --active`
+    /// (`budget` itself moves the counter by 0, so the whole delta is the scan):
+    ///
+    ///   | | GraphQL points, of 5,000/hr | REST calls |
+    ///   |---|---|---|
+    ///   | BEFORE — board scan + column filter | **24, 27, 31** | 1 issue body + 1 marker per `In progress` row |
+    ///   | AFTER  — `openIssues` + token filter | **0** | **2**: one issue body, one open-issue list |
+    ///
+    /// The GraphQL cost goes to **zero**: the board query, and `Board.bootstrapCached` behind it, are gone
+    /// from this path entirely. What replaces them is one REST list read whose bodies `Reads.openIssues`
+    /// states are *"free here"*, plus one marker read PER COLLIDING ROW — in the incident that produced
+    /// #1740, exactly one; on the measurement above, zero, because nothing collided. The old scan's marker
+    /// reads were per `In progress` row **whether or not its tokens could ever collide**, so on a busy
+    /// board this strictly shrinks the REST cost too.
+    ///
+    /// The upper bound is the repo's open-issue count, reached when a declaration collides with every other
+    /// one — the same number `Scan.snapshot` already pays on every poll. **It is NOT reached by a
+    /// `Paths: any` chore lock, though an earlier draft of this comment said so.** `TouchSet.parse` maps
+    /// `any` to `DeclaredChore` and `TouchSet.conflicts` answers `[]` for it in either direction (#1103 leg
+    /// 8: *"a chore reserves nothing, so it conflicts with nothing"*), so a chore lock is the CHEAPEST row
+    /// here, not the most expensive. Worth stating, because the wrong version of that sentence also implies
+    /// `widen` would report a collision against an `any` chore, and it never does.
+    ///
+    /// **WHAT THIS DOES NOT REACH, NAMED RATHER THAN GLOSSED (#266).**
+    ///
+    /// - ~~A claim on a CLOSED issue.~~ **CLOSED by `.github#2250`.** `openIssues` remains open-only, but
+    ///   `activeCollisions` now unions its token-filtered candidates with same-repo board rows that are
+    ///   CLOSED and not `Done`, then reads each such body's declared paths before it reads a matching
+    ///   marker. A closed-but-unstamped post-merge holder therefore reserves on both this gate and
+    ///   `Scan.snapshot`; `overlap --active`, `widen`, `batch`, and `take` name the same holder rather than
+    ///   disagreeing.
+    ///
+    ///   The cost is deliberate and measured: a cold gate pays the cached board universe (bootstrap's two
+    ///   resolver queries plus one board page) and one REST body read per closed, unstamped same-repo row.
+    ///   It still token-shortlists before every neighbour marker read, so it does not reintroduce the old
+    ///   per-In-progress marker sweep. `ApplicationServiceTests` and `coord-engine-e2e/writes.sh` pin both
+    ///   the cross-route result and this 3-GraphQL cold cost.
+    ///
+    ///   The old citation to `#520` stays absent: `#2225` moved that fixture from `Ready` to `Done`, which
+    ///   falsified the licence that had cited it. The replacement assertion drives one CLOSED, unstamped
+    ///   holder across BOTH production surfaces, so a future candidate-universe drift turns red.
+    /// - A marker that is **not yet visible** to a reader that just posted it. That is `.github#1668`, it
+    ///   would defeat any marker-keyed scan, and it is explicitly not absorbed here.
+    /// - A **stale-but-unreaped** claim. `winner` applies the lease, so a lapsed claim reserves nothing
+    ///   here, while `Scan.snapshot` reserves it via `reserver` (*"a lease is a clock; a lock is broken
+    ///   only by `reap`"*). So the scheduler and this gate can give opposite answers about one marker.
+    ///   That divergence predates this change and is neither introduced nor fixed by it — it is about
+    ///   which MARKERS count, where this is about which ROWS are looked at. Filed as `.github#1792`.
+    /// - A **MARKERLESS row the board calls `In progress`**. `Scan.snapshot` reserves it as `RUnowned` —
+    ///   *"something is evidently editing those files"* — and that reservation is read off the COLUMN, so
+    ///   a scan that never reads the column cannot reproduce it by construction. `take` will therefore
+    ///   refuse to schedule against a surface this gate calls DISJOINT. The old scan here did not reserve
+    ///   it either (it required a `winner`), so this is not a regression; it is the same "which markers
+    ///   count" question as the row above, and it is on `.github#1792`.
+    /// - ~~An issue whose list entry is **malformed**.~~ **CLOSED by `.github#1794`**, and it is the one
+    ///   residual on this list that was a fail-OPEN rather than a divergence. `Reads.openIssues` used to
+    ///   drop an element with no numeric `number` and read an absent/ill-typed `body` as `""` — which
+    ///   parses to `Undeclared`, a confident *"declares nothing"* about a row nobody could read. It now
+    ///   refuses the whole read for the first and returns `BodyUnread` for the second, and this scan gates
+    ///   on it below.
+    let private activeCollisions
+        (ctx: Context)
+        (opts: Options)
+        (ref: Ref)
+        (knownTargetPathRepo: string option)
+        (ts: TouchSet)
+        : Errors.IoResult<(Ref * string * string list) list> =
+        // THE REPO SCOPE IS STRUCTURAL NOW, NOT A FILTER (#353). `openIssues` is keyed on this item's own
+        // owner/repo, so a token in another repo is never even read — where the old scan pulled the whole
+        // board and filtered with `sameRepo`, one edit away from the phantom collisions #353 removed.
+        // PRs are dropped inside `openIssues` (#641), so `IsPullRequest` needs no analogue here.
+        let targetPathRepo =
+            match knownTargetPathRepo with
+            | Some pathRepo -> Ok pathRepo
+            | None ->
+                Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+                |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                |> Result.map (fun markers ->
+                    Reads.reserver opts.LeaseMinutes markers
+                    |> Option.bind (fun marker -> marker.PathRepo)
+                    // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
+                    |> pathRepoOrFallback ref.Repo)
+
+        // .github#2250 — `openIssues` is necessarily OPEN-only, but a CLOSED item is not terminal until
+        // its green Done stamp exists.  The scheduler already reads a closed-but-unstamped board row and
+        // lets its marker reserve paths during that post-merge window.  This gate must use that same
+        // candidate universe: a successful `widen` / `overlap --active` is final evidence workers act on,
+        // not an advisory that may disagree with `take`.
+        //
+        // COST, MADE EXPLICIT.  This adds the scheduler's cached Projects scan (normally one GraphQL page;
+        // the map bootstrap is day-cached) plus one REST body read per closed, unstamped row in THIS repo.
+        // It deliberately does not reinstate a per-In-progress-row marker sweep: tokens still shortlist
+        // candidates before their marker is read.  The post-merge set is normally tiny and bounded by
+        // unfinished delivery, while a false DISJOINT has no later CAS to repair it.
+        let closedUnstampedIssues =
+            Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+            |> Result.bind (fun board ->
+                Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number)
+            |> Result.bind (fun rows ->
+                rows
+                |> List.filter (fun row ->
+                    row.Ref.Owner = ref.Owner
+                    // repo-filter-monopoly: exempt — REF-to-REF identity comparison, not a `--repo` filter.
+                    && row.Ref.Repo = ref.Repo
+                    && not row.IsPullRequest
+                    && row.State = Closed
+                    && row.Status <> BoardStatus.Done)
+                |> List.fold
+                    (fun state row ->
+                        state
+                        |> Result.bind (fun issues ->
+                            Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                            |> Result.map (fun body ->
+                                ({ Number = row.Ref.Number
+                                   Body = Reads.BodyRead body }: Reads.OpenIssue)
+                                :: issues)))
+                    (Ok []))
+
+        match targetPathRepo, Reads.openIssues ctx.Transport ref.Owner ref.Repo, closedUnstampedIssues with
+        | Error e, _, _ -> Error e
+        | _, Error e, _ -> Error e
+        | _, _, Error e -> Error e
+        | Ok targetPathRepo, Ok openIssues, Ok closedIssues ->
+            // .github#2305/ADR-0044 — resolved ONCE for the whole scan, reusing the same
+            // `generatedPathCollector` seam `deliveryPathsVerified`/`updateTouchSet` already pay for (one
+            // local process invocation, no extra REST/GraphQL). A conflict pair attributable solely to a
+            // shared generated, CI-gated artifact is cleared below — see `TouchSet.excludeGenerated`'s doc
+            // for the exact-stem-only rule that keeps a directory-prefix declaration (the ADR-0044 #309
+            // parent-directory trap) colliding exactly as before.
+            let generated =
+                match KitDigest.kitRoot () with
+                | Some root -> generatedPathCollector root
+                | None -> Set.empty
+
+            // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
+            // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
+            // a row whose declaration cannot collide is discarded before anything is spent on it.
+            //
+            // Sorted by number so the collision list is deterministic. The old order was the board's row
+            // order, which is the project's, which no caller can predict — and `widen --json`'s
+            // `collisions` array is a machine contract.
+            let colliding =
+                List.append openIssues closedIssues
+                |> List.sortBy (fun i -> i.Number)
+                |> List.choose (fun issue ->
+                    if issue.Number = ref.Number then
+                        // AN ITEM NEVER COLLIDES WITH ITSELF. `widen` re-checks the touch-set it is about
+                        // to write, so without this every widen would report itself.
+                        None
+                    else
+                        let other =
+                            { Owner = ref.Owner
+                              Repo = ref.Repo
+                              Number = issue.Number }
+
+                        match issue.Body with
+                        // .github#1794 — A ROW WE COULD NOT READ SURVIVES THE FILTER. It cannot be
+                        // compared, so it cannot be CLEARED: discarding it here is the fail-open, because
+                        // the only thing downstream of this function is a `DISJOINT` nothing re-decides.
+                        // It is carried as UNDETERMINED, not as a collision — see the lock phase below for
+                        // why that distinction is what keeps the cost where #1779 measured it.
+                        | Reads.BodyUnread reason -> Some(other, Choice2Of2 reason)
+                        | Reads.BodyRead body ->
+                            // Scope is carried by the reservation marker, which is deliberately read only
+                            // after this cheap token shortlist. The unscoped comparison cannot create a
+                            // collision by itself; the marker-backed scope check below is authoritative.
+                            //
+                            // .github#2305 — a pair attributable SOLELY to a shared generated artifact is
+                            // excluded here, before the marker-backed scope check below ever runs: neither
+                            // side authors that file, so it is not a real reservation to defend.
+                            match TouchSet.conflicts ts (TouchSet.parse body) |> TouchSet.excludeGenerated generated with
+                            | [] -> None
+                            | pairs -> Some(other, Choice1Of2 pairs))
+
+            // ...THEN THE LOCK, for the survivors only. Colliding TOKENS are not a reservation: an
+            // unclaimed issue that declares the same files is work nobody is doing, and reporting it would
+            // stop a worker who has nothing to stop for. A marker read that FAILS propagates — a claim we
+            // could not check is never a silent DISJOINT (#461).
+            //
+            // IT IS `reserver`, NOT `winner` (.github#1792). This asks "who has RESERVED these files", and
+            // `Reads.fsi` already assigns that question its function: `winner` decides IDENTITY (only a live
+            // marker answers a heartbeat or loses a CAS), `reserver` decides RESERVATION. This call site read
+            // the IDENTITY function to answer the RESERVATION question, and that is the whole of the defect —
+            // one marker, two answers. Every OTHER `Reads.winner` in this file is an identity question and
+            // stays: `who` classifying Held vs Stale, `reap` refusing to touch a live claim, `adopt` refusing
+            // to call a live worker an orphan, `heartbeat` and `done` asking whether the lock is still ours.
+            // `adopt` is where "a lapsed lease is adoptable" is DELIBERATE, and it is deliberate about
+            // IDENTITY — which is why this change does not disturb it, and why both functions keep their
+            // callers rather than one being collapsed into the other.
+            //
+            // WHAT A MISS COSTS ON THIS CONSUMER (the #1740 AC4 warrant standard). This verdict is the ONLY
+            // thing standing between two workers and one file — there is no CAS on a file, so a wrong
+            // `DISJOINT` here is not retried, not detected, and not recoverable; it is discovered as two
+            // divergent edits to one tree. `winner` failed OPEN into exactly that: a lapsed lease is a MISSED
+            // HEARTBEAT far more often than a dead worker (a long build, a slow review, an item that simply
+            // outran its lease), and this scan told the next worker those files were free. Measured on
+            // 2026-07-28: `.github#1779`'s own worker had its lease lapse at 120m mid-verification and this
+            // scan returned `DISJOINT` for its own still-live work — the fail-open, observed on the engine
+            // that shipped it.
+            //
+            // `reserver` fails CLOSED instead, and the failure it can cause is BOUNDED AND ESCAPABLE: a
+            // genuinely dead claim reports `OVERLAP … held by W` until somebody collects it, and `reap` is
+            // that somebody — the protocol exit exists, it is one command, and the report NAMES the worker
+            // and the item to run it against. A lease is a clock; a lock is broken only by `reap`
+            // (#461/#581), and #581 has `reap` REFUSE a claim with an open `item/<n>-*` PR precisely because
+            // a lapsed lease is not proof the work is dead. If that reasoning is right — and it is the
+            // reasoning the SCHEDULER already runs on — it is right at both call sites, which is all this
+            // change says.
+            //
+            // ONE DIVERGENCE SURVIVES ON PURPOSE, AND IT IS NAMED HERE RATHER THAN LEFT IMPLIED
+            // (.github#1792, the `RUnowned` case). `Scan.snapshot` reserves one thing this scan does not: a
+            // board row sitting in `In progress` with NO marker at all. That reservation is COLUMN-derived,
+            // and #1779 removed the column from this path entirely — the candidate set here is
+            // `Reads.openIssues`, which carries numbers and bodies and no board state — so it is not merely
+            // unimplemented here, it is unreachable by construction. It is declined for two reasons, both
+            // about THIS consumer:
+            //
+            //   • COST. Reaching it means reading the board, which is the GraphQL half #1779 drove to ZERO
+            //     points. `overlap --active`/`widen` run in a worker's loop (#418), so paying board points
+            //     per call is the trade `.github#1666` and `.github#1086` are both about.
+            //   • NO EXIT. The two verbs need different things from a stop. `batch` passing over a candidate
+            //     costs a wait and nothing else. `widen` refusing costs a worker who cannot proceed — and a
+            //     markerless row offers them NOTHING to act on: no worker to `say` to, no marker to `reap`,
+            //     no lease to wait out. `Scan.snapshot` says this itself where it mints `RUnowned` ("no
+            //     worker to name and no lease to wait out"). A scheduler can absorb an unactionable stop by
+            //     waiting; a gate a worker is told to believe cannot, because the only remedy left is to
+            //     ignore it.
+            //
+            // So the rule, stated so it can be CHECKED rather than rediscovered: THE TWO SURFACES AGREE ON
+            // EVERY MARKER, LIVE OR LAPSED, AND DIVERGE ONLY WHERE THERE IS NO MARKER. `Scan.snapshot`'s
+            // `RUnowned` arm carries the same sentence, and the `#1792` legs in `ApplicationServiceTests`
+            // pin both halves — the divergence one so that closing it is a decision somebody makes with
+            // these two costs in front of them, rather than a patch that silently reopens the question.
+            //
+            // AND THE SAME MARKER READ SETTLES THE UNREADABLE ROWS, WHICH IS WHY THEY ARE CHEAP
+            // (.github#1794). An unreadable body is only dangerous if that row RESERVES something, and the
+            // paragraphs above are precisely the argument about what reserves. So an unreadable row asks the
+            // one question a colliding row already asks — its marker — and the answer settles it:
+            //
+            //   - no reserver → it reserves nothing whatever its body said. Skipped, provably safely, and
+            //     `widen` is NOT reddened for an anomaly on an issue nobody is holding.
+            //   - a reserver  → we cannot say whether it collides, and we may not answer DISJOINT over a
+            //     live reservation. Refuse: #266's *"I could not look"*, never *"I looked and it was
+            //     fine"*. The caller gets a `Malformed` naming the row, and `overlap --active`/`widen`/
+            //     `set-paths` exit non-zero on it.
+            //
+            // NOTE THE INTERACTION WITH `.github#1792`, WHICH IS NOT NEUTRAL AND IS ASSERTED RATHER THAN
+            // INHERITED: because this is `reserver` and not `winner`, a LAPSED claim on a row whose body
+            // could not be read now refuses too. That is the same bounded, escapable failure `reserver`
+            // takes everywhere else — `OVERLAP`/refusal until somebody `reap`s — and it is the consistent
+            // reading: if a lapsed lease still reserves, then a lapsed lease over an UNKNOWN surface
+            // reserves an unknown surface, which is exactly what may not be cleared.
+            //
+            // The cost is therefore 1 marker read per unreadable row — the same unit as a colliding row,
+            // and zero when the list reads cleanly, which is `.github#1779`'s measured steady state.
+            let rec scan acc rows =
+                match rows with
+                | [] -> Ok(List.rev acc)
+                | ((other: Ref), verdict) :: rest ->
+                    match
+                        Reads.markerScan ctx.Transport other.Owner other.Repo other.Number
+                        |> Result.bind (Reads.requireCompleteMarkerScan other.Short)
+                    with
+                    | Error e -> Error e
+                    | Ok markers ->
+                        // NO EXTRA READ. `reserver` is a pure function over the marker list already fetched
+                        // on the line above, so agreeing with the scheduler costs ZERO additional API calls —
+                        // #1779's measured cost (0 GraphQL points; REST at 1 issue-list plus 1 marker read
+                        // per colliding row) is unchanged, and that was verified either side of one
+                        // `overlap --active` call rather than estimated (#1086).
+                        match Reads.reserver opts.LeaseMinutes markers with
+                        | None -> scan acc rest
+                        | Some m ->
+                            // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
+                            let otherPathRepo = m.PathRepo |> pathRepoOrFallback other.Repo
+                            let samePathRepo =
+                                String.Equals(ref.Owner, other.Owner, StringComparison.OrdinalIgnoreCase)
+                                && String.Equals(targetPathRepo, otherPathRepo, StringComparison.OrdinalIgnoreCase)
+
+                            if not samePathRepo then
+                                scan acc rest
+                            else
+                                match verdict with
+                                | Choice1Of2 pairs -> scan ((other, m.Worker.Value, sharedTokens pairs) :: acc) rest
+                                | Choice2Of2 reason ->
+                                    Error(
+                                        Errors.Malformed(
+                                            $"%s{ref.Short}'s collision scan",
+                                            $"%s{other.Short} is held by %s{m.Worker.Value} and its touch-set could not be read (%s{reason}) — refusing to report DISJOINT over a live reservation whose surface is unknown (#1794/#266)"
+                                        )
+                                    )
+
+            scan [] colliding
+
     let claim (ctx: Context) (opts: Options) : int =
         match oneArg opts "claim: an issue ref", worker opts with
         | Error c, _
@@ -4449,324 +4814,477 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         $"  NOTE: --force ALSO STEALS a live claim — against an item another worker is holding it will DELETE their lock (#1620). On a FREE item it does nothing but lift this refusal."
                     ExitRed
                 | Ok [] ->
-                    // #481: the claim records the column it OVERWRITES, so `release` (and `reap`) can put it
-                    // back rather than guess `Ready`. The pre-claim column is knowable at exactly one instant
-                    // — before the `In progress` write below overwrites it — so it rides into the marker here.
+                    // #2459 — `claim` reaches items the scheduler's OWN overlap-avoidance never sees:
+                    // `take`/`batch` pre-filter every candidate through the #353 collision scan below
+                    // BEFORE it is ever claimed (`activeCollisions`, shared with `widen`/`overlap
+                    // --active`), but `claim` is the SAME lock without that upstream filter — which is
+                    // exactly right for the orphan/recovery paths `claim` exists to serve (see the #516
+                    // refusal two cases up, whose own sentence describes the touch-set reservation THIS
+                    // scan is what actually checks: "a claim reserves a touch-set ... and `batch` will
+                    // refuse every item that overlaps it"). What was missing is that reaching an item
+                    // this way silently gave up a check a caller had no reason to expect it lost: measured
+                    // live on 2026-08-12, two workers ended up on intersecting touch-sets with nothing
+                    // warning either of them until a merge conflict surfaced after a full review round had
+                    // already been spent (#2459).
                     //
-                    // The board is read at most ONCE: `board` is a `lazy` shared between the pre-claim column
-                    // read and the `In progress` write, so a winning claim bootstraps a single time. And the
-                    // pre-claim read is spent ONLY when we win and post: `readPreviousStatus` is the CAS's
-                    // post-path thunk, never called on a lost race or an idempotent re-claim. That is what
-                    // keeps this off the losing side of the hottest path in the org, on the budget that dies
-                    // first under fan-out (#418).
-                    let board = lazy (Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title)
+                    // So: run the SAME `activeCollisions` scan against THIS item's own declared touch-set.
+                    // Default is a WARNING that still claims — refusing by default would break the very
+                    // recovery paths `claim` exists for. `--refuse-overlap` is the explicit opt-in for a
+                    // caller that wants the scheduler's own guarantee without the scheduler; it refuses
+                    // instead, exit `ExitContended` (6) — the same code `take`/`overlap --active` already
+                    // use for a live collision, so a scripted caller reads one number either way.
+                    //
+                    // A CLAIM THAT WINS DESPITE A REPORTED COLLISION STILL EXITS GREEN (0): the lock is
+                    // real and the caller asked for exactly this item, so "claimed, and here is what you
+                    // now share with whom" is the true outcome, not a failure dressed as one — the OVERLAP
+                    // detail lives on stderr and in `--json`'s `collisions` array, never in the exit code.
+                    //
+                    // AN UNREADABLE SCAN IS NOT A COLLISION. `--refuse-overlap` cannot guarantee
+                    // disjointness over a scan it never completed, so it refuses (#523's doctrine, applied
+                    // here too). The default path cannot make that guarantee either, but its whole point is
+                    // to keep `claim` working through exactly this kind of degradation — an exhausted
+                    // budget must not silently turn every `claim` into a refusal — so it warns and proceeds.
+                    // `knownTargetPathRepo` is supplied EXPLICITLY, from the board's OWN declared Repo
+                    // Scope for `ref` (`boardPathScopes`, the same resolver `overlap`'s two-ref form and
+                    // `readPathRepo` below both use) — never left `None` to let `activeCollisions` derive
+                    // it from a live marker READ on `ref` itself. Two reasons, not one:
+                    //   1. CORRECTNESS. `ref` is, by construction, in the `Ok []` (not-already-held-by-us)
+                    //      arm — a FRESH claim has no marker of its own yet, so a marker-derived read would
+                    //      answer `None` anyway and fall back to `ref.Repo`, which `boardPathScopes` also
+                    //      does when the item is undeclared. A RENEWAL is the one case where `ref` might
+                    //      carry a `pathRepo=` on an existing marker — and the board's CURRENT Repo Scope is
+                    //      the more current answer of the two; a marker only ever recorded scope AT claim
+                    //      time (#2351's own reasoning for preferring the declared scope over a stale one).
+                    //   2. COST, MEASURABLY. A live marker read is one REST call PER CLAIM, against `ref`'s
+                    //      own `/comments` — on the hottest path in the org. `boardPathScopes` is a BOARD
+                    //      scan already cached day-to-day and (for a fresh, non-renewal claim) is the SAME
+                    //      read `readPathRepo` below performs moments later for the CAS itself — so this
+                    //      adds no new network shape, only reuses the cache sooner. Measured live: without
+                    //      this, `case24(g)`'s parity fixture (a transient re-read fault AFTER the CAS post)
+                    //      shifted onto THIS scan's marker read instead, changing which operation the fault
+                    //      landed on and breaking the withdraw-on-failed-reread assertion — a concrete
+                    //      demonstration that an extra per-item REST read here is not free.
+                    let collisionScan () =
+                        let refPathRepo =
+                            match boardPathScopes ctx with
+                            | Ok scopes -> Map.tryFind ref scopes |> pathRepoOrFallback ref.Repo
+                            | Error _ -> ref.Repo
 
-                    let readPreviousStatus () =
-                        // BEST-EFFORT. A pre-claim column we cannot read is recorded as NONE — the same as a
-                        // marker minted before #481 — and it NEVER blocks the lock: the lease matters more
-                        // than the courtesy of a restorable column, and `release` falling back to `Ready` is
-                        // the safe, pre-existing behaviour for "nothing recorded".
-                        match board.Force() with
-                        | Ok b ->
-                            match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
-                            | Ok s -> s
-                            | Error _ -> None
-                        | Error _ -> None
+                        Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number
+                        |> Result.map TouchSet.parse
+                        |> Result.bind (fun ts -> activeCollisions ctx opts ref (Some refPathRepo) ts)
 
-                    // Marker-carried scope keeps active collision checks on REST. This is best-effort
-                    // for the same reason as `prev`: failure to read a projection must not prevent the
-                    // lock, and an absent field has a conservative legacy fallback to the issue repo.
-                    let readPathRepo () =
-                        match boardPathScopes ctx with
-                        | Ok scopes -> Map.tryFind ref scopes
-                        | Error _ -> None
+                    // The courtesy notice `widen`'s own overlap refusal already sends its colliding
+                    // holders — posted ONLY on the path where this claim actually lands, because that is
+                    // the one outcome that gives the other holder something true to react to. A REFUSED
+                    // attempt (`--refuse-overlap`) changed nothing on either item, so there is nothing yet
+                    // for them to coordinate around.
+                    let notifyOverlap (collisions: (Ref * string * string list) list) : PathCollision list =
+                        [ for other, holder, toks in collisions do
+                              let msg =
+                                  $"heads up: worker '%s{w.Id}' just claimed %s{ref.Short} via `claim` (not the scheduler), which overlaps your touch-set here (%s{sharedTokenText toks}). I do not know which of us declared these paths first. This is NOT a race the scheduler is sequencing for us — `claim` skips that upstream filter (#2459) — so please coordinate directly: merge-sequence by hand (whoever lands second rebases), or one of us narrows with `set-paths`. Reply here."
 
-                    // A CLAIM IS TWO FACTS, NOT ONE: the REST marker is the lock; the Projects Status is
-                    // the user-visible ledger. A green CAS cannot prove the latter. This receipt re-reads
-                    // both AFTER the mutation and keeps every failure/lag explicit, so a worker can gate
-                    // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
-                    let emitClaimReceipt (kind: string) (held: Writes.Held) (statusOutcome, statusPreserved) =
-                        let markerObserved, markerId =
-                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
-                            | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
-                            | Ok(Writes.Holds fresh) -> false, Some fresh.MarkerId
-                            | Ok Writes.DoesNotHold
-                            // #1646. This is a READBACK, so it REPORTS rather than decides: `markerObserved
-                            // = false` is the honest receipt for a marker this process may not verify, and
-                            // `converged` then says so.
-                            //
-                            // It is not reachable from a successful claim any more, and the history is worth
-                            // keeping: while the refusal sat on `claim`'s re-claim arm alone, `claim --worker
-                            // <them>` on a FREE item won the CAS and then failed its own readback here — a
-                            // green claim whose receipt said the marker was not ours, because it was not.
-                            // `claim` refuses that argv outright now, so the two agree.
-                            | Ok(Writes.ImpersonatesHolder _)
-                            | Ok(Writes.TwinHolds _) -> false, None
+                              match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
+                              | Error e ->
+                                  eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
+
+                                  yield
+                                      { Ref = other
+                                        Worker = holder
+                                        SharedTokens = toks
+                                        Notified = false
+                                        NotifyError = Some(Errors.explain e) }
+                              | Ok() ->
+                                  eprint $"  notified worker %s{holder} on %s{other.Short}"
+
+                                  yield
+                                      { Ref = other
+                                        Worker = holder
+                                        SharedTokens = toks
+                                        Notified = true
+                                        NotifyError = None } ]
+
+                    let earlyExit, overlapCollisions =
+                        // `opts.Command` names the VERB the caller actually typed, not the function about
+                        // to run — `take`'s success path below (`match claim ctx { opts with Args = ... }
+                        // with ...`) delegates to this same `claim`, but never rewrites `Command`, so it is
+                        // still `Take` here. `adopt` and the bare `claim` dispatch are the same fact about
+                        // themselves (`opts.Command = Options.Adopt` is exactly what gates the budget-probe
+                        // skip a few lines below this one, in the existing `Writes.claimScoped` call).
+                        //
+                        // `take`/`batch` ALREADY ran their own overlap-avoidance moments before reaching
+                        // here — a candidate whose declared touch-set collides with a live claim is never
+                        // even offered (`Schedulability`) — so re-running the identical #353 scan on this,
+                        // the hottest and most budget-sensitive write path in the whole engine (#1666/
+                        // #1086; `budget`'s own spend table shows `take` as the dearest call by a wide
+                        // margin), would buy zero new information at a real, paid cost. `claim` (typed
+                        // directly) and `adopt` (transferring a STALE claim the scheduler never re-filters)
+                        // both reach items the scheduler's pre-filter never saw, which is the actual gap
+                        // #2459 is about — so both keep the scan; only `take`'s internal delegation skips it.
+                        if opts.Command = Options.Take then
+                            None, []
+                        else
+                            match collisionScan () with
+                            | Error e when opts.RefuseOverlap ->
+                                let code = failWith opts.Render e
+                                Some code, ([]: PathCollision list)
                             | Error e ->
-                                eprint $"fsgg-coord-engine: post-claim marker readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
-                                false, None
+                                eprint
+                                    $"fsgg-coord-engine: the #353 collision scan for %s{ref.Short} could not run (%s{Errors.explain e}) — claiming %s{ref.Short} anyway (best-effort; pass --refuse-overlap to require a clean scan first)."
 
-                        let status, statusRead =
+                                None, []
+                            | Ok [] -> None, []
+                            | Ok collisions ->
+                                for other, holder, toks in collisions do
+                                    let toksText = sharedTokenText toks
+                                    eprint $"OVERLAP — %s{ref.Short} would collide with %s{other.Short} (worker %s{holder})"
+                                    eprint $"  %s{toksText}"
+
+                                    eprint
+                                        "  These are TWO LIVE CLAIMS over intersecting files, not one — the scheduler is not sequencing them for you here (that protection is `take`/`batch`'s; `claim` skips it, #2459). MERGE-SEQUENCE them by hand (whoever lands second rebases); do not race them. `claim --refuse-overlap` would have refused instead of warning."
+
+                                if opts.RefuseOverlap then
+                                    eprint
+                                        $"fsgg-coord-engine: refusing to claim %s{ref.Short} (--refuse-overlap): it overlaps %d{List.length collisions} live claim(s) (see OVERLAP lines above)."
+
+                                    Some ExitContended, []
+                                else
+                                    None, notifyOverlap collisions
+
+                    match earlyExit with
+                    | Some exitCode -> exitCode
+                    | None ->
+                        // #481: the claim records the column it OVERWRITES, so `release` (and `reap`) can put it
+                        // back rather than guess `Ready`. The pre-claim column is knowable at exactly one instant
+                        // — before the `In progress` write below overwrites it — so it rides into the marker here.
+                        //
+                        // The board is read at most ONCE: `board` is a `lazy` shared between the pre-claim column
+                        // read and the `In progress` write, so a winning claim bootstraps a single time. And the
+                        // pre-claim read is spent ONLY when we win and post: `readPreviousStatus` is the CAS's
+                        // post-path thunk, never called on a lost race or an idempotent re-claim. That is what
+                        // keeps this off the losing side of the hottest path in the org, on the budget that dies
+                        // first under fan-out (#418).
+                        let board = lazy (Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title)
+
+                        let readPreviousStatus () =
+                            // BEST-EFFORT. A pre-claim column we cannot read is recorded as NONE — the same as a
+                            // marker minted before #481 — and it NEVER blocks the lock: the lease matters more
+                            // than the courtesy of a restorable column, and `release` falling back to `Ready` is
+                            // the safe, pre-existing behaviour for "nothing recorded".
                             match board.Force() with
-                            | Error e ->
-                                eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
-                                None, "failed"
                             | Ok b ->
                                 match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
-                                | Ok s -> s |> Option.map statusWireName, "observed"
+                                | Ok s -> s
+                                | Error _ -> None
+                            | Error _ -> None
+
+                        // Marker-carried scope keeps active collision checks on REST. This is best-effort
+                        // for the same reason as `prev`: failure to read a projection must not prevent the
+                        // lock, and an absent field has a conservative legacy fallback to the issue repo.
+                        let readPathRepo () =
+                            match boardPathScopes ctx with
+                            | Ok scopes -> Map.tryFind ref scopes
+                            | Error _ -> None
+
+                        // A CLAIM IS TWO FACTS, NOT ONE: the REST marker is the lock; the Projects Status is
+                        // the user-visible ledger. A green CAS cannot prove the latter. This receipt re-reads
+                        // both AFTER the mutation and keeps every failure/lag explicit, so a worker can gate
+                        // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
+                        let emitClaimReceipt (kind: string) (held: Writes.Held) (statusOutcome, statusPreserved) =
+                            let markerObserved, markerId =
+                                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
+                                | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
+                                | Ok(Writes.Holds fresh) -> false, Some fresh.MarkerId
+                                | Ok Writes.DoesNotHold
+                                // #1646. This is a READBACK, so it REPORTS rather than decides: `markerObserved
+                                // = false` is the honest receipt for a marker this process may not verify, and
+                                // `converged` then says so.
+                                //
+                                // It is not reachable from a successful claim any more, and the history is worth
+                                // keeping: while the refusal sat on `claim`'s re-claim arm alone, `claim --worker
+                                // <them>` on a FREE item won the CAS and then failed its own readback here — a
+                                // green claim whose receipt said the marker was not ours, because it was not.
+                                // `claim` refuses that argv outright now, so the two agree.
+                                | Ok(Writes.ImpersonatesHolder _)
+                                | Ok(Writes.TwinHolds _) -> false, None
+                                | Error e ->
+                                    eprint $"fsgg-coord-engine: post-claim marker readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                    false, None
+
+                            let status, statusRead =
+                                match board.Force() with
                                 | Error e ->
                                     eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
                                     None, "failed"
+                                | Ok b ->
+                                    match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
+                                    | Ok s -> s |> Option.map statusWireName, "observed"
+                                    | Error e ->
+                                        eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                        None, "failed"
 
-                        let statusWrite =
-                            if statusPreserved then
-                                "preserved"
-                            else
-                                match statusOutcome with
-                                | Ok Board.Written -> "written"
-                                | Ok Board.Deferred -> "deferred"
-                                | Ok Board.NotOnBoard -> "not-on-board"
-                                | Error _ -> "failed"
-
-                        let pending =
-                            match Cache.pending () with
-                            | Ok entries -> Some(List.length entries)
-                            | Error _ -> None
-
-                        let converged =
-                            markerObserved
-                            && (status = Some "In progress" || (kind = "renewed" && statusPreserved && status = Some "In review"))
-
-                        let receipt: ClaimReceipt =
-                            { Ref = ref
-                              Worker = w.Id
-                              Kind = kind
-                              MarkerObserved = markerObserved
-                              MarkerId = markerId
-                              // The assignee is account-level decoration, never the worker lock. This
-                              // client does not mutate it; null is the honest observation, not a success.
-                              AssigneeObserved = None
-                              Status = status
-                              StatusRead = statusRead
-                              StatusWrite = statusWrite
-                              PendingBoardWrites = pending
-                              Converged = converged }
-
-                        match opts.Render with
-                        | Json -> printfn "%s" (renderClaimReceiptJson receipt)
-                        | Text ->
-                            let humanPrefix =
-                                match kind with
-                                | "renewed" -> $"held %s{ref.Short} by worker %s{w.Id} (lease renewed;"
-                                // #1620: a steal reads as a steal on stdout too. The stderr lines above
-                                // named the displaced worker; this is the line a human skims.
-                                | "stolen" -> $"STOLE %s{ref.Short} for worker %s{w.Id} (--force; "
-                                | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
-
-                            if converged then
-                                let lifecycle = if statusPreserved then "In review preserved" else "Status=In progress"
-                                printfn "%sboard confirmed: marker=%d, %s)" humanPrefix held.MarkerId lifecycle
-                            else
-                                let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
-                                printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
-                                eprint $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
-
-                        if not statusPreserved then
-                            boardWriteNote ref "Status" "In progress" statusOutcome
-                        KitDigest.declaredWarn ctx.Transport ref
-                        ExitGreen
-
-                    // A stale marker we claimed over was COLLECTED (deleted) by the CAS, never merely
-                    // out-ordered — an ignored stale marker is what `heartbeat` resurrects underneath us,
-                    // two live markers on one item. TELL each evicted worker, on their own item, that their
-                    // expired claim was collected and the item is taken: a silent eviction is how a worker
-                    // keeps building against a lock it no longer holds.
-                    //
-                    // ONE COPY, THREE CALLERS (`Won`, `Renewed`, `Stolen`). It was two identical copies
-                    // before #1620, and adding the third is exactly when a duplicated announcement starts
-                    // drifting — this is the courtesy that stops a displaced worker corrupting an item, so
-                    // the version that gets forgotten is the one that matters.
-                    let announceCollected (collected: WorkerId list) =
-                        for evicted in collected do
-                            match opts.Render with
-                            | Json -> eprint $"collected worker '%s{evicted.Value}' expired claim"
-                            | Text -> printfn "collected worker '%s' expired claim" evicted.Value
-
-                            Writes.say
-                                ctx.Transport
-                                (WorkerId w.Id)
-                                evicted
-                                ref
-                                $"your expired claim on %s{ref.Short} was collected — worker '%s{w.Id}' has taken the item. Stop working it."
-                            |> ignore
-
-                    // Move the board column to In progress — the ONE board write, through the queue-aware
-                    // path so an exhausted budget defers rather than drops (#510).
-                    let setInProgress preserveReview () =
-                        let write b =
-                            Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
-
-                        match board.Force() with
-                        | Error e -> Error e, false
-                        | Ok b when not preserveReview ->
-                            // A fresh win/steal already owes exactly the pre-claim read plus the
-                            // post-write receipt readback.  Do not add a lifecycle probe to that hot path;
-                            // only an idempotent renewal can preserve an existing review state.
-                            write b, false
-                        | Ok b ->
-                            // A re-claim renews an existing lock; it is not a fresh start.  Moving a row
-                            // from In review back to In progress hides an active critic round, so preserve
-                            // that deliberate lifecycle state and report it distinctly in the receipt.
-                            match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
-                            | Ok(Some InReview) when preserveReview -> Ok Board.Written, true
-                            | _ ->
-                                write b, false
-
-                    let force =
-                        if opts.Force then
-                            Writes.StealLiveHolder
-                        else
-                            Writes.RefuseLiveHolder
-
-                    // #1620 — THE THEFT NOTICE, POSTED THE MOMENT THE LOCK IS DESTROYED.
-                    //
-                    // Everything here is the "loud accounting" half of the decision, and it is not optional:
-                    // a silent transfer is worse than a refusal, because the displaced worker is still
-                    // RUNNING. It matters more than the courtesy on a stale collection — an expired lease
-                    // means its holder probably stopped; a stolen live claim means it probably did not.
-                    //
-                    // The `say` is the load-bearing part. It posts a comment ON THE ITEM naming the prior
-                    // holder, the worker that took it, and (by the comment's own timestamp) when — so a
-                    // reader of the issue afterwards can see the theft, AND the displaced worker finds it in
-                    // `inbox`. Both obligations, one comment. The evicted marker is DELETED, so this comment
-                    // is the only surviving trace of the claim that was taken.
-                    //
-                    // IT RUNS FROM THE EVICTION CALLBACK, NOT FROM THE `Stolen` ARM, because a lock can be
-                    // destroyed on paths that never produce a `Stolen`: the post can fail, the re-read can
-                    // fail, a newcomer can win the open race. Best-effort — a failed comment does not
-                    // un-take the lock — but it is ATTEMPTED on every execution that deleted a live marker.
-                    let mutable displaced: WorkerId list = []
-
-                    let announceTheft (victims: WorkerId list) =
-                        displaced <- victims
-
-                        for victim in victims do
-                            match opts.Render with
-                            | Json -> eprint $"STOLE %s{ref.Short} from worker '%s{victim.Value}' (--force)"
-                            | Text -> printfn "STOLE %s from worker '%s' (--force)" ref.Short victim.Value
-
-                            Writes.say
-                                ctx.Transport
-                                (WorkerId w.Id)
-                                victim
-                                ref
-                                $"worker '%s{w.Id}' has TAKEN %s{ref.Short} from you with `claim --force` — your claim was live and its marker has been deleted. STOP working this item: you no longer hold it, `heartbeat` will refuse, and anything you push against it now races a second worker. If this was wrong, say so here."
-                            |> ignore
-
-                    match
-                        Writes.claimScoped
-                            ctx.Transport
-                            opts.LeaseMinutes
-                            force
-                            announceTheft
-                            (WorkerId w.Id)
-                            (selfOf w)
-                            session
-                            ref
-                            readPreviousStatus
-                            readPathRepo
-                            (fun () ->
-                                if opts.Command = Options.Adopt || not (usesLiveHttp ctx) then Ok()
+                            let statusWrite =
+                                if statusPreserved then
+                                    "preserved"
                                 else
-                                    match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
-                                    | null | "" -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
-                                    | token ->
-                                        let establish =
-                                            if Budget.fleetState (Budget.readRestObservations token) = Budget.Unknown then
-                                                Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number |> Result.map ignore
-                                            else Ok()
-                                        establish |> Result.bind (fun () ->
-                                            match Budget.fleetState (Budget.readRestObservations token) with
-                                            | Budget.Healthy -> Ok()
-                                            | _ -> Error(Errors.RateLimited(Errors.UnknownBudget, None))) )
-                    with
-                    | Error e -> failWith opts.Render e
-                    | Ok(Writes.Won(held, collected)) ->
-                        announceCollected collected
-                        emitClaimReceipt "claimed" held (setInProgress false ())
-                    | Ok(Writes.Stolen(held, _, collected)) ->
-                        // `announceTheft` has already run — it fired from inside the CAS, the moment the
-                        // holder's marker went. All that is left here is the receipt, which reports the
-                        // steal as a steal so a scripted caller can tell it from an ordinary win.
-                        announceCollected collected
-                        emitClaimReceipt "stolen" held (setInProgress false ())
-                    | Ok(Writes.Renewed(held, collected)) ->
-                        // A live marker already ours — the claim RENEWED it in place rather than posting a
-                        // second (a `take` retry, or a worker beating its own lease). Any stale debris it
-                        // claimed over was still collected, so tell the evicted workers exactly as a fresh
-                        // win does.
-                        announceCollected collected
-                        let outcome = setInProgress true ()
+                                    match statusOutcome with
+                                    | Ok Board.Written -> "written"
+                                    | Ok Board.Deferred -> "deferred"
+                                    | Ok Board.NotOnBoard -> "not-on-board"
+                                    | Error _ -> "failed"
 
-                        // THE SHARED-ID HAZARD, WARNED WHERE IT ACTUALLY BITES. This path bypassed the CAS —
-                        // it renewed a marker on the strength of its worker id alone — and a marker bearing
-                        // our id is not proof it is ours: rules 4/5 (#419) can hand one id to several workers.
-                        // The fresh-claim CAS never runs here, so its shared-id refusal is never reached; this
-                        // is the one place to say a same-id sibling may have just had its lock adopted.
-                        match w.Provenance with
-                        | Identity.FromSharedSession _ ->
-                            eprint
-                                $"fsgg-coord-engine: NOTE — this renewed an EXISTING marker for worker '%s{w.Id}' without running the claim CAS. If another worker shares this id, you have just adopted ITS lock."
+                            let pending =
+                                match Cache.pending () with
+                                | Ok entries -> Some(List.length entries)
+                                | Error _ -> None
 
-                            eprint
-                                $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' may not be unique to this worker. Give EACH worker its own id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
-                        | _ -> ()
+                            let converged =
+                                markerObserved
+                                && (status = Some "In progress" || (kind = "renewed" && statusPreserved && status = Some "In review"))
 
-                        emitClaimReceipt "renewed" held outcome
-                    | Ok(Writes.Lost holder) ->
-                        // TWO DIFFERENT FACTS, ONE OUTCOME (#1620). Ordinarily the holder refused us before
-                        // we posted anything. But a `--force` that EVICTED somebody and then lost the fresh
-                        // race to a worker arriving after the eviction is a different event: "wait for the
-                        // lease" is wrong advice (the lease we were waiting on is gone), and the worker we
-                        // set out to displace HAS been displaced even though we did not get the item.
+                            let receipt: ClaimReceipt =
+                                { Ref = ref
+                                  Worker = w.Id
+                                  Kind = kind
+                                  MarkerObserved = markerObserved
+                                  MarkerId = markerId
+                                  // The assignee is account-level decoration, never the worker lock. This
+                                  // client does not mutate it; null is the honest observation, not a success.
+                                  AssigneeObserved = None
+                                  Status = status
+                                  StatusRead = statusRead
+                                  StatusWrite = statusWrite
+                                  PendingBoardWrites = pending
+                                  // #2459 — every live claim this item's declared touch-set collides with,
+                                  // exactly as computed and reported above; empty when the scan found none
+                                  // (or, best-effort, when the scan itself could not run). This is purely
+                                  // informational and never affects `Converged`: the LOCK and BOARD facts
+                                  // above are the postcondition of the mutation, while this is a courtesy
+                                  // report about OTHER items that this claim, once won, does not change.
+                                  Collisions = overlapCollisions
+                                  Converged = converged }
+
+                            match opts.Render with
+                            | Json -> printfn "%s" (renderClaimReceiptJson receipt)
+                            | Text ->
+                                let humanPrefix =
+                                    match kind with
+                                    | "renewed" -> $"held %s{ref.Short} by worker %s{w.Id} (lease renewed;"
+                                    // #1620: a steal reads as a steal on stdout too. The stderr lines above
+                                    // named the displaced worker; this is the line a human skims.
+                                    | "stolen" -> $"STOLE %s{ref.Short} for worker %s{w.Id} (--force; "
+                                    | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
+
+                                if converged then
+                                    let lifecycle = if statusPreserved then "In review preserved" else "Status=In progress"
+                                    printfn "%sboard confirmed: marker=%d, %s)" humanPrefix held.MarkerId lifecycle
+                                else
+                                    let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
+                                    printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
+                                    eprint $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
+
+                                // #2459 — the human line stays a one-word summary; the detailed OVERLAP/who/
+                                // shared-tokens lines already went to stderr above, once, at scan time.
+                                if not (List.isEmpty overlapCollisions) then
+                                    eprint
+                                        $"fsgg-coord-engine: NOTE — this claim overlaps %d{List.length overlapCollisions} live claim(s); see OVERLAP lines above (or `overlap %s{ref.Short} --active`)."
+
+                            if not statusPreserved then
+                                boardWriteNote ref "Status" "In progress" statusOutcome
+                            KitDigest.declaredWarn ctx.Transport ref
+                            ExitGreen
+
+                        // A stale marker we claimed over was COLLECTED (deleted) by the CAS, never merely
+                        // out-ordered — an ignored stale marker is what `heartbeat` resurrects underneath us,
+                        // two live markers on one item. TELL each evicted worker, on their own item, that their
+                        // expired claim was collected and the item is taken: a silent eviction is how a worker
+                        // keeps building against a lock it no longer holds.
                         //
-                        // IT KEYS ON `displaced`, NOT ON `opts.Force`, and the difference is reachable:
-                        // `--force` against an item that turns out to be FREE evicts nobody and then loses
-                        // an ordinary race to a concurrent claimant. Keying on the flag would report a
-                        // displacement that never happened — and "you displaced someone" is not a sentence
-                        // to print on a guess.
-                        if not (List.isEmpty displaced) then
+                        // ONE COPY, THREE CALLERS (`Won`, `Renewed`, `Stolen`). It was two identical copies
+                        // before #1620, and adding the third is exactly when a duplicated announcement starts
+                        // drifting — this is the courtesy that stops a displaced worker corrupting an item, so
+                        // the version that gets forgotten is the one that matters.
+                        let announceCollected (collected: WorkerId list) =
+                            for evicted in collected do
+                                match opts.Render with
+                                | Json -> eprint $"collected worker '%s{evicted.Value}' expired claim"
+                                | Text -> printfn "collected worker '%s' expired claim" evicted.Value
+
+                                Writes.say
+                                    ctx.Transport
+                                    (WorkerId w.Id)
+                                    evicted
+                                    ref
+                                    $"your expired claim on %s{ref.Short} was collected — worker '%s{w.Id}' has taken the item. Stop working it."
+                                |> ignore
+
+                        // Move the board column to In progress — the ONE board write, through the queue-aware
+                        // path so an exhausted budget defers rather than drops (#510).
+                        let setInProgress preserveReview () =
+                            let write b =
+                                Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+
+                            match board.Force() with
+                            | Error e -> Error e, false
+                            | Ok b when not preserveReview ->
+                                // A fresh win/steal already owes exactly the pre-claim read plus the
+                                // post-write receipt readback.  Do not add a lifecycle probe to that hot path;
+                                // only an idempotent renewal can preserve an existing review state.
+                                write b, false
+                            | Ok b ->
+                                // A re-claim renews an existing lock; it is not a fresh start.  Moving a row
+                                // from In review back to In progress hides an active critic round, so preserve
+                                // that deliberate lifecycle state and report it distinctly in the receipt.
+                                match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
+                                | Ok(Some InReview) when preserveReview -> Ok Board.Written, true
+                                | _ ->
+                                    write b, false
+
+                        let force =
+                            if opts.Force then
+                                Writes.StealLiveHolder
+                            else
+                                Writes.RefuseLiveHolder
+
+                        // #1620 — THE THEFT NOTICE, POSTED THE MOMENT THE LOCK IS DESTROYED.
+                        //
+                        // Everything here is the "loud accounting" half of the decision, and it is not optional:
+                        // a silent transfer is worse than a refusal, because the displaced worker is still
+                        // RUNNING. It matters more than the courtesy on a stale collection — an expired lease
+                        // means its holder probably stopped; a stolen live claim means it probably did not.
+                        //
+                        // The `say` is the load-bearing part. It posts a comment ON THE ITEM naming the prior
+                        // holder, the worker that took it, and (by the comment's own timestamp) when — so a
+                        // reader of the issue afterwards can see the theft, AND the displaced worker finds it in
+                        // `inbox`. Both obligations, one comment. The evicted marker is DELETED, so this comment
+                        // is the only surviving trace of the claim that was taken.
+                        //
+                        // IT RUNS FROM THE EVICTION CALLBACK, NOT FROM THE `Stolen` ARM, because a lock can be
+                        // destroyed on paths that never produce a `Stolen`: the post can fail, the re-read can
+                        // fail, a newcomer can win the open race. Best-effort — a failed comment does not
+                        // un-take the lock — but it is ATTEMPTED on every execution that deleted a live marker.
+                        let mutable displaced: WorkerId list = []
+
+                        let announceTheft (victims: WorkerId list) =
+                            displaced <- victims
+
+                            for victim in victims do
+                                match opts.Render with
+                                | Json -> eprint $"STOLE %s{ref.Short} from worker '%s{victim.Value}' (--force)"
+                                | Text -> printfn "STOLE %s from worker '%s' (--force)" ref.Short victim.Value
+
+                                Writes.say
+                                    ctx.Transport
+                                    (WorkerId w.Id)
+                                    victim
+                                    ref
+                                    $"worker '%s{w.Id}' has TAKEN %s{ref.Short} from you with `claim --force` — your claim was live and its marker has been deleted. STOP working this item: you no longer hold it, `heartbeat` will refuse, and anything you push against it now races a second worker. If this was wrong, say so here."
+                                |> ignore
+
+                        match
+                            Writes.claimScoped
+                                ctx.Transport
+                                opts.LeaseMinutes
+                                force
+                                announceTheft
+                                (WorkerId w.Id)
+                                (selfOf w)
+                                session
+                                ref
+                                readPreviousStatus
+                                readPathRepo
+                                (fun () ->
+                                    if opts.Command = Options.Adopt || not (usesLiveHttp ctx) then Ok()
+                                    else
+                                        match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
+                                        | null | "" -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
+                                        | token ->
+                                            let establish =
+                                                if Budget.fleetState (Budget.readRestObservations token) = Budget.Unknown then
+                                                    Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number |> Result.map ignore
+                                                else Ok()
+                                            establish |> Result.bind (fun () ->
+                                                match Budget.fleetState (Budget.readRestObservations token) with
+                                                | Budget.Healthy -> Ok()
+                                                | _ -> Error(Errors.RateLimited(Errors.UnknownBudget, None))) )
+                        with
+                        | Error e -> failWith opts.Render e
+                        | Ok(Writes.Won(held, collected)) ->
+                            announceCollected collected
+                            emitClaimReceipt "claimed" held (setInProgress false ())
+                        | Ok(Writes.Stolen(held, _, collected)) ->
+                            // `announceTheft` has already run — it fired from inside the CAS, the moment the
+                            // holder's marker went. All that is left here is the receipt, which reports the
+                            // steal as a steal so a scripted caller can tell it from an ordinary win.
+                            announceCollected collected
+                            emitClaimReceipt "stolen" held (setInProgress false ())
+                        | Ok(Writes.Renewed(held, collected)) ->
+                            // A live marker already ours — the claim RENEWED it in place rather than posting a
+                            // second (a `take` retry, or a worker beating its own lease). Any stale debris it
+                            // claimed over was still collected, so tell the evicted workers exactly as a fresh
+                            // win does.
+                            announceCollected collected
+                            let outcome = setInProgress true ()
+
+                            // THE SHARED-ID HAZARD, WARNED WHERE IT ACTUALLY BITES. This path bypassed the CAS —
+                            // it renewed a marker on the strength of its worker id alone — and a marker bearing
+                            // our id is not proof it is ours: rules 4/5 (#419) can hand one id to several workers.
+                            // The fresh-claim CAS never runs here, so its shared-id refusal is never reached; this
+                            // is the one place to say a same-id sibling may have just had its lock adopted.
+                            match w.Provenance with
+                            | Identity.FromSharedSession _ ->
+                                eprint
+                                    $"fsgg-coord-engine: NOTE — this renewed an EXISTING marker for worker '%s{w.Id}' without running the claim CAS. If another worker shares this id, you have just adopted ITS lock."
+
+                                eprint
+                                    $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' may not be unique to this worker. Give EACH worker its own id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+                            | _ -> ()
+
+                            emitClaimReceipt "renewed" held outcome
+                        | Ok(Writes.Lost holder) ->
+                            // TWO DIFFERENT FACTS, ONE OUTCOME (#1620). Ordinarily the holder refused us before
+                            // we posted anything. But a `--force` that EVICTED somebody and then lost the fresh
+                            // race to a worker arriving after the eviction is a different event: "wait for the
+                            // lease" is wrong advice (the lease we were waiting on is gone), and the worker we
+                            // set out to displace HAS been displaced even though we did not get the item.
+                            //
+                            // IT KEYS ON `displaced`, NOT ON `opts.Force`, and the difference is reachable:
+                            // `--force` against an item that turns out to be FREE evicts nobody and then loses
+                            // an ordinary race to a concurrent claimant. Keying on the flag would report a
+                            // displacement that never happened — and "you displaced someone" is not a sentence
+                            // to print on a guess.
+                            if not (List.isEmpty displaced) then
+                                eprint
+                                    $"fsgg-coord-engine: %s{ref.Short} was CLEARED by --force, and then %s{holder.Value} won the open race for it — the steal displaced the previous holder but did NOT give you the item."
+
+                                eprint "  Retry to race for it, or leave it: a fresh holder is a working worker, not the dead one you came to recover."
+                            else
+                                eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
+
+                            ExitRed
+                        | Ok(Writes.Twin theirs) ->
+                            // #419: the marker is ours by id but a DIFFERENT session — two workers share one id.
+                            // This is a broken IDENTITY, not a contested item, and the fix for a broken identity
+                            // is a NEW identity, so `--force` (which steals contested items) must NOT override it:
+                            // forcing here would delete a lock our twin is working behind. The remedy is a command,
+                            // not a literal — an id an agent copies is an id agents collide on.
                             eprint
-                                $"fsgg-coord-engine: %s{ref.Short} was CLEARED by --force, and then %s{holder.Value} won the open race for it — the steal displaced the previous holder but did NOT give you the item."
+                                $"fsgg-coord-engine: %s{ref.Short} carries a live marker with YOUR worker id '%s{w.Id}' but a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). Adopting it would put both of you on this item, which is the double-claim ADR-0027 exists to prevent."
 
-                            eprint "  Retry to race for it, or leave it: a fresh holder is a working worker, not the dead one you came to recover."
-                        else
-                            eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
-
-                        ExitRed
-                    | Ok(Writes.Twin theirs) ->
-                        // #419: the marker is ours by id but a DIFFERENT session — two workers share one id.
-                        // This is a broken IDENTITY, not a contested item, and the fix for a broken identity
-                        // is a NEW identity, so `--force` (which steals contested items) must NOT override it:
-                        // forcing here would delete a lock our twin is working behind. The remedy is a command,
-                        // not a literal — an id an agent copies is an id agents collide on.
-                        eprint
-                            $"fsgg-coord-engine: %s{ref.Short} carries a live marker with YOUR worker id '%s{w.Id}' but a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). Adopting it would put both of you on this item, which is the double-claim ADR-0027 exists to prevent."
-
-                        eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
-                        ExitRed
-                    | Ok(Writes.Impersonates(derived, named)) ->
-                        // #1646: `claim` is `Held`'s OTHER door, and the re-claim arm walks through it on the
-                        // id alone. Under one harness session the `Twin` arm above cannot catch this — the
-                        // impersonator's session IS the holder's — so `claim --worker <them>` renewed a live
-                        // holder's lease and reported the item held. Same refusal as the other four verbs.
-                        impersonationRefusal "claim" ref derived named
-                    | Ok(Writes.Undecided reason) ->
-                        eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
-                        ExitRed
-                    | Ok Writes.BlockedByUnparseableMarker ->
-                        eprint $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
-                        ExitRed
+                            eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+                            ExitRed
+                        | Ok(Writes.Impersonates(derived, named)) ->
+                            // #1646: `claim` is `Held`'s OTHER door, and the re-claim arm walks through it on the
+                            // id alone. Under one harness session the `Twin` arm above cannot catch this — the
+                            // impersonator's session IS the holder's — so `claim --worker <them>` renewed a live
+                            // holder's lease and reported the item held. Same refusal as the other four verbs.
+                            impersonationRefusal "claim" ref derived named
+                        | Ok(Writes.Undecided reason) ->
+                            eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
+                            ExitRed
+                        | Ok Writes.BlockedByUnparseableMarker ->
+                            eprint $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
+                            ExitRed
 
     /// #697 — take over an ORPHAN (a stale claim whose PR is FINISHED) and land it.
     ///
@@ -5986,371 +6504,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | _ ->
             eprint "fsgg-coord-engine: child takes <parent-ref> <child-ref>."
             ExitError
-
-    // #353 — two refs name the same repo. `Paths:` tokens are repo-relative, so a touch-set comparison
-    // is only meaningful within a repo; both `overlap` and `widen`'s re-check narrow the live set to this.
-    let private sameRepo (a: Ref) (b: Ref) =
-        String.Equals(a.Owner, b.Owner, StringComparison.OrdinalIgnoreCase)
-        && String.Equals(a.Repo, b.Repo, StringComparison.OrdinalIgnoreCase)
-
-    // The tokens a collision is named IN — the stem (`src/Scene/**` and `src/Scene` are one subtree, so
-    // the raw suffix beside a reservation that has none reads as two different things), deduped.
-    //
-    // #1517 — this returns the LIST and the human sites join it, rather than returning the joined string
-    // and leaving a machine consumer to split it back apart. `widen --json` emits these stems, and a
-    // comma-joined string beside a sibling `paths` ARRAY in the same object is a shape formatted for the
-    // stderr line it used to have only one caller for.
-    let private sharedTokens (pairs: (string * string) list) : string list =
-        pairs
-        |> List.collect (fun (a, b) -> [ TouchSet.stem a; TouchSet.stem b ])
-        |> List.distinct
-
-    let private sharedTokenText (tokens: string list) = String.Join(", ", tokens)
-
-    /// The #353 collision scan, shared by `overlap --active` and `widen`'s re-check: given an item's ref
-    /// and touch-set, every LIVE claim in the SAME repo whose touch-set collides with it, named with its
-    /// holder and the shared token stems. The repo scope IS the fix — a same-named repo-relative token in
-    /// another repo names a different file, so it is never a collision and its holder is never named. A
-    /// claim we could not read propagates as an Error: a claim we could not check is never a silent DISJOINT.
-    ///
-    /// ---- THE CANDIDATE SET IS KEYED ON THE **LOCK**, NEVER ON A PROJECTION OF IT (.github#1779) --------
-    ///
-    /// A touch-set reservation is carried by a CLAIM MARKER — a comment, posted by `claim`'s CAS. The
-    /// board's `Status` column is a PROJECTION of that marker, written afterwards, over a different
-    /// transport, on a different budget. Every way those two can disagree is a way this scan can print
-    /// `DISJOINT` over a live reservation, and **there is no CAS on a file**: nothing downstream re-decides
-    /// a false `DISJOINT`, nothing detects it, and the cost is two workers editing one file for as long as
-    /// they both work. `heldElsewhere`'s warrant — *"staleness costs a retry, not a double-claim"* — is
-    /// about the ITEM CAS and does not reach this consumer; #1740 is what borrowing it cost.
-    ///
-    /// `claim`'s own receipt enumerates the disagreements, and it exits GREEN on all four —
-    /// `converged:false` is a report, not a refusal. A column-derived candidate set misses the last three:
-    ///
-    /// | `statusWrite` | the column says | closed by a column-derived scan? |
-    /// |---|---|---|
-    /// | `written`, read fresh   | `In progress`     | yes |
-    /// | `written`, read stale   | the pre-claim column | only by a freshness tier (#1740 cause 1) |
-    /// | `deferred`              | the pre-claim column, until somebody runs `flush` | only by reading the deferral queue (#1740 cause 2) |
-    /// | `failed`                | the pre-claim column, **forever** — #510 never queues a permanent failure, because a write replayed forever is a promise nobody can keep | **no** |
-    /// | `not-on-board`          | nothing: there is no row | **no, by construction** |
-    ///
-    /// So the candidate set is not derived from the board at all. `Reads.openIssues` lists the repo's open
-    /// issues WITH their bodies in one paginated, unconditional call; the `Paths:` tokens are compared
-    /// PURELY; and a marker is read only for a row whose tokens actually collide. The column is never
-    /// consulted, so none of the four rows above can hide behind it, and the two `#1740` closed are closed
-    /// again here by a mechanism that does not depend on a cache tier or on a local queue file.
-    ///
-    /// **THE SWEEP IS THE SCHEDULER'S OWN, NOT A NEW ONE.** `Scan.snapshot` takes
-    /// `candidates = scoped.Rows` — every row, with NO column filter — reads body and markers for each OPEN
-    /// one, and then sweeps `Reads.openIssues` for *"a claim on an issue whose column flip failed (the board
-    /// says Ready, the lock says held), or on one that never reached the board at all"*. That is
-    /// `take`/`next`/`batch`, on every scheduling poll. So this reads what the scheduler already reads, on
-    /// a verb run far less often, which is what #353 was reaching for when it repo-scoped this call: a
-    /// `widen` that disagrees with `take` about who holds what is incoherent whichever way it errs.
-    ///
-    /// **THAT IS NOT THE SAME AS "THE SAME UNIVERSE", AND AN EARLIER DRAFT OF THIS COMMENT SAID IT WAS.**
-    /// Two differences survive, both listed under #266 below: `Scan.snapshot` reserves a stale-but-unreaped
-    /// marker (`reserver`, not `winner`) and it reserves a MARKERLESS `In progress` row as `RUnowned`. The
-    /// second is column-derived by construction, so a scan that never reads the column cannot reproduce it,
-    /// and no amount of care here would. Both predate this change; neither is fixed by it.
-    ///
-    /// **AND IT IS CHEAPER THAN THE COLUMN-DERIVED SCAN IT REPLACES — MEASURED, NOT ESTIMATED** (#1086 got
-    /// this same trade wrong by an order of magnitude by estimating; the first draft of `.github#1779` got
-    /// it wrong the other way, filing "~74 REST marker reads per `widen`" and declining the work over it).
-    /// Measured on the live Coordination board, 2026-07-28 — 74 open issues in `FS-GG/.github`, five rows
-    /// `In progress` — by reading the GraphQL budget either side of one `overlap .github#1688 --active`
-    /// (`budget` itself moves the counter by 0, so the whole delta is the scan):
-    ///
-    ///   | | GraphQL points, of 5,000/hr | REST calls |
-    ///   |---|---|---|
-    ///   | BEFORE — board scan + column filter | **24, 27, 31** | 1 issue body + 1 marker per `In progress` row |
-    ///   | AFTER  — `openIssues` + token filter | **0** | **2**: one issue body, one open-issue list |
-    ///
-    /// The GraphQL cost goes to **zero**: the board query, and `Board.bootstrapCached` behind it, are gone
-    /// from this path entirely. What replaces them is one REST list read whose bodies `Reads.openIssues`
-    /// states are *"free here"*, plus one marker read PER COLLIDING ROW — in the incident that produced
-    /// #1740, exactly one; on the measurement above, zero, because nothing collided. The old scan's marker
-    /// reads were per `In progress` row **whether or not its tokens could ever collide**, so on a busy
-    /// board this strictly shrinks the REST cost too.
-    ///
-    /// The upper bound is the repo's open-issue count, reached when a declaration collides with every other
-    /// one — the same number `Scan.snapshot` already pays on every poll. **It is NOT reached by a
-    /// `Paths: any` chore lock, though an earlier draft of this comment said so.** `TouchSet.parse` maps
-    /// `any` to `DeclaredChore` and `TouchSet.conflicts` answers `[]` for it in either direction (#1103 leg
-    /// 8: *"a chore reserves nothing, so it conflicts with nothing"*), so a chore lock is the CHEAPEST row
-    /// here, not the most expensive. Worth stating, because the wrong version of that sentence also implies
-    /// `widen` would report a collision against an `any` chore, and it never does.
-    ///
-    /// **WHAT THIS DOES NOT REACH, NAMED RATHER THAN GLOSSED (#266).**
-    ///
-    /// - ~~A claim on a CLOSED issue.~~ **CLOSED by `.github#2250`.** `openIssues` remains open-only, but
-    ///   `activeCollisions` now unions its token-filtered candidates with same-repo board rows that are
-    ///   CLOSED and not `Done`, then reads each such body's declared paths before it reads a matching
-    ///   marker. A closed-but-unstamped post-merge holder therefore reserves on both this gate and
-    ///   `Scan.snapshot`; `overlap --active`, `widen`, `batch`, and `take` name the same holder rather than
-    ///   disagreeing.
-    ///
-    ///   The cost is deliberate and measured: a cold gate pays the cached board universe (bootstrap's two
-    ///   resolver queries plus one board page) and one REST body read per closed, unstamped same-repo row.
-    ///   It still token-shortlists before every neighbour marker read, so it does not reintroduce the old
-    ///   per-In-progress marker sweep. `ApplicationServiceTests` and `coord-engine-e2e/writes.sh` pin both
-    ///   the cross-route result and this 3-GraphQL cold cost.
-    ///
-    ///   The old citation to `#520` stays absent: `#2225` moved that fixture from `Ready` to `Done`, which
-    ///   falsified the licence that had cited it. The replacement assertion drives one CLOSED, unstamped
-    ///   holder across BOTH production surfaces, so a future candidate-universe drift turns red.
-    /// - A marker that is **not yet visible** to a reader that just posted it. That is `.github#1668`, it
-    ///   would defeat any marker-keyed scan, and it is explicitly not absorbed here.
-    /// - A **stale-but-unreaped** claim. `winner` applies the lease, so a lapsed claim reserves nothing
-    ///   here, while `Scan.snapshot` reserves it via `reserver` (*"a lease is a clock; a lock is broken
-    ///   only by `reap`"*). So the scheduler and this gate can give opposite answers about one marker.
-    ///   That divergence predates this change and is neither introduced nor fixed by it — it is about
-    ///   which MARKERS count, where this is about which ROWS are looked at. Filed as `.github#1792`.
-    /// - A **MARKERLESS row the board calls `In progress`**. `Scan.snapshot` reserves it as `RUnowned` —
-    ///   *"something is evidently editing those files"* — and that reservation is read off the COLUMN, so
-    ///   a scan that never reads the column cannot reproduce it by construction. `take` will therefore
-    ///   refuse to schedule against a surface this gate calls DISJOINT. The old scan here did not reserve
-    ///   it either (it required a `winner`), so this is not a regression; it is the same "which markers
-    ///   count" question as the row above, and it is on `.github#1792`.
-    /// - ~~An issue whose list entry is **malformed**.~~ **CLOSED by `.github#1794`**, and it is the one
-    ///   residual on this list that was a fail-OPEN rather than a divergence. `Reads.openIssues` used to
-    ///   drop an element with no numeric `number` and read an absent/ill-typed `body` as `""` — which
-    ///   parses to `Undeclared`, a confident *"declares nothing"* about a row nobody could read. It now
-    ///   refuses the whole read for the first and returns `BodyUnread` for the second, and this scan gates
-    ///   on it below.
-    let private activeCollisions
-        (ctx: Context)
-        (opts: Options)
-        (ref: Ref)
-        (knownTargetPathRepo: string option)
-        (ts: TouchSet)
-        : Errors.IoResult<(Ref * string * string list) list> =
-        // THE REPO SCOPE IS STRUCTURAL NOW, NOT A FILTER (#353). `openIssues` is keyed on this item's own
-        // owner/repo, so a token in another repo is never even read — where the old scan pulled the whole
-        // board and filtered with `sameRepo`, one edit away from the phantom collisions #353 removed.
-        // PRs are dropped inside `openIssues` (#641), so `IsPullRequest` needs no analogue here.
-        let targetPathRepo =
-            match knownTargetPathRepo with
-            | Some pathRepo -> Ok pathRepo
-            | None ->
-                Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
-                |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
-                |> Result.map (fun markers ->
-                    Reads.reserver opts.LeaseMinutes markers
-                    |> Option.bind (fun marker -> marker.PathRepo)
-                    // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
-                    |> pathRepoOrFallback ref.Repo)
-
-        // .github#2250 — `openIssues` is necessarily OPEN-only, but a CLOSED item is not terminal until
-        // its green Done stamp exists.  The scheduler already reads a closed-but-unstamped board row and
-        // lets its marker reserve paths during that post-merge window.  This gate must use that same
-        // candidate universe: a successful `widen` / `overlap --active` is final evidence workers act on,
-        // not an advisory that may disagree with `take`.
-        //
-        // COST, MADE EXPLICIT.  This adds the scheduler's cached Projects scan (normally one GraphQL page;
-        // the map bootstrap is day-cached) plus one REST body read per closed, unstamped row in THIS repo.
-        // It deliberately does not reinstate a per-In-progress-row marker sweep: tokens still shortlist
-        // candidates before their marker is read.  The post-merge set is normally tiny and bounded by
-        // unfinished delivery, while a false DISJOINT has no later CAS to repair it.
-        let closedUnstampedIssues =
-            Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
-            |> Result.bind (fun board ->
-                Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number)
-            |> Result.bind (fun rows ->
-                rows
-                |> List.filter (fun row ->
-                    row.Ref.Owner = ref.Owner
-                    // repo-filter-monopoly: exempt — REF-to-REF identity comparison, not a `--repo` filter.
-                    && row.Ref.Repo = ref.Repo
-                    && not row.IsPullRequest
-                    && row.State = Closed
-                    && row.Status <> BoardStatus.Done)
-                |> List.fold
-                    (fun state row ->
-                        state
-                        |> Result.bind (fun issues ->
-                            Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number
-                            |> Result.map (fun body ->
-                                ({ Number = row.Ref.Number
-                                   Body = Reads.BodyRead body }: Reads.OpenIssue)
-                                :: issues)))
-                    (Ok []))
-
-        match targetPathRepo, Reads.openIssues ctx.Transport ref.Owner ref.Repo, closedUnstampedIssues with
-        | Error e, _, _ -> Error e
-        | _, Error e, _ -> Error e
-        | _, _, Error e -> Error e
-        | Ok targetPathRepo, Ok openIssues, Ok closedIssues ->
-            // .github#2305/ADR-0044 — resolved ONCE for the whole scan, reusing the same
-            // `generatedPathCollector` seam `deliveryPathsVerified`/`updateTouchSet` already pay for (one
-            // local process invocation, no extra REST/GraphQL). A conflict pair attributable solely to a
-            // shared generated, CI-gated artifact is cleared below — see `TouchSet.excludeGenerated`'s doc
-            // for the exact-stem-only rule that keeps a directory-prefix declaration (the ADR-0044 #309
-            // parent-directory trap) colliding exactly as before.
-            let generated =
-                match KitDigest.kitRoot () with
-                | Some root -> generatedPathCollector root
-                | None -> Set.empty
-
-            // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
-            // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
-            // a row whose declaration cannot collide is discarded before anything is spent on it.
-            //
-            // Sorted by number so the collision list is deterministic. The old order was the board's row
-            // order, which is the project's, which no caller can predict — and `widen --json`'s
-            // `collisions` array is a machine contract.
-            let colliding =
-                List.append openIssues closedIssues
-                |> List.sortBy (fun i -> i.Number)
-                |> List.choose (fun issue ->
-                    if issue.Number = ref.Number then
-                        // AN ITEM NEVER COLLIDES WITH ITSELF. `widen` re-checks the touch-set it is about
-                        // to write, so without this every widen would report itself.
-                        None
-                    else
-                        let other =
-                            { Owner = ref.Owner
-                              Repo = ref.Repo
-                              Number = issue.Number }
-
-                        match issue.Body with
-                        // .github#1794 — A ROW WE COULD NOT READ SURVIVES THE FILTER. It cannot be
-                        // compared, so it cannot be CLEARED: discarding it here is the fail-open, because
-                        // the only thing downstream of this function is a `DISJOINT` nothing re-decides.
-                        // It is carried as UNDETERMINED, not as a collision — see the lock phase below for
-                        // why that distinction is what keeps the cost where #1779 measured it.
-                        | Reads.BodyUnread reason -> Some(other, Choice2Of2 reason)
-                        | Reads.BodyRead body ->
-                            // Scope is carried by the reservation marker, which is deliberately read only
-                            // after this cheap token shortlist. The unscoped comparison cannot create a
-                            // collision by itself; the marker-backed scope check below is authoritative.
-                            //
-                            // .github#2305 — a pair attributable SOLELY to a shared generated artifact is
-                            // excluded here, before the marker-backed scope check below ever runs: neither
-                            // side authors that file, so it is not a real reservation to defend.
-                            match TouchSet.conflicts ts (TouchSet.parse body) |> TouchSet.excludeGenerated generated with
-                            | [] -> None
-                            | pairs -> Some(other, Choice1Of2 pairs))
-
-            // ...THEN THE LOCK, for the survivors only. Colliding TOKENS are not a reservation: an
-            // unclaimed issue that declares the same files is work nobody is doing, and reporting it would
-            // stop a worker who has nothing to stop for. A marker read that FAILS propagates — a claim we
-            // could not check is never a silent DISJOINT (#461).
-            //
-            // IT IS `reserver`, NOT `winner` (.github#1792). This asks "who has RESERVED these files", and
-            // `Reads.fsi` already assigns that question its function: `winner` decides IDENTITY (only a live
-            // marker answers a heartbeat or loses a CAS), `reserver` decides RESERVATION. This call site read
-            // the IDENTITY function to answer the RESERVATION question, and that is the whole of the defect —
-            // one marker, two answers. Every OTHER `Reads.winner` in this file is an identity question and
-            // stays: `who` classifying Held vs Stale, `reap` refusing to touch a live claim, `adopt` refusing
-            // to call a live worker an orphan, `heartbeat` and `done` asking whether the lock is still ours.
-            // `adopt` is where "a lapsed lease is adoptable" is DELIBERATE, and it is deliberate about
-            // IDENTITY — which is why this change does not disturb it, and why both functions keep their
-            // callers rather than one being collapsed into the other.
-            //
-            // WHAT A MISS COSTS ON THIS CONSUMER (the #1740 AC4 warrant standard). This verdict is the ONLY
-            // thing standing between two workers and one file — there is no CAS on a file, so a wrong
-            // `DISJOINT` here is not retried, not detected, and not recoverable; it is discovered as two
-            // divergent edits to one tree. `winner` failed OPEN into exactly that: a lapsed lease is a MISSED
-            // HEARTBEAT far more often than a dead worker (a long build, a slow review, an item that simply
-            // outran its lease), and this scan told the next worker those files were free. Measured on
-            // 2026-07-28: `.github#1779`'s own worker had its lease lapse at 120m mid-verification and this
-            // scan returned `DISJOINT` for its own still-live work — the fail-open, observed on the engine
-            // that shipped it.
-            //
-            // `reserver` fails CLOSED instead, and the failure it can cause is BOUNDED AND ESCAPABLE: a
-            // genuinely dead claim reports `OVERLAP … held by W` until somebody collects it, and `reap` is
-            // that somebody — the protocol exit exists, it is one command, and the report NAMES the worker
-            // and the item to run it against. A lease is a clock; a lock is broken only by `reap`
-            // (#461/#581), and #581 has `reap` REFUSE a claim with an open `item/<n>-*` PR precisely because
-            // a lapsed lease is not proof the work is dead. If that reasoning is right — and it is the
-            // reasoning the SCHEDULER already runs on — it is right at both call sites, which is all this
-            // change says.
-            //
-            // ONE DIVERGENCE SURVIVES ON PURPOSE, AND IT IS NAMED HERE RATHER THAN LEFT IMPLIED
-            // (.github#1792, the `RUnowned` case). `Scan.snapshot` reserves one thing this scan does not: a
-            // board row sitting in `In progress` with NO marker at all. That reservation is COLUMN-derived,
-            // and #1779 removed the column from this path entirely — the candidate set here is
-            // `Reads.openIssues`, which carries numbers and bodies and no board state — so it is not merely
-            // unimplemented here, it is unreachable by construction. It is declined for two reasons, both
-            // about THIS consumer:
-            //
-            //   • COST. Reaching it means reading the board, which is the GraphQL half #1779 drove to ZERO
-            //     points. `overlap --active`/`widen` run in a worker's loop (#418), so paying board points
-            //     per call is the trade `.github#1666` and `.github#1086` are both about.
-            //   • NO EXIT. The two verbs need different things from a stop. `batch` passing over a candidate
-            //     costs a wait and nothing else. `widen` refusing costs a worker who cannot proceed — and a
-            //     markerless row offers them NOTHING to act on: no worker to `say` to, no marker to `reap`,
-            //     no lease to wait out. `Scan.snapshot` says this itself where it mints `RUnowned` ("no
-            //     worker to name and no lease to wait out"). A scheduler can absorb an unactionable stop by
-            //     waiting; a gate a worker is told to believe cannot, because the only remedy left is to
-            //     ignore it.
-            //
-            // So the rule, stated so it can be CHECKED rather than rediscovered: THE TWO SURFACES AGREE ON
-            // EVERY MARKER, LIVE OR LAPSED, AND DIVERGE ONLY WHERE THERE IS NO MARKER. `Scan.snapshot`'s
-            // `RUnowned` arm carries the same sentence, and the `#1792` legs in `ApplicationServiceTests`
-            // pin both halves — the divergence one so that closing it is a decision somebody makes with
-            // these two costs in front of them, rather than a patch that silently reopens the question.
-            //
-            // AND THE SAME MARKER READ SETTLES THE UNREADABLE ROWS, WHICH IS WHY THEY ARE CHEAP
-            // (.github#1794). An unreadable body is only dangerous if that row RESERVES something, and the
-            // paragraphs above are precisely the argument about what reserves. So an unreadable row asks the
-            // one question a colliding row already asks — its marker — and the answer settles it:
-            //
-            //   - no reserver → it reserves nothing whatever its body said. Skipped, provably safely, and
-            //     `widen` is NOT reddened for an anomaly on an issue nobody is holding.
-            //   - a reserver  → we cannot say whether it collides, and we may not answer DISJOINT over a
-            //     live reservation. Refuse: #266's *"I could not look"*, never *"I looked and it was
-            //     fine"*. The caller gets a `Malformed` naming the row, and `overlap --active`/`widen`/
-            //     `set-paths` exit non-zero on it.
-            //
-            // NOTE THE INTERACTION WITH `.github#1792`, WHICH IS NOT NEUTRAL AND IS ASSERTED RATHER THAN
-            // INHERITED: because this is `reserver` and not `winner`, a LAPSED claim on a row whose body
-            // could not be read now refuses too. That is the same bounded, escapable failure `reserver`
-            // takes everywhere else — `OVERLAP`/refusal until somebody `reap`s — and it is the consistent
-            // reading: if a lapsed lease still reserves, then a lapsed lease over an UNKNOWN surface
-            // reserves an unknown surface, which is exactly what may not be cleared.
-            //
-            // The cost is therefore 1 marker read per unreadable row — the same unit as a colliding row,
-            // and zero when the list reads cleanly, which is `.github#1779`'s measured steady state.
-            let rec scan acc rows =
-                match rows with
-                | [] -> Ok(List.rev acc)
-                | ((other: Ref), verdict) :: rest ->
-                    match
-                        Reads.markerScan ctx.Transport other.Owner other.Repo other.Number
-                        |> Result.bind (Reads.requireCompleteMarkerScan other.Short)
-                    with
-                    | Error e -> Error e
-                    | Ok markers ->
-                        // NO EXTRA READ. `reserver` is a pure function over the marker list already fetched
-                        // on the line above, so agreeing with the scheduler costs ZERO additional API calls —
-                        // #1779's measured cost (0 GraphQL points; REST at 1 issue-list plus 1 marker read
-                        // per colliding row) is unchanged, and that was verified either side of one
-                        // `overlap --active` call rather than estimated (#1086).
-                        match Reads.reserver opts.LeaseMinutes markers with
-                        | None -> scan acc rest
-                        | Some m ->
-                            // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
-                            let otherPathRepo = m.PathRepo |> pathRepoOrFallback other.Repo
-                            let samePathRepo =
-                                String.Equals(ref.Owner, other.Owner, StringComparison.OrdinalIgnoreCase)
-                                && String.Equals(targetPathRepo, otherPathRepo, StringComparison.OrdinalIgnoreCase)
-
-                            if not samePathRepo then
-                                scan acc rest
-                            else
-                                match verdict with
-                                | Choice1Of2 pairs -> scan ((other, m.Worker.Value, sharedTokens pairs) :: acc) rest
-                                | Choice2Of2 reason ->
-                                    Error(
-                                        Errors.Malformed(
-                                            $"%s{ref.Short}'s collision scan",
-                                            $"%s{other.Short} is held by %s{m.Worker.Value} and its touch-set could not be read (%s{reason}) — refusing to report DISJOINT over a live reservation whose surface is unknown (#1794/#266)"
-                                        )
-                                    )
-
-            scan [] colliding
 
 
     type private PathUpdate =

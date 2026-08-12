@@ -3986,10 +3986,13 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
               StatusRead = "observed"
               StatusWrite = "written"
               PendingBoardWrites = Some 0
+              // .github#2459 adds this key to the wire shape; the empty case is what every claim before
+              // #2459 would have reported had the key existed, so it is the byte-identical baseline here.
+              Collisions = []
               Converged = true }
 
         Assert.Equal(
-            """{"ref":".github#1525","repo":"FS-GG/.github","number":1525,"worker":"snipe-6404","kind":"claimed","markerObserved":true,"markerId":5087533685,"assigneeObserved":null,"status":"In progress","statusRead":"observed","statusWrite":"written","pendingBoardWrites":0,"converged":true}""",
+            """{"ref":".github#1525","repo":"FS-GG/.github","number":1525,"worker":"snipe-6404","kind":"claimed","markerObserved":true,"markerId":5087533685,"assigneeObserved":null,"status":"In progress","statusRead":"observed","statusWrite":"written","pendingBoardWrites":0,"collisions":[],"converged":true}""",
             Render.renderClaimReceiptJson receipt
         )
 

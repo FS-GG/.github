@@ -86,6 +86,19 @@ module Render =
           /// a lapsed one (so the `STALE` a human is about to `reap` is not free).
           Incomplete: string list }
 
+    /// ONE claim a path update — or, since .github#2459, a `claim` itself — now collides with. The human
+    /// OVERLAP branch prints these same facts across two stderr lines and then a THIRD naming whether the
+    /// courtesy notice landed; the machine form carries all of it in one element, because a notice that
+    /// FAILED still leaves a standing collision and a consumer must not have to infer that from an absent
+    /// log line. Moved ahead of `ClaimReceipt` (.github#2459) because that receipt now carries a list of
+    /// these too, and an F# record referring to a type must follow its definition.
+    type PathCollision =
+        { Ref: Ref
+          Worker: string
+          SharedTokens: string list
+          Notified: bool
+          NotifyError: string option }
+
     type ClaimReceipt =
         { Ref: Ref
           Worker: string
@@ -97,6 +110,7 @@ module Render =
           StatusRead: string
           StatusWrite: string
           PendingBoardWrites: int option
+          Collisions: PathCollision list
           Converged: bool }
 
     /// `take --json`'s other outcome (.github#1525) — see the `.fsi` for why it is not a `ClaimReceipt`
@@ -127,17 +141,6 @@ module Render =
           OwnerValue: string option
           Note: string option
           Reason: string option }
-
-    /// ONE claim a path update now collides with (.github#1517). The human OVERLAP branch prints these same
-    /// facts across two stderr lines and then a THIRD naming whether the courtesy notice landed; the machine
-    /// form carries all of it in one element, because a notice that FAILED still leaves a standing collision
-    /// and a consumer must not have to infer that from an absent log line.
-    type PathCollision =
-        { Ref: Ref
-          Worker: string
-          SharedTokens: string list
-          Notified: bool
-          NotifyError: string option }
 
     /// The `widen --json` / `set-paths --json` receipt (.github#1517) — the ref, the RESULTING declaration,
     /// and the #353 overlap verdict in one object. `Kind` is the past-tense verb, mirroring `ClaimReceipt`.
@@ -375,6 +378,37 @@ module Render =
         match receipt.PendingBoardWrites with
         | Some n -> w.WriteNumber("pendingBoardWrites", n)
         | None -> w.WriteNull("pendingBoardWrites")
+
+        // #2459 — `claim`'s own #353 collision report, shaped exactly like `renderPathUpdateJson`'s
+        // `collisions` array so one consumer can read either document the same way. Advisory: an empty
+        // array here is NOT proof of disjointness (a degraded scan reports empty too, best-effort), so
+        // unlike `PathUpdateReceipt` there is no derived `verdict` key sitting beside it to overclaim one.
+        w.WriteStartArray("collisions")
+
+        for c in receipt.Collisions do
+            w.WriteStartObject()
+            w.WriteString("ref", c.Ref.Short)
+            w.WriteString("repo", $"%s{c.Ref.Owner}/%s{c.Ref.Repo}")
+            w.WriteNumber("number", c.Ref.Number)
+            w.WriteString("worker", c.Worker)
+
+            w.WriteStartArray("sharedTokens")
+
+            for t in c.SharedTokens do
+                w.WriteStringValue t
+
+            w.WriteEndArray()
+
+            w.WriteBoolean("notified", c.Notified)
+
+            match c.NotifyError with
+            | Some e -> w.WriteString("notifyError", e)
+            | None -> w.WriteNull("notifyError")
+
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+
         w.WriteBoolean("converged", receipt.Converged)
         w.WriteEndObject()
         w.Flush()

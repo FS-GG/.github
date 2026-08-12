@@ -45,6 +45,7 @@
     <Compile Include="VerifyPathsClosingKeywordTests.fs" />
     <Compile Include="SchedulingCostTests.fs" />
     <Compile Include="AuthorizedMarkerTests.fs" />
+    <Compile Include="ClaimOverlapTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
