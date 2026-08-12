@@ -198,16 +198,17 @@ module Driver =
     /// one route shares — `fsgg-critic-normal`, or any future `fsgg-critic-<route>` — rather than a
     /// minted, distinguishing identity the way a worker's `whoami --mint` id is (.github#2451). Measured
     /// live: two separate critics dispatched during one run both posted `critic: fsgg-critic-normal`.
-    /// PUBLIC, not private: `Review.criticSuccessionValid` consumes it too, so the recognition rule lives
-    /// in exactly one place rather than as two copies that could drift (the same "one definition" reason
-    /// `reviewPhaseFacts` itself is additive rather than a second parser, #2175 acceptance 11).
     ///
-    /// Two markers that both carry this shape can never be treated as proof of "the same critic": every
+    /// PRIVATE, and `Review.fs` carries its own copy of this exact one-line predicate rather than this
+    /// module exposing it through `Driver.fsi` (`Review.isGenericCriticIdentity`, kept byte-identical by
+    /// comment) — `.github#2451`'s own declared `Paths:` does not include `Driver.fsi`, and widening a
+    /// signature file for a single boolean helper is out of proportion to the file it would touch. Two
+    /// markers that both carry this shape can never be treated as proof of "the same critic": every
     /// critic ever dispatched at that route satisfies the string equality, whether or not it is the same
     /// instance, so the equality proves nothing about identity. The check is a prefix, not a fixed list,
     /// because the dispatch convention (`fsgg-critic-<route>`) is what is actually stable — a route name
     /// this module has no reason to enumerate.
-    let isGenericCriticIdentity (identity: string) =
+    let private isGenericCriticIdentity (identity: string) =
         not (System.String.IsNullOrWhiteSpace identity)
         && identity.Trim().StartsWith("fsgg-critic-", System.StringComparison.OrdinalIgnoreCase)
 

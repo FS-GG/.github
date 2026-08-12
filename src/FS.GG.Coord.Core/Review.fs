@@ -149,6 +149,17 @@ module Review =
         | Ordinary -> Protocol.reviewPolicy.MaxAutomatedRepairRounds
         | Repair -> Protocol.reviewPolicy.RepairPhaseMaxRounds
 
+    /// A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
+    /// one route shares (`fsgg-critic-normal`, or any future `fsgg-critic-<route>`) rather than a
+    /// minted, distinguishing identity (.github#2451). Byte-identical to `Driver.fs`'s own private
+    /// `isGenericCriticIdentity` — kept as two small, deliberate copies rather than one shared export
+    /// because `.github#2451`'s declared `Paths:` does not include `Driver.fsi`, and widening a
+    /// signature file for a single boolean helper is out of proportion. If this predicate's rule ever
+    /// changes, update both.
+    let private isGenericCriticIdentity (identity: string) =
+        not (String.IsNullOrWhiteSpace identity)
+        && identity.Trim().StartsWith("fsgg-critic-", StringComparison.OrdinalIgnoreCase)
+
     /// The ONE guard both the ordinary and repair-phase `AwaitingSameCriticConfirmation`-shaped branches
     /// consult (.github#2417 PD-002) — never two copies. A granted receipt is admitted only when it is
     /// bound to the EXACT critic and head this round is stuck on, and neither the successor nor the
@@ -160,8 +171,8 @@ module Review =
     /// accountable grant.
     ///
     /// `.github#2451`: `receipt.OriginalCriticIdentity = critic` alone is NOT proof this receipt names
-    /// the exact stuck critic when `critic` is the bare agent-type string (`Driver.isGenericCriticIdentity`)
-    /// — every critic ever dispatched at that route would satisfy the equality, so the "exact critic"
+    /// the exact stuck critic when `critic` is the bare agent-type string (`isGenericCriticIdentity`) —
+    /// every critic ever dispatched at that route would satisfy the equality, so the "exact critic"
     /// property `independent-review.md` states is never actually witnessed by a generic string. A
     /// receipt whose current-round critic identity is generic is refused exactly like a mismatched one:
     /// the caller falls back to `ResumeSameCritic`, never to a succession the marker text cannot support.
@@ -173,7 +184,7 @@ module Review =
         match successionGranted, currentCritic with
         | Some receipt, Some critic when
             receipt.OriginalCriticIdentity = critic
-            && not (Driver.isGenericCriticIdentity critic)
+            && not (isGenericCriticIdentity critic)
             && receipt.CandidateHeadSha = binding.HeadSha
             && not (String.IsNullOrWhiteSpace receipt.SuccessorCriticIdentity)
             && not (String.IsNullOrWhiteSpace receipt.GrantedBy)

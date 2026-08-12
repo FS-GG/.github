@@ -427,14 +427,35 @@ module DriverTests =
         | Error errors -> Assert.True(saysThat "minted, distinguishing identity" errors, sprintf "%A" errors)
 
     [<Fact>]
-    let ``#2451 isGenericCriticIdentity recognises the bare agent-type shape and not a minted one`` () =
-        Assert.True(isGenericCriticIdentity "fsgg-critic-normal")
-        Assert.True(isGenericCriticIdentity "fsgg-critic-best")
-        Assert.True(isGenericCriticIdentity "  fsgg-critic-normal  ")
-        Assert.False(isGenericCriticIdentity "brant-99e5")
-        Assert.False(isGenericCriticIdentity "shrike")
-        Assert.False(isGenericCriticIdentity "")
-        Assert.False(isGenericCriticIdentity null)
+    let ``#2451 a minted-looking critic identity that merely contains "critic" still continues normally`` () =
+        // The boundary this row's prefix check must respect: `isGenericCriticIdentity` is private to
+        // `Driver.fs`/`Review.fs` (`.github#2451`'s declared `Paths:` excludes `Driver.fsi`, so it is
+        // not exposed for a direct unit test), but its behavior is fully observable at this chain level.
+        // A distinguishing identity that happens to contain the substring "critic" without the
+        // `fsgg-critic-` PREFIX must not be caught by the same net — same-critic continuity still holds
+        // ordinarily.
+        let initial =
+            comment
+                1L
+                "https://reviews/1"
+                "<!-- fsgg:independent-review:v1 -->\ncritic: critic-of-code-77\nreviewed-head: first\nverdict: changes-required"
+
+        let confirm =
+            comment
+                2L
+                "https://reviews/2"
+                ("<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/1\ncritic: critic-of-code-77\nround: 1\npreceding-review: https://reviews/1\nreviewed-head: second\nverdict: pass"
+                 + notMeaningful)
+
+        let accepted =
+            comment
+                3L
+                "https://reviews/3"
+                "<!-- fsgg:review-accepted:v1 -->\naccepted-head: second\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/2"
+
+        match parseReviewComments [ initial; confirm; accepted ] with
+        | Ok chain -> Assert.Equal(Some "second", chain.HeadSha)
+        | Error errors -> failwithf "expected an ordinary accepted chain, got: %A" errors
 
     [<Fact>]
     let ``#2127 markers and acceptance links fail closed at the live parser`` () =

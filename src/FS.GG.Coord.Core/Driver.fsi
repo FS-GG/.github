@@ -59,13 +59,6 @@ module Driver =
           AcceptanceCount: int
           AcceptancePresent: bool }
 
-    /// A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
-    /// one route shares (`fsgg-critic-normal`, or any future `fsgg-critic-<route>`) rather than a
-    /// minted, distinguishing identity (.github#2451). Two markers that both carry this shape can never
-    /// be treated as proof of "the same critic" — reused by both `parseReviewComments`'s same-critic
-    /// continuity check and `Review.criticSuccessionValid`, so the recognition rule lives in one place.
-    val isGenericCriticIdentity: identity: string -> bool
-
     /// Classify a PR's review comments into the structural facts `Review.inspect` needs to select a
     /// typed review-protocol state — reusing the same leading-marker-block/quoting-aware detection
     /// `parseReviewComments` uses, never re-scanning comment bodies with a second grammar.
