@@ -1157,6 +1157,28 @@ else
   bad "#2133: production advance must reject invented provider provenance" "rc=$forged_advance_rc output=$forged_advance"
 fi
 
+# .github#2465: the accepted `fsgg-sdd verify` `toolVersion` is an explicitly-vetted LIST, not a bare
+# equality against one hardcoded literal — and it must still fail closed on an unvetted version, with
+# a message that names the exact reported version rather than a six-way conflated "identity, version,
+# command, or work binding is unsupported" a caller had to reverse-engineer via unrelated #2133 red.
+# A fake `fsgg-sdd` ahead on PATH reports an otherwise well-formed but unvetted toolVersion, so this
+# isolates the version check from the identity/command/work-binding checks it used to share a branch with.
+fake_sdd_dir="$CYCLE_FIX/fake-sdd-bin"
+mkdir -p "$fake_sdd_dir"
+cat >"$fake_sdd_dir/fsgg-sdd" <<'FAKE_SDD'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"schema":"fsgg.sdd.verify/1","toolVersion":"9.9.9","command":{"name":"verify"},"context":{"workId":"2133-resumable-cycle-ledger"},"coherent":true,"outcome":"noChange"}
+JSON
+FAKE_SDD
+chmod +x "$fake_sdd_dir/fsgg-sdd"
+unvetted_version="$(PATH="$fake_sdd_dir:$PATH" run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; unvetted_version_rc=$?
+if [ "$unvetted_version_rc" -ne 0 ] && printf '%s' "$unvetted_version" | grep -q 'fsgg-sdd validator toolVersion 9.9.9 is not vetted'; then
+  ok "#2465: an unvetted fsgg-sdd validator toolVersion fails closed and names the reported version"
+else
+  bad "#2465: an unvetted fsgg-sdd validator toolVersion must fail closed and name the reported version" "rc=$unvetted_version_rc output=$unvetted_version"
+fi
+
 jq '{sourceRevision,units,cycle,evidence}' "$CYCLE_SNAPSHOT" >"$CYCLE_FIX/update.json"
 cycle_update="$(run cycle update --snapshot "$CYCLE_FIX/update.json" --json 2>&1)"; cycle_update_rc=$?
 update_receipt="$(printf '%s' "$cycle_update" | jq -c '.updateReceipt // empty' 2>/dev/null)"
