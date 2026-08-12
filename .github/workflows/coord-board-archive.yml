@@ -1,0 +1,132 @@
+name: Archive terminal rows off the Coordination board
+
+# WHAT PROBLEM THIS SOLVES, MEASURED
+# ==================================
+#
+# On 2026-08-12 the board held 2,206 rows, of which 2,172 were `Done` AND closed — 98.8%. Every truth
+# read (`reconcile`, `lint`, `ready`, `who`, `batch`, `driver --events`, and all of `/check-board`)
+# pages the entire `items` connection to answer a question about ~30 live rows: 23 pages for 26 rows,
+# growing forever.
+#
+# That is the measured cause of a recurring incident class the repo has repaired FOUR times without
+# touching it — `.github#2313` (a reconciling scan paying 1,658 REST body reads, REST at 0/5000),
+# `.github#2314`, `.github#2352`, and the still-open `.github#2356` ("too small for THIS BOARD'S actual
+# scan cost"). Each made the scan cheaper; none made the board smaller, so the cause outlived every
+# repair. The one-off sweep took 2,206 -> 36 rows and a full scan 23 pages -> 1 (`ready` 23 pts -> 1).
+# This workflow is what stops it regrowing.
+#
+# WHY NOT GITHUB'S BUILT-IN AUTO-ARCHIVE
+# ======================================
+#
+# Projects v2 ships one, but it is configured in the UI and is not manageable through the API, so it
+# cannot be reviewed, tested, guarded or explained in the repo that depends on it. Two of the four
+# guards below — "never archive a live row's blocker" and "never archive a row you could not read" —
+# have no expression in it at all.
+
+on:
+  schedule:
+    # Daily, deliberately off the hour and well clear of `coord-board-reconcile`'s ':17' so the two
+    # never contend for the same budget window. This job is never urgent: it is a floor sweeper, and
+    # anything it misses today it takes tomorrow.
+    - cron: '43 4 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Plan only — report what would be archived and change nothing'
+        type: boolean
+        default: true
+      retention_days:
+        description: 'Keep Done+closed rows closed more recently than this many days'
+        type: string
+        default: '30'
+
+permissions:
+  contents: read
+
+# One sweep at a time, and never cancel one that is running: archiving is idempotent, but a run killed
+# mid-sweep still leaves its manifest half-written, and a queued duplicate would only re-derive the same
+# plan against a board the first run is already changing.
+concurrency:
+  group: coord-board-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The board is org-owned, so this needs Projects v2 write — which `GITHUB_TOKEN` never carries.
+      # Same App installation the reconcile job mints from, with `permission-issues` dropped: this
+      # workflow moves ROWS, never issues, and a credential should not carry a scope its job cannot use.
+      - name: Mint an installation token with Projects v2 access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-organization-projects: write
+
+      - name: Resolve the Coordination project id
+        id: project
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          # Resolved live rather than hard-coded: a pinned node id silently sweeps the WRONG BOARD if
+          # the project is ever recreated, and "wrong board" is the one failure this job must not have.
+          id="$(gh api graphql -f query='
+            query($owner: String!, $number: Int!) {
+              organization(login: $owner) { projectV2(number: $number) { id title } }
+            }' -F owner=FS-GG -F number=1 --jq '.data.organization.projectV2.id')"
+          case "$id" in
+            PVT_*) ;;
+            *) echo "::error::could not resolve the Coordination project id (got '${id:-empty}')"; exit 1 ;;
+          esac
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Archive terminal rows
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          FSGG_COORD_PROJECT_ID: ${{ steps.project.outputs.id }}
+        run: |
+          set -euo pipefail
+          retention='${{ inputs.retention_days || '30' }}'
+
+          # A scheduled run always executes; a manual run defaults to a DRY RUN, so a human reaching for
+          # this workflow to "have a look" cannot archive 2,000 rows by pressing the obvious button.
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ '${{ inputs.dry_run }}' != 'false' ]; then
+            mode=''
+            echo "::notice::dry run — planning only, nothing will be archived"
+          else
+            mode='--execute'
+          fi
+
+          python3 scripts/coord-board-archive.py \
+            --retention-days "$retention" \
+            --manifest "$RUNNER_TEMP/archived.jsonl" \
+            $mode | tee "$RUNNER_TEMP/archive.log"
+
+          {
+            echo '### Coordination board archive'
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/archive.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The manifest is what makes this reversible — every archived row id, restorable with
+      # `unarchiveProjectV2Item`. Retained deliberately: the board is a projection and the issues are
+      # untouched, but "reversible in principle" is worth nothing if the ids were thrown away.
+      - name: Upload the reversal manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: archived-manifest
+          path: ${{ runner.temp }}/archived.jsonl
+          if-no-files-found: ignore
+          retention-days: 90
