@@ -1821,7 +1821,14 @@ module Client =
     ///
     /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
     /// endpoint is the one GitHub documents for it.
-    let private ensureAuthorization
+    ///
+    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` drives this directly
+    /// against a `Fake.Recorder`, the same "reuse the internal seam rather than restate the whole
+    /// `delivery` command's board-scan/PR-facts machinery" idiom `AuthorizedMarkerTests.fs` already uses
+    /// for `authorizedMarker`, above. This is what makes the LIVE wired IO (`Reads.prBody` then a
+    /// conditional `ctx.Transport.Send` PATCH) hermetically testable, not merely the pure
+    /// `rebindAuthorization` decision it wraps.
+    let ensureAuthorization
         (ctx: Context)
         (target: Ref)
         (marker: Reads.Marker option)
