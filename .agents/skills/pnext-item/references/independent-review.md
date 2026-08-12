@@ -28,6 +28,57 @@ produces a marker the live engine cannot read — the parser refuses it and name
 `key: value` form in the refusal (`.github#2369`) rather than parking with no signal about what to
 fix or which field was unreadable.
 
+**A `pass` verdict additionally requires exactly one `route-applicability` field on that same marker;
+`changes-required` does not require one, though it may carry one for context.** This applies identically
+to the initial marker and to every confirmation marker whose `verdict` is `pass`. The two permitted
+values are `meaningful` and `not-meaningful`; when the value is `not-meaningful`, the accompanying
+`route-not-meaningful-reason` field is bounded to **≤ 500 characters**. Missing, duplicate, empty,
+unknown, mixed-shape, or overlong fields fail the live review-marker parser — and that parser runs only
+at host acceptance, after the whole review chain has already completed (`.github#2483`), so compose the
+field correctly now rather than discover the refusal after three rounds. **Runtime-route evidence gate**
+below states when the value must be `meaningful` versus `not-meaningful` and the full field shape for
+each; the copyable templates immediately below are ready to fill in and post as-is.
+
+Copyable, complete marker templates — fill in the bracketed placeholders and post as-is:
+
+Passing marker, route comparison meaningful for this review subject:
+
+```text
+<!-- fsgg:independent-review:v1 -->
+critic: <minted critic identity>
+reviewed-head: <exact head SHA reviewed>
+verdict: pass
+route-applicability: meaningful
+built-artifact: <artifact exercised>
+executed-command: <command or measurement performed>
+compared-routes: <production route and comparison route>
+observed-result: <observed equality or divergence>
+```
+
+Passing marker, no meaningful multi-route comparison exists for this review subject:
+
+```text
+<!-- fsgg:independent-review:v1 -->
+critic: <minted critic identity>
+reviewed-head: <exact head SHA reviewed>
+verdict: pass
+route-applicability: not-meaningful
+route-not-meaningful-reason: <reason tied to this review subject, ≤ 500 characters>
+```
+
+Changes-required marker (no `route-applicability` field required):
+
+```text
+<!-- fsgg:independent-review:v1 -->
+critic: <minted critic identity>
+reviewed-head: <exact head SHA reviewed>
+verdict: changes-required
+```
+
+The confirmation marker (`fsgg:independent-review-confirmation:v1`) follows the identical rule on its
+own `verdict` field, in addition to its own required `initial-review`, `critic`, `round`,
+`preceding-review`, `reviewed-head` fields listed above.
+
 **The `critic` field must be a minted, distinguishing identity, not the bare agent-type string**
 (`.github#2451`). A critic mints one exactly the way a worker does — `eval "$(scripts/fsgg-coord
 whoami --mint)"` — and writes the minted id, never the literal agent-type name (`fsgg-critic-normal`,
@@ -102,12 +153,13 @@ The not-meaningful shape is:
 
 ```text
 route-applicability: not-meaningful
-route-not-meaningful-reason: <bounded reason tied to this review subject>
+route-not-meaningful-reason: <reason tied to this review subject, ≤ 500 characters>
 ```
 
-Missing, duplicate, empty, unknown, mixed-shape, or overlong reason fields fail the live review-marker
-parser. A prose claim or `Verification:` line does not substitute for these fields; source-only review
-therefore cannot produce a valid passing chain when the critic declares the comparison meaningful.
+`route-not-meaningful-reason` is bounded to **≤ 500 characters**. Missing, duplicate, empty, unknown,
+mixed-shape, or overlong reason fields fail the live review-marker parser. A prose claim or
+`Verification:` line does not substitute for these fields; source-only review therefore cannot produce a
+valid passing chain when the critic declares the comparison meaningful.
 
 This is reusable guidance, not an audio-specific recipe. Rogue3 exposed the shape when a built product
 route emitted `[]` while direct dispatch emitted `[PlaySfx (SoundId "floor-descend", 0.8)]`: the cue map
