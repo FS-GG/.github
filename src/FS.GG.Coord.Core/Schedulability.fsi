@@ -183,6 +183,21 @@ module Schedulability =
     /// only moves the worker's confusion one step later.
     val TouchSetGrammar: string
 
+    /// Does an EXPIRED lease still authorize the item's action verbs (`review`, `delivery`) — the same
+    /// proof-of-life the scheduler already trusts when it refuses to hand a `HeldByLiveWork` item to a
+    /// second worker (#581). A worker paused at the review handoff cannot heartbeat between turns — it
+    /// is not running — so its lease can lapse mid-review, and an open `item/<n>-*` PR is exactly the
+    /// evidence that tells that pause apart from abandonment (#2378).
+    ///
+    /// This is the SAME rule as `schedulable`'s `HeldByLiveWork` arm, named once: "should a second
+    /// worker get this item?" and "does the claim in hand still authorize acting on it?" are asked of
+    /// the identical fact (a claim's `Liveness`), and the two must not be free to disagree.
+    ///
+    /// `LeaseExpiredBranchPushed` does NOT authorize — a pushed branch with no PR yet is weaker evidence
+    /// than an open PR, matching `schedulable`'s own `Undetermined` verdict for that case.
+    /// `LivenessUnknown` fails closed, as every liveness read in this codebase does.
+    val leaseAuthorizes: liveness: Liveness -> bool
+
     /// "Should I wait?" — as a NUMBER (#428).
     ///
     /// "nothing schedulable" and "queued behind a claim held by <w>, lease frees in ~96m" are the same

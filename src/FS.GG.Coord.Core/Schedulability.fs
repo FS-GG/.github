@@ -292,6 +292,31 @@ module Schedulability =
     /// recorded a timestamp, but a hand-written or truncated marker may not — and inventing
     /// "frees in ~120m" out of a missing field is the confident-but-unfounded sentence that #440 and
     /// #488 were both closed for.
+    /// Does an EXPIRED lease still authorize the item's action verbs — `review`, `delivery` — the same
+    /// proof-of-life the scheduler already trusts when it refuses to hand a `HeldByLiveWork` item to a
+    /// SECOND worker (#581). A worker paused at the review handoff cannot heartbeat between turns — it
+    /// is not running — so its lease can lapse mid-review, and an open `item/<n>-*` PR is exactly the
+    /// evidence that tells that pause apart from abandonment (#2378).
+    ///
+    /// THIS IS THE SAME RULE AS `schedulable`'s `HeldByLiveWork` ARM, NAMED ONCE (#485's lesson applied
+    /// to a second question): "should a second worker get this item?" and "does the claim in hand still
+    /// authorize acting on it?" are asked of the identical fact (a claim's `Liveness`), and a caller that
+    /// re-derived the second from scratch could disagree with the first about what "live" means without
+    /// either side noticing.
+    ///
+    /// `LeaseExpiredBranchPushed` (#1055 — a pushed branch, no PR yet) is WEAKER evidence than an open
+    /// PR: a branch can be a stale leftover in a way a still-open PR cannot, so it does NOT authorize
+    /// here — matching `schedulable`'s own `Undetermined` (not `HeldByLiveWork`) verdict for the same
+    /// case. `LivenessUnknown` fails closed, as every liveness read in this codebase does: a probe that
+    /// could not be made is not a probe that came back "abandoned".
+    let leaseAuthorizes (liveness: Liveness) : bool =
+        match liveness with
+        | LeaseHeld
+        | LeaseExpiredPrOpen _ -> true
+        | LeaseExpiredNoPr
+        | LeaseExpiredBranchPushed
+        | LivenessUnknown -> false
+
     let leaseWindow (leaseMinutes: int) (ageSeconds: int) : string =
         if ageSeconds < 0 then
             "lease unknown"

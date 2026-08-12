@@ -1724,6 +1724,37 @@ module Client =
             | Error _ -> true
         | _ -> true
 
+    /// THE MARKER THAT AUTHORIZES ACTING ON A CLAIM — `review`'s and `delivery`'s shared extension of
+    /// `Reads.winner`'s live-lease-only answer with the SAME proof-of-life the scheduler already trusts
+    /// for a `HeldByLiveWork` item (#581, `Schedulability.leaseAuthorizes`): an expired lease backed by
+    /// an OPEN `item/<n>-*` PR is not abandoned, it is a worker paused at the review handoff — stopped
+    /// between turns, unable to heartbeat because it is not running (#2378). One function, so the two
+    /// callers cannot silently disagree about what "live" means for the identical fact (#485's lesson).
+    ///
+    /// `liveness` is a THUNK, not an eager read: `Reads.winner` already answers most calls (a live lease
+    /// needs no PR probe), so the one extra REST call this adds is paid only on the path that actually
+    /// needs it — `Reads.prAlive`'s own doc comment states the same cost discipline ("only on the ONE
+    /// item about to be … reaped, never a scan").
+    ///
+    /// `Ok None` is a REAL, distinct answer — "no marker authorizes this claim" — kept apart from
+    /// `Error`, a read that could not be made. Callers choose their own refusal wording for `None`;
+    /// `review` and `delivery` worded it differently before this function existed and still do.
+    let authorizedMarker
+        (leaseMinutes: int)
+        (markers: Reads.Marker list)
+        (liveness: unit -> Errors.IoResult<Liveness>)
+        : Errors.IoResult<Reads.Marker option> =
+        match Reads.winner leaseMinutes markers with
+        | Some marker -> Ok(Some marker)
+        | None ->
+            match Reads.reserver leaseMinutes markers with
+            | None -> Ok None
+            | Some stale ->
+                match liveness () with
+                | Ok l when Schedulability.leaseAuthorizes l -> Ok(Some stale)
+                | Ok _ -> Ok None
+                | Error e -> Error e
+
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
@@ -1761,11 +1792,13 @@ module Client =
                         Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
                         |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
                         |> Result.bind (fun markers ->
-                            match Reads.winner opts.LeaseMinutes markers with
-                            | Some marker when marker.Worker.Value = w.Id -> Ok(Some marker)
-                            | Some marker -> Error(Errors.Malformed(target.Short, $"live claim belongs to worker '%s{marker.Worker.Value}', not '%s{w.Id}'"))
-                            | None when terminalBoardState -> Ok None
-                            | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize delivery")))
+                            authorizedMarker opts.LeaseMinutes markers (fun () ->
+                                Reads.prAlive ctx.Transport target.Owner target.Repo target.Number)
+                            |> Result.bind (function
+                                | Some marker when marker.Worker.Value = w.Id -> Ok(Some marker)
+                                | Some marker -> Error(Errors.Malformed(target.Short, $"live claim belongs to worker '%s{marker.Worker.Value}', not '%s{w.Id}'"))
+                                | None when terminalBoardState -> Ok None
+                                | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize delivery"))))
 
                     match liveClaim, Cache.pending () with
                     | Error error, _ -> fail error
@@ -1941,9 +1974,11 @@ module Client =
                         Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
                         |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
                         |> Result.bind (fun markers ->
-                            match Reads.winner opts.LeaseMinutes markers with
-                            | Some marker -> Ok marker
-                            | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize a review inspection")))
+                            authorizedMarker opts.LeaseMinutes markers (fun () ->
+                                Reads.prAlive ctx.Transport target.Owner target.Repo target.Number)
+                            |> Result.bind (function
+                                | Some marker -> Ok marker
+                                | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize a review inspection"))))
 
                     match liveClaim with
                     | Error error -> fail error
