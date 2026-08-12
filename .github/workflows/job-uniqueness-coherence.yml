@@ -19,20 +19,26 @@
 # achievable without a disproportionate bulk rename: a name that was NOT already ambiguous at the
 # merge-base must not become ambiguous at head. That is exactly `.github#2354`'s two illustrative
 # regressions (reverting PR #2371's `name:` overrides; adding a fourth job named `reconcile`), and it is
-# exactly what leaves the current, accepted duplicates alone. `.github#2447` closed the residual gap —
-# a future admin promoting one of the 8 already-ambiguous names to a required status check, invisibly
-# to this base-vs-head diff — with an ABSOLUTE tripwire scoped to the small set below: see
+# exactly what leaves the current, accepted duplicates alone. `.github#2447` MITIGATES the residual
+# gap — a future admin promoting one of the 8 already-ambiguous names to a required status check,
+# invisibly to this base-vs-head diff — with an ABSOLUTE tripwire scoped to the small set below: see
 # `--required-context` on the `check-job-uniqueness.py` invocation, and that script's own docstring for
 # why it is passed explicitly rather than read live (this repo's own CI cannot read its own branch
 # protection — no `administration: read` credential is available to it, unlike the six receiver repos
-# `required-context-coherence.yml` covers).
+# `required-context-coherence.yml` covers). IT DOES NOT CLOSE THE GAP: see below.
 #
-# KEEP THE `--required-context` LIST BELOW IN SYNC WITH LIVE BRANCH PROTECTION. Whoever changes this
-# repo's own required status checks (`gh api -X PUT repos/FS-GG/.github/branches/main/protection/`
+# THE LIST BELOW IS A MANUALLY-MAINTAINED MIRROR OF LIVE BRANCH PROTECTION, NOT A LIVE FACT THIS GATE
+# VERIFIES — and it cannot be more than that, for the exact reason `.github#2447` was filed: a required-
+# status-check promotion (`gh api -X PUT repos/FS-GG/.github/branches/main/protection/`
 # `required_status_checks/contexts …` — see `coherence.yml`'s `claim-generation` job for the exact form
-# that command takes) MUST update this list in the SAME reviewed PR. `contract-coherence / coherence`
-# (the fifth live-required context, verified via `gh api repos/FS-GG/.github/branches/main/protection
-# --jq '.required_status_checks.contexts'`) is deliberately NOT listed below: it is a nested
+# that command takes) is an ADMIN ACTION, not a reviewed workflow-YAML change, so there is no PR for an
+# instruction to attach itself to. Whoever promotes a context to required is responsible for a FOLLOW-UP
+# edit adding it to the list below; nothing here enforces that responsibility or detects a missed edit,
+# so a promoted name that is not also added here stays silently undetected — exactly `.github#2447`'s
+# own root cause, one layer down. What IS caught: any of the four names below drifting into ambiguity
+# via a workflow-YAML edit this repo DOES review. `contract-coherence / coherence` (the fifth
+# live-required context, verified via `gh api repos/FS-GG/.github/branches/main/protection --jq
+# '.required_status_checks.contexts'`) is deliberately NOT listed below: it is a nested
 # `<caller> / <callee>` name produced by a job WITH `uses:`, which this gate's whole model excludes
 # (that is `.github#549`'s subject, not this one's) — passing it here would be silently vacuous, never
 # able to match anything in `head`.

@@ -73,10 +73,20 @@ required AND is ambiguous. The caller (`job-uniqueness-coherence.yml`) hardcodes
 because this repo's own CI cannot read its own branch protection live: `administration: read` is not a
 valid `permissions:` scope for a workflow's `GITHUB_TOKEN` (`check-reusable-job-ids.py`'s own docstring),
 and the org dispatch App is not installed on `.github` itself (`required-context-coherence.yml`: the
-App's roster is the six receivers, not the authority that owns their callees). Whoever changes this
-repo's own required status checks MUST update that hardcoded set in the SAME reviewed PR — the existing
-practice this repo already follows for protection changes (see `coherence.yml`'s `claim-generation` job,
-which documents an admin `gh api -X PUT .../required_status_checks/contexts` command the same way).
+App's roster is the six receivers, not the authority that owns their callees).
+
+THIS MITIGATES THE GAP; IT DOES NOT CLOSE IT, AND SAYING OTHERWISE WOULD BE THE ISSUE'S OWN DEFECT ONE
+LAYER DOWN. `.github#2447`'s own root cause is that a required-status-check promotion is an admin
+action, not a reviewed workflow-YAML change — so there is no PR for an instruction to "update this list
+in the same PR" to attach to, and nothing in this codebase (see the credential wall above) can observe
+a live promotion and catch a hardcoded set that fell out of sync with it. The hardcoded set above is a
+MANUALLY-MAINTAINED MIRROR of live branch protection, checked once at the time it was written and
+whenever a human remembers to revisit it — not a live fact this gate verifies. Whoever promotes a
+context to required is responsible for a FOLLOW-UP edit adding it here (there is no tooling requirement
+enforcing this, and no tooling here catches a missed one); until that edit lands, a newly-required name
+that collides with one of the 8 already-ambiguous ones stays silently undetected, exactly as before this
+change. What this DOES close: the four names above are graded UNCONDITIONALLY, so any of them drifting
+into ambiguity — via a workflow-YAML edit this repo DOES review — is caught the moment it happens.
 
 AN EFFECTIVE NAME is what GitHub actually uses for the check run: a job's `name:` if it has one, else
 its job id (job.get("name") or job.get("uses") on the CALLING side never applies here — a job WITH
