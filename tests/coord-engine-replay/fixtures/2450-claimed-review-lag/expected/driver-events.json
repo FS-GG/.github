@@ -1,0 +1,20 @@
+{
+  "active": [
+    {
+      "evidence": "claim:worker=curlew-8afd;pr=888",
+      "reason": "claim marker live; no review evidence yet",
+      "ref": "FS-GG/FS.GG.SDD#600",
+      "state": "claimed:curlew-8afd"
+    }
+  ],
+  "schema": "fsgg.coord.driver-events/1",
+  "transitions": [
+    {
+      "evidence": "claim:worker=curlew-8afd;pr=888",
+      "previous": null,
+      "reason": "claim marker live; no review evidence yet",
+      "ref": "FS-GG/FS.GG.SDD#600",
+      "state": "claimed:curlew-8afd"
+    }
+  ]
+}

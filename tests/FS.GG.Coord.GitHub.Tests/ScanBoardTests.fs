@@ -1120,3 +1120,113 @@ let ``#1933 the SAME body, with the field set instead, yields the edge - the con
         let item = doc.RootElement.GetProperty("items").[0]
 
         Assert.Equal(1, item.GetProperty("blockers").GetArrayLength())
+
+// ---- .github#2450: the CLAIMED-ROW probe must cover 'In review' too, not just 'In progress' -------------
+//
+// `LIFECYCLE-PROJECTION-LAG`'s SECOND consumer (`Client.fs`'s lifecycle projector, in the Cli project)
+// reads `Item.ItemPr` for a row that is ALREADY `In review` to decide whether it STAYS there. The probe at
+// `Scan.fs:1298` used to fire only for `Status = InProgress`, so a claimed row already `In review` never had
+// `ItemPr` populated — the projector then read a live claim with no PR fact and projected the row BACKWARD
+// to `In progress`, on every reconcile pass, for as long as the review lasted. Same failure shape as
+// `BLOCKER-CLEARED` at Scan.fs:1240-1246 (the section above): a probe bounded to its FIRST consumer's
+// column left a SECOND, later consumer blind to its own subject.
+//
+// These tests stay inside this project's boundary and prove the fact the probe COLLECTS — exactly as the
+// `#1738` tests above do for the `BLOCKER-CLEARED` arm — because the second consumer (`Client.fs`) lives in
+// the Cli project, outside this item's declared `Paths:`.
+
+/// A claimed board row already sitting `In review` — the exact column the probe used to skip.
+let private claimedInReviewRow: Scan.Row =
+    { scopeRow "FS.GG.SDD" 99 with Status = BoardStatus.InReview }
+
+/// A transport for the claimed-row legs. Fresh node facts supply the body and a comment count of 1 (the
+/// claim marker itself is the one comment); the marker read answers with a LIVE, WITHIN-LEASE claim; and
+/// `pulls`/`matching-refs` are counted so a test can assert the probe fired exactly once, and no more.
+let private claimedRowTransport (openPrs: string) =
+    let mutable pullsReads = 0
+    let mutable matchingRefsReads = 0
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            match req.Path, req.Subject with
+            | "graphql", "fresh issue body and comment-count facts" ->
+                ok (nodeFactsResponse claimedInReviewRow.NodeId.Value "Paths: src/Board/**" 1)
+            | path, _ when path.EndsWith "/comments" -> ok (liveMarker "curlew-8afd" 99)
+            | path, _ when path.EndsWith "/issues" -> ok "[]"
+            | path, _ when path.Contains "/pulls" ->
+                pullsReads <- pullsReads + 1
+                ok openPrs
+            | path, _ when path.Contains "matching-refs" ->
+                matchingRefsReads <- matchingRefsReads + 1
+                ok "[]"
+            | _, _ -> Error(Http(500, "unexpected request")))
+
+    recorder, (fun () -> pullsReads), (fun () -> matchingRefsReads)
+
+[<Fact>]
+let ``#2450 a CLAIMED, OPEN row already 'In review' with an open item PR still populates ItemPr`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let openPrs = """[{"number":1911,"head":{"ref":"item/99-already-written"}}]"""
+    let transport, pullsReads, _ = claimedRowTransport openPrs
+
+    match Scan.snapshot transport [ claimedInReviewRow ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let item = doc.RootElement.GetProperty("items").[0]
+
+        Assert.Equal(1, pullsReads ())
+
+        // THE FIELD IS POPULATED — the half .github#2450 was filed over. Before the fix this arm matched
+        // `| Some _ -> ()` and `itemPr` never appeared, so the lifecycle projector read a live claim with
+        // no PR fact and proposed `In progress` for a row that is legitimately `In review`.
+        match item.TryGetProperty "itemPr" with
+        | true, v -> Assert.Equal(1911, v.GetInt32())
+        | false, _ ->
+            failwith "an 'In review' claimed row with an open item PR must populate itemPr — this is .github#2450"
+
+[<Fact>]
+let ``#2450 a CLAIMED, OPEN row already 'In review' with NO open item PR is still probed - the mate`` () =
+    // The mate to the test above, over the real writer — without it, "the probe reaches the second
+    // consumer's column" is satisfied by a scan that always finds a PR, and a row that is genuinely
+    // PR-less (an anomaly, but not one this probe should special-case) would go untested.
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let transport, pullsReads, matchingRefsReads = claimedRowTransport "[]"
+
+    match Scan.snapshot transport [ claimedInReviewRow ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let item = doc.RootElement.GetProperty("items").[0]
+
+        Assert.Equal(1, pullsReads ())
+        Assert.Equal(1, matchingRefsReads ())
+        Assert.False(fst (item.TryGetProperty "itemPr"))
+
+[<Fact>]
+let ``#2450 a CLAIMED, OPEN 'Blocked' row is NOT probed by this arm - the widened probe buys no request it need not``
+    ()
+    =
+    // THE BOUND, STATED AS A TEST. Widening from one column to two costs at most one additional REST
+    // request per row that is claimed, Open, and currently `In review` — not one for every claimed row
+    // regardless of column. A claimed row parked `Blocked` still falls to `| Some _ -> ()`, exactly as
+    // before this fix: this arm is not `| Open, _ ->`.
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let blockedRow = { claimedInReviewRow with Status = BoardStatus.Blocked }
+    let transport, pullsReads, _ =
+        claimedRowTransport """[{"number":1911,"head":{"ref":"item/99-already-written"}}]"""
+
+    match Scan.snapshot transport [ blockedRow ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let item = doc.RootElement.GetProperty("items").[0]
+
+        Assert.Equal(0, pullsReads ())
+        Assert.False(fst (item.TryGetProperty "itemPr"))

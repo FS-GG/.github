@@ -23,7 +23,7 @@ This directory does not replace either of those suites and deletes nothing from 
 - `fixtures/<name>/manifest.json` *(optional)* — names commands allowed to mismatch
   (`expectFailure.commands`) and why. Used by `fixtures/2216-oscillation/` only.
 
-## Fixtures (2, ~164 KB total — see `du -sh fixtures/*` to recheck)
+## Fixtures (3, ~152 KB total — see `du -sh fixtures/*` to recheck)
 
 - **`smoke`** (~52 KB, 22 recorded requests) — captured from `tests/coord-engine-e2e/stateful_server.py`,
   the existing hermetic multi-item board. `run.sh`'s leg 0 also drives the engine DIRECTLY against that
@@ -39,6 +39,18 @@ This directory does not replace either of those suites and deletes nothing from 
   `scenario_server.py`'s docstring). This is NOT a raw live capture: the real `.github#2216` row is a
   moving target this hermetic suite cannot depend on, so a small synthetic board reproducing the same
   shape is used instead, and `scenario_server.py` documents exactly how to regenerate it.
+- **`2450-claimed-review-lag`** (~48 KB, 10 recorded requests) — the CLAIMED sibling of
+  `2216-oscillation`: a live claim marker, `Status = In review`, and a genuinely open implementation PR
+  on its own branch (`scenario_server.py`, committed alongside it). `.github#2450` — before its fix,
+  `Scan.fs`'s claimed-row PR probe fired only for `Status = InProgress`, so this row's `Item.ItemPr` was
+  never populated and the lifecycle projector proposed `Status=In progress` for a row that is
+  legitimately `In review`, deterministically, forever. `transcript.json`'s `commands` list names
+  `reconcile` TWICE — `run.sh` invokes the compiled engine binary independently for each entry against
+  the same running replay server, so this genuinely runs two consecutive `reconcile --json` passes
+  through the fixed engine, both matching the checked-in no-op `expected/reconcile.json` — `.github#2450`
+  AC2 ("two consecutive `reconcile` passes ... produce no board write") proven end to end rather than
+  asserted in prose. No `manifest.json`: unlike `2216-oscillation`, this fixture's expectation is what
+  the FIXED engine actually outputs, not a deliberate override of a bug that is still open.
 
 ## Refreshing a fixture
 
