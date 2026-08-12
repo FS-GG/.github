@@ -111,8 +111,16 @@ if [ "$1" = "api" ] && [ "$2" = "-X" ]; then
   exit 0
 fi
 if [ "$1" = "api" ]; then
-  echo "GET $2" >> "$log"
-  cat "$STUB_DIR/comments.json"
+  target="$2"
+  echo "GET $target" >> "$log"
+  case "$target" in
+    */comments) cat "$STUB_DIR/comments.json" ;;
+    *) cat "$STUB_DIR/issue-state.json" ;;
+  esac
+  exit 0
+fi
+if [ "$1" = "issue" ] && [ "$2" = "reopen" ]; then
+  echo "REOPEN $3" >> "$log"
   exit 0
 fi
 if [ "$1" = "issue" ] && [ "$2" = "edit" ]; then
@@ -125,15 +133,18 @@ STUB
   chmod +x "$1/bin/gh"
 }
 
-# sandbox <name> <comments-json> -> prints the sandbox dir. Copies the REAL kit-auto-publish.py in
-# (relative `scripts/kit-auto-publish.py` is what the step itself invokes) and seeds the stubbed
-# `gh api .../comments` read.
+# sandbox <name> <comments-json> [<issue-state-json>] -> prints the sandbox dir. Copies the REAL
+# kit-auto-publish.py in (relative `scripts/kit-auto-publish.py` is what the step itself invokes) and
+# seeds the stubbed `gh api .../comments` and `gh api .../issues/<n>` reads. Issue state defaults to
+# open, matching #2106's steady state; a test opts into "closed" explicitly.
 sandbox() {
-  local d="$esc_work/$1"
+  local d="$esc_work/$1" state="${3:-}"
   mkdir -p "$d/bin" "$d/scripts"
   cp "$root/scripts/kit-auto-publish.py" "$d/scripts/"
   write_gh_stub "$d"
   printf '%s' "$2" > "$d/comments.json"
+  [ -n "$state" ] || state='{"state":"open"}'
+  printf '%s' "$state" > "$d/issue-state.json"
   printf '%s' "$d"
 }
 
@@ -214,6 +225,161 @@ grep -qi 'command not found' "$d3/stderr.log" \
 checks=$((checks + 1))
 [ ! -f "$d3/calls.log" ] || ! grep -qE '^(LABEL|POST|PATCH)' "$d3/calls.log" \
   || { echo 'gate-inversion: the escalation is total on the real defect — no label or comment write may occur' >&2; cat "$d3/calls.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 4. The escalation TARGET must be OPEN (.github#2435 AC2): a closed #2106 is reopened as part
+#         of writing the sticky comment, so a live streak always reads from an open-issue view. ----
+d4="$(sandbox closed-target '[]' '{"state":"closed"}')"
+rc=0; run_escalation "$d4" "$esc_facts" 3001 "$esc_script" || rc=$?
+[ "$rc" -eq 0 ] || { echo "closed-target escalation: expected exit 0, got $rc" >&2; cat "$d4/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qx 'REOPEN 2106' "$d4/calls.log" \
+  || { echo 'closed-target escalation: expected the escalation target to be reopened' >&2; cat "$d4/calls.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 5. An already-open target must not be needlessly reopened. ----
+d5="$(sandbox open-target '[]' '{"state":"open"}')"
+rc=0; run_escalation "$d5" "$esc_facts" 3002 "$esc_script" || rc=$?
+[ "$rc" -eq 0 ] || { echo "open-target escalation: expected exit 0, got $rc" >&2; cat "$d5/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qx 'REOPEN 2106' "$d5/calls.log" \
+  && { echo 'open-target escalation: an already-open issue must not be reopened' >&2; exit 1; }
+checks=$((checks + 1))
+
+marker_literal='<!-- fsgg:kit-auto-publish-escalation -->'
+seed_comment() {
+  local streak="$1" run="$2"
+  printf '%s\n\n```json\n%s\n```\n\nAuto-publish performed no tag, feed, or evidence-PR write. [Run](x).' \
+    "$marker_literal" "{\"valid\":true,\"streak\":$streak,\"action\":\"refuse\",\"reason\":\"major\",\"version\":\"1.0.0\",\"lastRun\":\"$run\"}"
+}
+
+# ---- 6. Below the bound: a prior streak of 1 becomes 2 on a new run (< threshold 3) — stays green.
+d6="$(sandbox below-threshold "$(jq -n --arg b "$(seed_comment 1 4001)" '[{id:601, body:$b}]')")"
+rc=0; run_escalation "$d6" "$esc_facts" 4002 "$esc_script" || rc=$?
+[ "$rc" -eq 0 ] || { echo "below-threshold escalation: expected exit 0 (streak 2 < 3), got $rc" >&2; cat "$d6/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .escalation.streak "$d6/escalation-decision.json")" = 2 ] \
+  || { echo "below-threshold escalation: expected streak 2, got $(jq -r .escalation.streak "$d6/escalation-decision.json")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 7. At the bound: a prior streak of 2 becomes 3 (>= threshold 3) — the job must fail, but only
+#         AFTER the sticky comment and label are written: the durable record is not sacrificed to the
+#         CI-visibility signal (acceptance criterion 1: "either the run fails ... or the escalation
+#         opens/updates an open tracking row, or both" — this exercises both together). ----
+d7="$(sandbox at-threshold "$(jq -n --arg b "$(seed_comment 2 5001)" '[{id:701, body:$b}]')")"
+rc=0; run_escalation "$d7" "$esc_facts" 5002 "$esc_script" || rc=$?
+[ "$rc" -eq 1 ] || { echo "at-threshold escalation: expected exit 1 (streak 3 >= 3), got $rc" >&2; cat "$d7/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qx 'PATCH repos/FS-GG/.github/issues/comments/701' "$d7/calls.log" \
+  || { echo 'at-threshold escalation: the sticky comment must still be written before the job fails' >&2; cat "$d7/calls.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qx 'LABEL 2106 blocked' "$d7/calls.log" \
+  || { echo 'at-threshold escalation: the label must still be applied before the job fails' >&2; cat "$d7/calls.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qi 'streak' "$d7/stdout.log" \
+  || { echo 'at-threshold escalation: expected a streak-bound error annotation' >&2; cat "$d7/stdout.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 8. GATE-INVERSION for the streak bound: strip the threshold check back out of a copy of the
+#         real step and show a streak of 5 (well past the bound) now stays silently green — exactly
+#         the invisible-refusal shape .github#2435 documents. A test that cannot fail on the absence
+#         of this check has not tested it. ----
+mutate_remove_threshold() {
+  python3 - "$esc_script" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+lines = open(src, encoding="utf-8").read().splitlines(keepends=True)
+out, skipping, removed = [], False, False
+for line in lines:
+    if line.lstrip().startswith('streak="$(jq -r'):
+        skipping = True
+        removed = True
+        continue
+    if skipping:
+        if line.strip() == 'fi':
+            skipping = False
+        continue
+    out.append(line)
+if not removed:
+    sys.exit("could not locate the streak-threshold block to strip")
+open(dst, "w", encoding="utf-8").write("".join(out))
+PY
+}
+no_threshold_script="$esc_work/escalate-no-threshold.sh"
+mutate_remove_threshold "$no_threshold_script"
+d8="$(sandbox no-threshold "$(jq -n --arg b "$(seed_comment 4 6001)" '[{id:801, body:$b}]')")"
+rc=0; run_escalation "$d8" "$esc_facts" 6002 "$no_threshold_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo "gate-inversion (streak bound): without the check, a streak past the bound should stay green like before the fix, got $rc" >&2; cat "$d8/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(jq -r .escalation.streak "$d8/escalation-decision.json")" -ge 3 ] \
+  || { echo "gate-inversion (streak bound): sanity check that the streak is really at/above the bound failed" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 9. `csproj_version`: PROVENANCE ROOT CAUSE (.github#2435). .github#2410 (coherent-set
+#         versioning) turned FS.GG.Kit.csproj's <Version> into an MSBuild property REFERENCE,
+#         `$(FsggCoherentSetVersion)`. A raw regex over just the csproj reads that reference as its
+#         own literal text, which never matches the msbuild-resolved `$version` computed elsewhere in
+#         the observation step — so the provenance search never found a matching merge for ANY future
+#         version, and the state machine refused every version forever. This extracts the REAL helper
+#         out of the REAL workflow and runs it against a synthetic git repo covering both the plain
+#         literal form and the property-indirection form. ----
+extract_csproj_version_fn() {
+  awk '/^[[:space:]]*# BEGIN kit-csproj-version$/{flag=1; next} /^[[:space:]]*# END kit-csproj-version$/{flag=0} flag' \
+    "$root/.github/workflows/kit-auto-publish.yml" > "$1"
+  grep -q 'csproj_version()' "$1" \
+    || { echo "csproj_version() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
+}
+
+fn_work="$esc_work/fn"
+mkdir -p "$fn_work"
+csproj_version_fn="$fn_work/csproj_version.sh"
+extract_csproj_version_fn "$csproj_version_fn"
+
+repo="$fn_work/repo"
+mkdir -p "$repo/src/FS.GG.Kit"
+git -C "$fn_work" init -q repo
+git -C "$repo" config user.email test@example.test
+git -C "$repo" config user.name test
+printf '<Project><PropertyGroup><Version>1.2.3</Version></PropertyGroup></Project>' > "$repo/src/FS.GG.Kit/FS.GG.Kit.csproj"
+git -C "$repo" add -A && git -C "$repo" commit -q -m literal
+literal_commit="$(git -C "$repo" rev-parse HEAD)"
+printf '<Project><PropertyGroup><FsggCoherentSetVersion>1.3.0</FsggCoherentSetVersion></PropertyGroup></Project>' > "$repo/Directory.Build.props"
+printf '<Project><PropertyGroup><Version>$(FsggCoherentSetVersion)</Version></PropertyGroup></Project>' > "$repo/src/FS.GG.Kit/FS.GG.Kit.csproj"
+git -C "$repo" add -A && git -C "$repo" commit -q -m indirection
+indirection_commit="$(git -C "$repo" rev-parse HEAD)"
+
+run_csproj_version() {
+  ( cd "$repo" && bash -c "source '$1'; csproj_version '$2' 'src/FS.GG.Kit/FS.GG.Kit.csproj'" )
+}
+
+got="$(run_csproj_version "$csproj_version_fn" "$literal_commit")"
+[ "$got" = "1.2.3" ] \
+  || { echo "csproj_version: literal form expected 1.2.3, got '$got'" >&2; exit 1; }
+checks=$((checks + 1))
+
+got="$(run_csproj_version "$csproj_version_fn" "$indirection_commit")"
+[ "$got" = "1.3.0" ] \
+  || { echo "csproj_version: property-indirection form expected 1.3.0 resolved through Directory.Build.props, got '$got'" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 10. GATE-INVERSION for the provenance fix: strip the property-indirection branch back to the
+#          pre-fix naive regex and show it now returns the UNRESOLVED literal property-reference text
+#          instead of the real version — reproducing exactly the defect that made kit-auto-publish
+#          refuse FS.GG.Kit 0.50.0 forever (streak 17 and rising, per .github#2435's live evidence).
+naive_csproj_version="$fn_work/csproj_version_naive.sh"
+cat > "$naive_csproj_version" <<'NAIVE'
+csproj_version() {
+  local commit="$1" path="$2"
+  git show "$commit:$path" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1
+}
+NAIVE
+got="$(run_csproj_version "$naive_csproj_version" "$indirection_commit")"
+[ "$got" = '$(FsggCoherentSetVersion)' ] \
+  || { echo "gate-inversion (provenance): the pre-fix regex should misread the property reference as its own literal text, got '$got'" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$got" != "1.3.0" ] \
+  || { echo "gate-inversion (provenance): the naive form must NOT resolve to the real version" >&2; exit 1; }
 checks=$((checks + 1))
 
 echo "kit auto-publish state machine: $checks passed"
