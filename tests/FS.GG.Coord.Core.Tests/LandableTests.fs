@@ -480,6 +480,30 @@ module LandableTests =
         Assert.Equal(PrRed, score (Some true) [ startupFailure ] [ unrelatedGreenCheck ])
 
     [<Fact>]
+    let ``a run whose suite is entirely CLEAN (every check-run already passed) but the run itself concluded bad still reds (#2454)`` () =
+        // The THIRD arm `runGating`'s `findings` filter introduces, next to the empty-suite arm above: a
+        // suite that has live check-runs, but none of them is a FINDING (every one already completed
+        // `success`), while the RUN's own conclusion is nonetheless bad. Nothing in the suite explains that
+        // badness, so `runGating` stays conservative and returns `Blocking` — the doc comment above
+        // `runGating` names this exactly ("nothing in its suite explains a bad or pending run status, so
+        // leaving it scored is the conservative answer").
+        //
+        // Pinned with the SAME masking discipline AC3's own comment documents (found at review, #2400 round
+        // 1, and reproduced for this branch at review, #2454 round 1): `greenRun` lives on a DIFFERENT suite
+        // (1L, not `cleanSuiteBadRun`'s 5L), so it keeps `total <> 0` whatever this arm decides, which is what
+        // makes this test's `PrRed` depend on the arm itself rather than on #606's unrelated zero-subjects
+        // rule. A `| [] -> Blocking` -> `| [] -> Advisory` mutation on this arm (findings empty) would launder
+        // `cleanSuiteBadRun`'s own `failure` conclusion to `Advisory`, dropping it from the rollup and turning
+        // this `PrRed` into a false `PrGreen` — exactly the gap a bare "does the suite total change?" test
+        // cannot catch, because `onlyCheckPassed` (already `Blocking`, already non-bad) contributes nothing
+        // to `bad` either way.
+        let cleanSuiteBadRun =
+            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+
+        let onlyCheckPassed = named "some-job" (Some 5L) "completed" (Some "success")
+        Assert.Equal(PrRed, score (Some true) [ greenRun; cleanSuiteBadRun ] [ onlyCheckPassed ])
+
+    [<Fact>]
     let ``AC1 (multi-check suite, #2454): an advisory-failing check ALONGSIDE genuinely GREEN non-advisory checks does not red — coherence.yml's real shape`` () =
         // `.github#2454`: this is the shape `coherence.yml` actually produces and the ORIGINAL #2400 fix did
         // not cover — one suite carrying the advisory `claim-generation` (failing) plus several ordinary jobs
