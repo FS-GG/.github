@@ -480,26 +480,52 @@ module LandableTests =
         Assert.Equal(PrRed, score (Some true) [ startupFailure ] [ unrelatedGreenCheck ])
 
     [<Fact>]
-    let ``AC4: a suite with an advisory-failing check AND a genuinely GREEN non-advisory check still reds — ALL, not ANY (#2379)`` () =
-        // `runGating`'s `List.forall` must require EVERY one of a run's own check-runs to be advisory
-        // before the run is excluded — not merely ANY. A `forall` -> `exists` mutation leaves the whole
-        // shipped suite green (found at review, #2400 round 1): every other case here either has a SINGLE
-        // check-run in the run's suite (so `forall` and `exists` agree) or has a second FAILING non-advisory
-        // check (AC2) whose own `bad` contribution reds the verdict regardless of how the RUN is classified,
-        // so neither shape can tell `forall` from `exists` apart.
-        //
-        // This one can: the suite carries one advisory-and-FAILING check-run alongside one ordinary-and-
-        // PASSING check-run. Under the correct `forall`, that suite is NOT all-advisory (the passing check
-        // is `Blocking`), so `coherenceRun` stays `Blocking` and its own `failure` conclusion reds the
-        // verdict. Under `exists`, the mere PRESENCE of the advisory-failing check is enough to call the
-        // whole suite advisory, the run is dropped from the rollup, its ordinary check-run is green, and the
-        // verdict comes out GREEN — silently laundering a genuine blocking failure.
+    let ``AC1 (multi-check suite, #2454): an advisory-failing check ALONGSIDE genuinely GREEN non-advisory checks does not red — coherence.yml's real shape`` () =
+        // `.github#2454`: this is the shape `coherence.yml` actually produces and the ORIGINAL #2400 fix did
+        // not cover — one suite carrying the advisory `claim-generation` (failing) plus several ordinary jobs
+        // that all PASSED. The first shipped `runGating` surveyed suite MEMBERSHIP: every check-run in the
+        // suite, passing ones included, had to be advisory-named for the run to qualify as `Advisory` — so
+        // the mere PRESENCE of these passing ordinary jobs kept `coherenceRun` `Blocking`, and its own
+        // `failure` conclusion (caused solely by the advisory job) still reded the verdict. The fix filters
+        // to FINDINGS (bad or pending) before asking whether everything left is advisory; a passing check-run
+        // is not a finding and cannot hold the run `Blocking` on its own.
         let coherenceRun =
             run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
 
         let advisoryFailing = named "claim-generation" (Some 5L) "completed" (Some "failure")
-        let ordinaryGreen = named "contract-coherence" (Some 5L) "completed" (Some "success")
-        Assert.Equal(PrRed, score (Some true) [ greenRun; coherenceRun ] [ advisoryFailing; ordinaryGreen ])
+        let ordinaryGreenA = named "contract-coherence" (Some 5L) "completed" (Some "success")
+        let ordinaryGreenB = named "projection" (Some 5L) "completed" (Some "success")
+        let ordinaryGreenC = named "roster-closure" (Some 5L) "completed" (Some "success")
+        let ordinaryGreenD = named "drift" (Some 5L) "completed" (Some "success")
+        let ordinaryGreenE = named "reconcile" (Some 5L) "completed" (Some "success")
+
+        Assert.Equal(
+            PrGreen,
+            score
+                (Some true)
+                [ greenRun; coherenceRun ]
+                [ advisoryFailing; ordinaryGreenA; ordinaryGreenB; ordinaryGreenC; ordinaryGreenD; ordinaryGreenE ]
+        )
+
+    [<Fact>]
+    let ``AC2 (multi-check suite, #2454): List.forall over FINDINGS, not membership — ALL bad checks must be advisory, not ANY`` () =
+        // The `forall`-vs-`exists` distinction the old membership-based test used to police still matters
+        // under the new findings-based rule, but the shape that exercises it now needs at least two BAD
+        // check-runs in the same suite (a single bad check can't tell `forall` from `exists` apart). This
+        // reuses AC2's own shape — one advisory-and-failing check plus one genuinely non-advisory-and-failing
+        // check — which already asserts `PrRed`; a `forall` -> `exists` mutation there would flip it to
+        // `PrGreen` (the failing ordinary check's mere coexistence with an advisory one would be enough to
+        // call the suite all-advisory), so that test alone already catches the mutation this comment used to
+        // describe. Adding a passing ordinary check-run alongside both bad ones — never a finding, so never
+        // in scope for `findings`'s `forall` — proves the passing check plays no part in the decision either
+        // way, distinguishing this from AC2 rather than duplicating it.
+        let coherenceRun =
+            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+
+        let advisoryFailing = named "claim-generation" (Some 5L) "completed" (Some "failure")
+        let realFailing = named "contract-coherence" (Some 5L) "completed" (Some "failure")
+        let ordinaryGreen = named "projection" (Some 5L) "completed" (Some "success")
+        Assert.Equal(PrRed, score (Some true) [ greenRun; coherenceRun ] [ advisoryFailing; realFailing; ordinaryGreen ])
 
     [<Fact>]
     let ``a run whose only check-run is advisory and STILL RUNNING is not held at pending either`` () =
