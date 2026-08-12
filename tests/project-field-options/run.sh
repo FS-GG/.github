@@ -120,6 +120,73 @@ else
   fail "Repo Scope missing resolver case" "rc=$rc out=$out"
 fi
 
+# State 3 (`.github#2411`): a SEMANTICALLY INERT reformat of `resolve` — every roster arm's RHS
+# wrapped in a no-op helper AND the arms reordered — must still read as agreement, not drift. This
+# reproduces the exact escape found reviewing `.github#2398`: PR #2404's first push (commit
+# `e4a0a650`) changed every arm's RHS shape (wrapping it in `Repository`) without touching the
+# roster/resolver MAPPING, and the then-current whole-body regex still reported a total false drift
+# (`missing=[everything]`, CI run https://github.com/FS-GG/.github/actions/runs/31521527951).
+# Built from the REAL `RepoScope.fs` (not a hand-written fixture) so this stays accurate as the
+# roster grows; the script asserts the roster-arm block's shape rather than silently drifting quiet.
+python3 - "$ROOT/src/FS.GG.Coord.Core/RepoScope.fs" "$WORK/reformatted-resolver.fs" <<'PY'
+import re
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+lines = open(src).readlines()
+arm_re = re.compile(r'^(\s*\| "[^"]+" -> )Repository ("[^"]+")\s*\n$')
+arm_idxs = [i for i, line in enumerate(lines) if arm_re.match(line)]
+if not arm_idxs:
+    sys.exit("no roster arms found in RepoScope.fs; fixture generator is stale")
+if arm_idxs != list(range(arm_idxs[0], arm_idxs[0] + len(arm_idxs))):
+    sys.exit("roster arms are not contiguous; fixture generator is stale")
+
+wrapped = []
+for i in arm_idxs:
+    prefix, literal = arm_re.match(lines[i]).groups()
+    wrapped.append(f"{prefix}noop (Repository {literal})\n")
+wrapped.reverse()  # arm order must not matter to the check
+for i, line in zip(arm_idxs, wrapped):
+    lines[i] = line
+
+out = "".join(lines).replace(
+    "    let resolve (raw: string)",
+    "    let private noop x = x\n\n    let resolve (raw: string)",
+    1,
+)
+open(dst, "w").write(out)
+PY
+out="$(run_tool check --schema "$SCHEMA" --resolver "$WORK/reformatted-resolver.fs" 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -eq 0 ]; then
+  pass "Repo Scope check reads agreement through a reordered, no-op-wrapped resolve (regression for .github#2411)"
+else
+  fail "resolver reformat tolerance" "rc=$rc out=$out"
+fi
+
+# State 4 (`.github#2411` round 1, critic `kite-2ddb` finding F1): a trailing LINE COMMENT holding a
+# decoy quoted string — an entirely ordinary rename comment, e.g. `// was "FS.GG.OldSDD" before the
+# rename` — must not defeat the "last quoted literal" reading. Before this fix such a comment on ONE
+# arm false-refused with `wrong=['sdd']`, a more mundane trigger than either residual risk this
+# check already discloses (active patterns, a hoisted helper). Built from the real RepoScope.fs; the
+# generator refuses loudly, rather than silently no-op, if the targeted arm's exact text ever changes.
+python3 - "$ROOT/src/FS.GG.Coord.Core/RepoScope.fs" "$WORK/comment-decoy-resolver.fs" <<'PY'
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+target = '| "sdd" -> Repository "FS.GG.SDD"'
+decoy = ' // was "FS.GG.OldSDD" before the rename'
+text = open(src).read()
+if text.count(target) != 1:
+    sys.exit(f"expected exactly one occurrence of {target!r}; fixture generator is stale")
+open(dst, "w").write(text.replace(target, target + decoy, 1))
+PY
+out="$(run_tool check --schema "$SCHEMA" --resolver "$WORK/comment-decoy-resolver.fs" 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -eq 0 ]; then
+  pass "Repo Scope check ignores a decoy quoted string in a trailing line comment (regression for .github#2411 round 1)"
+else
+  fail "resolver comment-decoy tolerance" "rc=$rc out=$out"
+fi
+
 reset_state
 if PROJECT_FIELD_OPTIONS_FAKE_BAD_TOTAL=1 run_tool snapshot --output "$WORK/partial.json" >/dev/null 2>&1; then
   fail "partial snapshot refusal" "mismatched totalCount was accepted"
