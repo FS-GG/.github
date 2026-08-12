@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 2343-receiver-safe-kit-doc-links
+  title: "Make coordination-kit documentation links receiver-safe"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2343-receiver-safe-kit-doc-links/spec.md
+  sourceClarifications: work/2343-receiver-safe-kit-doc-links/clarifications.md
+  sourceChecklist: work/2343-receiver-safe-kit-doc-links/checklist.md
+  sourcePlan: work/2343-receiver-safe-kit-doc-links/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2343-receiver-safe-kit-doc-links/spec.md
+    digest: 10580afc554a4bde8470ca7fbd372d41e551959c380d3736b487a23d90c36b47
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2343-receiver-safe-kit-doc-links/clarifications.md
+    digest: bc8717833a7824459397d559a6bae73c0fcc654d52507f23f287f742b2629492
+    schemaVersion: 1
+  - label: checklist
+    path: work/2343-receiver-safe-kit-doc-links/checklist.md
+    digest: 240393e5e6de0749c7b6b380f89317294e8e74329bf0c9c4e61433364b029a32
+    schemaVersion: 1
+  - label: plan
+    path: work/2343-receiver-safe-kit-doc-links/plan.md
+    digest: 6acef297bb99694a749e00d66ed0831e885b100625ef0d4ffe2c1052dfef9321
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-002]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2343-receiver-safe-kit-doc-links."

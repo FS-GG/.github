@@ -73,6 +73,18 @@ printf '\n[missing reference](references/does-not-exist.md)\n' \
   >>"$WORK/tree/.claude/skills/check-board/SKILL.md"
 expect_rejection "broken relative links fail before distribution" "broken relative link"
 
+# .github#2343: a link inside a kit-delivered skill (registry/repos.yml `kit:` block) that resolves
+# to a real file OUTSIDE every kit skill directory (here, docs/coordination/README.md) is exactly
+# the shape that shipped a dead link into every coordination-kit receiver, because a receiver never
+# materializes docs/ — only the kit skill directories themselves. `validate_links` alone cannot see
+# this: the target genuinely EXISTS in this checkout, so the older, weaker check stays green. Only
+# `validate_receiver_safe_links` — added by this item — proves the receiver-true fact.
+seed
+printf '\n[escapes the kit](../../../docs/coordination/README.md)\n' \
+  >>"$WORK/tree/.claude/skills/check-board/SKILL.md"
+expect_rejection "a kit skill link resolving outside every kit-delivered directory is rejected" \
+  "receiver-unsafe relative link"
+
 seed
 python3 - "$WORK/tree/tests/skill-quality/forward-triggers.json" <<'PY'
 import json
