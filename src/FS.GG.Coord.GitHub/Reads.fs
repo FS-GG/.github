@@ -1272,13 +1272,32 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
+                let root = doc.RootElement
+
+                // A 2xx BODY THAT IS SYNTACTICALLY VALID JSON BUT NOT AN OBJECT — `[]`, `"text"`, `7`,
+                // `true`, `null` — is not a GraphQL response of any shape, and `TryGetProperty` on
+                // anything but an object THROWS `InvalidOperationException` rather than answering `false`.
+                // This guard must run BEFORE the `errors` read below, which is otherwise the one call in
+                // this function that sits outside the `try/with` a few lines down — an unhandled crash on
+                // exactly the input this function exists to fail closed on. `Budget.readMeter` guards this
+                // identical case for the identical reason (`.github#2418`/PR #2419); this mirrors that
+                // proven shape rather than inventing a new one.
+                if root.ValueKind <> JsonValueKind.Object then
+                    Error(
+                        Malformed(
+                            subject,
+                            $"the content-edit response is not a JSON object (%A{root.ValueKind}) — a GraphQL response is always `{{...}}`, so this is a FAILED READ, never zero edits"
+                        )
+                    )
+                else
+
                 // THE ORDER IS THE CONTRACT (`Board.graphQlData`): GitHub reports an exhausted GraphQL
                 // budget, and any other partial failure, as an HTTP 200 carrying `errors` — exactly like a
                 // genuinely partial response. `errors` is read BEFORE `data` is trusted, never reached as
                 // a fallback once extraction below fails, so a rate limit is reported AS a rate limit and
                 // not folded into the generic "malformed" arm.
                 let errors =
-                    match doc.RootElement.TryGetProperty "errors" with
+                    match root.TryGetProperty "errors" with
                     | true, e when e.ValueKind = JsonValueKind.Array && e.GetArrayLength() > 0 -> Some e
                     | _ -> None
 
@@ -1306,7 +1325,7 @@ module Reads =
                     // manufacture that exact false negative through the "authoritative" path instead.
                     try
                         let editsNode =
-                            doc.RootElement
+                            root
                                 .GetProperty("data")
                                 .GetProperty("repository")
                                 .GetProperty("issueOrPullRequest")

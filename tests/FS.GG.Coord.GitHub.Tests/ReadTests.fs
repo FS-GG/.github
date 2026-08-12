@@ -734,6 +734,24 @@ let ``#2477 contentEditProvenance FAILS CLOSED - an empty body is an error, neve
     | Error other -> failwith $"expected Malformed — got %A{other}"
 
 [<Fact>]
+let ``#2477 contentEditProvenance FAILS CLOSED - a non-object JSON root is an error, never an unhandled crash`` () =
+    // The critic's finding on PR #2480 round 1: a 2xx body that is SYNTACTICALLY VALID JSON but not an
+    // object — `[]` here — made `TryGetProperty "errors"` throw `InvalidOperationException` from a call
+    // site that sat OUTSIDE the try/with a few lines below. That surfaced as an unhandled crash
+    // (`ExitDefect`, a raw stack trace) rather than a reported failure — AC4's letter ("a failed or
+    // unauthorized read must be reported as a FAILED READ") is not met by a read that does not complete
+    // at all. `Budget.readMeter` guards this identical non-object-root case for the identical reason
+    // (`.github#2418`/PR #2419); this proves the same guard closes it here. If this test throws instead
+    // of returning `Error`, xUnit reports it as a failed test with the escaping exception's stack trace —
+    // which is itself the observable shape of the defect this test exists to keep closed.
+    let transport = serving "[]"
+
+    match Reads.contentEditProvenance transport "FS-GG" ".github" 2417 with
+    | Error(Malformed _) -> ()
+    | Ok p -> failwith $"a non-object root must refuse, not report zero edits — got Total=%d{p.Total}"
+    | Error other -> failwith $"expected Malformed — got %A{other}"
+
+[<Fact>]
 let ``#2477 contentEditProvenance FAILS CLOSED - a 200-with-errors rate limit is RateLimited, never zero edits`` () =
     // GitHub reports an exhausted GraphQL budget as an HTTP 200 carrying `errors`, exactly like a
     // genuinely partial response — the same shape `Board.graphQlData` guards. `errors` must be read
