@@ -75,11 +75,27 @@ rename anything.
    > `.nupkg` archives with different sha256 (`-p:ContinuousIntegrationBuild=true` does not
    > change this — measured on FS.GG.Templates 0.8.0, FS-GG/FS.GG.Templates#349).
    >
-   > Exactly **one** retry path is safe: GitHub Actions **"Re-run failed jobs,"** which
-   > skips the already-succeeded `pack` job and lets the failed `publish` job re-download
-   > the *original* uploaded artifact. It is safe only **within the artifact's retention
-   > window** (`retention-days` on the upload — 7 days in the producers measured); past
-   > that window even this path re-packs.
+   > Whether a retry path is safe depends on **job topology**, and it is not uniform
+   > across producers.
+   >
+   > For a producer whose release job **splits `pack` from `publish`** — a `pack` job
+   > that uploads the `.nupkg` as a build artifact, and a separate `publish` job that
+   > downloads it (the shape this issue's own measurement observed in the FS.GG.Templates
+   > pipeline, run 30984547985, job `pack`) — GitHub Actions **"Re-run failed jobs"** is
+   > safe: it skips the already-succeeded `pack` job and lets `publish` re-download the
+   > *original* artifact. It is safe only **within the artifact's retention window**
+   > (`retention-days` on the upload); past that window even this path re-packs.
+   >
+   > **`.github`'s own three dual-push producers do not have that shape.**
+   > `release-kit.yml`, `release-drivers.yml` and `release-coord-engine.yml` each run
+   > `pack` and both pushes as sequential **steps inside one `publish` job** — no
+   > `needs:`, no `upload-artifact`/`download-artifact`. GitHub Actions reruns at **job**
+   > granularity with no per-step memoization, so "Re-run failed jobs" on these three
+   > re-executes `pack` exactly as "Re-run all jobs" does — there is no artifact to
+   > redownload. **For these three, no safe retry path exists today**: a nuget.org push
+   > that fails after the org-feed push already succeeded has no recovery that does not
+   > risk the divergence below. Whether the remaining external producers share the
+   > split-job or the single-job shape is not verified here.
    >
    > **"Re-run all jobs" and re-pushing/re-tagging the release are NOT safe.** Both
    > re-invoke `pack`, which mints a new `<guid>` and therefore new bytes. Because both the
