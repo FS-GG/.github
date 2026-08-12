@@ -120,7 +120,48 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.50.0 — VERSIONING-SCHEME CHANGE, NOT A BEHAVIOR CUT (.github#2402):
+    <PackageReleaseNotes>0.50.2 — the completed coherent-set cut. FOUR DEFECT-CLASS ENGINE FIXES
+plus two hardening changes, and the first version at which FS.GG.Kit, FS.GG.Drivers and this engine
+are all three published together since 0.50.0 (.github#2381).
+
+WHY 0.50.2 AND NOT 0.50.1. The 0.50.1 cut published FS.GG.Kit and FS.GG.Drivers to both feeds and
+then REFUSED to publish this engine: `check-engine-release-notes` (.github#1762) correctly red-flagged
+that this property still began with `0.50.0`, so the package listing would have announced another
+release's notes. Both sibling packages were already immutable at 0.50.1 and the coherent-set gate
+requires all three tags to name the SAME commit, so 0.50.1 could not be completed from a corrected
+tree — it stands as a permanent two-of-three set. 0.50.2 is the whole set, cut from one commit with
+this property corrected first. FS.GG.Kit 0.50.1 and FS.GG.Drivers 0.50.1 should not be adopted on
+their own; adopt 0.50.2.
+
+WHAT SHIPS SINCE 0.50.0 (defect-class marked DEFECT):
+
+DEFECT  landable now attributes run gating to bad/pending check-runs rather than suite membership
+        (.github#2454). Before this, a merge gate could red on a check merely BELONGING to a suite
+        rather than on that check having failed.
+DEFECT  the markerless-row PR probe widened to `In review`, not just `Ready`/`Backlog`
+        (.github#2384) — the projection oscillation that made an unclaimed in-review row flip
+        columns between reads.
+DEFECT  `done`'s .github#2427 passed-over-foreign-closer advisory now goes to stderr rather than
+        stdout and the durable receipt (.github#2444), restoring stdout purity for callers that
+        parse it.
+DEFECT  critic-succession's "exact critic" guard no longer accepts a generic agent-type string as
+        proof of "the same critic" (.github#2451) — it bound to a review-marker field that is not
+        always a minted identity, weakening the independent-review contract itself.
+        `isGenericCriticIdentity` is kept private to Driver.fs/Review.fs.
+        the #353 collision scan now runs on `claim`, warning by default and refusing with
+        `--refuse-overlap` (.github#2459) — `claim` previously bypassed the overlap check entirely,
+        so two workers could hold intersecting touch-sets.
+        the accepted fsgg-sdd validator `toolVersion` is now an explicit vetted set rather than a
+        bare literal (.github#2465), with an error naming the reported version and the accepted set.
+        Previously ANY FS.GG.SDD.Cli release — patch included — broke `cycle advance` until someone
+        edited F# source.
+
+NO WIRE-SURFACE CHANGE. `git diff coord-engine/v0.50.0..HEAD -- src/FS.GG.Coord.Core/Protocol.fs` is
+empty across all of the above: no verb, flag, help entry, render name, result name or exit code is
+added, removed or re-spelled. This is a patch-line cut.
+
+PRIOR 0.50.0.
+
 FS.GG.Coord.Cli's `&lt;Version&gt;` is no longer this project's own independent literal. FS.GG.Kit,
 FS.GG.Drivers and this engine are now released from one shared MSBuild property
 ($(FsggCoherentSetVersion), Directory.Build.props), so a bump to any one of the three moves all
