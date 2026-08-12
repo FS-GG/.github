@@ -4,8 +4,10 @@ open System
 open System.IO
 open Xunit
 open FS.GG.Coord
+open FS.GG.Coord.Types
 open FS.GG.Coord.Cli
 open FS.GG.Coord.GitHub
+open FS.GG.Coord.GitHub.Transport
 
 module DeliveryApplicationTests =
     let commentWithId id body : Driver.ReviewComment = { Id = id; Url = $"https://example.test/{id}"; Body = body }
@@ -340,3 +342,155 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         // silent fallback to a confident empty read.
         Assert.False(String.IsNullOrWhiteSpace err, "expected a non-empty diagnostic on stderr")
         Assert.True(err.Contains("declaredPaths") || err.Contains("unread"), $"expected the diagnostic to name the offending field, got: %s{err}")
+
+    // .github#2395 (design slice 3 of .github#1858): `Client.rebindAuthorization` is the pure decision
+    // behind `delivery`'s automatic write of the `fsgg:pr-authorization` marker `check-claim-generation.py`
+    // (`scripts/check-claim-generation.py`) reads. Each case below mirrors one of that gate's own four
+    // diagnoses — MISSING, STALE (a superset here: any mismatch of `gen`/`head` rebinds), and the "two
+    // markers is the same as none" rule — so a fix that makes any of them pass without truly repairing the
+    // marker is caught here first.
+
+    [<Fact>]
+    let ``#2395 authorizationMarker renders the exact v1 grammar the gate parses`` () =
+        let marker = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        Assert.Equal(
+            "<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
+            marker
+        )
+
+    [<Fact>]
+    let ``#2395 a body with no marker at all is rebound, not left missing`` () =
+        let body = "Implements the thing.\n\nCloses #2395"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-a" with
+        | Client.AuthorizationRebound updated ->
+            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-a", updated)
+            Assert.Contains("Closes #2395", updated)
+        | Client.AuthorizationCurrent -> failwith "expected a rebind: the body carried no marker at all"
+
+    [<Fact>]
+    let ``#2395 a marker bound to a superseded head is rebound to the current one, not left stale`` () =
+        let body =
+            "Implements the thing.\n\n" + Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-old"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-new" with
+        | Client.AuthorizationRebound updated ->
+            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-new", updated)
+            Assert.DoesNotContain("head-old", updated)
+        | Client.AuthorizationCurrent -> failwith "expected a rebind: the marker's head was superseded"
+
+    [<Fact>]
+    let ``#2395 two markers collapse to exactly one, never left duplicated`` () =
+        let stale = Client.authorizationMarker "FS-GG/.github#2395" "111" "head-old"
+        let alsoStale = Client.authorizationMarker "FS-GG/.github#2395" "222" "head-older"
+        let body = $"Implements the thing.\n\n{stale}\n\n{alsoStale}"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-new" with
+        | Client.AuthorizationRebound updated ->
+            let desired = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-new"
+            let occurrences = System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
+            Assert.Equal(1, occurrences)
+            Assert.Contains(desired, updated)
+        | Client.AuthorizationCurrent -> failwith "expected a rebind: two stale markers must collapse to one current one"
+
+    [<Fact>]
+    let ``#2395 a body already carrying exactly the desired marker is reported current, not rewritten`` () =
+        let desired = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-current"
+        let body = $"Implements the thing.\n\n{desired}"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-current" with
+        | Client.AuthorizationCurrent -> ()
+        | Client.AuthorizationRebound updated -> failwithf "expected no rewrite for an already-current marker, got %s" updated
+
+    // Everything above drives `rebindAuthorization` as a pure function — real coverage of the DECISION,
+    // but none of it proves the LIVE wired path actually reaches the transport with the right method,
+    // path, and body. `Client.ensureAuthorization` is that wiring (`Reads.prBody`'s GET, then a
+    // conditional PATCH via `ctx.Transport.Send`), and the two cases below drive it directly against a
+    // `Fake.Recorder` — the same "reuse the internal seam instead of restating the whole `delivery`
+    // command's board-scan/PR-facts machinery" idiom `AuthorizedMarkerTests.fs` already uses for
+    // `Client.authorizedMarker`. `tests/coord-engine-e2e/writes.sh` has no live `delivery --pr --apply`
+    // invocation, so this in-process pair is this change's only coverage of the real IO, not merely the
+    // pure decision it wraps.
+
+    let private jsonBody (body: string) : string =
+        System.Text.Json.JsonSerializer.Serialize {| body = body |}
+
+    let private ensureAuthorizationTransport (route: Request -> Errors.IoResult<Response>) : Fake.Recorder =
+        Fake.Recorder(fun (req: Request) -> route req)
+
+    let private okResponse (body: string) : Errors.IoResult<Response> =
+        Ok
+            { Status = 200
+              Body = body
+              ETag = None
+              NextLink = None
+              Headers = Map.empty }
+
+    let private ensureAuthorizationTarget: Ref =
+        { Owner = "FS-GG"; Repo = ".github"; Number = 2395 }
+
+    let private ensureAuthorizationMarker: Reads.Marker =
+        { Id = 5267541214L
+          Worker = WorkerId "smew-f1e2"
+          Session = None
+          AgeSeconds = 30
+          PreviousStatus = None
+          PathRepo = None
+          Raw = "<!-- fsgg:claim worker=smew-f1e2 lease=120 -->" }
+
+    let private ensureAuthorizationContext (transport: Fake.Recorder) : Client.Context =
+        { Transport = transport
+          Owner = "FS-GG"
+          Title = "Coordination"
+          DefaultRepo = Some ".github"
+          ChoreLocks = [] }
+
+    [<Fact>]
+    let ``#2395 ensureAuthorization reads the live PR body and PATCHes the rebound marker onto pulls/n`` () =
+        let mutable patchedBody: string option = None
+
+        let transport =
+            ensureAuthorizationTransport (fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/pulls/9001" -> okResponse (jsonBody "Implements the thing.\n\nCloses #2395")
+                | "PATCH", "repos/FS-GG/.github/pulls/9001" ->
+                    match req.Body with
+                    | Json payload ->
+                        use doc = System.Text.Json.JsonDocument.Parse payload
+                        patchedBody <- Some(doc.RootElement.GetProperty("body").GetString())
+                        okResponse "{}"
+                    | _ -> failwith "expected the authorization PATCH to carry a JSON body"
+                | method', path -> Error(Errors.NotFound $"unexpected request in the #2395 fixture: %s{method'} %s{path}"))
+
+        let head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false true with
+        | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
+        | Ok() ->
+            match patchedBody with
+            | None -> failwith "expected a PATCH to reach repos/FS-GG/.github/pulls/9001"
+            | Some body ->
+                Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" head, body)
+                Assert.Contains("Closes #2395", body)
+
+    [<Fact>]
+    let ``#2395 ensureAuthorization spends zero writes once the live PR body is already current`` () =
+        let head = "cccccccccccccccccccccccccccccccccccccccc"
+        let desired = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" head
+
+        let transport =
+            ensureAuthorizationTransport (fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/pulls/9001" -> okResponse (jsonBody $"Implements the thing.\n\n{desired}")
+                | "PATCH", "repos/FS-GG/.github/pulls/9001" ->
+                    failwith "expected zero writes: the live PR body already carried the current marker"
+                | method', path -> Error(Errors.NotFound $"unexpected request in the #2395 fixture: %s{method'} %s{path}"))
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false true with
+        | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
+        | Ok() -> ()
+
+    [<Fact>]
+    let ``#2395 ensureAuthorization makes no request at all without --apply`` () =
+        let transport =
+            ensureAuthorizationTransport (fun req -> Error(Errors.NotFound $"expected zero requests without --apply, got %s{req.Method} %s{req.Path}"))
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) "head-a" false false with
+        | Error e -> failwithf "expected ensureAuthorization to succeed as a no-op, got %A" e
+        | Ok() -> ()
