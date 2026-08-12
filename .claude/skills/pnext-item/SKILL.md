@@ -71,6 +71,17 @@ Never assume someone else did the repair. Read
 running any of it — every clause above has a measured reason, including why the check needs no `-C`
 and why the repair is not `pull --ff-only`.
 
+**Tier-2a is also a shadowing hazard, not only an escape hatch.** Once your OWN worktree has a source
+build, `scripts/fsgg-coord` keeps preferring it over the shared checkout's for the rest of this item —
+so a *later* staleness refusal from it names YOUR worktree's toplevel, never the shared checkout's, even
+after you have independently confirmed the shared checkout is current (`.github#2471`: a worker verified
+the shared checkout `Already up to date` and still hit exit 69, because an earlier `dotnet build` in
+their OWN worktree, from evidence-gathering before this item's build, had gone stale in place). The
+refusal's own message now says so explicitly and names both checkouts. When it fires: do NOT repair the
+shared checkout — it did not cause this — and do NOT merge `origin/main` into a feature branch under
+review to clear it, which moves a head an independent critic may already have confirmed. Rebuild (or
+delete the stale `bin`/`obj` under, then rebuild) the checkout the refusal names, exactly as printed.
+
 ```bash
 scripts/fsgg-coord budget
 scripts/fsgg-coord take --repo <repo> --json
