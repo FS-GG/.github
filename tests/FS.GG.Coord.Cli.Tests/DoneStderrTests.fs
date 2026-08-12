@@ -2,6 +2,7 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System
 open System.IO
+open System.Text.RegularExpressions
 open Xunit
 open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
@@ -198,6 +199,18 @@ module DoneStderrTests =
         Assert.Contains("passed over", stderr)
         Assert.Contains("EHotwagner/S.I.R.#195", stderr)
         Assert.Contains("PR #413", stderr)
+
+        // EXACTLY ONCE — `.github#2444`'s own acceptance criterion, and the property `Assert.Contains`
+        // above CANNOT see: `render`/`renderReceipt` are both called for the SAME verdict (once for the
+        // console line, once for the durable receipt), so a caller that re-derives and re-prints the note
+        // at each call site would print it TWICE, and every `Contains`/`DoesNotContain` assertion in this
+        // test passes identically either way — containment cannot detect cardinality. Counted on the
+        // stable, specific sentence `Done.passedOverForeignNote` emits (not the bare "passed over", which
+        // a coincidental second occurrence elsewhere in stderr could satisfy without being the SAME print).
+        let occurrences =
+            Regex.Matches(stderr, Regex.Escape "a foreign-repository closer was passed over").Count
+
+        Assert.Equal(1, occurrences)
 
     [<Fact>]
     let ``#2444 the durable receipt comment DELIBERATELY keeps the note stdout no longer carries`` () =
