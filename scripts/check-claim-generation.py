@@ -12,25 +12,31 @@ fence must live where the *effect* lands (the merge), not where the tool is invo
 
 THIS SLICE'S SCOPE, DELIBERATELY NARROWER THAN THE FULL DESIGN. The design's full merge gate (§6.3)
 has six checks, two of which (`grant=` names the lowest-id merge-ELECTION marker; the opkey recomputes)
-depend on machinery — `OpKey`, the merge election, `delivery` writing the PR authorization marker —
-that live in `src/FS.GG.Coord.*` and are explicitly OUT OF this item's `Paths:`. Those two checks are
-what grounds the marker in something a forger cannot type (design doc §6.3: "Only check 4 grounds the
-marker in something the forger cannot choose"). Without them, THIS gate is satisfiable by a PR author
-who simply copies the CURRENT live generation into the marker by hand — it deduplicates and fences the
-`#1853` incident's actual shape (an executor holding NO claim at all, so it can name no generation and
-is refused at check 1 regardless), but it does not yet defend against a forger who *can* read the live
-generation. That is `.github#1858`'s own AC1 caveat repeated here, not a new one: `#2342`'s own scope
-says "Root cause is deliberately NOT asserted" and "[t]his slice consumes that identity at the merge
-boundary rather than defining the whole scheme." A later slice landing the election and re-wiring this
-gate's check 4 (see `#1858`'s replacement plan) closes that residual; it is out of scope here.
+depend on machinery — `OpKey` and the merge election itself — that live in `src/FS.GG.Coord.*` and are
+explicitly OUT OF this item's `Paths:`. (`delivery` writing the plain `v=`/`item=`/`gen=`/`head=` marker
+landed separately, `.github#2395`; the election and its `opkey=`/`grant=` fields have not.) Those two
+checks are what grounds the marker in something a forger cannot type (design doc §6.3: "Only check 4
+grounds the marker in something the forger cannot choose"). Without them, THIS gate is satisfiable by a
+PR author who simply copies the CURRENT live generation into the marker by hand — it deduplicates and
+fences the `#1853` incident's actual shape (an executor holding NO claim at all, so it can name no
+generation and is refused at check 1 regardless), but it does not yet defend against a forger who *can*
+read the live generation. That is `.github#1858`'s own AC1 caveat repeated here, not a new one:
+`#2342`'s own scope says "Root cause is deliberately NOT asserted" and "[t]his slice consumes that
+identity at the merge boundary rather than defining the whole scheme." A later slice landing the
+election and re-wiring this gate's check 4 (see `#1858`'s replacement plan) closes that residual; it is
+out of scope here.
 
 THE MARKER THIS GATE READS. The design doc (§6.3) specifies a `fsgg:pr-authorization` marker in the PR
-BODY, bound to its head, carrying `item=`, `gen=`, `opkey=`, `grant=`, `head=`. Nothing in `src/`
-writes it yet (that is design slice 3, also out of `Paths:`), so this gate DEFINES the subset of that
-marker it can validate today and is written to remain forward-compatible with the rest: it requires
-`v=1 item=<owner>/<repo>#<n> gen=<comment id> head=<40-hex sha>`, and silently accepts (never rejects
-on) any *additional* `key=value` pairs — including a future `opkey=`/`grant=` — so slice 3 landing does
-not have to avoid emitting them and this gate does not have to change to tolerate them:
+BODY, bound to its head, carrying `item=`, `gen=`, `opkey=`, `grant=`, `head=`. `.github#2395` (design
+slice 3) made `delivery --apply --pr N` write and rebind this marker's `v=`/`item=`/`gen=`/`head=`
+fields automatically — `Client.ensureAuthorization`/`Client.rebindAuthorization`,
+`src/FS.GG.Coord.Cli/Client.fs` — but deliberately not the merge-election `opkey=`/`grant=`, which still
+depend on machinery out of that item's `Paths:` (see "THIS SLICE'S SCOPE" above). So this gate DEFINES
+the subset of that marker it can validate today and is written to remain forward-compatible with the
+rest: it requires `v=1 item=<owner>/<repo>#<n> gen=<comment id> head=<40-hex sha>`, and silently accepts
+(never rejects on) any *additional* `key=value` pairs — including a future `opkey=`/`grant=` — so a
+later slice landing them does not have to avoid emitting them and this gate does not have to change to
+tolerate them:
 
     <!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2342 gen=5250268950 head=<40-hex sha> -->
 

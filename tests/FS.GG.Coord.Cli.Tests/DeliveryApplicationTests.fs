@@ -327,3 +327,58 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         // silent fallback to a confident empty read.
         Assert.False(String.IsNullOrWhiteSpace err, "expected a non-empty diagnostic on stderr")
         Assert.True(err.Contains("declaredPaths") || err.Contains("unread"), $"expected the diagnostic to name the offending field, got: %s{err}")
+
+    // .github#2395 (design slice 3 of .github#1858): `Client.rebindAuthorization` is the pure decision
+    // behind `delivery`'s automatic write of the `fsgg:pr-authorization` marker `check-claim-generation.py`
+    // (`scripts/check-claim-generation.py`) reads. Each case below mirrors one of that gate's own four
+    // diagnoses — MISSING, STALE (a superset here: any mismatch of `gen`/`head` rebinds), and the "two
+    // markers is the same as none" rule — so a fix that makes any of them pass without truly repairing the
+    // marker is caught here first.
+
+    [<Fact>]
+    let ``#2395 authorizationMarker renders the exact v1 grammar the gate parses`` () =
+        let marker = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        Assert.Equal(
+            "<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
+            marker
+        )
+
+    [<Fact>]
+    let ``#2395 a body with no marker at all is rebound, not left missing`` () =
+        let body = "Implements the thing.\n\nCloses #2395"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-a" with
+        | Client.AuthorizationRebound updated ->
+            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-a", updated)
+            Assert.Contains("Closes #2395", updated)
+        | Client.AuthorizationCurrent -> failwith "expected a rebind: the body carried no marker at all"
+
+    [<Fact>]
+    let ``#2395 a marker bound to a superseded head is rebound to the current one, not left stale`` () =
+        let body =
+            "Implements the thing.\n\n" + Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-old"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-new" with
+        | Client.AuthorizationRebound updated ->
+            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-new", updated)
+            Assert.DoesNotContain("head-old", updated)
+        | Client.AuthorizationCurrent -> failwith "expected a rebind: the marker's head was superseded"
+
+    [<Fact>]
+    let ``#2395 two markers collapse to exactly one, never left duplicated`` () =
+        let stale = Client.authorizationMarker "FS-GG/.github#2395" "111" "head-old"
+        let alsoStale = Client.authorizationMarker "FS-GG/.github#2395" "222" "head-older"
+        let body = $"Implements the thing.\n\n{stale}\n\n{alsoStale}"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-new" with
+        | Client.AuthorizationRebound updated ->
+            let desired = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-new"
+            let occurrences = System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
+            Assert.Equal(1, occurrences)
+            Assert.Contains(desired, updated)
+        | Client.AuthorizationCurrent -> failwith "expected a rebind: two stale markers must collapse to one current one"
+
+    [<Fact>]
+    let ``#2395 a body already carrying exactly the desired marker is reported current, not rewritten`` () =
+        let desired = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-current"
+        let body = $"Implements the thing.\n\n{desired}"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-current" with
+        | Client.AuthorizationCurrent -> ()
+        | Client.AuthorizationRebound updated -> failwithf "expected no rewrite for an already-current marker, got %s" updated

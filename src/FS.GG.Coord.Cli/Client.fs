@@ -1755,6 +1755,105 @@ module Client =
                 | Ok _ -> Ok None
                 | Error e -> Error e
 
+    /// `delivery`'s write-side counterpart to `scripts/check-claim-generation.py`'s read side
+    /// (.github#2395, design slice 3 of .github#1858, narrowed to the marker alone — the merge
+    /// election's `opkey=`/`grant=` stay out of this item's `Paths:`, exactly as that gate's own
+    /// docstring already documents for its read side).
+    ///
+    /// UNLIKE the delivery-obligation/receipt markers `DeliveryApplication.obligationsFromComments`
+    /// parses, this one is matched the SAME PERMISSIVE way `check-claim-generation.py`'s `AUTH_MARKER_RE`
+    /// matches it: DOTALL, anywhere in the body, not anchored to a comment's leading line. That gate is
+    /// this marker's only other reader, so this mirrors its tolerance rather than inventing a stricter
+    /// one of its own — a marker this function judges "present and current" must be one the gate would
+    /// also accept.
+    let private authorizationMarkerPattern =
+        System.Text.RegularExpressions.Regex(
+            @"<!--\s*fsgg:pr-authorization\s.*?-->",
+            System.Text.RegularExpressions.RegexOptions.Compiled
+            ||| System.Text.RegularExpressions.RegexOptions.Singleline
+        )
+
+    /// The exact marker text `delivery` writes: `v=1 item=<owner/repo>#<n> gen=<claim marker comment
+    /// id> head=<40-hex sha>`. The gate silently accepts (never rejects on) any ADDITIONAL `key=value`
+    /// pair, so this stays forward-compatible with a future `opkey=`/`grant=` without either side
+    /// having to change first.
+    let authorizationMarker (item: string) (gen: string) (head: string) : string =
+        $"<!-- fsgg:pr-authorization v=1 item=%s{item} gen=%s{gen} head=%s{head} -->"
+
+    /// The one write-worthy fact about a PR body: is its authorization already exactly what the live
+    /// claim/head demand, or does it need rebinding? `AuthorizationCurrent` lets the caller skip a PATCH
+    /// entirely — the common case on every `delivery --apply` call after the first — while
+    /// `AuthorizationRebound` carries the WHOLE new body, never a diff, so the caller cannot
+    /// accidentally PATCH a partial rewrite.
+    type AuthorizationRebind =
+        | AuthorizationCurrent
+        | AuthorizationRebound of body: string
+
+    /// Rewrite `body` so it carries EXACTLY ONE `fsgg:pr-authorization` marker, bound to the current
+    /// `item`/`gen`/`head`. Satisfies the item's owed properties directly, by construction rather than
+    /// by a separate check:
+    ///   - "replaces rather than duplicates" — every existing match (zero, one, or many) is stripped
+    ///     before the fresh marker is appended, so the result never carries more than one;
+    ///   - "rebinds on head change" — a single existing match whose text is not byte-identical to the
+    ///     freshly rendered marker (a stale head, a stale gen, or any other drift) is treated exactly
+    ///     like zero matches: stripped and replaced, never left in place or duplicated alongside a
+    ///     second, corrected one.
+    let rebindAuthorization (body: string) (item: string) (gen: string) (head: string) : AuthorizationRebind =
+        let desired = authorizationMarker item gen head
+        let matches = authorizationMarkerPattern.Matches body
+        if matches.Count = 1 && matches.[0].Value.Trim() = desired then
+            AuthorizationCurrent
+        else
+            let stripped = authorizationMarkerPattern.Replace(body, "").TrimEnd()
+            if String.IsNullOrWhiteSpace stripped then
+                AuthorizationRebound desired
+            else
+                AuthorizationRebound(stripped + "\n\n" + desired)
+
+    /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
+    /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
+    /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
+    /// elsewhere), the PR has already merged (nothing further to authorize), or the caller is not
+    /// applying a mutation (`--apply` gates every write this command makes, and this is one).
+    /// `rebindAuthorization`'s `AuthorizationCurrent` answer skips the PATCH entirely, so a routine
+    /// status check that changed nothing spends one read and zero writes — the common case on every call
+    /// after the first.
+    ///
+    /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
+    /// endpoint is the one GitHub documents for it.
+    let private ensureAuthorization
+        (ctx: Context)
+        (target: Ref)
+        (marker: Reads.Marker option)
+        (pr: int option)
+        (head: string)
+        (merged: bool)
+        (apply: bool)
+        : Errors.IoResult<unit> =
+        match apply, pr, marker, merged with
+        | true, Some prNumber, Some heldMarker, false ->
+            Reads.prBody ctx.Transport target.Owner target.Repo prNumber
+            |> Result.bind (fun body ->
+                match rebindAuthorization body target.Canonical (string heldMarker.Id) head with
+                | AuthorizationCurrent -> Ok()
+                | AuthorizationRebound rebound ->
+                    let payload =
+                        let o = System.Text.Json.Nodes.JsonObject()
+                        o.["body"] <- System.Text.Json.Nodes.JsonValue.Create rebound
+                        o.ToJsonString()
+
+                    let request: Request =
+                        { Method = "PATCH"
+                          Path = $"repos/%s{target.Owner}/%s{target.Repo}/pulls/%d{prNumber}"
+                          Query = []
+                          Body = Transport.Json payload
+                          Budget = Rest
+                          IfNoneMatch = None
+                          Subject = target.Short }
+
+                    ctx.Transport.Send request |> Result.map ignore)
+        | _ -> Ok()
+
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
@@ -1854,6 +1953,19 @@ module Client =
                                 | _, _, _, Error error, _, _
                                 | _, _, _, _, Error error, _
                                 | _, _, _, _, _, Error error -> Error error
+
+                        // Ensure the PR's `fsgg:pr-authorization` marker is current BEFORE deriving the
+                        // lifecycle facts below — a write to the PR body that no fact in
+                        // `Delivery.Snapshot` reads, so folding it into the same `Result` here cannot
+                        // change what `Delivery.inspect` decides; it only keeps the gate's read side
+                        // (`scripts/check-claim-generation.py`) from ever seeing a stale or absent
+                        // marker on the NEXT push (.github#2395).
+                        let branchAndPr =
+                            branchAndPr
+                            |> Result.bind (fun (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations) ->
+                                ensureAuthorization ctx target marker pr head merged opts.Apply
+                                |> Result.map (fun () ->
+                                    (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations)))
 
                         match branchAndPr with
                         | Error error -> fail error
