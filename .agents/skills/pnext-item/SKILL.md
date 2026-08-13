@@ -218,11 +218,11 @@ Ensure the PR closes the item — with a bare `Closes #<n>` (same repo) or `owne
 **never** the board's own `<repo>#<n>` shorthand, which GitHub's closing-keyword grammar does not parse
 and which then never closes the issue and cannot be repaired once merged (.github#2107). `verify-paths`,
 run right after opening the PR (§5), now catches this while it is still free to fix — do not wait for it
-to surface at `done`. Observe the host-acceptance marker for the current head, address confirmed
-actionable feedback, and wait on the typed `landable` verdict for the exact head SHA.
+to surface at `done`. Observe the host-acceptance marker for the current head and address confirmed
+actionable feedback.
 
-**Immediately after `landable` reports green for that exact head SHA, and immediately before the merge
-REST call below, make one LIVE call:**
+**Immediately after the host-acceptance marker is observed and every repair is complete — and BEFORE
+checking `landable`, not after — make one LIVE call:**
 
 ```bash
 scripts/fsgg-coord delivery <ref> --pr <pr> --json
@@ -234,12 +234,27 @@ merged (`.github#2488`); nothing else in this documented flow reaches that write
 this step reproduces the five-for-five pattern `.github#2488` measured — a merged `item/<n>-*` PR with no
 marker at all (`.github#2496`).
 
-- **Once per item, at this exact point — not after opening the PR, and not on every push.** A call made
-  earlier binds the marker to whatever head existed then; every later push re-stales it, and nothing
-  short of this step calls `delivery` again. Calling here binds it to the one head that matters: the head
-  that is actually about to merge, and the last one CI will ever evaluate `claim-generation` against.
-  Calling it here is also sufficient on its own — `rebindAuthorization` makes a call against an
-  already-current marker a zero-cost no-op PATCH-skip, so this is never a routine per-push network write.
+This step moved ahead of the `landable` check (`.github#2504`) because `.github#1858` made
+`claim-generation` a required status context on `main`: GitHub now reports the PR `BLOCKED` — and
+`landable` reads that mergeability verdict, not only its own advisory rollup — until this call's marker
+is current, so waiting for `landable` green *before* making this call is a cycle the marker can never
+break. No push happens between this call and the merge below, so making the call here binds the marker
+to the identical head `landable` is about to score and the one that actually merges — the same property
+§6 has always required, reached one step earlier.
+
+This call's JSON output may report `action: refreshReview, stage: reviewActive` at this point, because
+`claim-generation` and any other still-running checks have not yet reported against the marker this call
+just wrote. **That is not a refusal** — the write happens unconditionally (`.github#2488` removed the
+`--apply` gate), and the reported action is only the engine's own next-step suggestion from a review
+chain it re-inspected before the checks caught up. Do not call it a second time; proceed straight to
+waiting on `landable` below.
+
+- **Once per item, at this exact point — after the host-acceptance marker and all repairs, and before
+  `landable`'s check — never after opening the PR, and never on every push.** A call made earlier binds
+  the marker to whatever head existed then; every later push re-stales it, and nothing short of this step
+  calls `delivery` again. Calling it here is also sufficient on its own — `rebindAuthorization` makes a
+  call against an already-current marker a zero-cost no-op PATCH-skip, so this is never a routine
+  per-push network write.
 - **Only the worker currently holding this item's live claim marker may make this call, and only before
   releasing that claim.** The live form itself refuses otherwise ("no live claim marker can authorize
   delivery") — a fresh critic or a worker after `done --flip` released the claim cannot make it on your
@@ -249,11 +264,14 @@ marker at all (`.github#2496`).
   this org's inventory carries (ADR-0019 §1, `.github#2332`); routing this call through CI is refuted by
   that boundary, not merely undesirable.
 - **A failed call is reported, never silently swallowed — and never blocks the merge.** The write is the
-  only thing this call does; `claim-generation`'s conclusion stays advisory (excluded from `landable`'s
-  own rollup by name, `.github#2373`) until it is armed into branch protection, which nothing here does.
-  Note the failure (to whoever dispatched you, or in the item's own history) and proceed with the merge.
+  only thing this call does; `claim-generation`'s conclusion stays advisory in the engine's own rollup
+  (excluded from `landable`'s own rollup by name, `.github#2373`) even though branch protection now makes
+  it merge-blocking regardless of that classification. Note the failure (to whoever dispatched you, or in
+  the item's own history) and proceed with the merge.
 
-Merge only green and verify the merge on the default branch.
+Now wait on the typed `landable` verdict for that exact same head SHA — the marker this call just wrote
+is what lets `claim-generation`, and therefore `landable`, go green. Merge only once `landable` reports
+green for that exact head, and verify the merge on the default branch.
 Then complete every package, deployment, generated-registry, and downstream obligation described in
 [merge-and-release](references/merge-and-release.md).
 For uncommon failure recovery, exact REST recipes, review-thread handling, and incident rationale,

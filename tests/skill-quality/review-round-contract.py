@@ -215,6 +215,38 @@ def main() -> None:
             f"pnext-item SKILL.md is missing the implementer gate-evidence mirror: {literal}",
         )
 
+    # .github#2504 — `claim-generation` became a required status context on `main` under `.github#1858`,
+    # which turned the OLD §6 order into a cycle: `landable` green requires `claim-generation` green,
+    # which requires the `fsgg:pr-authorization` marker, which only the live `delivery` call writes —
+    # and that call used to run only AFTER `landable` reported green, so it could never write the marker
+    # the wait was blocking on. The fix moves the live call ahead of the `landable` wait (no push happens
+    # between them, so the marker still binds the exact head that merges). A future edit that silently
+    # restores the OLD order — moving the call back to after `landable` green — must red this test even
+    # if it keeps every literal from the previous check above, so this pins ORDER, not just presence:
+    # both anchors must occur, and the delivery-call anchor's index must be STRICTLY LESS than the
+    # landable-wait anchor's index. Reverting the order swaps that inequality without necessarily
+    # deleting either literal, which is exactly the escape the presence-only checks above cannot catch.
+    acceptance_anchor = "Observe the host-acceptance marker for the current head and address confirmed"
+    call_anchor = "and BEFORE checking `landable`, not after — make one LIVE call:"
+    delivery_command_anchor = "scripts/fsgg-coord delivery <ref> --pr <pr> --json"
+    landable_wait_anchor = "Now wait on the typed `landable` verdict for that exact same head SHA"
+    anchor_indices = {
+        "host-acceptance-marker-observed": skill_normalized.find(acceptance_anchor),
+        "pre-landable live-delivery-call": skill_normalized.find(call_anchor),
+        "delivery-call command line": skill_normalized.find(delivery_command_anchor),
+        "post-call landable-wait": skill_normalized.find(landable_wait_anchor),
+    }
+    for name, index in anchor_indices.items():
+        require(index != -1, f"pnext-item SKILL.md is missing the merge-order anchor: {name}")
+    require(
+        anchor_indices["host-acceptance-marker-observed"] < anchor_indices["pre-landable live-delivery-call"]
+        < anchor_indices["delivery-call command line"]
+        < anchor_indices["post-call landable-wait"],
+        "pnext-item SKILL.md §6 must sequence host-acceptance observation, then the live `delivery` "
+        "call, then the `landable` wait, in that order — the OLD order (call after `landable` green) is "
+        "the exact cycle .github#2504 fixed",
+    )
+
     for runtime in RUNTIMES:
         for relative in (
             "pnext-item/SKILL.md",
