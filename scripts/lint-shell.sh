@@ -35,10 +35,13 @@
 # the identical reason `is_shell()` above reads bytes instead of trusting a `paths:` filter), and this
 # script lints its output through the SAME pinned binary, severity floor, and check set as the
 # file-based subject — no blanket exclusion either. The one shellcheck finding the `${{ }}` substitution
-# itself can manufacture (SC2050, on a narrow quoting shape) is suppressed PER LINE, inline in the
-# materialized file, only on the exact lines the extractor rewrote into that shape — see
-# `scripts/lib/extract-workflow-shell.py`'s `substitute_expressions` for why a blanket `-e SC2050` here
-# was tried and rejected: it also hid a genuine SC2050 typo with no `${{ }}` involvement at all.
+# itself can manufacture (SC2050, on a narrow quoting shape) is filtered by `scripts/lib/filter-sc2050.py`
+# PER OCCURRENCE — shellcheck's own reported (file, line, column) against a construct span
+# `scripts/lib/extract-workflow-shell.py` precisely computes — never a blanket `-e SC2050` (tried and
+# rejected: hid a genuine, unrelated SC2050 typo anywhere in the subject) and never a per-line pragma
+# (also tried and rejected: hid a genuine, unrelated SC2050 typo sharing one physical line with a
+# resembling-but-different substitution artifact, because shellcheck's own `disable` directive is
+# line-scoped, not column-scoped).
 #
 # EXIT CODES. "I could not check" is a different fact from "I checked, and it is clean", and a gate
 # whose entire job is reading shell does not get to conflate them (#266):
@@ -233,19 +236,29 @@ if [ "${#subject[@]}" -gt 0 ]; then
 fi
 wf_rc=0
 if [ "${#wf_subject[@]}" -gt 0 ]; then
-  # NO `-e SC2050` HERE. `scripts/lib/extract-workflow-shell.py` marks the ONE shape its `${{ }}`
-  # substitution cannot make shellcheck-clean by construction — `'${{ x }}'` as the WHOLE content of a
-  # single-quoted comparison operand, the common `[ '${{ github.event_name }}' = 'workflow_dispatch' ]`
-  # shape — with a PER-LINE `# shellcheck disable=SC2050` pragma, inline in the materialized file
-  # itself (see that script's `substitute_expressions` for exactly which lines qualify and why). A
-  # blanket `-e SC2050` on this whole invocation was the first version of this fix, and .github#2493's
-  # own review round 1 proved it wrong: it also hides a GENUINE SC2050 typo with zero `${{ }}`
-  # involvement anywhere in the 360-step subject — `[ 'GITHUB_REF_NAME' = 'main' ]`, missing the `$` —
-  # which is exactly the shape of defect this item exists to stop the gate from silently missing. The
-  # severity floor and pinned binary here are identical to the file-discovered subject's invocation;
-  # the per-line pragmas are the only difference, and each one is provably scoped to a line THIS
-  # extractor's own substitution produced, never to an author's line it never touched.
-  "$SHELLCHECK" -S "$SEVERITY" -f gcc "${wf_subject[@]}" >>"$findings_log" 2>&1 || wf_rc=$?
+  # NO `-e SC2050` HERE, and no inline pragma written into the materialized files either — both were
+  # tried in earlier rounds of .github#2493's own review and both proved too coarse. `-e SC2050` on the
+  # whole invocation hid a genuine, unrelated SC2050 typo anywhere in the 360-step subject (round 1); a
+  # per-line inline pragma hid a genuine, unrelated SC2050 typo sharing one physical line with a
+  # resembling-but-different substitution artifact, because shellcheck's own `disable` directive is
+  # LINE-scoped, not column-scoped (round 2). `scripts/lib/filter-sc2050.py` is the OCCURRENCE-scoped
+  # replacement: shellcheck runs here at full strength, no exclusions, and the filter drops only the
+  # specific SC2050 findings whose reported (file, line, column) falls inside a span
+  # `scripts/lib/extract-workflow-shell.py` precisely computed for a genuine `${{ }}` substitution site
+  # — never by line, never by file. A raw shellcheck exit outside {0,1} is "could not check" and must
+  # not be laundered through the filter at all, so that case is handled BEFORE filtering, identically
+  # to how the file-discovered subject's own exit code is checked below.
+  wf_raw_log="$(mktemp)" || exit 2
+  trap 'rm -rf "$wf_dir"; rm -f "$wf_manifest" "$log" "$findings_log" "$wf_raw_log"' EXIT
+  wf_raw_rc=0
+  "$SHELLCHECK" -S "$SEVERITY" -f gcc "${wf_subject[@]}" >"$wf_raw_log" 2>&1 || wf_raw_rc=$?
+  case "$wf_raw_rc" in
+    0|1) ;;
+    *) echo "::error::shellcheck exited $wf_raw_rc on the workflow-embedded subject, which is neither clean (0) nor findings (1) — treating as 'could not check'."
+       exit 2 ;;
+  esac
+  wf_rc=0
+  python3 "$GATE_DIR/lib/filter-sc2050.py" <"$wf_raw_log" >>"$findings_log" || wf_rc=$?
 fi
 
 # Re-label materialized temp paths back to their origin before a human reads them. The materialized

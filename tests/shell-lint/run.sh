@@ -402,14 +402,11 @@ run_gate "$d"
   || bad "#2493: substituting GitHub expressions must not manufacture its own findings" "rc=$RC
 $OUT"
 
-# ---- 9f2. THE SC2050 HANDLING IS SCOPED PER LINE, NOT A BLANKET EXCLUSION (.github#2493 review round 1).
-#      The first version of this fix used a file-wide `-e SC2050` flag on the whole workflow-embedded
-#      invocation of the linter, and the critic proved that wrong by mutating the SUBJECT: a step with
-#      a GENUINE SC2050 typo and ZERO `${{ }}` involvement anywhere in it. A blanket exclusion cannot
-#      tell that apart from the substitution artifact Leg 9f defends — it hides BOTH. This is the
-#      item's own defect ("shell-lint claims coverage it doesn't have") reintroduced one layer down,
-#      and it is exactly the gate-inversion shape this leg exists to catch permanently: if the per-line
-#      pragma ever regresses back to a blanket exclusion, this leg reds on a real, unrelated typo.
+# ---- 9f2. THE SC2050 HANDLING IS OCCURRENCE-SCOPED, NOT BLANKET AND NOT MERELY LINE-SCOPED
+#      (.github#2493 review rounds 1-2). Round 1 used a file-wide `-e SC2050` flag on the whole
+#      workflow-embedded invocation, and the critic proved that wrong by mutating the SUBJECT: a step
+#      with a GENUINE SC2050 typo and ZERO `${{ }}` involvement anywhere in it. A blanket exclusion
+#      cannot tell that apart from the substitution artifact Leg 9f defends — it hides BOTH.
 WF_TYPO_RUN='ref="$1"
 if [ "$ref" = "main" ]; then
   echo "on main"
@@ -423,12 +420,56 @@ wf_workflow_with "$d" "$WF_TYPO_RUN"
 git -C "$d" add -A
 run_gate "$d"
 [ "$RC" = 1 ] \
-  && ok "#2493: a genuine SC2050 typo with NO \${{ }} involvement still REDS the gate (the pragma is scoped, not blanket)" \
+  && ok "#2493: a genuine SC2050 typo with NO \${{ }} involvement still REDS the gate" \
   || bad "#2493: a real SC2050 defect unrelated to GitHub-expression substitution must not be hidden" "rc=$RC
 $OUT"
 printf '%s' "$OUT" | grep -q 'SC2050' \
   && ok "#2493: ...and the finding is specifically identified as SC2050" \
   || bad "#2493: the real typo's finding should be reported as SC2050" "$OUT"
+
+# ---- 9f3. THE EXACT ROUND-2 ESCAPE: a resembling-but-different substitution shape sharing ONE PHYSICAL
+#      LINE with a genuine, unrelated SC2050 defect. Round 2's fix moved the round-1 blanket exclusion to
+#      a PER-LINE inline `# shellcheck disable=SC2050` pragma — narrower, but still line-scoped, and the
+#      critic proved that ALSO wrong: `${{ }}` embedded with literal apostrophes inside a DOUBLE-quoted
+#      string (`echo "...'${{ x }}'..."`, the exact shape behind the Leg 9f / SC2027 history) makes the
+#      SAME textual pattern this repo's substitution produces appear on a line — and shellcheck's own
+#      `disable` directive suppresses the WHOLE following physical line, not just the clause that
+#      resembled the trigger. The genuine, unrelated `'GITHUB_REF_NAME' = 'main'` typo on the SECOND
+#      clause of the line below was silently swallowed by that mechanism; it must not be swallowed here.
+WF_COLLISION_RUN='echo "code '"'"'${{ steps.audit.outputs.rc }}'"'"'" && [ '"'"'GITHUB_REF_NAME'"'"' = '"'"'main'"'"' ]
+'
+d="$(newrepo wf-sc2050-collision)"
+wf_workflow_with "$d" "$WF_COLLISION_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 1 ] \
+  && ok "#2493: the round-2 same-line collision (resembling shape + genuine unrelated typo) still REDS the gate" \
+  || bad "#2493: a genuine SC2050 defect sharing a line with a resembling-but-different substitution artifact must not be hidden" "rc=$RC
+$OUT"
+printf '%s' "$OUT" | grep -q 'SC2050' \
+  && ok "#2493: ...and the finding is specifically identified as SC2050" \
+  || bad "#2493: the collision leg's finding should be reported as SC2050" "$OUT"
+
+# ---- 9f4. THE HARDER CASE: TWO GENUINE bracket/test CONSTRUCTS SHARING ONE LINE, only the FIRST one a
+#      substitution site. Occurrence-level filtering (by shellcheck's own reported column against a
+#      precisely-computed construct span — `scripts/lib/extract-workflow-shell.py`'s
+#      `find_sc2050_protected_spans`) must suppress ONLY the first construct's finding and keep the
+#      second, even though both are genuine `[ ... ]` tests on the identical physical line. A line-scoped
+#      mechanism — pragma OR exclusion — cannot pass this leg by construction; only per-occurrence
+#      filtering can.
+WF_TWO_BRACKETS_RUN="[ '\${{ github.event_name }}' = 'workflow_dispatch' ] && [ 'GITHUB_REF_NAME' = 'main' ]
+"
+d="$(newrepo wf-sc2050-two-brackets)"
+wf_workflow_with "$d" "$WF_TWO_BRACKETS_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 1 ] \
+  && ok "#2493: two genuine [ ] constructs on one line — only the substitution-caused one is suppressed, the other REDS" \
+  || bad "#2493: a second, genuine [ ] construct sharing a line with a real substitution site must not be hidden" "rc=$RC
+$OUT"
+printf '%s' "$OUT" | grep -q 'SC2050' \
+  && ok "#2493: ...and the surviving finding is specifically identified as SC2050" \
+  || bad "#2493: the surviving construct's finding should be reported as SC2050" "$OUT"
 
 # ---- 9g. THE REAL TREE'S WORKFLOW-EMBEDDED SUBJECT IS NON-VACUOUS. ------------------------------------
 #      Leg 7 above already requires the real tree clean INCLUDING its workflow-embedded shell (the

@@ -35,8 +35,9 @@
 # through the same pinned binary, severity floor, and check set as the rest of this repo's shell — no
 # gate-wide exclusion. See that script's own header for why GitHub Actions expressions (`${{ ... }}`)
 # need substituting before shellcheck can read them at all, and for the one shellcheck finding the
-# substitution itself can manufacture (SC2050), suppressed per line, only on the lines it actually
-# rewrote, never across the whole subject.
+# substitution itself can manufacture (SC2050), filtered by `scripts/lib/filter-sc2050.py` PER
+# OCCURRENCE — shellcheck's own reported column against a precisely-computed construct span — never by
+# line and never across the whole subject.
 name: shell-lint
 
 on:

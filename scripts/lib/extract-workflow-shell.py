@@ -35,29 +35,33 @@ specifically because an unbraced `$GHA_EXPR` immediately followed by literal tex
 shape in this repo: `"${{ ... }}[bot]"`) reads to shellcheck as unbraced array-subscript syntax and
 raises a self-inflicted SC1087 that has nothing to do with the author's script.
 
-Two substitution passes, in order — because a THIRD self-inflicted finding showed up empirically before
-this two-pass split existed:
+Substitution is a SINGLE pass, strictly in place: every `${{ ... }}` becomes `${GHA_EXPR}`, byte for
+byte, touching nothing outside the matched span. `.github#2493`'s own PR history is the record of why —
+an earlier draft rewrote a whole enclosing `'${{ x }}'` token into a double-quoted reference to dodge a
+shellcheck finding (SC2050, see below), and that rewrite is what introduced a DIFFERENT false positive
+(SC2027) on `.github/workflows/repos-audit.yml`'s `"...'${{ x }}'..."` shape — the `'` characters there
+are literal bytes inside an OUTER double-quoted string, not real quote syntax, and only a real shell
+tokenizer can tell the two apart. Leaving quote bytes alone entirely is the one transform that cannot
+make that mistake.
 
-  1. An expression that is the ENTIRE content of a single-quoted token — `'${{ x }}'`, nothing else
-     inside the quotes — is replaced INCLUDING its quotes, with `"${GHA_EXPR}"` (a real, double-quoted
-     variable reference). Single quotes never interpolate, so leaving them in place would hand
-     shellcheck two adjacent STRING LITERALS to compare in the extremely common
-     `[ '${{ github.event_name }}' = 'workflow_dispatch' ]` shape — and literal-vs-literal is
-     indistinguishable, to a tool that cannot see GitHub's own substitution stage, from a typo'd
-     comparison that can never be true (SC2050, "did you forget the $ on a variable?"). It is not a
-     typo: the left side is genuinely dynamic, just not dynamic in a way bash's own parser can see.
-     Promoting it to a real variable reference is what makes that dynamism visible to shellcheck too.
-  2. Every remaining `${{ ... }}` (embedded in a larger string, or bare/unquoted) is replaced in place
-     with `${GHA_EXPR}`, preserving whatever quoting already surrounded it:
+    "...${{ steps.x.outputs.y }}..."   ->   "...${GHA_EXPR}..."   (inside the author's quotes)
+    --flag ${{ inputs.value }}         ->   --flag ${GHA_EXPR}    (still bare — SC2086 can fire)
+    '${{ github.event_name }}'         ->   '${GHA_EXPR}'         (still single-quoted — see below)
 
-         "...${{ steps.x.outputs.y }}..."   ->   "...${GHA_EXPR}..."   (inside the author's quotes)
-         --flag ${{ inputs.value }}         ->   --flag ${GHA_EXPR}    (still bare — SC2086 can fire)
-
-Both passes preserve whatever quoting the author actually wrote wherever it is preservable, so
-shellcheck's read of that quoting is the same read it would give the substituted value at runtime — the
-property this is for. `.github#2493`'s own PR discussion is the record of the two false positives (one
-per pass) this two-pass design replaced a naive single-pass substitution to eliminate; see its
-Verification notes for the exact shellcheck output before and after.
+THE ONE SHAPE SUBSTITUTION CANNOT MAKE SHELLCHECK-CLEAN BY ITSELF: `${{ x }}` as the WHOLE content of a
+single-quoted comparison OPERAND. `'${{ x }}'` becomes `'${GHA_EXPR}'`, and single quotes never
+interpolate, so in the extremely common `[ '${{ github.event_name }}' = 'workflow_dispatch' ]` shape
+shellcheck sees two adjacent STRING LITERALS being compared and reports SC2050 ("did you forget the $ on
+a variable?") — indistinguishable, from where it is standing, from a typo'd comparison that can never be
+true. It is not a typo: the left side is genuinely dynamic, just substituted by GitHub before any shell
+parses it. `find_sc2050_protected_spans()` below identifies exactly the `[ ... ]` / `[[ ... ]]` / `test
+...` construct this shape sits inside, per OCCURRENCE — not per line — precisely so that a completely
+unrelated, genuine SC2050 defect sharing the SAME physical line survives filtering. This item's own
+history is why occurrence-level, not line-level: round 1 shipped a blanket `-e SC2050` across every
+workflow-embedded step (hid a real, unrelated typo anywhere in 360 steps); round 2 narrowed it to a
+per-line inline pragma (still hid a real, unrelated typo sharing one physical line with the
+resembling-but-different SC2027 shape above, because shellcheck's own `disable` directive is line-scoped,
+not column-scoped) — see `scripts/lib/filter-sc2050.py` for the mechanism that replaced both.
 
 SHELL SELECTION MIRRORS `is_shell()` IN `lint-shell.sh`: only `bash` and `sh` steps are admitted. GitHub
 Actions also allows `pwsh`, `python`, `cmd`, `powershell`, or a custom interpreter string, none of which
@@ -86,6 +90,44 @@ import sys
 ADMITTED_SHELLS = {"bash", "sh"}
 GHA_EXPR = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 
+# The construct a substituted occurrence sits inside, if any: an opening `[`, `[[`, or the `test`
+# keyword, through to the CLOSEST closing `]`/`]]` — no other `]` in between, so a non-greedy match
+# cannot straddle past an intervening, unrelated bracket construct on the same line. This is DETECTION
+# only; `filter-sc2050.py` is what turns a detected span into an actual, per-occurrence suppression.
+# See the module docstring's "THE ONE SHAPE..." section for the full rationale.
+BRACKET_TEST_CONSTRUCT = re.compile(
+    r"(?:\[\[|\[|(?<![\w.-])test(?![\w.-]))"
+    r"[^\n\]]*?"
+    r"'\$\{GHA_EXPR\}'"
+    r"[^\n\]]*?"
+    r"(?:\]\]|\])"
+)
+
+
+def _offset_to_line_col(text: str, offset: int) -> tuple[int, int]:
+    """1-indexed (line, column) for a character OFFSET into `text` — shellcheck's own convention, so a
+    span computed here compares directly against a column shellcheck reports."""
+    line = text.count("\n", 0, offset) + 1
+    line_start = text.rfind("\n", 0, offset) + 1  # -1 -> 0 when there is no preceding newline
+    col = offset - line_start + 1
+    return line, col
+
+
+def find_sc2050_protected_spans(text: str) -> list[tuple[int, int, int]]:
+    """Every (line, col_start, col_end) — both 1-indexed, INCLUSIVE — bracket/test construct in `text`
+    that contains a substituted `${{ }}` as the WHOLE content of one of its single-quoted operands. A
+    shellcheck SC2050 finding whose reported column falls inside one of these spans is attributable to
+    THIS substitution; one whose column falls outside every span — including a DIFFERENT unrelated
+    construct on the very same line — is a real, unrelated defect `filter-sc2050.py` must keep."""
+    spans: list[tuple[int, int, int]] = []
+    for m in BRACKET_TEST_CONSTRUCT.finditer(text):
+        start_line, start_col = _offset_to_line_col(text, m.start())
+        end_line, end_col = _offset_to_line_col(text, m.end() - 1)
+        if start_line != end_line:
+            continue  # a construct cannot span multiple lines here; skip rather than misattribute
+        spans.append((start_line, start_col, end_col))
+    return spans
+
 
 class DiscoveryError(Exception):
     """Raised when the subject cannot be established — never for a step this script chose to skip.
@@ -99,72 +141,14 @@ class DiscoveryError(Exception):
     in itself rather than launder it through the same exit code as an intentional discovery refusal."""
 
 
-# The one shape substitution cannot make shellcheck-clean by itself: `${{ x }}` as the WHOLE content of
-# a single-quoted token — `'${{ x }}'` becomes `'${GHA_EXPR}'` — stays inside quotes that never
-# interpolate, so shellcheck sees two adjacent STRING LITERALS in the common
-# `[ '${{ github.event_name }}' = 'workflow_dispatch' ]` shape and reports SC2050 ("did you forget the
-# $ on a variable?"). See SOLE_SINGLE_QUOTED_GHA_EXPR below for why this is scoped to a PER-LINE
-# pragma rather than a blanket `-e SC2050`.
-SOLE_SINGLE_QUOTED_GHA_EXPR = re.compile(r"'\$\{GHA_EXPR\}'")
-# TWO lines, inserted BEFORE the qualifying line — never a trailing same-line comment. shellcheck
-# directives must be their OWN comment line immediately preceding the line they govern (SC1126: "place
-# shellcheck directives before commands, not after" — a trailing `code  # shellcheck disable=X` does
-# NOT suppress a finding on that same line, confirmed empirically before this landed). The directive
-# comment must ALSO contain nothing but `key=value` pairs — appending human-readable prose to the same
-# comment (`# shellcheck disable=SC2050 -- reason`) makes shellcheck try to parse "-- reason" as ANOTHER
-# directive and error the file (SC1072/SC1073), so the rationale is a separate, PLAIN comment line
-# first. That plain line also must not itself start with the word "shellcheck" right after `#` — this
-# file's own header explains why: `# shellcheck <word>` is a directive wherever it appears, prose or
-# not.
-SC2050_PRAGMA_LINES = (
-    "# .github#2493: substituted GitHub Actions expression, not a literal",
-    "# shellcheck disable=SC2050",
-)
-
-
 def substitute_expressions(text: str) -> str:
     """Replace every `${{ ... }}` with the BRACED reference `${GHA_EXPR}`, strictly IN PLACE — nothing
     outside the matched span is touched, so whatever quote structure the author wrote survives byte for
-    byte around it. See the module docstring's GITHUB EXPRESSIONS section for why braced (SC1087) and
-    why strictly in-place: an earlier draft also rewrote a whole enclosing `'${{ x }}'` token to a
-    double-quoted reference to dodge a different self-inflicted finding (SC2050), and that rewrite is
-    what introduced SC2027 on `.github/workflows/repos-audit.yml`'s `"...'${{ x }}'..."` shape — the
-    `'` characters there are literal bytes inside an OUTER double-quoted string, not real quote syntax,
-    and only a real shell tokenizer can tell the two apart. Leaving quote bytes alone entirely is the
-    one transform that cannot make that mistake; see .github#2493's PR notes for both false positives
-    and the revert between them.
-
-    THEN, PER LINE, mark exactly the lines this substitution turned into `'${GHA_EXPR}'` with an inline
-    `# shellcheck disable=SC2050` — never a blanket `-e SC2050` across the whole file or invocation.
-    `.github#2493`'s own review round 1 proved why the blanket form is wrong: a workflow step with a
-    genuine SC2050 typo and ZERO `${{ }}` involvement — `[ 'GITHUB_REF_NAME' = 'main' ]`, a literal
-    missing its `$` — is a real defect shellcheck can catch, and a file-wide `-e SC2050` hides it just
-    as completely as it hides the substitution artifact. That is this item's own defect, reintroduced
-    one layer down: a gate that reports clean over shell it cannot actually judge. Per-line scoping
-    means the suppression can ONLY ever land on a line THIS function rewrote into that exact shape.
-
-    KNOWN, NARROW LIMITATIONS:
-      - a line inside a heredoc BODY that happens to contain the literal text `'${GHA_EXPR}'` (as data,
-        not code — e.g. a workflow step that `cat`s an example test expression into a file) would still
-        get the two pragma lines inserted before it, landing inside otherwise-literal text rather than
-        real shell. This has not been observed in this repo's real workflows (the two real sites are
-        both genuine `[ ... ]` comparisons), and a real shell tokenizer — which this extractor
-        deliberately is not — would be needed to rule it out generally.
-      - a qualifying line that is itself the CONTINUATION half of a backslash-continued previous line
-        is skipped: inserting a comment between a trailing-backslash line and its continuation would splice the comment
-        into that same logical line and silently swallow the continuation, which is a correctness bug
-        this function must not risk introducing. Such a line simply keeps its (blanket-free) SC2050
-        exposure — unobserved in this repo's real workflows."""
-    text = GHA_EXPR.sub("${GHA_EXPR}", text)
-    lines = text.split("\n")
-    out: list[str] = []
-    prev_continues = False
-    for line in lines:
-        if SOLE_SINGLE_QUOTED_GHA_EXPR.search(line) and not prev_continues:
-            out.extend(SC2050_PRAGMA_LINES)
-        out.append(line)
-        prev_continues = line.rstrip().endswith("\\")
-    return "\n".join(out)
+    byte around it. See the module docstring's GITHUB EXPRESSIONS section for the full rationale,
+    including why braced (avoids a self-inflicted SC1087) and why this is the ONLY transform this
+    function performs — SC2050 protection is a SEPARATE, later concern, handled by
+    `find_sc2050_protected_spans()` and `filter-sc2050.py`, not by rewriting quote structure here."""
+    return GHA_EXPR.sub("${GHA_EXPR}", text)
 
 
 def git_ls_files(repo_root: str) -> list[str]:
@@ -272,9 +256,16 @@ def extract(repo_root: str, out_dir: str) -> list[tuple[str, str]]:
             body = substitute_expressions(run_text)
             if not body.endswith("\n"):
                 body += "\n"
+            content = shebang + body
             with open(out_path, "w", encoding="utf-8") as out:
-                out.write(shebang)
-                out.write(body)
+                out.write(content)
+            # Sidecar spans file for `filter-sc2050.py` — computed over the FULL written content
+            # (shebang included), so its line numbers agree with the ones shellcheck will report
+            # against this exact file.
+            spans = find_sc2050_protected_spans(content)
+            with open(out_path + ".sc2050-spans", "w", encoding="utf-8") as sf:
+                for line, col_start, col_end in spans:
+                    sf.write(f"{line}\t{col_start}\t{col_end}\n")
             written.append((out_path, label))
     return written
 
