@@ -69,3 +69,79 @@ module DeliveryRouteTests =
                 SpecHome = None
                 RequiredGates = [] }
         Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" malformed |> Result.isError)
+
+    // ---- .github#2324: the sdd-required route's own mandatory output ---------------------------------
+
+    [<Fact>]
+    let ``#2324 an sdd-required receipt names its own work and readiness package directories`` () =
+        Assert.Equal<string list>(
+            [ "work/2137-delivery-route"; "readiness/2137-delivery-route" ],
+            DeliveryRoute.mandatorySddPaths (receipt (Some DeliveryRoute.SddRequired))
+        )
+
+    [<Fact>]
+    let ``#2324 a lightweight route obliges no package, so it exempts nothing`` () =
+        let lightweight =
+            { receipt (Some DeliveryRoute.Lightweight) with
+                SddWorkId = None
+                SpecHome = None
+                RequiredGates = [] }
+
+        Assert.Empty(DeliveryRoute.mandatorySddPaths lightweight)
+        // Even a lightweight receipt still CARRYING an SDD binding (which `validate` refuses outright)
+        // exempts nothing: the route, not the leftover field, decides.
+        Assert.Empty(DeliveryRoute.mandatorySddPaths (receipt (Some DeliveryRoute.Lightweight)))
+        Assert.Empty(DeliveryRoute.mandatorySddPaths (receipt None))
+
+    [<Fact>]
+    let ``#2324 a receipt whose SDD binding does not validate exempts nothing`` () =
+        // Each of these makes `validateSddBinding` unhappy, and every one of them must fail CLOSED to the
+        // empty list rather than produce a partly-guessed package location.
+        Assert.Empty(DeliveryRoute.mandatorySddPaths { receipt (Some DeliveryRoute.SddRequired) with SddWorkId = None })
+        Assert.Empty(DeliveryRoute.mandatorySddPaths { receipt (Some DeliveryRoute.SddRequired) with SddWorkId = Some "" })
+        Assert.Empty(DeliveryRoute.mandatorySddPaths { receipt (Some DeliveryRoute.SddRequired) with SpecHome = None })
+
+        Assert.Empty(
+            DeliveryRoute.mandatorySddPaths
+                { receipt (Some DeliveryRoute.SddRequired) with
+                    SpecHome = Some "work/some-other-item/spec.md" }
+        )
+
+        Assert.Empty(
+            DeliveryRoute.mandatorySddPaths
+                { receipt (Some DeliveryRoute.SddRequired) with
+                    RequiredGates = [ "implementationReady"; "verify" ] }
+        )
+
+    [<Fact>]
+    let ``#2324 a work id that is not path-safe never becomes an exemption`` () =
+        // `..` is a machine token by `tokens`' own rule (every character is `.`), and
+        // `work/../spec.md` satisfies the expected-spec form — so without the leading-alphanumeric guard
+        // this receipt would exempt `work/..` and `readiness/..`, i.e. the repository root.
+        let traversal =
+            { receipt (Some DeliveryRoute.SddRequired) with
+                SddWorkId = Some ".."
+                SpecHome = Some "work/../spec.md" }
+
+        Assert.Empty(DeliveryRoute.mandatorySddPaths traversal)
+
+        let hidden =
+            { receipt (Some DeliveryRoute.SddRequired) with
+                SddWorkId = Some ".git"
+                SpecHome = Some "work/.git/spec.md" }
+
+        Assert.Empty(DeliveryRoute.mandatorySddPaths hidden)
+
+        let slashed =
+            { receipt (Some DeliveryRoute.SddRequired) with
+                SddWorkId = Some "2324/../.."
+                SpecHome = Some "work/2324/../../spec.md" }
+
+        Assert.Empty(DeliveryRoute.mandatorySddPaths slashed)
+
+    [<Fact>]
+    let ``#2324 the exemption is bound to this receipt's own work id, never to work or readiness as roots`` () =
+        let paths = DeliveryRoute.mandatorySddPaths (receipt (Some DeliveryRoute.SddRequired))
+        Assert.DoesNotContain("work", paths)
+        Assert.DoesNotContain("readiness", paths)
+        Assert.All(paths, fun p -> Assert.EndsWith("2137-delivery-route", p))

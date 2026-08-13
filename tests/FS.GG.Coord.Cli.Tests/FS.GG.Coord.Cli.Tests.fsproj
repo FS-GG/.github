@@ -43,6 +43,7 @@
     <Compile Include="AddStatusDefaultTests.fs" />
     <Compile Include="LandableNotOpenTests.fs" />
     <Compile Include="VerifyPathsClosingKeywordTests.fs" />
+    <Compile Include="VerifyPathsSddPackageTests.fs" />
     <Compile Include="SchedulingCostTests.fs" />
     <Compile Include="AuthorizedMarkerTests.fs" />
     <Compile Include="ClaimOverlapTests.fs" />
