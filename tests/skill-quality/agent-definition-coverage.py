@@ -75,7 +75,21 @@ def require(condition: bool, message: str) -> None:
 
 
 def skill_roots(root: Path) -> list[Path]:
-    """The skill roots this tree declares, so a type named in EITHER runtime's copy is covered."""
+    """The skill roots this tree declares, so a type named in EITHER runtime's copy is covered.
+
+    EVERY declared root must resolve, and the check is on the RESOLVED list, not the declared one
+    (repair 1, `.github#2510` review round 1). The first draft required only that the declaration
+    parsed to a non-empty list and then silently dropped the roots that did not exist — so a tree
+    whose declaration had drifted past its directories scanned zero files, found zero named types,
+    and printed `0 skill-named types resolve` as a confident exit 0. That is a NON-ANSWER emitted as
+    a positive, and it makes the whole AC3 closure conditional on a file this gate reads but never
+    validates. `.agent-skill-roots` is exactly a file this repo migrates — its own header documents
+    the `.codex/skills` retirement — so the drift is a live shape, not a hypothetical.
+
+    Requiring all of them, rather than at least one, is the same closed-world assumption
+    `scripts/skill-union-assert.sh` already enforces: the declared roots hold the byte-identical
+    union, so a declared root with no directory behind it is a broken tree in either gate's terms.
+    """
     declaration = root / ".agent-skill-roots"
     require(declaration.is_file(), "no .agent-skill-roots declaration to read skill roots from")
     roots = [
@@ -84,7 +98,15 @@ def skill_roots(root: Path) -> list[Path]:
         if line.strip() and not line.lstrip().startswith("#")
     ]
     require(bool(roots), ".agent-skill-roots declares no skill roots")
-    return [path for path in roots if path.is_dir()]
+    resolved = [path for path in roots if path.is_dir()]
+    missing = [str(path.relative_to(root)) for path in roots if not path.is_dir()]
+    require(
+        not missing,
+        f".agent-skill-roots declares {len(roots)} skill root(s) but "
+        f"{', '.join(missing)} does not exist, so this gate would scan no skills and clear every "
+        "named agent type by looking at nothing",
+    )
+    return resolved
 
 
 def frontmatter(path: Path) -> dict:

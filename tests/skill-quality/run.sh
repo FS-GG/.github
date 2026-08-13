@@ -614,6 +614,19 @@ PY
 expect_agent_rejection "two variants disagreeing about one route's tier" \
   "work-board-normal routes 'normal' to opus/high, but another variant routes it to sonnet/high"
 
+# Repair 1 of this item's round-1 review. THE ESCAPE THIS CLOSES IS TWO-FACTOR, which is why the
+# single-factor case above ("a skill naming a type no route defines") did not catch it: that case
+# reds only because the scan FINDS the undefined type. Point the declared roots at directories that
+# do not exist and the scan finds nothing at all, so the identical undefined type cleared a green
+# exit 0 — a non-answer emitted as a positive. Both mutations are applied together here on purpose;
+# reverting either half of the gate's root check turns this leg red.
+seed_agents
+printf '.claude/skills-renamed\n.agents/skills-renamed\n' >"$WORK/tree/.agent-skill-roots"
+printf '\nA future round may be dispatched as `fsgg-critic-turbo`.\n' \
+  >>"$WORK/tree/.claude/skills/pnext-item/references/independent-review.md"
+expect_agent_rejection "declared skill roots that resolve to nothing clear every named type" \
+  ".agent-skill-roots declares 2 skill root(s) but .claude/skills-renamed, .agents/skills-renamed does not exist"
+
 # Epic #266's own class: a gate that does not run when its subject changes is green and wrong.
 seed_agents
 python3 - "$WORK/tree/.github/workflows/skill-quality.yml" <<'PY'
