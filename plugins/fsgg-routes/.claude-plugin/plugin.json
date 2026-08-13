@@ -1,0 +1,9 @@
+{
+  "name": "fsgg-routes",
+  "description": "The four routed subagent definitions the FS-GG board-driver skills dispatch: fsgg-worker-normal, fsgg-worker-best, fsgg-critic-normal, fsgg-critic-best. Their frontmatter carries model and effort verbatim, which is why the routes ship as a plugin rather than as prose.",
+  "version": "0.1.0",
+  "author": {
+    "name": "FS-GG"
+  },
+  "homepage": "https://github.com/FS-GG/.github/tree/main/plugins/fsgg-routes"
+}

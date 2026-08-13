@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "fsgg",
+  "description": "FS-GG operator route definitions. Carries the routed worker and critic subagent definitions the board-driver skills dispatch, so a clean checkout can request an exact <runtime, model, effort> route without a hand-authored agent file.",
+  "owner": {
+    "name": "FS-GG"
+  },
+  "plugins": [
+    {
+      "name": "fsgg-routes",
+      "description": "The four routed subagent definitions the FS-GG board-driver skills dispatch: fsgg-worker-normal, fsgg-worker-best, fsgg-critic-normal, fsgg-critic-best. Their frontmatter carries model and effort verbatim, which is why the routes ship as a plugin rather than as prose.",
+      "author": {
+        "name": "FS-GG"
+      },
+      "source": "./plugins/fsgg-routes",
+      "category": "workflow",
+      "homepage": "https://github.com/FS-GG/.github/tree/main/plugins/fsgg-routes"
+    }
+  ]
+}

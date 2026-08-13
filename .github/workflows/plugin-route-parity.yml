@@ -1,0 +1,113 @@
+# Gate the fsgg-routes plugin's declared routes against the board variants' route tables
+# (.github#2230 AC3, under the decision on .github#2203).
+#
+# `<runtime, model, effort>` is written down twice — once in each board variant's markdown route table,
+# which is what a HOST reads before it spawns anything, and once in each agent definition's frontmatter,
+# which is what the RUNTIME applies when the subagent starts. Nothing compared them. #2203's AC3 wants
+# the triple authored once in `src/FS.GG.Coord.Core/Protocol.fs` and projected; that projection is its
+# own slice, blocked on this one, and .github#2230 says in as many words that this checker is the
+# interim and "is retired by the projection slice". Delete it then.
+#
+# THE PATH FILTER INCLUDES THE SUBJECTS, NOT ONLY THE GATE'S OWN FILES. A drift gate that fires only
+# when someone edits the gate is a gate that never fires on the drift it exists to catch — the change
+# that breaks parity is an edit to a SKILL.md or to a definition's frontmatter, and neither is one of
+# this gate's own three files. `pull_request.paths` and `push.paths` are kept set-identical, which
+# `check-paths-coherence.py` rule (a) requires.
+#
+# Both jobs run on pull_request: unlike the feed/release gates, this gate's subject IS the diff — the
+# manifests, settings, definitions and route tables in the checked-out tree — so there is no live
+# arm to hold back and nothing here reads the network.
+#
+# FAILS CLOSED (epic #266). The checker returns the scripts/lib/gate.py contract: 0 clean, 1 finding,
+# 3 no-verdict. Exit 3 is red on purpose — "I could not look" must never be reported as "I looked and
+# it is clean". Do not add `continue-on-error` or a conditional that can skip either job into green.
+name: plugin-route-parity
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-plugin-route-parity.py"
+      - "tests/plugin-route-parity/**"
+      - ".github/workflows/plugin-route-parity.yml"
+      - ".claude-plugin/marketplace.json"
+      - "plugins/fsgg-routes/**"
+      - ".claude/settings.json"
+      - ".claude/agents/**"
+      - ".claude/skills/drive-board-best/**"
+      - ".claude/skills/drive-board-normal/**"
+      - ".claude/skills/work-board-best/**"
+      - ".claude/skills/work-board-normal/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-plugin-route-parity.py"
+      - "tests/plugin-route-parity/**"
+      - ".github/workflows/plugin-route-parity.yml"
+      - ".claude-plugin/marketplace.json"
+      - "plugins/fsgg-routes/**"
+      - ".claude/settings.json"
+      - ".claude/agents/**"
+      - ".claude/skills/drive-board-best/**"
+      - ".claude/skills/drive-board-normal/**"
+      - ".claude/skills/work-board-best/**"
+      - ".claude/skills/work-board-normal/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-route-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes. Every
+  # assertion has a negative leg, and each asserts the REASON as well as the exit code.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the plugin-route-parity fixture (no network)
+        run: bash tests/plugin-route-parity/run.sh
+
+  route-parity:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Do the plugin's routes still match the board variants' tables?
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-plugin-route-parity.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+      - name: Clean — the tables and the definitions agree
+        if: steps.check.outputs.rc == '0'
+        run: |
+          echo "plugin-route-parity: OK"
+      - name: FINDING — a declared route drifted, or a definition has two homes
+        if: steps.check.outputs.rc == '1'
+        run: |
+          echo "::error::plugin-route-parity found a real disagreement. See the annotations above."
+          exit 1
+      - name: NO VERDICT — the gate could not establish its subject
+        if: steps.check.outputs.rc == '3'
+        run: |
+          echo "::error::plugin-route-parity could not reach a verdict. This is NOT a clean result:"
+          echo "::error::a subject was missing or unparsable, so nothing was actually compared."
+          exit 1
+      - name: INCONCLUSIVE — unexpected exit code
+        if: steps.check.outputs.rc != '0' && steps.check.outputs.rc != '1' && steps.check.outputs.rc != '3'
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern (cf. release-coherence.yml, contract-coherence.yml).
+          RC: ${{ steps.check.outputs.rc }}
+        run: |
+          echo "::error::plugin-route-parity exited $RC, which is not part of the"
+          echo "::error::scripts/lib/gate.py contract (0/1/3). Treating it as a failure."
+          exit 1
