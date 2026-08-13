@@ -47,8 +47,17 @@
 #   2. REFUSALS (5 legs) — one per REACHABLE conjunct of `Review.criticSuccessionValid`: the four
 #      .github#2537 names (exact-critic, exact-head, generic-identity, self-grant) counted as five,
 #      because "self-grant" is two conjuncts — the successor and the granter — and an implementer can
-#      manufacture a succession through either. Every one of the five snapshots differs from the
-#      ACCEPTED grant in exactly one field, so what it measures is that field and not a coincidence.
+#      manufacture a succession through either. Each snapshot carries exactly ONE semantic deviation
+#      from the accepted grant, so what it measures is that deviation and not a coincidence.
+#
+#      Four of the five are also one TEXTUAL field. `generic-identity` is not, and the difference is
+#      worth stating rather than glossing: it moves the marker's `critic:` AND the receipt's
+#      `originalCriticIdentity` together, to `fsgg-critic-best`. That is deliberate and it is what makes
+#      the leg sharp — moving only one of the two would ALSO fail the exact-critic conjunct, and the leg
+#      would then pass for the wrong reason, indistinguishable from `exact-critic` above. Moving both
+#      keeps `receipt.OriginalCriticIdentity = critic` satisfied so that the ONLY conjunct left failing
+#      is `not (isGenericCriticIdentity critic)`. Section 3 is what confirms that claim rather than
+#      leaving it as reasoning: with only the generic conjunct deleted, this leg — and no other — flips.
 #
 #      Each asserts three things, and the third is the one that matters: `resumeSameCritic`, no receipt
 #      echoed, AND an `actionReason` carrying "refused, not consumed". That last clause is this
