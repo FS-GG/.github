@@ -62,16 +62,25 @@ anything in `tests/` that no workflow references is either unwired or dead. `tes
 that state today: 69 lines fixturing `.claude/hooks/block-merge-and-main-push.sh`, reachable only by
 hand, never once run by CI. `--list` reports that class rather than papering over it.
 
-Usage:
-  scripts/test              # the suites this change should run — the inner loop
-  scripts/test --all        # everything — the pre-push gate
-  scripts/test --list       # what would run, and why (which filter matched), without running it
-  scripts/test --base REF   # compare against REF instead of origin/main
-  scripts/test --root DIR   # audit a different working tree (used by the fixture)
+AND REPORTING IT WAS NOT ENOUGH (.github#2537). `--list` printed the class; nothing ever REFUSED it, so
+"unwired" was an unexplained state a suite could drift into in silence — and did.
+`tests/review-critic-succession-wire/`, which is itself the gate-inversion proof that critic
+succession's refusals can fire, sat invoked by no workflow from the day it landed: the proof that a
+gate can say NO had never once been executed. `--assert-wired` turns the report into a verdict, and
+`DELIBERATELY_UNWIRED` below is where the two accountable answers — "wired" or "deliberate, because
+X" — are the only two answers there are.
 
-Exit: 0 = every selected suite passed (or none was selected, said plainly); 1 = a suite failed;
-      3 = no verdict, PERMANENT — unreadable workflows, unsupported filter syntax, or a discovery
-      that examined nothing.
+Usage:
+  scripts/test                 # the suites this change should run — the inner loop
+  scripts/test --all           # everything — the pre-push gate
+  scripts/test --list          # what would run, and why (which filter matched), without running it
+  scripts/test --assert-wired  # every tests/ dir is wired to a workflow, or explained. CI gate.
+  scripts/test --base REF      # compare against REF instead of origin/main
+  scripts/test --root DIR      # audit a different working tree (used by the fixture)
+
+Exit: 0 = every selected suite passed (or none was selected, said plainly); 1 = a suite failed, or
+      `--assert-wired` found an unexplained or stale one; 3 = no verdict, PERMANENT — unreadable
+      workflows, unsupported filter syntax, or a discovery that examined nothing.
 """
 
 from __future__ import annotations
@@ -103,6 +112,52 @@ RX_DOTNET = re.compile(r"dotnet\s+test\s+(tests/[\w.@/-]+\.fsproj)")
 
 # Glob syntax we implement. Anything else is refused rather than guessed at.
 UNSUPPORTED = re.compile(r"[!\[\]+{}]")
+
+# THE ONLY TWO ACCOUNTABLE ANSWERS (.github#2537). A directory under `tests/` that no workflow runs is
+# either WIRED (fix it) or DELIBERATE (say why, here). `--assert-wired` refuses everything else, so
+# membership in this dict is a written claim someone signed, not a mute allowlist.
+#
+# AN ENTRY IS NOT A VERDICT THAT THE STATE IS FINE. It is a verdict that the state is UNDERSTOOD. Four
+# of the five below say, in as many words, that they are unwired by OMISSION and are tracked at
+# .github#2556 — because the alternative was writing "deliberate" about something that is not, and the
+# single property that makes this list worth having is that its entries are true.
+#
+# HOW IT ROTS, AND WHICH WAY IT FAILS. An entry naming a directory that is now WIRED fails
+# (`--assert-wired` calls it STALE): a stale exemption is the dangerous kind, because it would silently
+# re-bless that directory if someone later unwired it. An entry naming a directory that is not on disk
+# at all is INERT and merely reported — a directory that does not exist cannot be a stray, so the entry
+# blesses nothing today. `tests/test-selector/run.sh` is where the repo-specific rule lives that this
+# tree carries no inert entries; keeping it there is what lets `--assert-wired` run over a synthetic
+# root that has none of these directories.
+DELIBERATELY_UNWIRED: dict[str, str] = {
+    "tests/merge-guard": (
+        "DELIBERATE. Fixtures .claude/hooks/block-merge-and-main-push.sh, a LOCAL Claude Code "
+        "PreToolUse hook. CI has no agent tool-call to intercept, so there is nothing for a workflow "
+        "to exercise. Documented since #860; this entry is that documentation, made load-bearing."
+    ),
+    "tests/board-paths-live": (
+        "UNWIRED BY OMISSION, tracked at .github#2556. Hermetic fixture for "
+        "scripts/check-board-paths-live.py. The DETECTOR is wired — board-paths-live.yml runs it "
+        "nightly against the live board — but that workflow is schedule/workflow_dispatch only and "
+        "invokes the detector directly, never this fixture."
+    ),
+    "tests/coord-report": (
+        "UNWIRED BY OMISSION, tracked at .github#2556, and half-blocked on .github#2555. Fixtures "
+        "scripts/fsgg-coord-report, which no workflow runs. Wiring alone would NOT clear this report: "
+        "RX_SHELL/RX_DOTNET above are the whole scrape vocabulary, so `python3 tests/coord-report/"
+        "run.py` in a workflow is invisible to derivation and the directory would still read UNWIRED."
+    ),
+    "tests/observed-command-report": (
+        "UNWIRED BY OMISSION, tracked at .github#2556. Fixtures its own run-gate-junit.sh, a JUnit "
+        "wrapper referenced by nothing outside its own directory — so the remedy is a judgement (wire "
+        "it, or retire the wrapper) rather than a missing `run:` line."
+    ),
+    "tests/release-tag-anchors": (
+        "UNWIRED BY OMISSION, tracked at .github#2556. Fixtures scripts/check-release-tag-anchors.py, "
+        "which is itself invoked by no workflow — detector and fixture are both unwired, so wiring "
+        "this alone would gate a script nothing runs."
+    ),
+}
 
 
 class NoVerdict(Exception):
@@ -354,6 +409,63 @@ def unwired(root: Path, known: set[Suite]) -> list[str]:
     )
 
 
+def assert_wired(root: Path, known: set[Suite]) -> int:
+    """`unwired()` as a VERDICT rather than a note (.github#2537).
+
+    The report existed from #860 and nothing ever depended on it, so "unwired" was a state work could
+    drift into in silence — and `tests/review-critic-succession-wire/`, the gate-inversion proof that
+    critic succession's refusals can fire, drifted into it on the day it landed. Reporting a class you
+    never refuse is how the class survives being known about.
+    """
+    tests = root / "tests"
+    present = sorted(f"tests/{d.name}" for d in tests.iterdir() if d.is_dir()) if tests.is_dir() else []
+    if not present:
+        # THE VACUITY TRAP (#266, and .github#2534 measured it live: a gate that scanned an empty
+        # corpus passed green and was caught only by a separate non-vacuity leg). Every set below is
+        # empty over an empty `tests/`, so this assertion would be its most confident when it had
+        # examined nothing at all. Refuse instead — "I found no suites" must never be spelled the
+        # same way as "every suite is wired".
+        raise NoVerdict(
+            f"no test directories under {tests} — every set this assertion compares is empty, so it "
+            f"would pass having examined nothing, which is the shape of failure it exists to catch"
+        )
+
+    stray = set(unwired(root, known))
+    explained = sorted(stray & set(DELIBERATELY_UNWIRED))
+    unexplained = sorted(stray - set(DELIBERATELY_UNWIRED))
+    # Exempted, but not a stray: either it got wired (STALE — it would re-bless the directory if
+    # someone unwired it again) or it is not on disk (INERT — it blesses nothing today).
+    stale = sorted(d for d in DELIBERATELY_UNWIRED if d not in stray and d in present)
+    inert = sorted(d for d in DELIBERATELY_UNWIRED if d not in stray and d not in present)
+
+    print(
+        f"scripts/test --assert-wired: {len(present)} director(ies) under tests/, "
+        f"{len(present) - len(stray)} wired, {len(explained)} explained, "
+        f"{len(unexplained)} unexplained, {len(stale)} stale"
+    )
+    for d in explained:
+        print(f"  explained  {d}/ — {DELIBERATELY_UNWIRED[d]}")
+    for d in inert:
+        print(f"  INERT      {d}/ — exempted here, but no such directory is on disk")
+
+    rc = EX_OK
+    for d in unexplained:
+        print(f"  UNWIRED    {d}/ — no workflow invokes it, and DELIBERATELY_UNWIRED does not explain it")
+        rc = EX_FAIL
+    for d in stale:
+        print(f"  STALE      {d}/ — exempted here, but a workflow runs it now; delete the entry")
+        rc = EX_FAIL
+
+    if rc != EX_OK:
+        print(
+            "\nscripts/test: a suite no workflow runs has never been run by CI (#860), and a suite CI "
+            "has never run\nis a proof nobody has ever observed fire (.github#2537). Wire it in a "
+            "workflow's `run:` step, or\nrecord why it is deliberate in DELIBERATELY_UNWIRED "
+            "(scripts/test). Those are the two answers."
+        )
+    return rc
+
+
 def check_on_disk(root: Path, suites: set[Suite]) -> None:
     """A workflow naming a suite that is not there means discovery is wrong. Exit 3, never 0."""
     missing = sorted(s.path for s in suites if not (root / s.path).exists())
@@ -396,6 +508,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(add_help=True, description="Run the suites this change should run.")
     ap.add_argument("--all", action="store_true", help="run every suite, not just the selected ones")
     ap.add_argument("--list", action="store_true", help="print what would run, and why; run nothing")
+    ap.add_argument(
+        "--assert-wired",
+        action="store_true",
+        help="every tests/ dir is wired to a workflow, or explained in DELIBERATELY_UNWIRED; run nothing",
+    )
     ap.add_argument("--base", default=os.environ.get("FSGG_TEST_BASE", "origin/main"))
     ap.add_argument("--root", default=None, help="working tree to audit (default: this repo)")
     args = ap.parse_args()
@@ -412,6 +529,10 @@ def main() -> int:
                 "report green over an untested tree (#266)"
             )
         check_on_disk(root, known)
+
+        # Before selection: this mode judges the WIRING, not a change, so it needs no diff and no base.
+        if args.assert_wired:
+            return assert_wired(root, known)
 
         if args.all:
             chosen = {s: [Reason("--all", None, None)] for s in known}
@@ -448,7 +569,10 @@ def main() -> int:
                 f"run it (#860):"
             )
             for d in stray:
-                print(f"  {d}/")
+                # Annotated, because "unwired" alone reads as one state and is two (.github#2537):
+                # a deliberate one somebody signed, and an unexplained one `--assert-wired` refuses.
+                note = "explained" if d in DELIBERATELY_UNWIRED else "UNEXPLAINED — --assert-wired fails"
+                print(f"  {d}/  [{note}]")
         return EX_OK
 
     if not ordered:
