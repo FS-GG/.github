@@ -1,0 +1,324 @@
+# The RESPONSE half of the SkillMirror conformance table's freshness (.github#2521, epic #266).
+#
+# `skillmirror-freshness.yml` is the DETECTION half, and it works: it caught the table dated at
+# #1576, at #1880, and again on 2026-08-08. What was missing was RESPONSE. The repair for a dated
+# table is "check out the library, run `tests/skill-union/skillmirror-oracle.sh`, reconcile any
+# vector that moved, and re-pin `derivedFrom`" — a command nobody was assigned and nothing scheduled.
+# So each red waited for a human, and the gate was RED ON MAIN FOR SIX CONSECUTIVE SCHEDULED RUNS.
+#
+# THE RECURRENCE IS THE SUBJECT, NOT THE INSTANCE. .github#1880 already fixed this once, by hand, for
+# `SkillMirror.fs`. Ten days later the same red returned on `Schemas.fs` — the second watched file
+# (.github#1577) — because re-running the oracle repairs an INSTANCE and leaves the dated snapshot
+# with no owner and no trigger. A third manual refresh buys a fourth. This workflow is the trigger.
+#
+# WHAT IT DOES, AND THE ONE THING IT REFUSES TO DO. Daily it checks out the library's DEFAULT BRANCH,
+# runs the committed derivation over every vector, and:
+#   * every vector reproduces, provenance is current    -> nothing; no PR, no noise.
+#   * every vector reproduces, provenance is superseded -> re-pin provenance, push the standing
+#                                                          branch, open/update ONE reconcile PR.
+#   * a vector MOVED                                    -> write NOTHING and go RED, naming it.
+# The third case is the whole safety argument, and `scripts/skillmirror-redrive.py`'s header carries
+# it: the oracle is deliberately a checker and not a writer, because "a generator that rewrote its
+# own expectations from the implementation would green any divergence the moment it was regenerated."
+# Automating the re-derivation may not quietly convert it into one. So the bot re-pins the record of
+# WHICH REVISION was measured, and never a MEASURED ANSWER.
+#
+# THIS RE-MEASURES BEHAVIOUR, WHICH THE FRESHNESS GATE STRUCTURALLY CANNOT (.github#2521 AC4). That
+# gate compares a digest: it can say the library moved, and can never say whether the move altered
+# `verify`. It says so itself, at length, and a green there is narrow on purpose. Running the ORACLE
+# — the library's own source, over the table's 10 `verify` vectors and 11 `digestVectors` — is what
+# answers the behavioural question, and it now happens daily rather than when someone remembers.
+#
+# WHY IT DOES NOT MERGE ITS OWN PR, unlike `skill-registry-autofix.yml`. That bot merges because its
+# diff is mechanical digest churn it produces hourly, and .github#642 measured what a green unmerged
+# bot PR is worth. This one is different in the way that matters: each re-pin ASSERTS that the
+# library's behaviour is unchanged across a span of commits, and the value of this table has always
+# rested on someone WRITING THAT SPAN DOWN — read `derivedFrom.residualGap`, which reconstructs, per
+# commit, why #1880's re-derive was a no-op. A bot cannot author that paragraph, and auto-merging
+# would land the pin without it, degrading the practice the table is made of. So it opens a PR that
+# is already GREEN, already MEASURED, and needs a reader — turning hours of hand-derivation into
+# minutes of review. If the org later wants it landed unattended, the hook is
+# `scripts/fsgg-coord landable --require 'skillmirror-redrive / derivation'` and nothing else changes.
+#
+# THE PR IS SCORED BY SOMETHING OTHER THAN ITSELF — this is why the App token is not optional. The
+# `derivation` job below re-runs the oracle against the revision the table CLAIMS, on every PR that
+# touches the table. That is the independent check on the bot's own claim. A `GITHUB_TOKEN` push does
+# not re-trigger `on: pull_request` (GitHub's recursion guard), so the standing PR's own checks would
+# never run and nothing could contradict it — the .github#425 decay, arriving in a new place. The
+# branch is therefore pushed with the `fs-gg-cross-repo-dispatch` App token, exactly as
+# `skill-registry-autofix.yml` and `lockfile-sync.yml` do, and for exactly this reason.
+#
+# THE TWO PR-TIME JOBS ARE NOT THE FRESHNESS GATE, AND MUST NOT BE CONFUSED WITH IT.
+#   freshness (elsewhere, scheduled)  is the pin STILL CURRENT?     -> reads the default branch
+#   derivation (here, on PRs)         is the table WHAT THE PIN SAYS? -> reads the pinned commit
+# Two different questions, and neither is answerable by the other. `derivation` reads at
+# `derivedFrom.commit` deliberately — the exact read `check-skillmirror-freshness.py` forbids itself,
+# because there it would compare a digest to the bytes it was computed from and be green forever.
+# Here the compared quantities are independent: the table's MEASURED columns versus the library's
+# actual answers. A PR that edits a vector by hand, or re-pins a commit without re-deriving, reds.
+#
+# The two `paths:` lists are identical on purpose — `check-paths-coherence.py` rule (a) reds any
+# divergence — and they select `scripts/skillmirror-redrive.py`'s declared `PATHS_SUBJECT` (the
+# table and both halves of the oracle), which rule (c) reds this file against.
+name: skillmirror-redrive
+
+on:
+  pull_request:
+    paths:
+      - "scripts/skillmirror-redrive.py"
+      - "scripts/lib/gate.py"
+      - "tests/skill-union/skillmirror.fixtures.json"
+      - "tests/skill-union/skillmirror-oracle.sh"
+      - "tests/skill-union/skillmirror-oracle.fsx"
+      - "tests/skillmirror-redrive/**"
+      - ".github/workflows/skillmirror-redrive.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/skillmirror-redrive.py"
+      - "scripts/lib/gate.py"
+      - "tests/skill-union/skillmirror.fixtures.json"
+      - "tests/skill-union/skillmirror-oracle.sh"
+      - "tests/skill-union/skillmirror-oracle.fsx"
+      - "tests/skillmirror-redrive/**"
+      - ".github/workflows/skillmirror-redrive.yml"
+  schedule:
+    # Daily at 07:41, thirty minutes after `skillmirror-freshness` (07:11) and clear of the 06:xx
+    # cluster. Detection first, then response — so a red the schedule finds gets its reconcile PR the
+    # same morning rather than waiting a day. Nothing here depends on that ordering for correctness:
+    # this job re-measures from scratch and would reach the same verdict at any hour.
+    - cron: "41 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  # Scheduled runs share one group and DO NOT cancel each other: a run cancelled between the push and
+  # the PR update leaves the standing branch ahead of its PR body. PR runs are ordinary CI and cancel.
+  group: skillmirror-redrive-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Offline, hermetic, and the reason anyone may believe the two jobs below. It proves the driver
+  # REFUSES — on a moved vector, on an oracle it cannot classify, on an oracle it cannot run — and
+  # that its one permitted write is surgical and self-verified. `dotnet` is stubbed on PATH, so the
+  # legs exercise the real wrapper rather than a mock of it.
+  fixture:
+    name: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the skillmirror-redrive fixture (no network, no dotnet)
+        run: bash tests/skillmirror-redrive/run.sh
+
+  # Is the table what its own provenance claims? Runs the library at `derivedFrom.commit` over every
+  # vector. THE SUBJECT IS THE DIFF — a PR touching this table is making a claim about the library,
+  # so requiring the library to check it is proportionate, and a red here accuses the change that
+  # caused it. It fails closed: an unreachable revision, a missing dotnet, an unrunnable oracle are
+  # all non-zero, and none of them is spelled like agreement.
+  derivation:
+    name: derivation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: fixture
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v7
+
+      # The subject comes from the TABLE, never from this file: a workflow that retyped the library's
+      # repo or path would be free to check out something the table was not derived from and report a
+      # confident green about it. `--subject` validates the slug and the sha before they are
+      # interpolated into `actions/checkout`'s inputs below.
+      - name: Read the library revision this table claims to be derived from
+        id: pin
+        run: python3 scripts/skillmirror-redrive.py --root . --subject >> "$GITHUB_OUTPUT"
+
+      - name: Check out the library AT THE RECORDED REVISION
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.pin.outputs.repo }}
+          ref: ${{ steps.pin.outputs.commit }}
+          path: .library
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # The revision that was ACTUALLY checked out, read back from the checkout rather than carried
+      # forward from the step that requested it. `--assert-derived` refuses unless it equals
+      # `derivedFrom.commit`, so this job proves it measured the revision the table names — not
+      # merely that some checkout agreed with it.
+      - name: Read back the revision that was checked out
+        id: got
+        run: printf 'commit=%s\n' "$(git -C .library rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Through the driver, not `bash tests/skill-union/skillmirror-oracle.sh` directly: `scripts/test`
+      # scrapes `bash tests/**.sh` out of `run:` blocks and would then invoke the oracle with no
+      # `--lib`, which exits 2 — turning this line into a broken suite for everyone running the local
+      # selector. The driver is also the only thing that asserts the checked-out revision IS the one
+      # the table claims, which a bare oracle run cannot.
+      - name: Is this table derived from the revision it names?
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern, applied even though the value has already been validated.
+          GOT: ${{ steps.got.outputs.commit }}
+        run: python3 scripts/skillmirror-redrive.py --root . --checkout .library --commit "$GOT" --assert-derived
+
+  # The response. Scheduled and on demand only: the subject is another repository's default branch,
+  # and no event here is evidence about it (`skillmirror-freshness.yml` argues this at length).
+  redrive:
+    name: redrive
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: fixture
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    env:
+      BRANCH: bot/skillmirror-redrive
+      TABLE: tests/skill-union/skillmirror.fixtures.json
+    steps:
+      # Minted BEFORE the checkout, because the checkout is what persists it as the git credential —
+      # which is what makes the push below an App-token push, and therefore what makes the standing
+      # PR's own `derivation` job run. If the App is ever de-scoped from `.github` this fails loudly
+      # here, naming the App, rather than 403-ing deep in the push or falling back to a token whose
+      # push would leave the PR unchecked.
+      - name: Mint the cross-repo-dispatch App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Read the library subject
+        id: subject
+        run: python3 scripts/skillmirror-redrive.py --root . --subject >> "$GITHUB_OUTPUT"
+
+      # The DEFAULT BRANCH's head, resolved to an immutable sha before anything is measured — so the
+      # provenance written below names the revision that was actually run, not whatever the branch
+      # points at by the time the job ends. The library repository is public; `contents: read` is all
+      # this costs.
+      - name: Resolve the library's current default-branch head
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ steps.subject.outputs.repo }}
+        run: |
+          set -euo pipefail
+          branch="$(gh api "repos/$REPO" --jq .default_branch)"
+          sha="$(gh api "repos/$REPO/commits/$branch" --jq .sha)"
+          case "$sha" in
+            [0-9a-f]*) [ "${#sha}" -eq 40 ] || { echo "::error::$REPO $branch head is not a 40-hex sha: $sha" >&2; exit 1; } ;;
+            *) echo "::error::$REPO $branch head is not a sha: $sha" >&2; exit 1 ;;
+          esac
+          echo "$REPO $branch is at $sha"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the library at that head
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.subject.outputs.repo }}
+          ref: ${{ steps.head.outputs.sha }}
+          path: .library
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # THE MEASUREMENT. Exit 1 here means a VECTOR moved — the library's behaviour changed — and the
+      # job fails with it named. That red is the point: it is the one thing the digest gate can never
+      # say, and no bot may resolve it. Exit 3 means the derivation could not be run at all, which is
+      # a no-verdict and also not green. Only exit 0 continues.
+      - name: Re-derive against the live library, and re-pin provenance if that is all that moved
+        env:
+          SHA: ${{ steps.head.outputs.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/skillmirror-redrive.py --root . --checkout .library --commit "$SHA" \
+            --write --report redrive-report.md
+          echo "----- report -----"
+          cat redrive-report.md
+
+      - name: Decide whether anything changed
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- "$TABLE"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "skillmirror-redrive: the table's provenance is current — nothing to reconcile."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git --no-pager diff --stat -- "$TABLE"
+          fi
+
+      # ONE STANDING PR, force-updated. The App authors the commit: GitHub links a bot commit to its
+      # account only via `<BOT_USER_ID>+<slug>[bot]@users.noreply.github.com`, and 297630107 is the id
+      # of the `[bot]` USER, not the App id (see skill-registry-autofix.yml, which measured this).
+      - name: Open or update the standing reconcile PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SHA: ${{ steps.head.outputs.sha }}
+          REPO: ${{ steps.subject.outputs.repo }}
+        run: |
+          set -euo pipefail
+          git config user.name  "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add -- "$TABLE"
+          git commit -m "tests(skill-union): re-pin the SkillMirror table to $REPO ${SHA:0:12} (.github#2521)"
+          # Plain --force: this branch is bot-owned, and the concurrency group serialises runs, so
+          # there is no lost update to guard against — while --force-with-lease misfires on the very
+          # first push, when there is no remote-tracking ref to compare against.
+          git push --force origin "$BRANCH"
+
+          {
+            echo "Automated re-derivation of the SkillMirror conformance table (.github#2521)."
+            echo
+            cat redrive-report.md
+            echo
+            echo "---"
+            echo
+            echo "**What this PR asserts, and what it does not.** Every vector was re-measured by"
+            echo "running the library's own source; only PROVENANCE moved. It does not carry the"
+            echo "narrative of WHY the library's change was behaviour-preserving — read the span"
+            echo "\`$REPO\` moved across and add it to \`derivedFrom.residualGap\` before merging, as"
+            echo ".github#1576 and .github#1880 both did. That paragraph is why this bot opens a PR"
+            echo "instead of merging one."
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > pr-body.md
+
+          title="tests(skill-union): re-pin the SkillMirror table to ${SHA:0:12} (auto)"
+          existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' || true)"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body-file pr-body.md
+            echo "updated standing PR #$existing"
+          else
+            url="$(gh pr create --base main --head "$BRANCH" --title "$title" --body-file pr-body.md)"
+            echo "opened standing PR $url"
+          fi
+
+      # A standing PR whose diff is no longer needed does not sit there looking mergeable. The two
+      # branches are mutually exclusive halves of one boolean, so no run can take both, and the
+      # concurrency group means no two runs interleave.
+      - name: Retire an obsolete standing PR
+        if: steps.diff.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' || true)"
+          if [ -z "$existing" ]; then
+            echo "no standing PR open — nothing to retire."
+            exit 0
+          fi
+          gh pr close "$existing" --comment "Retired by \`skillmirror-redrive\`: a fresh run re-derived the table against the library's current default branch and found its provenance already current, so this reconcile has nothing left to write. A new one opens automatically the next time the library moves."
+          echo "retired obsolete standing PR #$existing"
