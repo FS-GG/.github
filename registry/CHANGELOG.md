@@ -1,4 +1,5 @@
 # Registry changelog
+- **2026-08-13** — **auto-publish evidence: FS.GG.Kit 0.51.1** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/actions/runs/31737631653) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.51.1/FS.GG.Kit.0.51.1.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.51.1/fs.gg.kit.0.51.1.nupkg). Both served nuspecs record repository commit 18af7595dda5a3ac825150eab9660ec67f2d7c7d.
 
 Reverse-chronological log of changes to [`dependencies.yml`](dependencies.yml), plus FS.GG.Kit
 republishes that change the fleet materialized by [`repos.yml`](repos.yml) without changing a
