@@ -1,10 +1,10 @@
 name: registry-changelog
 on:
   pull_request:
-    paths: ["registry/dependencies.yml", "registry/CHANGELOG.md", "scripts/check-registry-changelog.py", "tests/registry-changelog/**", ".github/workflows/registry-changelog.yml"]
+    paths: ["registry/dependencies.yml", "registry/CHANGELOG.md", "scripts/check-registry-changelog.py", "scripts/prepend-registry-changelog-entry.py", "tests/registry-changelog/**", ".github/workflows/registry-changelog.yml"]
   push:
     branches: [main]
-    paths: ["registry/dependencies.yml", "registry/CHANGELOG.md", "scripts/check-registry-changelog.py", "tests/registry-changelog/**", ".github/workflows/registry-changelog.yml"]
+    paths: ["registry/dependencies.yml", "registry/CHANGELOG.md", "scripts/check-registry-changelog.py", "scripts/prepend-registry-changelog-entry.py", "tests/registry-changelog/**", ".github/workflows/registry-changelog.yml"]
 permissions:
   contents: read
 jobs:

@@ -1493,4 +1493,405 @@ grep -qi 'non-fast-forward\|rejected' "$gi_second/push-stderr.log" \
   || { echo "documentation (shared-remote hazard): expected a non-fast-forward rejection, got:" >&2; cat "$gi_second/push-stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
 
+# =================================================================================================
+# .github#2558 — THE EVIDENCE-PR STEP. Three defects whose combined effect was that no auto-publish
+# evidence entry had EVER landed on `main`: `grep -cF "auto-publish evidence" registry/CHANGELOG.md`
+# returned **0** across every kit publish this repository had ever made.
+#
+#   1. `sed -i "2i\\${entry}"` — a HARDCODED line 2, while `## Entries` sits around line 20. Every
+#      entry landed ABOVE the heading, the exact shape `check-registry-changelog.py::top_date`
+#      refuses. The gate was right; the writer was wrong. PR #2246 was born red on 2026-08-05 and
+#      was still red, and still being force-pushed, eight days later.
+#   2. The PR body was a DOUBLE-QUOTED bash string containing `\n`, which bash never interprets — so
+#      the served body was one single line of literal backslash-n sequences.
+#   3. The refresh branch called `gh pr edit --body` with NO `--title`, while the create branch
+#      passed `--title` — so PR #2246's title still read `0.39.0` while its body had been rewritten
+#      to `0.51.1`.
+#
+# WHY THESE LEGS EXTRACT AND EXECUTE THE REAL STEP against a REAL local git remote, rather than
+# grepping the workflow: defect 2 is INVISIBLE in the source (`\n` inside double quotes looks like a
+# newline to a reader) and only appears in the bytes actually handed to `gh`. A fixture asserting on
+# the workflow's text would have been green against all three defects — the #266 green-by-absence
+# shape. Same mechanism and same reasoning as extract_tag_step above.
+#
+# WHY A REAL CHECKER RUN, not a "the entry is below the heading" assertion: fixing ONLY the insertion
+# point is NOT sufficient to make the gate pass. `check-registry-changelog.py` has a SECOND arm that
+# compares `dependencies.yml::updated:` against the top changelog date, and an insertion-only repair
+# still reds on every publish that does not land on the same UTC day as the last registry flip. The
+# `date-arm` leg below measures that directly, so the pairing cannot be silently dropped later.
+# =================================================================================================
+ev_work="$esc_work/evidence-pr"
+mkdir -p "$ev_work"
+
+extract_evidence_step() {
+  python3 - "$root/.github/workflows/kit-auto-publish.yml" "$1" <<'PY'
+import sys
+import yaml
+
+wf_path, out_path = sys.argv[1], sys.argv[2]
+with open(wf_path, encoding="utf-8") as fh:
+    wf = yaml.safe_load(fh)
+steps = (wf.get("jobs") or {}).get("decide", {}).get("steps") or []
+step = next((s for s in steps if s.get("name") == "Open or update the publish evidence PR"), None)
+if step is None:
+    sys.exit("the evidence-PR step is GONE from kit-auto-publish.yml")
+run = step["run"].replace("${{ steps.app-token.outputs.app-slug }}", "test-bot")
+if "${{" in run:
+    sys.exit("the evidence-PR step grew an unhandled ${{ }} expression; teach this extractor about it")
+# Carry the step's OWN static `env:` defaults (BRANCH) instead of restating them here, so a rename in
+# the workflow follows through to the fixture rather than silently diverging from it. Values that are
+# `${{ }}` expressions (VERSION, SOURCE_SHA) are supplied per-leg by the caller.
+env_lines = []
+for key, value in (step.get("env") or {}).items():
+    if isinstance(value, str) and "${{" not in value:
+        env_lines.append(f'export {key}="{value}"\n')
+with open(out_path, "w", encoding="utf-8") as out:
+    out.write("#!/usr/bin/env bash\n")
+    out.writelines(env_lines)
+    out.write(run)
+PY
+}
+
+ev_script="$ev_work/evidence.sh"
+extract_evidence_step "$ev_script"
+chmod +x "$ev_script"
+
+# A `gh` stub for the evidence step's three calls. It records the EXACT title and body bytes the step
+# handed over — which is the only place defect 2 was ever observable — and records separately whether
+# `--title` was passed AT ALL, because defect 3 is an ABSENT flag, not a wrong value.
+write_evidence_gh_stub() {
+  cat > "$1/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+log="$STUB_DIR/calls.log"
+sub="${1:-} ${2:-}"
+capture() {
+  local title="" body="" saw_title=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title) saw_title=1; title="${2:-}"; shift 2 ;;
+      --body)  body="${2:-}"; shift 2 ;;
+      --repo|--base|--head) shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  printf '%s' "$title" > "$STUB_DIR/last-title.txt"
+  printf '%s' "$body" > "$STUB_DIR/last-body.txt"
+  printf '%s' "$saw_title" > "$STUB_DIR/last-title-present"
+}
+case "$sub" in
+  "pr list")
+    echo "PR-LIST" >> "$log"
+    [ -s "$STUB_DIR/existing-pr" ] && cat "$STUB_DIR/existing-pr" || printf ''
+    exit 0 ;;
+  "pr edit")
+    num="${3:-}"; shift 3; capture "$@"
+    echo "EDIT $num" >> "$log"
+    exit 0 ;;
+  "pr create")
+    shift 2; capture "$@"
+    echo "CREATE" >> "$log"
+    exit 0 ;;
+esac
+echo "unstubbed gh invocation: $*" >&2
+exit 99
+STUB
+  chmod +x "$1/bin/gh"
+}
+
+# evidence_sandbox <name> -> a REAL bare remote + clone (via make_worktree, the same helper every tag
+# leg uses) whose `main` carries the LIVE registry/ files and the REAL scripts the step invokes by
+# relative path. Copying the real scripts is itself an assertion: if the workflow ever calls something
+# this repository does not ship, these legs fail rather than silently stubbing it in.
+evidence_sandbox() {
+  local d; d="$(make_worktree "$1")"
+  mkdir -p "$d/bin" "$d/repo/registry" "$d/repo/scripts"
+  write_evidence_gh_stub "$d"
+  cp "$root/registry/CHANGELOG.md" "$root/registry/dependencies.yml" "$d/repo/registry/"
+  cp "$root/scripts/prepend-registry-changelog-entry.py" "$root/scripts/check-registry-changelog.py" "$d/repo/scripts/"
+  : > "$d/existing-pr"
+  : > "$d/calls.log"
+  ( cd "$d/repo" \
+      && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git add registry scripts \
+      && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test commit --quiet -m "seed registry and scripts" \
+      && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
+  printf '%s' "$d"
+}
+
+# run_evidence <dir> <version> <source-sha> <script> -> exit code. Runs INSIDE the clone with an
+# isolated HOME, exactly like run_tag_step, so no host git identity can mask an identity defect.
+run_evidence() {
+  local dir="$1" version="$2" source_sha="$3" script="$4" rc=0
+  printf '{"releaseRun":{"url":"https://github.example.test/run/%s"}}' "$version" > "$dir/repo/facts.json"
+  ( cd "$dir/repo" \
+      && HOME="$dir/home" GIT_CONFIG_NOSYSTEM=1 STUB_DIR="$dir" PATH="$dir/bin:$PATH" \
+         GH_TOKEN=fake-token GITHUB_REPOSITORY=FS-GG/.github \
+         VERSION="$version" SOURCE_SHA="$source_sha" \
+         bash "$script" >"$dir/stdout.log" 2>"$dir/stderr.log" ) || rc=$?
+  return "$rc"
+}
+
+# ---- GREEN: a first publish. The entry must land BELOW the heading, the REAL gate must accept the
+#      produced tree, and the commit must actually reach the remote. ----
+ev1="$(evidence_sandbox evidence-create)"
+rc=0; run_evidence "$ev1" "7.7.1" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" "$ev_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo "evidence step (create): expected exit 0, got $rc" >&2; cat "$ev1/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+ev1_log="$ev1/repo/registry/CHANGELOG.md"
+ev_heading_line="$(grep -n '^## Entries$' "$ev1_log" | head -1 | cut -d: -f1)"
+ev_entry_line="$(grep -n 'auto-publish evidence: FS.GG.Kit 7.7.1' "$ev1_log" | head -1 | cut -d: -f1)"
+[ -n "$ev_entry_line" ] \
+  || { echo "evidence step (create): no entry was written to CHANGELOG.md at all" >&2; exit 1; }
+checks=$((checks + 1))
+# Deliberately a COMPARISON against the heading's own discovered line, never a constant: acceptance
+# criterion 1 forbids a fixed offset, and registry/CHANGELOG.md moves under this fixture constantly.
+[ "$ev_entry_line" -gt "$ev_heading_line" ] \
+  || { echo "evidence step (create): entry at line $ev_entry_line is NOT below the Entries heading at line $ev_heading_line" >&2; exit 1; }
+checks=$((checks + 1))
+
+# THE GATE ITSELF, on the produced tree — acceptance criterion 2's "passes on a produced entry".
+( cd "$ev1/repo" && python3 scripts/check-registry-changelog.py \
+    --changelog registry/CHANGELOG.md --dependencies registry/dependencies.yml \
+    --changed registry/CHANGELOG.md --changed registry/dependencies.yml >"$ev1/gate.log" 2>&1 ) \
+  || { echo "evidence step (create): the REAL registry-changelog gate refused the produced tree" >&2; cat "$ev1/gate.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# The write must have reached the REMOTE, not merely the working tree — "a PR was opened" and "a
+# commit landed carrying the entry" are different claims, and only the second one is the subject.
+ev1_remote="$ev1/origin.git"
+# The branch name is read back out of the step's OWN extracted `env:`, never restated here, so a
+# rename in the workflow cannot leave this assertion silently probing a ref that no longer exists —
+# which would read as "the entry never landed" and send a reader after the wrong defect.
+ev_branch="$(sed -n 's/^export BRANCH="\(.*\)"$/\1/p' "$ev_script")"
+[ -n "$ev_branch" ] \
+  || { echo "evidence step: could not read BRANCH out of the extracted step's env" >&2; exit 1; }
+checks=$((checks + 1))
+ev_remote_log="$(git -C "$ev1_remote" show "refs/heads/$ev_branch:registry/CHANGELOG.md" 2>&1)" \
+  || { echo "evidence step (create): cannot read registry/CHANGELOG.md from refs/heads/$ev_branch on the remote:" >&2
+       printf '%s\n' "$ev_remote_log" >&2; git -C "$ev1_remote" for-each-ref >&2; exit 1; }
+grep -qF 'auto-publish evidence: FS.GG.Kit 7.7.1' <<<"$ev_remote_log" \
+  || { echo "evidence step (create): the entry never reached the remote branch $ev_branch" >&2
+       git -C "$ev1_remote" for-each-ref >&2; exit 1; }
+checks=$((checks + 1))
+# NOTE THE CAPTURE, and do not "simplify" this back into `git show ... | grep -q`. This file runs
+# under `set -o pipefail`, and `grep -q` exits at its FIRST match — which closes the pipe while
+# `git show` is still writing a 200-300 KB registry file. `git show` then dies of SIGPIPE (141), the
+# pipeline inherits that status, and the leg reports "never reached the remote" for a file that is
+# demonstrably there. The size of these two files is what makes it reproducible rather than flaky:
+# small outputs finish writing before grep can exit, which is why the same idiom is safe elsewhere in
+# this fixture and unsafe here.
+ev_remote_dep="$(git -C "$ev1_remote" show "refs/heads/$ev_branch:registry/dependencies.yml" 2>&1)" \
+  || { echo "evidence step (create): cannot read registry/dependencies.yml from refs/heads/$ev_branch:" >&2
+       printf '%s\n' "$ev_remote_dep" >&2; exit 1; }
+grep -q '^updated:' <<<"$ev_remote_dep" \
+  || { echo "evidence step (create): dependencies.yml on $ev_branch carries no updated: line" >&2; exit 1; }
+checks=$((checks + 1))
+
+# Defect 2, on the bytes actually handed to `gh`.
+ev1_body_lines="$(wc -l < "$ev1/last-body.txt")"
+[ "$ev1_body_lines" -gt 1 ] \
+  || { echo "evidence step (create): body is $ev1_body_lines line(s); the \\n were not interpreted" >&2; cat "$ev1/last-body.txt" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qF '\n' "$ev1/last-body.txt" \
+  && { echo "evidence step (create): body still contains literal backslash-n sequences" >&2; cat "$ev1/last-body.txt" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qx 'Closes #2106' "$ev1/last-body.txt" \
+  || { echo "evidence step (create): the closing keyword is not on its own line" >&2; cat "$ev1/last-body.txt" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qx 'CREATE' "$ev1/calls.log" \
+  || { echo "evidence step (create): expected a gh pr create" >&2; cat "$ev1/calls.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- GREEN: acceptance criterion 4 — TWO PUBLISHES BETWEEN MERGES, exercised rather than assumed.
+#      The same open PR is refreshed by a second run at a higher version; its TITLE must move too. ----
+printf '2246' > "$ev1/existing-pr"
+rc=0; run_evidence "$ev1" "7.7.2" "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "$ev_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo "evidence step (refresh): expected exit 0, got $rc" >&2; cat "$ev1/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qx 'EDIT 2246' "$ev1/calls.log" \
+  || { echo "evidence step (refresh): expected a gh pr edit of the existing PR" >&2; cat "$ev1/calls.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(cat "$ev1/last-title-present")" = 1 ] \
+  || { echo "evidence step (refresh): gh pr edit was called WITHOUT --title (defect 3)" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qF '7.7.2' "$ev1/last-title.txt" \
+  || { echo "evidence step (refresh): title still names the old version: $(cat "$ev1/last-title.txt")" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qF '7.7.1' "$ev1/last-title.txt" \
+  && { echo "evidence step (refresh): title still carries the FIRST version — the .github#2246 shape" >&2; exit 1; }
+checks=$((checks + 1))
+# Both entries present, both below the heading, and the gate still accepts the two-entry tree.
+for v in 7.7.1 7.7.2; do
+  grep -qF "auto-publish evidence: FS.GG.Kit $v" "$ev1_log" \
+    || { echo "evidence step (refresh): entry for $v is missing after the second run" >&2; exit 1; }
+  checks=$((checks + 1))
+done
+( cd "$ev1/repo" && python3 scripts/check-registry-changelog.py \
+    --changelog registry/CHANGELOG.md --dependencies registry/dependencies.yml >"$ev1/gate2.log" 2>&1 ) \
+  || { echo "evidence step (refresh): the gate refused the two-entry tree" >&2; cat "$ev1/gate2.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# Idempotence: a THIRD run at an already-recorded version must not stack a duplicate entry.
+rc=0; run_evidence "$ev1" "7.7.2" "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "$ev_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo "evidence step (idempotence): expected exit 0, got $rc" >&2; cat "$ev1/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+ev_dupes="$(grep -cF 'auto-publish evidence: FS.GG.Kit 7.7.2' "$ev1_log")"
+[ "$ev_dupes" -eq 1 ] \
+  || { echo "evidence step (idempotence): $ev_dupes copies of the 7.7.2 entry, expected 1" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- GATE-INVERSION 1 (pnext-item §3, .github#2551): reintroduce the EXACT pre-fix `sed -i "2i..."`
+#      and prove the REAL gate refuses the result FOR THE STATED REASON. A "must fail" leg that only
+#      checked a non-zero exit would pass against a gate broken in a different way — the trap
+#      tests/feed-coherence/run.sh:10 names — so this asserts the line-2 refusal text specifically. ----
+mutate_to_sed_line2() {
+  python3 - "$ev_script" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+lines = open(src, encoding="utf-8").read().splitlines(keepends=True)
+out, replaced, skipping = [], False, False
+for line in lines:
+    if line.lstrip().startswith("python3 scripts/prepend-registry-changelog-entry.py"):
+        # The pre-fix pair: compose the entry, then splat it at a hardcoded line 2.
+        out.append(
+            'entry="$(printf \'%s\' "- **$(date -u +%F)** — **auto-publish evidence: FS.GG.Kit '
+            '${VERSION}** (owner github): [release run](${run}) published it.")"\n'
+        )
+        out.append(
+            'grep -Fq "auto-publish evidence: FS.GG.Kit ${VERSION}" registry/CHANGELOG.md '
+            '|| sed -i "2i\\\\${entry}" registry/CHANGELOG.md\n'
+        )
+        replaced, skipping = True, line.rstrip("\n").endswith("\\")
+        continue
+    if skipping:
+        skipping = line.rstrip("\n").endswith("\\")
+        continue
+    out.append(line)
+if not replaced:
+    sys.exit("mutate_to_sed_line2: could not find the prepend-script invocation to revert")
+open(dst, "w", encoding="utf-8").write("".join(out))
+PY
+}
+ev_sed_script="$ev_work/evidence-sed-line2.sh"
+mutate_to_sed_line2 "$ev_sed_script"
+chmod +x "$ev_sed_script"
+
+ev2="$(evidence_sandbox evidence-gate-inversion-line2)"
+rc=0; run_evidence "$ev2" "7.7.3" "cccccccccccccccccccccccccccccccccccccccc" "$ev_sed_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo "gate-inversion (line-2 insert): the pre-fix step itself should still exit 0 — its failure is SILENT, which is the whole defect; got $rc" >&2; cat "$ev2/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+ev2_gate_rc=0
+( cd "$ev2/repo" && python3 scripts/check-registry-changelog.py \
+    --changelog registry/CHANGELOG.md --dependencies registry/dependencies.yml >"$ev2/gate.log" 2>&1 ) || ev2_gate_rc=$?
+[ "$ev2_gate_rc" -ne 0 ] \
+  || { echo "gate-inversion (line-2 insert): the gate ACCEPTED an entry written above the heading — the check is not measuring this" >&2; cat "$ev2/gate.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qF 'has dated entry before Entries heading at line 2' "$ev2/gate.log" \
+  || { echo "gate-inversion (line-2 insert): refused, but NOT for the stated reason; got:" >&2; cat "$ev2/gate.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- GATE-INVERSION 2: the pre-fix double-quoted body. This is the defect that is invisible in the
+#      workflow source, so the assertion is on the bytes the step handed `gh`. ----
+mutate_to_unquoted_body() {
+  python3 - "$ev_script" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+lines = open(src, encoding="utf-8").read().splitlines(keepends=True)
+out, replaced = [], False
+for line in lines:
+    if line.lstrip().startswith('body="$(printf'):
+        out.append(
+            'body="Automated evidence for FS.GG.Kit ${VERSION}.\\n\\n- release run: ${run}\\n'
+            '\\nHuman/critic review is required before merge.\\n\\nCloses #2106"\n'
+        )
+        replaced = True
+        continue
+    out.append(line)
+if not replaced:
+    sys.exit("mutate_to_unquoted_body: could not find the printf body= line to revert")
+open(dst, "w", encoding="utf-8").write("".join(out))
+PY
+}
+ev_body_script="$ev_work/evidence-unquoted-body.sh"
+mutate_to_unquoted_body "$ev_body_script"
+chmod +x "$ev_body_script"
+
+ev3="$(evidence_sandbox evidence-gate-inversion-body)"
+rc=0; run_evidence "$ev3" "7.7.4" "dddddddddddddddddddddddddddddddddddddddd" "$ev_body_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo "gate-inversion (uninterpreted body): pre-fix step should still exit 0; got $rc" >&2; cat "$ev3/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+ev3_lines="$(wc -l < "$ev3/last-body.txt")"
+[ "$ev3_lines" -le 1 ] \
+  || { echo "gate-inversion (uninterpreted body): expected the pre-fix body to be a SINGLE line, got $ev3_lines — this leg is not measuring defect 2" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qF '\n' "$ev3/last-body.txt" \
+  || { echo "gate-inversion (uninterpreted body): expected literal backslash-n sequences in the pre-fix body" >&2; cat "$ev3/last-body.txt" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- GATE-INVERSION 3: drop `--title` from the refresh branch, reproducing defect 3 exactly. ----
+mutate_drop_title() {
+  python3 - "$ev_script" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+needle = 'gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"'
+if needle not in text:
+    sys.exit("mutate_drop_title: the refresh branch no longer matches the expected shape")
+text = text.replace(needle, 'gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"', 1)
+open(dst, "w", encoding="utf-8").write(text)
+PY
+}
+ev_title_script="$ev_work/evidence-no-title.sh"
+mutate_drop_title "$ev_title_script"
+chmod +x "$ev_title_script"
+
+ev4="$(evidence_sandbox evidence-gate-inversion-title)"
+rc=0; run_evidence "$ev4" "7.7.5" "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" "$ev_title_script" || rc=$?
+[ "$rc" -eq 0 ] || { echo "gate-inversion (no title): first run failed: $rc" >&2; cat "$ev4/stderr.log" >&2; exit 1; }
+printf '2246' > "$ev4/existing-pr"
+rc=0; run_evidence "$ev4" "7.7.6" "ffffffffffffffffffffffffffffffffffffffff" "$ev_title_script" || rc=$?
+[ "$rc" -eq 0 ] || { echo "gate-inversion (no title): refresh run failed: $rc" >&2; cat "$ev4/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(cat "$ev4/last-title-present")" = 0 ] \
+  || { echo "gate-inversion (no title): expected the pre-fix refresh to pass NO --title; it passed one — this leg is not measuring defect 3" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- GATE-INVERSION 4: THE SECOND GATE ARM. This is the leg that catches an insertion-only repair.
+#      Take the GREEN tree produced by the real step and move `dependencies.yml::updated:` back to a
+#      stale date — precisely what a fix that positioned the entry correctly but left dependencies.yml
+#      alone would have produced — and prove the gate refuses it, by its own distinct reason. Without
+#      this leg, "the entry is below the heading" would stand in for "the PR is landable", and it is
+#      not: `.github#2558`'s repair is only complete because BOTH files move. ----
+ev5="$(evidence_sandbox evidence-gate-inversion-date-arm)"
+rc=0; run_evidence "$ev5" "7.7.7" "1111111111111111111111111111111111111111" "$ev_script" || rc=$?
+[ "$rc" -eq 0 ] || { echo "gate-inversion (date arm): setup run failed: $rc" >&2; cat "$ev5/stderr.log" >&2; exit 1; }
+( cd "$ev5/repo" && python3 scripts/check-registry-changelog.py \
+    --changelog registry/CHANGELOG.md --dependencies registry/dependencies.yml >/dev/null 2>&1 ) \
+  || { echo "gate-inversion (date arm): the produced tree should be GREEN before the mutation" >&2; exit 1; }
+checks=$((checks + 1))
+python3 - "$ev5/repo/registry/dependencies.yml" <<'PY'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+t, n = re.subn(r'^(updated:\s*["\'])\d{4}-\d{2}-\d{2}(["\'])', r'\g<1>1999-01-01\g<2>', t, count=1, flags=re.M)
+if n != 1:
+    sys.exit("date-arm mutation: expected exactly one updated: line to rewrite")
+open(p, "w", encoding="utf-8").write(t)
+PY
+ev5_rc=0
+( cd "$ev5/repo" && python3 scripts/check-registry-changelog.py \
+    --changelog registry/CHANGELOG.md --dependencies registry/dependencies.yml >"$ev5/gate.log" 2>&1 ) || ev5_rc=$?
+[ "$ev5_rc" -ne 0 ] \
+  || { echo "gate-inversion (date arm): the gate ACCEPTED a stale updated: — the second arm is not live" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qF 'updated=1999-01-01 != top changelog date=' "$ev5/gate.log" \
+  || { echo "gate-inversion (date arm): refused, but not for the date-equality reason; got:" >&2; cat "$ev5/gate.log" >&2; exit 1; }
+checks=$((checks + 1))
+
 echo "kit auto-publish state machine: $checks passed"

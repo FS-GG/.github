@@ -434,11 +434,39 @@ jobs:
           git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
-          entry="$(printf '%s' "- **$(date -u +%F)** — **auto-publish evidence: FS.GG.Kit ${VERSION}** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](${run}) published the structurally single-packed artifact to [GitHub Packages](${org}) and [nuget.org](${nuget}). Both served nuspecs record repository commit ${SOURCE_SHA}.")"
-          grep -Fq "auto-publish evidence: FS.GG.Kit ${VERSION}" registry/CHANGELOG.md || sed -i "2i\\${entry}" registry/CHANGELOG.md
-          git add registry/CHANGELOG.md
+          # The insertion is delegated to scripts/prepend-registry-changelog-entry.py, which locates
+          # `## Entries` by matching the GATE'S OWN regex and verifies its output with the GATE'S OWN
+          # functions before writing (.github#2558).  What used to be here was
+          # `sed -i "2i\\${entry}"` — a hardcoded line 2, while the heading sits around line 20 — so
+          # every entry landed ABOVE the heading, which `check-registry-changelog.py::top_date`
+          # refuses by design.  The workflow wrote precisely the shape its own gate rejects, and
+          # `grep -cF "auto-publish evidence" registry/CHANGELOG.md` on `main` was **0** across every
+          # kit publish this repository had ever made.  Do not reintroduce a line number here: the
+          # heading's position is data, and registry/CHANGELOG.md changes under this workflow's feet.
+          #
+          # The script also moves `registry/dependencies.yml`'s `updated:` to the entry's date, which
+          # is NOT incidental: the gate's second arm refuses when `updated:` and the top changelog
+          # date differ, so an insertion-only repair would still have produced a red PR on every
+          # publish that did not land on the same UTC day as the last registry flip.  Hence both
+          # files are staged below.
+          python3 scripts/prepend-registry-changelog-entry.py \
+            --marker "auto-publish evidence: FS.GG.Kit ${VERSION}" \
+            --entry "**auto-publish evidence: FS.GG.Kit ${VERSION}** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](${run}) published the structurally single-packed artifact to [GitHub Packages](${org}) and [nuget.org](${nuget}). Both served nuspecs record repository commit ${SOURCE_SHA}."
+          git add registry/CHANGELOG.md registry/dependencies.yml
           git diff --cached --quiet || git commit -m "docs: record FS.GG.Kit ${VERSION} auto-publish evidence"
           git push --force-with-lease origin "$BRANCH"
-          body="Automated evidence for FS.GG.Kit ${VERSION}.\n\n- release run: ${run}\n- GitHub Packages: ${org}\n- nuget.org: ${nuget}\n- both served nuspecs: ${SOURCE_SHA}\n\nHuman/critic review is required before merge.\n\nCloses #2106"
+          # `printf` with a SINGLE-QUOTED format, and every variable passed as a `%s` DATA argument —
+          # the same construction, for the same reason, as the escalation step above (.github#2346).
+          # This was a double-quoted string containing `\n`, which bash never interprets, so the
+          # SERVED body was one single line of literal backslash-n sequences.  That defect is
+          # invisible in the source and obvious in the API response, which is where it must be
+          # verified (.github#2558 acceptance criterion 3).
+          body="$(printf 'Automated evidence for FS.GG.Kit %s.\n\n- release run: %s\n- GitHub Packages: %s\n- nuget.org: %s\n- both served nuspecs: %s\n\nHuman/critic review is required before merge.\n\nCloses #2106\n' "$VERSION" "$run" "$org" "$nuget" "$SOURCE_SHA")"
+          # ONE title, used by BOTH branches.  The refresh branch used to pass `--body` with no
+          # `--title`, so an evidence PR that stayed open across two publishes kept its first
+          # version's title forever: PR #2246 read `0.39.0` while its body had been rewritten all the
+          # way to `0.51.1`.  A version in a title that names a different release than the body is
+          # exactly the provenance confusion this PR exists to prevent.
+          title="docs: record FS.GG.Kit ${VERSION} publish evidence"
           existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
-          if [ -n "$existing" ]; then gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"; else gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "docs: record FS.GG.Kit ${VERSION} publish evidence" --body "$body"; fi
+          if [ -n "$existing" ]; then gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"; else gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "$title" --body "$body"; fi

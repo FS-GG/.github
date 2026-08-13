@@ -335,6 +335,147 @@ workflow_expect "an unresolvable range endpoint is refused, not treated as no ch
 workflow_expect "an event with no changed-set rule is refused" \
   "$GATE" 1 "no changed-set rule for event" "$VIOL" schedule "$VIOL_BASE" "$VIOL_HEAD"
 
+# ---------------------------------------------------------------------------------------------
+# Subject 3: THE WRITER — scripts/prepend-registry-changelog-entry.py (.github#2558).
+#
+# A THIRD subject exists for the same reason subject 2 does. Subjects 1 and 2 both grade the
+# CHECKER's behaviour, and the checker was never wrong. What was wrong was the only production
+# WRITER of these entries: kit-auto-publish.yml inserted at a hardcoded line 2 while `## Entries`
+# sat near line 20, so every entry it produced landed in exactly the position `top_date` refuses.
+# Checker green, writer broken, and `grep -cF "auto-publish evidence" registry/CHANGELOG.md` on
+# `main` was **0** across every kit publish this repository had ever made. A protocol with a tested
+# reader and an untested writer is only half-gated.
+#
+# The writer now IMPORTS this checker and validates its own output with the checker's own functions
+# before writing, so the two cannot silently disagree again. These legs grade that contract: the
+# writer's refusals, its idempotence, and — the leg that matters most — that BOTH registry files
+# move together, because moving only the entry still reds the checker's second arm.
+# ---------------------------------------------------------------------------------------------
+WRITER="$ROOT/scripts/prepend-registry-changelog-entry.py"
+
+# writer_fixture <name> -> a dir holding a private copy of the LIVE registry pair.
+writer_fixture() {
+  local d="$WORK/writer-$1"
+  mkdir -p "$d"
+  cp "$ROOT/registry/dependencies.yml" "$d/dependencies.yml"
+  cp "$ROOT/registry/CHANGELOG.md" "$d/CHANGELOG.md"
+  printf '%s' "$d"
+}
+
+# writer_expect <name> <want-rc> <needle> -- <args...>
+writer_expect() {
+  local name="$1" want="$2" needle="$3"; shift 3; [ "${1:-}" = "--" ] && shift
+  local out rc=0
+  out="$(python3 "$WRITER" "$@" 2>&1)" || rc=$?
+  if [ "$rc" -ne "$want" ]; then
+    bad "writer: $name (exit $rc, want $want)" "$out"
+  # `grep -F -- "$needle"`: the `--` is required, not stylistic. Several of this writer's refusals
+  # quote the offending FLAG ("--date must be YYYY-MM-DD"), and without the terminator grep parses
+  # that needle as its own option and dies — turning a correct refusal into a fixture failure.
+  elif [ -n "$needle" ] && ! grep -qF -- "$needle" <<<"$out"; then
+    bad "writer: $name (exit $want, but not for the stated reason: want '$needle')" "$out"
+  else
+    ok "writer: $name"
+  fi
+}
+
+# --- The happy path, graded by the CHECKER rather than by inspection. --------------------------
+WD="$(writer_fixture happy)"
+writer_expect "a produced entry is accepted by the checker's own verification" 0 "below the Entries heading" \
+  -- --changelog "$WD/CHANGELOG.md" --dependencies "$WD/dependencies.yml" --date 2026-08-20 \
+     --marker "auto-publish evidence: FS.GG.Kit 9.9.9" \
+     --entry '**auto-publish evidence: FS.GG.Kit 9.9.9** (owner github): body.'
+script_expect "the checker accepts the tree the writer produced" 0 "registry changelog protocol holds" \
+  -- --dependencies "$WD/dependencies.yml" --changelog "$WD/CHANGELOG.md" \
+     --changed registry/dependencies.yml --changed registry/CHANGELOG.md
+
+# Position is asserted RELATIVE to the discovered heading, never against a constant: .github#2558
+# acceptance criterion 1 forbids a fixed offset, and this file moves constantly.
+wr_heading="$(grep -n '^## Entries$' "$WD/CHANGELOG.md" | head -1 | cut -d: -f1)"
+wr_entry="$(grep -n 'FS.GG.Kit 9.9.9' "$WD/CHANGELOG.md" | head -1 | cut -d: -f1)"
+if [ -n "$wr_entry" ] && [ "$wr_entry" -gt "$wr_heading" ]; then
+  ok "writer: the entry lands below the Entries heading (heading $wr_heading, entry $wr_entry)"
+else
+  bad "writer: entry at line ${wr_entry:-none} is not below the heading at line $wr_heading"
+fi
+
+# --- THE SECOND ARM. An insertion-only repair still reds; both files must move together. -------
+wr_dep_date="$(sed -n 's/^updated: *"\([0-9-]*\)".*/\1/p' "$WD/dependencies.yml")"
+if [ "$wr_dep_date" = "2026-08-20" ]; then
+  ok "writer: dependencies.yml updated: moved to the entry's date"
+else
+  bad "writer: dependencies.yml updated: is '$wr_dep_date', expected 2026-08-20"
+fi
+# Prove that pairing is load-bearing rather than decorative: put `updated:` back to a stale date —
+# exactly what a fix that positioned the entry correctly and left dependencies.yml alone would have
+# produced — and the checker must refuse, by its OWN distinct reason (never the heading reason).
+sed -i 's/^updated: *"[0-9-]*"/updated: "1999-01-01"/' "$WD/dependencies.yml"
+script_expect "an entry correctly placed but with a stale updated: is still refused" 1 \
+  "updated=1999-01-01 != top changelog date=2026-08-20" \
+  -- --dependencies "$WD/dependencies.yml" --changelog "$WD/CHANGELOG.md"
+
+# --- Idempotence: a re-publish of an already-recorded version must not stack a duplicate. ------
+WD2="$(writer_fixture idempotent)"
+for _ in 1 2; do
+  python3 "$WRITER" --changelog "$WD2/CHANGELOG.md" --dependencies "$WD2/dependencies.yml" \
+    --date 2026-08-20 --marker "auto-publish evidence: FS.GG.Kit 8.8.8" \
+    --entry '**auto-publish evidence: FS.GG.Kit 8.8.8** (owner github): body.' >/dev/null 2>&1 || true
+done
+wr_copies="$(grep -cF 'FS.GG.Kit 8.8.8' "$WD2/CHANGELOG.md")"
+if [ "$wr_copies" -eq 1 ]; then
+  ok "writer: a second run for the same version adds no duplicate entry"
+else
+  bad "writer: $wr_copies copies of the 8.8.8 entry after two runs, expected 1"
+fi
+
+# --- Refusals. Each asserts its REASON, per this file's standing rule (tests/feed-coherence:10). -
+WD3="$(writer_fixture refusals)"
+grep -v '^## Entries$' "$WD3/CHANGELOG.md" > "$WD3/no-heading.md"
+# The marker below is a string that DOES occur in the file. That is the point: structure is checked
+# BEFORE idempotence, so a changelog that has lost its heading is REFUSED rather than reported as a
+# satisfied no-op. Reversing that order regressed this to a silent exit 0 during authoring.
+writer_expect "a changelog with no Entries heading is refused, not short-circuited by idempotence" 1 \
+  "lacks its Entries heading" \
+  -- --changelog "$WD3/no-heading.md" --dependencies "$WD3/dependencies.yml" \
+     --marker "Registry changelog" --entry 'body.'
+# ...and the refusal arrives as this repo's ::error:: line, not as a Python traceback. The checker
+# defines its own Refused class, which is NOT the writer's, so an uncaught one escapes as a
+# traceback — exit 1 either way, but a traceback is not a diagnostic a workflow log reader can act on.
+if python3 "$WRITER" --changelog "$WD3/no-heading.md" --dependencies "$WD3/dependencies.yml" \
+     --marker "Registry changelog" --entry 'body.' 2>&1 | grep -q '^Traceback'; then
+  bad "writer: a checker-side refusal surfaced as a Python traceback instead of an ::error:: line"
+else
+  ok "writer: a checker-side refusal surfaces as an ::error:: line, not a traceback"
+fi
+writer_expect "a malformed --date is refused" 1 "--date must be YYYY-MM-DD" \
+  -- --changelog "$WD3/CHANGELOG.md" --dependencies "$WD3/dependencies.yml" \
+     --date 20260820 --marker "zzz-unique-marker" --entry 'body.'
+printf 'updated: "2026-01-01"\nupdated: "2026-01-02"\n' > "$WD3/two-updated.yml"
+writer_expect "a dependencies.yml with two updated: lines is refused" 1 "exactly one quoted updated:" \
+  -- --changelog "$WD3/CHANGELOG.md" --dependencies "$WD3/two-updated.yml" \
+     --marker "zzz-unique-marker" --entry 'body.'
+# No refusal may leave a partial write behind.
+if cmp -s "$WD3/CHANGELOG.md" "$ROOT/registry/CHANGELOG.md"; then
+  ok "writer: a refused run leaves the changelog byte-identical"
+else
+  bad "writer: a refused run modified the changelog"
+fi
+
+# --- Criterion 2's other half: the checker REFUSES the pre-fix line-2 shape, by that reason. ----
+WD4="$(writer_fixture line2)"
+python3 - "$WD4/CHANGELOG.md" <<'PY'
+import sys
+p = sys.argv[1]
+lines = open(p, encoding="utf-8").read().splitlines(keepends=True)
+# The exact shape `sed -i "2i\\${entry}"` produced: a dated entry inserted at line 2, far above the
+# Entries heading. This is what every auto-publish evidence PR has looked like since 2026-08-05.
+lines.insert(1, "- **2026-08-20** — **auto-publish evidence: FS.GG.Kit 9.9.9** (owner github): body.\n")
+open(p, "w", encoding="utf-8").write("".join(lines))
+PY
+script_expect "the pre-fix line-2 insertion is refused by the checker" 1 \
+  "has dated entry before Entries heading at line 2" \
+  -- --dependencies "$WD4/dependencies.yml" --changelog "$WD4/CHANGELOG.md"
+
 echo
 echo "registry-changelog fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
