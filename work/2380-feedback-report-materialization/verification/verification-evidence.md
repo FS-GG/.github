@@ -53,9 +53,23 @@ runs it.
   carries no `profile` parameter: `always` is the only product predicate that holds there, so it is the
   only one reaching `skill-union-assert.sh`'s `[missing]` class. Every `profile`-gated row evaluates
   false and is classified as a *justified* off-profile omission.
-- `template_vocabulary_false` is `.github#2547`'s cause made executable: `FS.GG.Templates`' own manifest
-  predicates use a `template` parameter this repository does not declare, so they answer a constant
-  `false` here.
+- `template_vocabulary_false` shows `FS.GG.Templates`' own manifest vocabulary evaluating against a
+  scaffold from this provider family. It is false by **exactly the mechanism the `profile` rows above
+  are false**: the fixture's provenance carries no `template` key, so `eval_clause` resolves it to the
+  empty string and no list item matches.
+
+  It is **not** a constant, and it is **not** caused by `registry/skills.yml` omitting `template` from
+  its `parameters:` list. Nothing in `skill-union-assert.sh` reads that declaration — `grep -n
+  "parameters" scripts/skill-union-assert.sh` returns only comments (63, 157, 276, 460) and one error
+  string (590), and `:460` states it outright: *"Scaffold parameters (scaffold-provenance.json →
+  .effectiveParameters), read only with --params."* Measured both ways: a provenance carrying
+  `template: fable-game` evaluates the same predicate **`true`** (exit 0); the same provenance with the
+  key removed evaluates **`false`** (exit 0).
+
+  An earlier revision of this file, of `run-checks.sh`'s comment, and of the PR body asserted the
+  declaration as the cause. That was wrong and is corrected here; the check's result was always right,
+  only its stated reason was not. The related registry-completeness concern is tracked in
+  `.github#2547`, whose own wording is being corrected by its author — not by this package.
 - `negated_unset_param_true` records the latent hazard — an unset parameter resolves to the empty
   string, so a **negated** clause fires. No current product row uses that form; it is recorded, not
   claimed as active.

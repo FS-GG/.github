@@ -67,8 +67,12 @@ check_predicate always_holds                   "always"                         
 check_predicate profile_five_is_false          "profile in [app, headless-scene, governed, sample-pack, game]" false
 check_predicate profile_game_samplepack_false  "profile in [game, sample-pack]"                                false
 check_predicate profile_eq_samplepack_false    "profile == sample-pack"                                        false
-# FS.GG.Templates' own manifest vocabulary: `template` is not a parameter this repo declares, so its
-# predicates are unevaluatable here and answer a constant false (.github#2547).
+# FS.GG.Templates' own manifest vocabulary. This is false for exactly the same reason the `profile`
+# rows above are false, and for no other: the fixture's provenance carries no `template` key, so
+# `eval_clause` resolves it to the empty string and no list item matches. It is NOT a constant, and it
+# is NOT caused by `registry/skills.yml` failing to declare `template` in its `parameters:` list --
+# nothing in this gate reads that declaration (see :460, "read only with --params"). Supply a
+# provenance carrying `template: fable-game` and this same predicate evaluates true.
 check_predicate template_vocabulary_false      "template in [fable-game, fable-bindings]"                      false
 # An unset parameter resolves to the empty string, so a NEGATED clause fires. Latent hazard, recorded.
 check_predicate negated_unset_param_true       "lifecycle != spec-kit"                                         true
