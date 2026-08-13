@@ -485,6 +485,26 @@ _OBLIGATION_DECLARATION = re.compile(
     rf" head=(?P<head>{_DELIVERY_HEAD}) -->\Z"
 )
 
+
+def _leading_line(body: str) -> str:
+    """`DeliveryApplication.leadingLine`, restated — including its CommonMark indent limit.
+
+    Leading blank lines and up to THREE spaces of indentation render invisibly, so a marker behind
+    them is still the comment's leading line. FOUR spaces, or a tab (one tab stop), opens a CommonMark
+    INDENTED CODE BLOCK: the marker is then a visible code sample, and reading it as a declaration is
+    the fail-open the round-1 critic measured on `.github#2544` (a bystander's code sample destroying
+    somebody else's valid declaration, and an indented declaration+receipt pair reading `verified`).
+    The engine returns the line AS WRITTEN in that case so nothing can match it; so does this.
+    """
+    normalized = body.replace("\r\n", "\n")
+    first = next((line for line in normalized.split("\n") if line.strip()), None)
+    if first is None:
+        return ""
+    indent = first[: len(first) - len(first.lstrip(" \t"))]
+    if "\t" in indent or len(indent) >= 4:
+        return first
+    return body.strip().replace("\r\n", "\n").split("\n", 1)[0]
+
 # --- the tag arm (.github#1784, widened to every release namespace by .github#1790) ----------------
 # The tag scheme the #1772 resolver uses. Written once here; the workflow restates nothing.
 TAG_PREFIX = "kit/v"
@@ -1872,7 +1892,7 @@ def obligation_declarations(comments_path: str) -> tuple[list[Declaration], int]
         # ONE reading of "leading", used by the filter and the parse alike (.github#2544). Testing the
         # raw body here and the trimmed leading line below is exactly the disagreement that row fixed
         # in the engine; repeating it here would have re-created it in the gate that mirrors it.
-        leading = body.strip().replace("\r\n", "\n").split("\n", 1)[0]
+        leading = _leading_line(body)
         if not leading.startswith(_DECLARATION_PREFIX):
             continue  # Not the comment's leading line. Not generosity — agreement with the engine.
         if leading.startswith(_NONE_PREFIX):

@@ -292,6 +292,84 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             Assert.Contains("undeclared", reason)
             Assert.DoesNotContain("63", reason)
 
+    // ROUND-1 REVIEW REPAIR (.github#2544, critic `tern-bde7`). The first cut of this fix trimmed leading
+    // whitespace without limit, which did not merely make an inert marker live — it made the parse
+    // FAIL-OPEN and let a BYSTANDER break somebody else's PR. Four spaces (or a tab) opens a CommonMark
+    // indented code block, so a comment whose first content is an indented code SAMPLE was read as a real
+    // declaration. The limit below is CommonMark's own, and it is exactly the line between invisible and
+    // visible: 0-3 spaces render as nothing, 4+ render as a code block. `independent-review.md:16`'s
+    // generated review-policy block already states the rule this restores — a marker "inside a fence, an
+    // indented code block, or prose that only mentions it" is inert.
+
+    let private indentedSample = "    <!-- fsgg:delivery-obligation id=example kind=publication head=head-a -->"
+
+    [<Fact>]
+    let ``#2544 round 1: a bystander's indented code sample cannot destroy a valid declaration`` () =
+        // THE FINDING, as the critic executed it against live PR bytes: a good `none` declaration already
+        // on the PR, plus one added comment carrying an indented sample. Unlimited trimming turned the
+        // sample into a second declaration and the pair then collided, so the refusal accused the author
+        // of combining `none` with obligations when somebody had merely posted documentation.
+        let comments = [ commentWithId 71L noneMarker; commentWithId 72L indentedSample ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Ok [] -> ()
+        | other -> failwithf "a code sample must not disturb an existing valid declaration, got %A" other
+
+    [<Fact>]
+    let ``#2544 round 1: an indented declaration and receipt pair does not read as verified`` () =
+        // The fail-OPEN direction, and the one this subsystem must never move in: under unlimited
+        // trimming this pair reported `Verified = true` — a discharged obligation nobody declared.
+        let comments =
+            [ commentWithId 73L "    <!-- fsgg:delivery-obligation id=kit kind=publication head=head-a -->"
+              commentWithId 74L "    <!-- fsgg:delivery-receipt id=kit head=head-a evidence=https://nuget.example/kit -->" ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Ok obligations ->
+            failwithf "an indented code sample must never produce an obligation, let alone a verified one, got %A" obligations
+        | Error reason -> Assert.Contains("undeclared", reason)
+
+    [<Fact>]
+    let ``#2544 round 1: a four-space indented marker is inert, and is NAMED rather than silently ignored`` () =
+        // Both halves matter. Narrowing alone would send this declaration back to being invisible, which
+        // is the failure the whole row exists to kill — so criterion 2's diagnostic must reach it too.
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 75L ("    " + noneMarker) ] with
+        | Ok _ -> failwith "a four-space indented marker is a code block, not a declaration"
+        | Error reason ->
+            Assert.Contains("undeclared", reason)
+            Assert.Contains("75", reason)
+            Assert.Contains("leading line", reason)
+
+    [<Fact>]
+    let ``#2544 round 1: a tab-indented marker is inert, and is NAMED`` () =
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 76L ("\t" + noneMarker) ] with
+        | Ok _ -> failwith "a tab is one tab stop, so a tab-indented marker is a code block"
+        | Error reason ->
+            Assert.Contains("undeclared", reason)
+            Assert.Contains("76", reason)
+
+    [<Fact>]
+    let ``#2544 round 1: three spaces still declares, because three spaces render invisibly`` () =
+        // The boundary is CommonMark's, so it has to be pinned from BOTH sides: this is the widest
+        // indentation a reader cannot see, and leg C would be arbitrary if this one did not hold.
+        match DeliveryApplication.obligationsFromComments "head-a" [ comment ("   " + noneMarker) ] with
+        | Ok [] -> ()
+        | other -> failwithf "three spaces render as nothing, so the marker is still the leading line, got %A" other
+
+    [<Fact>]
+    let ``#2544 round 1: blank lines above a correctly-indented marker still declare`` () =
+        match DeliveryApplication.obligationsFromComments "head-a" [ comment ("\n\n  " + noneMarker) ] with
+        | Ok [] -> ()
+        | other -> failwithf "blank lines are not indentation, got %A" other
+
+    [<Fact>]
+    let ``#2544 round 1: the diagnostic does not tell a documentation author to make their sample declare`` () =
+        // The advice was unconditional — and under the indented-code-block case it was advice to perform
+        // the exact mutation that turns a code sample into a live declaration.
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 77L indentedSample ] with
+        | Ok _ -> failwith "expected the indented sample to stay inert"
+        | Error reason ->
+            Assert.DoesNotContain("edit that comment to lead with it", reason)
+            Assert.Contains("meant to declare", reason)
+            Assert.Contains("code sample", reason)
+
     // Round-1 review repair (.github#2264 PR #2271): `Client.outstandingObligations` is the extracted,
     // directly-testable core of `reconcile`'s lifecycle fold, which previously scanned live PR comments
     // with bulk, unanchored `.Contains` — a comment quoting ANOTHER obligation's receipt marker in prose

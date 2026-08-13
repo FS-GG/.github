@@ -1434,6 +1434,29 @@ obl "$OBL/space-led.json"
 must_fail "a declaration whose body opens with a space is seen, exactly as the engine now reads it" \
   "obligation id=space-led kind=package-release"
 
+# ---- AND THE LIMIT ON THAT TOLERANCE, which is CommonMark's (.github#2544 round-1 review repair).
+#      FOUR spaces, or a tab, opens an INDENTED CODE BLOCK: the marker is then a visible code sample,
+#      and reading it as a declaration is a fail-open — the critic measured a bystander's indented
+#      sample destroying a valid declaration already on a PR. Three spaces render as nothing and must
+#      still declare, so the boundary is pinned from both sides.
+printf '[{"body": "    <!-- fsgg:delivery-obligation id=indented kind=package-release head=%s -->"}]' \
+  "$HEAD_SHA" > "$OBL/indented.json"
+obl "$OBL/indented.json"
+must_pass "a four-space indented marker is a code sample, not a declaration" \
+  "carry no \`fsgg:delivery-obligation\`"
+
+printf '[{"body": "\\t<!-- fsgg:delivery-obligation id=tabbed kind=package-release head=%s -->"}]' \
+  "$HEAD_SHA" > "$OBL/tabbed.json"
+obl "$OBL/tabbed.json"
+must_pass "a tab-indented marker is a code sample too, because a tab is one tab stop" \
+  "carry no \`fsgg:delivery-obligation\`"
+
+printf '[{"body": "   <!-- fsgg:delivery-obligation id=three-spaces kind=package-release head=%s -->"}]' \
+  "$HEAD_SHA" > "$OBL/three-spaces.json"
+obl "$OBL/three-spaces.json"
+must_fail "three spaces render invisibly, so that marker still declares" \
+  "obligation id=three-spaces kind=package-release"
+
 # The trimmed filter must not make a QUOTED marker live: the fence is the comment's leading line, so
 # the marker on line 2 is not a declaration. `.github#2347` acceptance 2 and the `.github#2264`
 # round-1 anchoring fix are what this leg holds in place on this side of the boundary.
@@ -1915,7 +1938,9 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # behaviour leg reds when the thing it names is removed.
 # + 3 leading-line legs (.github#2544): the newline-led and space-led declarations this arm could not
 # see once the engine could, and the fenced control that holds the inertness boundary still.
-EXPECTED_LEGS=160
+# + 3 indent-limit legs (.github#2544 round-1 repair): four-space and tab indentation are CommonMark
+# code blocks and must stay inert; three spaces render invisibly and must still declare.
+EXPECTED_LEGS=163
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

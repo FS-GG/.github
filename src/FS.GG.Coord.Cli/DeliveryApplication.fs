@@ -176,17 +176,48 @@ module DeliveryApplication =
     // line — still fails this match and stays inert, preserving the `.github#2264` round-1 anchoring
     // fix for the sibling read path.
     //
-    // ONE SPLIT, BOTH HALVES (.github#2544). The leading line and everything below it come out of a single
-    // cut, so "leading" cannot be answered two ways: the diagnostic below has to reason about exactly the
-    // text this rule EXCLUDED, and computing that separately is how the pre-filter and the parser drifted
-    // apart in the first place. `leadingLine` is the same function it was — now the first half of the pair.
-    let private splitLeadingLine (text: string) =
-        let trimmed = text.Trim().Replace("\r\n", "\n")
-        match trimmed.IndexOf '\n' with
-        | -1 -> trimmed, ""
-        | index -> trimmed.Substring(0, index), trimmed.Substring(index + 1)
-
-    let private leadingLine (text: string) = fst (splitLeadingLine text)
+    // ONE FUNCTION, AND THE INDENT LIMIT LIVES INSIDE IT (.github#2544, round-1 repair). `leadingLine` is
+    // the ONLY place that decides what "leading" means — the candidate pre-filter, the three parses and
+    // the `none` equality all ask it rather than re-deriving it, which is what criterion 1 requires.
+    // Criterion 1 constrains WHERE the rule lives, not how permissive it is, so narrowing it here keeps
+    // that criterion satisfied rather than trading against it.
+    //
+    // AND THE LIMIT IS COMMONMARK'S, NOT AN ARBITRARY BUDGET. Leading blank lines and up to THREE spaces
+    // of indentation render invisibly, so a marker behind them is the comment's leading line in every
+    // sense a reader has access to. FOUR spaces — or a tab, which is one tab stop — opens a CommonMark
+    // INDENTED CODE BLOCK: the marker is then visibly a code sample, and treating it as a declaration is
+    // exactly "making a quoted marker live again", which `.github#2544`'s governing sentence forbids and
+    // which the generated `fsgg-protocol:review-policy` block already names in as many words ("inside a
+    // fence, AN INDENTED CODE BLOCK, or prose that only mentions it" is inert — `independent-review.md:16`).
+    //
+    // The round-1 critic measured why this is not cosmetic: with an unlimited trim, ONE added comment
+    // carrying an indented code sample destroys a VALID declaration already on the PR (the `none` sentinel
+    // then collides with a phantom obligation), and an indented declaration+receipt pair reads
+    // `Verified = true` — fail-OPEN, the one direction this subsystem must never move. A bystander posting
+    // documentation could do that to somebody else's PR.
+    let private leadingLine (text: string) =
+        // The first line carrying any content, exactly as written — indentation included, because the
+        // indentation is the thing being measured.
+        let firstContentLine =
+            text.Replace("\r\n", "\n").Split('\n')
+            |> Array.tryFind (fun line -> line.Trim() <> "")
+        let indentOf (line: string) =
+            let mutable i = 0
+            while i < line.Length && (line.[i] = ' ' || line.[i] = '\t') do
+                i <- i + 1
+            line.Substring(0, i)
+        match firstContentLine with
+        | Some line when (let indent = indentOf line in indent.Contains '\t' || indent.Length >= 4) ->
+            // An indented code block is not a leading marker line at all. Returning the line AS WRITTEN
+            // means no prefix and no marker grammar can match it, so the comment is inert.
+            line
+        | _ ->
+            // Every other body reaches the original trim, byte for byte — so leading blank lines and up
+            // to three spaces behave exactly as they did, and nothing else in this module moves.
+            let trimmed = text.Trim().Replace("\r\n", "\n")
+            match trimmed.IndexOf '\n' with
+            | -1 -> trimmed
+            | index -> trimmed.Substring(0, index)
 
     let private declarationPrefix = "<!-- fsgg:delivery-obligation"
     // `<!-- fsgg:delivery-obligations none head=<sha> -->` extends `declarationPrefix` (plural, then a
@@ -217,15 +248,22 @@ module DeliveryApplication =
     // invisible one is indistinguishable from never having been written, which is why four independent
     // lanes in one session each posted a heading above their marker believing they had declared. This
     // predicate decides nothing about the parse — it only supplies the comment id for that message.
+    //
+    // AND IT MUST REACH THE INDENTED LEADING MARKER TOO (round-1 repair). Narrowing `leadingLine` above
+    // sends a four-space-indented declaration back to being ignored — so if this predicate still only
+    // looked BELOW the leading line, that declaration would be silently invisible again, which is the
+    // exact failure this row exists to kill and the part a narrowing repair most easily drops. So the
+    // scan is over EVERY line of the body, including the first: the leading-line guard below is what
+    // keeps a genuine candidate from being described as a quotation, and it no longer needs the
+    // leading/below split to do that.
     let private carriesInertMarker (comment: Driver.ReviewComment) =
         let isMarkerLine (line: string) =
             let line = line.Trim()
             line.StartsWith declarationPrefix || line.StartsWith receiptPrefix
         // A comment that already LEADS with a marker is a candidate, not an inert quotation, even when it
         // also quotes one further down; naming it here would misdescribe it.
-        let below = snd (splitLeadingLine comment.Body)
         not (leadsWith declarationPrefix comment || leadsWith receiptPrefix comment)
-        && (below.Split('\n') |> Array.exists isMarkerLine)
+        && (comment.Body.Replace("\r\n", "\n").Split('\n') |> Array.exists isMarkerLine)
 
     let private malformedField (comment: Driver.ReviewComment) (kind: string) (fields: Regex) =
         let matched = fields.Match(leadingLine comment.Body)
@@ -248,8 +286,12 @@ module DeliveryApplication =
             // ignored marker is when there is one to point at (.github#2544).
             match comments |> List.tryFind carriesInertMarker with
             | Some comment ->
+                // THE ADVICE IS CONDITIONAL, DELIBERATELY (round-1 repair). The previous wording told the
+                // reader to "edit that comment to lead with it" — wrong for a documentation comment, and
+                // under the indented-code-block case it was advice to perform the exact mutation that
+                // turns a code sample into a live declaration. Say what is true and let the author decide.
                 Error
-                    $"delivery obligations are undeclared: comment {comment.Id} carries a delivery marker that is not that comment's leading line, so it is inert; a marker declares only as the comment's own first line, so edit that comment to lead with it"
+                    $"delivery obligations are undeclared: comment {comment.Id} carries a delivery marker that is not this comment's leading line — a marker below the first line, or indented four or more spaces (or by a tab) into a code block, is a quotation and stays inert. If it was meant to declare, post a comment whose very first line is that marker, indented no more than three spaces; if it is a code sample or documentation, it is correctly inert and nothing has been declared yet"
             | None -> Error "delivery obligations are undeclared"
         else
             let parsedDeclarations =
