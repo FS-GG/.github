@@ -1118,18 +1118,31 @@ chmod +x "$tag_no_identity_script"
 
 # A REAL local git remote — not a stub — so the assertion is "a tag actually landed", the exact gap
 # acceptance criterion 3 names.
-tag_remote="$tag_work/origin.git"
-git init --quiet --bare "$tag_remote"
-
-# make_worktree <name> -> a fresh clone of the bare remote with a seed commit, printed. HOME points
-# at an empty, per-clone directory and GIT_CONFIG_NOSYSTEM=1 is set so neither this host's own
-# ~/.gitconfig identity nor any system config leaks in — matching a hosted runner's clean
+#
+# .github#2508: EACH leg below gets its OWN bare remote, created fresh inside `make_worktree` itself,
+# rather than the single shared "$tag_work/origin.git" every leg used to clone and push
+# "HEAD -> main" against. Sharing one remote is what let a later leg's independent history collide
+# with an earlier leg's already-pushed tip: once one clone's checkout of the (no-longer-empty, but
+# differently-HEADed) bare repo failed — `git init --bare` leaves the remote's own symbolic HEAD
+# following the runner's `init.defaultBranch` default, which need not be "main" — that clone landed
+# on an unrelated unborn branch, and its own seed commit became an orphan with no shared ancestry.
+# Pushing that orphan to "main" is the exact non-fast-forward rejection .github#2508 measured on 7 of
+# 8 kit-auto-publish runs. No leg's push can depend on another leg's history when no leg shares a
+# remote with another, so the fix here is isolation, not reordering. `--initial-branch=main` also
+# makes every fresh bare remote's own HEAD name "main" explicitly, removing the runner-default
+# dependency entirely rather than merely making it unreachable through sharing.
+#
+# make_worktree <name> -> a fresh bare remote plus a fresh clone of it with a seed commit, printed.
+# HOME points at an empty, per-clone directory and GIT_CONFIG_NOSYSTEM=1 is set so neither this
+# host's own ~/.gitconfig identity nor any system config leaks in — matching a hosted runner's clean
 # environment, which is exactly the environment the live bug required. The seed commit's sha is left
-# in `$d/seed-sha` for callers that need it as SOURCE_SHA.
+# in `$d/seed-sha` for callers that need it as SOURCE_SHA, and the leg's own remote always lives at
+# the deterministic path `$d/origin.git` for callers that need to inspect it directly.
 make_worktree() {
   local d="$tag_work/$1"
   mkdir -p "$d/home"
-  git -c init.defaultBranch=main clone --quiet "$tag_remote" "$d/repo"
+  git init --quiet --bare --initial-branch=main "$d/origin.git"
+  git -c init.defaultBranch=main clone --quiet "$d/origin.git" "$d/repo"
   ( cd "$d/repo" \
       && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test commit --quiet --allow-empty -m seed \
       && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
@@ -1169,6 +1182,7 @@ run_tag_step() {
 # ---- RED: the pre-fix step (no identity configured) fails closed exactly like the live runs cited
 #      in .github#2492, and no tag reaches the remote. ----
 d="$(make_worktree red)"
+remote="$d/origin.git"
 seed_sha="$(cat "$d/seed-sha")"
 rc=0; run_tag_step "$d" "9.9.1" tag "$seed_sha" "$tag_no_identity_script" || rc=$?
 [ "$rc" -ne 0 ] \
@@ -1181,7 +1195,7 @@ checks=$((checks + 1))
 grep -q 'Committer identity unknown' "$d/stderr.log" \
   || { echo "gate-inversion (tag identity, RED phase): expected 'Committer identity unknown' in stderr, got:" >&2; cat "$d/stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
-git -C "$tag_remote" tag -l 'kit/v9.9.1' | grep -q . \
+git -C "$remote" tag -l 'kit/v9.9.1' | grep -q . \
   && { echo "gate-inversion (tag identity, RED phase): no tag should have reached the remote" >&2; exit 1; }
 checks=$((checks + 1))
 
@@ -1189,20 +1203,21 @@ checks=$((checks + 1))
 #      succeeds, and ALL THREE coherent-set tags actually land on the remote at the SAME commit — not
 #      merely that the commands were invoked without error, and not only kit (.github#2495's gap). ----
 d="$(make_worktree green)"
+remote="$d/origin.git"
 seed_sha="$(cat "$d/seed-sha")"
 rc=0; run_tag_step "$d" "9.9.2" tag "$seed_sha" "$tag_script" || rc=$?
 [ "$rc" -eq 0 ] \
   || { echo "gate-inversion (tag identity, GREEN phase): expected exit 0, got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
 for tag in kit/v9.9.2 drivers/v9.9.2 coord-engine/v9.9.2; do
-  git -C "$tag_remote" tag -l "$tag" | grep -qx "$tag" \
+  git -C "$remote" tag -l "$tag" | grep -qx "$tag" \
     || { echo "gate-inversion (tag identity, GREEN phase): expected $tag to have reached the remote" >&2; exit 1; }
   checks=$((checks + 1))
-  landed_sha="$(git -C "$tag_remote" rev-parse "refs/tags/$tag^{commit}")"
+  landed_sha="$(git -C "$remote" rev-parse "refs/tags/$tag^{commit}")"
   [ "$landed_sha" = "$seed_sha" ] \
     || { echo "gate-inversion (tag identity, GREEN phase): $tag landed at $landed_sha, expected the seed commit $seed_sha" >&2; exit 1; }
   checks=$((checks + 1))
-  tagger="$(git -C "$tag_remote" for-each-ref --format='%(taggername) %(taggeremail)' "refs/tags/$tag")"
+  tagger="$(git -C "$remote" for-each-ref --format='%(taggername) %(taggeremail)' "refs/tags/$tag")"
   [ "$tagger" = 'test-bot[bot] <297630107+test-bot[bot]@users.noreply.github.com>' ] \
     || { echo "gate-inversion (tag identity, GREEN phase): unexpected tagger identity for $tag: $tagger" >&2; exit 1; }
   checks=$((checks + 1))
@@ -1211,6 +1226,7 @@ done
 # ---- .github#2495 leg 1 — TOCTOU guard is unaffected: 'tag' still refuses when kit's tag appears
 #      between observation and this write, and (new) no sibling tag reaches the remote either. ----
 d="$(make_worktree race)"
+remote="$d/origin.git"
 seed_sha="$(cat "$d/seed-sha")"
 push_tag_at "$d" "kit/v9.9.3" "$seed_sha"
 rc=0; run_tag_step "$d" "9.9.3" tag "$seed_sha" "$tag_script" || rc=$?
@@ -1221,7 +1237,7 @@ grep -q 'tag appeared after observation' "$d/stdout.log" \
   || { echo ".github#2495 leg 1 (TOCTOU guard): expected the original race-refusal message, got:" >&2; cat "$d/stdout.log" >&2; exit 1; }
 checks=$((checks + 1))
 for tag in drivers/v9.9.3 coord-engine/v9.9.3; do
-  git -C "$tag_remote" tag -l "$tag" | grep -q . \
+  git -C "$remote" tag -l "$tag" | grep -q . \
     && { echo ".github#2495 leg 1 (TOCTOU guard): $tag must not have been created on a refused run" >&2; exit 1; }
   checks=$((checks + 1))
 done
@@ -1233,6 +1249,7 @@ done
 #      0.50.3 shape (kit/v0.50.3 already on origin at 42c63af9, both siblings absent) reproduced
 #      end-to-end against a real remote. ----
 d="$(make_worktree repair)"
+remote="$d/origin.git"
 seed_sha="$(cat "$d/seed-sha")"
 push_tag_at "$d" "kit/v9.9.4" "$seed_sha"
 advanced_sha="$(advance_head "$d")"
@@ -1244,17 +1261,17 @@ rc=0; run_tag_step "$d" "9.9.4" tagSiblings "$seed_sha" "$tag_script" || rc=$?
   || { echo ".github#2495 leg 2 (repair): expected exit 0, got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
 for tag in drivers/v9.9.4 coord-engine/v9.9.4; do
-  git -C "$tag_remote" tag -l "$tag" | grep -qx "$tag" \
+  git -C "$remote" tag -l "$tag" | grep -qx "$tag" \
     || { echo ".github#2495 leg 2 (repair): expected $tag to have been created and pushed" >&2; exit 1; }
   checks=$((checks + 1))
-  landed_sha="$(git -C "$tag_remote" rev-parse "refs/tags/$tag^{commit}")"
+  landed_sha="$(git -C "$remote" rev-parse "refs/tags/$tag^{commit}")"
   [ "$landed_sha" = "$seed_sha" ] \
     || { echo ".github#2495 leg 2 (repair): $tag landed at $landed_sha, expected kit's EXISTING commit $seed_sha (not the advanced HEAD $advanced_sha)" >&2; exit 1; }
   checks=$((checks + 1))
 done
 # kit itself must be untouched — still the ORIGINAL tag object pushed by push_tag_at, tagged by "seed",
 # not re-created by this run (which would have overwritten the tagger identity to test-bot[bot]).
-kit_tagger="$(git -C "$tag_remote" for-each-ref --format='%(taggername) %(taggeremail)' refs/tags/kit/v9.9.4)"
+kit_tagger="$(git -C "$remote" for-each-ref --format='%(taggername) %(taggeremail)' refs/tags/kit/v9.9.4)"
 [ "$kit_tagger" = 'seed <seed@example.test>' ] \
   || { echo ".github#2495 leg 2 (repair): kit/v9.9.4 must remain untouched (tagger 'seed'), got: $kit_tagger" >&2; exit 1; }
 checks=$((checks + 1))
@@ -1297,6 +1314,7 @@ tag_head_script="$tag_work/tag-head-not-source-sha.sh"
 mutate_to_head "$tag_head_script"
 
 d="$(make_worktree gate-inversion-source-sha)"
+remote="$d/origin.git"
 seed_sha="$(cat "$d/seed-sha")"
 push_tag_at "$d" "kit/v9.9.6" "$seed_sha"
 advanced_sha="$(advance_head "$d")"
@@ -1304,7 +1322,7 @@ rc=0; run_tag_step "$d" "9.9.6" tagSiblings "$seed_sha" "$tag_head_script" || rc
 [ "$rc" -eq 0 ] \
   || { echo ".github#2495 leg 4 (gate-inversion, SOURCE_SHA): mutated step should still exit 0 (git tag -a succeeds against HEAD), got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
-landed_sha="$(git -C "$tag_remote" rev-parse 'refs/tags/drivers/v9.9.6^{commit}')"
+landed_sha="$(git -C "$remote" rev-parse 'refs/tags/drivers/v9.9.6^{commit}')"
 [ "$landed_sha" = "$advanced_sha" ] \
   || { echo ".github#2495 leg 4 (gate-inversion, SOURCE_SHA): expected the mutated (HEAD-defaulting) step to land drivers/v9.9.6 at the WRONG advanced commit $advanced_sha, got $landed_sha" >&2; exit 1; }
 checks=$((checks + 1))
@@ -1322,25 +1340,26 @@ checks=$((checks + 1))
 #      existence check cannot see it and will still attempt to create+push it) at a decoy commit, while
 #      `drivers`/`coord-engine` are genuinely new. ----
 d="$(make_worktree atomic-push-fixed)"
+remote="$d/origin.git"
 seed_sha="$(cat "$d/seed-sha")"
 decoy_sha="$(advance_head "$d")"
 ( cd "$d/repo" && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
-( HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -C "$tag_remote" -c user.name=decoy -c user.email=decoy@example.test tag -a "kit/v0.60.2" "$decoy_sha" -m decoy )
+( HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -C "$remote" -c user.name=decoy -c user.email=decoy@example.test tag -a "kit/v0.60.2" "$decoy_sha" -m decoy )
 rc=0; run_tag_step "$d" "0.60.2" tag "$seed_sha" "$tag_script" || rc=$?
 [ "$rc" -ne 0 ] \
   || { echo ".github#2498 atomic push (fixed, RED-for-kit phase): expected the rejected kit ref to fail the whole step, got exit 0" >&2; exit 1; }
 checks=$((checks + 1))
-git -C "$tag_remote" tag -l 'kit/v0.60.2' | grep -qx 'kit/v0.60.2' \
+git -C "$remote" tag -l 'kit/v0.60.2' | grep -qx 'kit/v0.60.2' \
   || { echo ".github#2498 atomic push (fixed): the pre-existing decoy kit tag must still be present" >&2; exit 1; }
 checks=$((checks + 1))
-kit_landed="$(git -C "$tag_remote" rev-parse 'refs/tags/kit/v0.60.2^{commit}')"
+kit_landed="$(git -C "$remote" rev-parse 'refs/tags/kit/v0.60.2^{commit}')"
 [ "$kit_landed" = "$decoy_sha" ] \
   || { echo ".github#2498 atomic push (fixed): kit/v0.60.2 must remain at the decoy commit $decoy_sha (untouched), got $kit_landed" >&2; exit 1; }
 checks=$((checks + 1))
 # THE POINT: with --atomic, the two refs that COULD have landed (drivers, coord-engine) must NOT have,
 # because kit's ref update in the same push was rejected.
 for tag in drivers/v0.60.2 coord-engine/v0.60.2; do
-  git -C "$tag_remote" tag -l "$tag" | grep -q . \
+  git -C "$remote" tag -l "$tag" | grep -q . \
     && { echo ".github#2498 atomic push (fixed): $tag must NOT have landed — --atomic should have made the whole push all-or-nothing" >&2; exit 1; }
   checks=$((checks + 1))
 done
@@ -1366,28 +1385,66 @@ tag_no_atomic_script="$tag_work/tag-no-atomic.sh"
 mutate_drop_atomic "$tag_no_atomic_script"
 
 d="$(make_worktree atomic-push-mutated)"
+remote="$d/origin.git"
 seed_sha="$(cat "$d/seed-sha")"
 decoy_sha="$(advance_head "$d")"
 ( cd "$d/repo" && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
-( HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -C "$tag_remote" -c user.name=decoy -c user.email=decoy@example.test tag -a "kit/v0.60.3" "$decoy_sha" -m decoy )
+( HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -C "$remote" -c user.name=decoy -c user.email=decoy@example.test tag -a "kit/v0.60.3" "$decoy_sha" -m decoy )
 rc=0; run_tag_step "$d" "0.60.3" tag "$seed_sha" "$tag_no_atomic_script" || rc=$?
 [ "$rc" -ne 0 ] \
   || { echo "gate-inversion (atomic push): expected the overall push to still report non-zero (kit's ref is still rejected), got exit 0" >&2; exit 1; }
 checks=$((checks + 1))
-kit_landed_mutated="$(git -C "$tag_remote" rev-parse 'refs/tags/kit/v0.60.3^{commit}')"
+kit_landed_mutated="$(git -C "$remote" rev-parse 'refs/tags/kit/v0.60.3^{commit}')"
 [ "$kit_landed_mutated" = "$decoy_sha" ] \
   || { echo "gate-inversion (atomic push): kit/v0.60.3 must remain at the decoy commit (git itself still refuses to overwrite it), got $kit_landed_mutated" >&2; exit 1; }
 checks=$((checks + 1))
 # THE REGRESSION: without --atomic, drivers/coord-engine DO land even though kit's own ref in the SAME
 # push was rejected — a real, split, mismatched coherent-set trio on the remote.
 for tag in drivers/v0.60.3 coord-engine/v0.60.3; do
-  git -C "$tag_remote" tag -l "$tag" | grep -qx "$tag" \
-    || { echo "gate-inversion (atomic push): expected $tag to have landed WITHOUT --atomic (demonstrating the partial-push hazard), got none" >&2; git -C "$tag_remote" tag -l >&2; exit 1; }
+  git -C "$remote" tag -l "$tag" | grep -qx "$tag" \
+    || { echo "gate-inversion (atomic push): expected $tag to have landed WITHOUT --atomic (demonstrating the partial-push hazard), got none" >&2; git -C "$remote" tag -l >&2; exit 1; }
   checks=$((checks + 1))
-  landed="$(git -C "$tag_remote" rev-parse "refs/tags/$tag^{commit}")"
+  landed="$(git -C "$remote" rev-parse "refs/tags/$tag^{commit}")"
   [ "$landed" = "$seed_sha" ] \
     || { echo "gate-inversion (atomic push): expected $tag to have landed at $seed_sha, got $landed" >&2; exit 1; }
   checks=$((checks + 1))
 done
+
+# ---- GATE-INVERSION EVIDENCE (pnext-item §3) for the ISOLATION FIX ITSELF (.github#2508): reproduce
+#      the exact PRE-FIX shared-remote coupling this item removes — two independent clones of ONE
+#      bare remote, taken before either has pushed, each building its own seed commit and pushing
+#      "HEAD -> main". The first push lands; the second, built from a history that shares no ancestor
+#      with what the first just pushed (the same shape `make_worktree` used to produce whenever a
+#      later leg's clone of the single shared "$tag_remote" landed on a broken/unborn branch), must
+#      be rejected non-fast-forward — the identical failure signature .github#2508 measured on 7 of 8
+#      live kit-auto-publish runs (non-fast-forward on "HEAD -> main" against the fixture's own
+#      remote). A test that cannot fail when the coupling is reintroduced has not shown the fix is
+#      isolation rather than lucky ordering. ----
+gate_inversion_coupling_work="$tag_work/gate-inversion-shared-remote"
+mkdir -p "$gate_inversion_coupling_work"
+shared_remote="$gate_inversion_coupling_work/origin.git"
+git init --quiet --bare --initial-branch=main "$shared_remote"
+clone_and_seed() {
+  # Clones $shared_remote fresh and commits ONE seed commit locally WITHOUT pushing, printing the
+  # clone's directory — models a `make_worktree` leg's own clone+commit, minus its own isolated
+  # remote, so two calls below share exactly the coupling .github#2508 removed from the real legs.
+  local d="$gate_inversion_coupling_work/$1"
+  mkdir -p "$d/home"
+  git -c init.defaultBranch=main clone --quiet "$shared_remote" "$d/repo"
+  ( cd "$d/repo" && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test commit --quiet --allow-empty -m "seed-$1" )
+  printf '%s' "$d"
+}
+gi_first="$(clone_and_seed alpha)"
+gi_second="$(clone_and_seed beta)"
+( cd "$gi_first/repo" && HOME="$gi_first/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
+gi_rc=0
+( cd "$gi_second/repo" && HOME="$gi_second/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main ) \
+  2>"$gi_second/push-stderr.log" || gi_rc=$?
+[ "$gi_rc" -ne 0 ] \
+  || { echo "gate-inversion (tag-identity isolation): reintroduced shared-remote coupling should have rejected the second leg's push, exited 0" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qi 'non-fast-forward\|rejected' "$gi_second/push-stderr.log" \
+  || { echo "gate-inversion (tag-identity isolation): expected a non-fast-forward rejection, got:" >&2; cat "$gi_second/push-stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
 
 echo "kit auto-publish state machine: $checks passed"
