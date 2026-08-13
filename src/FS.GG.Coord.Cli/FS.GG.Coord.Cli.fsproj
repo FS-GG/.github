@@ -120,7 +120,26 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.51.0 — a MINOR coherent-set cut. The review protocol now represents a case it previously refused.
+    <PackageReleaseNotes>0.51.1 — a PATCH-LINE cut with NO ENGINE BEHAVIOUR CHANGE, published so the
+coordination kit can carry a corrected `pnext-item` skill body. The three packages resolve one scalar
+(`FsggCoherentSetVersion`, `Directory.Build.props`) by construction, so a kit-only content fix moves this
+package's version too. That is the coherent-set design (`.github#2402`), not an engine delta.
+
+WHAT THE KIT GAINS. `.github#2533`. `pnext-item`'s `merge-and-release.md` now states which post-merge
+acts this repository performs AUTOMATICALLY on a merge into `main` and which a worker still owes, and
+states the rule that a pre-act stop condition on an automated act belongs in a PRE-MERGE gate, because
+a condition readable only after the act is not a stop condition. A worker writing a delivery obligation
+no longer has to infer either from workflow files.
+
+WHAT THIS CUT DOES NOT ADD, stated because a listing that overclaims fails its reader exactly as much as
+one that says nothing. No verb, flag, help entry, render name, result name or exit code moves. `review`,
+`delivery` and every other command answer as they did in 0.51.0. The item's enforcement half is a new arm
+of a CI gate in this repository (`check-kit-published-coherence.py --obligation-arm`), which is not
+carried by any published package and therefore changes nothing a receiver restores.
+
+Adopt 0.51.1.
+
+0.51.0 — a MINOR coherent-set cut. The review protocol now represents a case it previously refused.
 
 `.github#2527`. A pull request whose head moves AFTER its review chain completed and was
 host-accepted had no representation. The only honest response to a moved head — a full fresh

@@ -926,8 +926,11 @@ must_fail "a tag-arm input on the published arm is refused, not ignored" \
 set +e
 out="$(python3 "$GATE" --pr-arm --tag-arm 2>&1)"; rc=$?
 set -e
+# The refusal now LISTS the arms it was given rather than naming a hard-coded pair, because
+# .github#2533 made three arms mutually exclusive and a pairwise message cannot say which three.
+# The assertion still names both arms, so it cannot pass on the obligation arm's message.
 must_fail "the pr and tag arms refuse to run at once" \
-  "--pr-arm and --tag-arm are different arms with different subjects"
+  "--pr-arm, --tag-arm are different arms with different subjects"
 
 set +e
 out="$(python3 "$GATE" --tag-arm --fixture-manifest "$CANON" --canonical-manifest "$CANON" 2>&1)"; rc=$?
@@ -1328,6 +1331,548 @@ else
   bad "the tag arm is wired on the main/schedule job"
 fi
 
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# THE OBLIGATION ARM (--obligation-arm, .github#2533)
+#
+# Subject: does a `fsgg:delivery-obligation` declared on this PR name an act the MERGE performs?
+# `.github#2512` declared a manual coherent-set release, had it reviewed by two independent critics
+# across three rounds and host-gated as the session's only irreversible act — and `kit-auto-publish`
+# had cut all three tags 8 seconds after the merge. AC2 is the flagged case, AC3 the controlled
+# counterpart that must stay quiet, and the two mutations at the end are the evidence that each of
+# them is measuring the detection rather than passing by accident.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+OBL="$WORK/obligations"
+mkdir -p "$OBL"
+HEAD_SHA=8de950c37e63f84f87f1a3736eca5847ddc0db97
+
+declaration() { # $1 file stem; $2 id; $3 kind  — marker at byte 0, prose below, the org's own style
+  printf '<!-- fsgg:delivery-obligation id=%s kind=%s head=%s -->\n\nProse the marker is not.' \
+    "$2" "$3" "$HEAD_SHA" \
+    | python3 -c 'import json,sys; print(json.dumps([{"body": sys.stdin.read()}]))' > "$OBL/$1.json"
+}
+
+obl() { # $1 comments file; $@ extra args — run from the REAL repo root, against the REAL workflows
+  local comments="$1"; shift
+  set +e
+  out="$(python3 "$GATE" --obligation-arm --obligations "$comments" "$@" 2>&1)"
+  rc=$?
+  set -e
+}
+
+obl_in() { # $1 tree to run from; $2 comments file; $@ extra args
+  local tree="$1" comments="$2"; shift 2
+  set +e
+  out="$(cd "$tree" && python3 "$GATE" --obligation-arm --obligations "$comments" "$@" 2>&1)"
+  rc=$?
+  set -e
+}
+
+# ---- AC2: the flagged case, measured against THIS repository's own live kit-auto-publish.yml. The
+#      workflow is READ, not restated, so if its trigger ever stops being a merge trigger this leg
+#      changes verdict with nothing here to edit — which is the property the arm is built on.
+declaration release-obligation coherent-set-0.50.6-release package-release
+obl "$OBL/release-obligation.json"
+must_fail "AC2: a package-release obligation on a PR whose merge triggers kit-auto-publish is flagged" \
+  "obligation id=coherent-set-0.50.6-release kind=package-release"
+if grep -q "kit-auto-publish.yml" <<<"$out"; then
+  ok "AC2: the finding names the workflow that performs the act"
+else
+  bad "AC2: the finding names the workflow that performs the act" "$out"
+fi
+if grep -q "PRE-MERGE gate" <<<"$out"; then
+  ok "AC5: the finding says a pre-act stop condition belongs in a pre-merge gate"
+else
+  bad "AC5: the finding says a pre-act stop condition belongs in a pre-merge gate" "$out"
+fi
+
+# Every kind the map declares reaches the same act — naming the artifact does not make it a
+# different act, because .github#2409's coherent set publishes from three sibling tags at ONE commit.
+for kind in coherent-set-release kit-release coord-engine-release drivers-release; do
+  declaration "flag-$kind" "obligation-$kind" "$kind"
+  obl "$OBL/flag-$kind.json"
+  must_fail "AC2: kind=$kind is flagged too" "kind=$kind"
+done
+
+# ---- AC3: THE CONTROLLED COUNTERPART. An obligation that genuinely needs a human is NOT flagged.
+#      "Warn always" would be indistinguishable from this arm at the AC2 leg and useless in practice.
+declaration registry-record registry-record-0.50.6 registry-record
+obl "$OBL/registry-record.json"
+must_pass "AC3: an obligation that genuinely requires manual action is not flagged" \
+  "name no act that merging this PR performs"
+
+# The no-obligations assertion shares the declaration marker's PREFIX (plural, then a space). It is
+# the claim that nothing is owed, not an obligation, and parsing it as one would flag `none`.
+printf '[{"body": "<!-- fsgg:delivery-obligations none head=%s -->"}]' "$HEAD_SHA" > "$OBL/none.json"
+obl "$OBL/none.json"
+must_pass 'the no-obligations assertion is not parsed as an obligation' "carry no \`fsgg:delivery-obligation\`"
+
+# ---- THE BYTE-0 RULE. `DeliveryApplication.fs:193` filters on `Body.StartsWith`, so a comment that
+#      opens with prose parses as ABSENT in the engine. This arm must agree: flagging a declaration
+#      the engine cannot see would report a control that is not there, and staying silent here is
+#      what keeps the two readings the same one.
+printf '[{"body": "Here is what I owe:\\n\\n<!-- fsgg:delivery-obligation id=x kind=package-release head=%s -->"}]' \
+  "$HEAD_SHA" > "$OBL/prose-first.json"
+obl "$OBL/prose-first.json"
+must_pass "a declaration not at byte 0 parses as absent, exactly as the engine reads it" \
+  "carry no \`fsgg:delivery-obligation\`"
+
+# A comment that DOES open with the marker but whose leading line is not a declaration is a
+# no-verdict, not a guess — the engine owns the diagnosis of which field is malformed.
+printf '[{"body": "<!-- fsgg:delivery-obligation id=BAD kind=package-release head=%s -->"}]' \
+  "$HEAD_SHA" > "$OBL/malformed.json"
+obl "$OBL/malformed.json"
+must_fail "a marker-prefixed comment that does not parse is a no-verdict" "does not parse as a declaration"
+
+# ---- NO SUBJECT IS NEVER A PASS (#266). Each of these is a distinct way to have read nothing.
+set +e
+out="$(python3 "$GATE" --obligation-arm 2>&1)"; rc=$?
+set -e
+must_fail "--obligation-arm with no --obligations refuses" "requires --obligations"
+
+obl "$OBL/does-not-exist.json"
+must_fail "an unreadable comments file is a no-verdict" "cannot read the PR comments"
+
+printf 'not json' > "$OBL/bad.json"
+obl "$OBL/bad.json"
+must_fail "an unparsable comments file is a no-verdict" "not parsable as JSON"
+
+printf '{"comments": []}' > "$OBL/object.json"
+obl "$OBL/object.json"
+must_fail "a comments payload that is not a list is a no-verdict" "not a list of comments"
+
+printf '[42]' > "$OBL/wrong-shape.json"
+obl "$OBL/wrong-shape.json"
+must_fail "a comment that is neither a string nor an object with a body is a no-verdict" \
+  "neither a string nor an object"
+
+printf '[]' > "$OBL/empty.json"
+obl "$OBL/empty.json"
+must_pass "a PR with no comments at all declares nothing, and says so" "0 comment(s)"
+
+# The bare-body shape is accepted as well as the `gh api` object shape, because the workflow may
+# reasonably hand over either and a shape the arm cannot read must error rather than read as empty.
+printf '["<!-- fsgg:delivery-obligation id=bare kind=package-release head=%s -->"]' "$HEAD_SHA" \
+  > "$OBL/bare-bodies.json"
+obl "$OBL/bare-bodies.json"
+must_fail "a plain list of comment bodies is accepted as the subject" "kind=package-release"
+
+# ---- THE TRIGGER IS READ, NEVER ASSUMED. These run against a synthetic tree at the mapped path, so
+#      the verdict is a function of the workflow file and of nothing else.
+OBL_TREE="$WORK/obligation-tree"
+mkdir -p "$OBL_TREE/.github/workflows"
+MAPPED="$OBL_TREE/.github/workflows/kit-auto-publish.yml"
+
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches: [main]
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "on: push: branches: [main] is a merge trigger" "THE MERGE ITSELF PERFORMS"
+
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  workflow_dispatch:
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_pass "an act that is NOT merge-triggered stops being flagged, with nothing here to update" \
+  "no longer trigger on a merge into main"
+
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches: [release/*]
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_pass "a push trigger that does not reach main is not a merge trigger" "no longer trigger"
+
+# GitHub matches `branches:` as GLOBS. A literal compare would read this as not covering `main` and
+# report an automated act as manual — the fail-OPEN direction, so it is asserted explicitly.
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches: ["ma*"]
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a glob that matches main is a merge trigger" "THE MERGE ITSELF PERFORMS"
+
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches-ignore: [main]
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_pass "branches-ignore: [main] is not a merge trigger" "no longer trigger"
+
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches-ignore: [wip/**]
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "branches-ignore that does not cover main leaves it a merge trigger" "THE MERGE ITSELF PERFORMS"
+
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on: push
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "the string spelling of on: is read, not skipped" "THE MERGE ITSELF PERFORMS"
+
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on: [push, pull_request]
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "the list spelling of on: is read, not skipped" "THE MERGE ITSELF PERFORMS"
+
+# PyYAML resolves the bare key `on` to the boolean True (YAML 1.1). The quoted spelling must read
+# identically, or half the repository's workflows would be invisible to this arm.
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+"on":
+  push:
+    branches: [main]
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "the quoted \"on\": key reads the same as the bare one" "THE MERGE ITSELF PERFORMS"
+
+# ---- A PATH-FILTERED MERGE TRIGGER IS A NO-VERDICT WHEN IT MATTERS, AND ONLY THEN. Whether THIS
+#      merge fires it is a function of the diff, which this arm does not have.
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches: [main]
+    paths: ["src/**"]
+jobs: {}
+YAML
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a path-filtered merge trigger is a no-verdict when a mapped kind is declared" \
+  "depends on the diff"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_pass "…and is deferred, not raised, for a PR that declares no mapped kind" \
+  "name no act that merging this PR performs"
+
+# ---- THE MAP CANNOT ROT IN SILENCE. Every mapped workflow is opened on EVERY run, declarations or
+#      not: a renamed or deleted file must be a no-verdict, never an arm that quietly matches nothing.
+rm -f "$MAPPED"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_fail "a mapped workflow that cannot be opened is a no-verdict, even with nothing declared" \
+  "cannot read the mapped workflow"
+
+printf 'name: kit-auto-publish\njobs: {}\n' > "$MAPPED"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_fail "a mapped workflow with no on: block is a no-verdict" "no \`on:\` block"
+
+printf 'name: kit-auto-publish\non: 42\njobs: {}\n' > "$MAPPED"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_fail "an on: block that is none of the three legal spellings is a no-verdict" \
+  "cannot tell what triggers the workflow"
+
+printf 'name: kit-auto-publish\non:\n  push: [main]\njobs: {}\n' > "$MAPPED"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "an on.push that is not a mapping is a no-verdict" "not a mapping"
+
+printf 'name: kit-auto-publish\non:\n  push:\n    branches: main\njobs: {}\n' > "$MAPPED"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "an on.push.branches that is not a list is a no-verdict" "not a list"
+
+printf 'name: kit-auto-publish\non:\n  push:\n    branches: [main]\n    branches-ignore: [wip]\njobs: {}\n' > "$MAPPED"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "branches and branches-ignore together is a no-verdict, not an invented precedence" \
+  "rejects"
+
+printf 'name: kit-auto-publish\non: [\njobs: {}\n' > "$MAPPED"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_fail "an unparsable mapped workflow is a no-verdict" "not parsable as YAML"
+
+# ---- THE ARMS STAY SEPARATE. A flag silently ignored is a caller who believes they configured a
+#      run they did not get.
+set +e
+out="$(python3 "$GATE" --obligation-arm --pr-arm --obligations "$OBL/none.json" 2>&1)"; rc=$?
+set -e
+must_fail "--pr-arm and --obligation-arm together refuse" "different arms with different subjects"
+
+set +e
+out="$(python3 "$GATE" --pr-arm --obligations "$OBL/none.json" --changed-files /dev/null \
+  --published-version 999.0.0 2>&1)"; rc=$?
+set -e
+must_fail "--obligations supplied to another arm refuses rather than being ignored" \
+  "means nothing to the other arms"
+
+set +e
+out="$(python3 "$GATE" --obligation-arm --obligations "$OBL/none.json" --changed-files /dev/null 2>&1)"
+rc=$?
+set -e
+must_fail "a --pr-arm canned input supplied to the obligation arm refuses" \
+  "mean nothing to the obligation arm"
+
+set +e
+out="$(python3 "$GATE" --obligation-arm --obligations "$OBL/none.json" \
+  --fixture-manifest /dev/null 2>&1)"; rc=$?
+set -e
+must_fail "--obligation-arm and the manifest fixture flags refuse together" \
+  "different arms with different subjects"
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# GATE-INVERSION EVIDENCE (pnext-item §3). Two mutations of the SHIPPED gate, each deleting one half
+# of the detection, each proving the leg above it was measuring that half and not passing by
+# accident. A gate whose inversion survives is a material finding by definition.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+MUT_OBL="$WORK/obligation-mutant"
+mkdir -p "$MUT_OBL/scripts"
+cp "$HERE/../../scripts/fsgg_feed.py" "$MUT_OBL/scripts/fsgg_feed.py"
+
+mutate() { # $1 destination stem; $2 exact source line; $3 replacement
+  cp "$GATE" "$MUT_OBL/scripts/$1.py"
+  python3 - "$MUT_OBL/scripts/$1.py" "$2" "$3" <<'PY'
+import sys
+path, old, new = sys.argv[1:4]
+text = open(path, encoding="utf-8").read()
+if text.count(old) != 1:
+    sys.exit(f"mutation anchor appears {text.count(old)} times, not once: {old!r}")
+open(path, "w", encoding="utf-8").write(text.replace(old, new))
+PY
+}
+
+# M1 — DELETE THE DETECTION ITSELF: never join a declaration to the automation that performs it.
+mutate mutant-detection \
+  "        automation = mapped.get(declaration.kind)" \
+  "        automation = None  # MUTATION: the .github#2533 detection deleted"
+set +e
+out="$(python3 "$MUT_OBL/scripts/mutant-detection.py" --obligation-arm \
+  --obligations "$OBL/release-obligation.json" 2>&1)"; rc=$?
+set -e
+must_pass "INVERSION M1: with the kind→automation join deleted, the AC2 leg goes GREEN" \
+  "name no act that merging this PR performs"
+
+# M2 — DELETE THE FAIL-CLOSED MAP READ: stop opening the mapped workflows, so a renamed or deleted
+# one can no longer be noticed.
+mutate mutant-maprot \
+  "    for automation in MERGE_AUTOMATION:" \
+  "    for automation in ():  # MUTATION: the map-rot read deleted"
+rm -f "$MAPPED"
+set +e
+out="$(cd "$OBL_TREE" && python3 "$MUT_OBL/scripts/mutant-maprot.py" --obligation-arm \
+  --obligations "$OBL/registry-record.json" 2>&1)"; rc=$?
+set -e
+must_pass "INVERSION M2: with the map read deleted, a MISSING mapped workflow goes GREEN" \
+  "name no act that merging this PR performs"
+
+# ---- THE ARM IS WIRED, ON EVERY PULL REQUEST. An unwired gate is the exact defect .github#2533 is
+#      about: an artifact that exists, is reviewed, and is not connected to anything.
+if python3 - "$HERE/../../.github/workflows/kit-published-coherence.yml" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+job = re.search(r"(?ms)^  pr-arm:\n(.*?)(?=^  [a-z]|\Z)", text)
+assert job, "the pr-arm job is not where this assertion expects it"
+body = job.group(1)
+# The KEY, not the substring: this job's own comments discuss `continue-on-error` and why it is not
+# used, and a substring test that its own rationale trips is a test nobody can keep green.
+assert not re.search(r"(?m)^\s*continue-on-error\s*:", body), (
+    "the pr-arm job gained continue-on-error; a finding would report green:\n" + body
+)
+# The job must stay reportable on EVERY pull request: a `paths:` filter on the trigger, or an `if`
+# narrowing this job, is how a gate reports nothing on the PRs that needed it.
+trigger = re.search(r"(?ms)^on:\n(.*?)(?=^[a-z])", text)
+assert trigger, "the on: block is not where this assertion expects it"
+pr_block = re.search(r"(?ms)^  pull_request:\n(.*?)(?=^  [a-z])", trigger.group(1))
+# YAML KEYS, not substrings. The block's own comment explains at length why the `paths:` filter that
+# used to sit here was removed (.github#1597), so a substring test reds on its own rationale.
+directives = [ln for ln in (pr_block.group(1) if pr_block else "").splitlines()
+              if ln.strip() and not ln.strip().startswith("#")]
+assert not any(re.match(r"\s*paths(-ignore)?\s*:", ln) for ln in directives), (
+    "the pull_request trigger regained a paths: filter, so PRs it excludes get no check run at "
+    "all:\n" + "\n".join(directives)
+)
+PY
+then
+  ok "the obligation arm is wired on the pr-arm job, on every pull request"
+else
+  bad "the obligation arm is wired on the pr-arm job, on every pull request"
+fi
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# THE STEP IS EXECUTED, NOT GREPPED (.github#2533 round-1 repairs 1 and 2, ONE cause).
+#
+# The two legs that used to stand here asserted `"--obligation-arm" in body` and `"issues/" in body
+# and "comments" in body` — SUBSTRING checks over the workflow's text. Independent review measured
+# what that bought: replacing the fetch with `echo '[]' > pr-comments.json` while leaving
+# COMMENTS_URL in place left this suite at 150 passed, 0 failed; and removing the invocation behind
+# a `# was: --obligation-arm` decoy comment left the companion green too (the FS.GG.Templates#379
+# shape). A substring check reads as an assertion and is not one.
+#
+# Underneath them was a real defect of the same shape, which is why they are one repair: the step
+# piped `gh api` into `jq` with no `shell:` and no `defaults:`, so GitHub ran `bash -e {0}` WITHOUT
+# pipefail. `-e` does not abort on a failed pipe HEAD, so a transport failure produced an empty
+# stream, `add // []` fabricated `[]`, and the arm exited 0 having read nothing. An empty comment
+# list is a LEGAL state, so the gate cannot tell that apart — only the step can.
+#
+# So both legs now EXTRACT the step's own `run:` body and RUN it, under GitHub's actual default
+# invocation, with stubs for `gh` and `python`. Each is followed by the mutation that would have
+# defeated its substring predecessor, asserted to change the outcome.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+OBL_STEP="$WORK/obligation-step.sh"
+OBL_BIN="$WORK/obligation-bin"
+STUB_LOG="$WORK/obligation-python-calls.log"
+STEP_CWD="$WORK/step-cwd"
+mkdir -p "$OBL_BIN" "$STEP_CWD"
+
+python3 - "$HERE/../../.github/workflows/kit-published-coherence.yml" "$OBL_STEP" <<'PY'
+import sys
+import yaml
+
+wf_path, out_path = sys.argv[1], sys.argv[2]
+wf = yaml.safe_load(open(wf_path, encoding="utf-8"))
+steps = (wf.get("jobs") or {}).get("pr-arm", {}).get("steps") or []
+name = "Does this PR declare a post-merge obligation the merge itself performs?"
+step = next((s for s in steps if s.get("name") == name), None)
+if step is None:
+    sys.exit("the obligation step is GONE from kit-published-coherence.yml's pr-arm job")
+# GitHub runs a `run:` step with no `shell:` as `bash -e {0}`. This fixture emulates exactly that, so
+# a `shell:` override would make the emulation WRONG rather than merely different — and an emulation
+# that supplies a guarantee the runner does not is how a behaviour leg becomes decorative again.
+if "shell" in step:
+    sys.exit(
+        f"the obligation step declares shell: {step['shell']!r}. This fixture runs its body under "
+        f"GitHub's default `bash -e`; teach it the new invocation before changing the step."
+    )
+if "${{" in step["run"]:
+    sys.exit(
+        "the obligation step's run: body interpolates a GitHub expression, so it cannot be executed "
+        "here. Keep the expressions in env:, where this fixture can supply them."
+    )
+open(out_path, "w", encoding="utf-8").write(step["run"])
+PY
+
+# A stub `gh` that can fail at TRANSPORT — the case the pipe used to swallow. Note it fails the way
+# a network error does (non-zero, nothing on stdout), not the way a 404 does (error JSON on stdout),
+# because the 404 case already failed closed and is exactly what made this one easy to miss.
+cat > "$OBL_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+if [ "${STUB_GH_FAIL:-0}" = "1" ]; then
+  echo "stub gh: transport failure" >&2
+  exit 1
+fi
+printf '%s' "${STUB_GH_BODY:-[]}"
+SH
+# A stub `python` that RECORDS its argv instead of running the gate. What is being measured here is
+# the step, not the arm; the arm has its own legs above.
+cat > "$OBL_BIN/python" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$STUB_LOG"
+exit 0
+SH
+chmod +x "$OBL_BIN/gh" "$OBL_BIN/python"
+
+run_obl_step() { # $1 script to run; env STUB_GH_FAIL / STUB_GH_BODY select the stub's behaviour
+  : > "$STUB_LOG"
+  rm -f "$STEP_CWD"/*.json
+  set +e
+  out="$(cd "$STEP_CWD" && PATH="$OBL_BIN:$PATH" STUB_LOG="$STUB_LOG" \
+    STUB_GH_FAIL="${STUB_GH_FAIL:-0}" STUB_GH_BODY="${STUB_GH_BODY:-[]}" \
+    COMMENTS_URL="repos/FS-GG/.github/issues/1/comments" bash -e "$1" 2>&1)"
+  rc=$?
+  set -e
+}
+
+# ---- REPAIR 1's BEHAVIOUR: a failed fetch must red the step, not fabricate an empty subject.
+STUB_GH_FAIL=1 run_obl_step "$OBL_STEP"
+if [ "$rc" -ne 0 ]; then
+  ok "a transport failure in the comment fetch reds the step (exit $rc)"
+else
+  bad "a transport failure in the comment fetch reds the step (exit $rc)" "$out"
+fi
+if [ ! -s "$STUB_LOG" ]; then
+  ok "…and the gate is never invoked on the subject that failure would have fabricated"
+else
+  bad "…and the gate is never invoked on the subject that failure would have fabricated" \
+    "$(cat "$STUB_LOG")"
+fi
+
+# ---- REPAIR 2's BEHAVIOUR: the step really does invoke the arm, with the PR's fetched comments.
+STUB_GH_FAIL=0 STUB_GH_BODY='[{"body":"hello"}]' run_obl_step "$OBL_STEP"
+if [ "$rc" -eq 0 ]; then
+  ok "a successful fetch runs the step to completion"
+else
+  bad "a successful fetch runs the step to completion (exit $rc)" "$out"
+fi
+if grep -q -- "--obligation-arm" "$STUB_LOG" && grep -q -- "--obligations" "$STUB_LOG"; then
+  ok "the step INVOKES the obligation arm, observed in the recorded argv rather than in the YAML text"
+else
+  bad "the step INVOKES the obligation arm, observed in the recorded argv rather than in the YAML text" \
+    "$(cat "$STUB_LOG")"
+fi
+# The subject handed to the gate must be the file the fetch wrote, carrying the fetched content.
+# Compared as JSON, not as bytes: `jq -s add` re-renders the payload, so a byte compare would be
+# asserting jq's formatting rather than the fetch's content.
+if [ "$(jq -cS . "$STEP_CWD/pr-comments.json" 2>/dev/null)" = '[{"body":"hello"}]' ]; then
+  ok "the file the gate is pointed at holds what the fetch actually returned"
+else
+  bad "the file the gate is pointed at holds what the fetch actually returned" \
+    "$(cat "$STEP_CWD/pr-comments.json" 2>/dev/null)"
+fi
+
+# ---- THE TWO MUTATIONS THAT DEFEATED THE SUBSTRING LEGS, now asserted to change the outcome.
+#      Each reproduces exactly what independent review did to the shipped workflow.
+python3 - "$OBL_STEP" "$WORK/step-echo-subject.sh" <<'PY'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+# The critic's mutation: replace the fetch with a fabricated subject, leaving COMMENTS_URL in place
+# so every substring the old leg looked for is still present in the file.
+mutated, n = re.subn(r"(?m)^\s*gh api .*$", "echo '[]' > pr-comment-pages.json", text)
+if n != 1:
+    sys.exit(f"expected exactly one `gh api` line to mutate, found {n}")
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+STUB_GH_FAIL=1 run_obl_step "$WORK/step-echo-subject.sh"
+if [ "$rc" -eq 0 ]; then
+  ok "INVERSION: with the fetch replaced by a literal, the transport leg goes GREEN — so it measures the fetch"
+else
+  bad "INVERSION: with the fetch replaced by a literal, the transport leg goes GREEN — so it measures the fetch" \
+    "$out"
+fi
+
+python3 - "$OBL_STEP" "$WORK/step-decoy-invocation.sh" <<'PY'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+# The FS.GG.Templates#379 decoy: remove the invocation but leave its flags in a comment, which is
+# what defeated a substring check while a bare deletion did not.
+mutated, n = re.subn(
+    r"(?ms)^\s*python scripts/check-kit-published-coherence\.py.*?--obligations pr-comments\.json\s*$",
+    "# was: python scripts/check-kit-published-coherence.py --obligation-arm --obligations pr-comments.json",
+    text,
+)
+if n != 1:
+    sys.exit(f"expected exactly one gate invocation to mutate, found {n}")
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+STUB_GH_FAIL=0 STUB_GH_BODY='[{"body":"hello"}]' run_obl_step "$WORK/step-decoy-invocation.sh"
+if [ ! -s "$STUB_LOG" ]; then
+  ok "INVERSION: with the invocation behind a decoy comment, nothing is invoked — so the leg measures the call"
+else
+  bad "INVERSION: with the invocation behind a decoy comment, nothing is invoked — so the leg measures the call" \
+    "$(cat "$STUB_LOG")"
+fi
+
 echo
 echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
@@ -1338,7 +1883,10 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # not cover a leg silently skipped because a variable it needed was empty, or an `if` whose python
 # heredoc exited 0 without asserting. So the count is asserted, and it must be updated deliberately
 # when legs are added — a fixture whose leg count nobody states is one that can quietly shrink.
-EXPECTED_LEGS=107
+# 107 + 50 obligation-arm legs (.github#2533). Four of the 50 are gate-inversion controls: M1/M2 on
+# the arm itself, plus the two round-1 repair controls that execute the workflow step and prove each
+# behaviour leg reds when the thing it names is removed.
+EXPECTED_LEGS=157
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
