@@ -162,6 +162,41 @@ def main() -> None:
     ):
         require(literal in normalized, f"review contract is missing gate-inversion invariant: {literal}")
 
+    # .github#2462 — nothing stopped a worker dispatching its own critic via the `Agent` tool, and the
+    # review marker could not record who dispatched it. Decided 2026-08-13: FORBID self-dispatch (the
+    # solo `pnext-item` case excepted), enforced by convention rather than a marker field, because host
+    # and worker post from one shared GitHub account. These literals are unique to the new block:
+    # deleting it reds this contract test the same way deleting any other pinned invariant does.
+    for literal in (
+        "**Critic dispatch belongs to the host, not the implementer.**",
+        "is a request the worker owes the host — never a task the worker discharges itself",
+        "`subagent_type: fsgg-critic-normal`",
+        "must not call the `Agent` tool",
+        "solo `pnext-item` invocation running with no host to ask",
+        "Enforcement here is by convention, not by construction, and this contract does not claim otherwise.",
+        "no marker field",
+        "can be made unforgeable between them",
+    ):
+        require(literal in normalized, f"review contract is missing critic-dispatch-provenance invariant: {literal}")
+
+    # The host-side mirror in drive-board's host-loop.md must say the same from the host's side, and
+    # both authored roots must agree. work-board's own host-loop.md is untouched by this item and is
+    # intentionally not pinned here.
+    host_loop_texts = [read(runtime, "drive-board/references/host-loop.md") for runtime in RUNTIMES]
+    require(host_loop_texts[0] == host_loop_texts[1], "drive-board host-loop.md differs between authored roots")
+    host_loop_normalized = " ".join(host_loop_texts[0].split())
+    for literal in (
+        "**The host owns critic dispatch; a worker does not dispatch its own.**",
+        "`subagent_type: fsgg-critic-normal`",
+        "measured twice in one run (`.github#2462`)",
+        "solo `pnext-item` invocation with no host to ask",
+        "**by convention, not by construction**",
+    ):
+        require(
+            literal in host_loop_normalized,
+            f"drive-board host-loop.md is missing critic-dispatch-provenance invariant: {literal}",
+        )
+
     # .github#2223 AC4 — the implementer-side mirror in `pnext-item` §3. Authoring a gate without
     # evidence it can fail makes the critic's step a discovery instead of a confirmation, so the
     # obligation is stated on BOTH sides of the handoff. Both authored roots must carry it, and the

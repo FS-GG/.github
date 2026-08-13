@@ -41,6 +41,20 @@ supersedes it and continue from the corrected effective totals.
 Critic reservation is **RESERVED, not advisory**; assigning it to an implementer is a contract
 violation, not an efficiency gain.
 
+**The host owns critic dispatch; a worker does not dispatch its own.** Assigning a fresh critic in
+response to a worker's review handoff is a request the worker owes the host (`pnext-item` §5); a
+worker calling the `Agent` tool with `subagent_type: fsgg-critic-normal` or any other
+`fsgg-critic-<route>` type to spawn and confirm its own critic is exactly the contract violation the
+reservation above forbids — measured twice in one run (`.github#2462`), and correctly disclosed both
+times, which does not make the mechanism sound on its own. The one stated exception is a **solo
+`pnext-item` invocation with no host to ask**; that mode has no reservation to violate, because no host
+is dispatching in it.
+
+Detection here is **by convention, not by construction**: host and worker share one GitHub account
+(rate-limit note below — "every worker still authenticates as the one account"), so no marker field can
+prove who dispatched a critic, and this loop does not claim otherwise. The reservation is enforced by
+the host verifying the dispatch it itself made, not by a field the review chain carries.
+
 `batch` reads the machine declaration above and emits `activeItems`, `waveCapacity`, and `openSlots`
 beside its scheduling answer. When schedulable work and open slots coexist it also emits `WAVE
 SHORTFALL`; treat that headline as an immediate re-plan/dispatch instruction. The signal is advisory
