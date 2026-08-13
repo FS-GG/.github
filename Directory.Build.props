@@ -175,8 +175,38 @@
        distinction is the whole subject of .github#2533.
 
        NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entry above records. -->
+  <!-- 0.51.1 to 0.52.0 (.github#2549): a MINOR bump, and the reason is the criterion the entry
+       immediately above states about itself. That one was a patch because "no engine verb, flag, help
+       entry, render name, result name or exit code moves, and no receiver-visible engine behaviour is
+       added". This change moves two of those and adds the third:
+
+         * a new RENDER NAME on the `fsgg.coord.review/1` wire — `state: "acceptedAwaitingChecks"`;
+         * a new RESULT NAME on the same wire — `action: "authorizeDelivery"`;
+         * receiver-visible engine behaviour: a well-formed, host-accepted chain whose checks are not
+           green now reports that new state with `stateErrors: null`, where it previously reported
+           `malformedEvidence` with `["review checks are not green"]`. A consumer switching on `state`
+           sees a value it has never seen, and — more to the point — a consumer that treated
+           `malformedEvidence` as "this chain is broken" was being told something false on every
+           ordinary landing.
+
+       It also adds one OPTIONAL input key, `facts.repairAssertionGranted`, read additively: a snapshot
+       that omits it parses exactly as before, which is why this is a minor and not a major.
+
+       CONSEQUENCE TO EXPECT, AND IT IS THE OPPOSITE OF THE ENTRY ABOVE. `kit-auto-publish` admits only
+       a same-line PATCH bump (.github#2442), so it will REFUSE this candidate with
+       `candidate-not-next-patch` and cut nothing. That refusal is the rail working, not a fault. The
+       release is therefore a MANUAL coherent-set publish through .github#2409's path, exactly as the
+       0.51.0 minor was — which means this item's post-merge obligation is to PERFORM the release and
+       then verify it, not merely to verify an automatic one. Measured, not inferred from #2442's prose:
+       `scripts/kit-auto-publish.py` was run over this candidate's facts and its refusal recorded on the
+       pull request, on the same discipline the entry above used.
+
+       A two-of-three set is permanent and uncompletable from a corrected tree — that is how 0.50.1 and
+       0.50.5 became permanent gaps — so all three sibling tags publish at the SAME merge commit.
+
+       NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entries above record. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.51.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.52.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

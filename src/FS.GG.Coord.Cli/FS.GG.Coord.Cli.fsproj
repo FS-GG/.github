@@ -120,7 +120,53 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.51.1 — a PATCH-LINE cut with NO ENGINE BEHAVIOUR CHANGE, published so the
+    <PackageReleaseNotes>0.52.0 — `fsgg-coord review` stops calling a designed wait broken evidence.
+
+WHAT MOVED, AND WHY IT IS A MINOR. Two new names on the `fsgg.coord.review/1` wire and one change in
+what an existing input produces. Both additions are additive; no existing state name, action name,
+payload key, or freshness/action-key derivation changes meaning, and a snapshot authored for 0.51.1
+parses and answers identically unless it opts into the new key.
+
+THE DEFECT. `review` reported the post-acceptance, pre-`delivery` window of `pnext-item` section 6 as
+`malformedEvidence` — the same state a chain carrying two competing initial markers reaches, whose
+established recovery is to close the pull request WITHOUT MERGING. Measured on FS-GG/.github#2534 /
+PR #2541: the identical comment set returned `malformedEvidence`/`park` at `checks: pending` and
+`accepted`/`accept` at `checks: green`. Nothing about the evidence differed between the two runs. And
+by .github#2504 the required `claim-generation` context CANNOT be green at that moment, because its
+marker is written by the `delivery` call section 6 places after acceptance — so every ordinary landing
+passed through the state whose recovery is destructive. PR #2514 was closed and reopened as #2528 on
+exactly that reading on 2026-08-13, at the cost of a full fresh review.
+
+NEW STATE `acceptedAwaitingChecks`, carrying the live `PrState`, with `stateErrors: null`. The chain is
+complete: well-formed, host-accepted, one critic, bound to the current head. The ACTION differentiates
+rather than the state — new `authorizeDelivery` for pending/unknown (make the section 6 `delivery`
+call, which is what lets `claim-generation` report at all), `resumeImplementer` for red/conflicted (a
+failing change is not broken evidence), `park` for merged/closed.
+
+`malformedEvidence` now means the durable evidence is structurally wrong, and only that.
+`Driver.validateReviewChain` keeps its exact messages in its exact order — so `Delivery.reviewProblem`
+and `Driver.receiptFresh` are behaviourally unchanged — and the new `validateReviewChainStructure`
+exposes its structural subset, both derived from one ordered source so they cannot drift.
+
+NEW OPTIONAL INPUT `facts.repairAssertionGranted`, and a new `Review.RepairAssertionReceipt`. A
+critic finding whose subject is a pull request COMMENT rather than the tree — the post-merge
+obligations declaration is a standing artefact of every item — is repaired by a comment edit, so the
+head correctly does not move, and the state machine previously modelled a repair as A COMMIT and
+could never advance. The engine cannot observe such a repair (a comment record is id, url and body,
+so the current body is readable but "it changed in answer to this finding" is not), so it enters as an
+accountable grant, exactly as .github#2417's critic succession does. Absent a grant the previous
+behaviour is byte-for-byte unchanged, and the grant is refused when it names a different head, answers
+a different review comment, carries no granter, is granted by the implementer, or is granted by the
+round's own critic. It is resolved on the `review --snapshot` path; the live `review &lt;ref&gt; --pr N` path
+passes no grant and is unchanged.
+
+`landable` is untouched: its CI verdict stays wholly independent of the review chain (.github#2360).
+
+WHY THIS PACKAGE MOVES WITH THE KIT. The three packages resolve one scalar (`FsggCoherentSetVersion`,
+`Directory.Build.props`) by construction (.github#2402), so the coordination kit's corresponding
+`pnext-item` contract section ships at this same version.
+
+--- 0.51.1 — a PATCH-LINE cut with NO ENGINE BEHAVIOUR CHANGE, published so the
 coordination kit can carry a corrected `pnext-item` skill body. The three packages resolve one scalar
 (`FsggCoherentSetVersion`, `Directory.Build.props`) by construction, so a kit-only content fix moves this
 package's version too. That is the coherent-set design (`.github#2402`), not an engine delta.
