@@ -33,9 +33,12 @@
 # exactly this shape of shell, and it did not, until now. `scripts/lib/extract-workflow-shell.py` does
 # a real YAML parse to find every `run:` block whose effective shell is bash or sh (never a grep, for
 # the identical reason `is_shell()` above reads bytes instead of trusting a `paths:` filter), and this
-# script lints its output through the SAME pinned binary and severity floor as the file-based subject —
-# see the "WORKFLOW-EMBEDDED SHELL" section below for the one narrow, documented exclusion that subject
-# carries and the file-based one does not.
+# script lints its output through the SAME pinned binary, severity floor, and check set as the
+# file-based subject — no blanket exclusion either. The one shellcheck finding the `${{ }}` substitution
+# itself can manufacture (SC2050, on a narrow quoting shape) is suppressed PER LINE, inline in the
+# materialized file, only on the exact lines the extractor rewrote into that shape — see
+# `scripts/lib/extract-workflow-shell.py`'s `substitute_expressions` for why a blanket `-e SC2050` here
+# was tried and rejected: it also hid a genuine SC2050 typo with no `${{ }}` involvement at all.
 #
 # EXIT CODES. "I could not check" is a different fact from "I checked, and it is clean", and a gate
 # whose entire job is reading shell does not get to conflate them (#266):
@@ -230,22 +233,19 @@ if [ "${#subject[@]}" -gt 0 ]; then
 fi
 wf_rc=0
 if [ "${#wf_subject[@]}" -gt 0 ]; then
-  # -e SC2050 (workflow-embedded subject ONLY — the file-discovered subject above carries no
-  # exclusion). `scripts/lib/extract-workflow-shell.py` replaces every `${{ x }}` with a braced
-  # variable reference, but a `${{ x }}` that is the WHOLE content of a single-quoted comparison
-  # operand — the common, correct `[ '${{ github.event_name }}' = 'workflow_dispatch' ]` shape — stays
-  # inside single quotes, which never interpolate. shellcheck then sees two adjacent STRING LITERALS
-  # and reports SC2050 ("did you forget the $ on a variable?") — indistinguishable, from where it is
-  # standing, from a typo'd comparison that can never be true. It is not a typo: the left side is
-  # genuinely dynamic, just substituted by GitHub before any shell parses it. An earlier draft tried to
-  # rewrite exactly that shape into a real double-quoted variable reference to avoid this exclusion, and
-  # that rewrite is what introduced a DIFFERENT false positive (SC2027) on a `'${{ x }}'` that was
-  # actually nested inside a larger double-quoted string, where the `'` characters are literal bytes,
-  # not quote syntax — telling the two shapes apart needs a real shell tokenizer, which this extractor
-  # is deliberately not. Excluding SC2050 here, and only here, is the narrower and more honest fix:
-  # it accepts one known, documented, and permanently-scoped false-positive class over reintroducing an
-  # unbounded one. See .github#2493's PR notes for both false positives and the revert between them.
-  "$SHELLCHECK" -S "$SEVERITY" -e SC2050 -f gcc "${wf_subject[@]}" >>"$findings_log" 2>&1 || wf_rc=$?
+  # NO `-e SC2050` HERE. `scripts/lib/extract-workflow-shell.py` marks the ONE shape its `${{ }}`
+  # substitution cannot make shellcheck-clean by construction — `'${{ x }}'` as the WHOLE content of a
+  # single-quoted comparison operand, the common `[ '${{ github.event_name }}' = 'workflow_dispatch' ]`
+  # shape — with a PER-LINE `# shellcheck disable=SC2050` pragma, inline in the materialized file
+  # itself (see that script's `substitute_expressions` for exactly which lines qualify and why). A
+  # blanket `-e SC2050` on this whole invocation was the first version of this fix, and .github#2493's
+  # own review round 1 proved it wrong: it also hides a GENUINE SC2050 typo with zero `${{ }}`
+  # involvement anywhere in the 360-step subject — `[ 'GITHUB_REF_NAME' = 'main' ]`, missing the `$` —
+  # which is exactly the shape of defect this item exists to stop the gate from silently missing. The
+  # severity floor and pinned binary here are identical to the file-discovered subject's invocation;
+  # the per-line pragmas are the only difference, and each one is provably scoped to a line THIS
+  # extractor's own substitution produced, never to an author's line it never touched.
+  "$SHELLCHECK" -S "$SEVERITY" -f gcc "${wf_subject[@]}" >>"$findings_log" 2>&1 || wf_rc=$?
 fi
 
 # Re-label materialized temp paths back to their origin before a human reads them. The materialized

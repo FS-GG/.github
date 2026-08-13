@@ -32,10 +32,11 @@
 # too — and this gate's own `lint` job showed `pass` on `.github#2489` without ever opening
 # `kit-auto-publish.yml`, the one file that PR actually touched. `lint-shell.sh` now extracts every
 # such `run:` block via a real YAML parse (`scripts/lib/extract-workflow-shell.py`) and shellchecks it
-# through the same pinned binary and severity floor as the rest of this repo's shell. See that script's
-# own header for why GitHub Actions expressions (`${{ ... }}`) need substituting before shellcheck can
-# read them at all, and `lint-shell.sh`'s header for the one narrow, documented exclusion (SC2050) that
-# subject carries and the file-based one does not.
+# through the same pinned binary, severity floor, and check set as the rest of this repo's shell — no
+# gate-wide exclusion. See that script's own header for why GitHub Actions expressions (`${{ ... }}`)
+# need substituting before shellcheck can read them at all, and for the one shellcheck finding the
+# substitution itself can manufacture (SC2050), suppressed per line, only on the lines it actually
+# rewrote, never across the whole subject.
 name: shell-lint
 
 on:

@@ -19,6 +19,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 GATE="$REPO_ROOT/scripts/lint-shell.sh"
+EXTRACT="$REPO_ROOT/scripts/lib/extract-workflow-shell.py"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shell-lint-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -327,6 +328,42 @@ run_gate "$d"
   || bad "#2493: a shell-less composite step must not be silently guessed at" "rc=$RC
 $OUT"
 
+# ...and THE EXTRACTOR ITSELF, invoked DIRECTLY — never through lint-shell.sh's wrapper. The wrapper's
+# `if ! python3 ... ; then exit 2; fi` launders ANY nonzero exit into 2, including a crash, so Leg 9d
+# above (and its composite-shell sibling) can only ever observe the wrapper's behaviour, never the
+# extractor's own documented CLI contract. That gap is exactly how a `DiscoveryError` reference with no
+# matching class definition shipped once already: every discovery failure died with `NameError` instead
+# of the message this script was written to give, and the ONLY reason Leg 9d still read rc=2 is that a
+# Python `NameError` is ALSO a nonzero exit the wrapper flattens to 2. Direct invocation is the only way
+# to see the tool rather than the wrapper around it (.github#2493 review round 1).
+wf_out="$WORK/wf-composite-noshell-direct-out"
+mkdir -p "$wf_out"
+direct_out="$(python3 "$EXTRACT" "$d" "$wf_out" 2>&1)"; direct_rc=$?
+[ "$direct_rc" = 2 ] && ok "#2493: the extractor's OWN CLI exits 2 on a shell-less composite step (direct invocation)" \
+  || bad "#2493: direct invocation must exit 2, not crash" "rc=$direct_rc
+$direct_out"
+printf '%s' "$direct_out" | grep -q 'no shell:' \
+  && ok "#2493: ...and prints the DESIGNED diagnostic, not a NameError" \
+  || bad "#2493: the extractor's own diagnostic message must actually be constructed and printed" "$direct_out"
+printf '%s' "$direct_out" | grep -qi 'NameError\|Traceback' \
+  && bad "#2493: the extractor must never crash with an uncaught NameError/Traceback on a step it is designed to refuse" "$direct_out" \
+  || ok "#2493: ...and no NameError/Traceback leaked (DiscoveryError is a real, defined class)"
+
+# ...and the SAME direct-invocation property for the OTHER DiscoveryError site: unparseable YAML.
+d2="$(newrepo wf-badyaml-direct)"
+mkdir -p "$d2/.github/workflows"
+printf 'name: [unterminated\n' > "$d2/.github/workflows/bad.yml"
+git -C "$d2" add -A
+wf_out2="$WORK/wf-badyaml-direct-out"
+mkdir -p "$wf_out2"
+direct_out2="$(python3 "$EXTRACT" "$d2" "$wf_out2" 2>&1)"; direct_rc2=$?
+[ "$direct_rc2" = 2 ] && ok "#2493: the extractor's OWN CLI exits 2 on unparseable workflow YAML (direct invocation)" \
+  || bad "#2493: direct invocation must exit 2 on bad YAML, not crash" "rc=$direct_rc2
+$direct_out2"
+printf '%s' "$direct_out2" | grep -qi 'NameError\|Traceback' \
+  && bad "#2493: unparseable YAML must not crash with an uncaught NameError/Traceback either" "$direct_out2" \
+  || ok "#2493: ...and no NameError/Traceback leaked here either"
+
 # ---- 9e. NO FALSE ACCUSATIONS: a shell shellcheck cannot read is never linted, embedded or not. ------
 #      Same #238 property as Leg 4, one layer up: a `pwsh`/`python`/etc. `shell:` is real GitHub Actions
 #      syntax this repo simply cannot check with shellcheck. The step body below is objectively bad
@@ -364,6 +401,34 @@ run_gate "$d"
 [ "$RC" = 0 ] && ok "#2493: \${{ }} expressions (bare and single-quoted-whole-token) do not self-accuse" \
   || bad "#2493: substituting GitHub expressions must not manufacture its own findings" "rc=$RC
 $OUT"
+
+# ---- 9f2. THE SC2050 HANDLING IS SCOPED PER LINE, NOT A BLANKET EXCLUSION (.github#2493 review round 1).
+#      The first version of this fix used a file-wide `-e SC2050` flag on the whole workflow-embedded
+#      invocation of the linter, and the critic proved that wrong by mutating the SUBJECT: a step with
+#      a GENUINE SC2050 typo and ZERO `${{ }}` involvement anywhere in it. A blanket exclusion cannot
+#      tell that apart from the substitution artifact Leg 9f defends — it hides BOTH. This is the
+#      item's own defect ("shell-lint claims coverage it doesn't have") reintroduced one layer down,
+#      and it is exactly the gate-inversion shape this leg exists to catch permanently: if the per-line
+#      pragma ever regresses back to a blanket exclusion, this leg reds on a real, unrelated typo.
+WF_TYPO_RUN='ref="$1"
+if [ "$ref" = "main" ]; then
+  echo "on main"
+fi
+if [ '"'"'GITHUB_REF_NAME'"'"' = '"'"'main'"'"' ]; then
+  echo "this can never be true — GITHUB_REF_NAME is missing its $"
+fi
+'
+d="$(newrepo wf-sc2050-real-typo)"
+wf_workflow_with "$d" "$WF_TYPO_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 1 ] \
+  && ok "#2493: a genuine SC2050 typo with NO \${{ }} involvement still REDS the gate (the pragma is scoped, not blanket)" \
+  || bad "#2493: a real SC2050 defect unrelated to GitHub-expression substitution must not be hidden" "rc=$RC
+$OUT"
+printf '%s' "$OUT" | grep -q 'SC2050' \
+  && ok "#2493: ...and the finding is specifically identified as SC2050" \
+  || bad "#2493: the real typo's finding should be reported as SC2050" "$OUT"
 
 # ---- 9g. THE REAL TREE'S WORKFLOW-EMBEDDED SUBJECT IS NON-VACUOUS. ------------------------------------
 #      Leg 7 above already requires the real tree clean INCLUDING its workflow-embedded shell (the

@@ -87,6 +87,41 @@ ADMITTED_SHELLS = {"bash", "sh"}
 GHA_EXPR = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 
 
+class DiscoveryError(Exception):
+    """Raised when the subject cannot be established — never for a step this script chose to skip.
+
+    Two sites raise this: an unreadable/unparseable workflow or action YAML file, and a composite
+    action's `run:` step with no `shell:` (GitHub never defaults one there, so guessing would be the
+    exact #266 shape this whole file exists to refuse). `main()` catches only this exception as exit 2
+    ("could not establish the subject"); anything else escapes as an uncaught Python exception, which
+    is deliberately NOT converted to a clean exit code here — that conversion is `lint-shell.sh`'s job
+    (`if ! python3 ... ; then exit 2; fi`), and this script's own direct CLI must fail loudly on a bug
+    in itself rather than launder it through the same exit code as an intentional discovery refusal."""
+
+
+# The one shape substitution cannot make shellcheck-clean by itself: `${{ x }}` as the WHOLE content of
+# a single-quoted token — `'${{ x }}'` becomes `'${GHA_EXPR}'` — stays inside quotes that never
+# interpolate, so shellcheck sees two adjacent STRING LITERALS in the common
+# `[ '${{ github.event_name }}' = 'workflow_dispatch' ]` shape and reports SC2050 ("did you forget the
+# $ on a variable?"). See SOLE_SINGLE_QUOTED_GHA_EXPR below for why this is scoped to a PER-LINE
+# pragma rather than a blanket `-e SC2050`.
+SOLE_SINGLE_QUOTED_GHA_EXPR = re.compile(r"'\$\{GHA_EXPR\}'")
+# TWO lines, inserted BEFORE the qualifying line — never a trailing same-line comment. shellcheck
+# directives must be their OWN comment line immediately preceding the line they govern (SC1126: "place
+# shellcheck directives before commands, not after" — a trailing `code  # shellcheck disable=X` does
+# NOT suppress a finding on that same line, confirmed empirically before this landed). The directive
+# comment must ALSO contain nothing but `key=value` pairs — appending human-readable prose to the same
+# comment (`# shellcheck disable=SC2050 -- reason`) makes shellcheck try to parse "-- reason" as ANOTHER
+# directive and error the file (SC1072/SC1073), so the rationale is a separate, PLAIN comment line
+# first. That plain line also must not itself start with the word "shellcheck" right after `#` — this
+# file's own header explains why: `# shellcheck <word>` is a directive wherever it appears, prose or
+# not.
+SC2050_PRAGMA_LINES = (
+    "# .github#2493: substituted GitHub Actions expression, not a literal",
+    "# shellcheck disable=SC2050",
+)
+
+
 def substitute_expressions(text: str) -> str:
     """Replace every `${{ ... }}` with the BRACED reference `${GHA_EXPR}`, strictly IN PLACE — nothing
     outside the matched span is touched, so whatever quote structure the author wrote survives byte for
@@ -97,8 +132,39 @@ def substitute_expressions(text: str) -> str:
     `'` characters there are literal bytes inside an OUTER double-quoted string, not real quote syntax,
     and only a real shell tokenizer can tell the two apart. Leaving quote bytes alone entirely is the
     one transform that cannot make that mistake; see .github#2493's PR notes for both false positives
-    and the revert between them."""
-    return GHA_EXPR.sub("${GHA_EXPR}", text)
+    and the revert between them.
+
+    THEN, PER LINE, mark exactly the lines this substitution turned into `'${GHA_EXPR}'` with an inline
+    `# shellcheck disable=SC2050` — never a blanket `-e SC2050` across the whole file or invocation.
+    `.github#2493`'s own review round 1 proved why the blanket form is wrong: a workflow step with a
+    genuine SC2050 typo and ZERO `${{ }}` involvement — `[ 'GITHUB_REF_NAME' = 'main' ]`, a literal
+    missing its `$` — is a real defect shellcheck can catch, and a file-wide `-e SC2050` hides it just
+    as completely as it hides the substitution artifact. That is this item's own defect, reintroduced
+    one layer down: a gate that reports clean over shell it cannot actually judge. Per-line scoping
+    means the suppression can ONLY ever land on a line THIS function rewrote into that exact shape.
+
+    KNOWN, NARROW LIMITATIONS:
+      - a line inside a heredoc BODY that happens to contain the literal text `'${GHA_EXPR}'` (as data,
+        not code — e.g. a workflow step that `cat`s an example test expression into a file) would still
+        get the two pragma lines inserted before it, landing inside otherwise-literal text rather than
+        real shell. This has not been observed in this repo's real workflows (the two real sites are
+        both genuine `[ ... ]` comparisons), and a real shell tokenizer — which this extractor
+        deliberately is not — would be needed to rule it out generally.
+      - a qualifying line that is itself the CONTINUATION half of a backslash-continued previous line
+        is skipped: inserting a comment between a trailing-backslash line and its continuation would splice the comment
+        into that same logical line and silently swallow the continuation, which is a correctness bug
+        this function must not risk introducing. Such a line simply keeps its (blanket-free) SC2050
+        exposure — unobserved in this repo's real workflows."""
+    text = GHA_EXPR.sub("${GHA_EXPR}", text)
+    lines = text.split("\n")
+    out: list[str] = []
+    prev_continues = False
+    for line in lines:
+        if SOLE_SINGLE_QUOTED_GHA_EXPR.search(line) and not prev_continues:
+            out.extend(SC2050_PRAGMA_LINES)
+        out.append(line)
+        prev_continues = line.rstrip().endswith("\\")
+    return "\n".join(out)
 
 
 def git_ls_files(repo_root: str) -> list[str]:
