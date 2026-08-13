@@ -64,6 +64,37 @@ module Driver =
     /// `parseReviewComments` uses, never re-scanning comment bodies with a second grammar.
     val reviewPhaseFacts: comments: ReviewComment list -> ReviewPhaseFacts
 
+    /// One review chain a host-acceptance marker accepted at a head the pull request has since moved off
+    /// (.github#2527), addressed by the initial-review comment URL every confirmation and the acceptance
+    /// itself already carry as `initial-review:`.
+    type ChainRetirement =
+        { InitialReviewUrl: string
+          InitialReviewCommentId: int64
+          AcceptedHead: string
+          AcceptanceCommentId: int64 }
+
+    /// A read-time partition of one pull request's review comments (.github#2527). `Live` and `Retired`
+    /// are new lists over the SAME comment values — nothing is mutated, reordered, edited, or quoted
+    /// inert, so a retired chain stays exactly as its critic posted it. `Diagnostics` names the near
+    /// misses that did NOT retire anything, so a refusal can say which condition failed.
+    type LiveReviewComments =
+        { Live: ReviewComment list
+          Retired: ChainRetirement list
+          Diagnostics: string list }
+
+    /// Partition review comments into the chain that binds `currentHead` and the chains a host acceptance
+    /// already settled at a head the pull request has moved off (.github#2527).
+    ///
+    /// A chain is retired when, and only when, a host-acceptance marker names its initial-review comment
+    /// URL AND carries an `accepted-head` other than `currentHead` — both read from that marker's own
+    /// required fields through the same classification `reviewPhaseFacts` and `parseReviewComments` use,
+    /// never a second marker parser (.github#2175 acceptance 11).
+    ///
+    /// Retirement is a TIE-BREAKER and fires only where more than one canonical initial marker is
+    /// present. With a single chain the result is the input, unchanged, so no verdict this protocol could
+    /// already describe can move.
+    val liveReviewComments: currentHead: string -> comments: ReviewComment list -> LiveReviewComments
+
     val parseReviewComments: comments: ReviewComment list -> Result<ReviewChain, string list>
 
     /// Parse review evidence while binding any mandatory diff audit to an independently recomputed

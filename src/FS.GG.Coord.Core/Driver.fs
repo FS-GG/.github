@@ -267,6 +267,138 @@ module Driver =
           AcceptanceCount = List.length groups.Acceptances
           AcceptancePresent = not (List.isEmpty groups.Acceptances) }
 
+    /// One review chain that a host-acceptance marker accepted at a head the PR has since moved off
+    /// (.github#2527). `InitialReviewUrl` is the chain's initial-review comment URL — the same key
+    /// `parseReviewCommentsCore` already requires every confirmation and the acceptance itself to carry
+    /// as `initial-review:`, so a chain is self-attributing in evidence that already exists rather than
+    /// in anything this change invents.
+    type ChainRetirement =
+        { InitialReviewUrl: string
+          InitialReviewCommentId: int64
+          AcceptedHead: string
+          AcceptanceCommentId: int64 }
+
+    /// The read-time partition `Review.classify` reads a PR's comments through (.github#2527).
+    ///
+    /// NOTHING IS REWRITTEN. `Live` and `Retired` are new lists over the SAME comment values; the
+    /// supplied list is never mutated, reordered, or edited, and no marker is quoted inert. That is the
+    /// whole point: the competing-marker rule exists to stop one agent rewriting another's durable review
+    /// evidence, so a recovery from it may not do that either. A retired chain stays exactly as posted and
+    /// re-classifies exactly as it always did when inspected at its own head.
+    ///
+    /// `Diagnostics` names the NEAR MISSES — an acceptance whose accepted head is still the current head,
+    /// or whose `initial-review:` names no initial marker present — so a refusal can say which condition
+    /// failed instead of only how many markers it counted. Same convention as
+    /// `ReviewPhaseFacts.LatestVerdictNearMissHints` (.github#2369).
+    type LiveReviewComments =
+        { Live: ReviewComment list
+          Retired: ChainRetirement list
+          Diagnostics: string list }
+
+    /// Partition a PR's review comments into the chain that BINDS the current head and the chains that a
+    /// host acceptance already settled at a head the PR has moved off (.github#2527).
+    ///
+    /// THE RULE. A chain is retired when, and only when, a host-acceptance marker (a) names that chain's
+    /// initial-review comment URL in `initial-review:`, and (b) carries an `accepted-head:` that is NOT
+    /// `currentHead`. Both halves are read from the acceptance marker's own REQUIRED fields
+    /// (`Protocol.lifecyclePolicy.HostAcceptanceFields`), through the same private `field` reader and the
+    /// same `classifyMarkers` groups every other caller uses — this is not a second marker parser
+    /// (.github#2175 acceptance 11).
+    ///
+    /// WHY OBSERVED AND NOT GRANTED. `RepairPhaseReceipt` and `CriticSuccessionReceipt` are out-of-band
+    /// grants because the facts they carry are genuinely unobservable from the PR. "This chain was
+    /// accepted at a head that is no longer current" is not: it is written in the acceptance marker. A
+    /// grant here would convert an observable fact into an assertable one, which is exactly the route by
+    /// which a stranger could launder a second chain onto a PR — the thing the one-initial-marker rule
+    /// exists to prevent.
+    ///
+    /// WHY ONLY WITH COMPETING INITIAL MARKERS. Retirement is a TIE-BREAKER between chains, never a
+    /// re-classification of one. With a single chain the pre-existing answer for an accepted-then-moved
+    /// head is unchanged and still refused (`ReviewTests.fs` `#2175 a changed head after acceptance
+    /// invalidates the prior accepted evidence`) — so this change cannot alter any verdict on a PR that
+    /// carries one chain, which is every PR the protocol was already able to describe.
+    let liveReviewComments (currentHead: string) (comments: ReviewComment list) : LiveReviewComments =
+        let groups = classifyMarkers comments
+        let unchanged = { Live = groups.Ordered; Retired = []; Diagnostics = [] }
+
+        if List.length groups.Initial <= 1 then
+            unchanged
+        else
+            let hostFields = Protocol.lifecyclePolicy.HostAcceptanceFields
+            let acceptedHeadKey, initialReviewKey = hostFields[0], hostFields[1]
+
+            // Only an initial comment that CAN be named is a retirement candidate: `initial-review:`
+            // addresses a chain by URL, so a blank URL is unaddressable and never matches.
+            let addressable =
+                groups.Initial |> List.filter (fun c -> not (System.String.IsNullOrWhiteSpace c.Url))
+
+            let readAcceptance (acceptance: ReviewComment) =
+                match field acceptedHeadKey acceptance.Body, field initialReviewKey acceptance.Body with
+                | Ok acceptedHead, Ok initialUrl -> Some(acceptance, acceptedHead, initialUrl)
+                | _ -> None
+
+            let classified = groups.Acceptances |> List.choose readAcceptance
+
+            let retired =
+                classified
+                |> List.choose (fun (acceptance, acceptedHead, initialUrl) ->
+                    if acceptedHead = currentHead then
+                        None
+                    else
+                        addressable
+                        |> List.tryFind (fun initial -> initial.Url = initialUrl)
+                        |> Option.map (fun initial ->
+                            { InitialReviewUrl = initialUrl
+                              InitialReviewCommentId = initial.Id
+                              AcceptedHead = acceptedHead
+                              AcceptanceCommentId = acceptance.Id }))
+
+            let diagnostics =
+                classified
+                |> List.choose (fun (_, acceptedHead, initialUrl) ->
+                    if acceptedHead = currentHead then
+                        Some
+                            $"a host-acceptance marker names initial review %s{initialUrl}, but its %s{acceptedHeadKey} is the current head, so that chain still binds and is not retired"
+                    elif addressable |> List.exists (fun initial -> initial.Url = initialUrl) then
+                        None
+                    else
+                        Some
+                            $"a host-acceptance marker's %s{initialReviewKey} %s{initialUrl} names no initial review marker on this pull request, so no chain is retired by it")
+
+            if List.isEmpty retired then
+                { unchanged with Diagnostics = diagnostics }
+            else
+                let retiredUrls = retired |> List.map _.InitialReviewUrl |> Set.ofList
+                let retiredMarkerIds =
+                    retired
+                    |> List.collect (fun r -> [ r.InitialReviewCommentId; r.AcceptanceCommentId ])
+                    |> Set.ofList
+
+                let confirmationIds = groups.Confirmations |> List.map _.Id |> Set.ofList
+
+                // A confirmation belongs to the chain its OWN `initial-review:` names. The key is spelled
+                // here rather than taken from `HostAcceptanceFields[1]` above: the two grammars happen to
+                // share the string, but they are different markers' required fields, and reading a
+                // confirmation through the acceptance marker's grammar would couple them by accident.
+                // This is the identical back-reference `parseReviewCommentsCore` validates as
+                // `initialUrl = first.Url`, reused rather than reinvented.
+                //
+                // A confirmation whose back-reference is unreadable belongs to no retired chain and
+                // therefore SURVIVES: retirement never removes evidence it cannot positively attribute,
+                // so unreadable evidence keeps failing closed downstream instead of vanishing here.
+                let confirmationInitialReviewKey = "initial-review"
+
+                let belongsToRetiredChain (comment: ReviewComment) =
+                    Set.contains comment.Id retiredMarkerIds
+                    || (Set.contains comment.Id confirmationIds
+                        && (match field confirmationInitialReviewKey comment.Body with
+                            | Ok url -> Set.contains url retiredUrls
+                            | Error _ -> false))
+
+                { Live = groups.Ordered |> List.filter (belongsToRetiredChain >> not)
+                  Retired = retired
+                  Diagnostics = diagnostics }
+
     let private parseReviewCommentsCore
         (trustedFacts: (bool * SemanticDiff.TrustedAudit option) option)
         (comments: ReviewComment list)

@@ -31,6 +31,7 @@ on:
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
       - "tests/coord-engine-replay/**"
+      - "tests/review-post-acceptance-head-move/**"
       - "scripts/fsgg-coord"
       - "scripts/record-board-fixture.py"
       - "Directory.Build.props"
@@ -49,6 +50,7 @@ on:
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
       - "tests/coord-engine-replay/**"
+      - "tests/review-post-acceptance-head-move/**"
       - "scripts/fsgg-coord"
       - "scripts/record-board-fixture.py"
       - "Directory.Build.props"
@@ -158,6 +160,17 @@ jobs:
       # contract — and refutes the #1194 instance (`fs-gg-playtest mirrored: true`) end to end.
       - name: The predicate oracle refutes a wrong cross-repo request — over local files
         run: bash tests/registry-predicate/run.sh
+
+      # THE POST-ACCEPTANCE HEAD-MOVE RECOVERY (.github#2527). A chain that completed and was accepted,
+      # on a head that then moved, had no representation: the honest response (a full fresh review)
+      # posted a second initial marker and the engine fail-closed with a message that named no remedy.
+      # This drives the compiled engine's pure `review --snapshot` decision path over the recovery, its
+      # three controlled counterparts — no acceptance, an acceptance still bound to the current head, and
+      # an acceptance naming no present initial review, each of which must STILL fail closed — and the
+      # single-chain boundary. Its last leg rebuilds the engine with the mechanism reduced to the identity
+      # function and requires the recovery leg to red, so the gate is measured rather than asserted.
+      - name: A head that moved after acceptance recovers — and the laundering counterpart stays refused
+        run: bash tests/review-post-acceptance-head-move/run.sh
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"

@@ -100,7 +100,14 @@ module Review =
         { State: State
           NextAction: NextAction
           FreshnessToken: string
-          ActionKey: string }
+          ActionKey: string
+          /// Every chain excluded from this verdict's evidence because a host acceptance already settled
+          /// it at a head the PR has moved off (.github#2527). Empty for every verdict that retires
+          /// nothing — which is every verdict this protocol could already describe. It is deliberately
+          /// NOT folded into `ActionKey`: the retirement is derived from the same comments and head the
+          /// key already covers, so it adds no independent freedom, and folding it in would invalidate
+          /// a caller's in-flight `advance` for a fact that cannot change without those inputs changing.
+          RetiredChains: Driver.ChainRetirement list }
 
     let private digest (value: string) =
         value
@@ -127,10 +134,14 @@ module Review =
         |> String.concat "\n"
         |> digest
 
-    let private makeVerdict binding state action =
+    let private makeVerdict binding retiredChains state action =
         let token = freshnessToken binding
         let actionKey = digest $"%s{token}\n%A{state}\n%A{action}"
-        { State = state; NextAction = action; FreshnessToken = token; ActionKey = actionKey }
+        { State = state
+          NextAction = action
+          FreshnessToken = token
+          ActionKey = actionKey
+          RetiredChains = retiredChains }
 
     let private missing value label =
         if String.IsNullOrWhiteSpace(value: string) then Some label else None
@@ -216,9 +227,12 @@ module Review =
     /// and no ceiling is defined in this module (acceptance 11). A chain whose head does not match the
     /// current binding is treated exactly like any other unresolved evidence (acceptance 4): the prior
     /// pass/checks/host-acceptance is invalidated by the new commit.
-    let private acceptanceOutcome (binding: Binding) (facts: Facts) =
+    /// `live` is the retirement-filtered comment set (.github#2527), never `facts.Comments` directly:
+    /// the terminal chain parser must read the SAME chain `reviewPhaseFacts` classified, or the two
+    /// would disagree about which chain a PR carrying a retired one is being judged on.
+    let private acceptanceOutcome (binding: Binding) (facts: Facts) (live: Driver.ReviewComment list) =
         let mechanicallyRequired = facts.DiffAuditTrusted.IsSome
-        match Driver.parseReviewCommentsWithFacts mechanicallyRequired facts.DiffAuditTrusted facts.Comments with
+        match Driver.parseReviewCommentsWithFacts mechanicallyRequired facts.DiffAuditTrusted live with
         | Error errors -> MalformedEvidence errors, Park(String.concat "; " errors)
         | Ok chain ->
             let checksGreen = facts.Checks = PrGreen
@@ -258,19 +272,51 @@ module Review =
         | [] -> baseReason
         | hints -> baseReason + " (" + String.concat "; " hints + ")"
 
+    /// The competing-initial-marker refusal, extended with WHY no chain was retired (.github#2527).
+    ///
+    /// The leading sentence is byte-for-byte what it has always been — `ReviewTests.fs` asserts the
+    /// `"2 comments"` substring, and more importantly a reader who has seen this refusal before should
+    /// not have to re-learn it. What follows is the part that was missing: this state describes the
+    /// symptom and, before this change, named no remedy at all, so the one honest response to a head that
+    /// moved after acceptance (a full fresh review) looked indistinguishable from a stranger hijacking
+    /// someone else's chain. Same near-miss-naming convention as `malformedVerdictReason` (#2369).
+    let private competingInitialMarkerReason (count: int) (diagnostics: string list) =
+        let baseReason = $"the initial review marker is carried by %d{count} comments; exactly one is required"
+
+        let rule =
+            "a second chain is admitted only when a host-acceptance marker names an earlier chain's "
+            + "initial-review comment URL AND carries an accepted-head other than the current head, which "
+            + "retires that earlier chain without rewriting any of it (.github#2527)"
+
+        let why =
+            match diagnostics with
+            | [] ->
+                "no host-acceptance marker on this pull request names an initial review, so nothing is "
+                + "retired: if the extra marker is a fresh review of a moved head, the accepted chain's "
+                + "acceptance marker is what must name it; otherwise close and reopen the pull request so "
+                + "the new chain starts alone, and leave both original chains intact on the closed one"
+            | hints -> String.concat "; " hints
+
+        $"%s{baseReason} — %s{rule}. %s{why}."
+
+    /// `live`/`diagnostics` come from `Driver.liveReviewComments` (.github#2527), computed once by
+    /// `inspect`. Every read below is of the LIVE set — the chain that binds this head — never
+    /// `facts.Comments` directly. On a pull request carrying one chain, which is every pull request this
+    /// protocol could already describe, `live` is `facts.Comments` ordered by id and nothing moves.
     let private classify
         (binding: Binding)
         (facts: Facts)
+        (live: Driver.ReviewComment list)
+        (diagnostics: string list)
         (successionGranted: CriticSuccessionReceipt option)
         : State * NextAction =
-        let phaseFacts = Driver.reviewPhaseFacts facts.Comments
+        let phaseFacts = Driver.reviewPhaseFacts live
 
         if phaseFacts.CriticIdentity = Some binding.ImplementerIdentity then
             let reason = "the critic identity equals the implementer identity; an implementer cannot act as its own critic"
             GuardViolation reason, Park reason
         elif phaseFacts.InitialCount > 1 then
-            let reason =
-                $"the initial review marker is carried by %d{phaseFacts.InitialCount} comments; exactly one is required"
+            let reason = competingInitialMarkerReason phaseFacts.InitialCount diagnostics
             MalformedEvidence [ reason ], Park reason
         elif phaseFacts.AcceptanceCount > 1 then
             let reason =
@@ -294,7 +340,7 @@ module Review =
                     let reason = "the repair-phase confirmation round ceiling is exhausted with no acceptance; no further automatic route exists"
                     TerminalHumanPark reason, Park reason
                 elif phaseFacts.AcceptancePresent then
-                    acceptanceOutcome binding facts
+                    acceptanceOutcome binding facts live
                 elif not phaseFacts.InitialPresent then
                     RepairPhaseSetup, DispatchCritic
                 else
@@ -339,7 +385,7 @@ module Review =
                             let reason = "the ordinary review chain is exhausted and no repair route is available"
                             TerminalHumanPark reason, Park reason
                 elif phaseFacts.AcceptancePresent then
-                    acceptanceOutcome binding facts
+                    acceptanceOutcome binding facts live
                 else
                     let round = phaseFacts.ConfirmationCount + 1
                     match phaseFacts.LatestVerdict with
@@ -378,8 +424,12 @@ module Review =
         | problems when not (List.isEmpty problems) ->
             Error(problems |> List.map (fun field -> $"review binding is incomplete: missing %s{field}"))
         | _ ->
-            let state, action = classify binding facts successionGranted
-            Ok(makeVerdict binding state action)
+            // .github#2527: the retirement partition is computed ONCE, here, and both the classifier
+            // and the verdict read the same answer — so what the state was decided from and what the
+            // verdict reports as retired can never disagree.
+            let partition = Driver.liveReviewComments binding.HeadSha facts.Comments
+            let state, action = classify binding facts partition.Live partition.Diagnostics successionGranted
+            Ok(makeVerdict binding partition.Retired state action)
 
     let advance freshnessToken actionKey binding facts successionGranted =
         match inspect binding facts successionGranted with
