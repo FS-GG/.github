@@ -19,6 +19,66 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-13** — **registry: record `0.50.6` as a COMPLETE but SUPERSEDED three-of-three set — historical only, and this entry moves no scalar**
+  (owner `github`; [.github#2536](https://github.com/FS-GG/.github/issues/2536),
+  [PR #2554](https://github.com/FS-GG/.github/pull/2554);
+  refs [.github#2512](https://github.com/FS-GG/.github/issues/2512),
+  [.github#2526](https://github.com/FS-GG/.github/issues/2526),
+  [.github#2527](https://github.com/FS-GG/.github/issues/2527),
+  [.github#2533](https://github.com/FS-GG/.github/issues/2533),
+  [.github#2552](https://github.com/FS-GG/.github/issues/2552),
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772)).
+  **⚠ THIS ENTRY SITS ABOVE THE `0.51.0` ENTRY BECAUSE THIS LOG ORDERS BY WHEN THE RECORD WAS WRITTEN,
+  NEVER BY VERSION — `0.50.6` WAS ALREADY TWO SETS STALE BEFORE THIS SENTENCE EXISTED.** By the time this
+  record was made the row had already been flipped *past* `0.50.6` to `0.51.0`
+  ([.github#2527](https://github.com/FS-GG/.github/issues/2527) — the entry immediately below this one),
+  and the feed had already gone on to `0.51.1`
+  ([.github#2552](https://github.com/FS-GG/.github/issues/2552)). **No scalar moves in this entry.**
+  `version` and `package-version` are not touched by it, and a reader who takes `0.50.6` for this row's
+  current version has misread this entry rather than caught a stale one. `0.50.6` is recorded here
+  **only** as a closed, superseded historical set — the record its own publication never got, and the
+  discharge of the forward references `.github#2512` and `.github#2527` both left pointing at
+  `.github#2536`.
+  **What was published, measured per package on both feeds rather than inferred from green runs.** The org
+  GitHub Packages feed and nuget.org each serve `FS.GG.Coord.Cli`, `FS.GG.Kit` and `FS.GG.Drivers` at
+  `0.50.6`, so this is a **complete three-of-three** — emphatically *not* one of the permanent
+  two-of-three sets `0.50.1` and `0.50.5` recorded further below, which can never be completed. A partial
+  set is unfinishable; this one is merely finished and succeeded. All three tags `coord-engine/v0.50.6`,
+  `kit/v0.50.6` and `drivers/v0.50.6` dereference to the single commit
+  `8de950c37e63f84f87f1a3736eca5847ddc0db97` (the merge of
+  [PR #2528](https://github.com/FS-GG/.github/pull/2528)), so
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772)'s sibling-tag precondition held.
+  **The tags were cut by automation, not by hand — which is why no human recorded them at the time.** All
+  three were created by `fs-gg-cross-repo-dispatch[bot]` at `2026-08-13T15:44:04Z`, on merge, by
+  `kit-auto-publish`. [.github#2512](https://github.com/FS-GG/.github/issues/2512)'s
+  `registry-0.50.6-record` obligation had been written, reviewed twice and host-gated as a **manual**
+  post-merge act, and it never ran — the publication it was waiting to perform had already happened
+  without it. That divergence is filed as
+  [.github#2533](https://github.com/FS-GG/.github/issues/2533); this entry is the record it owed.
+  **nuget.org's index lagged the org feed by roughly two to four minutes.** All three packages were absent
+  from nuget.org's flat container immediately after the release workflows reported success, and present on
+  a bounded re-read. `release-coherence` failed three consecutive times on that lag alone — runs
+  [31717078519](https://github.com/FS-GG/.github/actions/runs/31717078519) (15:45:03Z),
+  [31717165847](https://github.com/FS-GG/.github/actions/runs/31717165847) (15:46:01Z) and
+  [31717249990](https://github.com/FS-GG/.github/actions/runs/31717249990) (15:46:56Z), each within three
+  minutes of the 15:44:04Z tagging and each green on a later read. **Do not read a green publish step as a
+  served package**, and do not read this lag as a partial set.
+  **`FS.GG.Kit 0.50.6` ships a stale `pnext-item`; the pack is faithful and the tagged tree was stale.**
+  The published `0.50.6` `.nupkg`'s `kit/skills/pnext-item/SKILL.md` hashes
+  `sha256 e86617534873ba74cf5d042eb8ca0f49b43870341352a94a0a92be4a8daca3c2`, **byte-identical** to
+  canonical `.claude/skills/pnext-item/SKILL.md` at the tagged commit `8de950c3` — so the packer did its
+  job exactly and the defect is entirely in *what was tagged*. That copy still carries the superseded
+  claim that `claim-generation` "stays advisory in the engine's own rollup" and lacks
+  [.github#2526](https://github.com/FS-GG/.github/issues/2526)'s correction, "no longer advisory
+  anywhere", because `#2526`'s fix merged as `abe1e3c166b657084150222a3d29b5160c8a3968` — roughly 72
+  minutes *after* the `0.50.6` cut — and is therefore not an ancestor of `8de950c3`. The correction is not
+  merely "in some later version": `coord-engine/v0.50.7` **is** `abe1e3c1` itself, the very merge that
+  made it, so `0.50.7` is the first published set whose `pnext-item` is correct
+  (`sha256 5b4570efdcd900b9ee5d09cd4c4c429bb73364c3a55918971a1ac9d377826a2e`). No follow-up is owed from
+  here — `.github#2526` already carried that release obligation and it is discharged. **A green
+  `release-kit` run proves the job ran, not what shipped**, which is the whole reason this entry records
+  hashes of the served bytes instead of three run URLs.
+
 - **2026-08-13** — **registry: adopt `0.51.0`, the first MINOR coherent-set cut since `0.50.0`**
   (owner `github`; [.github#2527](https://github.com/FS-GG/.github/issues/2527),
   [PR #2532](https://github.com/FS-GG/.github/pull/2532);
