@@ -11,6 +11,7 @@ trap 'rm -rf "$WORK"' EXIT
 python3 "$ROOT/tests/skill-quality/driver-feedback-delivery.py"
 python3 "$ROOT/tests/skill-quality/review-round-contract.py"
 python3 "$ROOT/tests/skill-quality/roadmap-critique-contract.py"
+python3 "$ROOT/tests/skill-quality/agent-definition-coverage.py"
 
 ENGINE="$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
 "$ENGINE" command-contract --json >"$WORK/contract.json"
@@ -38,6 +39,34 @@ expect_rejection() {
   local rc=0
   python3 "$ROOT/scripts/check-skill-quality.py" \
     --root "$WORK/tree" --contract "$contract" >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
+    echo "PASS  $label"
+    pass=$((pass+1))
+  else
+    echo "FAIL  $label (wanted exit 1 containing: $evidence; got exit $rc)" >&2
+    sed 's/^/    | /' "$WORK/out" >&2
+    fail=$((fail+1))
+  fi
+}
+
+# .github#2510 — `seed` predates this gate and does not copy `.agent-skill-roots`, which the coverage
+# gate reads to discover the skill roots it scans for named agent types. Wrapping rather than widening
+# `seed` itself keeps the 30-odd pre-existing rejection cases on the exact tree they were written
+# against; the gate is deliberately NOT relaxed to guess a default root list, because a tree that
+# cannot say where its skills live is a tree this gate cannot honestly clear.
+seed_agents() {
+  seed
+  cp "$ROOT/.agent-skill-roots" "$WORK/tree/"
+}
+
+# The routed-dispatch coverage gate has its own rejection helper because it is a separate entry point
+# with its own `--root`. Same three-part shape as `expect_rejection`: exit 1 and the exact finding
+# text, so a regression that merely changes the message reds here too.
+expect_agent_rejection() {
+  local label="$1" evidence="$2"
+  local rc=0
+  python3 "$ROOT/tests/skill-quality/agent-definition-coverage.py" \
+    --root "$WORK/tree" >"$WORK/out" 2>&1 || rc=$?
   if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
     echo "PASS  $label"
     pass=$((pass+1))
@@ -511,6 +540,93 @@ for runtime in .claude .agents; do
 done
 expect_rejection "hand-authored duplicate wave literals are rejected" \
   "drive-board: hand-authored duplicate of generated wave policy"
+
+# --- .github#2510: routed dispatch must resolve from THIS repo ---------------------------------
+#
+# Each case inverts exactly one clause of agent-definition-coverage.py against an otherwise-pristine
+# seeded tree. Every one of them was green before the gate existed — `.claude/agents/` did not exist
+# at all — which is the point: the whole directory was the defect, so an unmutated tree is the only
+# baseline that can pass.
+
+seed_agents
+rm "$WORK/tree/.claude/agents/fsgg-critic-best.md"
+expect_agent_rejection "a route named by a skill with no definition shipped" \
+  "no .claude/agents/fsgg-critic-best.md, so a 'best'-routed dispatch cannot resolve"
+
+seed_agents
+rm -rf "$WORK/tree/.claude/agents"
+expect_agent_rejection "no agent directory at all is the original defect" \
+  ".claude/agents/ does not exist, so no routed dispatch can resolve here"
+
+# The silent-downgrade shape: a definition that still resolves, at the wrong tier. `Agent` carries
+# `model`, so this one is at least expressible elsewhere; the effort case below is not.
+seed_agents
+python3 - "$WORK/tree/.claude/agents/fsgg-worker-best.md" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+if "\nmodel: opus\n" not in text:
+    raise SystemExit("fixture model line missing")
+path.write_text(text.replace("\nmodel: opus\n", "\nmodel: sonnet\n", 1))
+PY
+expect_agent_rejection "a definition downgraded below its routing table" \
+  "fsgg-worker-best.md declares model 'sonnet', but the 'best' routing table mandates 'opus'"
+
+seed_agents
+python3 - "$WORK/tree/.claude/agents/fsgg-critic-normal.md" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+if "\neffort: high\n" not in text:
+    raise SystemExit("fixture effort line missing")
+path.write_text(text.replace("\neffort: high\n", "\n", 1))
+PY
+expect_agent_rejection "a definition that drops the effort only frontmatter can set" \
+  "fsgg-critic-normal.md declares effort None, but the 'normal' routing table mandates 'high'"
+
+# AC3 verbatim: a skill naming a new fsgg-* type without shipping its definition fails rather than merges.
+seed_agents
+printf '\nA future round may be dispatched as `fsgg-critic-turbo`.\n' \
+  >>"$WORK/tree/.claude/skills/pnext-item/references/independent-review.md"
+expect_agent_rejection "a skill naming a type no route defines" \
+  "names agent type 'fsgg-critic-turbo', which belongs to no route the board variants define"
+
+seed_agents
+printf -- '---\nname: fsgg-worker-turbo\ndescription: unreachable\nmodel: opus\neffort: high\n---\n' \
+  >"$WORK/tree/.claude/agents/fsgg-worker-turbo.md"
+expect_agent_rejection "a definition no route and no skill reaches" \
+  ".claude/agents/fsgg-worker-turbo.md defines 'fsgg-worker-turbo', which no route and no checked-in skill names"
+
+# Two variants sharing a route suffix must publish the same row; otherwise "the normal route" names
+# two different tiers and no single definition can satisfy both.
+seed_agents
+python3 - "$WORK/tree/.claude/skills/work-board-normal/SKILL.md" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+if "| Claude Code | `sonnet` | `high` |" not in text:
+    raise SystemExit("fixture routing row missing")
+path.write_text(text.replace("| Claude Code | `sonnet` | `high` |", "| Claude Code | `opus` | `high` |", 1))
+PY
+expect_agent_rejection "two variants disagreeing about one route's tier" \
+  "work-board-normal routes 'normal' to opus/high, but another variant routes it to sonnet/high"
+
+# Epic #266's own class: a gate that does not run when its subject changes is green and wrong.
+seed_agents
+python3 - "$WORK/tree/.github/workflows/skill-quality.yml" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+if '      - ".claude/agents/**"\n' not in text:
+    raise SystemExit("fixture trigger line missing")
+path.write_text(text.replace('      - ".claude/agents/**"\n', "", 1))
+PY
+expect_agent_rejection "the gate no longer triggers on its own subject" \
+  "does not list '.claude/agents/**' under pull_request.paths"
 
 if [ "$fail" -ne 0 ]; then
   echo "skill-quality fixture: $fail failure(s), $pass pass(es)" >&2

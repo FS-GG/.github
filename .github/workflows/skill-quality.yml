@@ -4,6 +4,7 @@ name: skill-quality
 on:
   pull_request:
     paths:
+      - ".claude/agents/**"
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
@@ -26,6 +27,7 @@ on:
   push:
     branches: [main]
     paths:
+      - ".claude/agents/**"
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
