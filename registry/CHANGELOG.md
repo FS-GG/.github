@@ -20,7 +20,8 @@ no gate behaviour changes — this is purely how humans record the log.
 ## Entries
 
 - **2026-08-13** — **registry: record `0.50.6` as a COMPLETE but SUPERSEDED three-of-three set — historical only, and this entry moves no scalar**
-  (owner `github`; [.github#2536](https://github.com/FS-GG/.github/issues/2536);
+  (owner `github`; [.github#2536](https://github.com/FS-GG/.github/issues/2536),
+  [PR #2554](https://github.com/FS-GG/.github/pull/2554);
   refs [.github#2512](https://github.com/FS-GG/.github/issues/2512),
   [.github#2526](https://github.com/FS-GG/.github/issues/2526),
   [.github#2527](https://github.com/FS-GG/.github/issues/2527),
