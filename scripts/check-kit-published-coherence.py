@@ -456,11 +456,19 @@ MERGE_AUTOMATION: tuple[MergeAutomation, ...] = (
 )
 
 # The engine's own filter, restated here because this arm must agree with it rather than hold a
-# second opinion about what a declaration is: `DeliveryApplication.fs:193` selects comments with
-# `Body.StartsWith "<!-- fsgg:delivery-obligation"` — AT BYTE 0. A comment that opens with prose and
-# carries a perfectly-formed marker on line 3 parses as ABSENT there, so it must parse as absent here
-# too; an arm that were more generous would flag declarations the engine cannot see, and stay quiet
-# about the byte-0 trap that made a fully-written declaration inert.
+# second opinion about what a declaration is: `DeliveryApplication.fs`'s `obligationsFromComments`
+# selects comments whose LEADING LINE — the first line of the trimmed body — starts with
+# `<!-- fsgg:delivery-obligation`. A comment that opens with prose and carries a perfectly-formed
+# marker on line 3 parses as ABSENT there, so it must parse as absent here too; an arm that were more
+# generous would flag declarations the engine cannot see, and stay quiet about the trap that made a
+# fully-written declaration inert.
+#
+# THIS SAID "AT BYTE 0" UNTIL .github#2544, AND THAT IS THE POINT OF THE ROW. The engine's candidate
+# pre-filter really was a raw `Body.StartsWith` while the parser it fed trimmed first, so a body
+# opening with a newline — what heredocs and `gh api --field` payloads add for free — was discarded
+# before the parser ran. The engine now asks the leading-line question once, and this arm follows it
+# rather than preserving the byte-0 reading it was written to mirror: an arm left stricter than the
+# engine would call a live declaration absent, which is the same invisibility one layer down.
 _DECLARATION_PREFIX = "<!-- fsgg:delivery-obligation"
 # `<!-- fsgg:delivery-obligations none head=<sha> -->` shares that prefix (plural, then a space), and
 # is the assertion that NOTHING is owed — not an obligation. It is skipped, not parsed.
@@ -1861,11 +1869,14 @@ def obligation_declarations(comments_path: str) -> tuple[list[Declaration], int]
 
     declarations: list[Declaration] = []
     for body in bodies:
-        if not body.startswith(_DECLARATION_PREFIX):
-            continue  # DeliveryApplication.fs:193's byte-0 filter. Not generosity — agreement.
-        if body.startswith(_NONE_PREFIX):
-            continue  # `fsgg:delivery-obligations none head=…`: the assertion that nothing is owed.
+        # ONE reading of "leading", used by the filter and the parse alike (.github#2544). Testing the
+        # raw body here and the trimmed leading line below is exactly the disagreement that row fixed
+        # in the engine; repeating it here would have re-created it in the gate that mirrors it.
         leading = body.strip().replace("\r\n", "\n").split("\n", 1)[0]
+        if not leading.startswith(_DECLARATION_PREFIX):
+            continue  # Not the comment's leading line. Not generosity — agreement with the engine.
+        if leading.startswith(_NONE_PREFIX):
+            continue  # `fsgg:delivery-obligations none head=…`: the assertion that nothing is owed.
         matched = _OBLIGATION_DECLARATION.match(leading)
         if not matched:
             raise GateError(

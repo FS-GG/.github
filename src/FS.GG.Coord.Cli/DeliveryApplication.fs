@@ -175,11 +175,57 @@ module DeliveryApplication =
     // matched against it. A marker merely quoted later in the body — not the comment's own leading
     // line — still fails this match and stays inert, preserving the `.github#2264` round-1 anchoring
     // fix for the sibling read path.
-    let private leadingLine (text: string) =
+    //
+    // ONE SPLIT, BOTH HALVES (.github#2544). The leading line and everything below it come out of a single
+    // cut, so "leading" cannot be answered two ways: the diagnostic below has to reason about exactly the
+    // text this rule EXCLUDED, and computing that separately is how the pre-filter and the parser drifted
+    // apart in the first place. `leadingLine` is the same function it was — now the first half of the pair.
+    let private splitLeadingLine (text: string) =
         let trimmed = text.Trim().Replace("\r\n", "\n")
         match trimmed.IndexOf '\n' with
-        | -1 -> trimmed
-        | index -> trimmed.Substring(0, index)
+        | -1 -> trimmed, ""
+        | index -> trimmed.Substring(0, index), trimmed.Substring(index + 1)
+
+    let private leadingLine (text: string) = fst (splitLeadingLine text)
+
+    let private declarationPrefix = "<!-- fsgg:delivery-obligation"
+    // `<!-- fsgg:delivery-obligations none head=<sha> -->` extends `declarationPrefix` (plural, then a
+    // space), so these two prefixes between them name all three delivery markers.
+    let private receiptPrefix = "<!-- fsgg:delivery-receipt"
+
+    // THE CANDIDATE PRE-FILTER ASKS THE PARSER'S OWN QUESTION, AND ONLY HERE (.github#2544). Before this,
+    // `obligationsFromComments` selected candidates with a RAW, untrimmed `Body.StartsWith` while every
+    // parse below tested `leadingLine`, which trims first. The pre-filter was therefore strictly STRICTER
+    // than the parser it fed: a body opening with a newline or a space — which `leadingLine` was written
+    // to accept, and does accept — was discarded before `leadingLine` ever ran, and the item read back as
+    // though nothing had been declared at all. Nobody decided that; two places simply answered different
+    // questions and one of them ran first. A leading newline is what heredocs, `gh api --field` payloads
+    // and comment editors add for free, so the trigger was authoring mechanics that the rendered comment
+    // does not show. Routing selection through `leadingLine` makes the agreement structural rather than
+    // coincidental. It does NOT loosen the inertness boundary `.github#2347` acceptance 2 and the
+    // `.github#2264` round-1 anchoring fix protect: a marker that is not the comment's own leading line —
+    // quoted in prose, or on a line inside a fenced block whose leading line is the fence — still fails
+    // this test and stays inert.
+    let private leadsWith (prefix: string) (comment: Driver.ReviewComment) =
+        (leadingLine comment.Body).StartsWith prefix
+
+    // AN INVISIBLE DECLARATION IS NOT A MALFORMED ONE, AND THAT IS THE WHOLE PROBLEM (.github#2544).
+    // A marker present but not leading is inert BY DESIGN, and that design stays. What changes is only the
+    // DIAGNOSTIC: `"delivery obligations are undeclared"` names no comment, so an author who posted a real
+    // declaration below a heading and an inspecting host both read "you declared nothing" when the truth is
+    // "comment N carries the marker below its leading line". A malformed declaration announces itself; an
+    // invisible one is indistinguishable from never having been written, which is why four independent
+    // lanes in one session each posted a heading above their marker believing they had declared. This
+    // predicate decides nothing about the parse — it only supplies the comment id for that message.
+    let private carriesInertMarker (comment: Driver.ReviewComment) =
+        let isMarkerLine (line: string) =
+            let line = line.Trim()
+            line.StartsWith declarationPrefix || line.StartsWith receiptPrefix
+        // A comment that already LEADS with a marker is a candidate, not an inert quotation, even when it
+        // also quotes one further down; naming it here would misdescribe it.
+        let below = snd (splitLeadingLine comment.Body)
+        not (leadsWith declarationPrefix comment || leadsWith receiptPrefix comment)
+        && (below.Split('\n') |> Array.exists isMarkerLine)
 
     let private malformedField (comment: Driver.ReviewComment) (kind: string) (fields: Regex) =
         let matched = fields.Match(leadingLine comment.Body)
@@ -190,14 +236,21 @@ module DeliveryApplication =
         else Error $"delivery {kind} comment {comment.Id} is malformed"
 
     let obligationsFromComments (headSha: string) (comments: Driver.ReviewComment list) : Result<Delivery.Obligation list, string> =
-        let declarations = comments |> List.filter (fun comment -> comment.Body.StartsWith "<!-- fsgg:delivery-obligation")
-        let receipts = comments |> List.filter (fun comment -> comment.Body.StartsWith "<!-- fsgg:delivery-receipt")
+        let declarations = comments |> List.filter (leadsWith declarationPrefix)
+        let receipts = comments |> List.filter (leadsWith receiptPrefix)
         let none = $"<!-- fsgg:delivery-obligations none head=%s{headSha} -->"
         if declarations |> List.exists (fun comment -> leadingLine comment.Body = none) then
             if declarations |> List.exists (fun comment -> leadingLine comment.Body <> none) || not (List.isEmpty receipts) then
                 Error "the no-obligations declaration cannot be combined with obligation declarations or receipts"
             else Ok []
-        elif List.isEmpty declarations then Error "delivery obligations are undeclared"
+        elif List.isEmpty declarations then
+            // Still `undeclared` — the parse is unchanged and the marker stays inert — but say WHERE the
+            // ignored marker is when there is one to point at (.github#2544).
+            match comments |> List.tryFind carriesInertMarker with
+            | Some comment ->
+                Error
+                    $"delivery obligations are undeclared: comment {comment.Id} carries a delivery marker that is not that comment's leading line, so it is inert; a marker declares only as the comment's own first line, so edit that comment to lead with it"
+            | None -> Error "delivery obligations are undeclared"
         else
             let parsedDeclarations =
                 declarations

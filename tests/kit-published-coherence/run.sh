@@ -1406,14 +1406,41 @@ printf '[{"body": "<!-- fsgg:delivery-obligations none head=%s -->"}]' "$HEAD_SH
 obl "$OBL/none.json"
 must_pass 'the no-obligations assertion is not parsed as an obligation' "carry no \`fsgg:delivery-obligation\`"
 
-# ---- THE BYTE-0 RULE. `DeliveryApplication.fs:193` filters on `Body.StartsWith`, so a comment that
-#      opens with prose parses as ABSENT in the engine. This arm must agree: flagging a declaration
-#      the engine cannot see would report a control that is not there, and staying silent here is
-#      what keeps the two readings the same one.
+# ---- THE LEADING-LINE RULE (.github#2544; it was the BYTE-0 rule until then, and the change is the
+#      point). `DeliveryApplication.fs` selects on the first line of the TRIMMED body, so a comment
+#      that opens with prose parses as ABSENT in the engine. This arm must agree: flagging a
+#      declaration the engine cannot see would report a control that is not there, and staying silent
+#      here is what keeps the two readings the same one.
 printf '[{"body": "Here is what I owe:\\n\\n<!-- fsgg:delivery-obligation id=x kind=package-release head=%s -->"}]' \
   "$HEAD_SHA" > "$OBL/prose-first.json"
 obl "$OBL/prose-first.json"
-must_pass "a declaration not at byte 0 parses as absent, exactly as the engine reads it" \
+must_pass "a declaration below its comment's leading line parses as absent, exactly as the engine reads it" \
+  "carry no \`fsgg:delivery-obligation\`"
+
+# ---- AND THE OTHER SIDE OF THAT SAME RULE, which is the defect .github#2544 actually fixed: leading
+#      WHITESPACE before the marker does not move it off the leading line. A newline is what heredocs
+#      and `gh api --field` payloads add for free, so an arm that stayed byte-0 while the engine
+#      trimmed would call a LIVE declaration absent — the same invisibility, one layer down, and
+#      silently unflagged rather than merely unparsed.
+printf '[{"body": "\\n<!-- fsgg:delivery-obligation id=newline-led kind=package-release head=%s -->"}]' \
+  "$HEAD_SHA" > "$OBL/newline-led.json"
+obl "$OBL/newline-led.json"
+must_fail "a declaration whose body opens with a newline is seen, exactly as the engine now reads it" \
+  "obligation id=newline-led kind=package-release"
+
+printf '[{"body": " <!-- fsgg:delivery-obligation id=space-led kind=package-release head=%s -->"}]' \
+  "$HEAD_SHA" > "$OBL/space-led.json"
+obl "$OBL/space-led.json"
+must_fail "a declaration whose body opens with a space is seen, exactly as the engine now reads it" \
+  "obligation id=space-led kind=package-release"
+
+# The trimmed filter must not make a QUOTED marker live: the fence is the comment's leading line, so
+# the marker on line 2 is not a declaration. `.github#2347` acceptance 2 and the `.github#2264`
+# round-1 anchoring fix are what this leg holds in place on this side of the boundary.
+printf '[{"body": "```\\n<!-- fsgg:delivery-obligation id=fenced kind=package-release head=%s -->\\n```"}]' \
+  "$HEAD_SHA" > "$OBL/fenced.json"
+obl "$OBL/fenced.json"
+must_pass "a fenced marker stays inert on this side of the boundary too" \
   "carry no \`fsgg:delivery-obligation\`"
 
 # A comment that DOES open with the marker but whose leading line is not a declaration is a
@@ -1886,7 +1913,9 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # 107 + 50 obligation-arm legs (.github#2533). Four of the 50 are gate-inversion controls: M1/M2 on
 # the arm itself, plus the two round-1 repair controls that execute the workflow step and prove each
 # behaviour leg reds when the thing it names is removed.
-EXPECTED_LEGS=157
+# + 3 leading-line legs (.github#2544): the newline-led and space-led declarations this arm could not
+# see once the engine could, and the fenced control that holds the inertness boundary still.
+EXPECTED_LEGS=160
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
