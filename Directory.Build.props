@@ -148,8 +148,35 @@
 
        NOTES AND SCALAR MOVE IN THIS SAME COMMIT, which is .github#2512's requirement and the whole
        reason 0.50.5 is a permanent two-of-three set. -->
+  <!-- 0.51.0 to 0.51.1 (.github#2533): a same-line PATCH bump, and the reason it is a patch is the
+       rule check-kit-published-coherence states about itself. That item's kit-visible change is
+       PROSE: `.claude/skills/pnext-item/references/merge-and-release.md` gains the table of which
+       post-merge acts are automated on merge into `main`, and the rule that a pre-act stop condition
+       on an automated act belongs in a PRE-MERGE gate. No engine verb, flag, help entry, render
+       name, result name or exit code moves, and no receiver-visible engine behaviour is added; the
+       item's other half is a new CI gate arm, which ships in this repository rather than in any
+       package.
+
+       WHY THE BUMP IS REQUIRED AT ALL, and why it was not required when this branch opened.
+       check-kit-published-coherence.py's PR arm demands a `<Version>` STRICTLY GREATER than the
+       newest STABLE FS.GG.Kit on nuget.org whenever a pull request edits a `kit:` source. That was
+       satisfied for free while 0.51.0 was tagged and unpublished: the tree was legitimately ahead of
+       the feed and this change rode into the pending release. `FS.GG.Kit 0.51.0` then PUBLISHED
+       during this item's work, the feed caught up with the tree, and the ride-along stopped being
+       available. An evidence claim has to hold at the commit it ships with, not the commit it was
+       measured on; re-reading the feed before pushing is what caught this one.
+
+       CONSEQUENCE TO EXPECT, AND IT IS THE OPPOSITE OF THE ENTRY ABOVE: kit-auto-publish admits a
+       same-line patch bump (.github#2442), so unlike the 0.51.0 minor it refused, it will ADMIT this
+       candidate and cut all three sibling tags at the merge commit itself. Confirmed by running
+       `scripts/kit-auto-publish.py` over the post-merge facts rather than inferred from #2442's
+       prose. That makes the release an AUTOMATED act, so this item's post-merge obligation is to
+       VERIFY the published bytes against canonical, never to perform the release by hand. That
+       distinction is the whole subject of .github#2533.
+
+       NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entry above records. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.51.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.51.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
