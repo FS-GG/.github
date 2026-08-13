@@ -551,13 +551,22 @@ and only when, a host-acceptance marker
 1. names that chain's initial-review comment URL in its `initial-review:` field, **and**
 2. carries an `accepted-head:` that is **not** the current head.
 
-Both facts are read from the acceptance marker's own already-required fields. The engine **observes**
-the accepted-then-moved structure; nobody asserts it. That distinction is the whole safety argument, and
-it is why this is not a superseding-chain marker or a host grant: the one-initial-marker rule is what
-stops a stranger silently continuing another critic's chain, so a mechanism that admitted a second chain
-on an *assertion* would be a laundering route for exactly the thing the rule exists to prevent. Two
-competing initial markers with **no** intervening accepted-then-moved head still fail closed, unchanged,
-and the refusal now names which condition of the rule was not met.
+Both facts are read from the acceptance marker's own already-required fields, rather than from a
+grant a caller supplies. That is why this is not a superseding-chain marker or a host grant: the
+one-initial-marker rule is what stops a stranger silently continuing another critic's chain, and adding a
+second, less checkable channel for the same conclusion is how that protection erodes. Two competing
+initial markers with **no** intervening accepted-then-moved head still fail closed, unchanged, and the
+refusal now names which condition of the rule was not met.
+
+**Be precise about what is observed: the marker's STRUCTURE, not the truth of its `accepted-head`.**
+Nothing verifies that the acceptance was genuine, so a forged acceptance marker will retire a live
+chain. This is not the hole it looks like, and the reason matters more than the slogan "observed, not
+asserted", which overstates it. A forged acceptance bound to the *current* head already yields an
+accepted chain outright, with a receipt. Retirement, reached from the same forgery, yields only a chain
+**awaiting a fresh host acceptance at the current head** — strictly less than the forgery it
+presupposes — and it publishes the bogus value in `retiredChains`, where a reader can see it. The
+guarantee is relative, not absolute: retirement grants an attacker who can forge acceptance markers no
+authority they did not already have, and it leaves evidence they would rather not leave.
 
 **Nothing is rewritten.** Retirement is a read-time exclusion, never an edit: the retired critic's
 marker, its confirmations, and the acceptance stay exactly as posted, and re-inspecting the same

@@ -305,12 +305,26 @@ module Driver =
     /// same `classifyMarkers` groups every other caller uses — this is not a second marker parser
     /// (.github#2175 acceptance 11).
     ///
-    /// WHY OBSERVED AND NOT GRANTED. `RepairPhaseReceipt` and `CriticSuccessionReceipt` are out-of-band
-    /// grants because the facts they carry are genuinely unobservable from the PR. "This chain was
-    /// accepted at a head that is no longer current" is not: it is written in the acceptance marker. A
-    /// grant here would convert an observable fact into an assertable one, which is exactly the route by
-    /// which a stranger could launder a second chain onto a PR — the thing the one-initial-marker rule
-    /// exists to prevent.
+    /// WHY READ FROM THE MARKER AND NOT FROM A GRANT. `RepairPhaseReceipt` and `CriticSuccessionReceipt`
+    /// are out-of-band grants because the facts they carry are genuinely unobservable from the PR. "An
+    /// acceptance marker names this chain and carries an accepted-head that is not the current head" is
+    /// observable: it is written in the marker's own required fields. A grant would add a second, less
+    /// checkable channel for the same conclusion.
+    ///
+    /// BE PRECISE ABOUT WHAT IS OBSERVED, THOUGH — it is the marker's STRUCTURE, not the TRUTH of its
+    /// `accepted-head`. Nothing here verifies that the acceptance was genuine or that the head it names
+    /// was ever really accepted; a forged acceptance marker will retire a live chain. That is not the
+    /// hole it first looks like, and the reason is worth stating because "observed, not asserted" alone
+    /// overstates the guarantee:
+    ///
+    ///   A forged acceptance bound to the CURRENT head already yields `Accepted`/`Accept` outright, with
+    ///   an `AcceptedReceipt`. Retirement, reached from the same forgery, yields only a chain awaiting a
+    ///   FRESH host acceptance at the current head. So this route confers STRICTLY LESS than the forgery
+    ///   it presupposes, and it publishes the bogus value in `RetiredChains` where a reader can see it.
+    ///
+    /// The guarantee is therefore relative, not absolute: retirement adds no authority an attacker who
+    /// can forge acceptance markers does not already have, and it adds evidence they would rather not
+    /// leave. That is what keeps the one-initial-marker rule's protection intact.
     ///
     /// WHY ONLY WITH COMPETING INITIAL MARKERS. Retirement is a TIE-BREAKER between chains, never a
     /// re-classification of one. With a single chain the pre-existing answer for an accepted-then-moved
