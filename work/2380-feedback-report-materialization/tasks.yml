@@ -1,0 +1,178 @@
+schemaVersion: 1
+work:
+  id: 2380-feedback-report-materialization
+  title: "Feedback Report Materialization"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2380-feedback-report-materialization/spec.md
+  sourceClarifications: work/2380-feedback-report-materialization/clarifications.md
+  sourceChecklist: work/2380-feedback-report-materialization/checklist.md
+  sourcePlan: work/2380-feedback-report-materialization/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2380-feedback-report-materialization/spec.md
+    digest: d8244ac725044eb409e15a455c86de90f2db9e875aac7a949affc604cb6c8abd
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2380-feedback-report-materialization/clarifications.md
+    digest: 02d8580dd5dc10a7ab023037e555a0209677c447e83aaca396c8134aac11f47f
+    schemaVersion: 1
+  - label: checklist
+    path: work/2380-feedback-report-materialization/checklist.md
+    digest: 52397f10ff9d7c5294010c692657309ca4e407a122228259e2e4f0d780754628
+    schemaVersion: 1
+  - label: plan
+    path: work/2380-feedback-report-materialization/plan.md
+    digest: 44d0b36f231c94036d8bd9b1ef477ff9641ef3d854b2786b4b759256bde7d119
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: complete
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: complete
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: complete
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: complete
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004, PD-004]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: complete
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-005, FR-005, PD-005]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement requirement FR-006
+    status: complete
+    owner: sdd
+    dependencies: []
+    requirements: [FR-006]
+    decisions: []
+    sourceIds: [AC-006, FR-006, PD-006]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement requirement FR-007
+    status: complete
+    owner: sdd
+    dependencies: []
+    requirements: [FR-007]
+    decisions: []
+    sourceIds: [AC-007, FR-007, PD-007]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement clarification decision DEC-001
+    status: complete
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Implement clarification decision DEC-002
+    status: complete
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Update contract surface PC-001
+    status: complete
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Record verification evidence VO-001
+    status: complete
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Handle migration posture PM-001
+    status: complete
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Refresh generated view impact GV-001
+    status: complete
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [generated-views]
+    requiredEvidence: [EV013]
+  - id: T014
+    title: Keep accepted deferral DEC-003 visible
+    status: complete
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [CR-008, DEC-003, PD-008, PD-009]
+    requiredSkills: [documentation]
+    requiredEvidence: [EV014]
+acceptedDeferrals:
+  - "CR-008"
+  - "DEC-003"
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2380-feedback-report-materialization."

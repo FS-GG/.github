@@ -1,0 +1,8 @@
+{
+  "_comment": "Object-shaped effectiveParameters, the ONLY shape scripts/skill-union-assert.sh load_params accepts. Parameter set matches EHotwagner/S.I.R.'s recorded scaffold: productName + rootNamespace only, and NO profile/lifecycle/feedback/designSystem.",
+  "templateRef": "FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game",
+  "effectiveParameters": {
+    "productName": "S.I.R.",
+    "rootNamespace": "SIR"
+  }
+}

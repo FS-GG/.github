@@ -1,0 +1,10 @@
+{
+  "_comment": "The ARRAY-shaped effectiveParameters that FS.GG.SDD.Artifacts actually emits, copied verbatim in shape from EHotwagner/S.I.R.'s live .fsgg/scaffold-provenance.json (schemaVersion 1, generator FS.GG.SDD.Artifacts 1.0.0). This is the shape .github#2546 reports the gate cannot parse.",
+  "schemaVersion": 1,
+  "templateRef": "FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game",
+  "providerName": "fable-game",
+  "effectiveParameters": [
+    { "key": "productName", "value": "S.I.R." },
+    { "key": "rootNamespace", "value": "SIR" }
+  ]
+}

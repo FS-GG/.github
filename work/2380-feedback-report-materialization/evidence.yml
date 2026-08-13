@@ -1,0 +1,308 @@
+schemaVersion: 1
+workId: 2380-feedback-report-materialization
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2380-feedback-report-materialization/spec.md
+sourceClarifications: work/2380-feedback-report-materialization/clarifications.md
+sourceChecklist: work/2380-feedback-report-materialization/checklist.md
+sourcePlan: work/2380-feedback-report-materialization/plan.md
+sourceTasks: work/2380-feedback-report-materialization/tasks.yml
+sourceAnalysis: readiness/2380-feedback-report-materialization/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2380-feedback-report-materialization/analysis.json
+    digest: 907eb15a793fc4a85c2c1caba1165914f0dc5d2f92c063177ca368f1112255cb
+    schemaVersion: 1
+  - label: checklist
+    path: work/2380-feedback-report-materialization/checklist.md
+    digest: 52397f10ff9d7c5294010c692657309ca4e407a122228259e2e4f0d780754628
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2380-feedback-report-materialization/clarifications.md
+    digest: 02d8580dd5dc10a7ab023037e555a0209677c447e83aaca396c8134aac11f47f
+    schemaVersion: 1
+  - label: plan
+    path: work/2380-feedback-report-materialization/plan.md
+    digest: 3cee74a228f0431a333d26f5709e070472d67ed50ad977ffa1cc30f07b79b868
+    schemaVersion: 1
+  - label: spec
+    path: work/2380-feedback-report-materialization/spec.md
+    digest: d8244ac725044eb409e15a455c86de90f2db9e875aac7a949affc604cb6c8abd
+    schemaVersion: 1
+  - label: tasks
+    path: work/2380-feedback-report-materialization/tasks.yml
+    digest: 8cb560dce36919ad3a7f40bd39c1f8fcb2ec899810198a61bc30e1b2ebe419e5
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: review
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/2380-feedback-report-materialization/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["Root cause stated once in spec.md finding F6 - no delivered channel exists for Rendering-owned scope product rows - with every load-bearing claim carrying the artifact, file:line or API read that produced it."]
+  - id: EV002
+    kind: review
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/2380-feedback-report-materialization/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["Both candidate mechanisms from .github#2380 adjudicated REFUTED-as-stated in spec.md F7, each with its settling measurement: the fable-game template has no profile symbol and emits no skills, and fs-gg-game-fable was delivered while its predicate evaluates false."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/skill-union-assert.sh, work/2380-feedback-report-materialization/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2380-feedback-report-materialization/verification/junit.xml
+      digest: "sha256:67cf81ae2fefca315d620d1f8e0401f49b23141f5e030cb63022b14167fe83f5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["Predicate table in spec.md F5 produced by executing scripts/skill-union-assert.sh --eval-when against a parameter set matching the measured tree. Recorded: always -> true; profile in [app, headless-scene, governed, sample-pack, game] -> false; profile in [game, sample-pack] -> false; profile == sample-pack -> false; template in [fable-game, fable-bindings] -> false; lifecycle != spec-kit -> true. All exit 0."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [work/2380-feedback-report-materialization/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2380-feedback-report-materialization/verification/junit.xml
+      digest: "sha256:67cf81ae2fefca315d620d1f8e0401f49b23141f5e030cb63022b14167fe83f5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["Sole channel named in spec.md F1 (FS.GG.Rendering fs-gg-ui template, unconditional source entry at lines 500-507) and shown absent from the measured chain in F3 by the tree's own provenance attribution plus the three FS.GG.SDD enrollment sources."]
+  - id: EV005
+    kind: review
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [work/2380-feedback-report-materialization/clarifications.md, work/2380-feedback-report-materialization/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["spec.md F8 answers no second product tree is required and justifies it from producer-side evidence, distinguishing the mechanism question answered here from the distribution question .github#2380 asked. Recorded as AMB-001/DEC-001. Blast radius is explicitly not claimed."]
+  - id: EV006
+    kind: review
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [work/2380-feedback-report-materialization/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["Three rows filed at their causes after REST dedupe against each cause: .github#2545 (structural gap), .github#2546 (params shape), .github#2547 (registry completeness). Numbers and dedupe reads recorded in the Filed rows table of spec.md."]
+  - id: EV007
+    kind: review
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [work/2380-feedback-report-materialization/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["EHotwagner/S.I.R. remediation routed as Class decision row .github#2548 with three options, a recommendation and its reasoning, and the registry/repos.yml link discharging .github#2380 acceptance criterion 4. Not resolved inside this package."]
+  - id: EV008
+    kind: review
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [work/2380-feedback-report-materialization/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["DEC-001 recorded in clarifications.md: establish the cause from producer-side artifacts and do not measure a second product tree, with the justification and the statement of what a second tree would instead establish."]
+  - id: EV009
+    kind: review
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [work/2380-feedback-report-materialization/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["DEC-002 recorded in clarifications.md: do not widen to registry/repos.yml. The row content depends on an unmade human decision and the file is shared with other lanes, so acceptance criterion 4 is carried by .github#2548 instead of left silent."]
+  - id: EV010
+    kind: review
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [work/2380-feedback-report-materialization/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["PC-001 authored in plan.md: no cross-repo API, schema, wire format or published surface changes. The only tool-facing artifacts are this package's own SDD command reports, which remain schemaVersion 1 and compatibility-preserving."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: [scripts/skill-union-assert.sh, work/2380-feedback-report-materialization/plan.md, work/2380-feedback-report-materialization/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2380-feedback-report-materialization/verification/junit.xml
+      digest: "sha256:67cf81ae2fefca315d620d1f8e0401f49b23141f5e030cb63022b14167fe83f5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 discharged by re-executing the recorded measurements rather than a test suite, since this package ships a record and no compiled artifact. The --eval-when table and the --params exit-2 measurement are both reproducible from this checkout plus one public API read, and both are stated with their exit codes."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [work/2380-feedback-report-materialization/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2380-feedback-report-materialization/verification/junit.xml
+      digest: "sha256:67cf81ae2fefca315d620d1f8e0401f49b23141f5e030cb63022b14167fe83f5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 authored in plan.md: nothing migrates. This package adds files under two new directories and alters no existing artifact, so there is no data, schema or consumer state to move."]
+  - id: EV013
+    kind: generated-view
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [readiness/2380-feedback-report-materialization/analysis.json, readiness/2380-feedback-report-materialization/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["GV-001 discharged: readiness/2380-feedback-report-materialization/ carries analysis.json and work-model.json, both regenerated by fsgg-sdd from the current plan sources and never hand-edited. analyze reports staleSourceCount 0 and readiness implementationReady."]
+  - id: EV014
+    kind: review
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008, PD-009]
+    obligationRefs: [EV014]
+    artifacts: [work/2380-feedback-report-materialization/clarifications.md, work/2380-feedback-report-materialization/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["DEC-003 and CR-008 remain visible as accepted deferrals in plan.md and clarifications.md, so tasks and evidence both show the fix-route decision as owned by .github#2545 acceptance 1 and deliberately unmade here."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
