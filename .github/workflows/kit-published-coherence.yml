@@ -105,6 +105,11 @@ jobs:
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
+      # For the obligation arm below: `fsgg:delivery-obligation` declarations live in the PR's ISSUE
+      # comments, so the arm's subject is an API read. Read-only, and a `pull_request` event from a
+      # fork gets a read-only token anyway — nothing here writes.
+      issues: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -121,6 +126,34 @@ jobs:
         run: |
           python scripts/check-kit-published-coherence.py --pr-arm \
             --base "refs/remotes/origin/${{ github.base_ref }}"
+
+      # .github#2533. A DIFFERENT SUBJECT ON THE SAME PR: not the version this PR ships, but the
+      # post-merge obligation its author declares for shipping it. `.github#2512` declared a manual
+      # coherent-set release, had it reviewed by two independent critics across three rounds and
+      # explicitly host-gated as the session's only irreversible act — and `kit-auto-publish.yml`
+      # (`on: push: branches: [main]`) had cut all three tags 8 seconds after the merge. The
+      # declaration looked like a control and was inert.
+      #
+      # It runs HERE rather than in its own workflow because the two arms share this file's question
+      # — what does merging this PR oblige, and who performs it — and because a second workflow with
+      # its own view of the release automation is how two gates end up disagreeing (#263).
+      #
+      # `!cancelled()` so a red from the version step above does not ABORT this one: a stale kit
+      # version and a misdeclared obligation are independent defects with independent remedies, and
+      # the first would otherwise mask the second for as long as it stands. It is NOT
+      # `continue-on-error` — this step's own failure still reds the job.
+      - name: Does this PR declare a post-merge obligation the merge itself performs?
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The subject is READ from the PR, never handed in as a literal: a step that typed its own
+          # declarations would be measuring itself.
+          COMMENTS_URL: repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+        run: |
+          gh api "$COMMENTS_URL" --paginate --jq '[.[] | {body}]' \
+            | jq -s 'add // []' > pr-comments.json
+          python scripts/check-kit-published-coherence.py --obligation-arm \
+            --obligations pr-comments.json
 
   # Online. The actual coherence signal: newest published FS.GG.Kit against main's validated lock +
   # exact pack-time staged manifest (destinations, bytes, modes, and closed set).

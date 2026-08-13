@@ -259,9 +259,82 @@ which is the only property that makes it different in kind from "compare against
 fixture pins the SET of records as well as their shape, so adding one fails until someone updates a
 line — a suppression that can be added without a reviewer noticing is not pinned at all.
 
+THE OBLIGATION ARM (`--obligation-arm`, .github#2533). A third PR-time subject, and it is about the
+OTHER half of a release: not the version this PR ships, but the post-merge obligation its author
+DECLARES for shipping it.
+
+`.github#2512` declared obligation 1, `coherent-set-0.50.6-release`, as a manual act — tag
+`coord-engine/v0.50.6`, `kit/v0.50.6`, `drivers/v0.50.6` at the merge commit, then verify both feeds.
+It was reviewed by two independent critics across three rounds, accumulated two sub-obligations, and
+was explicitly host-gated ("merge, then STOP; do NOT begin obligation 1") on the grounds that it was
+the session's only irreversible act. THE MERGE ITSELF PERFORMED IT: `kit-auto-publish.yml` is
+`on: push: branches: [main]`, and 8 seconds after the merge landed it had cut all three tags at
+`8de950c3`. A worker verified ZERO `0.50.6` tags at 15:43:56Z; six refs existed by 15:46:48Z.
+
+Two things were wrong at once, and only one of them is about wasted review attention:
+
+  * A GATE THAT CANNOT FIRE. Sub-obligation `1b` was written as a stop-DO-NOT-TAG condition to be
+    evaluated immediately before tagging. There was no such moment. Its condition happened to hold,
+    so nothing shipped that it would have refused — luck, not process.
+  * A DOUBLE ACT. A worker that DOES obey a manual release obligation after the automation has
+    already run re-tags or re-publishes. `.github#2240` measured that two packs of an identical
+    checkout produce different sha256, and this repo carries two permanent two-of-three sets
+    (`0.50.1`, `0.50.5`) as the standing cost of release paths going wrong.
+
+Nothing bound the declaration to whether its subject was automated. `fsgg:delivery-obligation` is
+free-text prose describing an act, and `kind=package-release` in a PR comment gives no hint that
+`on: push: branches: [main]` in a workflow file will fire on that same merge.
+
+THE MECHANISM, AND WHY IT IS THIS ONE OF THE THREE .github#2533 NAMED. The row offered a typed `kind`
+that names the automation, a check that cross-references `.github/workflows/*` triggers, or an
+explicit `automated: true|false` field the declaration must carry. This arm is the SECOND, joined to
+the declaration by its typed `kind`:
+
+  * A typed kind naming the automation, and an `automated:` field, both take THE AUTHOR'S WORD for
+    exactly the fact the author got wrong. `.github#2512`'s declaration was honest and confident and
+    would have said `automated: false` just as confidently; two critics and a host read it and
+    agreed. A field that records a belief cannot detect that the belief is false.
+  * An `automated:` field additionally changes the declaration grammar the engine already parses
+    (`DeliveryApplication.fs`'s `obligationDeclaration`), so every existing and in-flight declaration
+    becomes non-conforming — a protocol break bought for a detection that still would not detect.
+  * Cross-referencing the trigger derives the verdict from the repository's own live workflow files.
+    It stays true when a trigger changes: if `kit-auto-publish` ever stops running on push to `main`,
+    the same declaration stops being flagged, and correctly so, with nothing to update here.
+
+THE CONTROLLED COUNTERPART IS THE POINT (.github#2533 AC3). The fix is NOT "warn on every obligation".
+An obligation that genuinely requires manual action — a registry record needing post-publish evidence,
+a downstream repo's bump — is not flagged, and the fixture asserts that leg beside the flagged one. A
+warning that fires on everything is read as noise, and #266's whole thesis is that noise is how a
+control stops being a control.
+
+WHAT IT MEASURES. `MERGE_AUTOMATION` below declares, per automated act, the obligation `kind`s that
+NAME that act and the workflow that PERFORMS it. The kinds are not this file's invention: they are the
+same tokens `pnext-item`'s `merge-and-release.md` tells a worker to use for those acts, so the two
+halves of the join are one contract rather than two lists that can drift. The workflow half is never
+restated — the arm opens the workflow file and reads its `on:` block, and a declaration is flagged
+only if that trigger really does fire on a merge into `main`.
+
+FAILS CLOSED, and the map cannot rot in silence. Every mapped workflow is opened and its triggers
+parsed on EVERY run, even when this PR declares nothing: a renamed, deleted, or unparseable workflow
+is a no-verdict RED, not an arm that quietly matches nothing. A comment that opens with the
+declaration marker but does not parse is a no-verdict too, rather than a second opinion about why —
+`DeliveryApplication.fs` owns that diagnosis.
+
+WHAT IT CANNOT ASSERT, stated here rather than discovered later (#266):
+
+  * A kind nobody mapped is not flagged. The join is a declared table, which is why `merge-and-release.md`
+    carries the authoring-side half: a worker choosing a kind is told which acts are automated. This
+    arm is the backstop for the mapped ones, not a classifier for arbitrary prose.
+  * A mapped workflow whose `push:` trigger carries a `paths:`/`paths-ignore:` filter is a NO-VERDICT
+    when a mapped kind is declared, never a pass: whether THIS merge fires it then depends on the
+    diff, and "cannot tell" must not merge. No mapped workflow carries one today.
+  * It does not check that a declared obligation is CORRECT, complete, or discharged. That is the
+    engine's `delivery` path. Its one question is whether the act named is one the merge performs.
+
 Usage:  scripts/check-kit-published-coherence.py [--lock registry/repos.lock]
         scripts/check-kit-published-coherence.py --pr-arm [--base <ref-or-sha>]
         scripts/check-kit-published-coherence.py --tag-arm [--remote <url>] [--namespace kit/v]
+        scripts/check-kit-published-coherence.py --obligation-arm --obligations <comments.json>
 
 `--fixture-manifest <tsv> --canonical-manifest <tsv>` compares canned manifests and refuses to run
 unless FSGG_KIT_COHERENCE_FIXTURE_OK=1 — which only tests/kit-published-coherence/ sets. A test hook
@@ -271,11 +344,13 @@ for the same reason: each one of them, left open, is a way to make the arm answe
 subject.
 
 Exit 0 = the newest published FS.GG.Kit carries the same coordination-kit bytes canonical derives
-(default arm), or this PR incurs no republish obligation it has not already met (`--pr-arm`).
+(default arm), this PR incurs no republish obligation it has not already met (`--pr-arm`), or every
+obligation this PR declares names an act the merge will NOT perform for it (`--obligation-arm`).
 """
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import http.client
 import io
 import json
@@ -320,6 +395,77 @@ REPOS_TOOL = os.path.join(REPO_ROOT, "scripts", "repos.sh")
 # (ADR-0036), exactly as verify-package.sh partitions them.
 COORDINATION_KINDS = frozenset({"skill", "client", "config"})
 _HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
+
+# --- the obligation arm (.github#2533) ------------------------------------------------------------
+# The branch a merged pull request lands on, and therefore the branch whose `push:` trigger decides
+# whether an act is performed BY the merge.
+DEFAULT_BRANCH = "main"
+
+
+@dataclass(frozen=True)
+class MergeAutomation:
+    """One act this repository performs AUTOMATICALLY when a pull request merges into `main`.
+
+    `kinds` are the `fsgg:delivery-obligation` `kind` tokens that NAME this act. They are the same
+    tokens `.claude/skills/pnext-item/references/merge-and-release.md` tells a worker to use, so the
+    join is one contract with two halves rather than two lists free to drift.
+
+    `workflow` is READ, never restated: this arm opens the file and parses its `on:` block, so a
+    trigger that stops being a merge trigger stops flagging declarations with nothing to update here.
+    A workflow that cannot be opened or parsed is a no-verdict RED on every run, which is what stops
+    this table rotting silently when a file is renamed or deleted.
+    """
+
+    workflow: str
+    kinds: frozenset[str]
+    performs: str
+
+
+MERGE_AUTOMATION: tuple[MergeAutomation, ...] = (
+    MergeAutomation(
+        workflow=".github/workflows/kit-auto-publish.yml",
+        # `package-release` is the token `.github#2512` actually used, and it is the reason this arm
+        # exists; the four namespace-specific spellings are the ones `merge-and-release.md` offers a
+        # worker who wants to name the artifact rather than the act. All five reach the same workflow
+        # because .github#2409's coherent set is published from three sibling tags at ONE commit —
+        # naming one package does not make the act a different act.
+        kinds=frozenset(
+            {
+                "package-release",
+                "coherent-set-release",
+                "kit-release",
+                "coord-engine-release",
+                "drivers-release",
+            }
+        ),
+        performs=(
+            "cuts kit/v<version>, coord-engine/v<version> and drivers/v<version> at the merge commit "
+            "and starts release-kit / release-coord-engine / release-drivers"
+        ),
+    ),
+)
+
+# The engine's own filter, restated here because this arm must agree with it rather than hold a
+# second opinion about what a declaration is: `DeliveryApplication.fs:193` selects comments with
+# `Body.StartsWith "<!-- fsgg:delivery-obligation"` — AT BYTE 0. A comment that opens with prose and
+# carries a perfectly-formed marker on line 3 parses as ABSENT there, so it must parse as absent here
+# too; an arm that were more generous would flag declarations the engine cannot see, and stay quiet
+# about the byte-0 trap that made a fully-written declaration inert.
+_DECLARATION_PREFIX = "<!-- fsgg:delivery-obligation"
+# `<!-- fsgg:delivery-obligations none head=<sha> -->` shares that prefix (plural, then a space), and
+# is the assertion that NOTHING is owed — not an obligation. It is skipped, not parsed.
+_NONE_PREFIX = "<!-- fsgg:delivery-obligations "
+# `DeliveryApplication.fs`'s `obligationDeclaration`, character for character: the same id and kind
+# grammars, the same single-line shape, anchored the same way.
+_OBLIGATION_ID = r"[a-z0-9][a-z0-9_.-]*"
+_OBLIGATION_KIND = r"[a-z0-9][a-z0-9_-]*"
+_DELIVERY_HEAD = r"[0-9A-Za-z._-]+"
+_OBLIGATION_DECLARATION = re.compile(
+    r"\A<!-- fsgg:delivery-obligation"
+    rf" id=(?P<id>{_OBLIGATION_ID})"
+    rf" kind=(?P<kind>{_OBLIGATION_KIND})"
+    rf" head=(?P<head>{_DELIVERY_HEAD}) -->\Z"
+)
 
 # --- the tag arm (.github#1784, widened to every release namespace by .github#1790) ----------------
 # The tag scheme the #1772 resolver uses. Written once here; the workflow restates nothing.
@@ -1564,6 +1710,262 @@ def run_pr_arm(
     return 1
 
 
+def workflow_triggers(path: str) -> dict:
+    """One workflow's `on:` block, with all three legal spellings normalised.
+
+    PyYAML resolves the bare key `on` to the boolean True (YAML 1.1), so a plain `doc["on"]` misses
+    it entirely and EVERY workflow would look like it triggers on nothing — which here would mean
+    silently deciding no act is automated, the fail-open this file exists to refuse. Same trap, same
+    handling, as scripts/check-paths-coherence.py, check-workflow-timeouts.py and
+    check-workflow-permissions.py; nothing about it is specific to this arm.
+
+    `on: push` and `on: [push, pull_request]` are as legal as the mapping form. Anything that is none
+    of the three spellings is refused, not guessed.
+    """
+    import yaml  # lazy: only this arm and the pr-arm's roster read parse YAML.
+
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError as e:
+        raise GateError(
+            f"cannot read the mapped workflow {path!r}: {e}. MERGE_AUTOMATION names it as the actor "
+            f"that performs a declarable obligation, so a workflow this arm cannot open is a "
+            f"no-verdict — never an arm that quietly matches nothing (renamed? deleted? update "
+            f"MERGE_AUTOMATION and merge-and-release.md's table together)."
+        ) from e
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise GateError(f"{path} is not parsable as YAML: {e}") from e
+    if not isinstance(doc, dict):
+        raise GateError(f"{path} is not a YAML mapping")
+    for key in ("on", True):
+        if key in doc:
+            got = doc[key]
+            if isinstance(got, dict):
+                return got
+            if isinstance(got, list):
+                return {str(k): None for k in got}
+            if isinstance(got, str):
+                return {got: None}
+            raise GateError(
+                f"{path}: `on:` is {type(got).__name__}, not a string, list, or mapping — this arm "
+                f"cannot tell what triggers the workflow, and guessing would silently decide the act "
+                f"is manual (#266)."
+            )
+    raise GateError(f"{path}: no `on:` block — this arm cannot tell what triggers the workflow")
+
+
+def merge_triggers_workflow(triggers: dict, path: str) -> bool:
+    """Does a merge into `main` start this workflow?
+
+    True only for a `push:` trigger that reaches `main` UNCONDITIONALLY. A `paths:`/`paths-ignore:`
+    filter makes the answer a function of the diff, which this arm does not have; that is a
+    GateError (no-verdict), never a False that would read as "manual, carry on".
+    """
+    if "push" not in triggers:
+        return False
+    push = triggers["push"]
+    if push is None:  # bare `on: push` / `on: [push]` — every branch, every path.
+        return True
+    if not isinstance(push, dict):
+        raise GateError(
+            f"{path}: `on.push` is {type(push).__name__}, not a mapping — this arm cannot tell "
+            f"which branches it fires on"
+        )
+    if "paths" in push or "paths-ignore" in push:
+        raise GateError(
+            f"{path}: `on.push` carries a path filter, so whether THIS merge starts it depends on "
+            f"the diff — a question this arm does not answer. 'Cannot tell' must not merge (#266). "
+            f"Either evaluate the filter here, or say in merge-and-release.md's table that the act "
+            f"is conditional."
+        )
+    if "branches" in push and "branches-ignore" in push:
+        raise GateError(
+            f"{path}: `on.push` declares both `branches:` and `branches-ignore:`, which GitHub "
+            f"rejects — this arm will not invent a precedence between them"
+        )
+
+    def patterns(key: str) -> list[str]:
+        value = push[key]
+        if not isinstance(value, list):
+            raise GateError(
+                f"{path}: `on.push.{key}` is {type(value).__name__}, not a list — this arm cannot "
+                f"tell whether it covers {DEFAULT_BRANCH!r}"
+            )
+        return [str(item) for item in value]
+
+    # GitHub matches these as GLOBS, not literals, so `ma*` and `**` reach `main` exactly as `main`
+    # does. Comparing literals would read a glob-filtered trigger as not covering `main` and report
+    # an automated act as manual — the fail-open direction.
+    if "branches" in push:
+        return any(fnmatch.fnmatch(DEFAULT_BRANCH, pattern) for pattern in patterns("branches"))
+    if "branches-ignore" in push:
+        return not any(
+            fnmatch.fnmatch(DEFAULT_BRANCH, pattern) for pattern in patterns("branches-ignore")
+        )
+    return True  # `push:` with no branch filter at all — every branch, `main` included.
+
+
+@dataclass(frozen=True)
+class Declaration:
+    """One parsed `fsgg:delivery-obligation` declaration from this PR's comments."""
+
+    id: str
+    kind: str
+    head: str
+
+
+def obligation_declarations(comments_path: str) -> tuple[list[Declaration], int]:
+    """Parse this PR's comment bodies into declarations, exactly as the engine selects them.
+
+    Returns the declarations and the number of comments considered. Accepts either the raw
+    `gh api .../issues/<n>/comments` shape (a list of objects carrying `body`) or a plain list of
+    bodies, because the workflow may reasonably hand over either and a shape this arm cannot read
+    must be an error rather than an empty set.
+    """
+    try:
+        raw = open(comments_path, encoding="utf-8").read()
+    except OSError as e:
+        raise GateError(f"cannot read the PR comments {comments_path!r}: {e}") from e
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise GateError(f"{comments_path} is not parsable as JSON: {e}") from e
+    if not isinstance(payload, list):
+        raise GateError(
+            f"{comments_path} is {type(payload).__name__}, not a list of comments — an unreadable "
+            f"subject is a no-verdict, not 'this PR declared nothing'."
+        )
+
+    bodies: list[str] = []
+    for index, comment in enumerate(payload):
+        if isinstance(comment, str):
+            bodies.append(comment)
+        elif isinstance(comment, dict) and isinstance(comment.get("body"), str):
+            bodies.append(comment["body"])
+        else:
+            raise GateError(
+                f"{comments_path}[{index}] is neither a string nor an object with a string `body`"
+            )
+
+    declarations: list[Declaration] = []
+    for body in bodies:
+        if not body.startswith(_DECLARATION_PREFIX):
+            continue  # DeliveryApplication.fs:193's byte-0 filter. Not generosity — agreement.
+        if body.startswith(_NONE_PREFIX):
+            continue  # `fsgg:delivery-obligations none head=…`: the assertion that nothing is owed.
+        leading = body.strip().replace("\r\n", "\n").split("\n", 1)[0]
+        matched = _OBLIGATION_DECLARATION.match(leading)
+        if not matched:
+            raise GateError(
+                f"a comment opens with {_DECLARATION_PREFIX!r} but its leading line does not parse "
+                f"as a declaration: {leading!r}. This arm reports that as a no-verdict rather than "
+                f"guessing a kind; `DeliveryApplication.fs` owns the diagnosis of WHY (malformed id, "
+                f"kind, or head), and `scripts/fsgg-coord delivery` will report it."
+            )
+        declarations.append(
+            Declaration(
+                id=matched.group("id"), kind=matched.group("kind"), head=matched.group("head")
+            )
+        )
+    return declarations, len(bodies)
+
+
+def run_obligation_arm(*, comments_path: str) -> int:
+    """The .github#2533 rule. Exit 0 = no declared obligation names an act the merge performs."""
+    # Read the whole map FIRST, on every run, declarations or not: a mapped workflow that has been
+    # renamed away is the way this table rots into silence, and silence is the defect. Parsing is
+    # unconditional; only the VERDICT on an unanswerable trigger is deferred, so an unrelated PR is
+    # not held on a question it never asked.
+    parsed: dict[str, dict] = {}
+    triggered: dict[str, bool] = {}
+    for automation in MERGE_AUTOMATION:
+        parsed[automation.workflow] = workflow_triggers(automation.workflow)
+        try:
+            triggered[automation.workflow] = merge_triggers_workflow(
+                parsed[automation.workflow], automation.workflow
+            )
+        except GateError:
+            triggered[automation.workflow] = True
+
+    declarations, considered = obligation_declarations(comments_path)
+    mapped = {kind: a for a in MERGE_AUTOMATION for kind in a.kinds}
+
+    findings: list[str] = []
+    for declaration in declarations:
+        automation = mapped.get(declaration.kind)
+        if automation is None:
+            continue
+        # Re-ask the deferred question now that it is load-bearing: this is the leg where "cannot
+        # tell" must red rather than pass, so the GateError is deliberately NOT caught here.
+        if not merge_triggers_workflow(parsed[automation.workflow], automation.workflow):
+            continue
+        findings.append(
+            f"    obligation id={declaration.id} kind={declaration.kind}\n"
+            f"      performed by {automation.workflow}, which {automation.performs}"
+        )
+
+    if not findings:
+        return _obligation_ok(declarations, considered, mapped, triggered)
+
+    print(
+        f"::error::check-kit-published-coherence: this PR declares {len(findings)} post-merge "
+        f"obligation(s) for an act THE MERGE ITSELF PERFORMS.\n"
+        + "\n".join(findings)
+        + "\n"
+        f"This is .github#2533. `.github#2512` declared exactly this — a manual coherent-set "
+        f"release, reviewed by two independent critics across three rounds and explicitly host-gated "
+        f"— and the merge had cut all three tags 8 seconds later. The declaration looked like a "
+        f"control and was inert.\n"
+        f"REWRITE THE OBLIGATION AS VERIFICATION, NOT PERFORMANCE: 'verify the automatic release' — "
+        f"read the published bytes against canonical, which is what a green release workflow does "
+        f"NOT prove. Discharging it by hand after the automation has run re-tags or re-publishes "
+        f"(.github#2240: two packs of an identical checkout differ), and this repo already carries "
+        f"two permanent two-of-three sets as the cost of that.\n"
+        f"AND IF THE OBLIGATION CARRIES A PRE-ACT STOP CONDITION, IT IS IN THE WRONG PLACE. A "
+        f"condition readable only AFTER the act is not a stop condition; put it in a PRE-MERGE gate "
+        f"— see `pnext-item`'s merge-and-release.md, 'Which post-merge acts are automated'.",
+        file=sys.stderr,
+    )
+    return 1
+
+
+def _obligation_ok(
+    declarations: list[Declaration],
+    considered: int,
+    mapped: dict[str, MergeAutomation],
+    triggered: dict[str, bool],
+) -> int:
+    """The green line, which must say what was MEASURED — not merely that nothing was found."""
+    automated = sorted(w for w, fires in triggered.items() if fires)
+    manual = sorted(w for w, fires in triggered.items() if not fires)
+    kinds = ", ".join(sorted(mapped)) or "(none)"
+    note = (
+        ""
+        if not manual
+        else (
+            f" {len(manual)} mapped workflow(s) no longer trigger on a merge into "
+            f"{DEFAULT_BRANCH} and therefore flag nothing: {', '.join(manual)}."
+        )
+    )
+    if not declarations:
+        print(
+            f"ok: this PR's {considered} comment(s) carry no `fsgg:delivery-obligation` declaration, "
+            f"so there is no declared act to compare against the {len(automated)} merge-triggered "
+            f"automation(s) this repository runs. Whether obligations are REQUIRED here is "
+            f"`scripts/fsgg-coord delivery`'s question, not this arm's.{note}"
+        )
+        return 0
+    print(
+        f"ok: {len(declarations)} declared obligation(s) "
+        f"({', '.join(sorted(d.kind for d in declarations))}) name no act that merging this PR "
+        f"performs. The kinds that WOULD be flagged are: {kinds} — read from MERGE_AUTOMATION, whose "
+        f"{len(triggered)} workflow(s) were opened and their `on:` blocks parsed on this run.{note}"
+    )
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -1624,6 +2026,20 @@ def main(argv: list[str]) -> int:
         help="read canned `git ls-remote` output for one namespace instead of the remote "
         "(tests only; repeatable)",
     )
+    ap.add_argument(
+        "--obligation-arm",
+        action="store_true",
+        help="the obligation rule (.github#2533): does this PR declare a post-merge obligation for "
+        "an act the merge itself performs?",
+    )
+    ap.add_argument(
+        "--obligations",
+        help="this PR's comments, as `gh api repos/<slug>/issues/<n>/comments` emits them. This is "
+        "how the arm's SUBJECT is delivered, not a canned answer — the same shape as "
+        "check-claim-generation.py's --body — so it is not locked behind the fixture switch. A "
+        "wrong or empty file still fails; it cannot make the arm agree with something it did not "
+        "read.",
+    )
     args = ap.parse_args(argv)
 
     # EVERY canned input is locked behind the SAME switch as --fixture-manifest, and for the same
@@ -1652,33 +2068,82 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
-    if args.pr_arm and args.tag_arm:
+    selected = [
+        flag
+        for flag, on in (
+            ("--pr-arm", args.pr_arm),
+            ("--tag-arm", args.tag_arm),
+            ("--obligation-arm", args.obligation_arm),
+        )
+        if on
+    ]
+    if len(selected) > 1:
         print(
-            "::error::check-kit-published-coherence: --pr-arm and --tag-arm are different arms with "
-            "different subjects; run one or the other.",
+            f"::error::check-kit-published-coherence: {', '.join(selected)} are different arms with "
+            f"different subjects; run one of them.",
             file=sys.stderr,
         )
         return 1
+    # A flag that is silently ignored is a caller who believes they configured a run they did not
+    # get — the same rule the per-arm canned-input checks below apply.
+    if args.obligations and not args.obligation_arm:
+        print(
+            "::error::check-kit-published-coherence: --obligations is an --obligation-arm input and "
+            "means nothing to the other arms. Refusing to run rather than ignoring it.",
+            file=sys.stderr,
+        )
+        return 1
+
     # An arm's canned inputs mean nothing to the other arms, and a flag that is silently ignored is a
-    # caller who believes they configured a run they did not get.
-    running = "the tag arm" if args.tag_arm else "the published-package arm"
+    # caller who believes they configured a run they did not get. The arm's NAME is derived from the
+    # single selection above rather than restated per branch, so adding a fourth arm cannot leave one
+    # of these messages naming the wrong one.
+    arm_names = {
+        "--pr-arm": "the PR arm",
+        "--tag-arm": "the tag arm",
+        "--obligation-arm": "the obligation arm",
+    }
+    selected_name = arm_names[selected[0]] if selected else "the published-package arm"
     misdirected = sorted(flag for flag, value in pr_arm_canned.items() if value) if not args.pr_arm else []
     if misdirected:
         print(
             f"::error::check-kit-published-coherence: {', '.join(misdirected)} are --pr-arm inputs and "
-            f"mean nothing to {running}. Refusing to run rather than ignoring them.",
+            f"mean nothing to {selected_name}. Refusing to run rather than ignoring them.",
             file=sys.stderr,
         )
         return 1
-    running = "the PR arm" if args.pr_arm else "the published-package arm"
     misdirected = sorted(flag for flag, value in tag_arm_canned.items() if value) if not args.tag_arm else []
     if misdirected:
         print(
             f"::error::check-kit-published-coherence: {', '.join(misdirected)} are --tag-arm inputs and "
-            f"mean nothing to {running}. Refusing to run rather than ignoring them.",
+            f"mean nothing to {selected_name}. Refusing to run rather than ignoring them.",
             file=sys.stderr,
         )
         return 1
+
+    if args.obligation_arm:
+        if args.fixture_manifest or args.canonical_manifest:
+            print(
+                "::error::check-kit-published-coherence: --obligation-arm and the manifest fixture "
+                "flags are different arms with different subjects; run one or the other.",
+                file=sys.stderr,
+            )
+            return 1
+        if not args.obligations:
+            print(
+                "::error::check-kit-published-coherence: --obligation-arm requires --obligations. "
+                "An arm with no subject to read must refuse, not report that nothing was declared "
+                "(#266).",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            return run_obligation_arm(comments_path=args.obligations)
+        except GateError as e:
+            # Same rule as the other arms: a no-verdict is RED. We cannot tell whether this PR
+            # declares a manual obligation for an automated act, and "cannot tell" must not merge.
+            print(f"::error::check-kit-published-coherence (obligation-arm): {e}", file=sys.stderr)
+            return 1
 
     if args.tag_arm:
         if args.fixture_manifest or args.canonical_manifest:
