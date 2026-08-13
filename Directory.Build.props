@@ -92,8 +92,13 @@
        42c63af9, editing pnext-item/SKILL.md — a kit-packed source — so the published 0.50.3 kit
        drifted from canonical and check-kit-published-coherence reds on main. No engine source change;
        this bump exists solely to let the coherent set republish with current canonical content. -->
+  <!-- 0.50.4 to 0.50.5 (.github#2504): same-line patch bump, same cause and shape as 0.50.3 to 0.50.4
+       above — this PR edits pnext-item/SKILL.md, a kit-packed source, moving the live `delivery` call
+       ahead of the `landable` wait so §6's merge order stays satisfiable now that `claim-generation`
+       is a required status context (.github#1858). No engine source change; this bump exists solely to
+       let FS.GG.Kit republish above the currently-published 0.50.4 with the corrected skill content. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.50.4</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.50.5</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
