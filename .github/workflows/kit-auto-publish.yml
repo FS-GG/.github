@@ -304,6 +304,14 @@ jobs:
           set -euo pipefail
           tag="kit/v${VERSION}"
           git rev-parse -q --verify "refs/tags/$tag" >/dev/null && { echo '::error::tag appeared after observation; refusing'; exit 1; }
+          # `git tag -a` builds an annotated tag object, which requires a committer
+          # identity — a hosted runner carries none by default, so an unconfigured
+          # identity fails closed with `fatal: empty ident name ... not allowed`
+          # (exit 128) on EVERY eligible candidate (.github#2492). The sibling "Open
+          # or update the publish evidence PR" step below already configures this
+          # same identity before its own git operations; this mirrors it exactly.
+          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git tag -a "$tag" -m "Auto-publish FS.GG.Kit ${VERSION} after merged pr-arm evidence"
           git push origin "refs/tags/$tag"
       - name: Escalate a non-eligible or partial state once
