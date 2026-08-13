@@ -80,9 +80,19 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 7. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
    plan while each item worker consumes its current agent-authored delivery-route receipt. The fixed
    checklist is evidence only: it never derives a simple/complex or lightweight/SDD route.
-8. Stop only when fresh reconciliation and triage leave no startable or actionable/untriaged work and
-   every completed cycle is covered by a validated workspace feedback roll-up. Surface deliberately
-   parked and human-blocked backlog without spinning; then update/land the workspace report.
+8. Stop only when a fresh reconciliation and triage leave **no startable `Class: defect`**, no other
+   actionable or untriaged work, no live claim, unresolved repair or queued write, and every completed
+   cycle is covered by a validated workspace feedback roll-up. `hardening` accumulates as ordinary
+   backlog and is drained deliberately — it is not a reason to keep running; `decision` is surfaced to a
+   human and never dispatched. **An unclassed row counts as a possible defect**, not a minor one: its
+   severity is unknown. Read classes from `scripts/fsgg-coord ready --repo <this-repo> --json`'s `class`
+   field *after* a `reconcile --apply` (that column is a projection, current only as of the last
+   reconcile), and `lint`'s `CLASS-UNSET` for the rows that column cannot speak for; the authority is the
+   item's own `Class:` body line, so never hand-edit the column. You may still stop with unclassed rows
+   outstanding — report them by number as unresolved and say the run ended without establishing the board
+   is defect-free. Fixing one thing legitimately files two, so a wave producing only `hardening` and
+   `decision` is completion, not a stall. Surface deliberately parked and human-blocked backlog without
+   spinning; then update/land the workspace report.
 
 Load [host-loop](references/host-loop.md) for the shared worker/verification/termination contract and
 [workspace-scope](references/workspace-scope.md) for the single-repository ledger rules.
