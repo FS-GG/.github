@@ -19,6 +19,48 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-13** — **registry: adopt `0.51.0`, the first MINOR coherent-set cut since `0.50.0`**
+  (owner `github`; [.github#2527](https://github.com/FS-GG/.github/issues/2527),
+  [PR #2532](https://github.com/FS-GG/.github/pull/2532);
+  refs [.github#2402](https://github.com/FS-GG/.github/issues/2402),
+  [.github#2409](https://github.com/FS-GG/.github/issues/2409),
+  [.github#2442](https://github.com/FS-GG/.github/issues/2442),
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772),
+  [.github#2536](https://github.com/FS-GG/.github/issues/2536)).
+  `coord-engine` `version`/`package-version` move **`0.50.4` → `0.51.0`**, skipping `0.50.6` and `0.50.7`,
+  which published while this row stood still — the row was **two coherent sets behind the feed** when this
+  flip was made. Publish-before-flip (ADR-0037 / FR-007) is satisfied: the packages led the row.
+  **Why MINOR and not the patch line the four preceding cuts used.**
+  [.github#2527](https://github.com/FS-GG/.github/issues/2527) made the review protocol represent a pull
+  request whose head moves *after* its chain was accepted. That is receiver-visible behaviour — `review`
+  can return a different action for comment evidence a receiver already had, and its JSON render gains a
+  `retiredChains` array. `git diff coord-engine/v0.50.7 50efee6b -- src/FS.GG.Coord.Core/Protocol.fs` is
+  **empty**, and that "nothing MOVED" test is the one a patch-line cut applies; it is necessary and **not
+  sufficient**, because it cannot detect *added* behaviour. `check-kit-published-coherence` states the rule
+  and records that no gate can draw the distinction for itself.
+  **Complete three-of-three, measured on both feeds after publication.** All three tags
+  (`coord-engine/v0.51.0`, `kit/v0.51.0`, `drivers/v0.51.0`) dereference to the single commit
+  `50efee6ba4ddf46bf45dea3d7313f9da352fb57c` and were pushed in one `git push`, so
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772)'s sibling precondition held. 101 archive
+  entries compared entry-by-entry by SHA-256 across the org feed and nuget.org — 0 differing, 0 one-sided —
+  and a real isolated `dotnet tool install FS.GG.Coord.Cli --version 0.51.0` reports `0.51.0.0`.
+  **Released by hand through [.github#2409](https://github.com/FS-GG/.github/issues/2409)'s path.**
+  `kit-auto-publish` refused with `refuse/candidate-not-next-patch`: the
+  [.github#2442](https://github.com/FS-GG/.github/issues/2442) frontier rail declining a minor-line
+  candidate **by design**. That refusal is expected to recur on every coherent-set cut and is not a defect.
+  **`0.50.6` is NOT a partial set, and this entry does not make it one.**
+  [.github#2536](https://github.com/FS-GG/.github/issues/2536) records it: `0.50.6` is a **complete
+  three-of-three on both feeds** whose `FS.GG.Kit` merely ships a `pnext-item` predating
+  [.github#2526](https://github.com/FS-GG/.github/issues/2526)'s fix, because that fix was not an ancestor
+  of the tagged commit — the pack was faithful, the tagged tree was stale. It must **not** be read
+  alongside `0.50.1` and `0.50.5`, which are permanent two-of-three sets that can never be completed.
+  `0.50.6`'s content was corrected at `0.50.7` and is carried forward here.
+  **The pack was checked against canonical, which is the check `0.50.6` needed and did not get.** The
+  published `FS.GG.Kit`'s `kit/skills/pnext-item/references/independent-review.md` hashes
+  `sha256 d34496bd54afb5ce46b66e64ee538b5ebe9283585206e1804d55afe817167e58`, identical to canonical at the
+  tagged commit. A green release run proves the job ran, not what shipped — `release-kit` went green for
+  `0.50.6` while shipping a stale skill.
+
 - **2026-08-13** — **registry: record `0.50.5` as a second permanent two-of-three set; adopt `0.50.6`**
   (owner `github`; [.github#2512](https://github.com/FS-GG/.github/issues/2512), [PR #2514](https://github.com/FS-GG/.github/pull/2514);
   refs [.github#1762](https://github.com/FS-GG/.github/issues/1762), [.github#1772](https://github.com/FS-GG/.github/issues/1772),
