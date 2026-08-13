@@ -28,6 +28,14 @@
 # exercisable with the network source unavailable and still reach a real verdict — this is exactly what
 # a warm CACHE_DIR proves: see tests/shell-lint/run.sh's install-shellcheck legs.
 #
+# THE VERIFIED TARBALL IS RE-EXTRACTED EVERY RUN, EVEN WHEN $BIN ALREADY EXISTS. An independent review
+# (round 1) planted a checksum-valid tarball alongside a DIFFERENT, non-matching executable at $BIN and
+# got it executed unverified, because an earlier draft skipped extraction whenever $BIN was already
+# present — and `actions/cache` restores `extracted/` right alongside the tarball, so that was the
+# ROUTINE path on a warm production cache, not an edge case. The tarball checksum alone cannot vouch
+# for bytes it was never asked to re-derive. Extraction always runs now, so $BIN is always freshly
+# produced FROM the tarball this invocation just verified — see the comment at the `tar -xJf` call.
+#
 # Usage:   install-shellcheck.sh <version> <sha256> <cache-dir>
 # Prints:  the verified binary's path, on stdout, on success.
 # Env:     SHELLCHECK_URLS   space-separated candidate URLs to try in order (default: the single
@@ -78,7 +86,10 @@ if verify_checksum "$TARBALL"; then
   # CACHE HIT: the tarball already sitting in $CACHE_DIR already matches the pin. No `curl` is ever
   # invoked on this path — this is the exact property that turns a warm `actions/cache` restore into
   # zero-network acquisition, and what tests/shell-lint/run.sh proves by pre-seeding this file and
-  # pointing SHELLCHECK_URLS at an unreachable host.
+  # pointing SHELLCHECK_URLS at an unreachable host. `$BIN` is NOT trusted yet, even here: extraction
+  # below always runs regardless of this branch, so whatever currently sits at `$BIN` — restored,
+  # stale, or planted — is unconditionally overwritten from this verified tarball before anything
+  # downstream can execute it.
   acquired=1
 else
   for url in "${URLS[@]}"; do
@@ -105,12 +116,22 @@ if [ "$acquired" -ne 1 ]; then
   exit 2
 fi
 
-if [ ! -x "$BIN" ]; then
-  mkdir -p "$EXTRACT_DIR" 2>/dev/null || { echo "::error title=install-shellcheck: cannot create extract dir::$EXTRACT_DIR" >&2; exit 2; }
-  if ! tar -xJf "$TARBALL" -C "$EXTRACT_DIR" 2>/dev/null; then
-    echo "::error title=install-shellcheck: extraction failed::the checksum-verified tarball at $TARBALL could not be extracted." >&2
-    exit 2
-  fi
+# ALWAYS EXTRACT, EVEN WHEN $BIN ALREADY EXISTS (round-1 review finding, .github#2501). Skipping
+# extraction whenever an executable already sat at $BIN made a cache-restored `extracted/` directory
+# TRUSTED WITHOUT VERIFICATION — and `actions/cache` restores `extracted/` right alongside the
+# tarball, so a genuinely warm production cache hits this path on every run after the first success.
+# `verify_checksum` above only ever checks the TARBALL; nothing checked that $BIN's own bytes still
+# came from it. A tarball-only re-verification cannot see a $BIN that was separately replaced —
+# whether by cache corruption or tampering — so the routine, most-common path was exactly the one
+# capable of running an unverified binary. Re-extracting unconditionally makes $BIN's content ALWAYS
+# freshly derived from the tarball this run just checksum-verified, on every path, cache hit included
+# — the same integrity guarantee the tarball fetch itself gets, extended past extraction. `tar -xJf`
+# overwrites in place, and extracting a ~2MB tarball costs a fraction of a second: there is no
+# availability trade-off here, only the one #2433 refuses to make (checksum verification retained).
+mkdir -p "$EXTRACT_DIR" 2>/dev/null || { echo "::error title=install-shellcheck: cannot create extract dir::$EXTRACT_DIR" >&2; exit 2; }
+if ! tar -xJf "$TARBALL" -C "$EXTRACT_DIR" 2>/dev/null; then
+  echo "::error title=install-shellcheck: extraction failed::the checksum-verified tarball at $TARBALL could not be extracted." >&2
+  exit 2
 fi
 
 if [ ! -x "$BIN" ]; then

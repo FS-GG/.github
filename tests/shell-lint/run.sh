@@ -549,14 +549,53 @@ fi
 # ---- 10b. WARM cache + an UNREACHABLE source: still succeeds, and never touches the source at all. ----
 #      This is the property the workflow's `actions/cache` restore depends on: once ANY run has
 #      acquired the tarball, every later run is zero-network, so a source outage cannot red the job.
+#      THE CACHE STATE MODELED HERE IS `extracted/` INCLUDED, not the tarball alone (round-1 review
+#      finding): `actions/cache` restores `$CACHE_DIR` whole, so a REAL warm production cache always
+#      carries a prior run's `extracted/` alongside the tarball. A fixture that only ever pre-seeds the
+#      tarball is simpler than production and cannot exercise the path that mattered — this leg's
+#      `extracted/` is a genuine, correctly-extracted prior run, and Leg 10b2 right below is the one
+#      that plants a MISMATCHED `extracted/` to prove that state is never trusted either.
 d="$WORK/install-warm-unreachable"
-mkdir -p "$d"
+mkdir -p "$d/extracted/shellcheck-v${inst_ver}"
 cp "$good_tar" "$d/shellcheck-v${inst_ver}.linux.x86_64.tar.xz"
+printf '%s' "$fake_bin_content" > "$d/extracted/shellcheck-v${inst_ver}/shellcheck"
+chmod +x "$d/extracted/shellcheck-v${inst_ver}/shellcheck"
 run_install "$d" "file://$WORK/install-src/does-not-exist.tar.xz"
 [ "$IRC" = 0 ] \
-  && ok "#2501: a WARM cache acquires successfully even when every source URL is unreachable" \
+  && ok "#2501: a WARM cache (tarball + a real prior extraction) acquires successfully with every source URL unreachable" \
   || bad "#2501: a pre-verified cache entry must not require the network at all" "rc=$IRC
 $IOUT"
+
+# ---- 10b2. THE ROUND-1 REVIEW FINDING, REPRODUCED EXACTLY: a checksum-valid tarball sits beside a
+#      DIFFERENT, NON-MATCHING executable at the extracted `$BIN` path — the critic's own plant. An
+#      earlier draft of install-shellcheck.sh skipped extraction whenever `$BIN` already existed, so
+#      this state acquired with rc=0 AND printed the path to the UNVERIFIED planted binary, which the
+#      caller then executed. `verify_checksum` only ever re-checks the TARBALL; nothing re-derived
+#      `$BIN` from it unless extraction actually ran. This leg proves extraction now runs
+#      UNCONDITIONALLY: acquisition still succeeds (rc=0, still zero-network — the tarball was already
+#      verified), but the binary at the printed path is OVERWRITTEN with the genuine one from the
+#      verified tarball, never the planted impostor.
+d="$WORK/install-warm-tampered-bin"
+mkdir -p "$d/extracted/shellcheck-v${inst_ver}"
+cp "$good_tar" "$d/shellcheck-v${inst_ver}.linux.x86_64.tar.xz"
+printf '#!/usr/bin/env bash\necho "PLANTED NON-MATCHING BINARY"\n' > "$d/extracted/shellcheck-v${inst_ver}/shellcheck"
+chmod +x "$d/extracted/shellcheck-v${inst_ver}/shellcheck"
+run_install "$d" "file://$WORK/install-src/does-not-exist.tar.xz"
+if [ "$IRC" = 0 ]; then
+  bin_path="$(printf '%s' "$IOUT" | tail -1)"
+  ran="$("$bin_path" 2>/dev/null)"
+  if [ "$ran" = "PLANTED NON-MATCHING BINARY" ]; then
+    bad "#2501: round-1 finding REGRESSED — the planted, non-matching binary at \$BIN was executed unverified" "$IOUT"
+  elif printf '%s' "$ran" | grep -q 'fake shellcheck v9.9.9-fixture'; then
+    ok "#2501: a tampered/mismatched \$BIN is overwritten from the verified tarball before it can run — the plant never executes"
+  else
+    bad "#2501: the acquired binary's output matched neither the planted impostor nor the genuine one" "ran=$ran
+$IOUT"
+  fi
+else
+  bad "#2501: acquisition with a checksum-valid tarball must still succeed even when \$BIN was tampered" "rc=$IRC
+$IOUT"
+fi
 
 # ---- 10c. COLD cache + an UNREACHABLE source: fails, and DISTINGUISHABLY — never a lint finding. ------
 #      Acceptance criterion 1 on .github#2501: an acquisition failure must not be able to produce a
