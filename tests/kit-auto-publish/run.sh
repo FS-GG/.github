@@ -887,4 +887,125 @@ observed_green="$(jq -r .prArm "$d/stdout.log" 2>/dev/null)"
   || { echo "gate-inversion (repair 3, GREEN/restore phase): expected the restored function to find the real match (prArm=pass), got: $(cat "$d/stdout.log")" >&2; exit 1; }
 checks=$((checks + 1))
 
+# ---- .github#2492: "Tag the sole eligible state" never configured a committer identity before
+#      `git tag -a`, so every eligible candidate crashed with `fatal: empty ident name` on any
+#      runner without a global git identity (every GitHub Actions runner has none). This extracts
+#      the REAL step out of the REAL workflow and runs it end to end against a real local git
+#      remote — a fixture that could tell only "the commands were invoked" from "a tag actually
+#      landed" would not have caught this (the issue's own acceptance criterion 3).
+tag_work="$esc_work/tag-identity"
+mkdir -p "$tag_work"
+
+# GitHub Actions substitutes `${{ expression }}` textually BEFORE the shell ever sees the script; a
+# raw extraction that skipped this would hand bash a `${{ ... }}` token it cannot parse (`bad
+# substitution`), not a faithful reproduction of what actually runs on a runner. Stand in a fixed
+# stub app-slug exactly where the runner would have substituted the live one.
+extract_tag_step() {
+  python3 - "$root/.github/workflows/kit-auto-publish.yml" "$1" <<'PY'
+import sys
+import yaml
+
+wf_path, out_path = sys.argv[1], sys.argv[2]
+with open(wf_path, encoding="utf-8") as fh:
+    wf = yaml.safe_load(fh)
+steps = (wf.get("jobs") or {}).get("decide", {}).get("steps") or []
+step = next((s for s in steps if s.get("name") == "Tag the sole eligible state"), None)
+if step is None:
+    sys.exit("the tag step is GONE from kit-auto-publish.yml")
+run = step["run"].replace("${{ steps.app-token.outputs.app-slug }}", "test-bot")
+with open(out_path, "w", encoding="utf-8") as out:
+    out.write("#!/usr/bin/env bash\n")
+    out.write(run)
+PY
+}
+
+tag_script="$tag_work/tag.sh"
+extract_tag_step "$tag_script"
+chmod +x "$tag_script"
+
+# The MUTATED copy: strip the two `git config` lines back out, reproducing the exact pre-fix defect
+# textually so the failure mode is a permanent, re-runnable gate-inversion leg (pnext-item §3)
+# rather than a one-time manual observation.
+mutate_drop_identity() {
+  python3 - "$tag_script" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+lines = open(src, encoding="utf-8").read().splitlines(keepends=True)
+out, dropped = [], 0
+for line in lines:
+    if line.lstrip().startswith('git config user.name') or line.lstrip().startswith('git config user.email'):
+        dropped += 1
+        continue
+    out.append(line)
+if dropped != 2:
+    sys.exit(f"mutate_drop_identity: expected to drop exactly 2 git config lines, dropped {dropped}")
+open(dst, "w", encoding="utf-8").write("".join(out))
+PY
+}
+tag_no_identity_script="$tag_work/tag-no-identity.sh"
+mutate_drop_identity "$tag_no_identity_script"
+chmod +x "$tag_no_identity_script"
+
+# A REAL local git remote — not a stub — so the assertion is "a tag actually landed", the exact gap
+# acceptance criterion 3 names.
+tag_remote="$tag_work/origin.git"
+git init --quiet --bare "$tag_remote"
+
+# make_worktree <name> -> a fresh clone of the bare remote with a seed commit, printed. HOME points
+# at an empty, per-clone directory and GIT_CONFIG_NOSYSTEM=1 is set so neither this host's own
+# ~/.gitconfig identity nor any system config leaks in — matching a hosted runner's clean
+# environment, which is exactly the environment the live bug required.
+make_worktree() {
+  local d="$tag_work/$1"
+  mkdir -p "$d/home"
+  git -c init.defaultBranch=main clone --quiet "$tag_remote" "$d/repo"
+  ( cd "$d/repo" \
+      && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test commit --quiet --allow-empty -m seed \
+      && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
+  printf '%s' "$d"
+}
+
+# run_tag_step <dir> <version> <script> -> exit code; runs INSIDE the clone with the same isolated
+# HOME/GIT_CONFIG_NOSYSTEM so neither this host's global git identity nor any credential helper can
+# mask the defect.
+run_tag_step() {
+  local dir="$1" version="$2" script="$3" rc=0
+  ( cd "$dir/repo" \
+      && HOME="$dir/home" GIT_CONFIG_NOSYSTEM=1 VERSION="$version" bash "$script" >"$dir/stdout.log" 2>"$dir/stderr.log" ) || rc=$?
+  return "$rc"
+}
+
+# ---- RED: the pre-fix step (no identity configured) fails closed exactly like the live runs cited
+#      in .github#2492, and no tag reaches the remote. ----
+d="$(make_worktree red)"
+rc=0; run_tag_step "$d" "9.9.1" "$tag_no_identity_script" || rc=$?
+[ "$rc" -ne 0 ] \
+  || { echo "gate-inversion (tag identity, RED phase): pre-fix step should have failed closed, exited 0" >&2; exit 1; }
+checks=$((checks + 1))
+# git's exact fatal tail (`empty ident name` vs. `unable to auto-detect email address`) depends on
+# whether the HOST can guess an email at all, which varies by environment — the .github#2492 runs
+# hit the former; this sandbox can hit either. Both share this identical preamble, which is the part
+# that identifies "no identity configured" as the actual failure, independent of that guess.
+grep -q 'Committer identity unknown' "$d/stderr.log" \
+  || { echo "gate-inversion (tag identity, RED phase): expected 'Committer identity unknown' in stderr, got:" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+git -C "$tag_remote" tag -l 'kit/v9.9.1' | grep -q . \
+  && { echo "gate-inversion (tag identity, RED phase): no tag should have reached the remote" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- GREEN: the REAL, currently-shipped step (identity configured) succeeds, and the tag actually
+#      lands on the remote — not merely that the commands were invoked without error. ----
+d="$(make_worktree green)"
+rc=0; run_tag_step "$d" "9.9.2" "$tag_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo "gate-inversion (tag identity, GREEN phase): expected exit 0, got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+git -C "$tag_remote" tag -l 'kit/v9.9.2' | grep -qx 'kit/v9.9.2' \
+  || { echo "gate-inversion (tag identity, GREEN phase): expected kit/v9.9.2 to have reached the remote" >&2; exit 1; }
+checks=$((checks + 1))
+tagger="$(git -C "$tag_remote" for-each-ref --format='%(taggername) %(taggeremail)' refs/tags/kit/v9.9.2)"
+[ "$tagger" = 'test-bot[bot] <297630107+test-bot[bot]@users.noreply.github.com>' ] \
+  || { echo "gate-inversion (tag identity, GREEN phase): unexpected tagger identity: $tagger" >&2; exit 1; }
+checks=$((checks + 1))
+
 echo "kit auto-publish state machine: $checks passed"
