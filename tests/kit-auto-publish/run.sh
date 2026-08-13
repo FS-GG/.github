@@ -1410,24 +1410,70 @@ for tag in drivers/v0.60.3 coord-engine/v0.60.3; do
   checks=$((checks + 1))
 done
 
-# ---- GATE-INVERSION EVIDENCE (pnext-item §3) for the ISOLATION FIX ITSELF (.github#2508): reproduce
-#      the exact PRE-FIX shared-remote coupling this item removes — two independent clones of ONE
-#      bare remote, taken before either has pushed, each building its own seed commit and pushing
-#      "HEAD -> main". The first push lands; the second, built from a history that shares no ancestor
-#      with what the first just pushed (the same shape `make_worktree` used to produce whenever a
-#      later leg's clone of the single shared "$tag_remote" landed on a broken/unborn branch), must
-#      be rejected non-fast-forward — the identical failure signature .github#2508 measured on 7 of 8
-#      live kit-auto-publish runs (non-fast-forward on "HEAD -> main" against the fixture's own
-#      remote). A test that cannot fail when the coupling is reintroduced has not shown the fix is
-#      isolation rather than lucky ordering. ----
+# ---- GATE-INVERSION EVIDENCE (pnext-item §3) for the ISOLATION FIX ITSELF (.github#2508) — DRIVEN
+#      THROUGH THE REAL `make_worktree`, NOT A REIMPLEMENTATION. Round-1 review (.github#2508 PR #2509)
+#      found the block that used to live here material-defective: it built its own standalone
+#      `clone_and_seed` helper and a private `shared_remote`, never called `make_worktree` or touched
+#      `tag_remote`, and — proved by reverting ONLY `make_worktree`'s isolation in place and rerunning —
+#      never fired even once across 16 regression runs (8/8 undetected under this sandbox's own ambient
+#      `init.defaultBranch`, 5/8 undetected even under a forced mismatched ambient, where "detected" in
+#      the surviving 3/8 was unrelated pre-existing flakiness in the atomic-push legs, not this leg).
+#
+#      The property .github#2508 actually added to `make_worktree` is structural and observable
+#      WITHOUT any push-timing race or ambient-config dependency at all: every call gets its OWN bare
+#      remote, so two consecutive real calls must (a) report different `origin` URLs and (b) never see
+#      each other's commit. Asserting that directly, through two ordinary `make_worktree` calls exactly
+#      as every real leg above makes them, is what the round-1 finding asked for — "assert two
+#      consecutive real make_worktree calls produce distinct origin.git realpaths ... so that reverting
+#      the real fix is what reds the suite." If `make_worktree` is ever reverted back to cloning one
+#      shared `$tag_remote` (with the same `make_worktree <name>` call signature the reverted code also
+#      had), BOTH calls below resolve to the identical remote path and each other's commit becomes
+#      trivially visible — failing check (a), (b), or both, in ANY ambient config, deterministically. ----
+gi_iso_a="$(make_worktree gate-inversion-isolation-a)"
+gi_iso_a_remote="$(git -C "$gi_iso_a/repo" remote get-url origin)"
+gi_iso_a_seed="$(cat "$gi_iso_a/seed-sha")"
+gi_iso_b="$(make_worktree gate-inversion-isolation-b)"
+gi_iso_b_remote="$(git -C "$gi_iso_b/repo" remote get-url origin)"
+gi_iso_b_seed="$(cat "$gi_iso_b/seed-sha")"
+
+gi_iso_a_realpath="$(realpath "$gi_iso_a_remote")"
+gi_iso_b_realpath="$(realpath "$gi_iso_b_remote")"
+[ "$gi_iso_a_realpath" != "$gi_iso_b_realpath" ] \
+  || { echo "gate-inversion (tag-identity isolation): two consecutive make_worktree calls resolved to the SAME remote ($gi_iso_a_realpath) — per-leg isolation is gone" >&2; exit 1; }
+checks=$((checks + 1))
+
+# Each leg's own remote must carry EXACTLY the one commit ITS OWN make_worktree call pushed — never
+# more (a shared remote, by this point in the file, already carries every prior leg's history) and
+# never the other leg's ref state. Deliberately NOT a same-commit-SHA comparison: both calls commit an
+# empty tree with the same message/identity, so two calls landing in the same wall-clock second can
+# produce byte-identical commit objects even when fully isolated — a coincidence that would make a
+# content-equality check pass trivially and prove nothing. Counting each remote's own history is
+# ambient-independent and immune to that coincidence.
+gi_iso_a_count="$(git -C "$gi_iso_a_remote" rev-list --count refs/heads/main)"
+[ "$gi_iso_a_count" = 1 ] \
+  || { echo "gate-inversion (tag-identity isolation): leg A's remote carries $gi_iso_a_count commit(s) on main, expected exactly 1 — consistent with a SHARED remote that already carries prior legs' history" >&2; exit 1; }
+checks=$((checks + 1))
+gi_iso_b_count="$(git -C "$gi_iso_b_remote" rev-list --count refs/heads/main)"
+[ "$gi_iso_b_count" = 1 ] \
+  || { echo "gate-inversion (tag-identity isolation): leg B's remote carries $gi_iso_b_count commit(s) on main, expected exactly 1" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(git -C "$gi_iso_a_remote" rev-parse refs/heads/main)" = "$gi_iso_a_seed" ] \
+  || { echo "gate-inversion (tag-identity isolation): leg A's remote main does not point at leg A's own seed commit" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(git -C "$gi_iso_b_remote" rev-parse refs/heads/main)" = "$gi_iso_b_seed" ] \
+  || { echo "gate-inversion (tag-identity isolation): leg B's remote main does not point at leg B's own seed commit" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- DOCUMENTATION OF THE GENERAL HAZARD (kept per round-1 review: "legitimate as documentation ...
+#      but cannot be the thing standing in for AC-3"). This is a SEPARATE, self-contained demonstration
+#      that two independent clones of one remote taken before either pushes will always race — a real
+#      git fact, not specific to this fixture's own code, and not itself gate-inversion evidence for
+#      the fix above (that role belongs to the two checks immediately preceding this block). ----
 gate_inversion_coupling_work="$tag_work/gate-inversion-shared-remote"
 mkdir -p "$gate_inversion_coupling_work"
 shared_remote="$gate_inversion_coupling_work/origin.git"
 git init --quiet --bare --initial-branch=main "$shared_remote"
 clone_and_seed() {
-  # Clones $shared_remote fresh and commits ONE seed commit locally WITHOUT pushing, printing the
-  # clone's directory — models a `make_worktree` leg's own clone+commit, minus its own isolated
-  # remote, so two calls below share exactly the coupling .github#2508 removed from the real legs.
   local d="$gate_inversion_coupling_work/$1"
   mkdir -p "$d/home"
   git -c init.defaultBranch=main clone --quiet "$shared_remote" "$d/repo"
@@ -1441,10 +1487,10 @@ gi_rc=0
 ( cd "$gi_second/repo" && HOME="$gi_second/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main ) \
   2>"$gi_second/push-stderr.log" || gi_rc=$?
 [ "$gi_rc" -ne 0 ] \
-  || { echo "gate-inversion (tag-identity isolation): reintroduced shared-remote coupling should have rejected the second leg's push, exited 0" >&2; exit 1; }
+  || { echo "documentation (shared-remote hazard): reintroduced shared-remote coupling should have rejected the second leg's push, exited 0" >&2; exit 1; }
 checks=$((checks + 1))
 grep -qi 'non-fast-forward\|rejected' "$gi_second/push-stderr.log" \
-  || { echo "gate-inversion (tag-identity isolation): expected a non-fast-forward rejection, got:" >&2; cat "$gi_second/push-stderr.log" >&2; exit 1; }
+  || { echo "documentation (shared-remote hazard): expected a non-fast-forward rejection, got:" >&2; cat "$gi_second/push-stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
 
 echo "kit auto-publish state machine: $checks passed"
