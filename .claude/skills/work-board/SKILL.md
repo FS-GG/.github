@@ -94,6 +94,19 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    `decision` is completion, not a stall. Surface deliberately parked and human-blocked backlog without
    spinning; then update/land the workspace report.
 
+   **The census this depends on now also reaches a `Done`/closed row (`.github#2254`) — bounded, not
+   exhaustive.** `CLASS-PROJECTION-LAG` is no longer `Open`-only: a row that reaches `Done` between two
+   reconcile passes used to keep an EMPTY `Class` column forever, invisible to both `reconcile` and
+   `lint` alike, because nothing examined it again once it closed. `reconcile`'s scan now pays one extra
+   body read for exactly that population — a closed row whose board `Class` column is `None` — so a
+   fresh `reconcile --apply` reaches it the same as an open row. **The bound is deliberate**: a closed
+   row that already carries SOME `Class` value is never re-read (re-reading every `Done` row's body on
+   every pass would undo the cost model the scan exists to keep cheap), so a WRONG (non-empty) `Class`
+   value on an already-classed closed row is still not re-examined by this pass — that gap is unchanged
+   from before `.github#2254`, and closing it would need a human or a fresh `Open` pass, not a bigger
+   scan. This bound is engine behaviour, not a board-scope difference: it holds identically for a
+   workspace board and the org board.
+
 Load [host-loop](references/host-loop.md) for the shared worker/verification/termination contract and
 [workspace-scope](references/workspace-scope.md) for the single-repository ledger rules.
 Load [feedback-contract](references/feedback-contract.md) for worker activation, exact validation
