@@ -21,7 +21,7 @@ no gate behaviour changes — this is purely how humans record the log.
 
 - **2026-08-13** — **registry: flip the `coord-engine` row to the CURRENT coherent set `0.51.1` — this entry MOVES BOTH SCALARS**
   (owner `github`; [.github#2552](https://github.com/FS-GG/.github/issues/2552),
-  [PR #PRNUM](https://github.com/FS-GG/.github/pull/PRNUM);
+  [PR #2562](https://github.com/FS-GG/.github/pull/2562);
   refs [.github#2533](https://github.com/FS-GG/.github/issues/2533),
   [.github#2536](https://github.com/FS-GG/.github/issues/2536),
   [.github#2409](https://github.com/FS-GG/.github/issues/2409),
