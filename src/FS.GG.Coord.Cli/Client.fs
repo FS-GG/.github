@@ -940,9 +940,19 @@ module Client =
     /// live on stderr here, and adding a word to the parsed stream to carry one would repeat the mistake
     /// that item was filed about.
     ///
-    /// The exit-code half of the same acceptance is upstream and not in this function: the board scan now
-    /// refuses a batch it cannot prove complete, so a truncated read carries its own non-zero error code
-    /// and never arrives here presenting as a green empty ranking.
+    /// THE EXIT-CODE HALF HOLDS ON THE FRESH-SCAN ROUTE, AND ONLY THERE — stated narrowly on purpose
+    /// (.github#2525 repair 2), because the wider claim is the one that is easy to write and false.
+    ///
+    /// On a fresh scan, `Scan.scanFresh` now refuses a page-set it cannot prove complete, so a truncated
+    /// read carries its own non-zero error code and never reaches this function as a green empty ranking.
+    ///
+    /// On a CACHE HIT it does not, and cannot. `Scan.board` returns `Ok rows` from a parseable cache entry
+    /// before `scanFresh` is ever called (`Scan.fs:663-670`), so whatever that entry holds arrives here as
+    /// a complete board and exits 0. That is not a gap a completeness guard can close: the failure mode it
+    /// matters for — a cache carrying rows that were never on the board — produces an entry that is
+    /// complete, well-formed and internally consistent. There is nothing partial about it to detect. It is
+    /// prevented at the write instead, by never letting a test-fixture board reach `putScan` at all
+    /// (`tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs`), which is a different repair for a different cause.
     let private sayHowManyConsidered (result: Batch.BatchResult) =
         if List.isEmpty result.Chosen then
             eprint $"considered %d{List.length result.Decisions} candidate(s) — this is a measured count, not an assumption."

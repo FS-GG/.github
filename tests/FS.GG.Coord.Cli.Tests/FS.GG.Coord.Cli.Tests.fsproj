@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="CacheSandbox.fs" />
     <Compile Include="SnapshotTests.fs" />
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="CrossRepoRankTests.fs" />
@@ -32,6 +33,7 @@
     <Compile Include="EpicVerdictTests.fs" />
     <Compile Include="ClassLintTests.fs" />
     <Compile Include="BlockerLintTests.fs" />
+    <Compile Include="CacheIsolationTests.fs" />
     <Compile Include="ChoresTests.fs" />
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />

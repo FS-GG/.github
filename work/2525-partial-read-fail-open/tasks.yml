@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2525-partial-read-fail-open/spec.md
-    digest: 24fa8db343d1fc2cc134bc1b8019cbe318bf80997809864b0c4d993d44279225
+    digest: f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8
     schemaVersion: 1
   - label: clarifications
     path: work/2525-partial-read-fail-open/clarifications.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2525-partial-read-fail-open/plan.md
-    digest: d18bbf5ec7b543edff939caf8abba8e184c0cbd7592666b1c763e3cb2b83fa36
+    digest: 526b8e2fa850b5f3c9b27fd9f96d7db46b2321dda51485805c1c1366636cd336
     schemaVersion: 1
 tasks:
   - id: T001
@@ -35,7 +35,7 @@ tasks:
     dependencies: []
     requirements: [FR-001]
     decisions: []
-    sourceIds: [AC-001, FR-001, PD-001]
+    sourceIds: [AC-001, FR-001, PD-001, PD-008]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV001]
   - id: T002

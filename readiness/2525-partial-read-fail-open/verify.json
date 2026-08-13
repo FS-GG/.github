@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "301b01a61b6538e74bb9b478c17a9919d923adaa2b3a0de721f2ee69e52c66ab"
+        "value": "36fde3e0c04a27794b74498037ed0471bdd41af824cd8a516fc0823894d3a502"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "c227406b5e94fbfad006436d3bcab3d476cb1951cf3059d14fe6b2faa40913ab"
+        "value": "47da4de913f014b771055ddc5840eea605029e986abe0c8409b29acde0d0e728"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "d18bbf5ec7b543edff939caf8abba8e184c0cbd7592666b1c763e3cb2b83fa36"
+        "value": "526b8e2fa850b5f3c9b27fd9f96d7db46b2321dda51485805c1c1366636cd336"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "24fa8db343d1fc2cc134bc1b8019cbe318bf80997809864b0c4d993d44279225"
+        "value": "f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "d92c0a5ba652e607d5d6b3c7a314a744f322c315265b1540291c9895c08c109c"
+        "value": "09afbb2e3d5252653c95218b9b5115c1706f08d21ce7c372e873e9680cb704f9"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -174,7 +174,8 @@
       "affectedSourceIds": [
         "AC-001",
         "FR-001",
-        "PD-001"
+        "PD-001",
+        "PD-008"
       ],
       "severity": "ready",
       "diagnosticIds": [],

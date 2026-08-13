@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c227406b5e94fbfad006436d3bcab3d476cb1951cf3059d14fe6b2faa40913ab"
+        "value": "47da4de913f014b771055ddc5840eea605029e986abe0c8409b29acde0d0e728"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d18bbf5ec7b543edff939caf8abba8e184c0cbd7592666b1c763e3cb2b83fa36"
+        "value": "526b8e2fa850b5f3c9b27fd9f96d7db46b2321dda51485805c1c1366636cd336"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "24fa8db343d1fc2cc134bc1b8019cbe318bf80997809864b0c4d993d44279225"
+        "value": "f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d92c0a5ba652e607d5d6b3c7a314a744f322c315265b1540291c9895c08c109c"
+        "value": "09afbb2e3d5252653c95218b9b5115c1706f08d21ce7c372e873e9680cb704f9"
       }
     }
   ],
@@ -289,7 +289,8 @@
       "sourceIds": [
         "AC-001",
         "FR-001",
-        "PD-001"
+        "PD-001",
+        "PD-008"
       ],
       "requiredSkills": [
         "fsharp",
@@ -593,6 +594,8 @@
       ],
       "artifactRefs": [
         "src/FS.GG.Coord.GitHub/Scan.fs",
+        "tests/FS.GG.Coord.Cli.Tests/CacheIsolationTests.fs",
+        "tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs",
         "tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs"
       ],
       "result": "pass",
@@ -757,9 +760,8 @@
         "src/FS.GG.Coord.Cli/Client.fs",
         "src/FS.GG.Coord.Core/DriverEvents.fs",
         "src/FS.GG.Coord.GitHub/Scan.fs",
-        "tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs",
-        "tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs",
-        "tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs"
+        "tests/FS.GG.Coord.Cli.Tests/CacheIsolationTests.fs",
+        "tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs"
       ],
       "result": "pass",
       "synthetic": false,
@@ -809,7 +811,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs",
+        "tests/FS.GG.Coord.Cli.Tests/CacheIsolationTests.fs",
         "tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs"
       ],
@@ -835,7 +837,8 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "src/FS.GG.Coord.GitHub/Scan.fs",
+        "tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs",
+        "tests/FS.GG.Coord.Cli.Tests/SchedulingCostTests.fs",
         "work/2525-partial-read-fail-open/plan.md"
       ],
       "result": "pass",
@@ -930,7 +933,7 @@
           "path": "work/2525-partial-read-fail-open/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "c227406b5e94fbfad006436d3bcab3d476cb1951cf3059d14fe6b2faa40913ab"
+            "value": "47da4de913f014b771055ddc5840eea605029e986abe0c8409b29acde0d0e728"
           },
           "schemaVersion": 1
         },
@@ -938,7 +941,7 @@
           "path": "work/2525-partial-read-fail-open/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "d18bbf5ec7b543edff939caf8abba8e184c0cbd7592666b1c763e3cb2b83fa36"
+            "value": "526b8e2fa850b5f3c9b27fd9f96d7db46b2321dda51485805c1c1366636cd336"
           },
           "schemaVersion": 1
         },
@@ -946,7 +949,7 @@
           "path": "work/2525-partial-read-fail-open/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "24fa8db343d1fc2cc134bc1b8019cbe318bf80997809864b0c4d993d44279225"
+            "value": "f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8"
           },
           "schemaVersion": 1
         },
@@ -954,14 +957,14 @@
           "path": "work/2525-partial-read-fail-open/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "d92c0a5ba652e607d5d6b3c7a314a744f322c315265b1540291c9895c08c109c"
+            "value": "09afbb2e3d5252653c95218b9b5115c1706f08d21ce7c372e873e9680cb704f9"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "70a873b9bee86b69e20c7a53332791f767b49485f42b561ad61e020a80d0118c"
+        "value": "95ff040e4ad1ae4fb1ed98874b9e4caead36c41c34f4ce0f1ca1832d606c5037"
       },
       "currency": "current"
     }

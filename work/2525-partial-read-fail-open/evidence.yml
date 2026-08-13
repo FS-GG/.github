@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2525-partial-read-fail-open/plan.md
-    digest: d18bbf5ec7b543edff939caf8abba8e184c0cbd7592666b1c763e3cb2b83fa36
+    digest: 526b8e2fa850b5f3c9b27fd9f96d7db46b2321dda51485805c1c1366636cd336
     schemaVersion: 1
   - label: spec
     path: work/2525-partial-read-fail-open/spec.md
-    digest: 24fa8db343d1fc2cc134bc1b8019cbe318bf80997809864b0c4d993d44279225
+    digest: f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8
     schemaVersion: 1
   - label: tasks
     path: work/2525-partial-read-fail-open/tasks.yml
-    digest: d92c0a5ba652e607d5d6b3c7a314a744f322c315265b1540291c9895c08c109c
+    digest: 09afbb2e3d5252653c95218b9b5115c1706f08d21ce7c372e873e9680cb704f9
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -44,15 +44,15 @@ evidence:
     acceptanceScenarioRefs: []
     clarificationDecisionRefs: []
     checklistResultRefs: []
-    planDecisionRefs: [PD-001]
+    planDecisionRefs: [PD-001, PD-008]
     obligationRefs: [EV001]
-    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs]
+    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs, tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs, tests/FS.GG.Coord.Cli.Tests/CacheIsolationTests.fs]
     sourceRefs: []
     result: pass
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/github.trx"
-      digest: "sha256:d896bcad1bae807476a8b109e1da0690ffd51c5ece3688fffbfe81c5e22f4643"
+      digest: "sha256:3d0119292412fdcb3656a715610b513aa17ffebf7b9e59ddefcd321a32953ff3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 544
@@ -60,10 +60,15 @@ evidence:
       skipped: 0
     notes:
       - >-
-        FR-001: the board scan refuses a page-set it cannot prove complete.
-        ScanBoardTests legs: hasNextPage true with no endCursor; a blank endCursor is not a usable cursor;
-        a MISSING hasNextPage REFUSES; a NULL hasNextPage REFUSES; a STRING hasNextPage REFUSES;
-        a missing or ill-typed pageInfo REFUSES. Gate inversions M1/M2/M4 observed red (3, 2 and 1 failures).
+        FR-001 has TWO causes and both are evidenced here. (a) Fresh-scan completeness: ScanBoardTests legs for
+        no-endCursor, blank endCursor, missing/null/string hasNextPage, and ill-typed pageInfo. Inversions
+        M1/M2/M4 red (3, 2, 1). (b) The PROXIMATE cause of the reported incident, added in review round 1 -
+        a poisoned scan cache. Four test legs performed real scans with no cache-root isolation, so dotnet test
+        wrote fixture boards into the user's own ~/.cache/fsgg-coord. Fixed at the write, in two layers, and
+        measured: with XDG_CACHE_HOME pointed at a scratch dir so the real cache was never touched, baseline
+        leaks 0 scan files; neutering the assembly sandbox alone leaks 0 and reds 2 guard tests; neutering the
+        sandbox AND reverting the ChoresTests withCache wraps leaks scan-fs-gg-coordination.json at 204 bytes,
+        byte-identical to the artefact measured during the incident. Restored: 0 leaked, 788 green.
   - id: EV002
     kind: verification
     subject:
@@ -82,7 +87,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/github.trx"
-      digest: "sha256:d896bcad1bae807476a8b109e1da0690ffd51c5ece3688fffbfe81c5e22f4643"
+      digest: "sha256:3d0119292412fdcb3656a715610b513aa17ffebf7b9e59ddefcd321a32953ff3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 544
@@ -112,7 +117,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -121,9 +126,10 @@ evidence:
     notes:
       - >-
         FR-003: renderText never emits the bare no-active-items literal while any Unreadable row is carried.
-        DriverEventsTests legs: an unreadable item keeps the literal off line two; and the strengthened
-        missing-active-ref three-live-claims leg, which previously asserted only the TRANSITIONS line and so
-        let the active line keep printing the literal underneath its own name. Gate inversion M5 observed red (2 failures).
+        Independently reproduced by the round-1 critic against FS.GG.Coord.Core.dll built from each SHA: base
+        87b72024 renders 'no active items'; this head renders 'ACTIVE INVENTORY UNREADABLE (3 unaccounted for)'
+        naming #2324, #2510 and #2512. This half keys on cursor-versus-facts, so it repairs Observation A under
+        EITHER diagnosis. Gate inversion M5 observed red (2 failures).
   - id: EV004
     kind: verification
     subject:
@@ -142,7 +148,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -172,18 +178,20 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/cli.trx"
-      digest: "sha256:41b8b83b32c857f1ac838da7c55b5419f4a08c4f739a63c4df4b7a783f9f3300"
+      digest: "sha256:8a593253a207495f569d7e1cb9f0d3357639641181277825da19855b32527eb6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 785
+      passed: 788
       failed: 0
       skipped: 0
     notes:
       - >-
         FR-005: batch states the measured candidate count on stderr while stdout stays byte-identical.
-        ApplicationServiceTests legs: batch --text states how many candidates it MEASURED;
-        a board with NO items reports zero considered; and the counterpart, a batch that CHOOSES work does not
-        print the measured-count line. Gate inversion M7 observed red (2 failures).
+        Legs: batch --text states how many candidates it MEASURED; a board with NO items reports zero considered;
+        and the counterpart, a batch that CHOOSES work does not print the measured-count line. Inversion M7 red (2).
+        NARROWED in review round 1: the exit-code half of AC2 holds on the FRESH-SCAN route only. Scan.board
+        returns Ok rows from a parseable cache entry before scanFresh runs (Scan.fs:663-670), so a cache hit
+        exits 0 regardless. That is not closable by a completeness guard and is addressed at the write instead.
   - id: EV006
     kind: verification
     subject:
@@ -202,7 +210,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -210,10 +218,9 @@ evidence:
       skipped: 0
     notes:
       - >-
-        FR-006: a vanished item's last-known holder is never presented as current.
-        DriverEventsTests leg: acceptance #5, a vanished item's last-known holder is never presented as its
-        current one. It asserts the worker is still reported, is NOT rendered in the Claimed-quote spelling that
-        reads as a live claim, and is explicitly labelled superseded. Gate inversion M6 observed red (1 failure).
+        FR-006: a vanished item's last-known holder is never presented as current. The leg asserts the worker is
+        still reported, is NOT rendered in the Claimed-quote spelling that reads as a live claim, and is
+        explicitly labelled superseded. Gate inversion M6 observed red (1 failure).
   - id: EV007
     kind: verification
     subject:
@@ -226,26 +233,29 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV007]
-    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, src/FS.GG.Coord.Core/DriverEvents.fs, src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, src/FS.GG.Coord.Core/DriverEvents.fs, src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs, tests/FS.GG.Coord.Cli.Tests/CacheIsolationTests.fs]
     sourceRefs: []
     result: pass
     synthetic: false
     observedRun:
-      source: "work/2525-partial-read-fail-open/test-results/github.trx"
-      digest: "sha256:d896bcad1bae807476a8b109e1da0690ffd51c5ece3688fffbfe81c5e22f4643"
+      source: "work/2525-partial-read-fail-open/test-results/cli.trx"
+      digest: "sha256:8a593253a207495f569d7e1cb9f0d3357639641181277825da19855b32527eb6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 544
+      passed: 788
       failed: 0
       skipped: 0
     notes:
       - >-
-        FR-007: every guard shipped with its inversion recorded at authoring time. Seven mutations, each applied,
-        suite run, red observed, then reverted: M1 hasNextPage missing/ill-typed no longer refuses (3 red);
+        FR-007: every guard shipped with its inversion recorded at authoring time. Nine mutations, each applied,
+        suite run, red observed, then reverted. M1 hasNextPage missing/ill-typed no longer refuses (3 red);
         M2 hasNextPage true with no cursor no longer refuses (2 red); M3 unreadable Issue rows silently dropped
         again (1 red); M4 pageInfo not-an-object no longer refuses (1 red); M5 renderText collapses an unreadable
         inventory back to the no-active-items literal (2 red); M6 the stale holder spliced back in via %A (1 red);
-        M7 the measured-candidate count not printed (2 red). All three suites re-confirmed green after restore.
+        M7 the measured-candidate count not printed (2 red). Added in round 1: M8 assembly cache sandbox neutered
+        (2 red, 0 leaked - the per-leg withCache still holds); M9 sandbox neutered AND the ChoresTests withCache
+        wraps reverted (2 red, 1 leaked: scan-fs-gg-coordination.json at 204 bytes). All suites green after restore.
+        The round-1 critic independently re-ran M1-M7 and graded every one JUSTIFIED, with matching red counts.
   - id: EV008
     kind: verification
     subject:
@@ -264,7 +274,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -289,13 +299,13 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV009]
-    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs, tests/FS.GG.Coord.Cli.Tests/CacheIsolationTests.fs]
     sourceRefs: []
     result: pass
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -304,7 +314,7 @@ evidence:
     notes:
       - >-
         VO-001: full suites green on the head under review, Release configuration, no skips.
-        Core 829/829, GitHub 544/544, Cli 785/785.
+        Core 829/829, GitHub 544/544, Cli 788/788 (785 plus the three cache-isolation guards added in round 1).
   - id: EV010
     kind: verification
     subject:
@@ -317,24 +327,26 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV010]
-    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, work/2525-partial-read-fail-open/plan.md]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs, tests/FS.GG.Coord.Cli.Tests/SchedulingCostTests.fs, work/2525-partial-read-fail-open/plan.md]
     sourceRefs: []
     result: pass
     synthetic: false
     observedRun:
-      source: "work/2525-partial-read-fail-open/test-results/github.trx"
-      digest: "sha256:d896bcad1bae807476a8b109e1da0690ffd51c5ece3688fffbfe81c5e22f4643"
+      source: "work/2525-partial-read-fail-open/test-results/cli.trx"
+      digest: "sha256:8a593253a207495f569d7e1cb9f0d3357639641181277825da19855b32527eb6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 544
+      passed: 788
       failed: 0
       skipped: 0
     notes:
       - >-
-        PM-001: no data migration. The only posture change is that a scan which previously returned a truncated
-        Ok now refuses; every caller already handles Error from this read, evidenced by the GitHub and CLI suites
-        passing with the new refusals reachable. A scan cache written before this change can still hold a truncated
-        batch until its 90s TTL expires; no invalidation step is required and none is added.
+        PM-001 as CORRECTED in round 1. The original entry reasoned the cache route needed nothing because it
+        expires on its own; that is what routed this work away from the proximate cause. The cache does not merely
+        age, it is rewritten: putScan is a real read and restarts the TTL, so every dotnet test run re-poisoned it
+        with a fresh 90s lease. Verified in-tree that the PATCH path does NOT restart the clock (Cache.fs:236-239
+        restores the pre-fold mtime), so putScan is the only clock-restarting write and the write is where this is
+        fixed. Still no data migration; a pre-existing poisoned entry expires within one TTL and none is written now.
   - id: EV011
     kind: verification
     subject:
@@ -353,7 +365,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -361,8 +373,8 @@ evidence:
       skipped: 0
     notes:
       - >-
-        GV-001: the work model is re-derived from the current plan sources by fsgg-sdd evidence.
-        No scripts/generate-projections output is affected - this change touches no SKILL.md body and no emitted
-        protocol fact, so the generated skill corpus is unchanged.
+        GV-001: the work model is re-derived from the current plan sources, re-baselined via plan --accept-upstream
+        after the round-1 spec amendment. No scripts/generate-projections output is affected - this change touches
+        no SKILL.md body and no emitted protocol fact, so the generated skill corpus is unchanged.
 lifecycleNotes:
   - "Next lifecycle action: verify."

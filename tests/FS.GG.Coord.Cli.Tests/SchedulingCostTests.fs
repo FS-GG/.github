@@ -342,6 +342,24 @@ module SchedulingCostTests =
 
         let fixtureTitle = "Coordination-2313-" + Guid.NewGuid().ToString "n"
 
+        // .github#2525 — ISOLATE THE CACHE **ROOT**, NOT ONLY THE KEY. The unique `fixtureTitle` above
+        // already gives this test its own cache FILENAME, which is what stops it colliding with another
+        // test. It does nothing about WHERE that file is written: `Cache.root()` falls back to the
+        // developer's `~/.cache/fsgg-coord`, so every run of this suite deposited one more never-read
+        // `scan-fs-gg-coordination-2313-<guid>.json` there. Unlike the `ChoresTests` legs this cannot
+        // poison a live read — the key differs from the real board's — but litter that accumulates once
+        // per run is still this suite writing outside itself, and a unique key is a coincidence away from
+        // not being unique.
+        let previousCacheRoot = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+
+        let cacheDir =
+            IO.Path.Combine(IO.Path.GetTempPath(), "fsgg-2313-" + Guid.NewGuid().ToString "n")
+
+        IO.Directory.CreateDirectory cacheDir |> ignore
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cacheDir)
+
+        try
+
         let schedulingQueries = ResizeArray<string>()
         let scheduling = worldWithQueries closed (Some schedulingQueries)
 
@@ -372,6 +390,14 @@ module SchedulingCostTests =
         Assert.Single(reconcilingQueries) |> ignore
         Assert.Contains("body", reconcilingQueries.[0])
         Assert.Contains("... on PullRequest { id number title state createdAt body", reconcilingQueries.[0])
+
+        finally
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCacheRoot)
+
+            try
+                IO.Directory.Delete(cacheDir, true)
+            with _ ->
+                ()
 
     // ---- AC1/AC2 — bounded by the SCHEDULABLE set, not the candidate set --------------------------------
 

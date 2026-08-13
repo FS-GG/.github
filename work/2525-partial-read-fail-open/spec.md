@@ -38,6 +38,54 @@ A board driver can trust that "no active items" and "nothing schedulable" are me
 
 ## Root Cause Diagnosis (.github#2525 AC6)
 
+> **AMENDED AFTER INDEPENDENT REVIEW ROUND 1.** Two real causes were in play and this section originally
+> carried only one of them. The critic settled which is which **by execution rather than argument**, and
+> the ordering below is its finding, not a compromise between two opinions.
+>
+> **The proximate cause of the reported incident is a poisoned scan cache**, not a partial paginated read.
+> `Scan.board` returns `Ok rows` from a parseable cache entry *before* `scanFresh` is ever called
+> (`Scan.fs:663-670`), and `dotnet test` had been writing four-row test-fixture boards into the
+> developer's own `~/.cache/fsgg-coord` — so live `batch`/`take`/`driver` reads served a fabricated board
+> for the cache's TTL. **No completeness guard can detect that by construction**: the poisoned board is
+> complete, well-formed and internally consistent. It is simply not the board. That cause is fixed at the
+> write, and is written up under "The proximate cause" below.
+>
+> The pagination and row-parse defects described after it are **also real and independently confirmed** —
+> they are reachable on the fresh-scan route and are fixed here — but they are not what produced the two
+> observations in the issue. Their write-up is retained unchanged, demoted to its true standing.
+>
+> One consequence is recorded honestly rather than smoothed over: the original **PM-001** reasoned that
+> the cache route needed nothing because "it expires on its own". That is what routed the implementation
+> away from the proximate cause. See `plan.md` PM-001 for the correction.
+
+## The proximate cause — a poisoned scan cache (amended, round 1)
+
+`Cache.root()` falls back to `$XDG_CACHE_HOME/fsgg-coord`, then to `~/.cache/fsgg-coord`
+(`Cache.fs:17-28`). Four test legs performed **real** scans with no cache isolation, so their fixture
+boards were written to the developer's own cache by `Cache.putScan`:
+
+- `tests/FS.GG.Coord.Cli.Tests/ChoresTests.fs` — three `#2254` legs called `reconcileIds`/`Client.batch`
+  outside the `withCache` helper defined ten lines above them. These wrote
+  `scan-fs-gg-coordination.json`, **the real board's own cache key**, which is what makes them poisoning
+  rather than merely untidy.
+- `tests/FS.GG.Coord.Cli.Tests/SchedulingCostTests.fs` — the `#2313` leg isolated its cache **key** (a
+  GUID board title) but not its **root**, depositing one never-read
+  `scan-fs-gg-coordination-2313-<guid>.json` per suite run.
+
+Reproduced at this head with `XDG_CACHE_HOME` pointed at a scratch directory, so the real cache was never
+touched: reverting the `ChoresTests` isolation re-creates `scan-fs-gg-coordination.json` at **204 bytes**,
+the same artefact measured during the incident.
+
+The fix is at the write, in two layers, because the read cannot help:
+
+1. each leg gets the isolation it should always have had; and
+2. the assembly redirects `Cache.root()`'s **fallback** to a sandbox before any test runs, via a custom
+   xUnit test framework (`tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs`) — so a future leg whose author
+   forgets step 1 still cannot reach the user's cache. `XDG_CACHE_HOME` is redirected rather than
+   `FSGG_COORD_CACHE` precisely so that every existing fixture's own isolation is left untouched.
+
+## The fresh-scan causes (unchanged from round 0)
+
 AC6 requires the diagnosis, not the suppression. Both reported symptoms are one cause with one
 amplifier, and neither is exhaustion or backoff — budget was healthy throughout, with the REST window
 freshly reset.

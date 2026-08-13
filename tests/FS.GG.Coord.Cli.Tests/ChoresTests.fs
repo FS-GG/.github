@@ -691,13 +691,17 @@ let private closedDoneBoard (boardClass: string option) (bodyReads: int ref) =
 
 [<Fact>]
 let ``#2254 reconcile PAYS the census read and reports the row - the critic's reconcile half`` () =
-    let bodyReads = ref 0
-    let transport = closedDoneBoard None bodyReads
+    // `withCache` (.github#2525 repair 1): `reconcileIds` runs the REAL `Client.reconcile`, which reaches
+    // `Scan.scanFresh` → `Cache.putScan`. Unisolated, that wrote this fixture's four rows into the
+    // DEVELOPER'S OWN scan cache, where the next live `batch`/`driver` read served them as the board.
+    withCache (fun () ->
+        let bodyReads = ref 0
+        let transport = closedDoneBoard None bodyReads
 
-    let ids = reconcileIds transport
+        let ids = reconcileIds transport
 
-    Assert.Equal<string list>([ "CLASS-PROJECTION-LAG:FS-GG/.github#398" ], ids)
-    Assert.Equal(1, bodyReads.Value) // read ONCE — never re-read on a retry, never skipped
+        Assert.Equal<string list>([ "CLASS-PROJECTION-LAG:FS-GG/.github#398" ], ids)
+        Assert.Equal(1, bodyReads.Value)) // read ONCE — never re-read on a retry, never skipped
 
 [<Fact>]
 let ``#2254 batch does NOT pay the census read - the critic's measured regression, closed`` () =
@@ -715,15 +719,18 @@ let ``#2254 batch does NOT pay the census read - the critic's measured regressio
                 Error(Errors.Transport "batch must not pay the census read #2254 reserves for reconcile")
             | _ -> baseRoute req)
 
-    let stdout = System.Console.Out
-    use captured = new System.IO.StringWriter()
-
+    // Isolated for the same reason as its two siblings (.github#2525 repair 1): `Client.batch` runs a real
+    // `Scan.scanFresh` over this fixture and caches its rows.
     let code =
-        try
-            System.Console.SetOut captured
-            Client.batch (context refusingTransport) (optionsOf [ "batch"; "--json" ])
-        finally
-            System.Console.SetOut stdout
+        withCache (fun () ->
+            let stdout = System.Console.Out
+            use captured = new System.IO.StringWriter()
+
+            try
+                System.Console.SetOut captured
+                Client.batch (context refusingTransport) (optionsOf [ "batch"; "--json" ])
+            finally
+                System.Console.SetOut stdout)
 
     Assert.Equal(0, code) // green — a refused read the code never attempted is not a failure to explain
 
@@ -733,13 +740,14 @@ let ``#2254 an ALREADY-CLASSED Done row costs reconcile nothing either - the bou
     // EMPTY (.github#2254 AC1), never merely to double-check an existing value. A board where `#398`
     // already carries `Class: hardening` must cost `reconcile` zero extra reads too — the bound
     // `drive-board`'s SKILL.md now documents is not just prose.
-    let bodyReads = ref 0
-    let transport = closedDoneBoard (Some "hardening") bodyReads
+    withCache (fun () ->
+        let bodyReads = ref 0
+        let transport = closedDoneBoard (Some "hardening") bodyReads
 
-    let ids = reconcileIds transport
+        let ids = reconcileIds transport
 
-    Assert.Equal<string list>([], ids)
-    Assert.Equal(0, bodyReads.Value)
+        Assert.Equal<string list>([], ids)
+        Assert.Equal(0, bodyReads.Value))
 
 // ---- .github#2394 round 1 — the SAME defect through the RESERVED branch's second door -------------------
 //

@@ -24,3 +24,21 @@ module FS.GG.Coord.Cli.Tests.AssemblyInfo
 // suite that races itself is worth nothing at all.
 [<assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)>]
 do ()
+
+/// …and `ChoresTests` became exactly that class (.github#2525). Three of its legs ran the REAL
+/// `Client.reconcile`/`Client.batch` — so a real `Scan.scanFresh` → `Cache.putScan` — outside the
+/// `withCache` helper sitting ten lines away from them.
+///
+/// The consequence was not a racing test. `Cache.root()` falls back to `$XDG_CACHE_HOME/fsgg-coord`, and
+/// then to `~/.cache/fsgg-coord`, so `dotnet test` wrote this suite's four-row FIXTURE BOARD into the
+/// developer's own scan cache as `scan-fs-gg-coordination.json`. Every live `batch`/`take`/`next`/`driver`
+/// read on that machine then served those rows as the board for the cache's whole TTL — a board that is
+/// complete, well-formed and internally consistent, and entirely fabricated.
+///
+/// That is why the remedy below is a REDIRECTION rather than an assertion, and why it is installed by the
+/// test FRAMEWORK rather than by a fixture. A leaked fixture board defeats every completeness check by
+/// construction — there is nothing partial about it to detect — so the only thing that helps is for the
+/// write to have nowhere real to land, before any test can run. `withCache` stays and is still the right
+/// per-leg tool; this only guarantees that the root a leg WITHOUT it falls back to is never the user's.
+[<assembly: Xunit.TestFramework("FS.GG.Coord.Cli.Tests.CacheSandboxFramework", "FS.GG.Coord.Cli.Tests")>]
+do ()
