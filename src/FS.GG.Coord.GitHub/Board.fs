@@ -83,6 +83,41 @@ module Board =
         with :? JsonException as e ->
             Error(Malformed(subject, $"the GraphQL response is not JSON: %s{e.Message}"))
 
+    /// **"IS THERE ANOTHER PAGE, AND WHERE DOES IT START?"** — the one place `pageInfo` becomes an answer.
+    ///
+    /// COMPLETENESS IS A REQUIRED BOOLEAN, NOT AN OPTIONAL HINT. A missing, null, or non-Boolean
+    /// `hasNextPage` used to fall through as `false` in the external-owner walk and turn an incomplete read
+    /// into the definite absence `Ok None` — and `Ok None` is what licenses `item-add` (#2166). Every arm
+    /// that cannot establish "that was all" is therefore a refusal.
+    ///
+    /// Hoisted out of `externalItemId` by `.github#2535`, which needed the identical walk for the project
+    /// list, with the messages preserved byte-for-byte via `what`. Two copies of a completeness guard is
+    /// the drift that item is about, so the paginating remedy has exactly one implementation, as the
+    /// `totalCount` remedy (`Reads.connectionComplete`) does.
+    let private nextPage (subject: string) (what: string) (connection: JsonElement) : IoResult<string option> =
+        // `TryGetProperty` THROWS on a non-object rather than answering `false` (`.github#2418`), and both
+        // call sites sit inside a `try/with :? KeyNotFoundException` that would not catch it.
+        if connection.ValueKind <> JsonValueKind.Object then
+            Error(Malformed(subject, $"%s{what} is not a JSON object (%A{connection.ValueKind}) — this is a FAILED READ"))
+        else
+
+        match connection.TryGetProperty "pageInfo" with
+        | true, pageInfo when pageInfo.ValueKind = JsonValueKind.Object ->
+            match pageInfo.TryGetProperty "hasNextPage" with
+            | true, hasNext when hasNext.ValueKind = JsonValueKind.False -> Ok None
+            | true, hasNext when hasNext.ValueKind = JsonValueKind.True ->
+                match pageInfo.TryGetProperty "endCursor" with
+                | true, value when
+                    value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString()))
+                    ->
+                    Ok(Some(value.GetString()))
+                | _ -> Error(Malformed(subject, $"%s{what} has another page but no usable cursor"))
+            | _ ->
+                // COMPLETENESS IS A REQUIRED BOOLEAN, not an optional hint. Missing/null/string used to
+                // fall through as `false` and turn an incomplete read into the definite absence `Ok None`.
+                Error(Malformed(subject, $"%s{what}'s `pageInfo.hasNextPage` is missing or is not a Boolean"))
+        | _ -> Error(Malformed(subject, $"%s{what}'s `pageInfo` is missing or is not an object"))
+
     let private query (document: string) (variables: (string * Var) list) (subject: string) =
         { Method = "POST"
           Path = "graphql"
@@ -96,11 +131,16 @@ module Board =
 
     [<Literal>]
     let private ProjectsDoc =
-        "query($owner: String!) { organization(login: $owner) { projectsV2(first: 50) { nodes { number title id } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $cursor: String) { organization(login: $owner) { projectsV2(first: 50, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { number title id } } } rateLimit { cost remaining } }"
 
     [<Literal>]
     let private FieldsDoc =
-        "query($owner: String!, $number: Int!) { organization(login: $owner) { projectV2(number: $number) { fields(first: 50) { nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { id name dataType options { id name } } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $number: Int!) { organization(login: $owner) { projectV2(number: $number) { fields(first: 50) { totalCount nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { id name dataType options { id name } } } } } } rateLimit { cost remaining } }"
+
+    /// `FieldsDoc`'s own window, as the guard must see it — the two MUST agree, and
+    /// `.github#2535 the connection windows in the documents agree with the guards` pins them together.
+    [<Literal>]
+    let private FieldsWindow = 50
 
     let private fieldTypeOf (dataType: string) (node: JsonElement) =
         match dataType with
@@ -142,35 +182,90 @@ module Board =
         let ownerField = OwnerKind.ownerField kind
         let ownerVars = OwnerKind.ownerVars kind owner
 
-        match transport.Send(query (OwnerKind.forOwner kind ProjectsDoc) ownerVars subject) with
+        // **THE BOARD LOOKUP WALKS EVERY PROJECT, NOT THE FIRST FIFTY** (`.github#2535`). `projectsV2(first:
+        // 50)` with no cursor answers the same shape whether the owner has 50 projects or 500, so a board
+        // that happened to be #51 came back as `NotFound` — printed to the operator as *"no Projects v2
+        // board titled 'X'"*, a definite CONFIGURATION verdict manufactured from a window nobody announced,
+        // and one whose remedy ("check `FSGG_COORD_PROJECT`") is wrong for the actual condition. This is
+        // `externalItemId`'s walk, sharing its `nextPage` guard and its 100-page ceiling: a missing or
+        // non-Boolean `hasNextPage` is a refusal, never "that was all".
+        let rec findProject (cursor: string option) (guard: int) : IoResult<(int * string) option> =
+            if guard <= 0 then
+                Error(Malformed(subject, "the board lookup did not terminate within 100 pages of projects"))
+            else
+
+            let variables =
+                ownerVars
+                @ (match cursor with
+                   | Some value -> [ "cursor", VString value ]
+                   | None -> [])
+
+            match transport.Send(query (OwnerKind.forOwner kind ProjectsDoc) variables subject) with
+            | Error e -> Error e
+            | Ok projectsResponse ->
+
+            match graphQlData subject projectsResponse.Body with
+            | Error e -> Error e
+            | Ok data ->
+
+            let connection =
+                try
+                    let root = data.GetProperty ownerField
+
+                    if root.ValueKind = JsonValueKind.Null then
+                        None
+                    else
+                        Some(root.GetProperty "projectsV2")
+                with :? KeyNotFoundException ->
+                    None
+
+            match connection with
+            | None -> Error(Malformed(subject, $"the project-list response is missing `%s{ownerField}.projectsV2`"))
+            | Some connection ->
+
+            let matched =
+                try
+                    connection.GetProperty("nodes").EnumerateArray()
+                    |> Seq.tryFind (fun n ->
+                        match n.TryGetProperty "title" with
+                        | true, t when t.ValueKind = JsonValueKind.String -> t.GetString() = title
+                        | _ -> false)
+                    |> Ok
+                with :? KeyNotFoundException ->
+                    Error(Malformed(subject, $"the project-list response is missing `%s{ownerField}.projectsV2.nodes`"))
+
+            match matched with
+            | Error e -> Error e
+            | Ok(Some p) ->
+                // A BOARD WE FOUND AND CANNOT NAME IS A FAILED READ, not an absence and not a crash. The
+                // pre-`.github#2535` code read `number`/`id` unguarded, outside every `try`.
+                match p.TryGetProperty "number", p.TryGetProperty "id" with
+                | (true, number), (true, id) when
+                    number.ValueKind = JsonValueKind.Number && id.ValueKind = JsonValueKind.String
+                    ->
+                    match number.TryGetInt32() with
+                    | true, value -> Ok(Some(value, id.GetString()))
+                    | _ -> Error(Malformed(subject, "the board's `number` is not a 32-bit integer"))
+                | _ ->
+                    Error(Malformed(subject, $"the board titled '%s{title}' was found but carries no readable `number`/`id`"))
+
+            // NOT ON THIS PAGE IS NOT NOT-ANYWHERE. Ask `pageInfo` before turning it into an absence.
+            | Ok None ->
+                match nextPage subject "the board lookup" connection with
+                | Error e -> Error e
+                | Ok None -> Ok None
+                | Ok(Some next) -> findProject (Some next) (guard - 1)
+
+        match findProject None 100 with
         | Error e -> Error e
-        | Ok projectsResponse ->
-
-        match graphQlData subject projectsResponse.Body with
-        | Error e -> Error e
-        | Ok data ->
-
-        let project =
-            try
-                data.GetProperty(ownerField).GetProperty("projectsV2").GetProperty("nodes").EnumerateArray()
-                |> Seq.tryFind (fun n ->
-                    match n.TryGetProperty "title" with
-                    | true, t when t.ValueKind = JsonValueKind.String -> t.GetString() = title
-                    | _ -> false)
-            with :? KeyNotFoundException ->
-                None
-
-        match project with
-        | None ->
+        | Ok None ->
             // A BOARD WE READ AND DID NOT FIND IS A REAL ANSWER, and it is a configuration error, not a
             // transient. Naming the title back is what makes it fixable — the usual cause is
-            // `FSGG_COORD_PROJECT` pointing at a board that was renamed.
+            // `FSGG_COORD_PROJECT` pointing at a board that was renamed. Since `.github#2535` this sentence
+            // is entitled to be said: it is now measured over EVERY project, not the first page of them.
             Error(NotFound $"no Projects v2 board titled '%s{title}' in %s{owner}")
 
-        | Some p ->
-
-        let number = p.GetProperty("number").GetInt32()
-        let id = p.GetProperty("id").GetString()
+        | Ok(Some(number, id)) ->
 
         match transport.Send(query (OwnerKind.forOwner kind FieldsDoc) (ownerVars @ [ "number", VNumber(double number) ]) subject) with
         | Error e -> Error e
@@ -180,14 +275,40 @@ module Board =
         | Error e -> Error e
         | Ok fieldsData ->
 
+        let fieldsConnection =
+            try
+                let root = fieldsData.GetProperty ownerField
+
+                if root.ValueKind = JsonValueKind.Null then
+                    None
+                else
+                    let project = root.GetProperty "projectV2"
+
+                    if project.ValueKind = JsonValueKind.Null then
+                        None
+                    else
+                        Some(project.GetProperty "fields")
+            with :? KeyNotFoundException ->
+                None
+
+        match fieldsConnection with
+        | None -> Error(Malformed(subject, $"the field-map response is missing `%s{ownerField}.projectV2.fields`"))
+        | Some fieldsConnection ->
+
+        // **A PARTIAL FIELD MAP IS REFUSED, NOT CACHED** (`.github#2535`). `fields(first: 50)` with no
+        // cursor silently drops the tail of a board with more than 50 fields, and the all-empty guard below
+        // cannot see a PARTIAL map — only a wholly unreadable one. So a board map missing exactly the field
+        // a later write needs was accepted, cached for a day, and every write to that field failed with the
+        // misleading `no field named 'X' on this board. Known fields: …`, which recites the TRUNCATED list
+        // as if it were the board's own. The completeness question is asked here, once, before anything is
+        // built from the nodes — and a `totalCount` we cannot read is a refusal too.
+        match Reads.connectionComplete subject "the board's field map" FieldsWindow fieldsConnection with
+        | Error e -> Error e
+        | Ok() ->
+
         let fields =
             try
-                fieldsData
-                    .GetProperty(ownerField)
-                    .GetProperty("projectV2")
-                    .GetProperty("fields")
-                    .GetProperty("nodes")
-                    .EnumerateArray()
+                fieldsConnection.GetProperty("nodes").EnumerateArray()
                 |> Seq.choose (fun n ->
                     let get (name: string) =
                         match n.TryGetProperty name with
@@ -206,6 +327,12 @@ module Board =
             // A BOARD WITH NO FIELDS IS A READ THAT WENT WRONG. Every board has at least `Status`, so an
             // empty map is not an austere board — it is a document we failed to walk, and caching it would
             // make every subsequent write fail with "no field named Status" for a day.
+            //
+            // THIS GUARD IS STILL DISTINCT FROM THE COMPLETENESS CHECK ABOVE and neither subsumes the
+            // other: `connectionComplete` catches a map truncated by the window (`totalCount` 60, 50
+            // returned), this one catches a map that arrived complete-as-far-as-the-wire-goes and was
+            // nonetheless unwalkable — `totalCount` 0 with an empty `nodes`, or nodes whose `dataType` we
+            // were never taught, both of which are complete reads that produce nothing usable.
             Error(Malformed(subject, "the board reported no fields at all — refusing to cache a field map we could not read"))
         else
             Ok
@@ -332,7 +459,14 @@ module Board =
 
     [<Literal>]
     let private ItemIdDoc =
-        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { nodes { id project { number } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { id project { number } } } } } rateLimit { cost remaining } }"
+
+    /// The window EVERY issue-side `projectItems` selection in this module asks for — `ItemIdDoc` here,
+    /// `ItemStatusDoc` and `ItemBlockedByDoc` below — and therefore the one the guard must see. ONE literal
+    /// for all three: three copies is three chances for a document and its guard to disagree, and
+    /// `.github#2535 the connection windows in the documents agree with the guards` pins the whole set.
+    [<Literal>]
+    let private ProjectItemsWindow = 20
 
     let private repositoryItemId
         (transport: IGitHubTransport)
@@ -375,8 +509,10 @@ module Board =
                 Error(NotFound subject)
             else
 
+            let projectItems = issue.GetProperty "projectItems"
+
             let found =
-                issue.GetProperty("projectItems").GetProperty("nodes").EnumerateArray()
+                projectItems.GetProperty("nodes").EnumerateArray()
                 |> Seq.tryPick (fun n ->
                     let onThisBoard =
                         match n.TryGetProperty "project" with
@@ -396,9 +532,25 @@ module Board =
                     else
                         None)
 
-            // `None` HERE IS A SUCCESSFUL READ. We reached the board, we walked its items, and this issue is
-            // not among them. That is the only path to `item-add`, and it cannot be reached from a failure.
-            Ok found
+            match found with
+            // FOUND IS FOUND. Truncation cannot unmake an answer we already have, so the completeness
+            // question is only asked on the miss — the same rule `externalItemId`'s walk follows when it
+            // returns on a hit without consulting `pageInfo`, and the reason this guard costs nothing on
+            // the hot path.
+            | Some _ -> Ok found
+
+            | None ->
+                // **`None` HERE IS A SUCCESSFUL READ, AND `.github#2535` IS WHAT MAKES THAT TRUE ON THE
+                // SECOND AXIS.** We reached the board, we walked its items, and this issue is not among
+                // them. That is the only path to `item-add`, and it cannot be reached from a failure —
+                // which is #421 for a read that ERRORED. But `projectItems(first: 20)` had a second way to
+                // manufacture the same definite "no": an issue sitting on more than twenty boards, ours
+                // being the twenty-first, returns a full window that simply does not contain us, and
+                // "walked its items" was a claim about a window rather than about the connection. Asking
+                // `totalCount` is what turns the sentence above back into a measurement.
+                match Reads.connectionComplete subject "this issue's project-item connection" ProjectItemsWindow projectItems with
+                | Error e -> Error e
+                | Ok() -> Ok None
 
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item lookup response is missing `repository.issue.projectItems`"))
@@ -483,25 +635,13 @@ module Board =
                                 match found with
                                 | Some id -> Ok(Some id)
                                 | None ->
-                                    match items.TryGetProperty "pageInfo" with
-                                    | true, pageInfo when pageInfo.ValueKind = JsonValueKind.Object ->
-                                        match pageInfo.TryGetProperty "hasNextPage" with
-                                        | true, hasNext when hasNext.ValueKind = JsonValueKind.False -> Ok None
-                                        | true, hasNext when hasNext.ValueKind = JsonValueKind.True ->
-                                            match pageInfo.TryGetProperty "endCursor" with
-                                            | true, value
-                                                when value.ValueKind = JsonValueKind.String
-                                                     && not (String.IsNullOrWhiteSpace(value.GetString())) ->
-                                                page (Some(value.GetString())) (guard - 1)
-                                            | _ ->
-                                                Error(Malformed(subject, "the external-owner board item lookup has another page but no usable cursor"))
-                                        | _ ->
-                                            // COMPLETENESS IS A REQUIRED BOOLEAN, not an optional hint.
-                                            // Missing/null/string used to fall through as `false` and turn
-                                            // an incomplete read into the definite absence `Ok None`.
-                                            Error(Malformed(subject, "the external-owner board item lookup's `pageInfo.hasNextPage` is missing or is not a Boolean"))
-                                    | _ ->
-                                        Error(Malformed(subject, "the external-owner board item lookup's `pageInfo` is missing or is not an object"))
+                                    // `.github#2535` hoisted this walk's `pageInfo` guard into `nextPage`
+                                    // so `bootstrap`'s project list could share it. The refusal strings are
+                                    // preserved byte-for-byte through `what`; the behaviour is unchanged.
+                                    match nextPage subject "the external-owner board item lookup" items with
+                                    | Error e -> Error e
+                                    | Ok None -> Ok None
+                                    | Ok(Some next) -> page (Some next) (guard - 1)
                         with :? KeyNotFoundException ->
                             Error(Malformed(subject, "the external-owner board item lookup response is missing `data.node.items`"))
 
@@ -793,7 +933,7 @@ module Board =
 
     [<Literal>]
     let private ItemStatusDoc =
-        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { nodes { project { number } fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { project { number } fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } rateLimit { cost remaining } }"
 
     /// Read ONE item's `Status` column — the column a `claim` is about to overwrite, so `release` can put it
     /// back rather than guess `Ready` (#481).
@@ -847,10 +987,12 @@ module Board =
                 Ok None
             else
 
+            let projectItems = issue.GetProperty "projectItems"
+
             // NARROW TO OUR BOARD, exactly as `itemId` does. An issue can sit on several boards, and the
             // Status on another one is not the column this claim overwrites here.
             let ourNode =
-                issue.GetProperty("projectItems").GetProperty("nodes").EnumerateArray()
+                projectItems.GetProperty("nodes").EnumerateArray()
                 |> Seq.tryFind (fun n ->
                     match n.TryGetProperty "project" with
                     | true, p when p.ValueKind = JsonValueKind.Object ->
@@ -860,8 +1002,14 @@ module Board =
                     | _ -> false)
 
             match ourNode with
-            // NOT ON THIS BOARD. A successful read with a definite answer — nothing to restore.
-            | None -> Ok None
+            // NOT ON THIS BOARD. A successful read with a definite answer — nothing to restore — and
+            // `.github#2535` is what keeps it one: on a miss, a window that hid the tail is a FAILED read,
+            // never "not on this board". `claim` treats both as "recorded no column", but the two are not
+            // the same fact and only one of them may be asserted.
+            | None ->
+                match Reads.connectionComplete subject "this issue's project-item connection" ProjectItemsWindow projectItems with
+                | Error e -> Error e
+                | Ok() -> Ok None
             | Some node ->
                 match node.TryGetProperty "fieldValueByName" with
                 // `fieldValueByName` is null when the item is on the board with NO Status set. On board, no
@@ -889,7 +1037,7 @@ module Board =
             externalItemField transport board owner repo number "Status" statusOfFieldValue
 
     let private ItemBlockedByDoc =
-        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { nodes { project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
 
     /// Read ONE item's live `Blocked by` column. `itemStatus`'s twin over the TEXT fragment — see the
     /// `.fsi` for why this is a resolver read and what `Ok None` covers.
@@ -929,8 +1077,10 @@ module Board =
                 Ok None
             else
 
+            let projectItems = issue.GetProperty "projectItems"
+
             let ourNode =
-                issue.GetProperty("projectItems").GetProperty("nodes").EnumerateArray()
+                projectItems.GetProperty("nodes").EnumerateArray()
                 |> Seq.tryFind (fun n ->
                     match n.TryGetProperty "project" with
                     | true, p when p.ValueKind = JsonValueKind.Object ->
@@ -940,7 +1090,12 @@ module Board =
                     | _ -> false)
 
             match ourNode with
-            | None -> Ok None
+            // `itemStatus`'s rule, for `itemStatus`'s reason (`.github#2535`): a miss over a window that
+            // hid the tail is a failed read, not "not on this board".
+            | None ->
+                match Reads.connectionComplete subject "this issue's project-item connection" ProjectItemsWindow projectItems with
+                | Error e -> Error e
+                | Ok() -> Ok None
             | Some node ->
                 match node.TryGetProperty "fieldValueByName" with
                 // `fieldValueByName` is null when the item is on the board with the field genuinely

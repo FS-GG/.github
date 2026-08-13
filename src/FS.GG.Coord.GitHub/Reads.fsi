@@ -27,6 +27,33 @@ module Reads =
     open Errors
     open Transport
 
+    /// **DID THIS `first: N` CONNECTION RETURN EVERYTHING IT HAS?** (`.github#2535`)
+    ///
+    /// `Ok ()` is the load-bearing value and it means *measured completeness*. Only after it may a caller
+    /// read an absence out of `nodes` and mean it. It is reached two ways, and only two:
+    ///
+    /// - the connection reported a `totalCount` no larger than the number of `nodes` it returned; or
+    /// - the connection came back SHORT of `window`, which is proof on its own — `first: N` returns
+    ///   `min(N, available)`, so a page below N had nothing left for the window to hide.
+    ///
+    /// Everything else is `Error(Malformed …)`: a `totalCount` larger than what was returned (the defect
+    /// itself), a FULL window with no readable `totalCount` (a complete set of exactly N is
+    /// indistinguishable from a truncated one), a missing or non-array `nodes`, a connection that is not an
+    /// object at all. Each leaves completeness UNKNOWN, and an unknown completeness may not be spent as a
+    /// known one.
+    ///
+    /// `window` is the document's own `first: N` and MUST equal it — too low refuses pages it should
+    /// accept, too high accepts pages it should refuse. `what` names the connection in the refusal,
+    /// `subject` the thing being read.
+    ///
+    /// This is the `totalCount` half of `.github#2535`'s repair; the other half is a `pageInfo` cursor walk,
+    /// used where the tail must actually be fetched rather than refused (`Board.bootstrap`'s project list,
+    /// `Board.externalItemId`). It is exposed — rather than private, like `graphQlData` beside it — because
+    /// `Board` compiles after this module and shares it, and because a second copy of a completeness check
+    /// is precisely the drift `.github#2535` is about: five connections in two files, none of them asking.
+    val connectionComplete:
+        subject: string -> what: string -> window: int -> connection: System.Text.Json.JsonElement -> IoResult<unit>
+
     /// A live claim marker, as it sits on the issue.
     ///
     /// `Id` is the COMMENT ID, and it is the whole lock. GitHub issues comment ids from ONE server-side
@@ -458,6 +485,12 @@ module Reads =
     /// reports an exhausted GraphQL budget), a null `repository`/`pullRequest`, an absent connection, and a
     /// node whose `number`/`nameWithOwner` cannot be read are each an `Error`. They used to be `Ok None`,
     /// which `verify-paths` reads as "this PR implements no tracked item" and reports as a GREEN skip.
+    ///
+    /// **AND `Ok (Some …)` IS A MEASUREMENT TOO** (`.github#2535`). The connection is selected `first: 5`
+    /// and this returns the HEAD of whatever arrived, so a PR closing more issues than the window admits was
+    /// answered from a set already known to be short — and this function's whole contract is *the ONE item
+    /// this PR implements*, which a partly-seen closing graph does not have. It now carries `totalCount`,
+    /// and a window that hid a tail is an `Error` rather than a head plucked from five of seven.
     val prClosingRef: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<Ref option>
 
     /// One list element's body — READ, or NOT READ. The `TouchSet.Unreadable` distinction (#1150), carried
