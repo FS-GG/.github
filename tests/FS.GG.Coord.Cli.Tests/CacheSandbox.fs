@@ -18,6 +18,43 @@ module CacheSandbox =
     /// is asserted as one rather than silently tolerated.
     let mutable Root: string option = None
 
+    /// The user's REAL cache root, resolved from the home directory exactly as `Cache.root()`'s final
+    /// fallback does. Held here rather than recomputed per test so the guard and the thing it guards can
+    /// never disagree about which directory is under discussion.
+    let RealCacheRoot =
+        IO.Path.Combine(
+            Environment.GetFolderPath Environment.SpecialFolder.UserProfile,
+            ".cache",
+            "fsgg-coord"
+        )
+
+    let private digestOf (file: string) =
+        use sha = Security.Cryptography.SHA256.Create()
+        IO.File.ReadAllBytes file |> sha.ComputeHash |> Convert.ToHexString
+
+    /// Every `scan-*.json` in `RealCacheRoot`, by name and content digest.
+    ///
+    /// CONTENT, NOT A MARKER (.github#2525 repair 4). The first version of this guard filtered leaked files
+    /// for a marker string, and the marker only ever existed in the sandbox PATH — `Cache.putScan` writes
+    /// the rendered rows and nothing else (`Cache.fs:194`), so no leaked file could ever contain it and the
+    /// filter was empty by construction. The guard was green for the whole of round 1 with a poisoned file
+    /// sitting in the directory it claimed to inspect. A before/after digest comparison has no such escape:
+    /// it asks whether the bytes changed, which is the question AC6 is actually written in.
+    let ScanFilesAtStartup: Map<string, string> =
+        // A module-level binding, so it is captured when this module initialises — which the framework
+        // constructor below triggers, BEFORE xUnit discovers or runs anything. Putting it inside `install`
+        // would tie the snapshot's existence to the redirect's, and the mutation that neuters the redirect
+        // would then also blind the detector, which is precisely the failure being repaired.
+        try
+            if IO.Directory.Exists RealCacheRoot then
+                IO.Directory.GetFiles(RealCacheRoot, "scan-*.json")
+                |> Array.map (fun f -> IO.Path.GetFileName f, digestOf f)
+                |> Map.ofArray
+            else
+                Map.empty
+        with _ ->
+            Map.empty
+
     let install () =
         match Root with
         | Some _ -> () // the framework is constructed once, but installing twice must not orphan a root

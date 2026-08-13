@@ -76,6 +76,17 @@ Reproduced at this head with `XDG_CACHE_HOME` pointed at a scratch directory, so
 touched: reverting the `ChoresTests` isolation re-creates `scan-fs-gg-coordination.json` at **204 bytes**,
 the same artefact measured during the incident.
 
+The acceptance check for this is `tests/FS.GG.Coord.Cli.Tests/CacheIsolationTests.fs`. Its round-1 form
+**could not fail**, and that is recorded here rather than quietly replaced: it filtered leaked files for a
+marker string that exists only in the sandbox *path*, while `Cache.putScan` writes the rendered rows and
+nothing else (`Cache.fs:194`), so the filter was empty by construction and the assertion passed
+unconditionally. It also early-returned on `Directory.Exists` with no `else`, asserting nothing at all on CI.
+The signal was present in the round-1 inversion matrix and went unexamined — the leaking mutation turned
+**two** tests red, not three. The predicate is now a before/after comparison of content digests captured
+before any test runs, preceded by a real `putScan` round-trip that proves the detector works on a write it
+made itself. This is the same defect class as the round-0 finding about a guard named for a line it did not
+assert, one layer up.
+
 The fix is at the write, in two layers, because the read cannot help:
 
 1. each leg gets the isolation it should always have had; and

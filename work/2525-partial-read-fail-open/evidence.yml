@@ -23,11 +23,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2525-partial-read-fail-open/plan.md
-    digest: 526b8e2fa850b5f3c9b27fd9f96d7db46b2321dda51485805c1c1366636cd336
+    digest: 41d2ea8ecce54a068ce1700613a9d5c7080b2b8954d1d5a9b48e9c90322bf7bd
     schemaVersion: 1
   - label: spec
     path: work/2525-partial-read-fail-open/spec.md
-    digest: f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8
+    digest: dd0be2bfbac3d4d0793959d0cc472ce9c3f3be49ade0cfeac2d2150f0e0e5b87
     schemaVersion: 1
   - label: tasks
     path: work/2525-partial-read-fail-open/tasks.yml
@@ -52,7 +52,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/github.trx"
-      digest: "sha256:3d0119292412fdcb3656a715610b513aa17ffebf7b9e59ddefcd321a32953ff3"
+      digest: "sha256:7f46d86ded37df5188741b989a94d8251bc6a71b0a1b04d726527ed018da8cae"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 544
@@ -87,7 +87,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/github.trx"
-      digest: "sha256:3d0119292412fdcb3656a715610b513aa17ffebf7b9e59ddefcd321a32953ff3"
+      digest: "sha256:7f46d86ded37df5188741b989a94d8251bc6a71b0a1b04d726527ed018da8cae"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 544
@@ -117,7 +117,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
+      digest: "sha256:aacf4849e208261a26b7595ec70e788c0d8bc9f6298169ffe4e56785a75c21ac"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -148,7 +148,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
+      digest: "sha256:aacf4849e208261a26b7595ec70e788c0d8bc9f6298169ffe4e56785a75c21ac"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -178,7 +178,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/cli.trx"
-      digest: "sha256:8a593253a207495f569d7e1cb9f0d3357639641181277825da19855b32527eb6"
+      digest: "sha256:c927ba76c90314239e1746a991d31c8229d573418ea73f2b237dbda0d7f9a8b2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 788
@@ -210,7 +210,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
+      digest: "sha256:aacf4849e208261a26b7595ec70e788c0d8bc9f6298169ffe4e56785a75c21ac"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -239,7 +239,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/cli.trx"
-      digest: "sha256:8a593253a207495f569d7e1cb9f0d3357639641181277825da19855b32527eb6"
+      digest: "sha256:c927ba76c90314239e1746a991d31c8229d573418ea73f2b237dbda0d7f9a8b2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 788
@@ -256,6 +256,17 @@ evidence:
         (2 red, 0 leaked - the per-leg withCache still holds); M9 sandbox neutered AND the ChoresTests withCache
         wraps reverted (2 red, 1 leaked: scan-fs-gg-coordination.json at 204 bytes). All suites green after restore.
         The round-1 critic independently re-ran M1-M7 and graded every one JUSTIFIED, with matching red counts.
+        ROUND 2 / REPAIR 4 - the M8/M9 rows above were run under a redirected XDG_CACHE_HOME, which put the
+        leak somewhere the guard never inspected, so they could not reveal that the guard's own predicate was
+        inert. It filtered leaked files for a marker that exists only in the sandbox PATH, while putScan writes
+        the rendered rows and nothing else (Cache.fs:194) - always empty by construction, always green. The
+        tell was in the matrix and went unexamined - M9 leaked 1 file and turned 2 tests red, not 3. Re-measured
+        with HOME redirected so the guard's directory and the leak's destination coincide - B1 control 788 green
+        and 0 files; B2 (the M9 mutation) 3 RED with scan-fs-gg-coordination.json at 204 bytes sitting in the
+        inspected directory; restored 788 green and 0 files. M10 (wraps reverted, sandbox intact) 0 red and
+        0 leaked, confirming the sandbox alone closes it. M11 (sandbox installed but pointed AT the real cache
+        root, wraps reverted) isolates the digest assertion from the uninstalled-sandbox early-out and reds it
+        specifically, with a message naming the added file.
   - id: EV008
     kind: verification
     subject:
@@ -274,7 +285,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
+      digest: "sha256:aacf4849e208261a26b7595ec70e788c0d8bc9f6298169ffe4e56785a75c21ac"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -305,7 +316,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
+      digest: "sha256:aacf4849e208261a26b7595ec70e788c0d8bc9f6298169ffe4e56785a75c21ac"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829
@@ -314,7 +325,8 @@ evidence:
     notes:
       - >-
         VO-001: full suites green on the head under review, Release configuration, no skips.
-        Core 829/829, GitHub 544/544, Cli 788/788 (785 plus the three cache-isolation guards added in round 1).
+        Core 829/829, GitHub 544/544, Cli 788/788 (785 plus three cache-isolation guards; the third was rewritten
+        in round 2 because its round-1 form could not fail - see EV007).
   - id: EV010
     kind: verification
     subject:
@@ -333,7 +345,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/cli.trx"
-      digest: "sha256:8a593253a207495f569d7e1cb9f0d3357639641181277825da19855b32527eb6"
+      digest: "sha256:c927ba76c90314239e1746a991d31c8229d573418ea73f2b237dbda0d7f9a8b2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 788
@@ -365,7 +377,7 @@ evidence:
     synthetic: false
     observedRun:
       source: "work/2525-partial-read-fail-open/test-results/core.trx"
-      digest: "sha256:b88da11f76a137fb2e57c21515bba5947303e576a0365ed96903cdbaa54e5d03"
+      digest: "sha256:aacf4849e208261a26b7595ec70e788c0d8bc9f6298169ffe4e56785a75c21ac"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 829

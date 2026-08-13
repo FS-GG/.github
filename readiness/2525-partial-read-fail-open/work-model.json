@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "47da4de913f014b771055ddc5840eea605029e986abe0c8409b29acde0d0e728"
+        "value": "06acfc2d3b4c9c2e84a285689145b8deda606bbc24e715bd8c0c06470f99a378"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "526b8e2fa850b5f3c9b27fd9f96d7db46b2321dda51485805c1c1366636cd336"
+        "value": "41d2ea8ecce54a068ce1700613a9d5c7080b2b8954d1d5a9b48e9c90322bf7bd"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8"
+        "value": "dd0be2bfbac3d4d0793959d0cc472ce9c3f3be49ade0cfeac2d2150f0e0e5b87"
       }
     },
     {
@@ -933,7 +933,7 @@
           "path": "work/2525-partial-read-fail-open/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "47da4de913f014b771055ddc5840eea605029e986abe0c8409b29acde0d0e728"
+            "value": "06acfc2d3b4c9c2e84a285689145b8deda606bbc24e715bd8c0c06470f99a378"
           },
           "schemaVersion": 1
         },
@@ -941,7 +941,7 @@
           "path": "work/2525-partial-read-fail-open/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "526b8e2fa850b5f3c9b27fd9f96d7db46b2321dda51485805c1c1366636cd336"
+            "value": "41d2ea8ecce54a068ce1700613a9d5c7080b2b8954d1d5a9b48e9c90322bf7bd"
           },
           "schemaVersion": 1
         },
@@ -949,7 +949,7 @@
           "path": "work/2525-partial-read-fail-open/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8"
+            "value": "dd0be2bfbac3d4d0793959d0cc472ce9c3f3be49ade0cfeac2d2150f0e0e5b87"
           },
           "schemaVersion": 1
         },
@@ -964,7 +964,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "95ff040e4ad1ae4fb1ed98874b9e4caead36c41c34f4ce0f1ca1832d606c5037"
+        "value": "99f94de1961c1512a1c210647ea946c3e20a28661cf50772966c5702203a3f0f"
       },
       "currency": "current"
     }

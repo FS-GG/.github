@@ -16,7 +16,7 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2525-partial-read-fail-open/spec.md sha256:f209c7495c46d3749393577f07e8142a5a7a3b082a99ac499b2e3fc90f689eb8 schemaVersion:1
+- spec: work/2525-partial-read-fail-open/spec.md sha256:dd0be2bfbac3d4d0793959d0cc472ce9c3f3be49ade0cfeac2d2150f0e0e5b87 schemaVersion:1
 - clarifications: work/2525-partial-read-fail-open/clarifications.md sha256:16e3cc0372e270fa4641b657624e34fcbb0904ab4a1ec8881449149de72a9569 schemaVersion:1
 - checklist: work/2525-partial-read-fail-open/checklist.md sha256:48843efa84faebf9a5b9f95ade5fe8fffc54f68fe1a9e563f1cf2c7c31ed147f schemaVersion:1
 
