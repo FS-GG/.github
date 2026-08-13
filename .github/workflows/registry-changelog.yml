@@ -13,10 +13,94 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      # .github#2515 AC4: the fixture now EXECUTES this workflow's own `gate` step (a real YAML parse,
+      # never a grep — same mechanism as tests/kit-auto-publish/run.sh's extract_escalation_step), so
+      # it needs the pinned YAML dependency rather than a runner-image accident. Taking it from the
+      # shared action is what check-policy-checker-inventory asserts; kit-published-coherence's own
+      # fixture job took the same step for the same reason.
+      - uses: ./.github/actions/setup-policy-python
       - run: bash tests/registry-changelog/run.sh
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - run: python3 scripts/check-registry-changelog.py --changed registry/dependencies.yml --changed registry/CHANGELOG.md
+        with:
+          # The subject is a DIFF, so the merge-base has to resolve. The default shallow fetch shares
+          # no ancestor with the base branch; `git diff` then fails and `set -e` reds the step — the
+          # fail-closed direction (#266), but a self-inflicted red. kit-published-coherence's pr-arm
+          # asks for full history for exactly this reason.
+          fetch-depth: 0
+      # .github#2515. THIS STEP USED TO BE ONE LINE, and that line was the defect:
+      #
+      #   python3 scripts/check-registry-changelog.py --changed registry/dependencies.yml --changed registry/CHANGELOG.md
+      #
+      # It passed BOTH paths unconditionally — it never computed the change's real changed-file set —
+      # so the checker's co-change arm (`dependencies.yml in changed and CHANGELOG.md not in changed`)
+      # was constant-false in production and could not fire. The checker itself was correct and its
+      # fixture already exercised the refusal; only this wiring was broken, which is why the fixture
+      # stayed green and told nobody. Measured on PR #2514's head f1d6218d775d278429cf6cea252b7d617ee3c723,
+      # a commit that changes registry/dependencies.yml and NOT registry/CHANGELOG.md: the hardcoded
+      # command exits 0 while the true changed set exits 1. That is the #266 green-by-absence shape —
+      # a gate that passes and cannot fail on the thing it claims.
+      #
+      # Do not reintroduce a literal `--changed` list here. tests/registry-changelog/run.sh extracts
+      # and RUNS this step, so a revert to a hardcoded set reds the fixture rather than going quiet.
+      - name: Derive the changed set from this change's real diff, then run the guard
+        env:
+          # Passed via env, never interpolated into the script, to avoid injection — the posture
+          # architecture-map.yml's reconcile step states for this identical shape.
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+
+          case "$EVENT_NAME" in
+            pull_request)
+              # Diff against the MERGE-BASE, not the base-branch tip: the changed set must be this
+              # change's OWN commits. Using the base tip reports any file main changed after the fork
+              # as "changed" here — #375 measured exactly that, on registry/dependencies.yml itself,
+              # which would make this gate demand a changelog entry from a PR that never touched the
+              # registry. architecture-map.yml:56 derives its base the same way.
+              base="$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")"
+              head="$PR_HEAD_SHA"
+              ;;
+            push)
+              # The pushed range. On main after a merge, `before` is the previous tip.
+              base="$PUSH_BEFORE"
+              head="$PUSH_AFTER"
+              ;;
+            *)
+              echo "::error::registry-changelog: no changed-set rule for event '$EVENT_NAME'"
+              exit 1
+              ;;
+          esac
+
+          # FAIL CLOSED (#266). An unresolvable endpoint — a zero SHA from a branch creation or force
+          # push, a shallow checkout, a pruned commit — must never degrade into an EMPTY changed set,
+          # because an empty set satisfies the co-change arm by construction and prints "protocol
+          # holds". "I could not work out what changed" and "I looked, and nothing did" must not share
+          # an exit code; that equivalence is the defect this whole item is about.
+          for ref in "$base" "$head"; do
+            if ! git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+              echo "::error::registry-changelog: cannot resolve '$ref' — the changed set is unknown, which is not the same as empty"
+              exit 1
+            fi
+          done
+
+          changed="$(git diff --name-only "$base" "$head")"
+          echo "changed files in $base..$head:"
+          if [ -n "$changed" ]; then printf '%s\n' "$changed" | sed 's/^/  /'; else echo "  (none)"; fi
+
+          # Seeded with the command itself so the array is never empty — `"${cmd[@]}"` on an empty
+          # array is an unbound-variable error under `set -u` on bash < 4.4, and a changed set with
+          # no entries is a legitimate input here (a PR that touched only this workflow).
+          cmd=(python3 scripts/check-registry-changelog.py)
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            cmd+=(--changed "$path")
+          done <<< "$changed"
+          "${cmd[@]}"
