@@ -99,7 +99,44 @@ def decide(facts):
     if candidate[0] != org_latest[0] or candidate[1] != org_latest[1] + 1:
         return result("refuse", "candidate-not-next-patch", version)
     if facts.get("tagExists"):
+        # BEGIN sibling-tag-repair (extracted verbatim by tests/kit-auto-publish/run.sh for mutation)
+        # .github#2495: `kit/v$version` alone is not enough. FS.GG.Kit, FS.GG.Drivers and coord-engine
+        # release from one shared commit (.github#2402) and release-kit.yml's `check_sibling_tag`
+        # (.github#2409 DEC-004) refuses to publish until `drivers/v$version` and `coord-engine/v$version`
+        # ALSO resolve to that exact commit. kit-auto-publish's own tag step now pushes all three
+        # together (see the "tag" action below), so reaching here with the kit tag already present but a
+        # sibling missing means an EARLIER run completed only the kit half of that write — the live,
+        # currently-owed 0.50.3 is in exactly this state. `tagSiblings` is the typed, idempotent repair:
+        # it never re-tags kit (git itself will refuse an existing ref, and the workflow's own TOCTOU
+        # guard on the "tag" path assumes kit does not yet exist), it only supplies whichever sibling
+        # tag(s) are missing, pinned to the SAME commit the existing kit tag already names — not whatever
+        # commit main happens to be when this later run fires.
+        siblings = facts.get("siblingTags")
+        kit_sha = facts.get("sourceSha")
+        if (
+            not isinstance(siblings, dict)
+            or set(siblings) != {"drivers", "coordEngine"}
+            or not all(isinstance(siblings.get(key), str) for key in ("drivers", "coordEngine"))
+            or not isinstance(kit_sha, str)
+            or not kit_sha
+        ):
+            # A missing/malformed sibling-tag observation is not the same as a verified-absent sibling
+            # tag — folding the two together risks a `tagSiblings` action ATTEMPTING A WRITE from an
+            # incomplete read (fail-closed, same rationale as `REQUIRED_FACTS` above, scoped to this
+            # branch because every OTHER decision path here is indifferent to sibling-tag state).
+            return result("refuse", "sibling-tag-observation-missing", version)
+        mismatched = [name for name in ("drivers", "coordEngine") if siblings[name] and siblings[name] != kit_sha]
+        if mismatched:
+            # A sibling tag exists but names a DIFFERENT commit than the kit tag. Tags are immutable
+            # once pushed (.github#1772) — silently moving or duplicating one is exactly the hazard that
+            # guarantee exists to prevent, so this is an anomaly for a human to resolve, not something
+            # kit-auto-publish overwrites on its own authority.
+            return result("stickyEscalate", "sibling-tag-commit-mismatch", version)
+        missing = [name for name in ("drivers", "coordEngine") if not siblings[name]]
+        if missing:
+            return result("tagSiblings", "kit-tagged-siblings-missing", version)
         return result("stickyEscalate", "tag-exists-without-both-feed-publication", version)
+        # END sibling-tag-repair
     return result("tag", "eligible-authored-unpublished-patch", version)
 
 
