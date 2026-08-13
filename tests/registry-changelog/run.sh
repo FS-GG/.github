@@ -271,6 +271,18 @@ workflow_expect "a change touching no registry file passes" \
 # commits touch no registry file. Diffing against the base-branch TIP would report dependencies.yml as
 # changed by this PR and demand a changelog entry from an author who never touched the registry —
 # #375 measured that false accusation on this exact file. Diffing against the merge-base does not.
+#
+# MAIN'S COMMIT DELIBERATELY EDITS dependencies.yml ALONE, WITH NO CHANGELOG ENTRY, and that detail is
+# the whole leg. An earlier version of this block had main's commit edit BOTH registry files, which
+# made the leg DECORATIVE: the co-change arm needs dependencies.yml present AND CHANGELOG.md absent,
+# so with both present it could not fire under EITHER derivation, both exited 0, and only the printed
+# changed set differed — which nothing asserts. Round-1 independent review measured that directly:
+# replacing the merge-base with `base="$PR_BASE_SHA"` in the production workflow left the suite 15/15
+# green, this leg included. A leg that cannot fail is the exact #266 shape this whole item is about,
+# so it is worth stating plainly that it was found here, in the fixture written to prevent it.
+#
+# `updated:` is left alone for the same reason it is in the VIOL block: it keeps the date arm
+# incapable of producing this leg's verdict, so the only thing that can move it is the changed set.
 FORK="$WORK/forked"; new_repo "$FORK"
 FORK_POINT="$(git -C "$FORK" rev-parse HEAD)"
 git -C "$FORK" checkout -q -b pr
@@ -278,12 +290,43 @@ echo "pr work" >> "$FORK/README.md"
 FORK_HEAD="$(commit_all "$FORK" "PR work, no registry file touched")"
 git -C "$FORK" checkout -q main
 printf '  gamma: { name: Gamma }\n' >> "$FORK/registry/dependencies.yml"
-sed -i '/^## Entries$/a\\n- **2026-01-01** — someone else edited the registry on main' "$FORK/registry/CHANGELOG.md"
-FORK_TIP="$(commit_all "$FORK" "main moves on, editing the registry")"
+FORK_TIP="$(commit_all "$FORK" "main moves on, editing dependencies.yml with no changelog entry")"
 
 workflow_expect "a registry edit landed on main AFTER the fork is not attributed to the PR" \
   "$GATE" 0 "$HOLDS" "$FORK" pull_request "$FORK_TIP" "$FORK_HEAD"
 [ "$FORK_POINT" != "$FORK_TIP" ] || bad "workflow: the merge-base leg's base tip never moved (leg is vacuous)"
+
+# GATE-INVERSION EVIDENCE for the leg above, and the reason this block is a mutation rather than a
+# comment promising someone re-checked it by hand. The same real step with ONLY its base changed from
+# the merge-base to the base-branch tip must red the FORK repository with the co-change refusal —
+# `#375`'s false accusation, levelled at an author who never touched the registry. If this mutant ever
+# goes green, the leg above has gone decorative again and this says so at the point of failure.
+BASETIP="$WORK/gate-step-basetip.sh"
+basetip_built=1
+python3 - "$GATE" "$BASETIP" <<'PY' || basetip_built=0
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+out, replaced = [], False
+for line in open(src, encoding="utf-8").read().splitlines(keepends=True):
+    if line.lstrip().startswith('base="$(git merge-base'):
+        indent = line[:len(line) - len(line.lstrip())]
+        out.append(f'{indent}base="$PR_BASE_SHA"\n')
+        replaced = True
+    else:
+        out.append(line)
+if not replaced:
+    sys.exit("::error::could not locate the gate step's merge-base line to mutate to a base-tip diff — "
+             "the #375 leg has no inversion behind it, so its green means nothing")
+open(dst, "w", encoding="utf-8").write("".join(out))
+PY
+
+if [ "$basetip_built" -eq 1 ]; then
+  workflow_expect "diffing the base TIP instead of the merge-base misattributes main's edit to the PR" \
+    "$BASETIP" 1 "$CO_CHANGE" "$FORK" pull_request "$FORK_TIP" "$FORK_HEAD"
+else
+  bad "workflow: the gate step no longer diffs against a merge-base (the #375 mutation has no anchor) — see the ::error:: above"
+fi
 
 # --- Fail closed (#266): an unknown changed set is not an empty one. ---------------------------
 ZERO="0000000000000000000000000000000000000000"
