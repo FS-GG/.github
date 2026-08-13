@@ -1350,3 +1350,160 @@ let ``#2384 an UNCLAIMED, OPEN 'Blocked' row with an unresolved blocker is NOT p
 
         Assert.Equal(0, pullsReads ())
         Assert.False(fst (item.TryGetProperty "itemPr"))
+
+// ---- .github#2525 — a scan that cannot prove it read every page must REFUSE ---------------------------
+//
+// THE FAILURE LEGS ARE THE POINT OF THIS BLOCK. The defect was not that the scan crashed; it was that it
+// returned `Ok` with a short list and nothing downstream could tell that from a small board. `batch` then
+// printed "nothing schedulable right now." and `driver --events` printed "no active items", both at exit 0,
+// while three claims were live — and both sentences are inputs to the board stopping rule.
+//
+// Every leg below therefore scripts a page-one response that DOES carry rows (including a held one), so a
+// guard that regressed would return a plausible, non-empty, wrong answer rather than an obvious empty one.
+// `Board.fs`'s external-owner walk already refuses all four of these shapes; these legs are what stop the
+// board scan from drifting back apart from it.
+
+/// Page one of a board that is NOT fully read, with a live in-progress row on it. `pageInfoJson` is the
+/// whole `pageInfo` value, so a leg can express "missing", "ill-typed", or "no cursor" exactly.
+let private truncatedPage (pageInfoJson: string) =
+    let held = issueNode 41 "In progress" "" "OPEN"
+    let ready = issueNode 42 "Ready" "" "OPEN"
+
+    $"""{{"data":{{"organization":{{"projectV2":{{"items":{{
+        "pageInfo":%s{pageInfoJson},
+        "nodes":[%s{held},%s{ready}]}}}}}}}}}}"""
+
+let private refusesTruncation (name: string) (pageInfoJson: string) =
+    use _sandbox = new Sandbox()
+    let transport = scripted [ ok (truncatedPage pageInfoJson) ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 1 with
+    | Ok rows ->
+        failwith
+            $"%s{name}: the scan returned Ok with %d{List.length rows} row(s) over a board it could not prove it finished reading — that is the .github#2525 fail-open"
+    | Error(Malformed(_, detail)) -> detail
+    | Error e -> failwith $"%s{name}: expected a Malformed refusal, got %A{e}"
+
+[<Fact>]
+let ``.github#2525 hasNextPage true with no endCursor REFUSES rather than reporting a short board`` () =
+    // The server said, explicitly, that there is another page. Returning the pages we happen to have as a
+    // SUCCESS is the strongest form of the defect: the read knows it is incomplete and says it is complete.
+    let detail =
+        refusesTruncation "no-cursor" """{"hasNextPage":true,"endCursor":null}"""
+
+    Assert.Contains("another page but no usable cursor", detail)
+
+[<Fact>]
+let ``.github#2525 a blank endCursor is not a usable cursor`` () =
+    let detail =
+        refusesTruncation "blank-cursor" """{"hasNextPage":true,"endCursor":"   "}"""
+
+    Assert.Contains("another page but no usable cursor", detail)
+
+[<Fact>]
+let ``.github#2525 a MISSING hasNextPage REFUSES — completeness is a required Boolean, not an optional hint`` () =
+    // This is the arm `Board.fs:499-502` names in its own comment: missing/null/ill-typed used to fall
+    // through as `false`, which silently converts "I do not know whether there is more" into "there is no
+    // more" — the definite absence the caller then reports as an answer.
+    let detail = refusesTruncation "missing-flag" """{"endCursor":"c1"}"""
+    Assert.Contains("`pageInfo.hasNextPage` is missing or is not a Boolean", detail)
+
+[<Fact>]
+let ``.github#2525 a NULL hasNextPage REFUSES`` () =
+    let detail =
+        refusesTruncation "null-flag" """{"hasNextPage":null,"endCursor":"c1"}"""
+
+    Assert.Contains("`pageInfo.hasNextPage` is missing or is not a Boolean", detail)
+
+[<Fact>]
+let ``.github#2525 a STRING hasNextPage REFUSES rather than being read as truthy or falsy`` () =
+    let detail =
+        refusesTruncation "string-flag" """{"hasNextPage":"false","endCursor":"c1"}"""
+
+    Assert.Contains("`pageInfo.hasNextPage` is missing or is not a Boolean", detail)
+
+[<Fact>]
+let ``.github#2525 a missing or ill-typed pageInfo REFUSES`` () =
+    let detail = refusesTruncation "no-pageinfo" "null"
+    Assert.Contains("`pageInfo` is missing or is not an object", detail)
+
+[<Fact>]
+let ``.github#2525 an Issue node whose identity will not parse REFUSES instead of vanishing from the batch`` () =
+    // The row-level half of the same defect. `Seq.choose` dropped this node with no counter and no trace,
+    // so a board of N came back as N-1 and reported success. The query selected it `... on Issue`, so it is
+    // a REAL ROW WE FAILED TO READ — not a draft card, which is the one drop that is legitimate.
+    use _sandbox = new Sandbox()
+
+    let broken =
+        """{"status":{"name":"In progress"},"blockedBy":null,
+             "content":{"__typename":"Issue","title":"an issue whose number came back unreadable",
+                        "state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
+
+    let nodes = broken + "," + issueNode 42 "Ready" "" "OPEN"
+
+    let body =
+        $"""{{"data":{{"organization":{{"projectV2":{{"items":{{
+            "pageInfo":{{"hasNextPage":false,"endCursor":""}},
+            "nodes":[%s{nodes}]}}}}}}}}}}"""
+
+    let transport = scripted [ ok body ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 1 with
+    | Ok rows -> failwith $"an unreadable Issue node must not be silently dropped — got Ok with {List.length rows} row(s)"
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains("selected as an Issue or PullRequest", detail)
+        Assert.Contains("refusing to report a short board as a complete one", detail)
+    | Error e -> failwith $"expected a Malformed refusal, got %A{e}"
+
+// ---- .github#2525 acceptance #4 — the controlled counterpart -------------------------------------------
+//
+// The fix must not degrade into "always refuse". A scan that refuses everything is as useless as one that
+// truncates silently, and it would be far more obvious — which is exactly why it needs pinning: a future
+// tightening of the legs above would go green everywhere without these.
+
+[<Fact>]
+let ``.github#2525 an honest multi-page walk still returns EVERY row`` () =
+    use _sandbox = new Sandbox()
+
+    let transport =
+        scripted
+            [ ok (page (issueNode 1 "Ready" "" "OPEN") true "cursor-1")
+              ok (page (issueNode 2 "In progress" "" "OPEN") false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 1 with
+    | Ok rows ->
+        Assert.Equal(2, List.length rows)
+        Assert.Equal<int list>([ 1; 2 ], rows |> List.map (fun r -> r.Ref.Number))
+    | Error e -> failwith $"a well-formed two-page walk must succeed — got %A{e}"
+
+[<Fact>]
+let ``.github#2525 a genuinely empty board is still a successful, EMPTY read`` () =
+    use _sandbox = new Sandbox()
+    let transport = scripted [ ok (page "" false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 1 with
+    | Ok rows -> Assert.Empty rows
+    | Error e -> failwith $"an empty board is a legitimate answer, not a refusal — got %A{e}"
+
+[<Fact>]
+let ``.github#2525 a DraftIssue card is still skipped, not refused`` () =
+    // The one legitimate drop. A draft has no issue behind it and therefore no ref to reserve; refusing it
+    // would refuse every board that uses draft cards at all. `content: null` — the redacted-item shape — is
+    // covered by the pre-existing draft test above and keeps the same disposition, which is a stated limit
+    // of this guard rather than an oversight.
+    use _sandbox = new Sandbox()
+
+    let draft =
+        """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"DraftIssue"}}"""
+
+    let nodes = draft + "," + issueNode 9 "Ready" "" "OPEN"
+
+    let body =
+        $"""{{"data":{{"organization":{{"projectV2":{{"items":{{
+            "pageInfo":{{"hasNextPage":false,"endCursor":""}},
+            "nodes":[%s{nodes}]}}}}}}}}}}"""
+
+    match Scan.board (scripted [ ok body ]) Cache.Scheduling "FS-GG" "Coordination" 1 with
+    | Ok [ row ] -> Assert.Equal(9, row.Ref.Number)
+    | Ok rows -> failwith $"expected the draft skipped and one real row — got {List.length rows}"
+    | Error e -> failwith $"a draft card must be skipped, not fatal — got %A{e}"

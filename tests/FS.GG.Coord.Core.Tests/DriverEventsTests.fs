@@ -458,6 +458,15 @@ module DriverEventsTests =
         let rendered = renderText projection
         Assert.DoesNotContain("no material transitions", rendered)
 
+        // .github#2525 — THIS TEST'S OWN NAME WAS THE UNCHECKED CLAIM. It asserted the TRANSITIONS line
+        // ("no material transitions") and never the ACTIVE line, so the literal it is named for was free to
+        // keep printing underneath it, which is exactly what was measured in production: three held claims,
+        // and `no active items` on line two. The line the board stopping rule reads is now asserted here.
+        let activeLine = (rendered.Split '\n').[1]
+        Assert.DoesNotContain("no active items", activeLine)
+        Assert.Contains("ACTIVE INVENTORY UNREADABLE", activeLine)
+        Assert.Equal(3, List.length projection.Unreadable)
+
     [<Fact>]
     let ``missing-active-ref: a live claim still present in the facts batch is unaffected by the guard`` () =
         let cursor = Map.ofList [ ".github#1", Claimed "snipe-f30c" ]
@@ -496,6 +505,7 @@ module DriverEventsTests =
         let unguardedProjection: Projection =
             { Transitions = events
               Active = unguardedClassified |> List.filter (fun c -> isActive c.State)
+              Unreadable = []
               Cursor = cursor
               RenderedAt = 700L }
         let rendered = renderText unguardedProjection
@@ -566,7 +576,7 @@ module DriverEventsTests =
 
     [<Fact>]
     let ``renderText: an empty projection renders the two documented "nothing happened" lines`` () =
-        let projection: Projection = { Transitions = []; Active = []; Cursor = Map.empty; RenderedAt = 0L }
+        let projection: Projection = { Transitions = []; Active = []; Unreadable = []; Cursor = Map.empty; RenderedAt = 0L }
         let text = renderText projection
         let lines = text.Split '\n'
         Assert.Equal(2, lines.Length)
@@ -584,3 +594,95 @@ module DriverEventsTests =
         Assert.Contains("claimed:snipe-f30c", lines.[0])
         Assert.Contains(".github#1", lines.[1])
         Assert.Contains("claimed:snipe-f30c", lines.[1])
+
+    // ---- .github#2525 — a partial read must never render as a complete answer ---------------------
+    //
+    // The stopping rule in `drive-board`/`work-board` terminates on "nothing schedulable and no live
+    // claim". Line two of this projection is half of that input, so `no active items` is not prose: it
+    // is a positive assertion that the active set was MEASURED and found empty. Every leg below is
+    // about keeping that literal reserved for the case that earns it.
+
+    [<Fact>]
+    let ``.github#2525: an unreadable item keeps the "no active items" literal off line two`` () =
+        // The per-item failed read, as distinct from a ref missing from the batch entirely. Both are
+        // `Unreadable`, both are excluded from `Active` by `isActive`, and before this both therefore
+        // rendered as a measured-empty inventory.
+        let unreadable =
+            { baseFacts with
+                Ref = ".github#2512"
+                ReadOk = false
+                UnreadableReason = Some "the board scan could not be completed" }
+
+        let projection = project Map.empty [ unreadable ] 700L
+        let activeLine = (renderText projection).Split '\n' |> Array.item 1
+
+        Assert.Empty projection.Active
+        Assert.Single projection.Unreadable |> ignore
+        Assert.DoesNotContain("no active items", activeLine)
+        Assert.Contains("UNKNOWN, not empty", activeLine)
+        Assert.Contains(".github#2512", activeLine)
+
+    [<Fact>]
+    let ``.github#2525 acceptance #4: a COMPLETE read of an empty active set still renders exactly "no active items"`` () =
+        // The controlled counterpart. Without this the fix could degrade to "always refuse", which would
+        // be a worse defect than the one being repaired — it would train a host to ignore the line.
+        let projection = project Map.empty [] 700L
+        let lines = (renderText projection).Split '\n'
+
+        Assert.Empty projection.Unreadable
+        Assert.Equal("no active items", lines.[1])
+
+    [<Fact>]
+    let ``.github#2525 acceptance #4: a fully-read board whose items are all Ready still renders exactly "no active items"`` () =
+        // Ready is not active, so this is a genuinely empty active set over a board that WAS read. The
+        // literal must survive untouched.
+        let ready = { baseFacts with Ref = ".github#1" }
+        let alsoReady = { baseFacts with Ref = ".github#2" }
+        let projection = project Map.empty [ ready; alsoReady ] 700L
+        let lines = (renderText projection).Split '\n'
+
+        Assert.Empty projection.Unreadable
+        Assert.Equal("no active items", lines.[1])
+
+    [<Fact>]
+    let ``.github#2525: an active inventory that is non-empty but incomplete says so rather than reading as whole`` () =
+        // The subtler half. A read that finds two live claims and loses a third renders a perfectly
+        // plausible active line; nothing in it says a third item went unaccounted for, and a host would
+        // act on a set it has no reason to distrust.
+        let cursor = Map.ofList [ "FS-GG/.github#2512", Claimed "rook-94e0" ]
+
+        let stillVisible =
+            { baseFacts with
+                Ref = "FS-GG/.github#2511"
+                ClaimWorker = Some "brant-edf8" }
+
+        let projection = project cursor [ stillVisible ] 700L
+        let activeLine = (renderText projection).Split '\n' |> Array.item 1
+
+        Assert.Single projection.Active |> ignore
+        Assert.Single projection.Unreadable |> ignore
+        Assert.Contains("active items (1)", activeLine)
+        Assert.Contains("INCOMPLETE", activeLine)
+        Assert.Contains("FS-GG/.github#2512", activeLine)
+
+    [<Fact>]
+    let ``.github#2525 acceptance #5: a vanished item's last-known holder is never presented as its current one`` () =
+        // The measured incident: `#2512` was reported against `curlew-307b`, who had released cleanly,
+        // while `rook-94e0` actually held it. The cursor's value was interpolated with `%A`, which renders
+        // `Claimed "curlew-307b"` — a bare present-tense claim — into a sentence about an item this read
+        // could not see at all.
+        let cursor = Map.ofList [ "FS-GG/.github#2512", Claimed "curlew-307b" ]
+        let projection = project cursor [] 700L
+
+        let rendered =
+            match projection.Unreadable with
+            | [ only ] -> encodeState only.State
+            | other -> failwith $"expected exactly one unreadable row, got %d{List.length other}"
+
+        // The information is still reported — suppressing it would lose the only lead a human has.
+        Assert.Contains("curlew-307b", rendered)
+        // But never as a live claim, and never in the `Claimed "w"` spelling that reads as one.
+        Assert.DoesNotContain("Claimed \"curlew-307b\"", rendered)
+        Assert.Contains("last known to be held by curlew-307b", rendered)
+        Assert.Contains("NOT a statement about who holds it now", rendered)
+        Assert.Contains("state this pass is UNKNOWN", rendered)

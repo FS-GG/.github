@@ -170,6 +170,7 @@ module DriverEventsCliTests =
                     Evidence = "claim:worker=snipe-f30c"
                     ObservedAt = 100L
                     SourceSha = "sha-1" } ]
+              Unreadable = []
               Cursor = Map.ofList [ ".github#1", DriverEvents.Claimed "snipe-f30c" ]
               RenderedAt = 100L }
 
@@ -223,7 +224,7 @@ module DriverEventsCliTests =
     [<Fact>]
     let ``renderEventsJson: an empty projection renders empty transitions/active arrays, not an omitted field`` () =
         let projection: DriverEvents.Projection =
-            { Transitions = []; Active = []; Cursor = Map.empty; RenderedAt = 0L }
+            { Transitions = []; Active = []; Unreadable = []; Cursor = Map.empty; RenderedAt = 0L }
 
         let json = Client.renderEventsJson "sha-1" projection
         use document = JsonDocument.Parse json
@@ -305,3 +306,50 @@ module DriverEventsCliTests =
         Assert.Equal(true, facts.Merged)
         Assert.Equal(Some 42, facts.Pr)
         Assert.Equal(DriverEvents.MergedAwaitingObligations 42, (DriverEvents.classify facts).State)
+
+    // ---- .github#2525 — the machine projection carries the same completeness fact -----------------
+
+    [<Fact>]
+    let ``.github#2525: renderEventsJson reports activeComplete=false and the unreadable rows when a read fell short`` () =
+        // A consumer reading only `active: []` cannot tell a measured-empty inventory from one this read
+        // never finished — the same collapse the text renderer carried, one surface over. `activeComplete`
+        // is the single boolean a driver branches on.
+        let unreadable: DriverEvents.Classified =
+            { Ref = "FS-GG/.github#2512"
+              State = DriverEvents.Unreadable "absent from the current facts batch"
+              Reason = "missing from this read: previously active, absent from the current facts batch"
+              Evidence = "cursor-only; absent from current read"
+              ObservedAt = 100L
+              SourceSha = "sha-1" }
+
+        let projection: DriverEvents.Projection =
+            { Transitions = []
+              Active = []
+              Unreadable = [ unreadable ]
+              Cursor = Map.empty
+              RenderedAt = 100L }
+
+        let json = Client.renderEventsJson "sha-1" projection
+        use document = JsonDocument.Parse json
+
+        Assert.False(document.RootElement.GetProperty("activeComplete").GetBoolean())
+        Assert.Equal(0, document.RootElement.GetProperty("active").GetArrayLength())
+        Assert.Equal(1, document.RootElement.GetProperty("unreadable").GetArrayLength())
+
+        Assert.Equal(
+            "FS-GG/.github#2512",
+            document.RootElement.GetProperty("unreadable").[0].GetProperty("ref").GetString()
+        )
+
+    [<Fact>]
+    let ``.github#2525 acceptance #4: a complete read reports activeComplete=true with an empty unreadable array`` () =
+        // The controlled counterpart on the JSON surface. `unreadable` must be present and empty rather
+        // than omitted, for the same reason `active` is (.github#2135) — an absent key is not a fact.
+        let projection: DriverEvents.Projection =
+            { Transitions = []; Active = []; Unreadable = []; Cursor = Map.empty; RenderedAt = 0L }
+
+        let json = Client.renderEventsJson "sha-1" projection
+        use document = JsonDocument.Parse json
+
+        Assert.True(document.RootElement.GetProperty("activeComplete").GetBoolean())
+        Assert.Equal(0, document.RootElement.GetProperty("unreadable").GetArrayLength())

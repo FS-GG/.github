@@ -83,6 +83,15 @@ module DriverEvents =
     type Projection =
         { Transitions: TransitionEvent list
           Active: Classified list
+          /// Every row this read could NOT account for — a failed per-item read, a refused terminal
+          /// regression, or a previously-active ref absent from the facts batch entirely. Disjoint from
+          /// `Active` by construction, because `isActive Unreadable` is false (.github#2525).
+          ///
+          /// It exists because discarding these rows made "the active set is empty" and "the active set
+          /// could not be measured" render identically, and the board stopping rule consumes that line as
+          /// if it were the first. Carrying them lets the renderer — and any other consumer of this
+          /// projection — refuse to state an inventory it did not finish reading.
+          Unreadable: Classified list
           Cursor: Cursor
           RenderedAt: int64 }
 

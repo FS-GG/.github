@@ -4389,3 +4389,53 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.False(Client.boardUnreachable (Errors.RateLimited(Errors.GraphQlBudget, None)))
         Assert.False(Client.boardUnreachable (Errors.Transport "connection reset"))
         Assert.False(Client.boardUnreachable (Errors.Unauthorized "no Projects v2 board titled 'Coordination' in FS-GG"))
+
+    // ---- .github#2525 acceptance #2 — "nothing schedulable" must mean MEASURED nothing --------------
+    //
+    // `batch --text` over an empty candidate set printed one bare sentence on stdout, NOTHING on stderr,
+    // and exit 0 — byte-identical to a board that was fully read and had nothing startable in it. Every
+    // explanatory surface here (`sayPassedOver`, `starvedBanner`, `explainRanking`) is keyed on
+    // `Decisions`, so all three fall silent on exactly the case that most needs explaining.
+    //
+    // The count rides on STDERR, and that placement is the .github#1562 property, not an afterthought:
+    // the stdout headline is pinned byte-for-byte on both `take` and `batch --text` just above, and a
+    // change that moved both streams at once would have gone green everywhere.
+
+    [<Fact>]
+    let ``.github#2525: batch --text states how many candidates it MEASURED, on stderr, leaving stdout byte-identical`` () =
+        let code, out, err =
+            runQueue (busyQueue ()) [ "batch"; "--text"; "--repo"; "FS.GG.SDD"; "-n"; "1" ]
+
+        // The pinned machine contract is untouched — same assertion as the #1562 leg above.
+        Assert.Equal("nothing schedulable right now." + Environment.NewLine, out)
+        Assert.Equal(0, code)
+
+        // …and the answer to "why nothing" now includes the measurement itself.
+        Assert.Contains("considered 1 candidate(s)", err)
+        Assert.Contains("measured count, not an assumption", err)
+
+    [<Fact>]
+    let ``.github#2525: a board with NO items reports zero considered — distinguishable from one that considered and refused`` () =
+        // The distinction the acceptance is about. "I considered 1 and refused it" and "I considered
+        // nothing" produced identical output before this; they are different facts, and only the second
+        // is consistent with a scan that came back short.
+        let code, out, err =
+            runQueue (emptyQueue ()) [ "batch"; "--text"; "--repo"; "FS.GG.SDD"; "-n"; "1" ]
+
+        Assert.Equal("nothing schedulable right now." + Environment.NewLine, out)
+        Assert.Equal(0, code)
+        Assert.Contains("considered 0 candidate(s)", err)
+
+    [<Fact>]
+    let ``.github#2525: a batch that CHOOSES work does not print the measured-count line`` () =
+        // The controlled counterpart. This line answers "why did I get nothing"; printing it on a
+        // successful batch would be noise, and noise on a healthy path is how a signal stops being read.
+        let schedulable =
+            worldIn "Ready" (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) Map.empty false
+
+        let _, out, err =
+            runQueue schedulable [ "batch"; "--text"; "--repo"; "FS.GG.SDD"; "-n"; "1" ]
+
+        Assert.Contains("FS.GG.SDD#74", out)
+        Assert.DoesNotContain("nothing schedulable right now.", out)
+        Assert.DoesNotContain("measured count, not an assumption", err)

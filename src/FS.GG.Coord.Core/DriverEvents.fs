@@ -54,6 +54,7 @@ module DriverEvents =
     type Projection =
         { Transitions: TransitionEvent list
           Active: Classified list
+          Unreadable: Classified list
           Cursor: Cursor
           RenderedAt: int64 }
 
@@ -161,6 +162,32 @@ module DriverEvents =
     /// material transitions / no active items" pair with zero signal that three live claims went
     /// unobserved. `cursor` is authoritative for "was this active", never `facts`, precisely because
     /// this case is defined by the ref's ABSENCE from `facts`.
+    /// The cursor's last-known state, worded so it CANNOT be read as a current observation (.github#2525
+    /// acceptance #5).
+    ///
+    /// The old spelling interpolated the union with `%A`, which renders `Claimed "curlew-307b"` — a bare
+    /// present-tense claim — into a sentence about an item nobody could read this pass. In the measured
+    /// incident that string named a worker who had already released cleanly, while a different worker
+    /// actually held the row. The information is still worth reporting; asserting it as CURRENT is the
+    /// defect. Two things make the stale value stick and neither is safe to leave implicit: the sticky
+    /// cursor fold re-pins the original state for any ref that stays absent, and `alwaysReports` re-emits
+    /// `Unreadable` on every read — so a name that goes stale here is repeated forever and can never be
+    /// superseded, because the only thing that could supersede it is a fresh classification of a ref that
+    /// by definition is not in the batch.
+    let private lastKnownPhrase (state: MaterialState) : string =
+        match state with
+        | Claimed worker -> $"last known to be held by %s{worker}"
+        | ReviewHandoff(Some critic) -> $"last known to be in review with critic %s{critic}"
+        | ReviewHandoff None -> "last known to be at review handoff"
+        | ReviewRepair round -> $"last known to be in review repair round %d{round}"
+        | CiLandable -> "last known to be CI-landable"
+        | MergedAwaitingObligations pr -> $"last known to be merged awaiting obligations on PR #%d{pr}"
+        | Ready -> "last known to be Ready"
+        | Released -> "last known to be Released"
+        | HumanBlocked reason -> $"last known to be human-blocked (%s{reason})"
+        | Done -> "last known to be Done"
+        | Unreadable reason -> $"last known to be unreadable (%s{reason})"
+
     let private missingActiveRefs (cursor: Cursor) (classified: Classified list) (observedAt: int64) : Classified list =
         let seenRefs = classified |> List.map (fun c -> c.Ref) |> Set.ofList
         let fallbackSha =
@@ -171,7 +198,9 @@ module DriverEvents =
         |> List.filter (fun (ref, state) -> isActive state && not (Set.contains ref seenRefs))
         |> List.map (fun (ref, state) ->
             { Ref = ref
-              State = Unreadable $"this item was active (%A{state}) as of the previous read and is absent from this read"
+              State =
+                Unreadable
+                    $"this item is ABSENT from the current facts batch and its state this pass is UNKNOWN; it was %s{lastKnownPhrase state} as of the PREVIOUS read, which is a superseded observation and NOT a statement about who holds it now"
               Reason = "missing from this read: previously active, absent from the current facts batch"
               Evidence = "cursor-only; absent from current read"
               ObservedAt = observedAt
@@ -261,6 +290,17 @@ module DriverEvents =
 
         { Transitions = events
           Active = reported |> List.filter (fun c -> isActive c.State)
+          // THE COMPLETENESS OF THE ACTIVE SET, CARRIED (.github#2525). `isActive Unreadable` is false —
+          // correctly, an item nobody could read is not running — so before this the `Active` filter simply
+          // DISCARDED every unreadable row and the renderer had nothing left to distinguish "I measured an
+          // empty active set" from "I could not measure the active set". Those are different facts and the
+          // stopping rule consumes both, so the projection now carries them both.
+          Unreadable =
+            reported
+            |> List.filter (fun c ->
+                match c.State with
+                | Unreadable _ -> true
+                | _ -> false)
           Cursor = newCursor
           RenderedAt = observedAt }
 
@@ -318,15 +358,38 @@ module DriverEvents =
 
                 $"material transitions (%d{List.length projection.Transitions}): %s{rendered}"
 
+        // LINE TWO IS THE ONE THE STOPPING RULE READS (.github#2525 acceptance #1 and #4).
+        //
+        // `drive-board`/`work-board` terminate when nothing is schedulable and no claim is live, so
+        // "no active items" is not prose — it is a positive assertion that the active set was MEASURED and
+        // is empty. Every unreadable row was already being filtered out of `Active` by `isActive`, so a read
+        // that could not see three live claims rendered the identical sentence to a read that correctly saw
+        // none, and a host that trusted it would have declared the board finished with work outstanding.
+        //
+        // The literal is therefore reserved for the case that earns it, and an unaccounted-for item forces
+        // the failed-read wording instead. .github#2385 had already made this class of shortfall visible on
+        // the TRANSITIONS line; it is this line that stayed able to assert an empty inventory over a board
+        // it never finished reading.
+        let unreadableRefs =
+            projection.Unreadable |> List.map (fun c -> c.Ref) |> String.concat ", "
+
         let activeLine =
-            if List.isEmpty projection.Active then
-                "no active items"
-            else
+            match projection.Active, projection.Unreadable with
+            | [], [] -> "no active items"
+            | [], unreadable ->
+                $"ACTIVE INVENTORY UNREADABLE (%d{List.length unreadable} unaccounted for): the active set is UNKNOWN, not empty — %s{unreadableRefs}"
+            | active, unreadable ->
                 let rendered =
-                    projection.Active
+                    active
                     |> List.map (fun c -> $"%s{c.Ref} [%s{encodeState c.State}]")
                     |> String.concat ", "
 
-                $"active items (%d{List.length projection.Active}): %s{rendered}"
+                let tail =
+                    if List.isEmpty unreadable then
+                        ""
+                    else
+                        $" — INCOMPLETE, %d{List.length unreadable} further item(s) unaccounted for: %s{unreadableRefs}"
+
+                $"active items (%d{List.length active}): %s{rendered}%s{tail}"
 
         transitionLine + "\n" + activeLine
