@@ -94,7 +94,24 @@ module Board =
         | Set of value: string
         | Clear
 
-    /// Resolve the board and its field/option ids. Two GraphQL calls.
+    /// Resolve the board and its field/option ids. Two GraphQL calls in the ordinary case — one project
+    /// page, one field map.
+    ///
+    /// **THE PROJECT LIST IS WALKED, NOT SAMPLED** (`.github#2535`). `projectsV2(first: 50)` with no cursor
+    /// answers the same shape whether the owner has 50 projects or 500, so a board that happened to be the
+    /// 51st came back as `NotFound` — a definite CONFIGURATION verdict ("`FSGG_COORD_PROJECT` names a board
+    /// that is not here") manufactured from a window nobody announced, whose remedy is wrong for the actual
+    /// condition. The walk returns on the HIT, so the ordinary two-call cost is unchanged and only an owner
+    /// whose board really is past the first page pays a third call.
+    ///
+    /// `NotFound` therefore now means *no board by that title among ALL projects*, and a walk that could
+    /// not be shown to finish — a missing or non-Boolean `pageInfo.hasNextPage`, a next page with no usable
+    /// cursor — is `Error(Malformed …)` rather than that verdict.
+    ///
+    /// **A TRUNCATED FIELD MAP IS REFUSED RATHER THAN CACHED** (same item). `fields(first: 50)` dropped the
+    /// tail of a board with more than 50 fields, and the all-empty guard cannot see a PARTIAL map — so the
+    /// truncated map was cached for a day and every later write to a missing field failed with `no field
+    /// named 'X' on this board. Known fields: …`, reciting the truncated list as if it were the board's own.
     val bootstrap: transport: IGitHubTransport -> owner: string -> title: string -> IoResult<BoardMap>
 
     /// The board map as JSON — the `board` command's machine contract, and the on-disk cache format. One
@@ -114,6 +131,14 @@ module Board =
     /// `Ok None` means **the issue is genuinely not on this board** — a successful read with a definite
     /// answer, and the only thing that licenses an `item-add`. It is UNREACHABLE from a failed read: a
     /// rate-limited lookup returns `Error(RateLimited …)`, and #421 is the two of them being the same value.
+    ///
+    /// **AND UNREACHABLE FROM A TRUNCATED ONE** (`.github#2535`). #421 closed the axis where the read
+    /// ERRORED; the issue-side connection is selected `first: 20`, and an issue sitting on more boards than
+    /// that — ours being the twenty-first — returned a full window that simply did not contain us. "We
+    /// walked its items" was then a claim about a WINDOW rather than about the connection, and the
+    /// non-answer it produced licensed adding a row that already existed. The connection now carries
+    /// `totalCount`, and a window that hid a tail is `Error(Malformed …)`. The question is asked only on the
+    /// MISS: a hit cannot be unmade by a tail, so the hot path costs nothing.
     ///
     /// Item ids are stable, so this is cached forever once resolved.
     val itemId:
@@ -176,6 +201,11 @@ module Board =
     /// `Ok None` is a definite answer with two shapes — the issue is not on THIS board, or it is but its
     /// `Status` is unset — both meaning "no column to restore", which a claim records as none and `release`
     /// then puts back as `Ready`. A failed read is `Error`, never `Ok None`: absence may not be manufactured.
+    ///
+    /// **INCLUDING A READ THAT TRUNCATED** (`.github#2535`): the issue-side `projectItems` window is 20, and
+    /// a miss over a window that hid a tail is `Error`, not "not on this board". `claim` treats both as
+    /// "recorded no column", but they are not the same fact and only one of them may be ASSERTED — a
+    /// definite absence manufactured from a window is #266's class whatever the caller then does with it.
     val itemStatus:
         transport: IGitHubTransport ->
         board: BoardMap ->
@@ -201,7 +231,9 @@ module Board =
     /// pull off the `fieldValueByName` node.
     ///
     /// `Ok None` covers "not on this board" and "on the board with the field genuinely empty" alike, both
-    /// meaning there is no edge here today. A failed read is `Error`, never a manufactured absence.
+    /// meaning there is no edge here today. A failed read is `Error`, never a manufactured absence — and by
+    /// `.github#2535` that includes a `projectItems` window that hid a tail, on `itemStatus`'s rule and for
+    /// `itemStatus`'s reason.
     val itemBlockedBy:
         transport: IGitHubTransport ->
         board: BoardMap ->

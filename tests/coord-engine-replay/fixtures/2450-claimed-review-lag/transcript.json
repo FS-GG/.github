@@ -116,7 +116,7 @@
       "method": "POST",
       "path": "/graphql",
       "requestBody": {
-        "query": "query($owner: String!) { organization(login: $owner) { projectsV2(first: 50) { nodes { number title id } } } rateLimit { cost remaining } }",
+        "query": "query($owner: String!, $cursor: String) { organization(login: $owner) { projectsV2(first: 50, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { number title id } } } rateLimit { cost remaining } }",
         "variables": {
           "owner": "FS-GG"
         }
@@ -131,7 +131,11 @@
                   "number": 12,
                   "title": "Coordination"
                 }
-              ]
+              ],
+              "pageInfo": {
+                "endCursor": null,
+                "hasNextPage": false
+              }
             }
           }
         },
@@ -149,7 +153,7 @@
       "method": "POST",
       "path": "/graphql",
       "requestBody": {
-        "query": "query($owner: String!, $number: Int!) { organization(login: $owner) { projectV2(number: $number) { fields(first: 50) { nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { id name dataType options { id name } } } } } } rateLimit { cost remaining } }",
+        "query": "query($owner: String!, $number: Int!) { organization(login: $owner) { projectV2(number: $number) { fields(first: 50) { totalCount nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { id name dataType options { id name } } } } } } rateLimit { cost remaining } }",
         "variables": {
           "number": 12,
           "owner": "FS-GG"
@@ -230,7 +234,8 @@
                     "id": "PVTF_blocked",
                     "name": "Blocked by"
                   }
-                ]
+                ],
+                "totalCount": 5
               }
             }
           },

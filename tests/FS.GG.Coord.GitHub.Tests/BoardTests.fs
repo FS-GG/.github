@@ -1142,8 +1142,14 @@ let ``a board that reports NO fields is a failed read, and is never cached`` () 
 
 [<Fact>]
 let ``a board TITLE that does not exist is named back, so it can be fixed`` () =
+    // THE FIXTURE GAINED `pageInfo` FOR `.github#2535`, and that is the point rather than an accommodation:
+    // `NotFound` is a definite CONFIGURATION verdict ("your `FSGG_COORD_PROJECT` names a board that is not
+    // here"), and since `bootstrap` walks the project list, it is only entitled to be said once the walk
+    // has been shown to FINISH. `hasNextPage: false` is that proof, and the sibling test below is the same
+    // fixture without it.
     let transport =
-        serving """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Something Else","id":"PVT_x"}]}}}}"""
+        serving
+            """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Something Else","id":"PVT_x"}]}}}}"""
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Error(NotFound message) -> Assert.Contains("Coordination", message)

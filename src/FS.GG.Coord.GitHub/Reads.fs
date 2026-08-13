@@ -123,6 +123,116 @@ module Reads =
         | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
         | _ -> None
 
+    /// **A `first: N` CONNECTION EITHER RETURNED EVERYTHING IT HAS OR IT DID NOT, AND THE DIFFERENCE IS
+    /// ONLY VISIBLE IF YOU ASK** (`.github#2535`).
+    ///
+    /// A connection selected with a bare `first: N` and no cursor answers the same JSON shape whether the
+    /// set has N members or ten thousand — `nodes` is N long either way. So *"there were N or fewer"* and
+    /// *"there were more than N"* arrive byte-identical, and every reader that walked `nodes`, found no
+    /// match, and answered "absent" was reading the second as the first. That is `.github#2534`'s shape one
+    /// axis over — a partial answer rendered as a complete one — reached through the page size rather than
+    /// the error channel, which is why the two were kept as separate causes.
+    ///
+    /// This is the second of the two remedies this layer already had and did not apply uniformly: carry
+    /// `totalCount` and MAKE THE COMPARISON LOAD-BEARING. `SubIssueSet`'s own signature already says
+    /// *"`Total > Children.length` is a TRUNCATED graph, and the distinction is load-bearing"*, and
+    /// `userContentEdits(first: 100)` carries it for the same reason. The other remedy — a `pageInfo`
+    /// cursor walk — is the right one where the tail must actually be FETCHED (`Board.bootstrap`'s project
+    /// list, `Board.externalItemId`); this one is right where the honest answer to a truncated read is a
+    /// REFUSAL.
+    ///
+    /// **EVERY FAILURE TO ESTABLISH COMPLETENESS IS A REFUSAL, NEVER A SHRUG.** A missing `totalCount`, a
+    /// `totalCount` that is not a 32-bit integer, a missing or non-array `nodes` — each of them means *the
+    /// completeness of this read is unknown*, and an unknown completeness may not be spent as a known one.
+    /// This is `Board.nextPage`'s rule for `hasNextPage` (#2166), stated once for the other remedy.
+    ///
+    /// **THE COMPARISON IS AGAINST THE NUMBER OF NODES RETURNED, NOT THE NUMBER THE CALLER COULD USE.** A
+    /// caller that drops nodes on purpose — `Board.bootstrap` skips a field type it was never taught rather
+    /// than guessing it — would otherwise refuse a perfectly complete read for its own filtering.
+    ///
+    /// **THE WINDOW IS AN ARGUMENT BECAUSE THE DEFECT IS THE WINDOW.** `first: N` is an upper bound: the
+    /// connection returns `min(N, available)` nodes, so a page that came back SHORT of `N` cannot have been
+    /// cut by `N` — there was nothing left for the window to hide. The truncation question is live in
+    /// exactly one state, the one this item's own acceptance criterion names: *a fixture returning exactly N
+    /// entries with more available*. So the guard asks `totalCount` when the window came back FULL, and
+    /// nowhere else.
+    ///
+    /// That is not a softening; it is the guard being about the right thing. A `totalCount` we could not
+    /// read over a FULL window is still a refusal — the window was filled and nothing told us whether there
+    /// is more, which is precisely the ambiguity `.github#2535` is about. And in production the lenient arm
+    /// is unreachable anyway: every document this layer sends selects `totalCount` beside `nodes`, so it can
+    /// only be entered by a response that dropped a field we asked for AND under-filled the window.
+    ///
+    /// It lives in `Reads` because `Board` compiles after it and calls it, and because two copies of a
+    /// completeness check is exactly the drift this item is about.
+    let connectionComplete
+        (subject: string)
+        (what: string)
+        (window: int)
+        (connection: JsonElement)
+        : IoResult<unit> =
+        // `TryGetProperty` THROWS on anything that is not an object rather than answering `false`
+        // (`.github#2418`), and this function is called from inside `try/with :? KeyNotFoundException`
+        // blocks that would not catch it. Guard first, and fail closed.
+        if connection.ValueKind <> JsonValueKind.Object then
+            Error(
+                Malformed(
+                    subject,
+                    $"%s{what} is not a JSON object (%A{connection.ValueKind}) — its completeness cannot be established, so this is a FAILED READ, never an absence"
+                )
+            )
+        else
+
+        let returned =
+            match connection.TryGetProperty "nodes" with
+            | true, nodes when nodes.ValueKind = JsonValueKind.Array -> Some(nodes.GetArrayLength())
+            | _ -> None
+
+        let available =
+            match connection.TryGetProperty "totalCount" with
+            | true, total when total.ValueKind = JsonValueKind.Number ->
+                match total.TryGetInt32() with
+                | true, value -> Some value
+                | _ -> None
+            | _ -> None
+
+        match returned with
+        // NO `nodes` AT ALL is not an empty connection — it is a shape we did not read. Nothing downstream
+        // may enumerate it, and nothing may conclude an absence from it.
+        | None ->
+            Error(
+                Malformed(
+                    subject,
+                    $"%s{what} carries no readable `nodes` array, so its completeness cannot be established — this is a FAILED READ, never an absence"
+                )
+            )
+
+        | Some returned ->
+
+        match available with
+        // THE ANSWER, WHEN THE CONNECTION GAVE US ONE. `totalCount` is authoritative in both directions:
+        // larger than the window means truncated, equal-or-smaller means measured and complete.
+        | Some available when available > returned ->
+            Error(
+                Malformed(
+                    subject,
+                    $"%s{what} reports %d{available} entries and returned only %d{returned} — the `first: %d{window}` window hid the rest, and a TRUNCATED read may not be spent as a measured absence"
+                )
+            )
+        | Some _ -> Ok()
+
+        // NO READABLE `totalCount`. A SHORT page is still proof: `first: N` returns `min(N, available)`, so
+        // fewer than N back means the window had nothing left to hide. A FULL page proves nothing at all,
+        // and is refused.
+        | None when returned >= window ->
+            Error(
+                Malformed(
+                    subject,
+                    $"%s{what} filled its `first: %d{window}` window exactly and carries no readable `totalCount` — so a complete set of %d{window} cannot be told from a truncated one, and this is a FAILED READ, never an absence"
+                )
+            )
+        | None -> Ok()
+
     /// The `per_page` every collection read in this module asks for.
     ///
     /// IT IS A CONSTANT BECAUSE THE HEADROOM PROOF DEPENDS ON THE REQUEST AND THE PAGE SHAPE AGREEING. Ask
@@ -2537,7 +2647,14 @@ module Reads =
 
     [<Literal>]
     let private ClosingRefDoc =
-        "query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { closingIssuesReferences(first: 5) { nodes { number repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { closingIssuesReferences(first: 5) { totalCount nodes { number repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
+
+    /// `ClosingRefDoc`'s own window, as the guard must see it. It is stated beside the document it belongs
+    /// to because the two must agree: a `first:` raised in the document and not here would make the guard
+    /// refuse a page it should accept, and lowered would make it accept a page it should refuse.
+    /// `.github#2535 the connection windows in the documents agree with the guards` pins the pair.
+    [<Literal>]
+    let private ClosingRefWindow = 5
 
     let prClosingRef (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<Ref option> =
 
@@ -2582,12 +2699,25 @@ module Reads =
                 | Ok data ->
 
                 try
-                    let nodes =
+                    let connection =
                         data
                             .GetProperty("repository")
                             .GetProperty("pullRequest")
                             .GetProperty("closingIssuesReferences")
-                            .GetProperty("nodes")
+
+                    // AND `Ok None` ALSO MEANS *MEASURED* NONE ON THE OTHER AXIS (`.github#2535`). The
+                    // window is `first: 5`, and `Seq.tryHead` below takes ONE of whatever arrived — so a PR
+                    // that closes more issues than the window admits was answered from a set already known
+                    // to be short, and nothing said so. The honest answer to that is a refusal: this read's
+                    // whole contract is *"the one item this PR implements"*, and a PR whose closing graph we
+                    // could only partly see does not have a defensible "one". `verify-paths` renders an
+                    // `Error` as a refusal and `Ok None` as `FSGG-PATHS SKIP … ExitGreen`, so the failure
+                    // direction matters here exactly as much as it did for `.github#2534`.
+                    match connectionComplete subject "this PR's closing-issue connection" ClosingRefWindow connection with
+                    | Error e -> Error e
+                    | Ok() ->
+
+                    let nodes = connection.GetProperty("nodes")
 
                     match nodes.EnumerateArray() |> Seq.tryHead with
                     | None -> Ok None

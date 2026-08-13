@@ -34,6 +34,7 @@
     <Compile Include="BlockerGraphTests.fs" />
     <Compile Include="DoneFactsTests.fs" />
     <Compile Include="GraphQlErrorsFirstTests.fs" />
+    <Compile Include="ConnectionPaginationTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
