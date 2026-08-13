@@ -33,6 +33,7 @@
     <Compile Include="ScanBoardTests.fs" />
     <Compile Include="BlockerGraphTests.fs" />
     <Compile Include="DoneFactsTests.fs" />
+    <Compile Include="GraphQlErrorsFirstTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

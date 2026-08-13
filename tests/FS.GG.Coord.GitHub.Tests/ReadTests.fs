@@ -2414,10 +2414,14 @@ let ``#2365 subIssues refuses a null repository instead of throwing`` () =
 
 [<Fact>]
 let ``#2365 prClosingRef treats a null repository the same as an unreadable graph`` () =
-    // `prClosingRef` already folds an unreadable closing-ref graph into `Ok None` (no closing issue
-    // found) rather than a hard refusal; the null case joins that existing fallback, not a new one.
+    // #2365 CLOSED THE CRASH; `.github#2534` CLOSED THE ANSWER IT CRASHED INTO. This leg used to assert
+    // `Ok None` — "this PR closes nothing" — for a null `repository`, on the reasoning that the read
+    // "already folds an unreadable graph into `Ok None`". That fold was the defect: `verify-paths` reads
+    // `Ok None` as "this PR implements no tracked item" and prints a GREEN skip, so an unreadable graph
+    // was laundered into a passing touch-set verdict. The null case is still not a crash — it is now an
+    // ERROR, which is what `Reads.fsi` documented all along.
     let transport = serving """{"data":{"repository":null}}"""
 
     match Reads.prClosingRef transport "EHotwagner" "S.I.R" 146 with
-    | Ok None -> ()
-    | other -> failwith $"a null repository must fall back to None, not throw — got %A{other}"
+    | Error(Malformed(_, detail)) -> Assert.Contains("FAILED READ", detail)
+    | other -> failwith $"a null repository is a failed read, not 'closes nothing' — got %A{other}"
