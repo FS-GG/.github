@@ -1936,9 +1936,11 @@ let ``#1575 BEHIND and DRAFT refuse too — the other two states GitHub will not
         )
 
 [<Fact>]
-let ``#1575 a RED never reads the policy — a PR that is not merging need not be diagnosed`` () =
-    // The cost bound, MEASURED on the recorder actually being driven. The policy read happens only where
-    // the rollup is otherwise green and GitHub has said it will refuse; a red PR is already not merging.
+let ``#1575/#2517 a RED that GitHub also refuses reads no policy — it is already not merging`` () =
+    // The cost bound, MEASURED on the recorder actually being driven. #1575's diagnostic read happens only
+    // where the rollup is otherwise green and GitHub has said it will refuse. #2517 added a SECOND reader of
+    // the same endpoints — the derived advisory carve-out — and it is skipped on exactly this shape: a PR
+    // GitHub reports `blocked` cannot be rescued by reclassifying a check, so neither pass asks.
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
 
@@ -1966,6 +1968,176 @@ let ``#1575 --require still binds a context the base branch does NOT require`` (
     match unmet with
     | [ Reads.Asserted reason ] -> Assert.Contains("registry-coherence", reason)
     | other -> failwith $"a --require the caller named stays an ASSERTION, not a branch policy — got %A{other}"
+
+// ---- .github#2517: the advisory carve-out is DERIVED, not a source literal ---------------------------
+//
+// `Landable`'s carve-out was a hand-written set of ONE name, so every OTHER non-required check reded the
+// org's merge gate. Measured on this repo's PR #2514 at `f1d6218d775d278429cf6cea252b7d617ee3c723`: the six
+// required contexts all passing, the non-required `feed` arm failing, `gh pr view --json mergeStateStatus`
+// = `UNSTABLE` (GitHub itself permits the merge) — and `scripts/fsgg-coord landable 2514 --repo .github`
+// answering `red`, refusing a fully reviewed, host-accepted PR by the org's own protocol.
+//
+// THE VERDICT STILL DOES NOT REST ON THE POLICY READ (#1575/#463), and these legs are where that is
+// measured rather than asserted. The derivation is a SECOND pass, reached only when the fail-closed first
+// pass is not already green, when it scored at least one subject, and when GitHub has not itself said it
+// will refuse. So the merge path pays nothing (the `clean`/green leg above still asserts 0 policy reads), an
+// unreadable policy scores exactly what it scored before (`administration: read` is not a valid workflow
+// GITHUB_TOKEN scope, and `landable`'s unattended caller runs entirely under one), and an empty-but-readable
+// policy is indistinguishable from an unreadable one.
+
+/// A PR whose rollup is NOT green — one green workflow run with a passing `projection` check, and a failing
+/// `feed` run whose only check-run is the failing `feed` — into a `main` whose required contexts the test
+/// chooses. This is PR #2514's shape. Counts the POLICY reads, so the cost is measured on the recorder
+/// actually being driven rather than argued for.
+type private DerivedAdvisoryPrServer(state: string, ?demanded: string list, ?protection: IoError) =
+    let mutable policyReads = 0
+
+    member _.PolicyReads = policyReads
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            if isProtectionRead req.Path then
+                policyReads <- policyReads + 1
+
+                match protection with
+                | Some e -> Error e
+                | None ->
+                    Ok
+                        { Status = 200
+                          Body = protectionRequiring (defaultArg demanded [])
+                          ETag = None
+                          NextLink = None; Headers = Map.empty }
+            elif isRulesetRead req.Path then
+                policyReads <- policyReads + 1
+                Ok { Status = 200; Body = "[]"; ETag = None; NextLink = None; Headers = Map.empty }
+            else
+
+            let body =
+                if req.Path.Contains "git/ref/heads/" then
+                    """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
+                elif req.Path.EndsWith "pulls/801" then
+                    $"""{{"number":801,"state":"open","mergeable":true,"mergeable_state":"%s{state}","base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"sha-head"}}}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    """{"total_count":2,"workflow_runs":[
+                         {"path":".github/workflows/coherence.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]},
+                         {"path":".github/workflows/feed.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"failure","check_suite_id":2,"pull_requests":[{"number":801}]}]}"""
+                else
+                    """{"total_count":2,"check_runs":[
+                         {"name":"projection","check_suite":{"id":1},"status":"completed","conclusion":"success"},
+                         {"name":"feed","check_suite":{"id":2},"status":"completed","conclusion":"failure"}]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+
+[<Fact>]
+let ``#2517 AC3: a PR whose ONLY failing check is NON-required is GREEN — PR #2514's own shape`` () =
+    // THE ACCEPTANCE MEASUREMENT. `feed` is not among the branch's required contexts, so its failure — and
+    // the failure of the run that contains nothing else — cannot hold this merge. Before #2517 this scored
+    // `red` on the strength of one non-required arm, and a merge gate that reds on non-required checks is a
+    // gate operators learn to override.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection" ])
+
+    let state, n, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+    Assert.Equal(2, n)
+    Assert.Empty unmet
+
+    // The derivation is what produced that green, and it cost exactly the two reads of the two stores a
+    // branch's required contexts can live in (#574) — paid ONLY because the first pass was not green.
+    Assert.Equal(2, server.PolicyReads)
+
+[<Fact>]
+let ``#2517 AC4: the same PR is RED when the failing check IS required — the fix is not "always green"`` () =
+    // The controlled counterpart. Same fixture, same failing check, one word different in the branch's own
+    // declaration — and the gate refuses, exactly as it must.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection"; "feed" ])
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrRed, state)
+
+[<Fact>]
+let ``#2517 AC5: a policy we may not READ fails CLOSED — the verdict is what it was before the derivation`` () =
+    // #463, NOT RESTORED. A verdict that RESTED on `branches/{b}/protection` would 403 forever under the
+    // unattended caller's GITHUB_TOKEN and stop the kit landing anywhere. Failing closed here means "nothing
+    // is advisory", which is precisely what this PR scored before #2517 — so an unreadable policy costs a
+    // request, never a merge, and the derivation can only ever widen what lands.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        DerivedAdvisoryPrServer(
+            state = "unstable",
+            demanded = [ "projection" ],
+            protection = Unauthorized "FS-GG/FS.GG.SDD branch main protection"
+        )
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrRed, state)
+    // ONE read, not two: `requiredContexts` short-circuits on the classic store's failure — a list we
+    // already cannot complete is not worth a second request.
+    Assert.Equal(1, server.PolicyReads)
+
+[<Fact>]
+let ``#2517 AC6: an EMPTY required set fails closed on the SAME rule as an unreadable one`` () =
+    // THE SHARPEST HAZARD, and it arrives through a SUCCESSFUL read: `classicRequired` answers `Ok []` for a
+    // 404 and for "protected, but not on status checks", and the union of the two stores has no non-empty
+    // guard. Complement-of-empty is everything, so a naive derivation would make EVERY check advisory and
+    // score `landable` green on any repository with no branch protection at all — a fleet-wide fail-open
+    // strictly worse than the defect #2517 repairs. `Landable.advisoryFrom` refuses to build a derivation
+    // from an empty set, so this scores what an unreadable policy scores.
+    //
+    // At THIS layer the assertion is that the empty read is WIRED to that guard; the gate-inversion — a
+    // fixture whose verdict flips from red to green when the guard is deleted — is held in
+    // `LandableTests`, where the rule lives and where a suite of exactly two runs on two suites can be
+    // shaped to make the mutation visible instead of masked by #606's zero-subjects rule.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = DerivedAdvisoryPrServer(state = "unstable", demanded = [])
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrRed, state)
+    Assert.Equal(2, server.PolicyReads)
+
+[<Fact>]
+let ``#2517 AC2: --require overrides the derivation — the flag still binds a non-required check`` () =
+    // #737's flag is the autofix bot's whole reason for calling this command: `registry-coherence` decides
+    // that bot's PR and branch protection cannot require it. A derivation that silently overrode `--require`
+    // would break the one caller the flag exists for, so the flag is tested BEFORE the derivation.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection" ])
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [ "feed" ] None
+
+    Assert.Equal(PrRed, state)
+
+[<Fact>]
+let ``#2517: a red GitHub itself REFUSES pays no policy read — the derivation cannot rescue it`` () =
+    // THE COST BOUND, RE-MEASURED. Before #2517 the rule was "a red never reads the policy". It is now the
+    // sharper one: a PR GitHub reports `blocked`/`behind`/`draft` is not landable whatever the derivation
+    // says, so the second pass is not attempted at all.
+    //
+    // AND THAT GUARD IS A CORRECTNESS PROPERTY, NOT ONLY A COST ONE. The derived set is compared by NAME,
+    // and a required CONTEXT is not always a check-run name — one satisfied by a legacy commit status, or
+    // naming a job since renamed, matches nothing on the head. Treating such a check as advisory would drop
+    // a genuinely required finding and fail OPEN. But a required context with no check run on the head is
+    // exactly GitHub's `blocked` (#1575's own measurement), so that PR never reaches the derivation: every
+    // PR that does has already had its required contexts confirmed satisfied by GitHub itself.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = DerivedAdvisoryPrServer(state = "blocked", demanded = [ "projection" ])
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrRed, state)
+    Assert.Equal(0, server.PolicyReads)
 
 // ---- #1680: a PR that is NOT OPEN ------------------------------------------------------------------
 //

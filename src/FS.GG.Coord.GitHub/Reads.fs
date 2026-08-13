@@ -2311,7 +2311,79 @@ module Reads =
                 | Mergeable true, Some sha, headRef ->
                     match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
                     | Some runs, Some checks ->
-                        let state, n = Landable.scoreRequired required (Some true) runs checks
+                        // PASS 1 — THE FAIL-CLOSED SCORE, AND THE ONLY ONE THE MERGE PATH PAYS FOR
+                        // (`.github#2517`). Nothing is advisory here, so this is the pre-#2517 rollup for
+                        // every name: a green verdict is reached without asking the branch policy anything,
+                        // which is the property `ReadTests`' `Assert.Equal(0, server.PolicyReads)` on the
+                        // clean/green leg pins and the reason the derivation is a SECOND pass rather than an
+                        // input to the first.
+                        let closed = Landable.scoreRequired required (Some true) runs checks
+
+                        // PASS 2 — THE DERIVED ADVISORY CARVE-OUT (`.github#2517`).
+                        //
+                        // The carve-out used to be a hand-written one-name literal in `Landable.fs`, so every
+                        // check NOT in it gated the merge whether or not `main` required it. Measured on this
+                        // repo's PR #2514: six required contexts passing, the non-required `feed` arm
+                        // failing, GitHub reporting `unstable` (it would merge) — and `landable` `red`,
+                        // refusing a PR its own protocol had finished with. Branch protection already holds
+                        // the authoritative answer, and "advisory" is precisely its complement.
+                        //
+                        // ASKED ONLY WHERE IT COULD CHANGE THE ANSWER, which is what keeps the #1575 cost
+                        // bound. Advisory reclassification can only ever REMOVE subjects from the rollup, so:
+                        //
+                        //   * an already-GREEN verdict cannot be improved — and this is the merge path, so it
+                        //     must stay free (`0` policy reads, asserted);
+                        //   * a verdict over ZERO subjects cannot be improved either: dropping more subjects
+                        //     leaves it at zero, which #606 scores `PrRed` regardless. That also keeps the
+                        //     registration race (`red` over 0 subjects, the first 20-60s after a push, polled
+                        //     by `--wait`) from paying two reads per poll for an answer that cannot move;
+                        //   * and GITHUB ITSELF SAYING IT WILL REFUSE ends it: no derivation can make a
+                        //     `blocked`/`behind`/`draft` PR landable, and the arm below would only demote a
+                        //     green to `pending` anyway.
+                        //
+                        // THAT LAST GUARD IS A CORRECTNESS PROPERTY, NOT ONLY A COST ONE, and it closes the
+                        // one way this derivation could fail OPEN. The set is compared by NAME — a required
+                        // CONTEXT and a check-run `Name` are different vocabularies, and a context satisfied
+                        // by a legacy commit status, or naming a job that was renamed, matches no check-run.
+                        // Treating such a check as advisory would drop a genuinely required finding. But a
+                        // required context with no check run on the head is EXACTLY GitHub's `blocked`
+                        // (#1575's own measurement), so that PR never reaches the derivation at all: the
+                        // states we do derive on are the ones where GitHub has already confirmed every
+                        // required context is satisfied.
+                        //
+                        // NO `Unmet` REASON COMES FROM HERE, deliberately, consistent with every other
+                        // non-green arm: that list carries assertions the CALLER made (`--require`, `--sha`)
+                        // and GitHub's own refusal, and its stderr banner says so. Nobody asked for this.
+                        let state, n =
+                            let couldChangeTheAnswer =
+                                fst closed <> PrGreen
+                                && snd closed > 0
+                                && (refusedState facts |> Option.isNone)
+
+                            if not couldChangeTheAnswer then
+                                closed
+                            else
+                                // AN UNREADABLE POLICY AND AN EMPTY ONE ARE THE SAME VERDICT, and they reach
+                                // it through the same code path rather than by a short-circuit that merely
+                                // AGREES with pass 1. `Landable.advisoryFrom` refuses to build a derivation
+                                // from an empty required set (`.github#2517` AC6): complement-of-empty is
+                                // everything, which would make every check advisory and score `landable`
+                                // green on any repository with no branch protection — a fail-open strictly
+                                // worse than the defect this fixes. `NoDerivation` scores every live check,
+                                // so both cases return pass 1's verdict, and #463 is not restored: a policy
+                                // the fleet's `GITHUB_TOKEN` may not read (`administration: read` is not a
+                                // valid workflow scope) costs a request, never a verdict.
+                                let advisory =
+                                    match facts.BaseRef with
+                                    | None ->
+                                        Landable.noDerivation
+                                            "the PR object named no base branch, so its required contexts could not be read"
+                                    | Some b ->
+                                        match requiredContexts transport owner repo b with
+                                        | RequiredUnreadable why -> Landable.noDerivation why
+                                        | RequiredContexts contexts -> Landable.advisoryFrom contexts
+
+                                Landable.scoreDerived advisory required (Some true) runs checks
 
                         let unmet =
                             Landable.missing required runs checks

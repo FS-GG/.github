@@ -115,48 +115,104 @@ module Landable =
         let names = live |> List.map (fun c -> c.Name) |> Set.ofList
         required |> List.filter (fun name -> not (names.Contains name))
 
-    /// Check-run names `scoreRequired` never scores as `bad`/`pending` UNLESS the caller explicitly names
-    /// one in `required` (#2373). Every OTHER non-required check IS scored — `bad`'s own comment explains
-    /// why that is deliberate (`registry-coherence` on the skill-registry-autofix bot's PR, #642/#425, is
-    /// not in branch protection's required set either, and its redness must still gate that bot's merge).
-    /// This is the ONE narrow carve-out, and it exists because the FIRST subsystem — not this one — already
-    /// promised it: `scripts/check-claim-generation.py`'s own docstring and `.github/workflows/coherence.yml`
-    /// both say, in as many words, "a red verdict from this job does not block a merge — it is observed,
-    /// not enforced" (`.github#2342` AC6), and neither ever wired `claim-generation` into branch protection's
-    /// required-status-check list to make that true. `scoreRequired` scoring every live check unconditionally
-    /// meant `landable` enforced it anyway — RED for a check its own owner had already, explicitly, on the
-    /// record, declared advisory (`.github#2373`, reproduced live across three PRs in one wave: the PR
-    /// without a hand-added `fsgg:pr-authorization` marker read `landable` RED, the otherwise-identical PR
-    /// with one read GREEN). The two subsystems must agree about what is enforced; `check-claim-generation.py`
-    /// is the one with the documented, reviewed, AC6-ratified design decision, so THIS module is the one that
-    /// was wrong, and this set is the repair.
+    /// WHERE THE ADVISORY CARVE-OUT COMES FROM (`.github#2517`) — the branch's OWN
+    /// `required_status_checks.contexts`, never a source literal. "Advisory" is the COMPLEMENT of
+    /// "required": a check the base branch does not require cannot hold ITS merge, so it must not hold this
+    /// verdict either.
     ///
-    /// A name here is EXCLUDED from `bad` and `pending` and does not count toward `total` either — its own
-    /// GitHub check-run conclusion is untouched (still visibly `failure` in the Checks tab: "observed"), but
-    /// `landable`'s verdict never depends on it (not "enforced") — UNLESS the caller opts back in by naming
-    /// it in `required`, which still only makes it a PRESENCE assertion (`missingFrom`), never restores it to
-    /// the `bad`/`pending` rollup; nothing today calls `--require claim-generation`, and doing so would not
-    /// re-arm this exemption. It is the ONE lever that does: removing the name.
+    /// WHAT IT REPLACED, AND WHY THE LITERAL WAS WRONG. This was `advisoryCheckNames: Set<string> =
+    /// Set.ofList [ "claim-generation" ]`, hand-populated, and by its own comment "THE ONE DECLARED PLACE
+    /// ... the sole source of advisory names". It had exactly one entry, so EVERY other non-required check
+    /// on the repository was scored as gating whether or not `main` required it. Measured on `.github` PR
+    /// #2514 at `f1d6218d775d278429cf6cea252b7d617ee3c723`: all six required contexts passing, the
+    /// non-required `feed` arm failing, `mergeable_state` `unstable` (GitHub itself permits the merge) — and
+    /// `landable` `red`, refusing a fully reviewed, host-accepted PR by its own protocol. A merge gate that
+    /// reds on non-required checks is a gate operators learn to override, and the override habit is what
+    /// makes the NEXT genuinely-red required check land unnoticed (`.github#2517`, epic #266).
     ///
-    /// REMOVING A NAME HERE is exactly the branch-protection-arming administrative action `#2342`'s design
-    /// doc (§9.1) already names as the way to turn this on for real — do it in the SAME change that adds
-    /// the context to `branches/main/protection/required_status_checks`, so the two subsystems move together
-    /// and cannot drift back out of agreement the way they did to produce #2373.
+    /// THE HISTORY THE LITERAL CARRIED IS PRESERVED, NOT DISCARDED. `claim-generation`'s own design doc
+    /// (`.github#2342` AC6) declared its verdict "observed, not enforced", and `scoreRequired` scoring every
+    /// live check unconditionally enforced it anyway (`.github#2373`, reproduced live across three PRs in one
+    /// wave). That repair was right; only its INPUT was hand-written. #2342's design doc (§9.1) named the
+    /// exit condition itself — remove the name in the SAME change that adds the context to
+    /// `branches/main/protection/required_status_checks`, "so the two subsystems move together and cannot
+    /// drift back out of agreement". Deriving the set makes that simultaneity structural rather than
+    /// remembered: `claim-generation` IS in `.github`'s required contexts today (`gh api
+    /// repos/FS-GG/.github/branches/main/protection --jq '.required_status_checks.contexts'`, 2026-08-13:
+    /// `["contract-coherence / coherence","projection","roster-closure","drift","reconcile",
+    /// "claim-generation"]`), so this derivation now scores it `Blocking` — the arming #2342 §9.1 asked for,
+    /// applied the moment protection changed and with no source edit at all.
     ///
-    /// THE ONE DECLARED PLACE (#2400): this binding is the sole source of advisory names — `checkGating`
-    /// below is the sole reader of it, and `runGating` derives a run's advisory-ness from `checkGating`
-    /// rather than from a second copy of this set. Adding the next advisory check is one entry here, not an
-    /// edit anywhere the rollup itself lives.
+    /// AN EMPTY REQUIRED SET IS NOT A DERIVATION, and this is the sharpest hazard in the whole change.
+    /// `Reads.classicRequired` maps a 404 to `Ok []` and "protected, but not on status checks" to `Ok []`,
+    /// and the union of the two stores has no non-empty guard — so a SUCCESSFUL read can legitimately return
+    /// an empty required set. Complement-of-empty is EVERYTHING, which would make every check advisory and
+    /// score `landable` green on repositories with no branch protection at all: a fleet-wide fail-open
+    /// strictly worse than the defect being repaired. `advisoryFrom` is the ONE constructor of `DerivedFrom`
+    /// and refuses to build one from an empty set; an empty read is therefore `NoDerivation`, verdict-identical
+    /// to an UNREADABLE one. The union's cases are `private` for exactly this reason — there is no way to
+    /// hand-build a `DerivedFrom Set.empty` past the guard.
     ///
-    /// NAME COLLISIONS ARE NOT CLOSED BY THIS CHANGE (`.github#2374`, still open, deliberately). A check-run
-    /// `Name` is the JOB name and collides across workflows (`CheckRow`'s own doc comment: seven runs named
-    /// `fixture`, from six workflows, measured on `.github`). If a future job in some OTHER workflow were
-    /// ever named `claim-generation`, `checkGating` would classify it `Advisory` too, on the string alone —
-    /// exactly as the pre-#2400 `Set<string>.Contains` test already did. This refactor changes HOW the
-    /// classification is consumed (a typed, exhaustively-matched `Gating` instead of an inline predicate),
-    /// not WHAT it is keyed on; the "#2400 must say this" review AC exists precisely so nobody reads this
-    /// past tense.
-    let private advisoryCheckNames: Set<string> = Set.ofList [ "claim-generation" ]
+    /// `NoDerivation` MEANS NOTHING IS ADVISORY — every live check is scored, which is the pre-#2517
+    /// behaviour and the fail-CLOSED direction. That is what reconciles this change with `#1575`/`#463`:
+    /// reading `branches/{b}/protection` needs `administration: read`, which is not a valid `permissions:`
+    /// scope for a workflow's GITHUB_TOKEN, and `landable`'s unattended caller runs entirely under one. A
+    /// verdict that RESTED on that read would 403 forever (#463: a protection probe that 403'd on every
+    /// receiver and stopped the kit landing anywhere). Failing closed to "everything gating" means nothing
+    /// that lands today stops landing when the read fails; the derivation can only ever WIDEN what merges,
+    /// never narrow it.
+    ///
+    /// NAME COLLISIONS ARE STILL NOT CLOSED (`.github#2374`, open, deliberately), and the keying is
+    /// unchanged: a check-run `Name` is the JOB name and collides across workflows (seven runs named
+    /// `fixture`, from six workflows, measured on `.github`). What #2517 changes is WHERE the names come
+    /// from, not what they are matched on. The converse mismatch — a required CONTEXT that names no
+    /// check-run (a legacy commit status, a renamed job) — would classify a genuinely required check
+    /// advisory and fail OPEN; `Reads.prLandableRequire` is where that is closed, by never deriving at all
+    /// while GitHub itself reports the PR refused, and a required context with no check run is exactly the
+    /// `blocked` state (#1575).
+    type AdvisorySet =
+        private
+        /// The base branch's required contexts, read successfully and NON-EMPTY by construction. Advisory is
+        /// the complement: a live check whose name is not in this set.
+        | DerivedFrom of requiredContexts: Set<string>
+        /// No derivation is available — unreadable, or readable and EMPTY. Nothing is advisory.
+        | NoDerivation of why: string
+
+    /// The reason recorded when the read SUCCEEDED and returned nothing. Held apart from an unreadable
+    /// policy's reason in the SENTENCE only: both are `NoDerivation`, and the verdict cannot tell them apart.
+    let private emptyIsNotADerivation =
+        "the base branch requires no status checks, and an empty required set is not a derivation"
+
+    /// The reason recorded on the path that never asks: `scoreRequired`/`scoreN`/`score` score every live
+    /// check because no policy was consulted at all.
+    let private noPolicyConsulted = "no branch policy was consulted"
+
+    /// THE ONLY CONSTRUCTOR OF A `DerivedFrom` (`.github#2517`), and the only place the empty-set guard
+    /// lives. Deleting the guard here is what an AC6 gate-inversion mutates, and it must red a fixture.
+    let advisoryFrom (requiredContexts: string list) : AdvisorySet =
+        let contexts = requiredContexts |> List.filter (fun c -> c <> "") |> Set.ofList
+
+        if contexts.IsEmpty then
+            NoDerivation emptyIsNotADerivation
+        else
+            DerivedFrom contexts
+
+    /// "The policy could not be read" — the caller's own sentence, verdict-identical to an empty read.
+    let noDerivation (why: string) : AdvisorySet = NoDerivation why
+
+    /// Did a derivation actually happen? Projection only — the verdict never consults it. It exists so a
+    /// caller (and a test) can assert that an empty read produced NO derivation without the union's private
+    /// cases having to be public.
+    let isDerived (advisory: AdvisorySet) : bool =
+        match advisory with
+        | DerivedFrom _ -> true
+        | NoDerivation _ -> false
+
+    /// Why there is no derivation, for diagnostics. `None` when there is one.
+    let noDerivationReason (advisory: AdvisorySet) : string option =
+        match advisory with
+        | DerivedFrom _ -> None
+        | NoDerivation why -> Some why
 
     /// How a CI result participates in the landable verdict (#2400): every subject `scoreRequired` scores is
     /// EITHER `Blocking` (an ordinary finding — a bad or still-pending result withholds green) or `Advisory`
@@ -169,15 +225,25 @@ module Landable =
         | Blocking
         | Advisory
 
-    /// A check-run's `Gating` (#2400, the #2373 rule restated as a typed classification): `Advisory` iff its
-    /// name is in `advisoryCheckNames` AND the caller did not `--require` it by that same name — `required`
-    /// is the one opt-in lever (#2373), and it must still win over the exemption or `--require
-    /// claim-generation` would do nothing.
-    let private checkGating (required: Set<string>) (c: CheckRow) : Gating =
-        if advisoryCheckNames.Contains c.Name && not (required.Contains c.Name) then
-            Advisory
-        else
+    /// A check-run's `Gating` (#2400's typed classification, #2517's derived input): `Advisory` iff a
+    /// derivation exists, the derived required set does NOT name this check, AND the caller did not
+    /// `--require` it by that same name.
+    ///
+    /// `required` WINS OVER THE DERIVATION, and must (#2373's opt-in lever, restated as `.github#2517` AC2).
+    /// `--require registry-coherence` names a check branch protection cannot require — the autofix bot's
+    /// whole reason for calling this command (#642/#425/#737) — so a derivation that silently overrode the
+    /// flag would break the one caller the flag exists for. It is tested FIRST here so that no reachable
+    /// combination of derivation and flag can make a caller-named check advisory.
+    ///
+    /// `NoDerivation` IS FAIL-CLOSED: every check is `Blocking`, exactly as before #2517 for every name but
+    /// `claim-generation`, and exactly as before #2373 for that one.
+    let private checkGating (advisory: AdvisorySet) (required: Set<string>) (c: CheckRow) : Gating =
+        if required.Contains c.Name then
             Blocking
+        else
+            match advisory with
+            | NoDerivation _ -> Blocking
+            | DerivedFrom requiredContexts -> if requiredContexts.Contains c.Name then Blocking else Advisory
 
     /// A subject (run or check) is a FINDING unless it COMPLETED and concluded `success` or `skipped`.
     let private isPending (status: string) = status <> "completed"
@@ -188,7 +254,8 @@ module Landable =
     /// A workflow run's `Gating` (#2400/#2454, closing #2379): a run is `Advisory` only when EVERY check-run
     /// in its suite that is itself a FINDING — `isBad` or still `isPending` — is `Advisory`. A check-run that
     /// already PASSED takes no part in the decision; the run's own redness is then wholly attributable to
-    /// findings its own owner already declared "observed, not enforced" (#2373's `advisoryCheckNames`).
+    /// findings the BASE BRANCH itself does not require (`.github#2517`'s derived `AdvisorySet` — until then,
+    /// #2373's hand-written `advisoryCheckNames`).
     ///
     /// `.github#2454`: the FIRST shipped version of this rule surveyed suite MEMBERSHIP instead of findings —
     /// every check-run in the suite, passing ones included, had to be advisory-NAMED for the run to qualify.
@@ -206,7 +273,12 @@ module Landable =
     /// conservative answer. A MIXED suite of findings (one advisory job, one genuinely failing ordinary job —
     /// the `registry-coherence` case, #642/#425) also stays `Blocking` (#2379 AC2): one non-advisory FINDING
     /// in the suite is enough to keep the run a real finding.
-    let private runGating (required: Set<string>) (liveChecksAll: CheckRow list) (r: RunRow) : Gating =
+    let private runGating
+        (advisory: AdvisorySet)
+        (required: Set<string>)
+        (liveChecksAll: CheckRow list)
+        (r: RunRow)
+        : Gating =
         match r.CheckSuiteId with
         | None -> Blocking
         | Some suiteId ->
@@ -219,7 +291,7 @@ module Landable =
                     let allAdvisory =
                         findings
                         |> List.forall (fun c ->
-                            match checkGating required c with
+                            match checkGating advisory required c with
                             | Advisory -> true
                             | Blocking -> false)
 
@@ -248,7 +320,14 @@ module Landable =
     /// pushed, which is #710 restored. `pending` never settles, so `--wait` rides it out on the transient
     /// case and, when the check is absent because it was RENAMED, exhausts its tries and refuses — the same
     /// no-merge, reached honestly. It cannot fail open: `pending` is never a green.
-    let scoreRequired
+    ///
+    /// `advisory` IS HOW THE CARVE-OUT WAS POPULATED (`.github#2517`), and it is a parameter rather than a
+    /// literal because this module is PURE: `required_status_checks.contexts` is IO, so the only honest
+    /// place to read it is the caller that already makes requests (`Reads.prLandableRequire`). Passing
+    /// `noDerivation _` reproduces the pre-#2517 rollup exactly, which is why `scoreRequired` below can
+    /// remain the fail-closed default with an unchanged signature.
+    let scoreDerived
+        (advisory: AdvisorySet)
         (required: string list)
         (mergeable: bool option)
         (runs: RunRow list)
@@ -265,12 +344,12 @@ module Landable =
             let live, _ = supersede runs
             let liveChecksAll = liveChecks runs checks
 
-            // `advisoryCheckNames` (#2373/#2400) are excluded from the bad/pending/total rollup UNLESS the
-            // caller explicitly named them in `required` — an opt-in override, never a silent one. This
-            // filters only the ROLLUP's own inputs; `missingFrom` below is still handed the FULL
-            // `liveChecksAll`, so a `--require`d advisory name is still satisfied by its presence exactly as
-            // any other required name would be — only its `bad`/`pending` contribution is what the
-            // advisory carve-out withholds by default.
+            // Advisory checks (#2373/#2400, derived since #2517) are excluded from the bad/pending/total
+            // rollup UNLESS the caller explicitly named them in `required` — an opt-in override, never a
+            // silent one. This filters only the ROLLUP's own inputs; `missingFrom` below is still handed the
+            // FULL `liveChecksAll`, so a `--require`d advisory name is still satisfied by its presence
+            // exactly as any other required name would be — only its `bad`/`pending` contribution is what
+            // the advisory carve-out withholds by default.
             let requiredSet = Set.ofList required
 
             // ONE classification, consulted through `Gating` rather than a `Set<string>.Contains` inlined
@@ -279,14 +358,14 @@ module Landable =
             let scoredChecks =
                 liveChecksAll
                 |> List.filter (fun c ->
-                    match checkGating requiredSet c with
+                    match checkGating advisory requiredSet c with
                     | Blocking -> true
                     | Advisory -> false)
 
             let scoredRuns =
                 live
                 |> List.filter (fun r ->
-                    match runGating requiredSet liveChecksAll r with
+                    match runGating advisory requiredSet liveChecksAll r with
                     | Blocking -> true
                     | Advisory -> false)
 
@@ -332,6 +411,18 @@ module Landable =
     /// the difference between a diagnosis and a mystery.
     let missing (required: string list) (runs: RunRow list) (checks: CheckRow list) : string list =
         missingFrom required (liveChecks runs checks)
+
+    /// `scoreDerived` WITH NO DERIVATION — nothing is advisory, every live check is scored. The fail-closed
+    /// default (`.github#2517`), and deliberately the same words `Reads.prLandableRequire` scores its FIRST
+    /// pass with: the green path must never pay for a policy read, so the derivation is consulted only where
+    /// it could change the answer.
+    let scoreRequired
+        (required: string list)
+        (mergeable: bool option)
+        (runs: RunRow list)
+        (checks: CheckRow list)
+        : PrState * int =
+        scoreDerived (NoDerivation noPolicyConsulted) required mergeable runs checks
 
     let scoreN (mergeable: bool option) (runs: RunRow list) (checks: CheckRow list) : PrState * int =
         scoreRequired [] mergeable runs checks

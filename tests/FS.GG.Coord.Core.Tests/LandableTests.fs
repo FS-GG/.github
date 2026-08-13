@@ -1,5 +1,7 @@
 namespace FS.GG.Coord.Tests
 
+open System.IO
+open System.Text.RegularExpressions
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -347,258 +349,441 @@ module LandableTests =
         let checks = [ named "registry-coherence" (Some 1L) "completed" (Some "success") ]
         Assert.Empty(missing [ "registry-coherence" ] [ greenRun ] checks)
 
-    // ---- advisory checks: a named check's failure does not gate the verdict (#2373) ------------------
+    // ---- the advisory carve-out is DERIVED from branch protection (`.github#2517`) --------------------
     //
-    // `claim-generation`'s own design doc (`.github#2342` AC6) says a red verdict from that job is
-    // "observed, not enforced" — but `scoreRequired` used to score EVERY live check unconditionally, so
-    // its FINDING conclusion turned `landable` red anyway. Reproduced live across three PRs in one wave
-    // (`.github#2373`'s host-authored comment): the PR without a hand-added `fsgg:pr-authorization`
-    // marker read `landable` RED; an otherwise-identical PR with one read GREEN. These tests hold the
-    // fix to that corpus.
+    // WHAT MOVED, AND WHAT DID NOT. `claim-generation`'s own design doc (`.github#2342` AC6) says a red
+    // verdict from that job is "observed, not enforced", and `scoreRequired` scoring every live check
+    // unconditionally enforced it anyway (`.github#2373`, reproduced live across three PRs in one wave).
+    // That repair was right; its INPUT was a hand-written `advisoryCheckNames = Set.ofList
+    // [ "claim-generation" ]` with exactly one entry, so every OTHER non-required check still gated the
+    // merge. Measured on `.github` PR #2514 at `f1d6218d775d278429cf6cea252b7d617ee3c723`: all six required
+    // contexts passing, the non-required `feed` arm failing, `mergeable_state` `unstable` (GitHub itself
+    // would merge) — and `landable` `red`, refusing a reviewed, host-accepted PR by the org's own protocol.
+    // `.github#2517` replaced the literal with the branch's own `required_status_checks.contexts`, of which
+    // "advisory" is exactly the complement. Every RULE #2373/#2379/#2400/#2454 established still holds
+    // below; only the input to `checkGating` moved.
+    //
+    // THE ADVISORY SUBJECT IS NOW `feed`, not `claim-generation`, and that substitution is itself a
+    // measurement rather than a convenience: `claim-generation` IS in `.github`'s required contexts today,
+    // so the derivation — correctly — scores it `Blocking` again. That direction has its own test below. It
+    // is the branch-protection arming `.github#2342` §9.1 named as this carve-out's exit condition ("do it
+    // in the SAME change that adds the context to `branches/main/protection/required_status_checks`, so the
+    // two subsystems move together"), and deriving the set is what made it happen with no source edit.
+
+    /// The required contexts `.github`'s `main` actually declares.
+    ///
+    /// *Verification:* `gh api repos/FS-GG/.github/branches/main/protection --jq
+    /// '.required_status_checks.contexts'` on 2026-08-13 returned exactly this list, and
+    /// `gh api repos/FS-GG/.github/rules/branches/main` carries no `required_status_checks` rule, so the
+    /// union `Reads.requiredContexts` forms over the two stores is this list alone.
+    let private mainContexts =
+        [ "contract-coherence / coherence"
+          "projection"
+          "roster-closure"
+          "drift"
+          "reconcile"
+          "claim-generation" ]
+
+    /// The derivation branch protection produces on `.github` today.
+    let private fromMain = advisoryFrom mainContexts
+
+    /// The `feed` workflow's run — the real non-required arm `.github#2517` measured failing on PR #2514
+    /// while every required context passed. It is in no required set used here, so the derivation makes it
+    /// and its check-run advisory. Suite `5L`, deliberately distinct from `greenRun`'s `1L`.
+    let private feedRun =
+        run ".github/workflows/feed.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
 
     [<Fact>]
-    let ``a FAILED claim-generation check does not red the verdict — it is advisory, not required (#2373)`` () =
-        let checks = [ named "claim-generation" (Some 2L) "completed" (Some "failure") ]
-        Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
+    let ``#2517 AC3: a PR whose ONLY failure is a NON-required check is GREEN — PR #2514's own shape`` () =
+        // THE ACCEPTANCE MEASUREMENT, in the unit. `feedRun`'s only check-run is the non-required `feed`,
+        // failing; the required `projection` reported and passed. Under the one-name literal this scored
+        // RED and refused a PR GitHub itself reported mergeable.
+        let feedCheck = named "feed" (Some 5L) "completed" (Some "failure")
+        let projection = named "projection" (Some 1L) "completed" (Some "success")
+
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ feedCheck; projection ]))
 
     [<Fact>]
-    let ``an advisory check's failure does not count toward the subject total either`` () =
-        let checks = [ named "claim-generation" (Some 2L) "completed" (Some "failure") ]
-        // Only the one live run is counted; the failing advisory check contributes nothing to `n`.
-        Assert.Equal((PrGreen, 1), scoreN (Some true) [ greenRun ] checks)
+    let ``#2517 AC1: the SAME inputs are RED with no derivation — the verdict is the branch's, not a literal's`` () =
+        // The contrast that makes the test above about the derivation rather than about the fixture. This
+        // is also exactly what `landable` answered before #2517, for every non-required check that was not
+        // the one name somebody had remembered to add.
+        let feedCheck = named "feed" (Some 5L) "completed" (Some "failure")
+        let projection = named "projection" (Some 1L) "completed" (Some "success")
+
+        Assert.Equal(PrRed, fst (scoreRequired [] (Some true) [ greenRun; feedRun ] [ feedCheck; projection ]))
 
     [<Fact>]
-    let ``an advisory check STILL RUNNING does not hold the verdict at pending either`` () =
-        let checks = [ named "claim-generation" (Some 2L) "in_progress" None ]
-        Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
+    let ``#2517 AC4: a failure that IS in the required set still reds — the fix is not "always green"`` () =
+        // The controlled counterpart. `drift` is a required context, so its failure gates exactly as it did
+        // before, and the run that carries it is a finding too.
+        let driftCheck = named "drift" (Some 5L) "completed" (Some "failure")
+
+        Assert.Equal(PrRed, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ driftCheck ]))
 
     [<Fact>]
-    let ``a REAL required check's failure is unaffected by the advisory carve-out — it still reds`` () =
-        // The carve-out is a NAMED, narrow set — not "ignore anything non-required". A genuinely failing,
-        // ordinary (non-advisory) check must still red the PR exactly as before.
-        let checks =
-            [ named "claim-generation" (Some 2L) "completed" (Some "failure")
-              named "build" (Some 3L) "completed" (Some "failure") ]
-        Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
+    let ``#2517 AC2: --require still overrides the derivation for a check the caller names`` () =
+        // #2373's opt-in lever, unchanged, and it must still WIN: `--require registry-coherence` names a
+        // check branch protection cannot require, and it is the skill-registry-autofix bot's whole reason
+        // for calling this command (#642/#425/#737). A derivation that silently overrode the flag would
+        // break the one caller the flag exists for.
+        let feedCheck = named "feed" (Some 5L) "completed" (Some "failure")
 
-    [<Fact>]
-    let ``a caller that explicitly --requires claim-generation opts back into scoring its failure`` () =
-        // The one lever that re-arms the exemption for a single caller: name it in `required`. A missing
-        // OR failing named check both stop being invisible to the rollup once asked for by name.
-        let checks = [ named "claim-generation" (Some 2L) "completed" (Some "failure") ]
-        let state, _ = scoreRequired [ "claim-generation" ] (Some true) [ greenRun ] checks
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ feedCheck ]))
+
+        let state, _ = scoreDerived fromMain [ "feed" ] (Some true) [ greenRun; feedRun ] [ feedCheck ]
         Assert.Equal(PrRed, state)
 
     [<Fact>]
-    let ``--require claim-generation still treats its ABSENCE as pending, not as invisible`` () =
-        let state, _ = scoreRequired [ "claim-generation" ] (Some true) [ greenRun ] []
+    let ``#2517 AC5: an UNREADABLE policy fails CLOSED — every check is scored, exactly as before`` () =
+        // THE #1575/#463 RECONCILIATION, and the reason this change cannot restore #463. Reading
+        // `branches/{b}/protection` needs `administration: read`, which is not a valid `permissions:` scope
+        // for a workflow's GITHUB_TOKEN, and `landable`'s unattended caller runs entirely under one. Failing
+        // CLOSED means "nothing is advisory", which is what lands today — so a 403 costs a request, never a
+        // merge, and the derivation can only ever WIDEN what merges, never narrow it.
+        let feedCheck = named "feed" (Some 5L) "completed" (Some "failure")
+
+        let unreadable =
+            noDerivation "could not read FS-GG/.github branch main protection — the token may not see it"
+
+        Assert.False(isDerived unreadable)
+        Assert.Equal(PrRed, fst (scoreDerived unreadable [] (Some true) [ greenRun; feedRun ] [ feedCheck ]))
+
+        // ...and INDISTINGUISHABLE, at the verdict AND at the subject count, from never having asked.
+        Assert.Equal(
+            scoreRequired [] (Some true) [ greenRun; feedRun ] [ feedCheck ],
+            scoreDerived unreadable [] (Some true) [ greenRun; feedRun ] [ feedCheck ]
+        )
+
+    [<Fact>]
+    let ``#2517 AC6: an EMPTY required set is NOT a derivation — complement-of-empty must not green everything`` () =
+        // THE SHARPEST HAZARD IN THIS CHANGE, and a correction to AC5 as originally filed. A SUCCESSFUL read
+        // can return an empty required set: `Reads.classicRequired` maps a 404 to `Ok []` and "protected,
+        // but not on status checks" to `Ok []`, and the union of the two stores has no non-empty guard.
+        // "Advisory = complement of required" over an empty set makes EVERY check advisory — `landable`
+        // green on every repository with no branch protection at all, which is strictly worse than the
+        // defect #2517 repairs. AC5 as first written covered only a FAILED read and would have shipped it.
+        //
+        // GATE-INVERSION, WITH THE FIXTURE BUILT SO THE MUTATION IS VISIBLE. Deleting the guard inside
+        // `advisoryFrom` (returning `DerivedFrom (Set.ofList contexts)` unconditionally) turns this `PrRed`
+        // into `PrGreen`: `feed` and `feedRun` both become advisory and drop out, while `greenRun` — whose
+        // own suite carries no check-runs, so `runGating`'s empty-suite arm keeps it `Blocking` — survives
+        // as the one scored subject, and one passing subject is a green. WITHOUT `greenRun` the mutation
+        // would instead drop the count to zero, and #606's SEPARATE zero-subjects rule would supply the same
+        // `PrRed` for an unrelated reason: the mutation would survive undetected, which is the masking trap
+        // `.github#2400`'s own AC3 comment records.
+        let feedCheck = named "feed" (Some 5L) "completed" (Some "failure")
+        let empty = advisoryFrom []
+
+        Assert.False(isDerived empty)
+        Assert.Equal(PrRed, fst (scoreDerived empty [] (Some true) [ greenRun; feedRun ] [ feedCheck ]))
+
+        // AC6's own words — "indistinguishable, at the verdict, from an unreadable one" — in one assertion.
+        Assert.Equal(
+            scoreDerived (noDerivation "unreadable") [] (Some true) [ greenRun; feedRun ] [ feedCheck ],
+            scoreDerived empty [] (Some true) [ greenRun; feedRun ] [ feedCheck ]
+        )
+
+    [<Fact>]
+    let ``#2517 AC6: a required set of BLANK contexts is empty too — the guard is on content, not length`` () =
+        // `Reads` already drops empty contexts before the union, so this is defence in depth: a payload that
+        // yields `[ "" ]` must not manufacture a one-element "derivation" whose complement is everything but
+        // the empty string.
+        Assert.False(isDerived (advisoryFrom [ "" ]))
+        Assert.False(isDerived (advisoryFrom [ ""; "" ]))
+        Assert.True(isDerived (advisoryFrom [ ""; "drift" ]))
+
+    [<Fact>]
+    let ``#2517: claim-generation is BLOCKING again, because main now REQUIRES it — #2342 §9.1's arming, derived`` () =
+        // THE BEHAVIOUR CHANGE THIS ITEM SHIPS, stated rather than discovered. #2342's design doc named
+        // removing the name as the way to arm this "for real", to be done in the same change that adds the
+        // context to branch protection. The context IS added (see `mainContexts`' verification), so the
+        // derivation arms it the moment protection says so — the two subsystems can no longer drift, which
+        // is the drift that produced #2373 in the first place.
+        let cg = named "claim-generation" (Some 5L) "completed" (Some "failure")
+
+        Assert.Equal(PrRed, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ cg ]))
+
+        // ...and under the world as it WAS — protection not naming it — #2373's rule still holds exactly.
+        // The rule never changed; only who supplies its input did.
+        let beforeArming =
+            advisoryFrom [ "contract-coherence / coherence"; "projection"; "roster-closure"; "drift"; "reconcile" ]
+
+        Assert.Equal(PrGreen, fst (scoreDerived beforeArming [] (Some true) [ greenRun; feedRun ] [ cg ]))
+
+    [<Fact>]
+    let ``#2517: membership is EXACT — a check merely PREFIXED BY a required context is not required`` () =
+        // The old literal's prefix/substring pair, at the new polarity. Broadening the membership test to
+        // `requiredContexts |> Set.exists (fun r -> c.Name.StartsWith(r: string))` would classify
+        // `projection-v2` — a DIFFERENT check that merely shares a prefix with the required `projection` —
+        // as `Blocking` and red this fixture. Exact `Set.Contains` keeps it advisory, which is what the
+        // branch's own declaration says: `projection-v2` is not a context `main` requires.
+        let sibling = named "projection-v2" (Some 5L) "completed" (Some "failure")
+
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ sibling ]))
+
+    [<Fact>]
+    let ``#2517: ...and a check whose name is a PREFIX OF a required context is not required either`` () =
+        // The other direction: `requiredContexts |> Set.exists (fun r -> r.StartsWith(c.Name: string))`
+        // would make `roster` — a prefix of the required `roster-closure` — `Blocking`. Held apart from the
+        // test above so a repair that closes one broadening but not the other is still caught.
+        let shorter = named "roster" (Some 5L) "completed" (Some "failure")
+
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ shorter ]))
+
+    [<Fact>]
+    let ``#2517: scoreRequired IS scoreDerived with no derivation — the fail-closed default cannot drift`` () =
+        // `Reads.prLandableRequire` scores its FIRST pass with `scoreRequired`, precisely so the green path
+        // pays for no policy read. That is only safe while the two are the same function, so pin it.
+        let checks = [ named "feed" (Some 2L) "completed" (Some "failure") ]
+
+        Assert.Equal(
+            scoreDerived (noDerivation "no branch policy was consulted") [ "x" ] (Some true) [ greenRun ] checks,
+            scoreRequired [ "x" ] (Some true) [ greenRun ] checks
+        )
+
+    [<Fact>]
+    let ``#2517 AC7: no hardcoded check-name set remains in Landable.fs — the literal is GONE, not supplemented`` () =
+        // AC7 is "gone, not merely supplemented", and the only thing that holds a source literal down is a
+        // test that reads the source. It scans CODE, not prose: the doc comments must stay free to NAME
+        // `advisoryCheckNames` and `claim-generation`, because the whole #2373/#2400/#2454 history is
+        // written there and a gate that fired on the explanation would make the lesson unwritable — which is
+        // how gates actually die (`check-recipe-landable.py` draws the same prose/code line by hand).
+        //
+        // ALLOW-LISTED, NOT PATTERN-MATCHED. "Does this string look like a check name?" is not decidable —
+        // `contract-coherence / coherence` contains a space, `feed` is an English word — and a heuristic gate
+        // is one people learn to work around. So every string literal in executable code must be one of:
+        // GitHub's own status/conclusion vocabulary, a verdict word this module projects, or one of the two
+        // documented `NoDerivation` sentences. A NEW literal reds this test until somebody adds it here
+        // deliberately, which is exactly the review moment the hand-written set never got.
+        let rec repoRoot (dir: string) =
+            if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Core/Landable.fs")) then
+                dir
+            else
+                repoRoot (Directory.GetParent(dir).FullName)
+
+        let path =
+            Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Landable.fs")
+
+        // Comments cut at `//`, which is sound here because no string literal in this module contains one —
+        // a property the allow-list below independently enforces, since a literal carrying `//` would be
+        // truncated into something that is not in it.
+        let code =
+            File.ReadAllLines path
+            |> Array.map (fun line ->
+                match line.IndexOf "//" with
+                | -1 -> line
+                | i -> line.Substring(0, i))
+            |> String.concat "\n"
+
+        let allowed =
+            set
+                [ ""
+                  "completed"
+                  "success"
+                  "skipped"
+                  "green"
+                  "conflicted"
+                  "pending"
+                  "red"
+                  "unknown"
+                  "merged"
+                  "closed"
+                  "the base branch requires no status checks, and an empty required set is not a derivation"
+                  "no branch policy was consulted" ]
+
+        let unexpected =
+            Regex.Matches(code, "\"([^\"]*)\"")
+            |> Seq.map (fun m -> m.Groups.[1].Value)
+            |> Seq.distinct
+            |> Seq.filter (fun s -> not (allowed.Contains s))
+            |> List.ofSeq
+
+        Assert.Equal<string list>([], unexpected)
+
+        // ...and the deleted binding cannot come back under its own name either. (Its NAME survives in the
+        // prose above it, which is the point of scanning `code` rather than the file.)
+        Assert.DoesNotContain("advisoryCheckNames", code)
+
+        // A gate that only forbids is half a gate: the derivation must actually be what populates the
+        // carve-out, or "no literal remains" would also pass on a module that carves nothing out at all.
+        Assert.Contains("advisoryFrom", code)
+
+    // ---- the #2373 check-level corpus, re-expressed over the derived set -----------------------------
+
+    [<Fact>]
+    let ``a FAILED non-required check does not red the verdict — #2373's rule, derived (#2517)`` () =
+        let checks = [ named "feed" (Some 2L) "completed" (Some "failure") ]
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun ] checks))
+
+    [<Fact>]
+    let ``an advisory check's failure does not count toward the subject total either`` () =
+        let checks = [ named "feed" (Some 2L) "completed" (Some "failure") ]
+        // Only the one live run is counted; the failing advisory check contributes nothing to `n`.
+        Assert.Equal((PrGreen, 1), scoreDerived fromMain [] (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``an advisory check STILL RUNNING does not hold the verdict at pending either`` () =
+        let checks = [ named "feed" (Some 2L) "in_progress" None ]
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun ] checks))
+
+    [<Fact>]
+    let ``a REAL required check's failure is unaffected by the carve-out — it still reds`` () =
+        // The carve-out is the complement of a DECLARED set — not "ignore anything that failed". A
+        // genuinely failing required check must still red the PR exactly as before.
+        let checks =
+            [ named "feed" (Some 2L) "completed" (Some "failure")
+              named "drift" (Some 3L) "completed" (Some "failure") ]
+
+        Assert.Equal(PrRed, fst (scoreDerived fromMain [] (Some true) [ greenRun ] checks))
+
+    [<Fact>]
+    let ``a caller that explicitly --requires an advisory check opts back into scoring its failure`` () =
+        // The one lever that re-arms the exemption for a single caller: name it in `required`. A missing OR
+        // failing named check both stop being invisible to the rollup once asked for by name.
+        let checks = [ named "feed" (Some 2L) "completed" (Some "failure") ]
+        let state, _ = scoreDerived fromMain [ "feed" ] (Some true) [ greenRun ] checks
+        Assert.Equal(PrRed, state)
+
+    [<Fact>]
+    let ``--require on an advisory name still treats its ABSENCE as pending, not as invisible`` () =
+        let state, _ = scoreDerived fromMain [ "feed" ] (Some true) [ greenRun ] []
         Assert.NotEqual(PrGreen, state)
         Assert.NotEqual(PrRed, state)
-        Assert.Equal<string list>([ "claim-generation" ], missing [ "claim-generation" ] [ greenRun ] [])
+        Assert.Equal<string list>([ "feed" ], missing [ "feed" ] [ greenRun ] [])
 
     [<Fact>]
     let ``an advisory check that PASSES is unaffected — green stays green either way`` () =
-        let checks = [ named "claim-generation" (Some 2L) "completed" (Some "success") ]
+        let checks = [ named "feed" (Some 2L) "completed" (Some "success") ]
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun ] checks))
         Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
 
-    [<Fact>]
-    let ``a check that only SHARES A PREFIX with an advisory name is still scored, and still reds (#2373 repair 1)`` () =
-        // The exemption is a NAMED, EXACT set — not a prefix/substring match. `claim-generation-v2` is a
-        // DIFFERENT check that merely happens to share a prefix with the one advisory entry
-        // (`claim-generation`); nothing about this fix's own reasoning extends the "observed, not
-        // enforced" promise to it, and it must still gate the merge like any other ordinary check.
-        //
-        // This is the boundary the independent critic's own mutation found undefended: broadening
-        // `advisoryCheckNames.Contains c.Name` (exact) to
-        // `advisoryCheckNames |> Set.exists (fun a -> c.Name.StartsWith(a: string))` (prefix) left the
-        // whole 729-test suite green, because no existing case used a name that shares a prefix with
-        // `"claim-generation"` without BEING it. This test is written to fail under that broadening and
-        // pass under the current exact match — both directions demonstrated below.
-        let checks = [ named "claim-generation-v2" (Some 2L) "completed" (Some "failure") ]
-        Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
-
-    [<Fact>]
-    let ``a check whose name merely CONTAINS an advisory name as a substring is still scored, and still reds`` () =
-        // The substring-broadening sibling of the prefix case above: `advisoryCheckNames |> Set.exists
-        // (fun a -> c.Name.Contains(a: string))` would ALSO match a name like
-        // `pre-claim-generation-suffix`, which shares no prefix with `claim-generation` but does contain
-        // it. Held apart from the prefix test so a repair that fixes one broadening but not the other is
-        // still caught.
-        let checks = [ named "pre-claim-generation-suffix" (Some 2L) "completed" (Some "failure") ]
-        Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
-
-    // ---- advisory checks reach their CONTAINING WORKFLOW RUN too (#2400, closing #2379) --------------
+    // ---- advisory checks reach their CONTAINING WORKFLOW RUN too (#2400, closing #2379; #2454) -------
     //
-    // #2373 filtered only the check-run half of the rollup. `coherence.yml` runs `claim-generation`
-    // ALONGSIDE ordinary jobs, so the workflow RUN it belongs to still concluded `failure` whenever
-    // `claim-generation` failed — and `live` (the run list) was never filtered, so that run's redness
-    // still gated the merge (#2379). These tests hold `runGating`'s three cases to the corpus #2379
-    // itself specified.
+    // #2373 filtered only the check-run half of the rollup. A workflow that runs an advisory job ALONGSIDE
+    // ordinary ones still concluded `failure` whenever the advisory job failed — and `live` (the run list)
+    // was never filtered, so that run's redness still gated the merge (#2379). These tests hold `runGating`'s
+    // arms to the corpus #2379 and #2454 specified; only the source of "advisory" has changed (#2517).
 
     [<Fact>]
-    let ``AC1: a run failing SOLELY because its one advisory check failed does not red the verdict (#2379)`` () =
-        // `coherenceRun` is the run; its ONLY check-run (same suite) is the advisory `claim-generation`,
-        // also failing. Both are excluded from the rollup — but `greenRun` (a DIFFERENT suite, no check
-        // of its own here) is still live and green, so the verdict is GREEN, not a #606 zero-subjects red.
-        let coherenceRun =
-            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+    let ``AC1: a run failing SOLELY because its one non-required check failed does not red the verdict (#2379)`` () =
+        // `feedRun` is the run; its ONLY check-run (same suite) is the non-required `feed`, also failing.
+        // Both are excluded — but `greenRun` (a DIFFERENT suite) is still live and green, so the verdict is
+        // GREEN, not a #606 zero-subjects red.
+        let advisoryCheck = named "feed" (Some 5L) "completed" (Some "failure")
 
-        let advisoryCheck = named "claim-generation" (Some 5L) "completed" (Some "failure")
-        Assert.Equal(PrGreen, score (Some true) [ greenRun; coherenceRun ] [ advisoryCheck ])
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ advisoryCheck ]))
 
     [<Fact>]
-    let ``AC2: a run with ONE genuinely non-advisory failing check in the same suite still reds (#2379)`` () =
-        // The `registry-coherence` case (#642/#425): a mixed suite — one advisory job, one ordinary job
-        // that really failed — must not have its redness laundered by the advisory job sharing its suite.
-        let coherenceRun =
-            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+    let ``AC2: a run with ONE genuinely required failing check in the same suite still reds (#2379)`` () =
+        // The `registry-coherence` case (#642/#425), on the derived set: a mixed suite — one advisory job,
+        // one required job that really failed — must not have its redness laundered by the advisory job
+        // sharing its suite.
+        let advisoryCheck = named "feed" (Some 5L) "completed" (Some "failure")
+        let realCheck = named "contract-coherence / coherence" (Some 5L) "completed" (Some "failure")
 
-        let advisoryCheck = named "claim-generation" (Some 5L) "completed" (Some "failure")
-        let realCheck = named "contract-coherence" (Some 5L) "completed" (Some "failure")
-        Assert.Equal(PrRed, score (Some true) [ greenRun; coherenceRun ] [ advisoryCheck; realCheck ])
+        Assert.Equal(
+            PrRed,
+            fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ advisoryCheck; realCheck ])
+        )
 
     [<Fact>]
     let ``AC3: a run failing with NO check-runs of its own still reds — isolated from #606's zero-subjects rule (#2379)`` () =
         // The case that makes "just stop scoring runs" wrong: GitHub failed the run before any job could
-        // even report, so there is no check-run to attribute the failure to — `runGating`'s empty-suite
-        // arm must stay `Blocking`, not fall open because "no advisory checks disagreed".
+        // even report, so there is no check-run to attribute the failure to — `runGating`'s empty-suite arm
+        // must stay `Blocking`, not fall open because "no advisory checks disagreed".
         //
-        // `unrelatedGreenCheck` lives on a DIFFERENT suite (99L, not `startupFailure`'s 5L), so its own
-        // `checkGating` — unaffected by how `startupFailure` is classified — keeps `total <> 0` whatever
-        // `runGating`'s empty-suite arm decides. Without it (the original version of this test used only
-        // `greenRun`, whose suite ALSO has no check-runs in an empty `checks` list, so IT hits the same
-        // empty-suite arm) a `| [] -> Blocking` -> `| [] -> Advisory` mutation reclassifies every bare run
-        // as Advisory, drops the subject count to zero, and #606's SEPARATE "zero subjects is not green"
-        // rule supplies the same `PrRed` for an unrelated reason — the mutation survives, undetected,
-        // because this test's own red was never coming from the arm it claims to hold (found at review,
-        // #2400 round 1). Pinning `startupFailure` next to a subject whose gating cannot be affected by
-        // that arm is what makes this test's `PrRed` actually depend on `| [] -> Blocking`.
-        let startupFailure =
-            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+        // `unrelatedGreenCheck` lives on a DIFFERENT suite (99L) AND carries a REQUIRED name, so its own
+        // `checkGating` — unaffected by how `feedRun` is classified — keeps `total <> 0` whatever the
+        // empty-suite arm decides. Both properties are load-bearing: an advisory-named check here would be
+        // dropped by `checkGating` and a `| [] -> Blocking` -> `| [] -> Advisory` mutation would then reach
+        // zero subjects, where #606's SEPARATE rule supplies the same `PrRed` for an unrelated reason and
+        // the mutation survives undetected (the masking trap found at review in #2400 round 1).
+        let unrelatedGreenCheck = named "projection" (Some 99L) "completed" (Some "success")
 
-        let unrelatedGreenCheck = named "unrelated" (Some 99L) "completed" (Some "success")
-        Assert.Equal(PrRed, score (Some true) [ startupFailure ] [ unrelatedGreenCheck ])
+        Assert.Equal(PrRed, fst (scoreDerived fromMain [] (Some true) [ feedRun ] [ unrelatedGreenCheck ]))
 
     [<Fact>]
     let ``a run whose suite is entirely CLEAN (every check-run already passed) but the run itself concluded bad still reds (#2454)`` () =
-        // The THIRD arm `runGating`'s `findings` filter introduces, next to the empty-suite arm above: a
-        // suite that has live check-runs, but none of them is a FINDING (every one already completed
-        // `success`), while the RUN's own conclusion is nonetheless bad. Nothing in the suite explains that
-        // badness, so `runGating` stays conservative and returns `Blocking` — the doc comment above
-        // `runGating` names this exactly ("nothing in its suite explains a bad or pending run status, so
-        // leaving it scored is the conservative answer").
+        // The THIRD arm `runGating`'s `findings` filter introduces: a suite that has live check-runs, but
+        // none of them is a FINDING (every one completed `success`), while the RUN's own conclusion is
+        // nonetheless bad. Nothing in the suite explains that badness, so `runGating` stays conservative and
+        // returns `Blocking`.
         //
-        // Pinned with the SAME masking discipline AC3's own comment documents (found at review, #2400 round
-        // 1, and reproduced for this branch at review, #2454 round 1): `greenRun` lives on a DIFFERENT suite
-        // (1L, not `cleanSuiteBadRun`'s 5L), so it keeps `total <> 0` whatever this arm decides, which is what
-        // makes this test's `PrRed` depend on the arm itself rather than on #606's unrelated zero-subjects
-        // rule. A `| [] -> Blocking` -> `| [] -> Advisory` mutation on this arm (findings empty) would launder
-        // `cleanSuiteBadRun`'s own `failure` conclusion to `Advisory`, dropping it from the rollup and turning
-        // this `PrRed` into a false `PrGreen` — exactly the gap a bare "does the suite total change?" test
-        // cannot catch, because `onlyCheckPassed` (already `Blocking`, already non-bad) contributes nothing
-        // to `bad` either way.
-        let cleanSuiteBadRun =
-            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+        // Pinned with the same masking discipline AC3's comment documents: `greenRun` lives on a DIFFERENT
+        // suite (1L), so it keeps `total <> 0` whatever this arm decides. A `findings = [] -> Advisory`
+        // mutation would launder `feedRun`'s own `failure` conclusion, dropping it from the rollup and
+        // turning this `PrRed` into a false `PrGreen`.
+        let onlyCheckPassed = named "projection" (Some 5L) "completed" (Some "success")
 
-        let onlyCheckPassed = named "some-job" (Some 5L) "completed" (Some "success")
-        Assert.Equal(PrRed, score (Some true) [ greenRun; cleanSuiteBadRun ] [ onlyCheckPassed ])
+        Assert.Equal(PrRed, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ onlyCheckPassed ]))
 
     [<Fact>]
-    let ``AC1 (multi-check suite, #2454): an advisory-failing check ALONGSIDE genuinely GREEN non-advisory checks does not red — coherence.yml's real shape`` () =
-        // `.github#2454`: this is the shape `coherence.yml` actually produces and the ORIGINAL #2400 fix did
-        // not cover — one suite carrying the advisory `claim-generation` (failing) plus the workflow's OTHER
-        // three jobs (`.github/workflows/coherence.yml`'s own `jobs:` list: `contract-coherence`,
-        // `projection`, `roster-closure`, `claim-generation` — four jobs, one suite; `drift` and `reconcile`
-        // are real check-run names on a PR but belong to entirely separate workflows and never share this
-        // suite, a correction made to #2454's own AC1 wording at review) that all PASSED. The first shipped
-        // `runGating` surveyed suite MEMBERSHIP: every check-run in the suite, passing ones included, had to
-        // be advisory-named for the run to qualify as `Advisory` — so the mere PRESENCE of these passing
-        // ordinary jobs kept `coherenceRun` `Blocking`, and its own `failure` conclusion (caused solely by the
-        // advisory job) still reded the verdict. The fix filters to FINDINGS (bad or pending) before asking
-        // whether everything left is advisory; a passing check-run is not a finding and cannot hold the run
-        // `Blocking` on its own.
-        let coherenceRun =
-            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
-
-        let advisoryFailing = named "claim-generation" (Some 5L) "completed" (Some "failure")
-        let ordinaryGreenA = named "contract-coherence" (Some 5L) "completed" (Some "success")
+    let ``AC1 (multi-check suite, #2454): an advisory-failing check ALONGSIDE genuinely GREEN required checks does not red`` () =
+        // `.github#2454`: the shape a real workflow produces, and the one the ORIGINAL #2400 fix did not
+        // cover — one suite carrying the advisory job (failing) plus the workflow's other jobs, all passing.
+        // The first shipped `runGating` surveyed suite MEMBERSHIP: every check-run in the suite, passing ones
+        // included, had to be advisory for the run to qualify, so the mere PRESENCE of passing ordinary jobs
+        // kept the run `Blocking` and its own advisory-caused `failure` still reded the verdict. Filtering to
+        // FINDINGS first is what makes "solely because its advisory job did" actually mean solely.
+        let advisoryFailing = named "feed" (Some 5L) "completed" (Some "failure")
+        let ordinaryGreenA = named "contract-coherence / coherence" (Some 5L) "completed" (Some "success")
         let ordinaryGreenB = named "projection" (Some 5L) "completed" (Some "success")
         let ordinaryGreenC = named "roster-closure" (Some 5L) "completed" (Some "success")
 
         Assert.Equal(
             PrGreen,
-            score (Some true) [ greenRun; coherenceRun ] [ advisoryFailing; ordinaryGreenA; ordinaryGreenB; ordinaryGreenC ]
+            fst (
+                scoreDerived
+                    fromMain
+                    []
+                    (Some true)
+                    [ greenRun; feedRun ]
+                    [ advisoryFailing; ordinaryGreenA; ordinaryGreenB; ordinaryGreenC ]
+            )
         )
 
     [<Fact>]
     let ``AC2 (multi-check suite, #2454): List.forall over FINDINGS still governs the SUBJECT COUNT, though not the verdict on its own`` () =
-        // CORRECTED AT REVIEW (`.github#2454` round 2): an earlier version of this test and comment claimed a
-        // `forall` -> `exists` mutation of `runGating`'s findings test would flip THIS shape's verdict. That
-        // claim was FALSE and the round-2 critic proved it: applying that exact mutation still leaves the
-        // full suite green, 806/806 — `dotnet fsi` against the built DLL confirms both the correct build and
-        // the mutant return `(PrRed, _)` for this fixture, never `PrGreen`.
+        // CORRECTED AT REVIEW (`.github#2454` round 2): a `forall` -> `exists` mutation of `runGating`'s
+        // findings test cannot flip THIS shape's verdict, and the reason is structural rather than incidental
+        // to the fixture. `findings` and `scoredChecks` are BOTH derived from the same `checks` list, and
+        // `checkGating` classifies each check-run independently of whatever `runGating` decides for its run —
+        // so a `Blocking` member of `findings`, BEING a finding and BEING non-advisory, is always also scored
+        // directly through `scoredChecks` and forces the same non-green verdict either way.
         //
-        // The reason is structural, not incidental to this fixture: `findings` and `scoredChecks` are BOTH
-        // derived from the SAME `checks` list, and `checkGating` classifies each check-run independent of
-        // whatever `runGating` decides for the run that contains it. `forall` and `exists` can only disagree
-        // when `findings` holds at least one `Advisory` AND at least one `Blocking` member — and that
-        // `Blocking` member, BEING a finding (bad or pending) and BEING non-advisory, is *always* also scored
-        // directly through `scoredChecks`, so it forces the same non-green verdict whether or not `runGating`
-        // additionally counts the RUN itself. Filtering to findings before the `forall` — this fix's own
-        // change — is what makes the run's own inclusion redundant with the check-level rollup whenever a
-        // real, non-advisory finding coexists with an advisory one; the OLD membership-based rule did not
-        // have this property (its differentiator, a check-run that had already PASSED, contributed nothing to
-        // `scoredChecks` on its own, which is exactly why the pre-fix `AC4` test — see history — could still
-        // observe a verdict flip that this one structurally cannot).
-        //
-        // What `forall` vs `exists` DOES still change: the SUBJECT COUNT `scoreN`/`scoreRequired` return
-        // alongside the verdict (`#606`/`#724`'s own reason that count is a first-class output, not a detail —
-        // see `scoreN`'s doc comment). Under the correct `forall`, `coherenceRun` stays `Blocking` and is
-        // itself a counted subject; under a mutant `exists`, it is wrongly excluded. Gate-inversion evidence,
-        // both directions measured directly against the built DLL via this exact fixture (`greenRun`;
-        // `coherenceRun` completed/failure; `advisoryFailing` = `claim-generation` failing; `realFailing` =
-        // `contract-coherence` failing; `ordinaryGreen` = `projection` passing — all on suite `5L` except
-        // `greenRun`, whose distinct suite `1L` is what keeps `total <> 0` whichever way this arm goes):
-        //   - correct `forall`:  `scoreN` = `(PrRed, 4)` — `greenRun` + `coherenceRun` + the two bad checks
-        //   - mutant  `exists`:  `scoreN` = `(PrRed, 3)` — `coherenceRun` dropped from the count, verdict held
-        // Both measured directly (not inferred) before this test was written; see the PR's round-2 discussion
-        // for the reproduction. The verdict assertion below therefore pins what a `forall`->`exists` mutation
-        // on its own CANNOT flip; the count assertion pins what it CAN and does.
-        let coherenceRun =
-            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
-
-        let advisoryFailing = named "claim-generation" (Some 5L) "completed" (Some "failure")
-        let realFailing = named "contract-coherence" (Some 5L) "completed" (Some "failure")
+        // What the mutation DOES change is the SUBJECT COUNT (`#606`/`#724`'s own reason the count is a
+        // first-class output). Under the correct `forall`, `feedRun` stays `Blocking` and is itself a counted
+        // subject; under a mutant `exists` it is wrongly excluded and the count drops to 3. The verdict
+        // assertion below pins what that mutation cannot flip; the count assertion pins what it can.
+        let advisoryFailing = named "feed" (Some 5L) "completed" (Some "failure")
+        let realFailing = named "drift" (Some 5L) "completed" (Some "failure")
         let ordinaryGreen = named "projection" (Some 5L) "completed" (Some "success")
 
         Assert.Equal(
             (PrRed, 4),
-            scoreN (Some true) [ greenRun; coherenceRun ] [ advisoryFailing; realFailing; ordinaryGreen ]
+            scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ advisoryFailing; realFailing; ordinaryGreen ]
         )
 
     [<Fact>]
     let ``a run whose only check-run is advisory and STILL RUNNING is not held at pending either`` () =
-        // Symmetry with the check-run half (`an advisory check STILL RUNNING does not hold the verdict at
-        // pending either`, above): `runGating` is a function of NAMES, not status, so an in-progress
-        // advisory-only run is excluded from `pending` exactly as a completed-and-failed one is excluded
-        // from `bad`.
-        let coherenceRun =
-            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "in_progress" None (Some 5L)
+        // Symmetry with the check-run half: `runGating` is a function of NAMES, not status, so an
+        // in-progress advisory-only run is excluded from `pending` exactly as a completed-and-failed one is
+        // excluded from `bad`.
+        let pendingFeedRun =
+            run ".github/workflows/feed.yml" "pull_request" "item/x" [ 1 ] 5 "in_progress" None (Some 5L)
 
-        let advisoryCheck = named "claim-generation" (Some 5L) "in_progress" None
-        Assert.Equal(PrGreen, score (Some true) [ greenRun; coherenceRun ] [ advisoryCheck ])
+        let advisoryCheck = named "feed" (Some 5L) "in_progress" None
+
+        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun; pendingFeedRun ] [ advisoryCheck ]))
 
     [<Fact>]
     let ``a --required advisory name reaches the run too — opting in un-hides the containing run`` () =
-        // The other direction of the #2373 opt-in lever, extended to runs (#2400): naming the advisory
-        // check in `required` makes `checkGating` return `Blocking` for it, which flips `runGating`'s
-        // all-advisory test for the run that contains it — so `--require claim-generation` restores BOTH
-        // halves to the rollup, not just the check-run half.
-        let coherenceRun =
-            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
-
-        let advisoryCheck = named "claim-generation" (Some 5L) "completed" (Some "failure")
-        let state, _ = scoreRequired [ "claim-generation" ] (Some true) [ greenRun; coherenceRun ] [ advisoryCheck ]
+        // The other direction of #2373's opt-in lever, extended to runs (#2400): naming the advisory check in
+        // `required` makes `checkGating` return `Blocking` for it, which flips `runGating`'s all-advisory test
+        // for the run that contains it — so `--require` restores BOTH halves to the rollup.
+        let advisoryCheck = named "feed" (Some 5L) "completed" (Some "failure")
+        let state, _ = scoreDerived fromMain [ "feed" ] (Some true) [ greenRun; feedRun ] [ advisoryCheck ]
         Assert.Equal(PrRed, state)
 
     // ---- settled: the --wait break-vs-keep-waiting decision (#724) -----------------------------------
