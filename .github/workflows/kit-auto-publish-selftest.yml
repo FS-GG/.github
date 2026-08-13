@@ -16,6 +16,11 @@
 # (check-paths-coherence.py grades that agreement). Every path below is a real INPUT to the fixture,
 # not a guess:
 #   - tests/kit-auto-publish/**                       the fixture itself
+#   - registry/CHANGELOG.md                           SEEDED INTO THE SANDBOX and read back by the
+#     registry/dependencies.yml                       evidence legs, so their sensitivity depends on
+#                                                     this data; omitting them left the fixture unable
+#                                                     to be re-run by the very change that alters what
+#                                                     it is seeded with (round-1 M1(b))
 #   - scripts/kit-auto-publish.py                     driven directly by the state-machine legs
 #   - scripts/prepend-registry-changelog-entry.py     copied into the sandbox and EXECUTED by the
 #     scripts/check-registry-changelog.py             evidence legs; a change to either can red this
@@ -32,6 +37,8 @@ on:
   pull_request:
     paths:
       - "tests/kit-auto-publish/**"
+      - "registry/CHANGELOG.md"
+      - "registry/dependencies.yml"
       - "scripts/kit-auto-publish.py"
       - "scripts/prepend-registry-changelog-entry.py"
       - "scripts/check-registry-changelog.py"
@@ -41,6 +48,8 @@ on:
     branches: [main]
     paths:
       - "tests/kit-auto-publish/**"
+      - "registry/CHANGELOG.md"
+      - "registry/dependencies.yml"
       - "scripts/kit-auto-publish.py"
       - "scripts/prepend-registry-changelog-entry.py"
       - "scripts/check-registry-changelog.py"

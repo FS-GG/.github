@@ -1599,16 +1599,27 @@ STUB
   chmod +x "$1/bin/gh"
 }
 
-# evidence_sandbox <name> -> a REAL bare remote + clone (via make_worktree, the same helper every tag
-# leg uses) whose `main` carries the LIVE registry/ files and the REAL scripts the step invokes by
-# relative path. Copying the real scripts is itself an assertion: if the workflow ever calls something
-# this repository does not ship, these legs fail rather than silently stubbing it in.
+# evidence_sandbox <name> [skewed-updated-date] -> a REAL bare remote + clone (via make_worktree, the
+# same helper every tag leg uses) whose `main` carries the LIVE registry/ files and the REAL scripts
+# the step invokes by relative path. Copying the real scripts is itself an assertion: if the workflow
+# ever calls something this repository does not ship, these legs fail rather than silently stubbing it
+# in.
+#
+# THE OPTIONAL SKEW ARGUMENT EXISTS BECAUSE LIVE SEED DATA MADE A LEG BLIND (round-1 M1). A caller
+# that passes a date rewrites the seeded `dependencies.yml`'s `updated:` to it. Without that, a
+# property about the writer MOVING `updated:` can be satisfied by the calendar alone: `.github#2552`
+# set the live value to 2026-08-13 and this fixture ran on 2026-08-13 UTC, so a writer that never
+# touched the file at all still produced a tree whose dates agreed, and the suite stayed green under
+# exactly the mutation the leg named. A hostile seed removes the coincidence from the measurement.
 evidence_sandbox() {
   local d; d="$(make_worktree "$1")"
   mkdir -p "$d/bin" "$d/repo/registry" "$d/repo/scripts"
   write_evidence_gh_stub "$d"
   cp "$root/registry/CHANGELOG.md" "$root/registry/dependencies.yml" "$d/repo/registry/"
   cp "$root/scripts/prepend-registry-changelog-entry.py" "$root/scripts/check-registry-changelog.py" "$d/repo/scripts/"
+  if [ -n "${2:-}" ]; then
+    sed -i "s/^updated: *\"[0-9-]*\"/updated: \"$2\"/" "$d/repo/registry/dependencies.yml"
+  fi
   : > "$d/existing-pr"
   : > "$d/calls.log"
   ( cd "$d/repo" \
@@ -1685,8 +1696,16 @@ checks=$((checks + 1))
 ev_remote_dep="$(git -C "$ev1_remote" show "refs/heads/$ev_branch:registry/dependencies.yml" 2>&1)" \
   || { echo "evidence step (create): cannot read registry/dependencies.yml from refs/heads/$ev_branch:" >&2
        printf '%s\n' "$ev_remote_dep" >&2; exit 1; }
-grep -q '^updated:' <<<"$ev_remote_dep" \
-  || { echo "evidence step (create): dependencies.yml on $ev_branch carries no updated: line" >&2; exit 1; }
+# Assert the two files AGREE on the remote, not merely that an `updated:` line exists there — the
+# seed already carried one, so a presence check was decorative and would have passed against a writer
+# that never touched dependencies.yml (round-1 M1). Both dates are read out of the pushed content, so
+# this holds whatever today's date is.
+ev_remote_dep_date="$(sed -n 's/^updated: *"\([0-9-]*\)".*/\1/p' <<<"$ev_remote_dep")"
+ev_remote_top="$(awk '/^## Entries$/{f=1;next} f && /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}\*\*/{print substr($0,5,10); exit}' <<<"$ev_remote_log")"
+[ -n "$ev_remote_dep_date" ] && [ -n "$ev_remote_top" ] \
+  || { echo "evidence step (create): could not read updated:='$ev_remote_dep_date' / top entry='$ev_remote_top' from $ev_branch" >&2; exit 1; }
+[ "$ev_remote_dep_date" = "$ev_remote_top" ] \
+  || { echo "evidence step (create): on $ev_branch, dependencies.yml updated=$ev_remote_dep_date disagrees with the top changelog entry $ev_remote_top — the pushed commit would be refused by the gate's second arm" >&2; exit 1; }
 checks=$((checks + 1))
 
 # Defect 2, on the bytes actually handed to `gh`.
@@ -1862,36 +1881,67 @@ checks=$((checks + 1))
   || { echo "gate-inversion (no title): expected the pre-fix refresh to pass NO --title; it passed one — this leg is not measuring defect 3" >&2; exit 1; }
 checks=$((checks + 1))
 
-# ---- GATE-INVERSION 4: THE SECOND GATE ARM. This is the leg that catches an insertion-only repair.
-#      Take the GREEN tree produced by the real step and move `dependencies.yml::updated:` back to a
-#      stale date — precisely what a fix that positioned the entry correctly but left dependencies.yml
-#      alone would have produced — and prove the gate refuses it, by its own distinct reason. Without
-#      this leg, "the entry is below the heading" would stand in for "the PR is landable", and it is
-#      not: `.github#2558`'s repair is only complete because BOTH files move. ----
-ev5="$(evidence_sandbox evidence-gate-inversion-date-arm)"
+# ---- 4. DID THE WRITER MOVE dependencies.yml? This is the leg that catches an INSERTION-ONLY repair
+#      — one that positions the entry correctly below the heading and leaves registry/dependencies.yml
+#      untouched. Such a repair satisfies "the entry is below the heading" while still producing a PR
+#      the gate refuses on its second arm, which is the same never-lands outcome reached by a different
+#      refusal.
+#
+#      ROUND-1 REVIEW FOUND THE PREVIOUS VERSION OF THIS LEG DID NOT TEST THAT, and the way it failed
+#      is worth keeping written down. It took the tree the real step produced, mutated THAT tree's
+#      `updated:` to a stale date, and asserted the gate refused. That only re-proves the gate's second
+#      arm is live — which was never in doubt — while never observing whether the WRITER had touched
+#      dependencies.yml at all. A critic ran the mutation nobody had (an insertion-only writer: no
+#      `set_updated`, no self-check, no second `write`) and the whole suite still reported
+#      `183 passed`, exit 0.
+#
+#      It was blind for a specific and instructive reason: the sandbox seeds the LIVE registry files,
+#      `.github#2552` had set `updated:` to 2026-08-13 earlier that same day, and the fixture ran on
+#      2026-08-13 UTC — so the entry's date and the untouched `updated:` agreed BY CALENDAR
+#      COINCIDENCE. The leg would have started catching the defect the next day and nobody would have
+#      known why. A property whose sensitivity depends on the wall clock is not a gate.
+#
+#      So this leg now asserts on the WRITER'S OUTPUT, from a HOSTILE seed:
+#        - the sandbox's `updated:` is seeded to 1999-01-01, which no publish can ever agree with;
+#        - the file's bytes must CHANGE across the run (the direct "the writer touched it" claim);
+#        - its `updated:` must end up equal to the top entry's OWN date, both read out of the produced
+#          files rather than from this script's clock;
+#        - and the real gate must accept the result.
+#      An insertion-only writer fails the second and third of those on every calendar day. ----
+ev5_skew="1999-01-01"
+ev5="$(evidence_sandbox evidence-writer-moves-dependencies "$ev5_skew")"
+ev5_dep="$ev5/repo/registry/dependencies.yml"
+ev5_seeded="$(sed -n 's/^updated: *"\([0-9-]*\)".*/\1/p' "$ev5_dep")"
+[ "$ev5_seeded" = "$ev5_skew" ] \
+  || { echo "writer-moves-dependencies: the hostile seed did not take (updated=$ev5_seeded, wanted $ev5_skew) — this leg would be measuring nothing" >&2; exit 1; }
+checks=$((checks + 1))
+ev5_before="$(sha256sum "$ev5_dep" | cut -d' ' -f1)"
 rc=0; run_evidence "$ev5" "7.7.7" "1111111111111111111111111111111111111111" "$ev_script" || rc=$?
-[ "$rc" -eq 0 ] || { echo "gate-inversion (date arm): setup run failed: $rc" >&2; cat "$ev5/stderr.log" >&2; exit 1; }
+[ "$rc" -eq 0 ] \
+  || { echo "writer-moves-dependencies: the step failed: $rc" >&2; cat "$ev5/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+ev5_after="$(sha256sum "$ev5_dep" | cut -d' ' -f1)"
+[ "$ev5_before" != "$ev5_after" ] \
+  || { echo "writer-moves-dependencies: registry/dependencies.yml is byte-identical after the run — the writer never touched it, which is precisely the insertion-only repair this leg exists to catch" >&2; exit 1; }
+checks=$((checks + 1))
+ev5_dep_date="$(sed -n 's/^updated: *"\([0-9-]*\)".*/\1/p' "$ev5_dep")"
+ev5_top="$(awk '/^## Entries$/{f=1;next} f && /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}\*\*/{print substr($0,5,10); exit}' "$ev5/repo/registry/CHANGELOG.md")"
+[ -n "$ev5_top" ] \
+  || { echo "writer-moves-dependencies: no dated entry below the heading to compare against" >&2; exit 1; }
+[ "$ev5_dep_date" != "$ev5_skew" ] \
+  || { echo "writer-moves-dependencies: updated: is still the hostile seed $ev5_skew — the writer did not move it" >&2; exit 1; }
+checks=$((checks + 1))
+# Both sides read from the PRODUCED files, never from this script's own clock: the leg is about the
+# two agreeing, and it holds identically on the day of a registry flip and on any other day.
+[ "$ev5_dep_date" = "$ev5_top" ] \
+  || { echo "writer-moves-dependencies: updated=$ev5_dep_date disagrees with the top entry $ev5_top" >&2; exit 1; }
+checks=$((checks + 1))
 ( cd "$ev5/repo" && python3 scripts/check-registry-changelog.py \
-    --changelog registry/CHANGELOG.md --dependencies registry/dependencies.yml >/dev/null 2>&1 ) \
-  || { echo "gate-inversion (date arm): the produced tree should be GREEN before the mutation" >&2; exit 1; }
+    --changelog registry/CHANGELOG.md --dependencies registry/dependencies.yml >"$ev5/gate.log" 2>&1 ) \
+  || { echo "writer-moves-dependencies: the real gate refused the produced tree" >&2; cat "$ev5/gate.log" >&2; exit 1; }
 checks=$((checks + 1))
-python3 - "$ev5/repo/registry/dependencies.yml" <<'PY'
-import re, sys
-p = sys.argv[1]
-t = open(p, encoding="utf-8").read()
-t, n = re.subn(r'^(updated:\s*["\'])\d{4}-\d{2}-\d{2}(["\'])', r'\g<1>1999-01-01\g<2>', t, count=1, flags=re.M)
-if n != 1:
-    sys.exit("date-arm mutation: expected exactly one updated: line to rewrite")
-open(p, "w", encoding="utf-8").write(t)
-PY
-ev5_rc=0
-( cd "$ev5/repo" && python3 scripts/check-registry-changelog.py \
-    --changelog registry/CHANGELOG.md --dependencies registry/dependencies.yml >"$ev5/gate.log" 2>&1 ) || ev5_rc=$?
-[ "$ev5_rc" -ne 0 ] \
-  || { echo "gate-inversion (date arm): the gate ACCEPTED a stale updated: — the second arm is not live" >&2; exit 1; }
-checks=$((checks + 1))
-grep -qF 'updated=1999-01-01 != top changelog date=' "$ev5/gate.log" \
-  || { echo "gate-inversion (date arm): refused, but not for the date-equality reason; got:" >&2; cat "$ev5/gate.log" >&2; exit 1; }
-checks=$((checks + 1))
+# The gate's second arm being live at all is asserted date-independently by
+# tests/registry-changelog/run.sh ("an entry correctly placed but with a stale updated: is still
+# refused"), which is where that property belongs; it is deliberately not restated here.
 
 echo "kit auto-publish state machine: $checks passed"
