@@ -80,9 +80,32 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 7. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
    plan while each item worker consumes its current agent-authored delivery-route receipt. The fixed
    checklist is evidence only: it never derives a simple/complex or lightweight/SDD route.
-8. Stop only when fresh reconciliation and triage leave no startable or actionable/untriaged work and
-   every completed cycle is covered by a validated workspace feedback roll-up. Surface deliberately
-   parked and human-blocked backlog without spinning; then update/land the workspace report.
+8. Stop only when a fresh reconciliation and triage leave **no startable `Class: defect`**, no other
+   actionable or untriaged work, no live claim, unresolved repair or queued write, and every completed
+   cycle is covered by a validated workspace feedback roll-up. `hardening` accumulates as ordinary
+   backlog and is drained deliberately — it is not a reason to keep running; `decision` is surfaced to a
+   human and never dispatched. **An unclassed row counts as a possible defect**, not a minor one: its
+   severity is unknown. Read classes from `scripts/fsgg-coord ready --repo <this-repo> --json`'s `class`
+   field *after* a `reconcile --apply` (that column is a projection, current only as of the last
+   reconcile), and `lint`'s `CLASS-UNSET` for the rows that column cannot speak for; the authority is the
+   item's own `Class:` body line, so never hand-edit the column. You may still stop with unclassed rows
+   outstanding — report them by number as unresolved and say the run ended without establishing the board
+   is defect-free. Fixing one thing legitimately files two, so a wave producing only `hardening` and
+   `decision` is completion, not a stall. Surface deliberately parked and human-blocked backlog without
+   spinning; then update/land the workspace report.
+
+   **The census this depends on now also reaches a `Done`/closed row (`.github#2254`) — bounded, not
+   exhaustive.** `CLASS-PROJECTION-LAG` is no longer `Open`-only: a row that reaches `Done` between two
+   reconcile passes used to keep an EMPTY `Class` column forever, invisible to both `reconcile` and
+   `lint` alike, because nothing examined it again once it closed. `reconcile`'s scan now pays one extra
+   body read for exactly that population — a closed row whose board `Class` column is `None` — so a
+   fresh `reconcile --apply` reaches it the same as an open row. **The bound is deliberate**: a closed
+   row that already carries SOME `Class` value is never re-read (re-reading every `Done` row's body on
+   every pass would undo the cost model the scan exists to keep cheap), so a WRONG (non-empty) `Class`
+   value on an already-classed closed row is still not re-examined by this pass — that gap is unchanged
+   from before `.github#2254`, and closing it would need a human or a fresh `Open` pass, not a bigger
+   scan. This bound is engine behaviour, not a board-scope difference: it holds identically for a
+   workspace board and the org board.
 
 Load [host-loop](references/host-loop.md) for the shared worker/verification/termination contract and
 [workspace-scope](references/workspace-scope.md) for the single-repository ledger rules.

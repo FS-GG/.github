@@ -16,6 +16,13 @@ feedback envelope, plus the shared
 control-plane provenance guidance in the `pnext-item` contract. Do not hand it a second item. It MAY, after its done stamp, drain its OWN follow-up
 queue sequentially — one claim at a time, never interleaved.
 
+Every specific, checkable assertion included in a worker dispatch, worker report, or host relay must
+carry `Verification:` with the command, `file:line`, API call, or URL that established it, or exactly
+`unverified` when it was not checked. The latter is a valid, non-pejorative value. Before forwarding a
+handoff, check that each assertion has one of those two forms; a missing field is detectable incomplete
+evidence, not permission for the receiver to assume the claim was verified. This binds the host when it
+relays a worker's or critic's assertion as well as the original author.
+
 <!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->
 *Generated operational fact: the parser and driver consume this policy; do not restate its numbers.*
 
@@ -27,6 +34,20 @@ queue sequentially — one claim at a time, never interleaved.
 
 Critic reservation is **RESERVED, not advisory**; assigning it to an implementer is a contract
 violation, not an efficiency gain.
+
+**The host owns critic dispatch; a worker does not dispatch its own.** Assigning a fresh critic in
+response to a worker's review handoff is a request the worker owes the host (`pnext-item` §5); a
+worker calling the `Agent` tool with `subagent_type: fsgg-critic-normal`, `fsgg-critic-best`, or any
+other `fsgg-critic-<route>` type to spawn and confirm its own critic is exactly the contract violation
+the reservation above forbids — measured twice in one run (`.github#2462`), and correctly disclosed
+both times, which does not make the mechanism sound on its own. The one stated exception is a **solo
+`pnext-item` invocation with no host to ask**; that mode has no reservation to violate, because no host
+is dispatching in it.
+
+Detection here is **by convention, not by construction**: host and worker share one GitHub account
+(rate-limit note below — "every worker still authenticates as the one account"), so no marker field can
+prove who dispatched a critic, and this loop does not claim otherwise. The reservation is enforced by
+the host verifying the dispatch it itself made, not by a field the review chain carries.
 
 `batch` reads the machine declaration above and emits `activeItems`, `waveCapacity`, and `openSlots`
 beside its scheduling answer. When schedulable work and open slots coexist it also emits `WAVE
@@ -114,3 +135,31 @@ Terminate only from a fresh read. Distinguish empty from blocked, contended, sta
 An empty Ready batch is not completion while Backlog is actionable or untriaged, or while any completed
 cycle lacks validated feedback and roll-up disposition. Report deliberately parked and human-blocked
 Backlog without repeatedly dispatching or spinning on it.
+
+The stopping test is **no startable `defect`**, not an empty board: a run in which fixing one thing files
+two can never reach an empty board, and every row it files is real. `hardening` is drained deliberately as
+ordinary backlog; `decision` is surfaced and never dispatched. **An unclassed row is a possible defect, not
+a minor one** — you may stop with some outstanding, but report them by number and do not claim the board is
+defect-free. Read classes from `scripts/fsgg-coord ready --repo <this-repo> --json`'s `class` field *after*
+`reconcile --apply` (the column is a projection, current only as of the last reconcile) plus `lint`'s
+`CLASS-UNSET` for the rest; the authority is the item's own `Class:` body line, so never hand-edit the
+column. This test is additional to, never a substitute for, the validated feedback roll-up above: a
+workspace run stops only when both are satisfied.
+
+## Deliberately not carried from `drive-board`
+
+This loop and `drive-board`'s share most of one worker contract, so a paragraph present there and absent
+here should be a divergence a reader can check rather than guess at. One is deliberate:
+
+- **The "I am refused the shared checkout, and the engine is N commits behind" escalation.** In
+  `FS-GG/.github` the engine is a *source build* under a checkout every worker shares, so a worktree-
+  isolated worker can be refused the very repair its own `pnext-item` §1 currency check demands, and
+  `drive-board`'s host owns serialising that repair. A coordination-wired product workspace does not have
+  that shape: its engine arrives vendored — the kit's `scripts/fsgg-coord` shim plus the pinned
+  `fs.gg.coord.cli` tool — so bringing it current is a pin bump inside the workspace's own tree, not a
+  mutation of a checkout N workers share. The wiring preconditions in [deep detail](deep-detail.md)
+  already stop a wave on an engine that cannot be read.
+
+The three contracts `.github#2511` restored — the `Verification:` discipline, the critic-dispatch
+ownership rule, and the class-based stopping test above — are **not** workspace-specific, which is why
+they are stated here rather than listed above. Their absence had been silent since `.github#2201`.
