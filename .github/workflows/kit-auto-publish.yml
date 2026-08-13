@@ -353,7 +353,15 @@ jobs:
             echo '::error::nothing to tag/push — every coherent-set tag for '"$VERSION"' already exists at this commit; the decision engine should never have reached this step in that state'
             exit 1
           fi
-          git push origin "${push_refs[@]}"
+          # `--atomic`: a multi-ref push is NOT all-or-nothing by default — GitHub can accept some ref
+          # updates in one invocation and reject others (e.g. one tag name already exists on origin at a
+          # different commit, a genuine race this step cannot fully rule out from a single observation).
+          # Without `--atomic`, that partial acceptance is exactly how a split, mismatched coherent-set
+          # trio could land on `origin` even when this step's OWN logic is otherwise correct — the same
+          # split state `scripts/kit-auto-publish.py`'s sibling-tag check now also refuses to walk into
+          # from the read side (.github#2498 round-1 repair). `--atomic` closes the write side: either
+          # every ref in `push_refs` lands, or none do.
+          git push --atomic origin "${push_refs[@]}"
       - name: Escalate a non-eligible or partial state once
         if: steps.observe.outputs.action == 'refuse' || steps.observe.outputs.action == 'stickyEscalate'
         env:
