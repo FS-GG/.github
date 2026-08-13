@@ -120,7 +120,14 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.50.3 — no engine behavior change. `.github#2471` edited kit-packed content
+    <PackageReleaseNotes>0.50.4 — no engine behavior change. `.github#2496` edited kit-packed content
+(`pnext-item/SKILL.md`) after `FS.GG.Kit 0.50.3` had already been packed at `42c63af9`, so
+`check-kit-published-coherence` reds on `main`: the published 0.50.3 kit manifest differs from
+canonical on that one file. This bump exists to let the coherent set republish with current canonical
+content, not to announce a new engine fix; the engine source under `src/FS.GG.Coord.*` is
+byte-identical to 0.50.3. See 0.50.3's own notes below for the prior release's substantive changes.
+
+0.50.3 — no engine behavior change. `.github#2471` edited kit-packed content
 (the `pnext-item` skill and the `stale_guard` shell module) after 0.50.2 had already published, so
 `check-kit-published-coherence`'s PR arm required this coherent-set scalar to advance again before that
 PR could land (0.50.2 is not STRICTLY GREATER than the already-published 0.50.2). This bump exists to
