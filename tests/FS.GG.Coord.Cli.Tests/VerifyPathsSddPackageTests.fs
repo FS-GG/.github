@@ -95,18 +95,29 @@ module VerifyPathsSddPackageTests =
           DefaultRepo = Some ".github"
           ChoreLocks = [] }
 
-    /// Drive `Client.verifyPaths` and capture (exit code, stdout) — same cache-isolation licence as
-    /// `VerifyPathsClosingKeywordTests.runVerifyPaths`.
-    let private runVerifyPaths (transport: Fake.Recorder) : int * string =
+    /// Drive `Client.verifyPaths` and capture (exit code, stdout, STDERR) — same cache-isolation licence
+    /// as `VerifyPathsClosingKeywordTests.runVerifyPaths`.
+    ///
+    /// STDERR IS CAPTURED, AND THAT IS A REQUIREMENT RATHER THAN A CONVENIENCE (round-1 finding F13).
+    /// `FR-004`'s fail-closed clause has two halves — subtract nothing, AND say why — and `Client.eprint`
+    /// is `Console.Error.WriteLine`, so a harness that redirects only `Console.SetOut` can assert the
+    /// first half and nothing at all about the second. Measured: deleting the diagnostic outright
+    /// (`eprint …` → `ignore why`) left this suite 780/780 green. A mute fail-closed keeps the right
+    /// verdict and removes the only pointer to its cause — which is exactly what the production doc
+    /// comment promises will not happen, so the promise needs a witness.
+    let private runVerifyPaths (transport: Fake.Recorder) : int * string * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-2324-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let stdout = Console.Out
+        let stderr = Console.Error
         use captured = new StringWriter()
+        use capturedError = new StringWriter()
 
         try
             Directory.CreateDirectory dir |> ignore
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
             Console.SetOut captured
+            Console.SetError capturedError
 
             let opts =
                 match Options.parse [ "verify-paths"; "--pr"; "900"; "--repo"; ".github" ] with
@@ -115,9 +126,11 @@ module VerifyPathsSddPackageTests =
 
             let code = Client.verifyPaths (context transport) opts
             Console.Out.Flush()
-            code, captured.ToString()
+            Console.Error.Flush()
+            code, captured.ToString(), capturedError.ToString()
         finally
             Console.SetOut stdout
+            Console.SetError stderr
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
 
             try
@@ -145,7 +158,7 @@ module VerifyPathsSddPackageTests =
 
     [<Fact>]
     let ``#2324 AC-001 the item's own sdd package is expected output, not drift`` () =
-        let code, out = runVerifyPaths (serving issue (files packageFiles) (Some [ sddReceipt ]))
+        let code, out, _ = runVerifyPaths (serving issue (files packageFiles) (Some [ sddReceipt ]))
 
         Assert.Equal(Client.ExitGreen, code)
         Assert.Contains("FSGG-PATHS OK", out)
@@ -158,7 +171,7 @@ module VerifyPathsSddPackageTests =
 
     [<Fact>]
     let ``#2324 AC-002 a genuinely undeclared file still drifts beside the exempted package`` () =
-        let code, out =
+        let code, out, _ =
             runVerifyPaths (serving issue (files (packageFiles @ [ "src/Sneaky.fs" ])) (Some [ sddReceipt ]))
 
         Assert.Equal(Client.ExitRed, code)
@@ -184,7 +197,7 @@ module VerifyPathsSddPackageTests =
 
         let numberShapedPackage = [ "src/Impl.fs"; "work/42/spec.md"; "readiness/42/analysis.json" ]
 
-        let code, out = runVerifyPaths (serving issue (files numberShapedPackage) (Some [ lightweight ]))
+        let code, out, _ = runVerifyPaths (serving issue (files numberShapedPackage) (Some [ lightweight ]))
 
         Assert.Equal(Client.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
@@ -193,37 +206,63 @@ module VerifyPathsSddPackageTests =
         Assert.Contains("readiness/42/analysis.json", out)
         Assert.DoesNotContain("sdd package (expected)", out)
 
+    /// The fail-closed sentence `FR-004` requires, matched on its load-bearing clause rather than on the
+    /// whole string: the point a reader must be able to act on is that NOTHING was subtracted and that
+    /// the sdd-required route's mandatory output is therefore about to appear as drift.
+    let private nothingSubtractedSaidSo (stderr: string) =
+        Assert.Contains("could not establish", stderr)
+        Assert.Contains("NOTHING is subtracted", stderr)
+        Assert.Contains("work/<id> + readiness/<id>", stderr)
+
     [<Fact>]
-    let ``#2324 AC-004 an unreadable receipt window subtracts nothing rather than everything`` () =
-        let code, out = runVerifyPaths (serving issue (files packageFiles) None)
+    let ``#2324 AC-004 an unreadable receipt window subtracts nothing rather than everything, and says so`` () =
+        let code, out, err = runVerifyPaths (serving issue (files packageFiles) None)
 
         Assert.Equal(Client.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.Contains("work/2324-mandatory-sdd-output-enforcement/spec.md", out)
         Assert.DoesNotContain("sdd package (expected)", out)
+        // BOTH HALVES OF FAILING CLOSED. Subtracting nothing is the safe verdict; naming the cause is
+        // what makes it usable. Round 1 measured that deleting the diagnostic left the suite green.
+        nothingSubtractedSaidSo err
 
     [<Fact>]
-    let ``#2324 AC-004 a stale receipt is not a licence to exempt`` () =
+    let ``#2324 AC-004 a stale receipt is not a licence to exempt, and says why`` () =
         // Bound to a revision that is neither the canonical subject hash nor the legacy whole-body hash,
         // so `decideDeliveryRoute` answers `Stale` through both candidates.
         let stale = receiptComment "not-this-body" "sdd-required" (Some "2324-mandatory-sdd-output-enforcement")
 
-        let code, out = runVerifyPaths (serving issue (files packageFiles) (Some [ stale ]))
+        let code, out, err = runVerifyPaths (serving issue (files packageFiles) (Some [ stale ]))
 
         Assert.Equal(Client.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.DoesNotContain("sdd package (expected)", out)
+        nothingSubtractedSaidSo err
+        // The REASON is forwarded, not flattened to "something went wrong": a stale receipt is a
+        // different repair from an unreadable window, and only the reason distinguishes them.
+        Assert.Contains("subjectRevision is stale", err)
 
     [<Fact>]
     let ``#2324 AC-005 another item's sdd package is ordinary drift`` () =
+        // THE DECOY SHARES THIS ITEM'S WORK-ID AS A STRING PREFIX, deliberately (round-1 finding F10).
+        // A decoy like `work/9999-someone-elses-item` shares no prefix, so a bare `String.StartsWith`
+        // containment test and the real directory-boundary rule AGREE on it and a prefix-matching mutant
+        // survives — measured: replacing `TouchSet.covers` with `StartsWith` left the suite 780/780
+        // green. `…-followup` is one character-class away from being inside the package and is the shape
+        // that discriminates: it is a DIFFERENT item's directory, and `TouchSet.covers` knows that
+        // because it compares path SEGMENTS, not characters.
         let otherItemsPackage =
-            [ "src/Impl.fs"; "work/9999-someone-elses-item/spec.md"; "readiness/9999-someone-elses-item/analysis.json" ]
+            [ "src/Impl.fs"
+              "work/2324-mandatory-sdd-output-enforcement-followup/spec.md"
+              "work/9999-someone-elses-item/spec.md"
+              "readiness/9999-someone-elses-item/analysis.json" ]
 
-        let code, out = runVerifyPaths (serving issue (files otherItemsPackage) (Some [ sddReceipt ]))
+        let code, out, _ = runVerifyPaths (serving issue (files otherItemsPackage) (Some [ sddReceipt ]))
 
         Assert.Equal(Client.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.Contains("undeclared (review)", out)
+        Assert.Contains("work/2324-mandatory-sdd-output-enforcement-followup/spec.md", out)
         Assert.Contains("work/9999-someone-elses-item/spec.md", out)
         Assert.Contains("readiness/9999-someone-elses-item/analysis.json", out)
         Assert.DoesNotContain("sdd package (expected)", out)
@@ -231,7 +270,7 @@ module VerifyPathsSddPackageTests =
     [<Fact>]
     let ``#2324 AC-007 a PR with no drift asks for no receipt at all`` () =
         let transport = serving issue (files [ "src/Impl.fs" ]) (Some [ sddReceipt ])
-        let code, out = runVerifyPaths transport
+        let code, out, _ = runVerifyPaths transport
 
         Assert.Equal(Client.ExitGreen, code)
         Assert.Contains("FSGG-PATHS OK", out)
@@ -244,7 +283,7 @@ module VerifyPathsSddPackageTests =
     [<Fact>]
     let ``#2324 the receipt window is read exactly once when there IS drift to subtract from`` () =
         let transport = serving issue (files packageFiles) (Some [ sddReceipt ])
-        let code, _ = runVerifyPaths transport
+        let code, _, _ = runVerifyPaths transport
 
         Assert.Equal(Client.ExitGreen, code)
         Assert.Equal(1, transport.GraphQlCalls)
