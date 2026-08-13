@@ -26,6 +26,18 @@
 # The verdict is f(tree): hermetic, no world state, no decay. Every red it raises was introduced by
 # the diff in front of it, and the fix is always inside that diff. So it gates, honestly — and it
 # needs no `schedule:`, because nothing can stale a pure function of files that did not change.
+#
+# THE SUBJECT ALSO INCLUDES WORKFLOW-EMBEDDED SHELL (.github#2493). A `run:` block in
+# `.github/workflows/*.yml` itself, or in a composite action's `action.yml`, is real hand-written shell
+# too — and this gate's own `lint` job showed `pass` on `.github#2489` without ever opening
+# `kit-auto-publish.yml`, the one file that PR actually touched. `lint-shell.sh` now extracts every
+# such `run:` block via a real YAML parse (`scripts/lib/extract-workflow-shell.py`) and shellchecks it
+# through the same pinned binary, severity floor, and check set as the rest of this repo's shell — no
+# gate-wide exclusion. See that script's own header for why GitHub Actions expressions (`${{ ... }}`)
+# need substituting before shellcheck can read them at all, and for the one shellcheck finding the
+# substitution itself can manufacture (SC2050), filtered by `scripts/lib/filter-sc2050.py` PER
+# OCCURRENCE — shellcheck's own reported column against a precisely-computed construct span — never by
+# line and never across the whole subject.
 name: shell-lint
 
 on:

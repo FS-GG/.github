@@ -19,6 +19,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 GATE="$REPO_ROOT/scripts/lint-shell.sh"
+EXTRACT="$REPO_ROOT/scripts/lib/extract-workflow-shell.py"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shell-lint-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -168,11 +169,9 @@ run_gate "$REPO_ROOT"
   || bad "this repo's own shell must be clean" "rc=$RC
 $OUT"
 
-# ...and the real tree's subject includes the kit itself. A green that skipped fsgg-coord is #648
-# re-entered: the item was filed BECAUSE the kit is the one file no linter reads.
-(cd "$REPO_ROOT" && bash "$GATE" --list) | grep -qx 'scripts/fsgg-coord' \
-  && ok "#648: the real subject includes scripts/fsgg-coord — the kit is linted in the repo that owns it" \
-  || bad "#648: the kit must be in the subject" "$(cd "$REPO_ROOT" && bash "$GATE" --list)"
+# ...and the real tree's subject includes the kit itself: see Leg 9g below, which reuses ONE captured
+# `--list` for this assertion AND the workflow-embedded one rather than paying for a second ~15s
+# extraction pass over the real tree.
 
 # ---- 8. THE KIT'S SOURCES MUST BE FOLLOWABLE FROM ANY CWD (.github#1718). -------------------------
 #      `scripts/skill-view` is a kit-materialized file: registry/repos.yml ships it, and its two
@@ -215,6 +214,281 @@ n="$(sc1091 "$d" "$KIT_SHELL")"
   && ok "#1718: ...and REMOVING the directive brings both SC1091 findings back (control: $n)" \
   || bad "#1718: the control must reproduce exactly 2 SC1091 findings without the directive, got $n — this leg is no longer measuring what it claims" \
      "$(cd "$d" && "$SHELLCHECK" -x -S info -f gcc "$KIT_SHELL" 2>&1)"
+
+# ---- 9. WORKFLOW-EMBEDDED SHELL (.github#2493). ----------------------------------------------------
+#      `.github#2489` claimed "CI runs the pinned shellcheck" for shell that lived inside a `run:`
+#      block in `.github/workflows/kit-auto-publish.yml` — and nothing had ever opened it. Legs 1-8
+#      above are entirely about FILE-shaped discovery; none of them would catch that gap coming back,
+#      because none of them ever puts a `run:` block in front of the gate. These legs are the ones that
+#      would have caught #2489's inaccurate claim BEFORE a critic had to find it by hand.
+WF_CLEAN_RUN='d="$1"
+echo "$d"
+'
+# The same word-splitting hazard as $BAD_SHELL above, minus its shebang line (a `run:` block is never
+# its own shebanged file).
+WF_BAD_RUN='d=$1
+rm -rf "$d"/*
+cd $HOME/x
+'
+
+wf_workflow_with() {
+  # wf_workflow_with <dir> <run-text> [shell]  — one job, one step, `runs-on: ubuntu-latest`.
+  local d="$1" run="$2" shell="${3:-}"
+  mkdir -p "$d/.github/workflows"
+  {
+    echo "name: ci"
+    echo "on: push"
+    echo "jobs:"
+    echo "  build:"
+    echo "    runs-on: ubuntu-latest"
+    echo "    steps:"
+    echo "      - name: embedded step"
+    if [ -n "$shell" ]; then
+      echo "        shell: $shell"
+    fi
+    echo "        run: |"
+    printf '%s\n' "$run" | sed 's/^/          /'
+  } > "$d/.github/workflows/ci.yml"
+}
+
+# ---- 9a. A clean embedded run: step passes. ---------------------------------------------------------
+d="$(newrepo wf-clean)"
+wf_workflow_with "$d" "$WF_CLEAN_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 0 ] && ok "#2493: a clean workflow-embedded run: step passes (rc=0)" \
+  || bad "#2493: a clean embedded run: step must pass" "rc=$RC
+$OUT"
+
+# ---- 9b. THE GATE CAN SAY NO on embedded shell too. --------------------------------------------------
+d="$(newrepo wf-dirty)"
+wf_workflow_with "$d" "$WF_BAD_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 1 ] && ok "#2493: a finding in an embedded run: step REDS the gate (rc=1)" \
+  || bad "#2493: the gate must red on a finding embedded in a workflow" "rc=$RC
+$OUT"
+
+# ---- 9c. A composite action's run: step, admitted by its explicit shell: bash. -----------------------
+d="$(newrepo wf-composite-clean)"
+mkdir -p "$d/.github/actions/thing"
+{
+  echo "name: thing"
+  echo "runs:"
+  echo "  using: composite"
+  echo "  steps:"
+  echo "    - name: embedded step"
+  echo "      shell: bash"
+  echo "      run: |"
+  printf '%s\n' "$WF_CLEAN_RUN" | sed 's/^/        /'
+} > "$d/.github/actions/thing/action.yml"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 0 ] && ok "#2493: a clean composite-action run: step (shell: bash) passes (rc=0)" \
+  || bad "#2493: a clean composite run: step must pass" "rc=$RC
+$OUT"
+
+d="$(newrepo wf-composite-dirty)"
+mkdir -p "$d/.github/actions/thing"
+{
+  echo "name: thing"
+  echo "runs:"
+  echo "  using: composite"
+  echo "  steps:"
+  echo "    - name: embedded step"
+  echo "      shell: bash"
+  echo "      run: |"
+  printf '%s\n' "$WF_BAD_RUN" | sed 's/^/        /'
+} > "$d/.github/actions/thing/action.yml"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 1 ] && ok "#2493: a finding in a composite-action run: step REDS the gate (rc=1)" \
+  || bad "#2493: the gate must red on a finding in a composite action" "rc=$RC
+$OUT"
+
+# ---- 9d. A composite run: step with NO shell: is invalid workflow YAML, not a shell to guess at. -----
+#      GitHub never defaults a composite step's shell (unlike a normal job step, which defaults to
+#      bash on the runners this repo uses). Guessing bash here would silently lint — or silently skip
+#      — a step whose actual interpreter this script does not actually know; #266's "I could not check
+#      is not I checked and it's clean" applies to the EXTRACTOR's own subject, not only shellcheck's.
+d="$(newrepo wf-composite-noshell)"
+mkdir -p "$d/.github/actions/thing"
+{
+  echo "name: thing"
+  echo "runs:"
+  echo "  using: composite"
+  echo "  steps:"
+  echo "    - name: embedded step"
+  echo "      run: |"
+  printf '%s\n' "$WF_CLEAN_RUN" | sed 's/^/        /'
+} > "$d/.github/actions/thing/action.yml"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 2 ] && ok "#2493: a composite run: step with no shell: is a discovery failure (rc=2), not a guess" \
+  || bad "#2493: a shell-less composite step must not be silently guessed at" "rc=$RC
+$OUT"
+
+# ...and THE EXTRACTOR ITSELF, invoked DIRECTLY — never through lint-shell.sh's wrapper. The wrapper's
+# `if ! python3 ... ; then exit 2; fi` launders ANY nonzero exit into 2, including a crash, so Leg 9d
+# above (and its composite-shell sibling) can only ever observe the wrapper's behaviour, never the
+# extractor's own documented CLI contract. That gap is exactly how a `DiscoveryError` reference with no
+# matching class definition shipped once already: every discovery failure died with `NameError` instead
+# of the message this script was written to give, and the ONLY reason Leg 9d still read rc=2 is that a
+# Python `NameError` is ALSO a nonzero exit the wrapper flattens to 2. Direct invocation is the only way
+# to see the tool rather than the wrapper around it (.github#2493 review round 1).
+wf_out="$WORK/wf-composite-noshell-direct-out"
+mkdir -p "$wf_out"
+direct_out="$(python3 "$EXTRACT" "$d" "$wf_out" 2>&1)"; direct_rc=$?
+[ "$direct_rc" = 2 ] && ok "#2493: the extractor's OWN CLI exits 2 on a shell-less composite step (direct invocation)" \
+  || bad "#2493: direct invocation must exit 2, not crash" "rc=$direct_rc
+$direct_out"
+printf '%s' "$direct_out" | grep -q 'no shell:' \
+  && ok "#2493: ...and prints the DESIGNED diagnostic, not a NameError" \
+  || bad "#2493: the extractor's own diagnostic message must actually be constructed and printed" "$direct_out"
+printf '%s' "$direct_out" | grep -qi 'NameError\|Traceback' \
+  && bad "#2493: the extractor must never crash with an uncaught NameError/Traceback on a step it is designed to refuse" "$direct_out" \
+  || ok "#2493: ...and no NameError/Traceback leaked (DiscoveryError is a real, defined class)"
+
+# ...and the SAME direct-invocation property for the OTHER DiscoveryError site: unparseable YAML.
+d2="$(newrepo wf-badyaml-direct)"
+mkdir -p "$d2/.github/workflows"
+printf 'name: [unterminated\n' > "$d2/.github/workflows/bad.yml"
+git -C "$d2" add -A
+wf_out2="$WORK/wf-badyaml-direct-out"
+mkdir -p "$wf_out2"
+direct_out2="$(python3 "$EXTRACT" "$d2" "$wf_out2" 2>&1)"; direct_rc2=$?
+[ "$direct_rc2" = 2 ] && ok "#2493: the extractor's OWN CLI exits 2 on unparseable workflow YAML (direct invocation)" \
+  || bad "#2493: direct invocation must exit 2 on bad YAML, not crash" "rc=$direct_rc2
+$direct_out2"
+printf '%s' "$direct_out2" | grep -qi 'NameError\|Traceback' \
+  && bad "#2493: unparseable YAML must not crash with an uncaught NameError/Traceback either" "$direct_out2" \
+  || ok "#2493: ...and no NameError/Traceback leaked here either"
+
+# ---- 9e. NO FALSE ACCUSATIONS: a shell shellcheck cannot read is never linted, embedded or not. ------
+#      Same #238 property as Leg 4, one layer up: a `pwsh`/`python`/etc. `shell:` is real GitHub Actions
+#      syntax this repo simply cannot check with shellcheck. The step body below is objectively bad
+#      BASH — if it were ever mistakenly admitted, this leg's clean `.sh` file would not save it and RC
+#      would be 1. Admitting it correctly means the tree is clean overall (RC=0): one real bash file,
+#      one ignored pwsh step.
+d="$(newrepo wf-notshell)"
+printf '%s' "$CLEAN_SHELL" > "$d/ok.sh"
+wf_workflow_with "$d" "$WF_BAD_RUN" "pwsh"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 0 ] && ok "#2493: a 'shell: pwsh' step is NOT read as shell — its content is never opened" \
+  || bad "#2493: a non-bash shell: step must not be linted (shellcheck cannot read it)" "rc=$RC
+$OUT"
+
+# ---- 9f. GITHUB EXPRESSIONS (`\${{ }}`) do not themselves manufacture findings. -----------------------
+#      Two shapes this extractor's substitution got wrong on the FIRST pass, over the real tree, before
+#      either fix landed (.github#2493's own PR notes carry both shellcheck transcripts):
+#        - `"...\${{ x }}[bot]"` (unbraced) read as unquoted array-subscript syntax -> spurious SC1087.
+#        - `'\${{ x }}'` as the WHOLE content of a single-quoted comparison operand, exactly the common
+#          `[ '\${{ github.event_name }}' = 'workflow_dispatch' ]` shape, read as two adjacent literal
+#          strings -> spurious SC2050 ("did you forget the $ on a variable?"). It is not a typo: the
+#          left side is genuinely dynamic, just substituted by GitHub before any shell parses it.
+#      Both shapes appear below in one step; if either self-inflicted finding ever comes back, this leg
+#      reds on a synthetic tree that has no real defect in it at all.
+WF_EXPR_RUN='git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+if [ '"'"'${{ github.event_name }}'"'"' = '"'"'workflow_dispatch'"'"' ]; then
+  echo "manual"
+fi
+'
+d="$(newrepo wf-gha-expr)"
+wf_workflow_with "$d" "$WF_EXPR_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 0 ] && ok "#2493: \${{ }} expressions (bare and single-quoted-whole-token) do not self-accuse" \
+  || bad "#2493: substituting GitHub expressions must not manufacture its own findings" "rc=$RC
+$OUT"
+
+# ---- 9f2. THE SC2050 HANDLING IS OCCURRENCE-SCOPED, NOT BLANKET AND NOT MERELY LINE-SCOPED
+#      (.github#2493 review rounds 1-2). Round 1 used a file-wide `-e SC2050` flag on the whole
+#      workflow-embedded invocation, and the critic proved that wrong by mutating the SUBJECT: a step
+#      with a GENUINE SC2050 typo and ZERO `${{ }}` involvement anywhere in it. A blanket exclusion
+#      cannot tell that apart from the substitution artifact Leg 9f defends — it hides BOTH.
+WF_TYPO_RUN='ref="$1"
+if [ "$ref" = "main" ]; then
+  echo "on main"
+fi
+if [ '"'"'GITHUB_REF_NAME'"'"' = '"'"'main'"'"' ]; then
+  echo "this can never be true — GITHUB_REF_NAME is missing its $"
+fi
+'
+d="$(newrepo wf-sc2050-real-typo)"
+wf_workflow_with "$d" "$WF_TYPO_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 1 ] \
+  && ok "#2493: a genuine SC2050 typo with NO \${{ }} involvement still REDS the gate" \
+  || bad "#2493: a real SC2050 defect unrelated to GitHub-expression substitution must not be hidden" "rc=$RC
+$OUT"
+printf '%s' "$OUT" | grep -q 'SC2050' \
+  && ok "#2493: ...and the finding is specifically identified as SC2050" \
+  || bad "#2493: the real typo's finding should be reported as SC2050" "$OUT"
+
+# ---- 9f3. THE EXACT ROUND-2 ESCAPE: a resembling-but-different substitution shape sharing ONE PHYSICAL
+#      LINE with a genuine, unrelated SC2050 defect. Round 2's fix moved the round-1 blanket exclusion to
+#      a PER-LINE inline `# shellcheck disable=SC2050` pragma — narrower, but still line-scoped, and the
+#      critic proved that ALSO wrong: `${{ }}` embedded with literal apostrophes inside a DOUBLE-quoted
+#      string (`echo "...'${{ x }}'..."`, the exact shape behind the Leg 9f / SC2027 history) makes the
+#      SAME textual pattern this repo's substitution produces appear on a line — and shellcheck's own
+#      `disable` directive suppresses the WHOLE following physical line, not just the clause that
+#      resembled the trigger. The genuine, unrelated `'GITHUB_REF_NAME' = 'main'` typo on the SECOND
+#      clause of the line below was silently swallowed by that mechanism; it must not be swallowed here.
+WF_COLLISION_RUN='echo "code '"'"'${{ steps.audit.outputs.rc }}'"'"'" && [ '"'"'GITHUB_REF_NAME'"'"' = '"'"'main'"'"' ]
+'
+d="$(newrepo wf-sc2050-collision)"
+wf_workflow_with "$d" "$WF_COLLISION_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 1 ] \
+  && ok "#2493: the round-2 same-line collision (resembling shape + genuine unrelated typo) still REDS the gate" \
+  || bad "#2493: a genuine SC2050 defect sharing a line with a resembling-but-different substitution artifact must not be hidden" "rc=$RC
+$OUT"
+printf '%s' "$OUT" | grep -q 'SC2050' \
+  && ok "#2493: ...and the finding is specifically identified as SC2050" \
+  || bad "#2493: the collision leg's finding should be reported as SC2050" "$OUT"
+
+# ---- 9f4. THE HARDER CASE: TWO GENUINE bracket/test CONSTRUCTS SHARING ONE LINE, only the FIRST one a
+#      substitution site. Occurrence-level filtering (by shellcheck's own reported column against a
+#      precisely-computed construct span — `scripts/lib/extract-workflow-shell.py`'s
+#      `find_sc2050_protected_spans`) must suppress ONLY the first construct's finding and keep the
+#      second, even though both are genuine `[ ... ]` tests on the identical physical line. A line-scoped
+#      mechanism — pragma OR exclusion — cannot pass this leg by construction; only per-occurrence
+#      filtering can.
+WF_TWO_BRACKETS_RUN="[ '\${{ github.event_name }}' = 'workflow_dispatch' ] && [ 'GITHUB_REF_NAME' = 'main' ]
+"
+d="$(newrepo wf-sc2050-two-brackets)"
+wf_workflow_with "$d" "$WF_TWO_BRACKETS_RUN"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 1 ] \
+  && ok "#2493: two genuine [ ] constructs on one line — only the substitution-caused one is suppressed, the other REDS" \
+  || bad "#2493: a second, genuine [ ] construct sharing a line with a real substitution site must not be hidden" "rc=$RC
+$OUT"
+printf '%s' "$OUT" | grep -q 'SC2050' \
+  && ok "#2493: ...and the surviving finding is specifically identified as SC2050" \
+  || bad "#2493: the surviving construct's finding should be reported as SC2050" "$OUT"
+
+# ---- 9g. THE REAL TREE'S WORKFLOW-EMBEDDED SUBJECT IS NON-VACUOUS. ------------------------------------
+#      Leg 7 above already requires the real tree clean INCLUDING its workflow-embedded shell (the
+#      extraction runs unconditionally, not behind a flag) — but a green over an empty subject is
+#      exactly #266's failure shape one layer up. Reusing ONE `--list` capture for both this assertion
+#      and the pre-existing #648 one keeps this leg from paying for a second full extraction pass over
+#      the real tree (each is a real, non-trivial cost: ~15s of YAML parsing across ~100 workflows).
+# A HERE-STRING, not a live pipe into `grep -q`: bash implements `<<<` via a temp file, so an early
+# `-q` match can never SIGPIPE a still-writing producer. A live `(...) | grep -qx PATTERN` pipe hit
+# exactly that race the moment `--list` grew past one pipe buffer (.github#2493's own PR notes carry
+# the transcript) — `trap '' PIPE` in the gate itself is the belt, this is the suspenders for the one
+# spot in this fixture that reads a large capture rather than a small one.
+real_list="$(cd "$REPO_ROOT" && bash "$GATE" --list)"
+grep -qx 'scripts/fsgg-coord' <<<"$real_list" \
+  && ok "#648: the real subject includes scripts/fsgg-coord — the kit is linted in the repo that owns it" \
+  || bad "#648: the kit must be in the subject" "$real_list"
+grep -q '^workflow-embedded: \.github/workflows/kit-auto-publish\.yml:' <<<"$real_list" \
+  && ok "#2493: the real subject includes workflow-embedded shell from kit-auto-publish.yml" \
+  || bad "#2493: the real subject must include at least one real workflow's embedded shell — a green here with an empty workflow-embedded subject is discovery having broken, not a clean tree" "$real_list"
 
 echo
 echo "shell-lint fixture: $pass passed, $failcount failed"
