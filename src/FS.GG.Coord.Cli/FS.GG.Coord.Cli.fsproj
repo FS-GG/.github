@@ -120,7 +120,28 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.50.4 — no engine behavior change. `.github#2496` edited kit-packed content
+    <PackageReleaseNotes>0.50.6 — no engine behavior change. This release exists to COMPLETE a coherent
+set that 0.50.5 could not complete.
+
+DO NOT ADOPT 0.50.5. It is a permanent two-of-three set. `FS.GG.Kit 0.50.5` and `FS.GG.Drivers 0.50.5`
+published to both feeds; this package's publish was then REFUSED by `check-engine-release-notes`
+(`.github#1762`) because this very property still began with `0.50.4` while `Version` had moved to
+`0.50.5`. Correcting that needs a new commit, and `.github#1772`'s sibling-tag precondition requires
+all three tags to name the SAME commit, so 0.50.5 could not be finished from a corrected tree —
+re-cutting it is the re-pack divergence `.github#2240` documents. This is the same shape 0.50.1 had,
+and it is recorded the same way in `registry/dependencies.yml`. Adopt 0.50.6.
+
+WHAT ACTUALLY CHANGED (`.github#2512`). `check-engine-release-notes` had a PR-time arm already, but
+its workflow `paths:` filter selected only this project file — not `Directory.Build.props`, where
+`FsggCoherentSetVersion` (and therefore this package's `Version`) is declared. PR #2507 bumped the
+scalar there and touched nothing else that filter selected, so the gate never ran on the PR that
+created the mismatch and first spoke at release time, after two packages had shipped irrevocably.
+That filter and the checker's own `PATHS_SUBJECT` now both name `Directory.Build.props`; the checker
+additionally refuses a `Version` that does not resolve from `FsggCoherentSetVersion`, so a version it
+cannot trace to the coherent-set scalar is no longer something it will bless. The engine source under
+`src/FS.GG.Coord.*` is byte-identical to 0.50.4, the last version of it that actually published.
+
+0.50.4 — no engine behavior change. `.github#2496` edited kit-packed content
 (`pnext-item/SKILL.md`) after `FS.GG.Kit 0.50.3` had already been packed at `42c63af9`, so
 `check-kit-published-coherence` reds on `main`: the published 0.50.3 kit manifest differs from
 canonical on that one file. This bump exists to let the coherent set republish with current canonical

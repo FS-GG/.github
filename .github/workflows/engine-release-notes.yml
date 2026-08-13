@@ -1,8 +1,18 @@
 name: engine-release-notes
 
+# Directory.Build.props IS AN OPERAND OF THIS GATE, NOT A NEIGHBOUR OF IT (.github#2512). The engine
+# project's <Version> is `$(FsggCoherentSetVersion)`, declared in Directory.Build.props — so a bump
+# lives THERE, and until this filter selected it, a version-only PR ran none of this. PR #2507 did
+# exactly that: it moved the scalar 0.50.4 -> 0.50.5 and touched no other path below, so this gate
+# stayed silent and `check-engine-release-notes` first spoke inside `release-coord-engine`, after
+# FS.GG.Kit 0.50.5 and FS.GG.Drivers 0.50.5 had already published. 0.50.5 is a permanent
+# two-of-three set because of it. `scripts/check-engine-release-notes.py` declares the same pair in
+# its PATHS_SUBJECT, and check-paths-coherence rule (c) keeps these two lists from drifting apart
+# again.
 on:
   pull_request:
     paths:
+      - "Directory.Build.props"
       - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
       - "scripts/check-engine-release-notes.py"
       - "tests/engine-release-notes/**"
@@ -11,6 +21,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "Directory.Build.props"
       - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
       - "scripts/check-engine-release-notes.py"
       - "tests/engine-release-notes/**"
