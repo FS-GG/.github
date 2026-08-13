@@ -460,7 +460,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
 
         let head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false true with
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             match patchedBody with
@@ -482,15 +482,54 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                     failwith "expected zero writes: the live PR body already carried the current marker"
                 | method', path -> Error(Errors.NotFound $"unexpected request in the #2395 fixture: %s{method'} %s{path}"))
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false true with
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() -> ()
 
+    // Replaces the deleted `#2395 ensureAuthorization makes no request at all without --apply` test.
+    // That test asserted the very defect #2488 measured: it is the only reason no live `item/<n>-*` PR
+    // ever carried a current marker at the moment `claim-generation` evaluated it (five for five,
+    // #2488's own evidence table). `apply` no longer exists as a parameter — every call at this
+    // signature performs the read-modify-write below, so there is no argument left to hold "false" to
+    // reproduce the old no-op. Before this fix landed, this exact call (there was no sixth `false`
+    // argument to add — `ensureAuthorization` took one fewer parameter) would have failed to compile
+    // against the OLD 6-argument signature, and the OLD test at the OLD signature asserted zero requests
+    // for precisely this shape; reverting `Client.fs`'s call-site and signature change while keeping
+    // this test is the gate-inversion mutation this change's PR records having run.
     [<Fact>]
-    let ``#2395 ensureAuthorization makes no request at all without --apply`` () =
-        let transport =
-            ensureAuthorizationTransport (fun req -> Error(Errors.NotFound $"expected zero requests without --apply, got %s{req.Method} %s{req.Path}"))
+    let ``#2488 ensureAuthorization is no longer gated on --apply: a plain live status read writes the marker too`` () =
+        let mutable patchedBody: string option = None
+        let head = "dddddddddddddddddddddddddddddddddddddddd"
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) "head-a" false false with
+        let transport =
+            ensureAuthorizationTransport (fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/pulls/9001" -> okResponse (jsonBody "Implements the thing.")
+                | "PATCH", "repos/FS-GG/.github/pulls/9001" ->
+                    match req.Body with
+                    | Json payload ->
+                        use doc = System.Text.Json.JsonDocument.Parse payload
+                        patchedBody <- Some(doc.RootElement.GetProperty("body").GetString())
+                        okResponse "{}"
+                    | _ -> failwith "expected the authorization PATCH to carry a JSON body"
+                | method', path -> Error(Errors.NotFound $"unexpected request in the #2488 fixture: %s{method'} %s{path}"))
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
+        | Ok() ->
+            match patchedBody with
+            | None -> failwith "expected a PATCH even though this call carries nothing resembling --apply"
+            | Some body -> Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" head, body)
+
+    // A genuinely still-live no-op: a merged PR's body is never rewritten, apply or not — nothing further
+    // needs authorizing once landing has already happened. Not previously covered at this wired level
+    // (only the apply-gated no-op was), so this is new coverage the #2488 signature change earns for
+    // free rather than a behavior it changes.
+    [<Fact>]
+    let ``#2488 ensureAuthorization still makes no request once the PR has merged`` () =
+        let transport =
+            ensureAuthorizationTransport (fun req -> Error(Errors.NotFound $"expected zero requests once merged, got %s{req.Method} %s{req.Path}"))
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) "head-a" true with
         | Error e -> failwithf "expected ensureAuthorization to succeed as a no-op, got %A" e
         | Ok() -> ()
