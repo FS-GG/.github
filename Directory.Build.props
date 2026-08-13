@@ -97,8 +97,25 @@
        ahead of the `landable` wait so §6's merge order stays satisfiable now that `claim-generation`
        is a required status context (.github#1858). No engine source change; this bump exists solely to
        let FS.GG.Kit republish above the currently-published 0.50.4 with the corrected skill content. -->
+  <!-- 0.50.5 to 0.50.6 (.github#2512): NOT the usual republish bump. 0.50.5 IS A PERMANENT
+       TWO-OF-THREE SET and must not be adopted. The bump above moved this scalar and did NOT update
+       FS.GG.Coord.Cli.fsproj's PackageReleaseNotes, which still opened "0.50.4" — so at release time
+       check-engine-release-notes (.github#1762) correctly refused to publish the engine, AFTER
+       FS.GG.Kit 0.50.5 and FS.GG.Drivers 0.50.5 had already published to the feeds. Tags are
+       immutable and .github#1772's sibling-tag precondition requires all three tags at the SAME
+       commit, so 0.50.5 cannot be completed from a corrected tree: correcting the notes needs a new
+       commit, and that is a new version. This is exactly the 0.50.1 shape, recorded verbatim in
+       registry/dependencies.yml. 0.50.6 is that corrected cut — notes and scalar moved TOGETHER,
+       which is the whole point — and it is the version the fleet should adopt.
+
+       WHY IT COULD HAPPEN AT ALL, AND WHAT NOW PREVENTS IT. A PR-time arm of that same checker
+       already existed (.github/workflows/engine-release-notes.yml), but its `paths:` filter did not
+       select THIS FILE — only the project file. A bump that lands solely here therefore ran none of
+       it, and the gate first spoke at release time, which is after the irrevocable part. Both that
+       filter and the checker's own PATHS_SUBJECT now name this file, and check-paths-coherence rule
+       (c) plus tests/engine-release-notes/run.sh keep the two from drifting apart again. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.50.5</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.50.6</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
