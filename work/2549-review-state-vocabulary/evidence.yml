@@ -1,0 +1,638 @@
+schemaVersion: 1
+workId: 2549-review-state-vocabulary
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2549-review-state-vocabulary/spec.md
+sourceClarifications: work/2549-review-state-vocabulary/clarifications.md
+sourceChecklist: work/2549-review-state-vocabulary/checklist.md
+sourcePlan: work/2549-review-state-vocabulary/plan.md
+sourceTasks: work/2549-review-state-vocabulary/tasks.yml
+sourceAnalysis: readiness/2549-review-state-vocabulary/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2549-review-state-vocabulary/analysis.json
+    digest: d53a55710063bcb034927b125e38cddb8c8050cb7cf471895303b66618015504
+    schemaVersion: 1
+  - label: checklist
+    path: work/2549-review-state-vocabulary/checklist.md
+    digest: e3b69f29356d3a5991f43a01390eaf70a9a67a319dc96cce7c4a4665195d4353
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2549-review-state-vocabulary/clarifications.md
+    digest: b8b3654ffedae199d03b834a0096a22830e4cb5fe68279f3c6f48afff6fd5479
+    schemaVersion: 1
+  - label: plan
+    path: work/2549-review-state-vocabulary/plan.md
+    digest: d14b77f6d571c72240f135d03d571e31e04a1eaefca35c1aa1c54fd5145ca47d
+    schemaVersion: 1
+  - label: spec
+    path: work/2549-review-state-vocabulary/spec.md
+    digest: b044a60d8060e65e59eb52c973607282f3d10daff3264e8f65ff63349b727937
+    schemaVersion: 1
+  - label: tasks
+    path: work/2549-review-state-vocabulary/tasks.yml
+    digest: 656add840c3dc4cf60ec202e834678d923b8cabbde4ec2ebb63b7a6f58e91819
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Core/Driver.fs, src/FS.GG.Coord.Core/Driver.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["reviewChainProblems returns (isStructural, message) pairs; validateReviewChain is its messages and validateReviewChainStructure its structural subset, so both derive from one ordered source. acceptanceOutcome classifies on the structural subset."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Core/Review.fs, src/FS.GG.Coord.Core/Review.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["State.AcceptedAwaitingChecks of PrState and NextAction.AuthorizeDelivery added; acceptanceOutcome branches exhaustively over PrState with no wildcard."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Leg \"#2549 validateReviewChain reports the same nine messages in the same order as before the split\" pins the full list positionally. Authored to pass both before and after the split - a compatibility pin, deliberately not gate-inversion evidence."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Leg \"#2549 an acceptance bound to a different head is STILL malformed evidence (.github#2487 untouched)\" pins the head-mismatch arm unchanged."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-007]
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Core/Driver.fs, src/FS.GG.Coord.Core/Driver.fsi, src/FS.GG.Coord.Core/Review.fs, src/FS.GG.Coord.Core/Review.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["RepairAssertionReceipt plus the single shared repairAssertionValid guard consulted by both the ordinary and repair-phase unmoved-head branches; Driver.ReviewPhaseFacts.LatestReviewUrl supplies the review the grant binds to."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Six refusal legs, one per guard conjunct, each asserting the pre-existing AwaitingImplementerRepair/ResumeImplementer outcome and the refused-not-consumed clause."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008, PD-010]
+    obligationRefs: [EV007]
+    artifacts: [".agents/skills/pnext-item/references/independent-review.md", ".claude/skills/pnext-item/references/independent-review.md", src/FS.GG.Coord.Cli/ReviewApplication.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Wire renders state acceptedAwaitingChecks with stateErrors null and action authorizeDelivery; facts.repairAssertionGranted parses additively. Contract text added to both kit-mirrored copies, byte-identical."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV008]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverTests.fs, tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Eight distinct mutations run at authoring time; each observed red is recorded in the pull request body with the exact mutation and the failing test name."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/FS.GG.Coord.Core/Review.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["git diff --stat over the candidate contains no Landable.fs, no Protocol.fs and no Protocol.fsi; Landable.advisoryFrom is untouched and landable keeps a CI verdict independent of the review chain (.github#2360)."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [work/2549-review-state-vocabulary/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 decides the open design question in favour of modelling comment-shaped repairs in the state machine, with the three measured grounds for rejecting the alternative."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [work/2549-review-state-vocabulary/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 decides the grant channel and prices the durable-marker alternative that was rejected, and states the live-path limitation rather than hiding it."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [work/2549-review-state-vocabulary/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["DEC-003 decides AuthorizeDelivery over reusing AwaitChecks, because by .github#2504 waiting can never clear claim-generation."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [work/2549-review-state-vocabulary/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["DEC-004 decides that a red check state reports the same new state with a different action, keeping one new state rather than three."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [work/2549-review-state-vocabulary/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: [DEC-005 decides the split is made at the source rather than by matching message strings in a second file.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-005, PD-007, PD-008]
+    obligationRefs: [EV015]
+    artifacts: [src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/Driver.fsi, src/FS.GG.Coord.Core/Review.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Every surface change is additive. ReviewApplication.render keeps its pinned three-argument shape and Driver.validateReviewChain its exact messages and order, so Client.fs, ReviewApplication.fsi and Delivery.fs need no edit and none is in the diff."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV016]
+    artifacts: [".agents/skills/pnext-item/references/independent-review.md", ".claude/skills/pnext-item/references/independent-review.md"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Kit-content change; kit-auto-publish picks it up on push to main. Post-merge obligation is to verify the published bytes against canonical."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV017]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverTests.fs, tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests: 849 passed, 0 failed. Covers the pending, green and red legs, the structural-only malformation leg and the nine-message order pin."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006, PD-007]
+    obligationRefs: [EV018]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["The admitted grant is covered in both the ordinary and the repair phase, plus advance re-convergence and refusal at a moved head."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-006]
+    obligationRefs: [EV019]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverTests.fs, tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Gate inversion run at authoring time: re-tagging the liveness clause structural reds 6 legs; reverting acceptanceOutcome to the full list reds 4; each of the six guard conjuncts dropped in turn reds exactly one distinct leg."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV020]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs, tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test Core 849 passed and Cli 788 passed, both 0 failed, with every pre-existing #2175, #2417 and #2527 review leg unchanged."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV021]
+    artifacts: [".claude/skills/pnext-item/references/independent-review.md"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["scripts/generate-projections --check reported \"projections: current - the protocol is stated once, and every projection agrees with it\", exit 0."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV022]
+    artifacts: [src/FS.GG.Coord.Core/Review.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["The candidate diff touches seven source and test files and two kit-mirrored docs; no Landable and no Protocol path appears in it."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV023]
+    artifacts: [work/2549-review-state-vocabulary/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: ["Additive, no migration. Both new states are recomputed from live facts on every call and nothing is persisted, so there is no historical value to migrate."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV024]
+    artifacts: [readiness/2549-review-state-vocabulary/analysis.json, readiness/2549-review-state-vocabulary/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2549-review-state-vocabulary/test-results/core.trx
+      digest: "sha256:1724c79215a8cadfdb034cd51cdf6f7757af0832d6170642b9dd7c944ecb9a27"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 849
+      failed: 0
+      skipped: 0
+    notes: [Regenerated by fsgg-sdd analyze and evidence from the current plan sources.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

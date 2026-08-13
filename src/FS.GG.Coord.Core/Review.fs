@@ -44,6 +44,31 @@ module Review =
           Reason: string
           CandidateHeadSha: string }
 
+    /// The accountable grant that lets a repair whose subject is a PR COMMENT rather than the tree
+    /// advance a round (.github#2549) — the third instance of the same "external fact the pure engine
+    /// cannot observe itself" pattern as `RepairPhaseReceipt` and `CriticSuccessionReceipt`.
+    ///
+    /// WHY A GRANT AND NOT AN OBSERVATION. `.github#2527`'s charter sets the test: prefer evidence the
+    /// engine can already observe, and grant only what it genuinely cannot. A `Driver.ReviewComment` is
+    /// `{ Id; Url; Body }`, so a comment's CURRENT body is observable but "it changed in answer to this
+    /// finding" is not. The fact qualifies for a grant on exactly the test that disqualified one there.
+    ///
+    /// WHY THIS IS A STRONGER GUARD THAN THE RULE IT SUPPLEMENTS. The head-equality rule below treats
+    /// "the tree moved" as proof the implementer did work. An empty commit satisfies it and proves
+    /// nothing, so an implementer that wants the lane to advance is actively incentivised to manufacture
+    /// one — which is what the live `.github#2534` instance declined to do. A grant carries `GrantedBy`,
+    /// so it can refuse the implementer and the round's critic BY NAME; a moved head cannot.
+    ///
+    /// `AnsweredReviewUrl` is the URL of the exact changes-required review comment this repair answers
+    /// (`Driver.ReviewPhaseFacts.LatestReviewUrl`), which is what stops a grant left over from an
+    /// earlier round being replayed against a later one. `CandidateHeadSha` binds it to the head the
+    /// repair was made at.
+    type RepairAssertionReceipt =
+        { AnsweredReviewUrl: string
+          CandidateHeadSha: string
+          GrantedBy: string
+          Reason: string }
+
     /// UNLIKE `RepairPhaseGranted`, the critic-succession grant is deliberately NOT a field on `Facts`
     /// (.github#2417): `Facts` is constructed as a record literal at several sites this change does not
     /// own — most importantly the live `review <ref> --pr N` path (`Client.fs`) — and adding a required
@@ -67,6 +92,14 @@ module Review =
         | AwaitingSameCriticConfirmation of round: int
         | PassedAwaitingChecks
         | AwaitingHostAcceptance
+        /// The chain is COMPLETE — well-formed, host-accepted, critic-identified, bound to the current
+        /// head — and the only thing outstanding is the pull request's live check state (.github#2549).
+        /// Carries that state so a consumer reads WHY from the verdict rather than re-deriving §6.
+        ///
+        /// This is not a softer `MalformedEvidence`; it is a different question's answer. Nothing about
+        /// the evidence is wrong here, and the recovery `MalformedEvidence` teaches — close the pull
+        /// request without merging — is never correct from this state.
+        | AcceptedAwaitingChecks of checks: PrState
         | OrdinaryExhaustion
         | RepairPhaseSetup
         | RepairPhaseActive of round: int
@@ -90,6 +123,14 @@ module Review =
         | ResumeImplementer of reason: string
         | ResumeSameCritic of reason: string
         | AwaitChecks
+        /// Make the ONE live `scripts/fsgg-coord delivery <ref> --pr <n>` call `pnext-item` §6 places
+        /// after host acceptance (.github#2549).
+        ///
+        /// Deliberately NOT `AwaitChecks`. By `.github#2504`, `claim-generation` is a required context
+        /// on `main` whose marker that very call PATCHes onto the head about to merge, so "wait for
+        /// green, then call `delivery`" is a cycle the marker can never break. Telling a host to wait
+        /// here would replace one misleading answer with a quieter one that still ends in a dead end.
+        | AuthorizeDelivery of reason: string
         | RequestHostAcceptance
         | EnterRepairPhase of RepairPhaseReceipt
         | EnterCriticSuccession of CriticSuccessionReceipt
@@ -221,6 +262,66 @@ module Review =
             + "guard conditions; it was refused, not consumed)"
         | None -> baseReason
 
+    /// The ONE guard both the ordinary and repair-phase unmoved-head branches consult for a
+    /// comment-shaped repair (.github#2549) — never two copies, on the same rule `.github#2417` set for
+    /// `criticSuccessionValid`.
+    ///
+    /// This is what preserves the property the head-equality rule it supplements exists for: a critic
+    /// must never be sent to confirm a head no one repaired. Absent a receipt, or on ANY failed
+    /// conjunct, this returns `None` and the caller's pre-existing `ResumeImplementer` behavior is
+    /// completely unchanged — the route is entered only by an explicit, accountable grant, never by
+    /// inference and never by silence.
+    ///
+    /// Each conjunct answers a distinct way the grant could be abused:
+    ///  * `CandidateHeadSha = binding.HeadSha` — a grant made at an earlier head cannot be replayed
+    ///    after the tree moved.
+    ///  * `LatestReviewUrl = Some receipt.AnsweredReviewUrl` (non-blank) — a grant answering round 1
+    ///    cannot be replayed against round 2's finding. A blank URL can never be named, so a comment
+    ///    with no URL can never be answered.
+    ///  * `GrantedBy` is non-blank and is NOT `binding.ImplementerIdentity` — an implementer can never
+    ///    unlock its own round. This is the conjunct that makes the grant stronger than a moved head,
+    ///    which the implementer produces alone and unaccountably.
+    ///  * `GrantedBy` is NOT the round's critic — a critic can never manufacture its own trigger to
+    ///    confirm, which would collapse the two-party structure into one.
+    let private repairAssertionValid
+        (binding: Binding)
+        (repairAssertionGranted: RepairAssertionReceipt option)
+        (phaseFacts: Driver.ReviewPhaseFacts)
+        =
+        match repairAssertionGranted with
+        | Some receipt when
+            receipt.CandidateHeadSha = binding.HeadSha
+            && not (String.IsNullOrWhiteSpace receipt.AnsweredReviewUrl)
+            && phaseFacts.LatestReviewUrl = Some receipt.AnsweredReviewUrl
+            && not (String.IsNullOrWhiteSpace receipt.GrantedBy)
+            && receipt.GrantedBy <> binding.ImplementerIdentity
+            && phaseFacts.CriticIdentity <> Some receipt.GrantedBy
+            ->
+            Some receipt
+        | _ -> None
+
+    /// Same DEC-001 near-miss convention `resumeSameCriticReason` uses (.github#2369/.github#2417): the
+    /// base reason is byte-for-byte what it has always been when no grant was supplied, so a caller that
+    /// never grants one reads exactly the message it always did, and a REFUSED grant says so rather than
+    /// looking like no grant at all.
+    let private resumeImplementerReason (repairAssertionGranted: RepairAssertionReceipt option) =
+        let baseReason = "the critic requested changes at the current head; no new commit has landed yet"
+
+        match repairAssertionGranted with
+        | Some _ ->
+            baseReason
+            + " (a repair-assertion receipt was supplied but did not match this round's head, the review "
+            + "comment it must answer, or its granter guards; it was refused, not consumed)"
+        | None -> baseReason
+
+    /// The reason carried when a comment-shaped repair IS admitted. It names the granter, because the
+    /// whole safety argument for advancing at an unmoved head is that an accountable third party — not
+    /// the implementer — attested the repair.
+    let private commentRepairConfirmationReason (receipt: RepairAssertionReceipt) =
+        "the outstanding changes-required finding was repaired in a pull request comment rather than the "
+        + $"tree, so the head correctly did not move; %s{receipt.GrantedBy} granted the repair assertion "
+        + $"against review %s{receipt.AnsweredReviewUrl}, and the same critic must now confirm it"
+
     /// The shared acceptance path for both ordinary and repair-phase review: reuses
     /// `Driver.parseReviewCommentsWithFacts` (the terminal chain parser) and `Driver.validateReviewChain`
     /// (the FS-GG/.github#2136 generated round-ceiling policy) as the sole authorities — no marker text
@@ -238,10 +339,13 @@ module Review =
             let checksGreen = facts.Checks = PrGreen
             let chainWithChecks = { chain with ChecksGreen = checksGreen }
             let ceiling = ceilingFor binding.Phase
-            match Driver.validateReviewChain ceiling chainWithChecks, chain.CriticIdentity with
+            // .github#2549: STRUCTURE, not the full problem list. `validateReviewChain` also reports
+            // "review checks are not green", and folding that into `MalformedEvidence` made every
+            // ordinary landing pass through the state whose taught recovery is to close the pull
+            // request without merging — on a chain with nothing wrong with it.
+            match Driver.validateReviewChainStructure ceiling chainWithChecks, chain.CriticIdentity with
             | [], Some critic when chain.HeadSha = Some binding.HeadSha ->
-                Accepted,
-                Accept
+                let receipt =
                     { HeadSha = binding.HeadSha
                       CriticIdentity = critic
                       Rounds = chain.Rounds
@@ -250,6 +354,39 @@ module Review =
                       RuntimeRouteEvidence = chain.RuntimeRouteEvidence
                       DiffAuditRequired = chain.DiffAuditRequired
                       DiffAuditHead = chain.DiffAuditHead }
+
+                // Exhaustive over `PrState` with NO wildcard: a future check state cannot silently fall
+                // into whichever arm happens to be last. The state is the same in every non-green case —
+                // the chain is complete either way — and only the ACTION differs, because what a host
+                // should do about "not reported yet" and "reported red" are opposites.
+                match facts.Checks with
+                | PrGreen -> Accepted, Accept receipt
+                | PrPending
+                | PrUnknown ->
+                    AcceptedAwaitingChecks facts.Checks,
+                    AuthorizeDelivery(
+                        "the review chain is complete and accepted at this head; make the one live "
+                        + "`fsgg-coord delivery <ref> --pr <n>` call pnext-item section 6 places here, "
+                        + "which PATCHes the pull request's fsgg:pr-authorization marker onto this head "
+                        + "and is what lets the required claim-generation context report at all "
+                        + "(.github#2504) — waiting for green before making it is a cycle the marker can "
+                        + "never break"
+                    )
+                | PrRed
+                | PrConflicted ->
+                    AcceptedAwaitingChecks facts.Checks,
+                    ResumeImplementer(
+                        "the review chain is complete and accepted at this head; the pull request's own "
+                        + "checks are failing or conflicted, which is a defect in the change rather than "
+                        + "in the review evidence"
+                    )
+                | PrMerged
+                | PrClosed ->
+                    AcceptedAwaitingChecks facts.Checks,
+                    Park(
+                        "the review chain is complete and accepted at this head, but the pull request is "
+                        + "no longer open; no routine review action remains"
+                    )
             | [], Some _ ->
                 let reason = "the accepted review chain is bound to a different head than the current commit"
                 MalformedEvidence [ reason ], Park reason
@@ -309,6 +446,7 @@ module Review =
         (live: Driver.ReviewComment list)
         (diagnostics: string list)
         (successionGranted: CriticSuccessionReceipt option)
+        (repairAssertionGranted: RepairAssertionReceipt option)
         : State * NextAction =
         let phaseFacts = Driver.reviewPhaseFacts live
 
@@ -357,8 +495,12 @@ module Review =
                             let reason = "a changes-required verdict carries no readable reviewed-head field"
                             MalformedEvidence [ reason ], Park reason
                         | Some reviewedHead when reviewedHead = binding.HeadSha ->
-                            RepairPhaseActive round,
-                            ResumeImplementer "the critic requested changes at the current head; no new commit has landed yet"
+                            match repairAssertionValid binding repairAssertionGranted phaseFacts with
+                            | Some receipt ->
+                                RepairPhaseActive round, ResumeSameCritic(commentRepairConfirmationReason receipt)
+                            | None ->
+                                RepairPhaseActive round,
+                                ResumeImplementer(resumeImplementerReason repairAssertionGranted)
                         | Some _ ->
                             match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
                             | Some receipt -> RepairPhaseActive round, EnterCriticSuccession receipt
@@ -400,8 +542,13 @@ module Review =
                             let reason = "a changes-required verdict carries no readable reviewed-head field"
                             MalformedEvidence [ reason ], Park reason
                         | Some reviewedHead when reviewedHead = binding.HeadSha ->
-                            AwaitingImplementerRepair round,
-                            ResumeImplementer "the critic requested changes at the current head; no new commit has landed yet"
+                            match repairAssertionValid binding repairAssertionGranted phaseFacts with
+                            | Some receipt ->
+                                AwaitingSameCriticConfirmation round,
+                                ResumeSameCritic(commentRepairConfirmationReason receipt)
+                            | None ->
+                                AwaitingImplementerRepair round,
+                                ResumeImplementer(resumeImplementerReason repairAssertionGranted)
                         | Some _ ->
                             match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
                             | Some receipt -> AwaitingSameCriticConfirmation round, EnterCriticSuccession receipt
@@ -419,6 +566,7 @@ module Review =
         (binding: Binding)
         (facts: Facts)
         (successionGranted: CriticSuccessionReceipt option)
+        (repairAssertionGranted: RepairAssertionReceipt option)
         : Result<Verdict, string list> =
         match validateBinding binding with
         | problems when not (List.isEmpty problems) ->
@@ -428,11 +576,12 @@ module Review =
             // and the verdict read the same answer — so what the state was decided from and what the
             // verdict reports as retired can never disagree.
             let partition = Driver.liveReviewComments binding.HeadSha facts.Comments
-            let state, action = classify binding facts partition.Live partition.Diagnostics successionGranted
+            let state, action =
+                classify binding facts partition.Live partition.Diagnostics successionGranted repairAssertionGranted
             Ok(makeVerdict binding partition.Retired state action)
 
-    let advance freshnessToken actionKey binding facts successionGranted =
-        match inspect binding facts successionGranted with
+    let advance freshnessToken actionKey binding facts successionGranted repairAssertionGranted =
+        match inspect binding facts successionGranted repairAssertionGranted with
         | Ok verdict when verdict.FreshnessToken = freshnessToken && verdict.ActionKey = actionKey -> Ok verdict
         | Ok _ -> Error [ "review verdict is stale or does not authorize this transition; re-inspect before advancing" ]
         | Error reasons -> Error reasons

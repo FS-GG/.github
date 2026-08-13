@@ -189,6 +189,14 @@ module Driver =
           /// (.github#2369) — this never widens what `field` accepts, only what a refusal explains.
           LatestVerdictNearMissHints: string list
           LatestReviewedHeadSha: string option
+          /// The URL of the comment `LatestVerdict` and `LatestReviewedHeadSha` were read from — the
+          /// latest confirmation's when one exists, else the single initial-review comment's
+          /// (.github#2549). Read off the SAME `classifyMarkers` groups every sibling field is read
+          /// off, and off the comment record's own `Url`, so it introduces no parsing and no second
+          /// classification. It exists so an out-of-band grant can be bound to the EXACT review it
+          /// answers: without it, a receipt could only say "some review", and a grant left over from an
+          /// earlier round would be indistinguishable from one answering the current one.
+          LatestReviewUrl: string option
           EscalationPresent: bool
           RepairPhasePresent: bool
           AcceptanceCount: int
@@ -262,6 +270,13 @@ module Driver =
           LatestVerdict = latestVerdict
           LatestVerdictNearMissHints = latestVerdictNearMissHints
           LatestReviewedHeadSha = latestReviewedHeadSha
+          // .github#2549: the SAME comment `latestVerdict`/`latestReviewedHeadSha` were read from,
+          // chosen by the same `latestConfirmation`-else-`initial` rule immediately above, so the three
+          // can never describe different comments.
+          LatestReviewUrl =
+            match latestConfirmation with
+            | Some c -> Some c.Url
+            | None -> initial |> Option.map _.Url
           EscalationPresent = not (List.isEmpty groups.Escalations)
           RepairPhasePresent = not (List.isEmpty groups.RepairPhases)
           AcceptanceCount = List.length groups.Acceptances
@@ -1060,25 +1075,67 @@ module Driver =
         | DispatchWave of slots: int
         | ContinueCurrentWave
 
-    let validateReviewChain maxRounds chain =
+    /// Every problem a review chain can carry, each tagged `true` when it is a STRUCTURAL fact about the
+    /// durable review evidence and `false` when it is a LIVENESS fact about the pull request's current
+    /// check run (.github#2549).
+    ///
+    /// The two kinds were indistinguishable, and that cost a healthy chain. `Review.acceptanceOutcome`
+    /// folded every message here into `MalformedEvidence` — the same state a chain carrying two
+    /// competing initial markers reaches, whose taught recovery is to close the pull request without
+    /// merging. `.github#2504` then made "checks are not green" a condition every ordinary landing
+    /// passes through by design: `claim-generation` is a required context on `main` whose marker is
+    /// written by the `delivery` call `pnext-item` §6 places AFTER host acceptance, so it CANNOT be
+    /// green at the moment acceptance is first observed. Measured on `.github#2534` / PR #2541: a chain
+    /// with one initial marker, one confirmation, one critic and a correctly bound acceptance reported
+    /// `{"state":"malformedEvidence","stateErrors":["review checks are not green"],"action":"park"}`.
+    /// PR #2514 was closed without merging and reopened as #2528 on that reading on 2026-08-13.
+    ///
+    /// ONE list, ONE order. `validateReviewChain` below is exactly this list's messages, so the split is
+    /// a property of the construction rather than a promise — `Delivery.reviewProblem` and
+    /// `receiptFresh` cannot drift from it, and a later reword of any message cannot silently
+    /// reintroduce the conflation the way a string match in a second file would.
+    let private reviewChainProblems maxRounds chain =
         [ if not chain.MarkerValid then
-              "review marker is missing or invalid"
+              true, "review marker is missing or invalid"
           if Option.isNone chain.CriticIdentity then
-              "critic identity is missing"
+              true, "critic identity is missing"
           if Option.isNone chain.HeadSha then
-              "review head SHA is missing"
+              true, "review head SHA is missing"
           if List.isEmpty chain.Rounds || chain.Rounds <> [ 1 .. List.length chain.Rounds ] then
-              "review rounds are not ordered from one"
+              true, "review rounds are not ordered from one"
           if List.length chain.Rounds > maxRounds then
-              "review round ceiling exceeded"
+              true, "review round ceiling exceeded"
           if Option.isNone chain.RuntimeRouteEvidence then
-              "runtime-route applicability evidence is missing"
+              true, "runtime-route applicability evidence is missing"
           if chain.DiffAuditRequired && chain.DiffAuditHead <> chain.HeadSha then
-              "required diff-audit receipt is missing, stale, or unresolved"
+              true, "required diff-audit receipt is missing, stale, or unresolved"
+          // The ONLY liveness clause. Everything above is a fact about what the critic and host durably
+          // wrote; this one is a fact about a CI run that has not reported yet.
           if not chain.ChecksGreen then
-              "review checks are not green"
+              false, "review checks are not green"
+          // STRUCTURAL, deliberately: "no host acceptance marker is present" is a completeness fact
+          // about the durable evidence, not about a check run. `Review.acceptanceOutcome` is only
+          // reached when an acceptance IS present, so this clause can never fire on the path
+          // .github#2549 introduces; tagging it structural is therefore both correct and inert there.
           if not chain.HostAccepted then
-              "host acceptance is missing" ]
+              true, "host acceptance is missing" ]
+
+    let validateReviewChain maxRounds chain =
+        reviewChainProblems maxRounds chain |> List.map snd
+
+    /// The STRUCTURAL subset of `validateReviewChain` — everything that is wrong with the durable review
+    /// evidence itself, with the live-check liveness clause withheld (.github#2549).
+    ///
+    /// This is what `Review.acceptanceOutcome` classifies `MalformedEvidence` from, so that word once
+    /// again means only what a host can act on by inspecting the chain: a broken marker, a missing
+    /// critic, an unordered round sequence, an exhausted ceiling, missing route evidence, an unresolved
+    /// diff audit. An empty result does NOT mean the chain may merge — it means nothing about the
+    /// evidence is malformed. Merge readiness stays where it has always been: `landable`'s own CI
+    /// verdict, which `.github#2360` requires to remain wholly independent of the review chain and which
+    /// this function does not touch, and the host-acceptance marker.
+    let validateReviewChainStructure maxRounds chain =
+        reviewChainProblems maxRounds chain
+        |> List.choose (fun (structural, message) -> if structural then Some message else None)
 
     let receiptFresh now maxAgeSeconds (receipt: Receipt) =
         let confirmationCeiling chain =
