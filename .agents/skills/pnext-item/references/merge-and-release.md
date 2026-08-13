@@ -31,11 +31,22 @@ and all three release workflows had run. `.github#2533` is that defect.
 | regenerating `registry/coordination-kit-skill-manifest.json` and the other rostered projections | `skill-registry-coherence` / `projections` autofix | scheduled + `push` | none — but a projection you did not regenerate reds `main` until the bot catches up, so regenerate it in your PR |
 | recording a published coherent set in `registry/dependencies.yml` / `registry/CHANGELOG.md`, bumping a downstream repo, filing a follow-up row | nothing | — | **yours**, and it must be declared |
 
-Use `kind=package-release` (or the artifact-specific `kit-release`, `coord-engine-release`,
-`drivers-release`, `coherent-set-release`) for row 1. Those tokens are not decoration: they are the join
-key `check-kit-published-coherence.py --obligation-arm` uses to flag a declaration whose subject the
-merge already performs, and it reads `kit-auto-publish.yml`'s live `on:` block rather than trusting this
-table. If you change one half, change the other.
+**For row 1, the token you want is `kind=release-verification`.** Read that twice, because the obvious
+choice is the wrong one: `package-release` — and its artifact-specific spellings `kit-release`,
+`coord-engine-release`, `drivers-release`, `coherent-set-release` — are exactly the tokens
+`check-kit-published-coherence.py --obligation-arm` **flags**, because they name an act the merge
+performs. They are listed here so you can recognise them, not so you can use them. Declaring one on a PR
+into `main` reds `kit-published-coherence / pr-arm`, which is the gate doing its job.
+
+| you owe | use | why |
+|---|---|---|
+| confirming the automatic release published what you meant | `release-verification` | comparing published bytes to canonical is not something any workflow does |
+| performing a release by hand | `package-release` and friends | **flagged** — the merge already did it; rewrite the obligation as verification |
+
+Those tokens are the join key the gate uses; it reads `kit-auto-publish.yml`'s live `on:` block rather
+than trusting this table. If you change one half, change the other. `.github#2533`'s own PR declares
+`kind=release-verification`, which is the worked example — the item self-applying rather than exempting
+itself.
 
 **Verifying an automatic release means reading the PUBLISHED BYTES against canonical.** A green release
 workflow proves the job ran, not that what shipped is what you meant: `release-kit` run `31716998803`

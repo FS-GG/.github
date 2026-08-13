@@ -1683,19 +1683,10 @@ text = open(sys.argv[1], encoding="utf-8").read()
 job = re.search(r"(?ms)^  pr-arm:\n(.*?)(?=^  [a-z]|\Z)", text)
 assert job, "the pr-arm job is not where this assertion expects it"
 body = job.group(1)
-assert "--obligation-arm" in body, (
-    "the pr-arm job does not run --obligation-arm, so the .github#2533 detection is not wired to "
-    "anything — which is the defect that item exists to close:\n" + body
-)
 # The KEY, not the substring: this job's own comments discuss `continue-on-error` and why it is not
 # used, and a substring test that its own rationale trips is a test nobody can keep green.
 assert not re.search(r"(?m)^\s*continue-on-error\s*:", body), (
     "the pr-arm job gained continue-on-error; a finding would report green:\n" + body
-)
-# The subject has to be READ from the PR, not handed in as a literal.
-assert "issues/" in body and "comments" in body, (
-    "the obligation step does not fetch the PR's comments, so its subject is whatever the caller "
-    "typed:\n" + body
 )
 # The job must stay reportable on EVERY pull request: a `paths:` filter on the trigger, or an `if`
 # narrowing this job, is how a gate reports nothing on the PRs that needed it.
@@ -1717,6 +1708,171 @@ else
   bad "the obligation arm is wired on the pr-arm job, on every pull request"
 fi
 
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# THE STEP IS EXECUTED, NOT GREPPED (.github#2533 round-1 repairs 1 and 2, ONE cause).
+#
+# The two legs that used to stand here asserted `"--obligation-arm" in body` and `"issues/" in body
+# and "comments" in body` — SUBSTRING checks over the workflow's text. Independent review measured
+# what that bought: replacing the fetch with `echo '[]' > pr-comments.json` while leaving
+# COMMENTS_URL in place left this suite at 150 passed, 0 failed; and removing the invocation behind
+# a `# was: --obligation-arm` decoy comment left the companion green too (the FS.GG.Templates#379
+# shape). A substring check reads as an assertion and is not one.
+#
+# Underneath them was a real defect of the same shape, which is why they are one repair: the step
+# piped `gh api` into `jq` with no `shell:` and no `defaults:`, so GitHub ran `bash -e {0}` WITHOUT
+# pipefail. `-e` does not abort on a failed pipe HEAD, so a transport failure produced an empty
+# stream, `add // []` fabricated `[]`, and the arm exited 0 having read nothing. An empty comment
+# list is a LEGAL state, so the gate cannot tell that apart — only the step can.
+#
+# So both legs now EXTRACT the step's own `run:` body and RUN it, under GitHub's actual default
+# invocation, with stubs for `gh` and `python`. Each is followed by the mutation that would have
+# defeated its substring predecessor, asserted to change the outcome.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+OBL_STEP="$WORK/obligation-step.sh"
+OBL_BIN="$WORK/obligation-bin"
+STUB_LOG="$WORK/obligation-python-calls.log"
+STEP_CWD="$WORK/step-cwd"
+mkdir -p "$OBL_BIN" "$STEP_CWD"
+
+python3 - "$HERE/../../.github/workflows/kit-published-coherence.yml" "$OBL_STEP" <<'PY'
+import sys
+import yaml
+
+wf_path, out_path = sys.argv[1], sys.argv[2]
+wf = yaml.safe_load(open(wf_path, encoding="utf-8"))
+steps = (wf.get("jobs") or {}).get("pr-arm", {}).get("steps") or []
+name = "Does this PR declare a post-merge obligation the merge itself performs?"
+step = next((s for s in steps if s.get("name") == name), None)
+if step is None:
+    sys.exit("the obligation step is GONE from kit-published-coherence.yml's pr-arm job")
+# GitHub runs a `run:` step with no `shell:` as `bash -e {0}`. This fixture emulates exactly that, so
+# a `shell:` override would make the emulation WRONG rather than merely different — and an emulation
+# that supplies a guarantee the runner does not is how a behaviour leg becomes decorative again.
+if "shell" in step:
+    sys.exit(
+        f"the obligation step declares shell: {step['shell']!r}. This fixture runs its body under "
+        f"GitHub's default `bash -e`; teach it the new invocation before changing the step."
+    )
+if "${{" in step["run"]:
+    sys.exit(
+        "the obligation step's run: body interpolates a GitHub expression, so it cannot be executed "
+        "here. Keep the expressions in env:, where this fixture can supply them."
+    )
+open(out_path, "w", encoding="utf-8").write(step["run"])
+PY
+
+# A stub `gh` that can fail at TRANSPORT — the case the pipe used to swallow. Note it fails the way
+# a network error does (non-zero, nothing on stdout), not the way a 404 does (error JSON on stdout),
+# because the 404 case already failed closed and is exactly what made this one easy to miss.
+cat > "$OBL_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+if [ "${STUB_GH_FAIL:-0}" = "1" ]; then
+  echo "stub gh: transport failure" >&2
+  exit 1
+fi
+printf '%s' "${STUB_GH_BODY:-[]}"
+SH
+# A stub `python` that RECORDS its argv instead of running the gate. What is being measured here is
+# the step, not the arm; the arm has its own legs above.
+cat > "$OBL_BIN/python" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$STUB_LOG"
+exit 0
+SH
+chmod +x "$OBL_BIN/gh" "$OBL_BIN/python"
+
+run_obl_step() { # $1 script to run; env STUB_GH_FAIL / STUB_GH_BODY select the stub's behaviour
+  : > "$STUB_LOG"
+  rm -f "$STEP_CWD"/*.json
+  set +e
+  out="$(cd "$STEP_CWD" && PATH="$OBL_BIN:$PATH" STUB_LOG="$STUB_LOG" \
+    STUB_GH_FAIL="${STUB_GH_FAIL:-0}" STUB_GH_BODY="${STUB_GH_BODY:-[]}" \
+    COMMENTS_URL="repos/FS-GG/.github/issues/1/comments" bash -e "$1" 2>&1)"
+  rc=$?
+  set -e
+}
+
+# ---- REPAIR 1's BEHAVIOUR: a failed fetch must red the step, not fabricate an empty subject.
+STUB_GH_FAIL=1 run_obl_step "$OBL_STEP"
+if [ "$rc" -ne 0 ]; then
+  ok "a transport failure in the comment fetch reds the step (exit $rc)"
+else
+  bad "a transport failure in the comment fetch reds the step (exit $rc)" "$out"
+fi
+if [ ! -s "$STUB_LOG" ]; then
+  ok "…and the gate is never invoked on the subject that failure would have fabricated"
+else
+  bad "…and the gate is never invoked on the subject that failure would have fabricated" \
+    "$(cat "$STUB_LOG")"
+fi
+
+# ---- REPAIR 2's BEHAVIOUR: the step really does invoke the arm, with the PR's fetched comments.
+STUB_GH_FAIL=0 STUB_GH_BODY='[{"body":"hello"}]' run_obl_step "$OBL_STEP"
+if [ "$rc" -eq 0 ]; then
+  ok "a successful fetch runs the step to completion"
+else
+  bad "a successful fetch runs the step to completion (exit $rc)" "$out"
+fi
+if grep -q -- "--obligation-arm" "$STUB_LOG" && grep -q -- "--obligations" "$STUB_LOG"; then
+  ok "the step INVOKES the obligation arm, observed in the recorded argv rather than in the YAML text"
+else
+  bad "the step INVOKES the obligation arm, observed in the recorded argv rather than in the YAML text" \
+    "$(cat "$STUB_LOG")"
+fi
+# The subject handed to the gate must be the file the fetch wrote, carrying the fetched content.
+# Compared as JSON, not as bytes: `jq -s add` re-renders the payload, so a byte compare would be
+# asserting jq's formatting rather than the fetch's content.
+if [ "$(jq -cS . "$STEP_CWD/pr-comments.json" 2>/dev/null)" = '[{"body":"hello"}]' ]; then
+  ok "the file the gate is pointed at holds what the fetch actually returned"
+else
+  bad "the file the gate is pointed at holds what the fetch actually returned" \
+    "$(cat "$STEP_CWD/pr-comments.json" 2>/dev/null)"
+fi
+
+# ---- THE TWO MUTATIONS THAT DEFEATED THE SUBSTRING LEGS, now asserted to change the outcome.
+#      Each reproduces exactly what independent review did to the shipped workflow.
+python3 - "$OBL_STEP" "$WORK/step-echo-subject.sh" <<'PY'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+# The critic's mutation: replace the fetch with a fabricated subject, leaving COMMENTS_URL in place
+# so every substring the old leg looked for is still present in the file.
+mutated, n = re.subn(r"(?m)^\s*gh api .*$", "echo '[]' > pr-comment-pages.json", text)
+if n != 1:
+    sys.exit(f"expected exactly one `gh api` line to mutate, found {n}")
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+STUB_GH_FAIL=1 run_obl_step "$WORK/step-echo-subject.sh"
+if [ "$rc" -eq 0 ]; then
+  ok "INVERSION: with the fetch replaced by a literal, the transport leg goes GREEN — so it measures the fetch"
+else
+  bad "INVERSION: with the fetch replaced by a literal, the transport leg goes GREEN — so it measures the fetch" \
+    "$out"
+fi
+
+python3 - "$OBL_STEP" "$WORK/step-decoy-invocation.sh" <<'PY'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+# The FS.GG.Templates#379 decoy: remove the invocation but leave its flags in a comment, which is
+# what defeated a substring check while a bare deletion did not.
+mutated, n = re.subn(
+    r"(?ms)^\s*python scripts/check-kit-published-coherence\.py.*?--obligations pr-comments\.json\s*$",
+    "# was: python scripts/check-kit-published-coherence.py --obligation-arm --obligations pr-comments.json",
+    text,
+)
+if n != 1:
+    sys.exit(f"expected exactly one gate invocation to mutate, found {n}")
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+STUB_GH_FAIL=0 STUB_GH_BODY='[{"body":"hello"}]' run_obl_step "$WORK/step-decoy-invocation.sh"
+if [ ! -s "$STUB_LOG" ]; then
+  ok "INVERSION: with the invocation behind a decoy comment, nothing is invoked — so the leg measures the call"
+else
+  bad "INVERSION: with the invocation behind a decoy comment, nothing is invoked — so the leg measures the call" \
+    "$(cat "$STUB_LOG")"
+fi
+
 echo
 echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
@@ -1727,7 +1883,10 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # not cover a leg silently skipped because a variable it needed was empty, or an `if` whose python
 # heredoc exited 0 without asserting. So the count is asserted, and it must be updated deliberately
 # when legs are added — a fixture whose leg count nobody states is one that can quietly shrink.
-EXPECTED_LEGS=150  # 107 + 43 obligation-arm legs (.github#2533), two of them gate-inversion controls
+# 107 + 50 obligation-arm legs (.github#2533). Four of the 50 are gate-inversion controls: M1/M2 on
+# the arm itself, plus the two round-1 repair controls that execute the workflow step and prove each
+# behaviour leg reds when the thing it names is removed.
+EXPECTED_LEGS=157
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

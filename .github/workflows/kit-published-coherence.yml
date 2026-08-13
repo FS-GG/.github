@@ -150,8 +150,25 @@ jobs:
           # declarations would be measuring itself.
           COMMENTS_URL: repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
         run: |
-          gh api "$COMMENTS_URL" --paginate --jq '[.[] | {body}]' \
-            | jq -s 'add // []' > pr-comments.json
+          # THE FETCH MUST BE ABLE TO FAIL, and the first draft of this step could not. It was
+          # `gh api … | jq -s 'add // []' > pr-comments.json`, with no `shell:` and no `defaults:`,
+          # so GitHub ran it as `bash -e {0}` — WITHOUT pipefail. `-e` does not abort on a failed
+          # pipe HEAD (`bash -e -c 'false | cat > f; echo $?'` prints 0 and continues), so a
+          # transport failure produced an empty stream, `add // []` fabricated `[]` from it, and the
+          # gate reported "ok: this PR's 0 comment(s) carry no declaration" and exited 0. An empty
+          # comment list is a LEGAL state — a PR really can have no comments — so the gate cannot
+          # tell that apart from having read nothing. Only this step can, which makes the guarantee
+          # this step's to keep.
+          #
+          # Two independent guards, because one of them is the kind of thing a later edit removes:
+          #   1. NO PIPE AT ALL in the fetch. `gh`'s own exit status is the command's status, so
+          #      `-e` aborts on it with nothing in between to swallow it.
+          #   2. `pipefail` anyway, so a pipe added here later is covered from the moment it lands.
+          # `tests/kit-published-coherence/run.sh` EXECUTES this script under `bash -e` with a
+          # failing stub `gh` and asserts a non-zero exit, so neither guard can be deleted silently.
+          set -o pipefail
+          gh api "$COMMENTS_URL" --paginate --jq '[.[] | {body}]' > pr-comment-pages.json
+          jq -s 'add // []' pr-comment-pages.json > pr-comments.json
           python scripts/check-kit-published-coherence.py --obligation-arm \
             --obligations pr-comments.json
 

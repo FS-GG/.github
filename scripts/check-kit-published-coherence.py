@@ -330,6 +330,16 @@ WHAT IT CANNOT ASSERT, stated here rather than discovered later (#266):
     diff, and "cannot tell" must not merge. No mapped workflow carries one today.
   * It does not check that a declared obligation is CORRECT, complete, or discharged. That is the
     engine's `delivery` path. Its one question is whether the act named is one the merge performs.
+  * IT CANNOT TELL "THIS PR HAS NO COMMENTS" FROM "I READ NOTHING", and no arrangement of this file
+    can. An empty comment list is a legal state, so `[]` is a legal subject; an unreadable,
+    unparsable or non-list payload is a no-verdict RED, but an empty one is a green. The guarantee
+    that the comments were actually FETCHED therefore belongs to the caller, and it is a real
+    guarantee, not a disclaimer: the first draft of this arm's step piped `gh api` into `jq` under
+    GitHub's default `bash -e` (no pipefail), so a transport failure fabricated `[]` and greened
+    this arm. `kit-published-coherence.yml` now takes the pipe out and sets `pipefail`, and the
+    fixture EXECUTES that step under a failing stub `gh` and asserts it exits non-zero — a
+    behaviour assertion, because the substring check that stood there first passed while the fetch
+    was replaced by `echo '[]'`.
 
 Usage:  scripts/check-kit-published-coherence.py [--lock registry/repos.lock]
         scripts/check-kit-published-coherence.py --pr-arm [--base <ref-or-sha>]
@@ -2036,9 +2046,11 @@ def main(argv: list[str]) -> int:
         "--obligations",
         help="this PR's comments, as `gh api repos/<slug>/issues/<n>/comments` emits them. This is "
         "how the arm's SUBJECT is delivered, not a canned answer — the same shape as "
-        "check-claim-generation.py's --body — so it is not locked behind the fixture switch. A "
-        "wrong or empty file still fails; it cannot make the arm agree with something it did not "
-        "read.",
+        "check-claim-generation.py's --body — so it is not locked behind the fixture switch. An "
+        "unreadable, unparsable or non-list file is a no-verdict RED. An EMPTY LIST is not: a PR "
+        "really can have no comments, so `[]` is a legal subject and this arm cannot tell it from "
+        "a fetch that read nothing. Whoever produces this file owes the guarantee that it was "
+        "actually read — see the caller's own note in kit-published-coherence.yml.",
     )
     args = ap.parse_args(argv)
 
@@ -2132,8 +2144,10 @@ def main(argv: list[str]) -> int:
         if not args.obligations:
             print(
                 "::error::check-kit-published-coherence: --obligation-arm requires --obligations. "
-                "An arm with no subject to read must refuse, not report that nothing was declared "
-                "(#266).",
+                "An arm handed no subject AT ALL must refuse, not report that nothing was declared "
+                "(#266). Note this is the only 'no subject' case this arm can detect: a supplied "
+                "file holding `[]` is a legal PR with no comments, and the guarantee that the file "
+                "was actually fetched belongs to the caller.",
                 file=sys.stderr,
             )
             return 1
