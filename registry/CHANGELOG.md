@@ -55,10 +55,7 @@ no gate behaviour changes — this is purely how humans record the log.
   sibling-tag precondition inside `Resolve version + publish decision` ("refusing to publish FS.GG.Kit
   0.50.3: sibling tag drivers/v0.50.3 does not exist yet"), and its `Restore (locked)`, `Pack`, `Push to
   org GitHub Packages feed` and `Push byte-identical package to nuget.org` steps are **all** recorded
-  `skipped`. Corroborated on the served bytes: Kit 0.50.3 is byte-identical across both feeds (40
-  non-signature, non-psmdcp entries compared, 0 differing, 0 feed-exclusive) **including `_rels/.rels`**,
-  one of exactly the two entries #2240 measured as divergent between two packs — so both feeds carry one
-  pack. **This is not licence to re-run a publish:** once an archive has reached a feed, #2240 stands
+  `skipped`. **This is not licence to re-run a publish:** once an archive has reached a feed, #2240 stands
   unamended and the only safe retry is "Re-run failed jobs", which skips `pack` and re-pushes the
   original artifact. `0.50.4` published cleanly:
   runs [31680586145](https://github.com/FS-GG/.github/actions/runs/31680586145) (coord-engine),
