@@ -924,6 +924,29 @@ module Client =
     let private passedOver (result: Batch.BatchResult) =
         result.Decisions |> List.filter (fun d -> d.Result <> Schedulability.Startable)
 
+    /// "NOTHING SCHEDULABLE" MUST MEAN *MEASURED* NOTHING (.github#2525 acceptance #2).
+    ///
+    /// `Decisions` is one entry per candidate the scheduler actually looked at, so its length IS the
+    /// measurement — no parallel counter on `BatchResult`, which is how two numbers start disagreeing
+    /// (#485). It matters because every other explanatory surface here (`sayPassedOver`, `starvedBanner`,
+    /// `explainRanking`) is keyed on `Decisions` and so says nothing AT ALL when it is empty: the
+    /// empty-candidate case printed one bare sentence on stdout, nothing on stderr, and exit 0 —
+    /// indistinguishable from a board that was fully read and had nothing startable in it. Stating the
+    /// count separates "I considered 40 and refused them all" from "I considered nothing".
+    ///
+    /// STDERR, AND THAT IS THE WHOLE POINT (.github#1562). The stdout headline is a pinned byte-for-byte
+    /// contract on both `take` and `batch --text`, and #1562 exists because a change that moved BOTH
+    /// streams at once would have been green everywhere. This is an explanation, explanations already all
+    /// live on stderr here, and adding a word to the parsed stream to carry one would repeat the mistake
+    /// that item was filed about.
+    ///
+    /// The exit-code half of the same acceptance is upstream and not in this function: the board scan now
+    /// refuses a batch it cannot prove complete, so a truncated read carries its own non-zero error code
+    /// and never arrives here presenting as a green empty ranking.
+    let private sayHowManyConsidered (result: Batch.BatchResult) =
+        if List.isEmpty result.Chosen then
+            eprint $"considered %d{List.length result.Decisions} candidate(s) — this is a measured count, not an assumption."
+
     /// THE `--json` STDERR SPLIT, shared by `batch --json` and `take --json` (.github#1525).
     ///
     /// stdout is the machine document; the "why nothing / why less" is stderr, exactly as bash splits them.
@@ -934,6 +957,8 @@ module Client =
     /// NO `passed over:` HEADER. That header belongs to the human projection below; the JSON arm has never
     /// printed it, and this is the extraction of what `batch --json` already emitted, not a reformat of it.
     let private sayWhyNothing (leaseMinutes: int) (result: Batch.BatchResult) =
+        sayHowManyConsidered result
+
         for d in passedOver result do
             eprint $"  %s{Batch.explainDecision leaseMinutes d}"
 
@@ -957,6 +982,8 @@ module Client =
     /// putting its headline somewhere else. It is deliberately NOT `sayWhyNothing` above: that one is the
     /// `--json` split and has never printed the `passed over:` header, which belongs to this projection.
     let private sayPassedOver (leaseMinutes: int) (result: Batch.BatchResult) =
+        sayHowManyConsidered result
+
         let passed = passedOver result
 
         if not (List.isEmpty passed) then
@@ -1367,12 +1394,27 @@ module Client =
                    reason = c.Reason
                    evidence = c.Evidence |})
 
+        // THE MACHINE PROJECTION NEEDS THE SAME COMPLETENESS FACT AS THE TEXT ONE (.github#2525).
+        // A reader that only saw `active: []` could not tell a measured-empty inventory from one this read
+        // never finished, which is exactly the collapse the text renderer was fixed for. `activeComplete`
+        // is the single boolean a driver can branch on; `unreadable` carries the detail. Additive keys on
+        // an existing schema — no consumer of `transitions`/`active` changes.
+        let unreadableItems =
+            projection.Unreadable
+            |> List.map (fun c ->
+                {| ref = c.Ref
+                   state = DriverEvents.encodeState c.State
+                   reason = c.Reason
+                   evidence = c.Evidence |})
+
         JsonSerializer.Serialize
             {| schema = "fsgg.coord.driver-events/1"
                sourceSha = sourceSha
                renderedAt = projection.RenderedAt
                transitions = transitions
-               active = activeItems |}
+               active = activeItems
+               activeComplete = List.isEmpty projection.Unreadable
+               unreadable = unreadableItems |}
 
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     let driver (ctx: Context) (opts: Options) : int =

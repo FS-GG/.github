@@ -1,5 +1,6 @@
 {
   "active": [],
+  "activeComplete": true,
   "schema": "fsgg.coord.driver-events/1",
   "transitions": [
     {
@@ -9,5 +10,6 @@
       "ref": "FS-GG/FS.GG.SDD#500",
       "state": "ready"
     }
-  ]
+  ],
+  "unreadable": []
 }

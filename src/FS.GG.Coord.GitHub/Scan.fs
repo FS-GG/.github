@@ -338,6 +338,29 @@ module Scan =
         // would put a phantom on the queue.
         | _ -> None
 
+    /// Did the board query select this node AS an issue row? (.github#2525)
+    ///
+    /// `parseRow` has exactly one failure exit — `None` — and TWO completely different things arrive at it.
+    /// A draft card legitimately has no ref, and skipping it is correct. But a node the query matched
+    /// `... on Issue` / `... on PullRequest`, whose `number` or `repository.nameWithOwner` then came back
+    /// missing or ill-typed, is a REAL ROW WE FAILED TO READ — and it left the batch by the same silent
+    /// door, with no counter and no trace. `__typename` is already selected on every node by both board
+    /// documents, so the two cases are distinguishable for free; without this the caller cannot tell a
+    /// 640-row board from the part of it that happened to parse.
+    ///
+    /// `content` absent or null deliberately reads as FALSE here. That is the redacted-item case — an item
+    /// this token cannot see — and refusing the whole scan for it would refuse boards that legitimately
+    /// carry such items. It is a stated limit of this guard, not an oversight: this guard covers rows the
+    /// server DID hand us and we then failed to read, which is the class that produced .github#2525.
+    let private isIssueRowNode (node: JsonElement) : bool =
+        match node.TryGetProperty "content" with
+        | true, content when content.ValueKind = JsonValueKind.Object ->
+            match str content "__typename" with
+            | Some "Issue"
+            | Some "PullRequest" -> true
+            | _ -> false
+        | _ -> false
+
     /// The scan, as the JSON we cache. It is the ROWS, not the raw GraphQL — so a cache hit does not have to
     /// re-walk a document, and the shape on disk is the shape the reader wants.
     let private renderRows (rows: Row list) =
@@ -542,23 +565,60 @@ module Scan =
                         .GetProperty("projectV2")
                         .GetProperty("items")
 
-                let rows =
+                let parsed =
                     items.GetProperty("nodes").EnumerateArray()
-                    |> Seq.choose (parseRow carrySweptBody)
+                    |> Seq.map (fun node -> node, parseRow carrySweptBody node)
                     |> List.ofSeq
 
-                let pageInfo = items.GetProperty("pageInfo")
+                let rows = parsed |> List.choose snd
 
-                let hasNext =
+                // ROW-LEVEL COMPLETENESS (.github#2525). `Seq.choose` used to drop every unparseable node
+                // here, which is right for a draft card and wrong for an issue row we simply could not
+                // read: the batch came back short and reported success, and both projections downstream
+                // render a short batch as a substantive answer.
+                let unreadableRows =
+                    parsed
+                    |> List.filter (fun (node, row) -> Option.isNone row && isIssueRowNode node)
+                    |> List.length
+
+                if unreadableRows > 0 then
+                    Error(
+                        Malformed(
+                            subject,
+                            $"the board scan returned %d{unreadableRows} item node(s) selected as an Issue or PullRequest whose `number`/`repository.nameWithOwner` could not be read — refusing to report a short board as a complete one"
+                        )
+                    )
+                else
+
+                // COMPLETENESS IS A REQUIRED BOOLEAN, not an optional hint (.github#2525).
+                //
+                // This is `Board.fs`'s external-owner walk, ported. That read had the identical defect and
+                // states the rule in its own comment; the port to THIS scan — the one behind `batch`,
+                // `take`, `next`, and `driver --events` — never happened, so the more load-bearing of the
+                // two reads carried the weaker guard. Both old arms returned `Ok` with a short list:
+                // a missing/null/ill-typed `hasNextPage` fell through as `false` and stopped the walk after
+                // page one, and `hasNextPage: true` with no cursor fell into a catch-all `| _ ->` that
+                // reported success while the server had just said there was more. Neither is distinguishable
+                // downstream from a genuinely small board — `Cache.putScan`'s invariant is "never EMPTY",
+                // not "never PARTIAL", so a truncated batch is also cached and re-served for its whole TTL.
+                //
+                // A scan that cannot PROVE it observed every page has one honest answer, and it is the one
+                // the 100-page guard above already gives: refuse.
+                match items.TryGetProperty "pageInfo" with
+                | true, pageInfo when pageInfo.ValueKind = JsonValueKind.Object ->
                     match pageInfo.TryGetProperty "hasNextPage" with
-                    | true, v -> v.ValueKind = JsonValueKind.True
-                    | _ -> false
-
-                let next = str pageInfo "endCursor"
-
-                match hasNext, next with
-                | true, Some c -> page (Some c) (acc @ rows) (guard - 1)
-                | _ -> Ok(acc @ rows)
+                    | true, hasNext when hasNext.ValueKind = JsonValueKind.False -> Ok(acc @ rows)
+                    | true, hasNext when hasNext.ValueKind = JsonValueKind.True ->
+                        match pageInfo.TryGetProperty "endCursor" with
+                        | true, value when
+                            value.ValueKind = JsonValueKind.String
+                            && not (String.IsNullOrWhiteSpace(value.GetString()))
+                            ->
+                            page (Some(value.GetString())) (acc @ rows) (guard - 1)
+                        | _ -> Error(Malformed(subject, "the board scan has another page but no usable cursor"))
+                    | _ ->
+                        Error(Malformed(subject, "the board scan's `pageInfo.hasNextPage` is missing or is not a Boolean"))
+                | _ -> Error(Malformed(subject, "the board scan's `pageInfo` is missing or is not an object"))
 
             with
             | :? JsonException as e -> Error(Malformed(subject, $"the board scan's response is not JSON: %s{e.Message}"))

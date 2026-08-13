@@ -7,6 +7,7 @@
       "state": "claimed:curlew-8afd"
     }
   ],
+  "activeComplete": true,
   "schema": "fsgg.coord.driver-events/1",
   "transitions": [
     {
@@ -16,5 +17,6 @@
       "ref": "FS-GG/FS.GG.SDD#600",
       "state": "claimed:curlew-8afd"
     }
-  ]
+  ],
+  "unreadable": []
 }

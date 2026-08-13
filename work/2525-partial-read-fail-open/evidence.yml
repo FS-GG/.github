@@ -1,0 +1,368 @@
+schemaVersion: 1
+workId: 2525-partial-read-fail-open
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2525-partial-read-fail-open/spec.md
+sourceClarifications: work/2525-partial-read-fail-open/clarifications.md
+sourceChecklist: work/2525-partial-read-fail-open/checklist.md
+sourcePlan: work/2525-partial-read-fail-open/plan.md
+sourceTasks: work/2525-partial-read-fail-open/tasks.yml
+sourceAnalysis: readiness/2525-partial-read-fail-open/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2525-partial-read-fail-open/analysis.json
+    digest: 4f368863e07681ef46dd7c97c682486fc89f51e974938ad9d3deda32247dae6e
+    schemaVersion: 1
+  - label: checklist
+    path: work/2525-partial-read-fail-open/checklist.md
+    digest: 48843efa84faebf9a5b9f95ade5fe8fffc54f68fe1a9e563f1cf2c7c31ed147f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2525-partial-read-fail-open/clarifications.md
+    digest: 16e3cc0372e270fa4641b657624e34fcbb0904ab4a1ec8881449149de72a9569
+    schemaVersion: 1
+  - label: plan
+    path: work/2525-partial-read-fail-open/plan.md
+    digest: d18bbf5ec7b543edff939caf8abba8e184c0cbd7592666b1c763e3cb2b83fa36
+    schemaVersion: 1
+  - label: spec
+    path: work/2525-partial-read-fail-open/spec.md
+    digest: 24fa8db343d1fc2cc134bc1b8019cbe318bf80997809864b0c4d993d44279225
+    schemaVersion: 1
+  - label: tasks
+    path: work/2525-partial-read-fail-open/tasks.yml
+    digest: d92c0a5ba652e607d5d6b3c7a314a744f322c315265b1540291c9895c08c109c
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/github.trx"
+      digest: "sha256:d896bcad1bae807476a8b109e1da0690ffd51c5ece3688fffbfe81c5e22f4643"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 544
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        FR-001: the board scan refuses a page-set it cannot prove complete.
+        ScanBoardTests legs: hasNextPage true with no endCursor; a blank endCursor is not a usable cursor;
+        a MISSING hasNextPage REFUSES; a NULL hasNextPage REFUSES; a STRING hasNextPage REFUSES;
+        a missing or ill-typed pageInfo REFUSES. Gate inversions M1/M2/M4 observed red (3, 2 and 1 failures).
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/github.trx"
+      digest: "sha256:d896bcad1bae807476a8b109e1da0690ffd51c5ece3688fffbfe81c5e22f4643"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 544
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        FR-002: an Issue/PullRequest node whose identity will not parse refuses instead of vanishing from the batch.
+        ScanBoardTests leg: an Issue node whose identity will not parse REFUSES instead of vanishing from the batch.
+        The two legitimate skips stay pinned by: a DraftIssue card is still skipped, not refused.
+        Gate inversion M3 observed red (1 failure).
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/core.trx"
+      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 829
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        FR-003: renderText never emits the bare no-active-items literal while any Unreadable row is carried.
+        DriverEventsTests legs: an unreadable item keeps the literal off line two; and the strengthened
+        missing-active-ref three-live-claims leg, which previously asserted only the TRANSITIONS line and so
+        let the active line keep printing the literal underneath its own name. Gate inversion M5 observed red (2 failures).
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/core.trx"
+      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 829
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        FR-004: the controlled counterpart, so the fix cannot degrade into always-refuse.
+        DriverEventsTests legs: a COMPLETE read of an empty active set still renders exactly no active items;
+        and a fully-read board whose items are all Ready still renders exactly no active items.
+        Green throughout, including under every inversion of the other guards.
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/cli.trx"
+      digest: "sha256:41b8b83b32c857f1ac838da7c55b5419f4a08c4f739a63c4df4b7a783f9f3300"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 785
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        FR-005: batch states the measured candidate count on stderr while stdout stays byte-identical.
+        ApplicationServiceTests legs: batch --text states how many candidates it MEASURED;
+        a board with NO items reports zero considered; and the counterpart, a batch that CHOOSES work does not
+        print the measured-count line. Gate inversion M7 observed red (2 failures).
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/core.trx"
+      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 829
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        FR-006: a vanished item's last-known holder is never presented as current.
+        DriverEventsTests leg: acceptance #5, a vanished item's last-known holder is never presented as its
+        current one. It asserts the worker is still reported, is NOT rendered in the Claimed-quote spelling that
+        reads as a live claim, and is explicitly labelled superseded. Gate inversion M6 observed red (1 failure).
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, src/FS.GG.Coord.Core/DriverEvents.fs, src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/github.trx"
+      digest: "sha256:d896bcad1bae807476a8b109e1da0690ffd51c5ece3688fffbfe81c5e22f4643"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 544
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        FR-007: every guard shipped with its inversion recorded at authoring time. Seven mutations, each applied,
+        suite run, red observed, then reverted: M1 hasNextPage missing/ill-typed no longer refuses (3 red);
+        M2 hasNextPage true with no cursor no longer refuses (2 red); M3 unreadable Issue rows silently dropped
+        again (1 red); M4 pageInfo not-an-object no longer refuses (1 red); M5 renderText collapses an unreadable
+        inventory back to the no-active-items literal (2 red); M6 the stale holder spliced back in via %A (1 red);
+        M7 the measured-candidate count not printed (2 red). All three suites re-confirmed green after restore.
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fsi, src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/DriverEventsCliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/core.trx"
+      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 829
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        PC-001: the contract surface. DriverEvents.Projection gains one documented field, Unreadable, with its
+        .fsi updated in the same change. Scan.board's IoResult signature is unchanged; only its Error arm becomes
+        reachable in new cases. driver --events --json gains the additive keys activeComplete and unreadable.
+        batch's pinned stdout contract is untouched, evidenced by the two pre-existing byte-equality assertions
+        (take byte-identical to today, and #1562 batch --text KEEPS the headline on stdout) both staying green.
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs, tests/FS.GG.Coord.GitHub.Tests/ScanBoardTests.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/core.trx"
+      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 829
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        VO-001: full suites green on the head under review, Release configuration, no skips.
+        Core 829/829, GitHub 544/544, Cli 785/785.
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/FS.GG.Coord.GitHub/Scan.fs, work/2525-partial-read-fail-open/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/github.trx"
+      digest: "sha256:d896bcad1bae807476a8b109e1da0690ffd51c5ece3688fffbfe81c5e22f4643"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 544
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        PM-001: no data migration. The only posture change is that a scan which previously returned a truncated
+        Ok now refuses; every caller already handles Error from this read, evidenced by the GitHub and CLI suites
+        passing with the new refusals reachable. A scan cache written before this change can still hold a truncated
+        batch until its 90s TTL expires; no invalidation step is required and none is added.
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: [readiness/2525-partial-read-fail-open/work-model.json, work/2525-partial-read-fail-open/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2525-partial-read-fail-open/test-results/core.trx"
+      digest: "sha256:ca43b9f702810f5ac7b80c28d28529a7091c8ae100fd674fde358c38640278d7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 829
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        GV-001: the work model is re-derived from the current plan sources by fsgg-sdd evidence.
+        No scripts/generate-projections output is affected - this change touches no SKILL.md body and no emitted
+        protocol fact, so the generated skill corpus is unchanged.
+lifecycleNotes:
+  - "Next lifecycle action: verify."
