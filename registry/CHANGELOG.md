@@ -19,6 +19,86 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-13** — **registry: flip the `coord-engine` row to the CURRENT coherent set `0.51.1` — this entry MOVES BOTH SCALARS**
+  (owner `github`; [.github#2552](https://github.com/FS-GG/.github/issues/2552),
+  [PR #PRNUM](https://github.com/FS-GG/.github/pull/PRNUM);
+  refs [.github#2533](https://github.com/FS-GG/.github/issues/2533),
+  [.github#2536](https://github.com/FS-GG/.github/issues/2536),
+  [.github#2409](https://github.com/FS-GG/.github/issues/2409),
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772),
+  [.github#2442](https://github.com/FS-GG/.github/issues/2442),
+  [.github#2534](https://github.com/FS-GG/.github/issues/2534),
+  [.github#1075](https://github.com/FS-GG/.github/issues/1075),
+  [.github#2505](https://github.com/FS-GG/.github/pull/2505)).
+  **⚠ READ THIS ENTRY AND THE ONE DIRECTLY BELOW IT AS OPPOSITES.** They carry the same date, they sit adjacent, they
+  are both about the `coord-engine` row, and they mean opposite things. The entry below records `0.50.6` as a closed,
+  superseded, **historical** set and explicitly **moves no scalar**. **This entry moves the scalars.** `version` and
+  `package-version` both go `0.51.0` → `0.51.1` here, and after this entry `0.51.1` is this row's current coherent set.
+  A reader who takes the version named in the entry below for this row's current value has misread that entry; the
+  current value is the one named *here*. This log orders by **when the record was written, never by version** — its
+  protocol header says so — which is exactly how a superseded `0.50.6` record comes to sit above a `0.51.0` record and
+  below this `0.51.1` one. The ordering is not the defect; reading it as a version ordering is.
+  **This is publish-before-flip step 2 (ADR-0037 / FR-007) executed late, and nothing here decides anything.** The
+  publish was already correct and already complete; only the record was missing. For more than two hours the
+  registry — a **source of truth** — was actively false about what the org publishes, and
+  `python3 scripts/check-feed-coherence.py` exited **1 on unmodified `main`** for that whole window: *"registry
+  `package-version` is BEHIND the feed — declares '0.51.0' but FS.GG.Coord.Cli newest on the org feed is '0.51.1'"*.
+  That red was reproduced immediately before this change and the same command exits **0** immediately after it, so the
+  gate is demonstrated to be measuring this row rather than asserted to.
+  **What is published, measured per package on both feeds rather than inferred from green runs.** The org GitHub
+  Packages feed and nuget.org each serve `FS.GG.Coord.Cli`, `FS.GG.Kit` and `FS.GG.Drivers` at `0.51.1`, and nuget.org's
+  registration hive reports `listed: true` for all three. This is a **complete three-of-three** — not one of the
+  permanent two-of-three sets `0.50.1` and `0.50.5` recorded further below, which can never be completed. All three tags
+  `coord-engine/v0.51.1`, `kit/v0.51.1` and `drivers/v0.51.1` dereference to the single commit
+  `18af7595dda5a3ac825150eab9660ec67f2d7c7d` (the merge of
+  [PR #2539](https://github.com/FS-GG/.github/pull/2539)), so
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772) / `#2409` DEC-004's sibling-tag precondition held.
+  **The tags were cut by automation working exactly as designed — which is the interesting part.** All three tag objects
+  were created by `fs-gg-cross-repo-dispatch[bot]` at `2026-08-13T19:47:44Z` by `kit-auto-publish`, firing on a
+  same-line patch. That is the precise mirror of `0.51.0`, where the same
+  [.github#2442](https://github.com/FS-GG/.github/issues/2442) frontier rail **refused** the candidate with
+  `refuse/candidate-not-next-patch` because it was a minor. The rail admitted this one and declined that one, correctly,
+  both times. What automation does **not** do is flip this registry: the red stood on `main` for more than two hours
+  with nothing opening a PR against it. The auto-publish path therefore produces exactly this gap by construction, and
+  this record — like `0.51.0`'s before it, and `0.50.6`'s in the entry below — is written by hand.
+  **No engine behaviour changed in this cut, and the patch line is measured rather than assumed.**
+  `git diff coord-engine/v0.51.0 coord-engine/v0.51.1 -- src/FS.GG.Coord.Core/Protocol.fs` is **empty**, and the only
+  change anywhere under `src/` in that range is `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj` (+20/-1) — the
+  `<PackageReleaseNotes>` listing text. What the cut exists to ship is **kit content**:
+  [.github#2533](https://github.com/FS-GG/.github/issues/2533)'s rewrite of
+  `pnext-item/references/merge-and-release.md` (+61 lines), stating which post-merge acts this repository performs
+  automatically on a merge to `main` and which a worker still owes. All three packages resolve one scalar
+  (`FsggCoherentSetVersion`) by construction, so a kit-only content fix necessarily moves the engine package's version
+  too — coherent-set design, not an engine delta.
+  **The published bytes were opened, not trusted.** Each `0.51.1` `.nupkg` was downloaded from the org feed **and** from
+  nuget.org and compared entry by entry by SHA-256, excluding only nuget.org's appended signature and its rewritten
+  `.psmdcp`: `FS.GG.Coord.Cli` 32 entries, `FS.GG.Kit` 40, `FS.GG.Drivers` 29 — **101 compared, 0 differing, 0 present
+  in one feed but not the other**. The pack was then checked **against canonical**, which is the check `0.50.6` needed
+  and did not get: all 26 of the served `FS.GG.Kit`'s `kit/skills/**` entries are byte-identical to canonical
+  `.claude/skills/**` at the tagged commit, and the served nuspecs record `<version>0.51.1</version>` with
+  `commit="18af7595dda5a3ac825150eab9660ec67f2d7c7d"`. The single file this cut exists for was checked in **both**
+  directions: the served `kit/skills/pnext-item/references/merge-and-release.md` hashes
+  `sha256 a8d59cc022f9c65399d2f7910d938b1a7d6f687b8b593b48b450213dce34c019`, identical to canonical at `18af7595` *and*
+  different from the same path at `coord-engine/v0.51.0` — so the publish demonstrably **carried** `#2533`'s content
+  rather than re-packing the previous set under a new number, a distinction a version-only comparison cannot make.
+  Consumability is a real install: a fresh isolated `dotnet tool install FS.GG.Coord.Cli --version 0.51.1` succeeds and
+  `dotnet fsgg-coord-engine --version` reports `0.51.1.0`. **A green release run proves the job ran, not what shipped.**
+  **`Directory.Build.props` is deliberately untouched.** It already carried `0.51.1` before this change. This entry
+  records a publish that already happened, and moving a version line there would hand `kit-auto-publish` a fresh
+  candidate — the one thing a record must never do.
+  **Neither scalar's evidence prose was left describing the version it replaced.** Both trailing comments on the
+  `coord-engine` row were rewritten wholesale, and the before/after occurrence counts were reported per version string
+  on the pull request. This is required because bot PR
+  [#2505](https://github.com/FS-GG/.github/pull/2505) was closed this session for writing
+  `package-version: 0.50.2 → 0.50.4` while leaving 28 occurrences of the old version in the surrounding evidence prose —
+  falsified provenance on the package inventory, in the hardest-to-detect direction, on a file where nothing compiles
+  and no test contradicts a wrong version string.
+  **What this row still cannot see.** `scripts/check-engine-freshness.py` reports one unreleased engine commit on `HEAD`
+  since the tag (`30aa766f`, [.github#2534](https://github.com/FS-GG/.github/issues/2534)), none touching the wire
+  surface. This row's `version` moves only at release time, so `version == package-version` is precisely the state the
+  source-outran-feed defect lives in; do not read this entry's green `feed-coherence` as "the fleet runs current code".
+  That is [.github#1075](https://github.com/FS-GG/.github/issues/1075)'s question, not this one's.
+
 - **2026-08-13** — **registry: record `0.50.6` as a COMPLETE but SUPERSEDED three-of-three set — historical only, and this entry moves no scalar**
   (owner `github`; [.github#2536](https://github.com/FS-GG/.github/issues/2536),
   [PR #2554](https://github.com/FS-GG/.github/pull/2554);
