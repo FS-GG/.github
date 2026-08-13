@@ -130,6 +130,21 @@ UNSUPPORTED = re.compile(r"[!\[\]+{}]")
 # tree carries no inert entries; keeping it there is what lets `--assert-wired` run over a synthetic
 # root that has none of these directories.
 DELIBERATELY_UNWIRED: dict[str, str] = {
+    "tests/delivery-leading-line": (
+        "DELIBERATE, and not a suite at all. This directory holds ONE data file — corpus.json, the "
+        "single statement of the delivery-marker leading-line boundary (.github#2563) — and no runner, "
+        "because a runner here would be a third implementation of the rule its two consumers exist to "
+        "agree on. It is not unwired in the sense this gate is built to catch: CI executes every entry "
+        "of it TWICE on every pull request, through both consumers' real entry points. "
+        "tests/kit-published-coherence/run.sh drives it through "
+        "check-kit-published-coherence.py --obligation-arm, and that workflow is deliberately "
+        "unfiltered (.github#1597) so it starts on every PR; "
+        "tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs drives it through "
+        "DeliveryApplication.obligationsFromComments under coord-engine.yml, whose paths: filter names "
+        "tests/delivery-leading-line/** in BOTH copies precisely so an edit to this file starts it. "
+        "Each consumer also asserts the corpus's stated entry count, so this directory cannot go "
+        "silently unread the way an unwired suite can."
+    ),
     "tests/merge-guard": (
         "DELIBERATE. Fixtures .claude/hooks/block-merge-and-main-push.sh, a LOCAL Claude Code "
         "PreToolUse hook. CI has no agent tool-call to intercept, so there is nothing for a workflow "
