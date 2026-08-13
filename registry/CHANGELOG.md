@@ -19,6 +19,46 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-13** — **registry: record `0.50.5` as a second permanent two-of-three set; adopt `0.50.6`**
+  (owner `github`; [.github#2512](https://github.com/FS-GG/.github/issues/2512), [PR #2514](https://github.com/FS-GG/.github/pull/2514);
+  refs [.github#1762](https://github.com/FS-GG/.github/issues/1762), [.github#1772](https://github.com/FS-GG/.github/issues/1772),
+  [.github#2240](https://github.com/FS-GG/.github/issues/2240), [.github#2507](https://github.com/FS-GG/.github/pull/2507)).
+  **No scalar moves in this entry.** `version`/`package-version` stay at `0.50.4`, byte-identical to the
+  entry below; this change is the `coord-engine` row's **prose** only. It discharges the forward reference
+  [.github#2518](https://github.com/FS-GG/.github/issues/2518) deliberately left in that row — "⚠ `0.50.5`
+  IS DELIBERATELY NOT ADOPTED HERE … `.github#2512` / PR #2514 owns that version's full disposition and the
+  `0.50.6` that supersedes it" — which named this item as the owner.
+  **`0.50.5` is a permanent two-of-three, the same shape and the same cause as `0.50.1`.** `FS.GG.Kit
+  0.50.5` and `FS.GG.Drivers 0.50.5` published; `FS.GG.Coord.Cli 0.50.5` published to **neither** feed,
+  because `release-coord-engine` was refused by `check-engine-release-notes` (.github#1762):
+  `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj`'s `PackageReleaseNotes` still began with `0.50.4` while
+  `FsggCoherentSetVersion` in `Directory.Build.props` had already moved to `0.50.5` —
+  [run 31693513571](https://github.com/FS-GG/.github/actions/runs/31693513571) at `9ecb91bb`,
+  2026-08-13T10:59:39Z, whose siblings `release-kit` and `release-drivers` both **succeeded at that same
+  commit**. All three `v0.50.5` tags exist at `9ecb91bb`; only two of the three packages behind them
+  shipped. Tags are immutable and `.github#1772`'s sibling-tag precondition requires all three at the
+  **same** commit, so `0.50.5` cannot be completed from a corrected tree, and re-cutting it is the
+  re-pack divergence `.github#2240` documents. It was therefore **not** re-cut.
+  **The per-feed enumeration in the entry below is the durable evidence, and it corrects this item's own
+  issue body.** That body tabled `FS.GG.Drivers 0.50.5` as absent from the org feed; `.github#2518`
+  enumerated all three packages on **both** feeds and found `Kit 0.50.5` and `Drivers 0.50.5` on each,
+  and no `FS.GG.Coord.Cli 0.50.5` on either. The measured reading supersedes the tabled one.
+  **Why `0.50.4` is not "behind" for refusing `0.50.5`:** adopting an incomplete set would put this row
+  *ahead* of the feed for its own package — the same test `0.50.1` fails. **`0.50.6` is the version to
+  adopt**, and it moves the notes and the scalar together. The scalars are not moved to `0.50.6` here
+  because publish-before-flip (ADR-0037 / FR-007) forbids naming a version before it is served;
+  `.github#2512`'s post-merge `registry-0.50.6-record` obligation owns that flip and owes post-publish
+  evidence (run ids, per-entry nupkg SHA-256 across both feeds, a real isolated `dotnet tool install`).
+  **Why it recurred four versions after `0.50.1`, and what now prevents it.** The PR-time arm of that
+  checker (`.github/workflows/engine-release-notes.yml`) did not select `Directory.Build.props`, where the
+  version it checks is declared — so PR #2507's version-only bump ran **none** of the gate, and the
+  refusal arrived at release time, after the irrevocable part. The gate existed and was unreachable for
+  the one change that could break it. Both trigger filters and the checker's `PATHS_SUBJECT` now name that
+  file (held together by `check-paths-coherence` rule (c)), and the checker additionally refuses a
+  `Version` that does not resolve from `FsggCoherentSetVersion`. Proven by inversion: dropping
+  `Directory.Build.props` from either filter, or deleting either new arm, reds
+  `tests/engine-release-notes/run.sh`.
+
 - **2026-08-13** — **registry: record the already-shipped coherent set, `coord-engine` 0.50.2 → 0.50.4**
   (owner `github`; [.github#2518](https://github.com/FS-GG/.github/issues/2518), blocking
   [.github#2512](https://github.com/FS-GG/.github/issues/2512)/[PR #2514](https://github.com/FS-GG/.github/pull/2514)).
