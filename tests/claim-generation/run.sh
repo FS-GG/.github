@@ -241,14 +241,16 @@ expect "lease: the SAME marker is STALE under a tightened 30-minute lease" \
 
 # =============================================================================================
 # 7. .github#2488 — THE FIVE-FOR-FIVE SCENARIO, NAMED. A freshly opened item/<n>-* PR, exactly as
-# GitHub's `opened` event would present it BEFORE the .github#2488 self-heal step (`coherence.yml`'s
-# `claim-generation` job) has had a chance to run: a real live claim exists, but the PR body carries no
-# `fsgg:pr-authorization` marker at all — reds. The SAME item, SAME live claim, and the marker
-# `Client.ensureAuthorization`/`Client.authorizationMarker` (`src/FS.GG.Coord.Cli/Client.fs`) would
-# write once that self-heal step's live, non---apply `delivery <ref> --pr N` status read reaches it —
-# greens. These two legs are cases 1 and 5 above, replayed against THIS item's own ref rather than
-# `#2342`'s, so a reader auditing #2488's own acceptance criterion 4 finds the exact scenario by number
-# instead of having to infer that the pre-existing legs already cover it.
+# GitHub's `opened` event would present it BEFORE a worker's own live, non-`--apply` `delivery <ref>
+# --pr N` status read (run from a shell that holds a working board credential — round 1 repair: this is
+# NOT a CI-side self-heal, which cannot run under this org's CI credential inventory; see
+# `coherence.yml`'s `claim-generation` job comment) has had a chance to reach it: a real live claim
+# exists, but the PR body carries no `fsgg:pr-authorization` marker at all — reds. The SAME item, SAME
+# live claim, and the marker `Client.ensureAuthorization`/`Client.authorizationMarker`
+# (`src/FS.GG.Coord.Cli/Client.fs`) writes once that call reaches it — greens. These two legs are cases
+# 1 and 5 above, replayed against THIS item's own ref rather than `#2342`'s, so a reader auditing
+# #2488's own acceptance criterion 4 finds the exact scenario by number instead of having to infer that
+# the pre-existing legs already cover it.
 # =============================================================================================
 ITEM_2488="$REPO#2488"
 REF_2488="item/2488-authorization-emission-timing"

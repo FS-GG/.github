@@ -291,10 +291,10 @@ CLIENT commands read and write GitHub through the typed IO layer.
 
 DECISION (pure — no board, no network):
   decide [--snapshot FILE] [--json|--text]   decide a batch from a board-state snapshot on stdin
-  delivery <ref> [--pr N] [--apply] [--json|--text]
-                                             re-read one claimed item's delivery facts and emit its sole
-                                             freshness-bound action; --apply performs only guarded landing
-  delivery --snapshot FILE [--json|--text]   inspect a supplied lifecycle snapshot without IO
+  delivery --snapshot FILE [--json|--text]   inspect a supplied lifecycle snapshot without IO — the ONLY
+                                             `delivery` form that belongs under this heading; the live
+                                             `delivery <ref> [--pr N]` form reads AND WRITES the board and
+                                             lives under IO, below (.github#2488)
   review <ref> --pr N [--json|--text]        inspect the resumable review/repair protocol (.github#2175):
                                              one typed state and next action — dispatch critic, resume
                                              implementer, resume the same critic, await checks, request
@@ -370,6 +370,17 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              PR; absent, it reads like a passing one (#606). --sha SHA: the
                                              head you MEAN to gate, for a caller that just force-pushed (the
                                              PR object lags). Neither can green; both are pending (#737)
+
+  delivery <ref> [--pr N] [--apply] [--json|--text]
+                                             re-read one claimed item's delivery facts and emit its sole
+                                             freshness-bound action. WRITES ON PLAIN `--pr N` TOO
+                                             (.github#2488), not only under `--apply`: whenever the caller
+                                             holds the item's live claim and the named PR has not yet
+                                             merged, this PATCHes the PR body's `fsgg:pr-authorization`
+                                             marker current — a runtime-state-gated write no flag turns
+                                             off, distinct from --apply's SEPARATE, larger effect
+                                             (guarded landing: a real merge or the `Complete` transition)
+  delivery --snapshot FILE [--json|--text]   the pure, IO-free form — see DECISION above
 
   claim  <ref> [--worker W] [--force]        take the lock; --json emits a fresh marker/Status receipt.
          [--refuse-overlap] [--json]         --force STEALS: it takes an item another worker holds RIGHT
@@ -1038,9 +1049,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         // ---- PURE DECISION — no board, no network at all (ADR-0034) ------------------------------------
         | Decide -> Reads
-        | DeliveryCmd -> WritesIf(OnlyWhenGiven FApply)
-        // .github#2175: `review` (snapshot or live) only ever inspects — unlike `delivery` it has no
-        // `--apply`/mutating arm at all, so it is unconditionally `Reads`, beside `DriverCmd`/`CycleCmd`.
+        // .github#2175: `review` (snapshot or live) only ever inspects — unlike `delivery` (moved out of
+        // this section, .github#2488 — see "WRITE UNDER A CONDITION" below) it has no mutating arm at
+        // all, so it is unconditionally `Reads`, beside `DriverCmd`/`CycleCmd`.
         | ReviewCmd -> Reads
         | DriverCmd -> Reads
         | CycleCmd -> Reads
@@ -1098,6 +1109,26 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // ---- WRITE UNDER A CONDITION -------------------------------------------------------------------
         | Reap -> WritesIf(OnlyWhenGiven FApply)
         | Reconcile -> WritesIf(OnlyWhenGiven FApply)
+        // NOT `OnlyWhenGiven FApply` (.github#2488 round-1 repair — this used to say that, and after
+        // `Client.ensureAuthorization` dropped its own `--apply` gate the claim went false: a BARE
+        // `delivery <ref> --pr N`, no flag at all, now PATCHes the PR body's `fsgg:pr-authorization`
+        // marker whenever the caller holds the item's live claim and the named PR has not yet merged.
+        // `--apply` still gates the SEPARATE, larger `GuardedLand`/`Complete` mutation
+        // (`Client.fs`'s `delivery` command handler) — but a consumer trusting `OnlyWhenGiven FApply`
+        // here would wrongly read a bare status call as non-mutating, which is exactly the "trust this
+        // field" property (#1534) this type exists to protect. `NotOnArgv` is the precise fit, not a
+        // fallback: its own doc above already describes exactly this shape ("the condition is not on
+        // argv AT ALL... a person's reading of `Client.fs`, held total by the compiler") — WHETHER this
+        // command writes now turns on runtime state (a live claim held by the calling worker, the PR's
+        // merged status) that no argv parse can see, precisely what that case was written for.
+        | DeliveryCmd ->
+            WritesIf(
+                NotOnArgv
+                    "PATCHes the PR body's fsgg:pr-authorization marker on ANY --pr N invocation, apply \
+                     or not, whenever the caller holds the referenced item's live claim and the PR has \
+                     not yet merged — a runtime fact, not a flag; --apply additionally gates the \
+                     separate GuardedLand/Complete transition"
+            )
         // AND THIS ROW IS NOT THE SHIM'S ROW — read before wiring the #1534 follow-on gate. The shim puts
         // `flush` in BOARD_WRITES (unconditional) and this says `conditional`, and BOTH are right about
         // different questions: the shim's two write sets are REFUSED IDENTICALLY under staleness, so its

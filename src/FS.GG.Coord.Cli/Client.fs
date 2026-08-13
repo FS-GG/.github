@@ -1828,13 +1828,20 @@ module Client =
     /// worker who DID pass `--apply` reached it too late: `--apply` immediately attempts the
     /// `GuardedLand`/`Complete` transition in the SAME call, so by the time any CI re-evaluation could
     /// see the freshly-PATCHed body the PR was often already merged or closed. Dropping the gate makes
-    /// every LIVE `delivery <ref> --pr N` call — including a plain, non-`--apply` status read, which IS
-    /// exercised by the fleet's routine "ask the engine for its one current action" step — refresh the
-    /// marker as a side effect. This is safe precisely because it is the ONLY thing this function does:
-    /// unlike `delivery`'s `GuardedLand`/`Complete` transitions (still exclusively `--apply`-gated,
-    /// untouched here), a PR-body PATCH of an HTML-comment marker takes no board-affecting action, so a
-    /// read-only inspection performing it carries none of the "did this quietly merge something" risk
-    /// that gating write-capable commands behind `--apply` exists to prevent.
+    /// every LIVE `delivery <ref> --pr N` call — including a plain, non-`--apply` status read — refresh
+    /// the marker as a side effect wherever a caller with a live GitHub credential DOES make that call
+    /// (a worker's own shell; `pnext-item` §5's own documented step routes to `--snapshot FILE`, an
+    /// IO-free path this change does not touch — nothing in that skill's CURRENT text calls the live
+    /// form, a distinct reachability gap tracked separately, not fixed by this signature change alone).
+    /// This is safe precisely because it is the ONLY thing this function does: unlike `delivery`'s
+    /// `GuardedLand`/`Complete` transitions (still exclusively `--apply`-gated, untouched here), a
+    /// PR-body PATCH of an HTML-comment marker takes no board-affecting action, so a read-only
+    /// inspection performing it carries none of the "did this quietly merge something" risk that gating
+    /// write-capable commands behind `--apply` exists to prevent. It ALSO cannot run from this repo's
+    /// own CI: the live form's first action is a Coordination Projects (v2) board bootstrap
+    /// (`Board.bootstrapCached`), a read this org's CI credential inventory does not carry (ADR-0019
+    /// §1, `.github#2332`) — see `.github/workflows/coherence.yml`'s `claim-generation` job comment for
+    /// the measured failure and why a CI-side self-heal was tried and deliberately dropped.
     ///
     /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
     /// endpoint is the one GitHub documents for it.
@@ -1985,10 +1992,10 @@ module Client =
                         //
                         // UNCONDITIONAL on `opts.Apply` (.github#2488, was gated on it — see
                         // `ensureAuthorization`'s own doc comment for the measured reachability failure
-                        // that gating caused). Every LIVE `delivery <ref> --pr N` call reaches this now,
-                        // apply or not, so the marker is refreshed on the ordinary status-read path the
-                        // fleet's real flow actually exercises, not only on a `--apply` invocation
-                        // nothing in that flow makes.
+                        // that gating caused, and for what still has to call this LIVE form for the
+                        // write to actually happen). Every LIVE `delivery <ref> --pr N` call reaches
+                        // this now, apply or not — a plain status read is enough, not only a
+                        // `--apply` invocation.
                         let branchAndPr =
                             branchAndPr
                             |> Result.bind (fun (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations) ->

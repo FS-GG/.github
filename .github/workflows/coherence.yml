@@ -20,12 +20,14 @@ name: coherence
 
 # `pull_request.types` names `edited` explicitly (.github#2488), on top of the three GitHub defaults
 # `opened`/`synchronize`/`reopened` a bare `pull_request:` would otherwise fall back to. `claim-generation`
-# (below) self-heals its own `fsgg:pr-authorization` marker via a PR-body PATCH, which is edited, never a
-# push — so without `edited` in this list, nothing ever re-evaluates the gate against the marker that PATCH
-# just wrote, and every `item/<n>-*` PR the fleet opens is fenced on the `opened` event's ALREADY-STALE
-# `github.event.pull_request.body` forever (measured: five for five real PRs, #2488's evidence table). The
-# other jobs below re-run on a body edit too as a result — accepted, not free, and bounded to the rare case
-# of an actual PR edit (human or this self-heal), not every push.
+# (below) reads `Client.ensureAuthorization`'s `fsgg:pr-authorization` marker, which a worker's own live
+# `delivery <ref> --pr N` call PATCHes into the PR body FROM OUTSIDE THIS WORKFLOW (see that job's comment
+# for why the write cannot happen IN CI) — a PATCH is edited, never a push, so without `edited` in this
+# list nothing ever re-evaluates the gate against a marker such a call just wrote, and every `item/<n>-*`
+# PR the fleet opens stays fenced on the `opened` event's ALREADY-STALE `github.event.pull_request.body`
+# forever (measured: five for five real PRs, #2488's evidence table). The other jobs below re-run on a
+# body edit too as a result — accepted, not free, and bounded to the rare case of an actual PR edit
+# (human or a worker's own authorization call), not every push.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
@@ -182,90 +184,37 @@ jobs:
   # waits forever). This job decides its own applicability from the BRANCH SHAPE
   # (`item/<n>-*`) rather than from a trigger filter, so an unrelated PR still gets a real `success`.
   #
-  # SELF-HEALS ITS OWN AUTHORIZATION MARKER (.github#2488), below, rather than only reading one a
-  # worker was supposed to have written. Measured: the write existed (`Client.ensureAuthorization`,
-  # `.github#2395`) but was unreachable from the fleet's real flow, so five for five real `item/<n>-*`
-  # PRs merged with NO `fsgg:pr-authorization` marker at all. `pull-requests: write` (job-scoped,
-  # narrower than the workflow's read-only default) is what the self-heal step needs to PATCH the body.
+  # DOES NOT SELF-HEAL ITS OWN MARKER IN CI, AND THAT IS A DELIBERATE, MEASURED CHOICE (.github#2488
+  # round 1 repair). An earlier draft of this job ran `who --json` here to find the live claim holder,
+  # then re-invoked `delivery <ref> --pr N` under that identity to PATCH the body. Both calls' FIRST
+  # action is a live Coordination Projects (v2) board bootstrap (`Board.bootstrapCached`,
+  # `src/FS.GG.Coord.GitHub/Board.fs`) — and this org's CI credential inventory does not carry that
+  # read. This is not a bug this job could route around: `roster-closure`, three blocks above in this
+  # SAME file, and `docs/adr/0019-org-repo-roster-registry-and-coordination-kit.md`'s 2026-08-11
+  # amendment (`.github#2332`) already record it as an ACCEPTED org decision — `FSGG_DISPATCH_APP_ID`/
+  # `_PRIVATE_KEY`, `GITHUB_TOKEN`, and `NUGET_USER` are this org's whole CI credential inventory, and
+  # NONE of them carries organization or Projects (v2) read. A self-heal step built on either call
+  # would red identically to a missing one, every time, under any credential already available here —
+  # measured live: `who --json` failed `not found: no Projects v2 board titled 'Coordination' in
+  # FS-GG` on this PR's own first head (`da310d55`, run 31655633573/job 94309337287).
+  #
+  # THE EMISSION POINT, NAMED (.github#2488 AC2) AND WHERE IT ACTUALLY LIVES: `Client.ensureAuthorization`,
+  # reached through a plain LIVE `delivery <ref> --pr N` status read — no `--apply`, so it can never merge
+  # or close anything (see that function's own doc comment in `Client.fs`). That call is NOT made from
+  # this workflow; it is made from a WORKER's own shell, which already holds a working board/GitHub
+  # credential (the same one every other coordination-engine command in that worker's session uses) —
+  # exactly the credential this job's own token cannot be given under the accepted decision above. The
+  # `edited` type this workflow's `on:` block now carries exists FOR that external write: a worker's
+  # `delivery` call PATCHes the PR body from outside this job entirely, and `edited` is what makes THIS
+  # job re-evaluate against it, automatically, with no human intervention and no close/reopen — see the
+  # `on:` block's own comment for the "why `edited`" half of this story.
   claim-generation:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      packages: read
-      issues: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-policy-python
-
-      # ADR-0040 Phase C/D, the same pattern `touch-set-drift.yml` established as this org's one other
-      # CI runner of the coordination client (see that workflow's own comment on why the source build,
-      # not a feed/tool install, is the engine `.github` runs). Built once, reused by both the self-heal
-      # step below and (if ever needed) local debugging via the same `FSGG_COORD_ENGINE_BIN`.
-      - uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-          cache: true
-          cache-dependency-path: "**/packages.lock.json"
-
-      - name: Build the engine (the shim execs it, ADR-0040 D.2)
-        run: |
-          set -euo pipefail
-          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
-          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
-
-      # THE EMISSION POINT, NAMED (.github#2488 AC2): `Client.ensureAuthorization`, reached through a
-      # plain LIVE `delivery <ref> --pr N` status read — no `--apply`, so this step can never merge or
-      # close anything; `--apply`'s `GuardedLand`/`Complete` transitions stay exactly as gated as they
-      # were (see `ensureAuthorization`'s own doc comment in `Client.fs` for why dropping ITS gate is
-      # safe: a marker PATCH is the only thing this call can do). `delivery`'s live-claim read still
-      # requires the CALLING identity to match the item's current claim holder, so this step asks the
-      # engine itself who that is (`who --json`, the same precedence-aware read `Reads.winner` already
-      # makes — not a hand-rolled re-parse of the marker grammar) and impersonates nobody it did not
-      # just read back from the live board. A wrong or absent guess (no live claim, a stale one, a read
-      # failure) makes `delivery` refuse on ITS OWN identity check, and this step no-ops — it does not
-      # invent an answer `who` did not already report.
-      #
-      # NO `pull_request.types: edited` LOOP: `rebindAuthorization` is idempotent (`AuthorizationCurrent`
-      # skips the PATCH once the marker is already exact), so the `edited` run this step's own PATCH
-      # triggers finds nothing left to write and makes zero further requests.
-      #
-      # `continue-on-error`: this step's ENTIRE job is a best-effort remediation of the read the next
-      # step performs for real. Its failure must never read as this job's verdict — only the "Assert…"
-      # step below decides pass/fail, exactly as `#266` requires ("a failed read is never a pass" cuts
-      # the other way here too: a failed WRITE must never read as a FAIL either, when the read step that
-      # actually gates has not yet run).
-      - name: Self-heal the fsgg:pr-authorization marker for the live claim (.github#2488)
-        id: self-heal
-        continue-on-error: true
-        if: startsWith(github.event.pull_request.head.ref, 'item/')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          set -euo pipefail
-          # item/<n>-<slug> -> <n>. The SAME branch-shape rule `check-claim-generation.py` and
-          # `Client.fs`'s own `ItemBranchCanonical` check already use; not re-derived, just applied.
-          n="${HEAD_REF#item/}"; n="${n%%-*}"
-          case "$n" in
-            ''|*[!0-9]*) echo "::notice::self-heal: '$HEAD_REF' is not item/<n>-* shaped, nothing to authorize"; exit 0 ;;
-          esac
-
-          worker="$(scripts/fsgg-coord who --repo "${REPO#*/}" --json \
-            | python3 -c "import json,sys; rows=json.load(sys.stdin); m=[r for r in rows if r.get('number')==int(sys.argv[1]) and r.get('state')=='held']; print(m[0]['worker'] if m else '')" "$n")"
-          if [ -z "$worker" ]; then
-            echo "::notice::self-heal: no live-held claim for $REPO#$n, nothing to authorize"
-            exit 0
-          fi
-
-          echo "::notice::self-heal: refreshing the authorization marker for $REPO#$n under the live claim held by $worker"
-          FSGG_WORKER="$worker" scripts/fsgg-coord delivery "$REPO#$n" --pr "$PR" --json || \
-            echo "::notice::self-heal: delivery declined to write (stale identity, no verdict, or nothing to do) — the read below reports the real state"
 
       - name: Run the claim-generation fixture (no network)
         run: bash tests/claim-generation/run.sh
