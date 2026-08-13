@@ -1,0 +1,180 @@
+{
+  "note": [
+    "THE DELIVERY-MARKER LEADING-LINE BOUNDARY. One statement, two implementations, graded from here.",
+    "",
+    "`.github#2544` collapsed this rule inside the engine and its round-1 repair re-created a weaker",
+    "version of the same hazard ACROSS the F#/Python language boundary: `DeliveryApplication.leadingLine`",
+    "and `check-kit-published-coherence.py`'s `_leading_line` each held their own copy of the CommonMark",
+    "indent limit, each side pinned its copy with its own fixture legs, and the only coupling was two",
+    "prose sentences that nothing read. A one-sided edit reds that side. A COORDINATED one-sided edit --",
+    "moving one language's constant AND updating that same language's legs -- passed both. That is what a",
+    "careful engineer does when they believe they are fixing a bug, and the fixtures agreed the whole way.",
+    "",
+    "`.github#2563` closes it with this file. Both sides now consume THIS corpus and neither keeps private",
+    "legs for the declaration form, so there is nowhere for a coordinated edit to hide: move one",
+    "language's constant and it reds against these verdicts; edit these verdicts to restore it and the",
+    "OTHER language reds instead.",
+    "",
+    "CONSUMERS -- each drives its own side's REAL entry point, never the private helper:",
+    "  * F#     tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs",
+    "           -> DeliveryApplication.obligationsFromComments",
+    "  * Python tests/kit-published-coherence/run.sh",
+    "           -> check-kit-published-coherence.py --obligation-arm -> obligation_declarations",
+    "",
+    "Each consumer independently asserts a STATED literal entry count. That literal lives in the two",
+    "consumers and deliberately NOT in this file: a count stored here could be edited in the same breath",
+    "as the entry it counts, which is the vacuity `.github#2534` (empty-corpus green) and `.github#1768`",
+    "(157 passing legs while the script died mid-run) both measured. Adding or removing an entry is",
+    "therefore a three-file edit, on purpose.",
+    "",
+    "WHY A CORPUS AND NOT A GENERATED CONSTANT (work/2563-cross-language-indent-limit DEC-001): the rule",
+    "has four clauses -- leading blank lines are not indentation; 0-3 spaces still lead; 4+ spaces or ANY",
+    "tab is a code block; and in that case the line is returned AS WRITTEN so no prefix can match. A",
+    "shared constant couples only the numeral, leaving the other three uncoupled, and would need a",
+    "build-order dependency the Python gate's job does not have -- kit-published-coherence.yml's fixture",
+    "job installs Python only, by design. A source-text check asserts the literal rather than the",
+    "behaviour and goes vacuous on any reformatting. Deleting the Python implementation was refused",
+    "because the obligation arm must classify comment bodies with no built engine and no network.",
+    "",
+    "ONLY THE DECLARATION FORM LIVES HERE, and that is a real limit rather than an oversight. The",
+    "`<!-- fsgg:delivery-obligations none ... -->` form is skipped by `obligation_declarations` by design,",
+    "so Python answers `no declarations` for it whether it is indented or not and has no verdict to",
+    "compare. The engine's `none`-form indent legs therefore stay in the F# suite, where they remain",
+    "meaningful. There is deliberately NO per-entry skip flag: an opt-out in the artifact whose whole",
+    "purpose is to prevent an opt-out would be the first thing a coordinated edit reached for.",
+    "",
+    "`head` is the head SHA both consumers pass to their entry point; the engine matches it against each",
+    "marker's `head=` field and the gate does not read it. `verdict` is `declares` (the engine returns the",
+    "obligation, and the gate names it) or `inert` (the engine returns an Error that NAMES the",
+    "leading-line rule -- criterion 5 requires inert AND named -- and the gate reports no declaration)."
+  ],
+  "head": "head-a",
+  "entries": [
+    {
+      "name": "spaces-0",
+      "body": "<!-- fsgg:delivery-obligation id=spaces-0 kind=package-release head=head-a -->",
+      "verdict": "declares",
+      "why": "No indentation at all: the marker is the comment's leading line by inspection."
+    },
+    {
+      "name": "spaces-1",
+      "body": " <!-- fsgg:delivery-obligation id=spaces-1 kind=package-release head=head-a -->",
+      "verdict": "declares",
+      "why": "One space renders as nothing. `.github#2544`: `gh api --field` payloads and comment editors add leading whitespace for free, so an arm that stayed byte-0 would call a LIVE declaration absent."
+    },
+    {
+      "name": "spaces-2",
+      "body": "  <!-- fsgg:delivery-obligation id=spaces-2 kind=package-release head=head-a -->",
+      "verdict": "declares",
+      "why": "Two spaces render as nothing."
+    },
+    {
+      "name": "spaces-3",
+      "body": "   <!-- fsgg:delivery-obligation id=spaces-3 kind=package-release head=head-a -->",
+      "verdict": "declares",
+      "why": "THREE SPACES IS THE BOUNDARY FROM BELOW. This is the widest indentation CommonMark still renders as an ordinary paragraph, so the marker is the leading line in every sense a reader has access to. Moving the limit up makes this entry the one that reds."
+    },
+    {
+      "name": "spaces-4",
+      "body": "    <!-- fsgg:delivery-obligation id=spaces-4 kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "FOUR SPACES IS THE BOUNDARY FROM ABOVE. CommonMark opens an INDENTED CODE BLOCK here, so the marker is a visible code sample. Reading it as a declaration is the `.github#2544` round-1 fail-open: a bystander's indented sample destroyed a valid declaration already on somebody else's PR."
+    },
+    {
+      "name": "spaces-5",
+      "body": "     <!-- fsgg:delivery-obligation id=spaces-5 kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "Past the boundary."
+    },
+    {
+      "name": "spaces-6",
+      "body": "      <!-- fsgg:delivery-obligation id=spaces-6 kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "Past the boundary."
+    },
+    {
+      "name": "tab",
+      "body": "\t<!-- fsgg:delivery-obligation id=tab kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "A tab is one tab stop. Tab stops are every 4 columns, so a leading tab always lands at column 4 or beyond and ALWAYS opens an indented code block."
+    },
+    {
+      "name": "space-tab",
+      "body": " \t<!-- fsgg:delivery-obligation id=space-tab kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "Tab arrangement 2 of 5. There is no arrangement of 0-3 spaces and a tab that CommonMark leaves as a paragraph, so `any tab in the indent` and `>= 4 columns` coincide exactly."
+    },
+    {
+      "name": "three-spaces-tab",
+      "body": "   \t<!-- fsgg:delivery-obligation id=three-spaces-tab kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "Tab arrangement 3 of 5, and the tightest: three spaces then a tab still reaches a tab stop."
+    },
+    {
+      "name": "tab-three-spaces",
+      "body": "\t   <!-- fsgg:delivery-obligation id=tab-three-spaces kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "Tab arrangement 4 of 5."
+    },
+    {
+      "name": "two-tabs",
+      "body": "\t\t<!-- fsgg:delivery-obligation id=two-tabs kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "Tab arrangement 5 of 5."
+    },
+    {
+      "name": "nl-spaces-0",
+      "body": "\n<!-- fsgg:delivery-obligation id=nl-spaces-0 kind=package-release head=head-a -->",
+      "verdict": "declares",
+      "why": "A leading blank line is not indentation. This is the shape heredocs produce, and the one `.github#2544` was filed about."
+    },
+    {
+      "name": "nlnl-spaces-3",
+      "body": "\n\n   <!-- fsgg:delivery-obligation id=nlnl-spaces-3 kind=package-release head=head-a -->",
+      "verdict": "declares",
+      "why": "Blank lines above a marker indented to the boundary from below: both tolerances at once."
+    },
+    {
+      "name": "crlf-spaces-3",
+      "body": "\r\n   <!-- fsgg:delivery-obligation id=crlf-spaces-3 kind=package-release head=head-a -->",
+      "verdict": "declares",
+      "why": "CRLF case 1 of 2. Normalization must happen before the indent is measured, or `\\r` counts as content."
+    },
+    {
+      "name": "nl-spaces-4",
+      "body": "\n    <!-- fsgg:delivery-obligation id=nl-spaces-4 kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "A leading blank line does not buy indentation tolerance: the first CONTENT line is still a code block."
+    },
+    {
+      "name": "nl-tab",
+      "body": "\n\t<!-- fsgg:delivery-obligation id=nl-tab kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "Same, for the tab clause."
+    },
+    {
+      "name": "crlf-spaces-4",
+      "body": "\r\n    <!-- fsgg:delivery-obligation id=crlf-spaces-4 kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "CRLF case 2 of 2."
+    },
+    {
+      "name": "blank-line-of-spaces",
+      "body": "    \n<!-- fsgg:delivery-obligation id=blank-line-of-spaces kind=package-release head=head-a -->",
+      "verdict": "declares",
+      "why": "THE TRAP THAT LOOKS LIKE THE OPPOSITE ONE: the first line is four spaces, but it is BLANK, so it is not the first CONTENT line. The marker at byte 0 of line 2 declares. A reader who measures the first line rather than the first non-empty line gets this backwards."
+    },
+    {
+      "name": "prose-first",
+      "body": "Here is what I owe:\n\n<!-- fsgg:delivery-obligation id=prose-first kind=package-release head=head-a -->",
+      "verdict": "inert",
+      "why": "`Leading line` means the FIRST content line, not `anywhere in the comment`. A marker below prose is a mention, not a declaration."
+    },
+    {
+      "name": "fenced",
+      "body": "```\n<!-- fsgg:delivery-obligation id=fenced kind=package-release head=head-a -->\n```",
+      "verdict": "inert",
+      "why": "The fence is the comment's leading line, so the marker on line 2 is not a declaration. `.github#2347` acceptance 2 and the `.github#2264` round-1 anchoring fix are what this entry holds in place."
+    }
+  ]
+}

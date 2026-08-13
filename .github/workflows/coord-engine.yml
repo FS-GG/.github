@@ -27,6 +27,15 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
+      # rather than bookkeeping. `tests/delivery-leading-line/corpus.json` is the one statement of
+      # the delivery-marker leading-line boundary; `DeliveryApplicationTests` grades the ENGINE
+      # against it and `tests/kit-published-coherence/run.sh` grades the PYTHON gate against the
+      # same verdicts. Without this path a PR that moved the Python limit and edited the corpus to
+      # match would never start this workflow, so the F# half would stay silent on precisely the
+      # coordinated one-sided edit the corpus exists to catch — a gate keyed on `paths:` is
+      # selectively silent, and quietest on the additive variants (.github#2551).
+      - "tests/delivery-leading-line/**"
       - "tests/coord-engine-e2e/**"
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
@@ -47,6 +56,15 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
+      # rather than bookkeeping. `tests/delivery-leading-line/corpus.json` is the one statement of
+      # the delivery-marker leading-line boundary; `DeliveryApplicationTests` grades the ENGINE
+      # against it and `tests/kit-published-coherence/run.sh` grades the PYTHON gate against the
+      # same verdicts. Without this path a PR that moved the Python limit and edited the corpus to
+      # match would never start this workflow, so the F# half would stay silent on precisely the
+      # coordinated one-sided edit the corpus exists to catch — a gate keyed on `paths:` is
+      # selectively silent, and quietest on the additive variants (.github#2551).
+      - "tests/delivery-leading-line/**"
       - "tests/coord-engine-e2e/**"
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"

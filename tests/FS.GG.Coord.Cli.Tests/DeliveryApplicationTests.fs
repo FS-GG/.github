@@ -359,6 +359,135 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         | Ok [] -> ()
         | other -> failwithf "blank lines are not indentation, got %A" other
 
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+    // THE SHARED CROSS-LANGUAGE CORPUS (.github#2563). This is where the boundary is now STATED.
+    //
+    // `#2544` collapsed a rule that lived in two places INSIDE the engine into one function, and its
+    // round-1 repair then re-created a weaker version of the same hazard ACROSS the F#/Python language
+    // boundary: `DeliveryApplication.leadingLine` and `check-kit-published-coherence.py`'s
+    // `_leading_line` each held their own copy of the CommonMark indent limit, each side pinned its
+    // copy with its OWN fixture legs, and the only coupling was two prose sentences that nothing read.
+    //
+    // A one-sided edit reds that side. What was caught by nothing was a COORDINATED one-sided edit —
+    // moving one language's constant AND updating that same language's legs to match. That is not
+    // exotic; it is what a careful engineer does when they believe they are fixing a bug, and the
+    // fixtures agreed with them the whole way.
+    //
+    // `tests/delivery-leading-line/corpus.json` is the repair. Both sides consume it and NEITHER keeps
+    // private legs for the declaration form, so a coordinated edit has nowhere to hide: move the limit
+    // here and this test reds against the corpus; edit the corpus to restore it and the
+    // `kit-published-coherence` fixture reds instead, because it grades
+    // `obligation_declarations` — the gate's real entry point — against the same verdicts.
+    //
+    // THIS TEST DRIVES `obligationsFromComments`, NOT `leadingLine`. Transcribing a parser into another
+    // language to check it is literally this row's bug class, and checking only the private helper
+    // would leave the candidate pre-filter — the half `#2544` was actually filed about — ungraded.
+    //
+    // The `none`-form indent legs above stay where they are and are NOT duplicated into the corpus.
+    // `obligation_declarations` skips `<!-- fsgg:delivery-obligations none … -->` by design, so Python
+    // answers "no declarations" for it whether it is indented or not and has no verdict to compare.
+    // That is the honest reason those legs cannot be shared, recorded rather than glossed.
+
+    /// The corpus is repository DATA, not a build output — no `.fsproj` in this repository copies
+    /// content beside its test assembly — so this walks up from the assembly to the repository root,
+    /// the idiom `RuleSubsetTests` and `DocumentedInvocationTests` already use. The sentinel IS the
+    /// corpus, so a tree that does not carry it fails naming the path it looked for rather than
+    /// walking off the filesystem root into a null reference.
+    let private corpusPath =
+        let relative = Path.Combine("tests", "delivery-leading-line", "corpus.json")
+
+        let rec up (d: DirectoryInfo) =
+            if isNull (box d) then
+                failwith
+                    $"DeliveryApplicationTests: walked past the filesystem root without finding %s{relative}. The shared cross-language leading-line corpus (.github#2563) is the only statement of this boundary, and this suite refuses to pass without reading it."
+            elif File.Exists(Path.Combine(d.FullName, relative)) then
+                Path.Combine(d.FullName, relative)
+            else
+                up d.Parent
+
+        up (DirectoryInfo AppContext.BaseDirectory)
+
+    /// STATED, not derived from the file. A count read out of the corpus could be edited in the same
+    /// breath as the entry it counts, which is the vacuity `.github#2534` (an empty-corpus green) and
+    /// `.github#1768` (157 passing legs while the script was dying mid-run) each measured. The Python
+    /// consumer states its own copy of this number independently, so adding or removing an entry is a
+    /// deliberate three-file edit rather than something that can happen to a corpus quietly.
+    let private corpusEntryCount = 21
+
+    [<Fact>]
+    let ``#2563 the engine agrees with the shared cross-language leading-line corpus, entry for entry`` () =
+        use doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText corpusPath)
+        let head = doc.RootElement.GetProperty("head").GetString()
+        let entries = doc.RootElement.GetProperty("entries").EnumerateArray() |> Seq.toList
+        let verdictOf (e: System.Text.Json.JsonElement) = e.GetProperty("verdict").GetString()
+
+        // NON-VACUITY, asserted before a single verdict is compared. A corpus that is missing, empty,
+        // truncated, or reduced to one verdict class must RED here — a shorter corpus than this suite
+        // claims to check is exactly how a coupling stops coupling without anyone noticing.
+        Assert.Equal(corpusEntryCount, List.length entries)
+
+        Assert.True(
+            entries |> List.exists (fun e -> verdictOf e = "declares"),
+            "the corpus carries no `declares` entry, so it pins no lower bound on the indent tolerance"
+        )
+
+        Assert.True(
+            entries |> List.exists (fun e -> verdictOf e = "inert"),
+            "the corpus carries no `inert` entry, so it pins no upper bound and could not catch a fail-open"
+        )
+
+        // AND THE DISCRIMINATING SHAPES SURVIVE, which the count alone does not buy. A stated count
+        // forces a deliberate edit to add or remove an entry, but an author moving the limit could
+        // delete exactly the entries that discriminate and lower both stated counts, leaving two
+        // implementations that disagree over a corpus with nothing left to disagree ABOUT. `spaces-3`
+        // and `spaces-4` are the two shapes that discriminate a limit move in either direction — raise
+        // the limit and `spaces-4` changes verdict, lower it and `spaces-3` does — so they must be
+        // PRESENT.
+        //
+        // Presence, deliberately, and not a required verdict or a required disagreement between them. A
+        // limit that legitimately moved to 8 in BOTH languages is a coherent change this suite must let
+        // through, and it leaves those two entries agreeing; a leg demanding they disagree would red on
+        // exactly the correct action, which is how a gate teaches people to edit it out. The DIRECTION
+        // lives in the corpus alone — restating it here would re-create the second copy .github#2563
+        // exists to remove.
+        let present name =
+            entries |> List.exists (fun e -> e.GetProperty("name").GetString() = name)
+
+        Assert.True(
+            present "spaces-3" && present "spaces-4",
+            "the corpus must keep `spaces-3` and `spaces-4`: they are the two shapes either side of the CommonMark indented-code-block limit, and a corpus that has lost them can no longer tell a moved limit from an unmoved one"
+        )
+
+        let failures = ResizeArray<string>()
+        let mutable executed = 0
+
+        for entry in entries do
+            let name = entry.GetProperty("name").GetString()
+            let body = entry.GetProperty("body").GetString()
+            let verdict = verdictOf entry
+            executed <- executed + 1
+
+            match verdict, DeliveryApplication.obligationsFromComments head [ commentWithId 2563L body ] with
+            // A `declares` entry must produce THE obligation the corpus names, not merely some `Ok`.
+            | "declares", Ok [ obligation ] when obligation.Id = name -> ()
+            // An `inert` entry must be inert AND NAMED — both halves, because narrowing without the
+            // diagnostic sends a real declaration back to being invisible, which is the failure
+            // `#2544` exists to kill rather than a lesser version of it.
+            | "inert", Error reason when reason.Contains "leading line" -> ()
+            | "inert", Error reason ->
+                failures.Add $"%s{name}: inert as expected, but the refusal never names the leading-line rule, so an author who indented a real declaration is not told why it did not take: %s{reason}"
+            | ("declares" | "inert"), actual -> failures.Add $"%s{name}: corpus says %s{verdict}, engine said %A{actual}"
+            | other, _ -> failures.Add $"%s{name}: corpus carries the unknown verdict %s{other}; only `declares` and `inert` are defined"
+
+        // Every entry READ was also EXECUTED. `failures.Count = 0` alone cannot tell "all agreed" from
+        // "the loop never ran" (.github#1768).
+        Assert.Equal(List.length entries, executed)
+
+        if failures.Count > 0 then
+            failwith
+                $"""the engine disagrees with %s{corpusPath} in %d{failures.Count} of %d{executed} entries. That corpus is the ONE statement of this boundary and `check-kit-published-coherence.py` is graded against the same verdicts, so a change here that is right must be made THERE — changing the limit and this suite together is precisely the coordinated one-sided edit .github#2563 exists to catch.
+%s{String.Join("\n", failures)}"""
+
     [<Fact>]
     let ``#2544 round 1: the diagnostic does not tell a documentation author to make their sample declare`` () =
         // The advice was unconditional — and under the indented-code-block case it was advice to perform

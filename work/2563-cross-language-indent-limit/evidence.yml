@@ -1,0 +1,588 @@
+schemaVersion: 1
+workId: 2563-cross-language-indent-limit
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2563-cross-language-indent-limit/spec.md
+sourceClarifications: work/2563-cross-language-indent-limit/clarifications.md
+sourceChecklist: work/2563-cross-language-indent-limit/checklist.md
+sourcePlan: work/2563-cross-language-indent-limit/plan.md
+sourceTasks: work/2563-cross-language-indent-limit/tasks.yml
+sourceAnalysis: readiness/2563-cross-language-indent-limit/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2563-cross-language-indent-limit/analysis.json
+    digest: f772d553f6248280e45e0f289bc5d857f8b8c0741aa19086b1357cd466396c1b
+    schemaVersion: 1
+  - label: checklist
+    path: work/2563-cross-language-indent-limit/checklist.md
+    digest: 7fa349146e288fb4f9a06ab6f8c692b05f72a7e952b19b32b196263948bf5106
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2563-cross-language-indent-limit/clarifications.md
+    digest: 7ee95e9bc303cd0e2bae8ea6f40a050ddb95d578368921be16f2fcfa7c58852b
+    schemaVersion: 1
+  - label: plan
+    path: work/2563-cross-language-indent-limit/plan.md
+    digest: 5a28bf1fd9567546d29ae6d945ba1f6bc07609714599dc1361866b68024ccbb4
+    schemaVersion: 1
+  - label: spec
+    path: work/2563-cross-language-indent-limit/spec.md
+    digest: 91b30031534f2c636f88b3ed532b72a3f4b999b65c152cfe5b973c3705a06b07
+    schemaVersion: 1
+  - label: tasks
+    path: work/2563-cross-language-indent-limit/tasks.yml
+    digest: 744e947513204e0b55530188b295629f5d1eb03c1bc0268fc6580f21e3637444
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV001]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs, tests/delivery-leading-line/corpus.json, tests/kit-published-coherence/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["Coordinated one-sided edit in the F# direction, executed: DeliveryApplication.fs `indent.Length >= 4` changed to `>= 8` AND the five corpus entries that move (spaces-4, spaces-5, spaces-6, nl-spaces-4, crlf-spaces-4) flipped to declares. The F# suite went GREEN, exactly as this edit always did. `bash tests/kit-published-coherence/run.sh` then reported `175 passed, 5 failed`, exit 1, naming those five entries. Reverted; 181/181 green."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs, tests/delivery-leading-line/corpus.json, tests/kit-published-coherence/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["The mirror image, executed: check-kit-published-coherence.py `len(indent) >= 4` changed to `>= 8` AND the same five corpus entries flipped. The fixture went GREEN (181 passed, 0 failed). `dotnet test --filter FullyQualifiedName~2563` then FAILED, reporting `the engine disagrees with .../corpus.json in 5 of 21 entries` and naming each. Reverted; both suites green."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV003]
+    artifacts: [".github/workflows/coord-engine.yml"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["`tests/delivery-leading-line/**` is declared in BOTH `paths:` copies of coord-engine.yml, so an edit confined to the corpus starts the workflow running the F# consumer. kit-published-coherence.yml carries NO `paths:` filter on `pull_request` (deliberately, .github#1597), so it starts on every PR and needs no declaration. `python3 scripts/check-paths-coherence.py` exits 0 with `67 workflow(s) declaring both filters agree`."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV004]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs, tests/kit-published-coherence/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["Non-vacuity proven by inversion in three shapes. Corpus TRUNCATED by one entry: fixture `FAIL ... carries 20 entries, not the 21 this arm declares` (178 passed, 1 failed); F# `Assert.Equal() Failure: Expected 21, Actual 20`. Corpus DELETED: fixture reports three distinct FAILs (unreadable, 0 entries, 0 declares and 0 inert); F# fails with `walked past the filesystem root without finding tests/delivery-leading-line/corpus.json`. Discriminator DELETED with BOTH stated counts lowered to 20 so the count legs stay green: both sides still red on the `must keep spaces-3 and spaces-4` leg."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [scripts/check-kit-published-coherence.py, src/FS.GG.Coord.Cli/DeliveryApplication.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["No behaviour change, established two ways. (1) The diff of both implementations is COMMENT-ONLY: `git diff -U0` over DeliveryApplication.fs and check-kit-published-coherence.py yields no non-comment, non-docstring line. (2) The exact 18-shape .github#2544 corpus re-measured through both real entry points after the change is byte-identical to the pre-change baseline: 7 declare, 11 inert, every inert case an Error naming the leading-line rule. `diff` of the two runs is empty."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV006]
+    artifacts: [tests/delivery-leading-line/corpus.json, work/2563-cross-language-indent-limit/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 records the chosen shape (a shared authored corpus both sides consume) with its residual limitation, and each rejected shape with the specific property that disqualified it: the generated constant's build-order dependency and single-clause coupling, the source-text check's literal-not-behaviour reading, and the deletion option's violation of item criterion 4. DEC-002 records the location decision and the reachability asymmetry behind it. The corpus header restates the same for a reader who arrives at the file."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV007]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["The .github#2544 round-1 engine-only legs are untouched and still pass: the bystander's indented code sample not destroying a valid declaration, the indented declaration+receipt pair not reading Verified, the four-space and tab `none`-form legs, the three-space and blank-line legs, and the conditional-advice leg. Full suite `Passed! Failed: 0, Passed: 805`."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [work/2563-cross-language-indent-limit/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 is implemented as authored: one corpus, two consumers, each driving its own side's real entry point (obligationsFromComments and obligation_declarations, never the private helper), and neither side retaining private legs for the declaration form."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/coord-engine.yml", tests/delivery-leading-line/corpus.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 is implemented as authored: the corpus sits on neutral ground at tests/delivery-leading-line/, not under either language's test directory, and its trigger is declared explicitly in both copies of coord-engine.yml rather than relying on the accident that tests/FS.GG.Coord.Cli.Tests/** is already in the list."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV010]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["The F# consumer asserts BOTH halves of criterion 5: a declares entry must yield `Ok [obligation]` whose Id is the entry name, and an inert entry must yield `Error` whose reason contains `leading line`. A refusal that is inert but unnamed is reported as its own distinct failure message, so narrowing cannot silently regress into invisibility."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-001, FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV011]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs, tests/delivery-leading-line/corpus.json, tests/kit-published-coherence/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["Gate-inversion evidence produced in BOTH directions before handoff and both reverted, plus three non-vacuity inversions. Every mutation and its observed red are recorded under EV001, EV002 and EV004. No check in this change has only ever been green (.github#2551)."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [tests/delivery-leading-line/corpus.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["The corpus is the contract surface: 21 entries, 8 declares and 13 inert, covering 0 to 6 spaces, all five tab arrangements, both CRLF cases, the blank-line-of-spaces trap, prose-first and fenced. Its entry count is asserted independently by each consumer, so adding or removing an entry is a deliberate three-file edit."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV013]
+    artifacts: [".github/workflows/coord-engine.yml"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["coord-engine.yml gains one identical `paths:` entry in each of its two copies. Compatibility-preserving: it widens the trigger set and narrows nothing. paths-coherence exits 0."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV014]
+    artifacts: [scripts/check-kit-published-coherence.py, src/FS.GG.Coord.Cli/DeliveryApplication.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["Behaviour-preserving confirmed: both implementation diffs are comment-only and the 18-shape measurement is identical before and after. No runtime behaviour of scripts/fsgg-coord, the published kit, or the gate's verdicts moves."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [scripts/check-kit-published-coherence.py, src/FS.GG.Coord.Cli/DeliveryApplication.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 baseline recorded BEFORE any edit. `dotnet fsi` against the shared checkout's Release assemblies drove DeliveryApplication.obligationsFromComments over the 18 bodies: 18/18 matched the .github#2544 confirming critic's table. An importlib load of check-kit-published-coherence.py drove obligation_declarations over the same 18: 18/18. Both recorded before the corpus existed."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-004]
+    obligationRefs: [EV016]
+    artifacts: [scripts/check-kit-published-coherence.py, src/FS.GG.Coord.Cli/DeliveryApplication.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["VO-002 re-measurement after the change, against this worktree's own build rather than the shared one, is identical to the baseline: `diff` between the pre-change and post-change 18-shape runs is empty on both sides."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV017]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs, tests/kit-published-coherence/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["VO-003 discharged under EV001 and EV002: both directions mutated, both reds observed and quoted, both reverted, both suites re-confirmed green."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV018]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs, tests/kit-published-coherence/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["VO-004 discharged under EV004: corpus deleted, corpus truncated, and discriminator deleted with both stated counts lowered. Each consumer fails independently in every shape."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV019]
+    artifacts: [".github/workflows/coord-engine.yml"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["VO-005 evidence is the declared path in both copies of coord-engine.yml, the absence of any `paths:` filter on kit-published-coherence.yml's pull_request trigger, and the live check runs on this PR."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV020]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs, tests/kit-published-coherence/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["VO-006: `dotnet test tests/FS.GG.Coord.Cli.Tests` reports `Failed: 0, Passed: 805`. `bash tests/kit-published-coherence/run.sh` reports `181 passed, 0 failed` and `all 181 declared legs ran`, its EXPECTED_LEGS floor updated deliberately with the arithmetic stated in the file."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV021]
+    artifacts: [tests/delivery-leading-line/corpus.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["PM-001: nothing to migrate. The corpus is new, the workflow change only widens a trigger set, and no marker grammar, wire shape or published artifact moves. A checkout before and after this change classifies every comment body identically, which EV005 measures rather than asserts."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV022]
+    artifacts: [readiness/2563-cross-language-indent-limit/analysis.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
+      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 805
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/2563-cross-language-indent-limit/ refreshed by the lifecycle commands. The corpus is deliberately AUTHORED, not generated: nothing derives it from either implementation and neither implementation derives anything from it, which is what keeps it out of the stale-artifact class .github#2551 warns about."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

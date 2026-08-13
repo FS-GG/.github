@@ -456,7 +456,11 @@ MERGE_AUTOMATION: tuple[MergeAutomation, ...] = (
 )
 
 # The engine's own filter, restated here because this arm must agree with it rather than hold a
-# second opinion about what a declaration is: `DeliveryApplication.fs`'s `obligationsFromComments`
+# second opinion about what a declaration is — and since .github#2563 that agreement is MECHANICAL
+# rather than a promise: both sides are graded against `tests/delivery-leading-line/corpus.json`, so
+# this file cannot drift from the engine without one of the two suites going red. See `_leading_line`
+# below for what that replaced and why a docstring was not enough.
+# `DeliveryApplication.fs`'s `obligationsFromComments`
 # selects comments whose LEADING LINE — the first line of the trimmed body — starts with
 # `<!-- fsgg:delivery-obligation`. A comment that opens with prose and carries a perfectly-formed
 # marker on line 3 parses as ABSENT there, so it must parse as absent here too; an arm that were more
@@ -495,6 +499,18 @@ def _leading_line(body: str) -> str:
     the fail-open the round-1 critic measured on `.github#2544` (a bystander's code sample destroying
     somebody else's valid declaration, and an indented declaration+receipt pair reading `verified`).
     The engine returns the line AS WRITTEN in that case so nothing can match it; so does this.
+
+    THE SENTENCE ABOVE USED TO BE THE WHOLE COUPLING, AND THAT WAS THE DEFECT (.github#2563). "Restated
+    here" was a claim no test could falsify: the engine held one copy of the limit, this function held
+    another, each side pinned its own copy with its own fixture legs, and a COORDINATED one-sided edit —
+    moving one constant AND updating that same side's legs — passed both. It is now enforced instead of
+    asserted. `tests/delivery-leading-line/corpus.json` is the single statement of this boundary;
+    `tests/kit-published-coherence/run.sh` grades THIS function's real entry point
+    (`obligation_declarations`) against it, and `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs`
+    grades the engine against the same verdicts. Neither side keeps private legs for the declaration
+    form, so changing the limit here reds the corpus, and editing the corpus to restore it reds the
+    engine suite. If you are about to change the test below, that corpus is the file to change, and it
+    will make the other language's disagreement visible rather than let it pass.
     """
     normalized = body.replace("\r\n", "\n")
     first = next((line for line in normalized.split("\n") if line.strip()), None)

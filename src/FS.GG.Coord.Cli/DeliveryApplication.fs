@@ -195,6 +195,16 @@ module DeliveryApplication =
     // then collides with a phantom obligation), and an indented declaration+receipt pair reads
     // `Verified = true` — fail-OPEN, the one direction this subsystem must never move. A bystander posting
     // documentation could do that to somebody else's PR.
+    //
+    // AND THE LIMIT IS NOT WRITTEN ONLY HERE ANY MORE (.github#2563). `check-kit-published-coherence.py`
+    // deliberately restates this filter — an arm STRICTER than the engine would call a LIVE declaration
+    // absent, which is the same invisibility one layer down — but until #2563 the two copies were
+    // coupled by nothing except a docstring saying so. A one-sided edit reddened that side's fixtures; a
+    // COORDINATED one-sided edit, moving one constant and that same language's own legs together,
+    // passed both, and that is what a careful engineer does when they believe they are fixing a bug.
+    // `tests/delivery-leading-line/corpus.json` is now the single statement of this boundary, graded
+    // through BOTH real entry points — `obligationsFromComments` here, `obligation_declarations` there.
+    // Changing the test below reds that corpus; editing the corpus to restore it reds the Python gate.
     let private leadingLine (text: string) =
         // The first line carrying any content, exactly as written — indentation included, because the
         // indentation is the thing being measured.
