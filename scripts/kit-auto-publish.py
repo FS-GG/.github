@@ -18,6 +18,25 @@ REQUIRED_FACTS = (
     "version", "provenance", "orgFeed", "nugetFeed", "orgLatest", "nugetLatest", "tagExists",
 )
 
+# .github#2442 (maintainer decision, 2026-08-12): this frontier rail stays exactly as written —
+# kit-auto-publish admits only a same-line patch bump, on purpose, so an automated publisher never
+# widens its own blast radius across two public feeds (.github#2240).  Coherent-set releases are a
+# MINOR bump by design (.github#2402) and publish through .github#2409's dedicated workflow instead.
+# So a `candidate-not-next-patch` refusal on a coherent-set version is the rail working, not a defect
+# — and .github#2435's own visibility fixes (open escalation target, streak-bound job failure) now
+# apply to this reason exactly like any other, which means this refusal reads, at the point someone
+# actually sees it, like an unexplained problem unless it says otherwise.  `SCOPE_NOTES` is that
+# one-line legibility fix: attached to the decision itself, so it reaches every surface (JSON, sticky
+# comment, ``::error::`` annotation) without special-casing each one.
+SCOPE_NOTES = {
+    "candidate-not-next-patch": (
+        "kit-auto-publish deliberately admits only a same-line patch bump (see .github#2442); a "
+        "minor-line candidate, which every coherent-set release produces, is out of scope by design "
+        "and this refusal is expected to recur — it is not a bug to re-file. Coherent-set versions "
+        "publish through .github#2409's release path instead."
+    ),
+}
+
 
 def patch_tuple(value):
     match = PATCH.fullmatch(value or "")
@@ -85,8 +104,12 @@ def decide(facts):
 
 
 def result(action, reason, version):
-    return {"schemaVersion": 1, "action": action, "reason": reason, "version": version,
-            "terminal": action in ("refuse", "stickyEscalate")}
+    answer = {"schemaVersion": 1, "action": action, "reason": reason, "version": version,
+              "terminal": action in ("refuse", "stickyEscalate")}
+    note = SCOPE_NOTES.get(reason)
+    if note is not None:
+        answer["note"] = note
+    return answer
 
 
 def main():

@@ -19,6 +19,51 @@ case_run partial stickyEscalate "{\"version\":\"0.27.1\",${base/\"orgFeed\":\"ab
 case_run older-gap refuse '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.28.0","nugetLatest":"0.28.0","tagExists":false}'
 case_run frontier-disagree stickyEscalate '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.28.0","tagExists":false}'
 case_run unrelated-later-pr refuse '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.27.0","tagExists":false}'
+case_run coherent-set-minor refuse '{"version":"0.51.0","provenance":{"mergedReachable":true,"introducedVersion":"0.51.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.50.2","nugetLatest":"0.50.2","tagExists":false}'
+
+# ---- .github#2442/.github#2435: a `candidate-not-next-patch` refusal on a coherent-set minor bump
+#      is the frontier rail working AS DESIGNED, not a defect (maintainer decision on #2442) — but
+#      .github#2435's own visibility fixes (open escalation target, streak-bound job failure) now
+#      apply to this reason exactly like any other actionable one, so without an explanation it reads
+#      as an unexplained problem at the point someone actually sees it. `SCOPE_NOTES` attaches that
+#      explanation to the decision itself. ----
+note="$(python3 "$root/scripts/kit-auto-publish.py" --facts "$work/coherent-set-minor.json" --json | jq -r '.note // empty')"
+[ -n "$note" ] \
+  || { echo 'coherent-set-minor: expected a scope note explaining the deliberate refusal, got none' >&2; exit 1; }
+checks=$((checks + 1))
+case "$note" in *2442*) : ;; *) echo "coherent-set-minor: note does not reference .github#2442, got: $note" >&2; exit 1 ;; esac
+checks=$((checks + 1))
+
+# An ORDINARY, actionable refusal reason must carry no note — the field is deliberately reason-scoped,
+# not a general refusal-explainer, so it cannot dilute into noise on the reasons that ARE bugs.
+has_note="$(python3 "$root/scripts/kit-auto-publish.py" --facts "$work/major.json" --json | jq -r 'has("note")')"
+[ "$has_note" = "false" ] \
+  || { echo 'major (version-not-stable-0x-patch): unexpected scope note on an ordinary, actionable refusal' >&2; exit 1; }
+checks=$((checks + 1))
+
+# GATE-INVERSION for the note itself: strip `SCOPE_NOTES` back to empty in a mutated copy of the REAL
+# script and show the same coherent-set-minor fixture now loses its explanation — a test that cannot
+# fail on the absence of this mapping has not tested it.
+mutate_drop_scope_note() {
+  python3 - "$root/scripts/kit-auto-publish.py" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+start = text.index('SCOPE_NOTES = {')
+end = text.index('\n}\n', start) + len('\n}\n')
+mutated = text[:start] + 'SCOPE_NOTES = {}\n' + text[end:]
+if mutated == text:
+    sys.exit("mutate_drop_scope_note: SCOPE_NOTES block not found/unchanged")
+open(dst, 'w', encoding='utf-8').write(mutated)
+PY
+}
+no_note_script="$work/kit-auto-publish-no-note.py"
+mutate_drop_scope_note "$no_note_script"
+has_note_mutated="$(python3 "$no_note_script" --facts "$work/coherent-set-minor.json" --json | jq -r 'has("note")')"
+[ "$has_note_mutated" = "false" ] \
+  || { echo 'gate-inversion (scope note): stripping SCOPE_NOTES should remove the note, it did not' >&2; exit 1; }
+checks=$((checks + 1))
+
 facts='{ "version":"0.27.1", "provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"}, "orgFeed":"unknown", "nugetFeed":"absent", "orgLatest":"0.27.0", "nugetLatest":"0.27.0", "tagExists":false }'
 case_run released-after-later-merge openEvidencePr '{"version":"0.27.1","sourceSha":"later","provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass","mergeCommit":"authoring"},"orgFeed":"present","nugetFeed":"present","orgLatest":"0.27.1","nugetLatest":"0.27.1","tagExists":true,"releaseRun":{"id":"42","url":"https://example.test/run/42","nuspecCommit":"later"}}'
 printf '%s' "$facts" > "$work/escalate.json"
@@ -160,6 +205,7 @@ run_escalation() {
 }
 
 esc_facts="{\"version\":\"1.0.0\",$base}"   # the existing "major" case: a stable refuse, every run.
+cnp_esc_facts='{"version":"0.51.0","provenance":{"mergedReachable":true,"introducedVersion":"0.51.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.50.2","nugetLatest":"0.50.2","tagExists":false}'  # coherent-set minor: candidate-not-next-patch, deliberately out of scope (.github#2442).
 
 # ---- 1. A fresh refusal: no prior comment, so this must POST once, label once, and round-trip. ----
 d1="$(sandbox fresh '[]')"
@@ -192,6 +238,12 @@ expected="$(jq -c .escalation "$d1/escalation-decision.json")"
 checks=$((checks + 1))
 [ "$(jq -r .streak <<<"$extracted")" = 1 ] \
   || { echo "fresh escalation: first-ever streak must be 1, got $(jq -r .streak <<<"$extracted")" >&2; exit 1; }
+checks=$((checks + 1))
+
+# `version-not-stable-0x-patch` carries no scope note (.github#2435/.github#2442) — the field must
+# stay reason-scoped and not leak into an ordinary, actionable refusal's sticky comment.
+grep -q '2442' "$d1/last-body.txt" \
+  && { echo 'fresh escalation: unexpected .github#2442 reference for a reason with no scope note' >&2; exit 1; }
 checks=$((checks + 1))
 
 # ---- 2. A second refusal with the sticky comment already present: update in place, not duplicate. -
@@ -314,6 +366,90 @@ rc=0; run_escalation "$d8" "$esc_facts" 6002 "$no_threshold_script" || rc=$?
 checks=$((checks + 1))
 [ "$(jq -r .escalation.streak "$d8/escalation-decision.json")" -ge 3 ] \
   || { echo "gate-inversion (streak bound): sanity check that the streak is really at/above the bound failed" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 8b. The scope note reaches BOTH surfaces a reader hits without opening #2106: the sticky
+#          comment (below threshold, still green) and the `::error::` annotation itself (at/above
+#          threshold, job fails). This is the concrete fix for the gap #2442's closing comment named:
+#          the refusal text did not say a coherent-set minor is deliberately out of scope. ----
+d9="$(sandbox note-fresh '[]')"
+rc=0; run_escalation "$d9" "$cnp_esc_facts" 7001 "$esc_script" || rc=$?
+[ "$rc" -eq 0 ] || { echo "note escalation: expected exit 0 (streak 1 below threshold), got $rc" >&2; cat "$d9/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -q '2442' "$d9/last-body.txt" \
+  || { echo 'note escalation: expected the sticky comment to reference .github#2442 for candidate-not-next-patch' >&2; cat "$d9/last-body.txt" >&2; exit 1; }
+checks=$((checks + 1))
+
+seed_note_comment() {
+  local streak="$1" run="$2"
+  printf '%s\n\n```json\n%s\n```\n\nAuto-publish performed no tag, feed, or evidence-PR write. [Run](x).' \
+    "$marker_literal" "{\"valid\":true,\"streak\":$streak,\"action\":\"refuse\",\"reason\":\"candidate-not-next-patch\",\"version\":\"0.51.0\",\"lastRun\":\"$run\"}"
+}
+d10="$(sandbox note-at-threshold "$(jq -n --arg b "$(seed_note_comment 2 8001)" '[{id:901, body:$b}]')")"
+rc=0; run_escalation "$d10" "$cnp_esc_facts" 8002 "$esc_script" || rc=$?
+[ "$rc" -eq 1 ] || { echo "note escalation (at threshold): expected exit 1 (streak 3 >= 3), got $rc" >&2; cat "$d10/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -q '2442' "$d10/stdout.log" \
+  || { echo 'note escalation (at threshold): expected the ::error:: annotation to reference .github#2442 without opening the issue' >&2; cat "$d10/stdout.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- 8c. GATE-INVERSION for the note plumbing: strip the note extraction/suffix wiring back out of
+#          a copy of the REAL step and show the same two surfaces above lose the explanation — a test
+#          that cannot fail on the absence of this wiring has not tested it. ----
+mutate_strip_note_surfacing() {
+  python3 - "$esc_script" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+lines = open(src, encoding="utf-8").read().splitlines(keepends=True)
+out = []
+touched = 0
+drop_prefixes = (
+    'note="$(jq -r',
+    'note_suffix=""',
+    '[ -z "$note" ] || note_suffix=',
+    'note_annotation=""',
+    '[ -z "$note" ] || note_annotation=',
+)
+for line in lines:
+    stripped = line.strip()
+    if any(stripped.startswith(p) for p in drop_prefixes):
+        touched += 1
+        continue
+    if stripped.startswith('body="$(printf'):
+        out.append(
+            'body="$(printf \'%s\\n\\n```json\\n%s\\n```\\n\\nAuto-publish performed no tag, feed, or '
+            'evidence-PR write. [Run](%s/%s/actions/runs/%s).\' "$marker" "$state" "$GITHUB_SERVER_URL" '
+            '"$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"\n'
+        )
+        touched += 1
+        continue
+    if 'note_annotation' in line:
+        out.append(line.replace('${note_annotation}', ''))
+        touched += 1
+        continue
+    out.append(line)
+if touched < 6:
+    sys.exit(f"mutate_strip_note_surfacing: expected to touch at least 6 lines, touched {touched}")
+open(dst, "w", encoding="utf-8").write("".join(out))
+PY
+}
+no_note_script="$esc_work/escalate-no-note.sh"
+mutate_strip_note_surfacing "$no_note_script"
+
+d11="$(sandbox no-note-fresh '[]')"
+rc=0; run_escalation "$d11" "$cnp_esc_facts" 7002 "$no_note_script" || rc=$?
+[ "$rc" -eq 0 ] || { echo "gate-inversion (note plumbing, body): expected exit 0, got $rc" >&2; cat "$d11/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -q '2442' "$d11/last-body.txt" \
+  && { echo 'gate-inversion (note plumbing, body): without the wiring, the note must NOT reach the sticky comment' >&2; exit 1; }
+checks=$((checks + 1))
+
+d12="$(sandbox no-note-at-threshold "$(jq -n --arg b "$(seed_note_comment 2 9001)" '[{id:1001, body:$b}]')")"
+rc=0; run_escalation "$d12" "$cnp_esc_facts" 9002 "$no_note_script" || rc=$?
+[ "$rc" -eq 1 ] || { echo "gate-inversion (note plumbing, annotation): expected exit 1, got $rc" >&2; cat "$d12/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+grep -q '2442' "$d12/stdout.log" \
+  && { echo 'gate-inversion (note plumbing, annotation): without the wiring, the ::error:: annotation must NOT reference .github#2442' >&2; exit 1; }
 checks=$((checks + 1))
 
 # ---- 9. `csproj_version`: PROVENANCE ROOT CAUSE (.github#2435). .github#2410 (coherent-set

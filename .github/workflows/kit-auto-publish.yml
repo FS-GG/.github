@@ -335,14 +335,23 @@ jobs:
           python3 scripts/kit-auto-publish.py --facts facts.json --json --run "$GITHUB_RUN_ID" "${args[@]}" > escalation-decision.json
           state="$(jq -c .escalation escalation-decision.json)"
           jq -e '.valid == true' <<<"$state" >/dev/null || { echo '::error::sticky marker state malformed; refusing to overwrite'; exit 1; }
+          # A refusal reason can be permanent and expected BY DESIGN (.github#2442:
+          # `candidate-not-next-patch` on a coherent-set minor bump keeps the frontier rail intact on
+          # purpose) rather than a defect — `scripts/kit-auto-publish.py`'s `SCOPE_NOTES` attaches the
+          # explanation to the decision itself, so it is empty for an ordinary/actionable refusal and
+          # non-empty only for a reason known in advance to recur without being a bug (.github#2435).
+          note="$(jq -r '.note // empty' escalation-decision.json)"
           # A double-quoted one-liner here has two independent quoting defects (.github#2346): the
           # fence backticks open command substitution inside double quotes, and `\n` inside double
           # quotes is a literal backslash-n, not a newline. Both crashed this step at exit 127 before
           # it ever wrote the sticky marker or the `blocked` label, so a correct refusal was silent.
           # `printf`'s FORMAT is single-quoted, so the fence backticks are inert literal text (single
           # quotes admit no command substitution, nested or not) and its own `\n` escapes become real
-          # newlines; `$marker`/`$state` are supplied as `%s` DATA arguments, never re-parsed as shell.
-          body="$(printf '%s\n\n```json\n%s\n```\n\nAuto-publish performed no tag, feed, or evidence-PR write. [Run](%s/%s/actions/runs/%s).' "$marker" "$state" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          # newlines; `$marker`/`$state`/`$note` are supplied as `%s` DATA arguments, never re-parsed
+          # as shell.
+          note_suffix=""
+          [ -z "$note" ] || note_suffix="$(printf '\n\n%s' "$note")"
+          body="$(printf '%s\n\n```json\n%s\n```\n\nAuto-publish performed no tag, feed, or evidence-PR write. [Run](%s/%s/actions/runs/%s).%s' "$marker" "$state" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$note_suffix")"
           gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --add-label blocked
           if [ -n "$existing" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -f body="$body" >/dev/null; else gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$issue/comments" -f body="$body" >/dev/null; fi
           # The sticky comment and label above are written FIRST, unconditionally — they are the
@@ -351,7 +360,9 @@ jobs:
           # agent reading `gh pr checks` / run conclusions actually notices without opening #2106.
           streak="$(jq -r '.streak' <<<"$state")"
           if [ "$streak" -ge "$streak_fail_threshold" ]; then
-            echo "::error::kit-auto-publish streak bound reached: '$(jq -r .action <<<"$state")/$(jq -r .reason <<<"$state")' for $streak consecutive runs (>= $streak_fail_threshold) — failing this job so the refusal is visible without reading issue #$issue's comments. See the sticky comment above for the typed state."
+            note_annotation=""
+            [ -z "$note" ] || note_annotation=" $note"
+            echo "::error::kit-auto-publish streak bound reached: '$(jq -r .action <<<"$state")/$(jq -r .reason <<<"$state")' for $streak consecutive runs (>= $streak_fail_threshold) — failing this job so the refusal is visible without reading issue #$issue's comments. See the sticky comment above for the typed state.${note_annotation}"
             exit 1
           fi
       - name: Open or update the publish evidence PR
