@@ -19,6 +19,60 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-13** — **registry: record the already-shipped coherent set, `coord-engine` 0.50.2 → 0.50.4**
+  (owner `github`; [.github#2518](https://github.com/FS-GG/.github/issues/2518), blocking
+  [.github#2512](https://github.com/FS-GG/.github/issues/2512)/[PR #2514](https://github.com/FS-GG/.github/pull/2514)).
+  **Publish-before-flip step 2 only — no publish is owed by this item and none was made.** `0.50.3` and
+  `0.50.4` were both published on 2026-08-13 and neither was ever recorded here, so
+  `check-feed-coherence` went red on `main` ([run 31679648241](https://github.com/FS-GG/.github/actions/runs/31679648241)
+  at `925c5927`, 07:53:17Z; the three preceding `main` runs were green) with exactly one problem —
+  ``coord-engine: registry `package-version` is BEHIND the feed — declares '0.50.2' but FS.GG.Coord.Cli
+  newest on the org feed is '0.50.4'`` — and that single arm was what held
+  [PR #2514](https://github.com/FS-GG/.github/pull/2514) unlandable while it was otherwise reviewed,
+  host-accepted and passing every required context.
+  **Which version is recorded was established by reading both feeds per package, not inferred from the
+  feed listing `FS.GG.Coord.Cli 0.50.4`.** That inference is exactly what `0.50.1` and `0.50.5` refute:
+  a `0.50.x` number can exist for two of the three packages and no third. Enumerated directly — org
+  GitHub Packages (`gh api /orgs/FS-GG/packages/nuget/<id>/versions`) serves `FS.GG.Coord.Cli` … 0.50.0,
+  0.50.2, 0.50.3, 0.50.4 (**no** 0.50.1, **no** 0.50.5); `FS.GG.Kit` … 0.50.0, 0.50.1, 0.50.2, 0.50.3,
+  0.50.4, 0.50.5; `FS.GG.Drivers` … 0.50.0, 0.50.1, 0.50.2, 0.50.3, 0.50.4, 0.50.5. nuget.org's flat
+  container (re-read with `Cache-Control: no-cache`) reports the identical set for each of the three,
+  and its registration hive reports `listed: true` for every one. **So `0.50.3` and `0.50.4` are each
+  complete three-of-three sets, `0.50.4` is the newest, and neither owes a two-of-three warning** — that
+  obligation is discharged by measurement, not by assuming the newest number is whole.
+  `0.50.3` is complete although it did not look it for four and a half hours, which is the near-miss
+  worth recording: at commit `42c63af9` the coord-engine ([31660741872](https://github.com/FS-GG/.github/actions/runs/31660741872))
+  and drivers ([31660741707](https://github.com/FS-GG/.github/actions/runs/31660741707)) publishes both
+  succeeded at 02:24Z while `release-kit` [31658150062](https://github.com/FS-GG/.github/actions/runs/31658150062)
+  **failed** at 01:34Z, and it was completed by a **re-run from that same commit**
+  ([31675542589](https://github.com/FS-GG/.github/actions/runs/31675542589), success, 06:53Z; Kit 0.50.3
+  on the org feed 06:54:22Z). Same commit is what makes that a completion rather than a re-cut — the
+  `.github#2240` re-pack divergence that makes `0.50.1` permanent applies to publishing a *corrected*
+  tree under an already-used version, never to re-running an unchanged one. `0.50.4` published cleanly:
+  runs [31680586145](https://github.com/FS-GG/.github/actions/runs/31680586145) (coord-engine),
+  [31680585524](https://github.com/FS-GG/.github/actions/runs/31680585524) (kit),
+  [31680586332](https://github.com/FS-GG/.github/actions/runs/31680586332) (drivers), all success, all at
+  `e35f01e00fd3a54d47ae6794057fdfc1061593b5`, and all three *served* nuspecs record
+  `<repository … commit="e35f01e0…">`.
+  Evidence beyond the run conclusions: every 0.50.4 `.nupkg` was downloaded from **both** feeds and
+  compared entry-by-entry by SHA-256 — `FS.GG.Coord.Cli` 32 entries, `FS.GG.Kit` 40, `FS.GG.Drivers` 29;
+  0 differing, 0 present in one feed but not the other — whole-archive hashes differing only by
+  nuget.org's appended signature. Consumability is a real install, not a flat-container hit: a fresh
+  isolated `dotnet tool install FS.GG.Coord.Cli --version 0.50.4` succeeds and `dotnet fsgg-coord-engine
+  --version` reports `0.50.4.0`. `python3 scripts/check-engine-freshness.py` is green (0 engine commits
+  since `coord-engine/v0.50.4`), and `git diff coord-engine/v0.50.2..coord-engine/v0.50.4 --
+  src/FS.GG.Coord.Core/Protocol.fs` is empty, so this is a patch-line cut with no wire-surface movement
+  and `version` advances with `package-version`.
+  **⚠ `0.50.5` is deliberately not adopted here, and this row is not behind for refusing it:**
+  `FS.GG.Kit` and `FS.GG.Drivers` serve `0.50.5` on both feeds and `FS.GG.Coord.Cli` serves it on
+  neither, so it is not a complete set and taking it would put this row *ahead* of the feed for its own
+  package. `.github#2512`/PR #2514 owns that version's full disposition and the `0.50.6` that supersedes
+  it; fusing the two changes would bind evidence that exists today to evidence that does not yet.
+  Generated projections regenerated from this flip via `scripts/generate-projections`
+  (`docs/registry/compatibility.md`, `docs/architecture.md`, and the `release-inventory` region of both
+  `publishing-and-deployment` skill roots) plus `scripts/generate-driver-manifest --write`
+  (`registry/driver-skill-manifest.json`, whose digest covers those skill bodies).
+
 - **2026-08-12** — coherent-set republish train — coord-engine/FS.GG.Kit/FS.GG.Drivers `0.50.2`
   (github; `.github#2381`, `.github#2409`, `.github#2402`): the four unreleased DEFECT-class engine
   fixes since `0.50.0` reach receivers — `.github#2454` (landable attributed run gating to suite
