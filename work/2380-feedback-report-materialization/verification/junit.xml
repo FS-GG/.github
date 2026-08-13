@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="github2380.verification" tests="8" failures="0" errors="0">
+    <testcase classname="github2380" name="always_holds"/>
+    <testcase classname="github2380" name="profile_five_is_false"/>
+    <testcase classname="github2380" name="profile_game_samplepack_false"/>
+    <testcase classname="github2380" name="profile_eq_samplepack_false"/>
+    <testcase classname="github2380" name="template_vocabulary_false"/>
+    <testcase classname="github2380" name="negated_unset_param_true"/>
+    <testcase classname="github2380" name="array_provenance_refused"/>
+    <testcase classname="github2380" name="fixture_shapes_differ"/>
+  </testsuite>
+</testsuites>
