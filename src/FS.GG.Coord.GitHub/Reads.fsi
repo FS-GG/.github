@@ -451,6 +451,13 @@ module Reads =
     ///
     /// `Ok None` means it closes nothing by that record — a real answer (the PR may implement an item by
     /// its branch name instead). It is distinct from a failed read, which is an `Error`.
+    ///
+    /// **`Ok None` IS A MEASUREMENT, and until `.github#2534` the implementation did not honour this line.**
+    /// It is now reachable from exactly one state: a `closingIssuesReferences.nodes` array successfully
+    /// enumerated and found empty. A partial HTTP 200 (`data` present, `errors` populated — how GitHub
+    /// reports an exhausted GraphQL budget), a null `repository`/`pullRequest`, an absent connection, and a
+    /// node whose `number`/`nameWithOwner` cannot be read are each an `Error`. They used to be `Ok None`,
+    /// which `verify-paths` reads as "this PR implements no tracked item" and reports as a GREEN skip.
     val prClosingRef: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<Ref option>
 
     /// One list element's body — READ, or NOT READ. The `TouchSet.Unreadable` distinction (#1150), carried

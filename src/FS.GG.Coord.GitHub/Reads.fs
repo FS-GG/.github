@@ -58,6 +58,66 @@ module Reads =
                 // why this is an error and not an empty list.
                 Error(Malformed(subject, $"the response is not JSON: %s{e.Message}"))
 
+    /// The `data` of a GraphQL response — reachable ONLY after the response has been asked whether it
+    /// announced its own incompleteness.
+    ///
+    /// **THE ORDER IS THE CONTRACT, AND THIS FUNCTION IS WHAT MAKES IT STRUCTURAL** (`.github#2534`).
+    /// GitHub reports an exhausted GraphQL budget — and any other partial field failure — as an HTTP
+    /// **200 carrying BOTH `data` and `errors`**, byte-indistinguishable at the transport layer from a
+    /// complete answer. `Board.graphQlData` has carried this shape from the start and `Scan.fs`/`Done.fs`
+    /// each re-implemented it correctly, but nothing made a read that SKIPPED it fail — so three reads in
+    /// this module drifted: `recentCommentBodies` and `subIssues` accepted a partially populated `nodes`
+    /// array as a complete one, and `prClosingRef` turned a rate-limited response into `Ok None`, the
+    /// positive assertion *"this PR closes nothing"*. A convention enforced by repetition is not
+    /// enforced. A function every read must call to reach `data` is, and
+    /// `GraphQlErrorsFirstTests` fails the build if any read in this layer reaches `data` around it.
+    ///
+    /// RATE LIMIT FIRST, for the reason `Board.graphQlData` states: test the generic partial arm first and
+    /// an exhausted budget is misreported as a malformed response, destroying the one fact — that this
+    /// condition is temporary — the caller needs in order to back off rather than refuse the subject.
+    let private graphQlData (subject: string) (root: JsonElement) : IoResult<JsonElement> =
+        // A 2xx BODY THAT IS SYNTACTICALLY VALID JSON BUT NOT AN OBJECT — `[]`, `"text"`, `7`, `true`,
+        // `null` — is not a GraphQL response of any shape, and `TryGetProperty` on anything but an object
+        // THROWS `InvalidOperationException` rather than answering `false`. This guard must run BEFORE the
+        // `errors` read below, which sits outside every caller's `try/with`: an unhandled crash on exactly
+        // the input this function exists to fail closed on. `Budget.readMeter` guards this identical case
+        // for the identical reason (`.github#2418`/PR #2419); `contentEditProvenance` carried this guard
+        // inline before `.github#2534` hoisted it here, where every read gets it.
+        if root.ValueKind <> JsonValueKind.Object then
+            Error(
+                Malformed(
+                    subject,
+                    $"the GraphQL response is not a JSON object (%A{root.ValueKind}) — a GraphQL response is always `{{...}}`, so this is a FAILED READ, never an empty answer"
+                )
+            )
+        else
+
+        let errors =
+            match root.TryGetProperty "errors" with
+            | true, e when e.ValueKind = JsonValueKind.Array && e.GetArrayLength() > 0 -> Some e
+            | _ -> None
+
+        match errors with
+        | Some e ->
+            let messages =
+                e.EnumerateArray()
+                |> Seq.map (fun err ->
+                    match err.TryGetProperty "message" with
+                    | true, m when m.ValueKind = JsonValueKind.String -> m.GetString()
+                    | _ -> "(no message)")
+                |> List.ofSeq
+
+            // RATE LIMIT FIRST. `ofGraphQlErrors` also tells a SECONDARY limit from the primary budget
+            // (#1666), which `isRateLimited` cannot.
+            match Budget.ofGraphQlErrors messages with
+            | Some limited -> Error limited
+            | None -> Error(GraphQlErrors messages)
+
+        | None ->
+            match root.TryGetProperty "data" with
+            | true, data when data.ValueKind <> JsonValueKind.Null -> Ok data
+            | _ -> Error(Malformed(subject, "the GraphQL response carried neither `data` nor `errors`"))
+
     let private str (e: JsonElement) (name: string) =
         match e.TryGetProperty name with
         | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
@@ -711,10 +771,13 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
+                match graphQlData subject doc.RootElement with
+                | Error e -> Error e
+                | Ok data ->
+
                 try
                     let nodes =
-                        doc.RootElement
-                            .GetProperty("data")
+                        data
                             .GetProperty("repository")
                             .GetProperty("issue")
                             .GetProperty("comments")
@@ -1096,10 +1159,13 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
+                match graphQlData subject doc.RootElement with
+                | Error e -> Error e
+                | Ok data ->
+
                 try
                     let subIssuesNode =
-                        doc.RootElement
-                            .GetProperty("data")
+                        data
                             .GetProperty("repository")
                             .GetProperty("issue")
                             .GetProperty("subIssues")
@@ -1272,98 +1338,61 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
-                let root = doc.RootElement
+                // THE ORDER IS THE CONTRACT — now enforced by `graphQlData` rather than restated here.
+                // The non-object guard, the `errors`-before-`data` ordering and the rate-limit-first
+                // dispatch all moved into that one function (`.github#2534`), so this read cannot reach
+                // `data` around them and neither can any read added after it.
+                match graphQlData subject doc.RootElement with
+                | Error e -> Error e
+                | Ok data ->
 
-                // A 2xx BODY THAT IS SYNTACTICALLY VALID JSON BUT NOT AN OBJECT — `[]`, `"text"`, `7`,
-                // `true`, `null` — is not a GraphQL response of any shape, and `TryGetProperty` on
-                // anything but an object THROWS `InvalidOperationException` rather than answering `false`.
-                // This guard must run BEFORE the `errors` read below, which is otherwise the one call in
-                // this function that sits outside the `try/with` a few lines down — an unhandled crash on
-                // exactly the input this function exists to fail closed on. `Budget.readMeter` guards this
-                // identical case for the identical reason (`.github#2418`/PR #2419); this mirrors that
-                // proven shape rather than inventing a new one.
-                if root.ValueKind <> JsonValueKind.Object then
+                // FAILS CLOSED (#2456/#2477): a null `issueOrPullRequest` (not found, wrong type, or not
+                // visible to this token), a response with no `userContentEdits`, or a `totalCount` that is
+                // not a number are each a STRUCTURAL failure caught below as `Malformed` — an ERROR, never
+                // `Ok { Total = 0; Edits = [] }`. `.github#2456` exists precisely because a REST-timeline
+                // "no edits found" is `NOT_MEASURED`, not a negative result; degrading an unreadable
+                // GraphQL response into an empty connection here would silently manufacture that exact
+                // false negative through the "authoritative" path instead.
+                try
+                    let editsNode =
+                        data
+                            .GetProperty("repository")
+                            .GetProperty("issueOrPullRequest")
+                            .GetProperty("userContentEdits")
+
+                    let total = editsNode.GetProperty("totalCount").GetInt32()
+
+                    let edits =
+                        editsNode.GetProperty("nodes").EnumerateArray()
+                        |> Seq.choose (fun n ->
+                            match n.TryGetProperty "editedAt" with
+                            | true, v when v.ValueKind = JsonValueKind.String ->
+                                match DateTimeOffset.TryParse(v.GetString()) with
+                                | true, editedAt ->
+                                    let login =
+                                        match n.TryGetProperty "editor" with
+                                        | true, ed when ed.ValueKind = JsonValueKind.Object -> str ed "login"
+                                        | _ -> None
+
+                                    Some { EditedAt = editedAt; EditorLogin = login }
+                                | _ -> None
+                            | _ -> None)
+                        |> List.ofSeq
+
+                    Ok { Total = total; Edits = edits }
+                with
+                | :? System.Collections.Generic.KeyNotFoundException
+                | :? System.NullReferenceException
+                // Same present-but-null case `subIssues` (#2365) and `recentCommentBodies` guard: a
+                // `null` `data.repository` (or `.issueOrPullRequest`, or `.userContentEdits`) throws
+                // `InvalidOperationException` from `GetProperty`, not `NullReferenceException`.
+                | :? System.InvalidOperationException ->
                     Error(
                         Malformed(
                             subject,
-                            $"the content-edit response is not a JSON object (%A{root.ValueKind}) — a GraphQL response is always `{{...}}`, so this is a FAILED READ, never zero edits"
+                            "the content-edit response is missing `repository.issueOrPullRequest.userContentEdits` — a null or absent node here is a FAILED READ, never zero edits"
                         )
                     )
-                else
-
-                // THE ORDER IS THE CONTRACT (`Board.graphQlData`): GitHub reports an exhausted GraphQL
-                // budget, and any other partial failure, as an HTTP 200 carrying `errors` — exactly like a
-                // genuinely partial response. `errors` is read BEFORE `data` is trusted, never reached as
-                // a fallback once extraction below fails, so a rate limit is reported AS a rate limit and
-                // not folded into the generic "malformed" arm.
-                let errors =
-                    match root.TryGetProperty "errors" with
-                    | true, e when e.ValueKind = JsonValueKind.Array && e.GetArrayLength() > 0 -> Some e
-                    | _ -> None
-
-                match errors with
-                | Some e ->
-                    let messages =
-                        e.EnumerateArray()
-                        |> Seq.map (fun err ->
-                            match err.TryGetProperty "message" with
-                            | true, m when m.ValueKind = JsonValueKind.String -> m.GetString()
-                            | _ -> "(no message)")
-                        |> List.ofSeq
-
-                    match Budget.ofGraphQlErrors messages with
-                    | Some limited -> Error limited
-                    | None -> Error(GraphQlErrors messages)
-
-                | None ->
-                    // FAILS CLOSED (#2456/#2477): a null `issueOrPullRequest` (not found, wrong type, or
-                    // not visible to this token), a response with no `userContentEdits`, or a `totalCount`
-                    // that is not a number are each a STRUCTURAL failure caught below as `Malformed` — an
-                    // ERROR, never `Ok { Total = 0; Edits = [] }`. `.github#2456` exists precisely because
-                    // a REST-timeline "no edits found" is `NOT_MEASURED`, not a negative result; degrading
-                    // an unreadable GraphQL response into an empty connection here would silently
-                    // manufacture that exact false negative through the "authoritative" path instead.
-                    try
-                        let editsNode =
-                            root
-                                .GetProperty("data")
-                                .GetProperty("repository")
-                                .GetProperty("issueOrPullRequest")
-                                .GetProperty("userContentEdits")
-
-                        let total = editsNode.GetProperty("totalCount").GetInt32()
-
-                        let edits =
-                            editsNode.GetProperty("nodes").EnumerateArray()
-                            |> Seq.choose (fun n ->
-                                match n.TryGetProperty "editedAt" with
-                                | true, v when v.ValueKind = JsonValueKind.String ->
-                                    match DateTimeOffset.TryParse(v.GetString()) with
-                                    | true, editedAt ->
-                                        let login =
-                                            match n.TryGetProperty "editor" with
-                                            | true, ed when ed.ValueKind = JsonValueKind.Object -> str ed "login"
-                                            | _ -> None
-
-                                        Some { EditedAt = editedAt; EditorLogin = login }
-                                    | _ -> None
-                                | _ -> None)
-                            |> List.ofSeq
-
-                        Ok { Total = total; Edits = edits }
-                    with
-                    | :? System.Collections.Generic.KeyNotFoundException
-                    | :? System.NullReferenceException
-                    // Same present-but-null case `subIssues` (#2365) and `recentCommentBodies` guard: a
-                    // `null` `data.repository` (or `.issueOrPullRequest`, or `.userContentEdits`) throws
-                    // `InvalidOperationException` from `GetProperty`, not `NullReferenceException`.
-                    | :? System.InvalidOperationException ->
-                        Error(
-                            Malformed(
-                                subject,
-                                "the content-edit response is missing `repository.issueOrPullRequest.userContentEdits` — a null or absent node here is a FAILED READ, never zero edits"
-                            )
-                        )
 
     let prHeadRef (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
 
@@ -2537,10 +2566,24 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
+                // `Ok None` FROM HERE ON MEANS *MEASURED* NONE (`.github#2534`). It is reachable from
+                // exactly one place — an `closingIssuesReferences.nodes` array this read successfully
+                // enumerated and found EMPTY. Every other outcome is an `Error`.
+                //
+                // This is the sharpest of the three sites `.github#2534` repaired, and the reason is what
+                // the caller does with the answer: `verify-paths` reads `Ok None` as *"this PR implements
+                // no tracked item"* and prints `FSGG-PATHS SKIP … ExitGreen` (`Client.fs`), so a
+                // rate-limited or malformed response used to be laundered into a GREEN touch-set verdict
+                // on a PR nobody checked. `Reads.fsi` has always documented the correct contract —
+                // *"distinct from a failed read, which is an `Error`"* — and the implementation did not
+                // hold it.
+                match graphQlData subject doc.RootElement with
+                | Error e -> Error e
+                | Ok data ->
+
                 try
                     let nodes =
-                        doc.RootElement
-                            .GetProperty("data")
+                        data
                             .GetProperty("repository")
                             .GetProperty("pullRequest")
                             .GetProperty("closingIssuesReferences")
@@ -2569,16 +2612,31 @@ module Reads =
                                       Repo = parts.[1]
                                       Number = num }
                             )
-                        | _ -> Ok None
+                        // A NODE IS PRESENT AND UNREADABLE. The connection reported a closing reference
+                        // and we could not name it — the opposite of "it closes nothing", so it may not
+                        // borrow that answer's value.
+                        | _ ->
+                            Error(
+                                Malformed(
+                                    subject,
+                                    "a closing-issue reference is present but carries no readable `number`/`repository.nameWithOwner` — a reference we could not name is a FAILED READ, never 'this PR closes nothing'"
+                                )
+                            )
                 with
                 | :? System.Collections.Generic.KeyNotFoundException
                 | :? System.NullReferenceException
                 // Same present-but-null case as `recentCommentBodies` (.github#2365): a `null`
                 // `data.repository` (or `.pullRequest`) throws `InvalidOperationException` from
-                // `GetProperty`, not `NullReferenceException`. This read already treats an unreadable
-                // graph as `Ok None` (no closing ref found) rather than a hard refusal, so the null case
-                // joins that same fallback.
-                | :? System.InvalidOperationException -> Ok None
+                // `GetProperty`, not `NullReferenceException`. This arm used to answer `Ok None` for all
+                // three, which is what made an unreadable graph indistinguishable from a PR that genuinely
+                // closes no issue.
+                | :? System.InvalidOperationException ->
+                    Error(
+                        Malformed(
+                            subject,
+                            "the closing-refs response is missing `repository.pullRequest.closingIssuesReferences` — a null or absent node here is a FAILED READ, never 'this PR closes nothing'"
+                        )
+                    )
 
     // ---- the claim-scan candidate set --------------------------------------------------------------
 
