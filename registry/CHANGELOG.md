@@ -46,9 +46,21 @@ no gate behaviour changes — this is purely how humans record the log.
   succeeded at 02:24Z while `release-kit` [31658150062](https://github.com/FS-GG/.github/actions/runs/31658150062)
   **failed** at 01:34Z, and it was completed by a **re-run from that same commit**
   ([31675542589](https://github.com/FS-GG/.github/actions/runs/31675542589), success, 06:53Z; Kit 0.50.3
-  on the org feed 06:54:22Z). Same commit is what makes that a completion rather than a re-cut — the
-  `.github#2240` re-pack divergence that makes `0.50.1` permanent applies to publishing a *corrected*
-  tree under an already-used version, never to re-running an unchanged one. `0.50.4` published cleanly:
+  on the org feed 06:54:22Z). **Why that is a completion and not a `.github#2240` re-pack divergence —
+  and the reason is *not* "same commit".** #2240's discriminator is **re-packing**, not tree-correction:
+  it measured that two packs of an *identical, clean* checkout produce archives with different sha256,
+  and the unsafe remedies it names — re-push the tag, or "Re-run all jobs" — are both **unchanged-tree**
+  re-runs. Run `31675542589` was `workflow_dispatch`, attempt 1, so it did genuinely re-pack. What makes
+  it safe is that **there was no first archive to diverge from**: the 01:34Z run refused at the
+  sibling-tag precondition inside `Resolve version + publish decision` ("refusing to publish FS.GG.Kit
+  0.50.3: sibling tag drivers/v0.50.3 does not exist yet"), and its `Restore (locked)`, `Pack`, `Push to
+  org GitHub Packages feed` and `Push byte-identical package to nuget.org` steps are **all** recorded
+  `skipped`. Corroborated on the served bytes: Kit 0.50.3 is byte-identical across both feeds (40
+  non-signature, non-psmdcp entries compared, 0 differing, 0 feed-exclusive) **including `_rels/.rels`**,
+  one of exactly the two entries #2240 measured as divergent between two packs — so both feeds carry one
+  pack. **This is not licence to re-run a publish:** once an archive has reached a feed, #2240 stands
+  unamended and the only safe retry is "Re-run failed jobs", which skips `pack` and re-pushes the
+  original artifact. `0.50.4` published cleanly:
   runs [31680586145](https://github.com/FS-GG/.github/actions/runs/31680586145) (coord-engine),
   [31680585524](https://github.com/FS-GG/.github/actions/runs/31680585524) (kit),
   [31680586332](https://github.com/FS-GG/.github/actions/runs/31680586332) (drivers), all success, all at
