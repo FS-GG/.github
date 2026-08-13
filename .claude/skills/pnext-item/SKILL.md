@@ -219,8 +219,41 @@ Ensure the PR closes the item — with a bare `Closes #<n>` (same repo) or `owne
 and which then never closes the issue and cannot be repaired once merged (.github#2107). `verify-paths`,
 run right after opening the PR (§5), now catches this while it is still free to fix — do not wait for it
 to surface at `done`. Observe the host-acceptance marker for the current head, address confirmed
-actionable feedback, and wait on the typed `landable` verdict for the exact head SHA. Merge only green
-and verify the merge on the default branch.
+actionable feedback, and wait on the typed `landable` verdict for the exact head SHA.
+
+**Immediately after `landable` reports green for that exact head SHA, and immediately before the merge
+REST call below, make one LIVE call:**
+
+```bash
+scripts/fsgg-coord delivery <ref> --pr <pr> --json
+```
+
+No `--snapshot` — §5's own read uses a different, IO-free path that never reaches this write. This is what makes
+`Client.ensureAuthorization` PATCH the PR's `fsgg:pr-authorization` marker onto the head about to be
+merged (`.github#2488`); nothing else in this documented flow reaches that write, and a worker who skips
+this step reproduces the five-for-five pattern `.github#2488` measured — a merged `item/<n>-*` PR with no
+marker at all (`.github#2496`).
+
+- **Once per item, at this exact point — not after opening the PR, and not on every push.** A call made
+  earlier binds the marker to whatever head existed then; every later push re-stales it, and nothing
+  short of this step calls `delivery` again. Calling here binds it to the one head that matters: the head
+  that is actually about to merge, and the last one CI will ever evaluate `claim-generation` against.
+  Calling it here is also sufficient on its own — `rebindAuthorization` makes a call against an
+  already-current marker a zero-cost no-op PATCH-skip, so this is never a routine per-push network write.
+- **Only the worker currently holding this item's live claim marker may make this call, and only before
+  releasing that claim.** The live form itself refuses otherwise ("no live claim marker can authorize
+  delivery") — a fresh critic or a worker after `done --flip` released the claim cannot make it on your
+  behalf.
+- **It must run from your own credentialed shell — never CI.** The live path's first action is a
+  Coordination Projects-v2 board bootstrap (`Board.bootstrapCached`), a GraphQL read no CI credential in
+  this org's inventory carries (ADR-0019 §1, `.github#2332`); routing this call through CI is refuted by
+  that boundary, not merely undesirable.
+- **A failed call is reported, never silently swallowed — and never blocks the merge.** The write is the
+  only thing this call does; `claim-generation`'s conclusion stays advisory (excluded from `landable`'s
+  own rollup by name, `.github#2373`) until it is armed into branch protection, which nothing here does.
+  Note the failure (to whoever dispatched you, or in the item's own history) and proceed with the merge.
+
+Merge only green and verify the merge on the default branch.
 Then complete every package, deployment, generated-registry, and downstream obligation described in
 [merge-and-release](references/merge-and-release.md).
 For uncommon failure recovery, exact REST recipes, review-thread handling, and incident rationale,
