@@ -120,7 +120,31 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.50.6 — a PATCH-LINE cut that COMPLETES a coherent set that 0.50.5 could not
+    <PackageReleaseNotes>0.50.7 — a PATCH-LINE cut with NO ENGINE SOURCE CHANGE, published so the
+coordination kit can carry a corrected `pnext-item` skill body. The three packages resolve one scalar
+(`FsggCoherentSetVersion`, `Directory.Build.props`) by construction, so a kit-only content fix moves this
+package's version too. That is the coherent-set design (`.github#2402`), not an engine delta.
+
+THE ENGINE SOURCE IS BYTE-IDENTICAL TO 0.50.6, and this claim was measured rather than copied from the
+entry below: `git diff` over `src/FS.GG.Coord.Cli`, `src/FS.GG.Coord.Core` and `src/FS.GG.Coord.GitHub`
+between the `kit/v0.50.6` tag commit and this one is EMPTY. Only this property and the coherent-set
+scalar move.
+
+WHY IT COULD NOT RIDE 0.50.6 (`.github#2526`). Three places in this repository stated as current fact
+that `claim-generation` is advisory-only "until this job is genuinely armed into branch protection". It
+has been a REQUIRED status context on `main` since `.github#1858`, and `.github#2517` replaced
+`Landable.fs`'s hand-written `advisoryCheckNames` literal with the derived COMPLEMENT of the base
+branch's required contexts, so the engine's own rollup scores it `Blocking` as well. Those three prose
+claims were the last copies of the old answer, and one of them is packed into the kit as
+`pnext-item/SKILL.md`. No behaviour changed: no gate, workflow trigger, or engine path was edited.
+
+`kit-auto-publish` tags on merge to `main`, so `FS.GG.Kit 0.50.6` was cut and published from
+`.github#2512`'s merge commit minutes before this branch merged `origin/main`. The published 0.50.6 is
+byte-faithful to its tagged tree — the pack was correct — but that tree predates this fix, and its
+`SKILL.md` still contains "stays advisory in the engine's own rollup". Tags are immutable, so the
+corrected body cannot reach receivers under 0.50.6. This cut is how it does.
+
+0.50.6 — a PATCH-LINE cut that COMPLETES a coherent set that 0.50.5 could not
 complete, and that carries the engine changes which landed between 0.50.4 and the commit it is tagged at.
 
 DO NOT ADOPT 0.50.5. It is a permanent two-of-three set. `FS.GG.Kit 0.50.5` and `FS.GG.Drivers 0.50.5`

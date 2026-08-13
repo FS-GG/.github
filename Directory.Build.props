@@ -114,8 +114,22 @@
        it, and the gate first spoke at release time, which is after the irrevocable part. Both that
        filter and the checker's own PATHS_SUBJECT now name this file, and check-paths-coherence rule
        (c) plus tests/engine-release-notes/run.sh keep the two from drifting apart again. -->
+  <!-- 0.50.6 to 0.50.7 (.github#2526): same-line patch bump, the ordinary republish shape — same cause
+       as 0.50.3 to 0.50.4 and 0.50.4 to 0.50.5 above, NOT the two-of-three repair immediately above.
+       This PR edits pnext-item/SKILL.md, a kit-packed source, correcting three prose claims that call
+       `claim-generation` advisory-only when it has been a REQUIRED context since .github#1858. No
+       engine source change and no behaviour change of any kind (AC4).
+
+       WHY A NEW VERSION RATHER THAN RIDING 0.50.6. `kit-auto-publish` tags on merge to `main`, so
+       0.50.6 was cut and published from .github#2512's merge commit 8de950c3 minutes before this
+       branch merged `origin/main` — measured, not assumed: `git merge-base` in its ancestor-test form
+       exits 1 for 5daf9126 against `kit/v0.50.6^{}`, and SKILL.md at that tag hashes e86617534873ba74
+       and still contains
+       "stays advisory in the engine's own rollup". The published FS.GG.Kit 0.50.6 is byte-faithful to
+       its tagged tree; the tagged tree simply predates this fix. So the corrected skill body cannot
+       reach receivers under 0.50.6, and republishing 0.50.6 is impossible (immutable tags). -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.50.6</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.50.7</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
