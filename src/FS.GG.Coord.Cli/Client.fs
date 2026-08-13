@@ -574,6 +574,22 @@ module Client =
     [<Literal>]
     let private DeliveryRouteCommentWindow = 100
 
+    /// THE LATEST delivery-route receipt in a comment window — the one search, in one place.
+    ///
+    /// It was written out three times (scheduling, the claim/take mutation boundary, and
+    /// `delivery-route show`/`record`) and .github#2324 needed a fourth caller in `verifyPaths`. A rule
+    /// copied a fourth time is #485's shape arriving by addition rather than by drift, so the copies are
+    /// collapsed here first. Every caller still owns what it does with `None` — the three existing ones
+    /// deliberately differ (`Unreadable`/`Stale` vs. a raw IO error), and that judgement is theirs, not
+    /// this function's.
+    let private latestDeliveryRouteReceipt (comments: string list) : DeliveryRoute.Receipt option =
+        comments
+        |> List.rev
+        |> List.tryPick (fun comment ->
+            if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
+                DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
+            else None)
+
     /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
     /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
     /// unreadable, rather than collapsing into a missing/lightweight decision.
@@ -582,15 +598,7 @@ module Client =
               Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
         | Error error, _
         | _, Error error -> DeliveryRoute.Unreadable [ Errors.explain error ]
-        | Ok body, Ok comments ->
-            let receipt =
-                comments
-                |> List.rev
-                |> List.tryPick (fun comment ->
-                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
-                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
-                    else None)
-            decideDeliveryRoute target.Canonical body receipt
+        | Ok body, Ok comments -> decideDeliveryRoute target.Canonical body (latestDeliveryRouteReceipt comments)
 
     /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
     /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
@@ -601,15 +609,7 @@ module Client =
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->
-            let receipt =
-                comments
-                |> List.rev
-                |> List.tryPick (fun comment ->
-                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
-                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
-                    else None)
-
-            match decideDeliveryRoute target.Canonical body receipt with
+            match decideDeliveryRoute target.Canonical body (latestDeliveryRouteReceipt comments) with
             | DeliveryRoute.Current route -> Ok route
             | DeliveryRoute.Stale reasons
             | DeliveryRoute.Unreadable reasons ->
@@ -7777,6 +7777,48 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
     do generatedPathCollector <- generatedPaths
 
+    // ---- .github#2324: the sdd-required route's own mandatory output is subtracted against -------------
+
+    /// The package directories the item this PR implements is OBLIGED to produce, as `PathToken`s ready
+    /// for `TouchSet.covers` — or the EMPTY list, which subtracts nothing.
+    ///
+    /// `work/<workId>/` and `readiness/<workId>/` are mandatory output of the `sdd-required` route itself
+    /// (#2298 makes the CLAIMED WORKER author them), and nothing in filing, routing, or claiming ever puts
+    /// them in the item's `Paths:` — the paths cannot be named before the item exists, and nothing
+    /// revisits the declaration once they do. So `verify-paths` reported DRIFT on the behaviour the
+    /// protocol MANDATES, on every single `sdd-required` item, and each one paid a `widen` to silence it.
+    /// That is #498's lesson exactly — a signal that fires on the instruction it enforces is one workers
+    /// learn to skip past — reached through a second door. See `DeliveryRoute.mandatorySddPaths`' own doc
+    /// for why the remedy is an exemption rather than an auto-declaration, and for why declaring them
+    /// nonetheless stays legal (this is NOT ADR-0044's refusal).
+    ///
+    /// BOUND TO THIS ITEM'S OWN RECEIPT, never to `work/`/`readiness/` as roots: another item's package is
+    /// ordinary drift, and stays so.
+    ///
+    /// FAILS CLOSED, ALWAYS, AND SAYS SO. An unreadable comment window or a receipt that is not `Current`
+    /// yields the empty list — "I could not ask what this route obliges" and "this route obliges nothing"
+    /// are opposite facts (#266) — and the reason goes to stderr rather than being swallowed, for the same
+    /// reason `generatedPaths` forwards its child's stderr: a mute fail-closed leaves the right verdict and
+    /// removes the only pointer to its cause. It takes the body the caller ALREADY read, so this costs one
+    /// bounded GraphQL call and no second `issueBody`.
+    let private sddPackageTokens (ctx: Context) (issue: Ref) (body: string) : PathToken list =
+        let nothingSubtracted (why: string) =
+            eprint
+                $"fsgg-coord-engine: could not establish %s{issue.Short}'s delivery route (%s{why}) — NOTHING is subtracted for the sdd-required route's mandatory work/<id> + readiness/<id> output, so it will be reported as drift below."
+
+            []
+
+        match Reads.recentCommentBodies ctx.Transport issue.Owner issue.Repo issue.Number DeliveryRouteCommentWindow with
+        | Error e -> nothingSubtracted (Errors.explain e)
+        | Ok comments ->
+            match decideDeliveryRoute issue.Canonical body (latestDeliveryRouteReceipt comments) with
+            // A `lightweight` route reaches here too and answers the empty list from
+            // `mandatorySddPaths` — correctly, and SILENTLY: it has no mandatory package, so there is
+            // nothing we failed to read and nothing to warn about.
+            | DeliveryRoute.Current receipt -> DeliveryRoute.mandatorySddPaths receipt |> List.map TouchSet.classify
+            | DeliveryRoute.Stale reasons
+            | DeliveryRoute.Unreadable reasons -> nothingSubtracted (String.concat "; " reasons)
+
     // ---- verify-paths ----------------------------------------------------------------------------------
 
     /// Check a PR's changed files against the touch-set declared by the issue it implements.
@@ -8017,10 +8059,26 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // our stderr into the file it publishes). A gate that cries wolf on the happy path
                             // teaches one lesson — that its output is noise — and the next warning will be
                             // real (#698). With no drift there is nothing to subtract and nothing to say.
-                            let regenerated, undeclared =
+                            //
+                            // .github#2324 shares this guard and this reason. The route receipt read is a
+                            // bounded GraphQL call, and its own fail-closed diagnostic ("NOTHING is
+                            // subtracted … so it will be reported as drift below") is FALSE on a PR with no
+                            // drift — the same sentence in the same sticky comment on the same green PR.
+                            // Both subtractions therefore hang off one `List.isEmpty drift` gate rather
+                            // than two, so neither can be re-armed on the happy path by accident.
+                            let sddPackage, regenerated, undeclared =
                                 if List.isEmpty drift then
-                                    [], []
+                                    [], [], []
                                 else
+
+                                // SUBTRACTED FIRST, and the order is not arbitrary: an SDD package file is
+                                // never a generated, CI-gated artifact, so the two sets are disjoint in
+                                // practice — but partitioning the sdd bucket out first means a file can
+                                // only ever land in ONE reported bucket, and a reader is never asked to
+                                // reconcile the same path appearing twice under two different reasons.
+                                let sddPackage, rest =
+                                    let tokens = sddPackageTokens ctx issue body
+                                    drift |> List.partition (fun f -> tokens |> List.exists (fun t -> TouchSet.covers t f))
 
                                 let subtractable =
                                     let checkoutIsSubject =
@@ -8036,7 +8094,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         | Some root -> generatedPaths root
                                         | None -> Set.empty
 
-                                drift |> List.partition (fun f -> Set.contains f subtractable)
+                                let regenerated, undeclared =
+                                    rest |> List.partition (fun f -> Set.contains f subtractable)
+
+                                sddPackage, regenerated, undeclared
 
                             // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
                             // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
@@ -8061,9 +8122,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     for f in regenerated do
                                         printfn "    %s" f
 
+                            // .github#2324 — REPORTED, NEVER SILENTLY SUBTRACTED, and on BOTH verdicts for
+                            // the same reason `regenerated` is: an invisible subtraction is indistinguishable
+                            // from a gate that stopped looking. Naming the bucket and its reason is what lets
+                            // a reviewer check the exemption instead of trusting it.
+                            let reportSddPackage () =
+                                if not (List.isEmpty sddPackage) then
+                                    printfn
+                                        "  sdd package (expected) — mandatory output of %s's sdd-required delivery route, so not required in Paths: (.github#2324):"
+                                        issue.Short
+
+                                    for f in sddPackage do
+                                        printfn "    %s" f
+
                             if List.isEmpty undeclared then
                                 printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
                                 reportRegenerated ()
+                                reportSddPackage ()
                                 combine ExitGreen
                             else
                                 printfn "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:" pr issue.Short
@@ -8074,6 +8149,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     printfn "    %s" f
 
                                 reportRegenerated ()
+                                reportSddPackage ()
                                 eprint "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
                                 combine (if opts.Warn then ExitGreen else ExitRed)
 
@@ -9765,18 +9841,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->
-            let receipt =
-                comments
-                |> List.rev
-                |> List.tryPick (fun comment ->
-                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
-                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
-                    else None)
             // The reported `subjectRevision` is the RECEIPT'S OWN stored value, not a freshly recomputed
             // one: `Current` means it already equals whichever candidate (`deliveryRouteRevision` or, for
             // a pre-#2392 receipt, `legacyDeliveryRouteRevision`) `decideDeliveryRoute` matched it
             // against, so printing it back is exact either way and needs no second branch here.
-            match decideDeliveryRoute target.Canonical body receipt with
+            match decideDeliveryRoute target.Canonical body (latestDeliveryRouteReceipt comments) with
             | DeliveryRoute.Current valid -> Ok(valid, valid.SubjectRevision)
             | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
             | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
