@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2549-review-state-vocabulary/spec.md
-    digest: b044a60d8060e65e59eb52c973607282f3d10daff3264e8f65ff63349b727937
+    digest: 998b27a2f483396261843e5a6d8c4cf63c862e373a13274479d38ce3aa78c3cb
     schemaVersion: 1
   - label: clarifications
     path: work/2549-review-state-vocabulary/clarifications.md
-    digest: b8b3654ffedae199d03b834a0096a22830e4cb5fe68279f3c6f48afff6fd5479
+    digest: 6159ff19d657544a9f825ff180837940e7a2367c041f67e049bc1fbb1de33371
     schemaVersion: 1
   - label: checklist
     path: work/2549-review-state-vocabulary/checklist.md
-    digest: e3b69f29356d3a5991f43a01390eaf70a9a67a319dc96cce7c4a4665195d4353
+    digest: 47aff7f0efee3d7383e37e0c78d5601b019e08c82fd9a15ba5bd785edb2d8ba7
     schemaVersion: 1
   - label: plan
     path: work/2549-review-state-vocabulary/plan.md
-    digest: d14b77f6d571c72240f135d03d571e31e04a1eaefca35c1aa1c54fd5145ca47d
+    digest: 6df721ca585fe60db82c8640b5e16b9e32d5ab1018ee4c9de0e9f02e2b95cd79
     schemaVersion: 1
 tasks:
   - id: T001
@@ -45,7 +45,7 @@ tasks:
     dependencies: []
     requirements: [FR-002]
     decisions: []
-    sourceIds: [AC-001, AC-002, AC-005, FR-002, PD-002]
+    sourceIds: [AC-001, AC-002, AC-005, AC-017, FR-002, PD-002]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV002]
   - id: T003
@@ -95,7 +95,7 @@ tasks:
     dependencies: []
     requirements: [FR-007]
     decisions: []
-    sourceIds: [AC-014, FR-007, PD-008, PD-010]
+    sourceIds: [AC-014, AC-018, FR-007, PD-008, PD-010]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV007]
   - id: T008
@@ -268,6 +268,36 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV024]
+  - id: T025
+    title: Implement clarification decision DEC-006
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-006]
+    sourceIds: [DEC-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV025]
+  - id: T026
+    title: Implement clarification decision DEC-007
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-007]
+    sourceIds: [DEC-007]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV026]
+  - id: T028
+    title: Implement plan decision PD-009
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-015, AC-018, FR-008, PD-009]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV028]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

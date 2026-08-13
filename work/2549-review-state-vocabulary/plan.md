@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2549-review-state-vocabulary/spec.md sha256:b044a60d8060e65e59eb52c973607282f3d10daff3264e8f65ff63349b727937 schemaVersion:1
-- clarifications: work/2549-review-state-vocabulary/clarifications.md sha256:b8b3654ffedae199d03b834a0096a22830e4cb5fe68279f3c6f48afff6fd5479 schemaVersion:1
-- checklist: work/2549-review-state-vocabulary/checklist.md sha256:e3b69f29356d3a5991f43a01390eaf70a9a67a319dc96cce7c4a4665195d4353 schemaVersion:1
+- spec: work/2549-review-state-vocabulary/spec.md sha256:998b27a2f483396261843e5a6d8c4cf63c862e373a13274479d38ce3aa78c3cb schemaVersion:1
+- clarifications: work/2549-review-state-vocabulary/clarifications.md sha256:6159ff19d657544a9f825ff180837940e7a2367c041f67e049bc1fbb1de33371 schemaVersion:1
+- checklist: work/2549-review-state-vocabulary/checklist.md sha256:47aff7f0efee3d7383e37e0c78d5601b019e08c82fd9a15ba5bd785edb2d8ba7 schemaVersion:1
 
 ## Plan Scope
 - Work item 2549-review-state-vocabulary is planned from the current specification, clarification, and checklist facts.
@@ -38,13 +38,13 @@ Prose status: planned
   a CI run, and `acceptanceOutcome` is only ever reached when an acceptance marker is present, so
   tagging it structural cannot change any state this row introduces.
 
-- PD-002 [AC-001] [AC-002] [AC-005] [FR-002] complete: `Review.acceptanceOutcome` classifies on
+- PD-002 [AC-001] [AC-002] [AC-005] [AC-017] [FR-002] complete: `Review.acceptanceOutcome` classifies on
   `Driver.validateReviewChainStructure` instead of `validateReviewChain`. Its accepting arm — structural
   errors empty, critic identity present, `chain.HeadSha = Some binding.HeadSha` — now branches on
   `facts.Checks` rather than assuming green: `PrGreen` keeps today's `Accepted`/`Accept receipt`;
-  `PrPending`/`PrUnknown` give `AcceptedAwaitingChecks checks` with `AuthorizeDelivery`;
-  `PrRed`/`PrConflicted` give `AcceptedAwaitingChecks checks` with `ResumeImplementer`;
-  `PrMerged`/`PrClosed` give `AcceptedAwaitingChecks checks` with `Park`. The match on `PrState` is
+  `PrPending` gives `AcceptedAwaitingChecks checks` with `AuthorizeDelivery`;
+  `PrRed`/`PrConflicted` give it with `ResumeImplementer`; `PrUnknown` gives it with `Park` naming the
+  no-verdict (clarifications DEC-006); `PrMerged`/`PrClosed` give it with `Park`. The match on `PrState` is
   exhaustive with no wildcard, so a future `PrState` case cannot silently fall into a wrong arm.
 
 - PD-003 [AC-004] [FR-003] complete: `DriverTests.fs` gains a leg constructing a `ReviewChain` that
@@ -87,7 +87,7 @@ Prose status: planned
   classification. `Client.fs` only reads fields off this record, so adding one is source-compatible
   there; the record is constructed in exactly one place, `Driver.reviewPhaseFacts`.
 
-- PD-008 [AC-014] [FR-007] complete: `ReviewApplication.fs` gains `stateName` `"acceptedAwaitingChecks"`,
+- PD-008 [AC-014] [AC-018] [FR-007] complete: `ReviewApplication.fs` gains `stateName` `"acceptedAwaitingChecks"`,
   an `actionName` `"authorizeDelivery"`, a `stateReason` arm naming the live check word, an
   `actionReason` arm for `AuthorizeDelivery`, and an additive `repairAssertionGranted` reader modelled
   byte-for-byte on `criticSuccessionGranted` (absent key parses as `None`, a non-object is an
@@ -96,16 +96,17 @@ Prose status: planned
   carry no wildcard arm and `FS.GG.Coord.Cli.fsproj` sets `TreatWarningsAsErrors`, so omitting either
   arm is a build error, not a silent `null`.
 
-- PD-009 [AC-015] [FR-008] complete: All executable coverage lands in `tests/FS.GG.Coord.Core.Tests`
-  (`ReviewTests.fs`, `DriverTests.fs`), which is wired into CI already. The two natural additional homes
-  were BOTH refused by live claims and this is recorded rather than worked around:
-  `.github/workflows/coord-engine.yml` collides with `.github#2537` (worker `avocet-7275`) and
-  `tests/FS.GG.Coord.Cli.Tests` collides with `.github#2544` (worker `curlew-84dc`), each measured by
-  `scripts/fsgg-coord widen … --json` returning `verdict: overlap` with the declaration left unchanged.
-  Consequently NO new `tests/<suite>/run.sh` fixture is created: an unwired fixture is a gate CI never
-  runs, which is the `#266` defect. The CLI wire rendering is instead evidenced by a recorded
-  measurement against the engine built from the candidate head, reported in the pull request, and by the
-  compiler-enforced exhaustiveness of the rendering match described above.
+- PD-009 [AC-015] [AC-018] [FR-008] complete: Engine coverage lands in `tests/FS.GG.Coord.Core.Tests`
+  (`ReviewTests.fs`, `DriverTests.fs`) and CLI WIRE coverage in
+  `tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs`, appended to that file's existing `#2175`
+  module and reusing its `runSnapshot`/`snapshotJson` helpers rather than minting a second harness.
+  Both projects are ALREADY wired into `coord-engine.yml`, so no new `tests/<suite>/run.sh` is created
+  and `.github/workflows/coord-engine.yml` is not touched — which matters, because at repair time that
+  file was held by a live claim (`.github#2563`), measured by `widen … --json` returning
+  `verdict: overlap` with the declaration left unchanged. The CLI file is declared as TWO SINGLE-FILE
+  tokens rather than the directory, which is what makes it disjoint from `#2563`'s own
+  `DeliveryApplicationTests.fs` hold — the narrowing lesson `.github#2549`'s round-1 review drew from
+  `#2544`.
 
 - PD-010 [FR-007] complete: `independent-review.md` is edited once and the byte-identical `.agents`
   mirror updated to match. The new subsection states: the designed post-acceptance §6 window and its new
@@ -169,9 +170,8 @@ No performance intent is declared for this work item.
 ## Accepted Deferrals
 - DEF-001 [PD-005]: The live `review <ref> --pr N` path passes `None` for the repair-assertion grant,
   per clarifications DEC-002. Criterion 3's route is reachable through `review --snapshot`.
-- DEF-002 [PD-009]: CLI-level unit coverage of the wire rendering is deferred to whichever item next
-  holds `tests/FS.GG.Coord.Cli.Tests`; the overlap that forces this is recorded in the coverage decision above with the
-  colliding claim and worker.
+- DEF-002: WITHDRAWN by clarifications DEC-007. CLI-level coverage of the wire rendering is no longer
+  deferred; it ships in `tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs`.
 
 ## Planning Findings
 No blocking planning findings recorded.

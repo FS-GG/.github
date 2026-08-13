@@ -619,8 +619,9 @@ The state carries the pull request's live check word, and the action tells you w
 
 | checks | action | what it means |
 |---|---|---|
-| `pending`, `unknown` | `authorizeDelivery` | **Every ordinary landing passes through here.** Make the one live `scripts/fsgg-coord delivery <ref> --pr <n>` call §6 places directly after acceptance. By `.github#2504` the required `claim-generation` context cannot report until that call PATCHes the authorization marker onto this head, so waiting for green *first* is a cycle the marker can never break. |
+| `pending` | `authorizeDelivery` | **Every ordinary landing passes through here.** Make the one live `scripts/fsgg-coord delivery <ref> --pr <n>` call §6 places directly after acceptance. By `.github#2504` the required `claim-generation` context cannot report until that call PATCHes the authorization marker onto this head, so waiting for green *first* is a cycle the marker can never break. |
 | `red`, `conflicted` | `resumeImplementer` | The change is failing CI. That is a defect in the change, not in the review evidence — do not restart the chain. |
+| `unknown` | `park` | The check state could not be READ. Deliberately not grouped with `pending`: `Landable.settled` scores `unknown` with `conflicted` because waiting cannot improve it, `Client` maps it to `ExitNoVerdict`, and a multi-page runs list degrades to it deterministically. Establish the real check state first — it is a no-verdict on the checks, not a wait, and not a finding against the change. |
 | `merged`, `closed` | `park` | The pull request is no longer open; no routine review action remains. |
 
 Never reach for close-and-reopen from `acceptedAwaitingChecks`. Nothing about the evidence is wrong.

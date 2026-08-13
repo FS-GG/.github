@@ -361,8 +361,34 @@ module Review =
                 // should do about "not reported yet" and "reported red" are opposites.
                 match facts.Checks with
                 | PrGreen -> Accepted, Accept receipt
-                | PrPending
+                // `PrUnknown` is DELIBERATELY NOT GROUPED WITH `PrPending` (.github#2549 round-1 M1), and
+                // the reason is this repository's own settled convention in three places rather than a
+                // preference. `Landable.settled` scores `PrUnknown` alongside `PrConflicted` as SETTLED —
+                // waiting cannot improve it — and explicitly not alongside `PrPending`, "the one verdict
+                // worth waiting on". `Client.fs` maps it to `ExitNoVerdict`. And `Reads.fsi` records this
+                // exact defect ALREADY FIXED ONCE: an unresolvable state used to be answered `PrPending`,
+                // "the one verdict the exit contract defines as worth retrying, for a state that can never
+                // change".
+                //
+                // It is not hypothetical here either. `Reads.fsi` degrades a multi-page runs list to
+                // `PrUnknown` deterministically, so on a genuinely red pull request whose runs paginate,
+                // grouping it with `PrPending` would tell the host to publish an authorization for a change
+                // CI is failing, and never route to the implementer who owes the fix.
+                //
+                // It is not `ResumeImplementer` either: "the checks could not be read" is not evidence the
+                // change is broken, and sending the implementer to fix an unnamed failure invents a fact in
+                // the other direction. So it parks — a no-verdict on the CHECKS, over a chain whose evidence
+                // is complete. An item whose whole subject is that an unreadable fact must not take a
+                // reassuring path cannot make that mistake in its own new state.
                 | PrUnknown ->
+                    AcceptedAwaitingChecks facts.Checks,
+                    Park(
+                        "the review chain is complete and accepted at this head, but the pull request's "
+                        + "check state could not be read; that is a no-verdict on the checks, not a wait "
+                        + "and not a finding against the change, so a host must establish the real check "
+                        + "state before either the delivery call or a repair round"
+                    )
+                | PrPending ->
                     AcceptedAwaitingChecks facts.Checks,
                     AuthorizeDelivery(
                         "the review chain is complete and accepted at this head; make the one live "

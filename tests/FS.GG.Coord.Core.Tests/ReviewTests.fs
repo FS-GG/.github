@@ -693,17 +693,66 @@ module ReviewTests =
             | other -> failwithf "expected MalformedEvidence, got %A" other
         | Error e -> failwithf "%A" e
 
+    /// THE ARM IS UNCHANGED; ITS REACHABILITY IS NOT — and the first draft of this file claimed
+    /// otherwise (.github#2549 round-1 M3). At GREEN checks this is byte-for-byte the pre-change
+    /// behaviour, which the leg below pins. At a NON-GREEN check state it is not: before the
+    /// structural/liveness split, `validateReviewChain` returned `["review checks are not green"]`, that
+    /// list was non-empty, and the head-mismatch arm was never reached — the chain reported the checks
+    /// message instead. So the honest statement is that the arm's reason and shape are untouched and it
+    /// is now REACHABLE where the liveness clause previously masked it.
+    ///
+    /// The direction is benign and toward `.github#2487`'s own remedy: a chain bound to the wrong head
+    /// now says so at every check state instead of only at green. `.github#2487` still owns the arm, and
+    /// this row does not rewrite it.
     [<Fact>]
-    let ``#2549 an acceptance bound to a different head is STILL malformed evidence (.github#2487 untouched)`` () =
-        // Deliberately unchanged by this row: `.github#2487` is the same family in the opposite
-        // direction and owns this arm. If a later change makes this pass differently, that must be a
-        // decision, not a side effect.
-        match inspect (binding Ordinary 1 "head2" "impl") (facts acceptedChain PrPending None true) None None with
+    let ``#2549 an acceptance bound to a different head is malformed evidence at GREEN checks, byte-for-byte`` () =
+        match inspect (binding Ordinary 1 "head2" "impl") (facts acceptedChain PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | MalformedEvidence [ reason ] ->
                 Assert.Equal("the accepted review chain is bound to a different head than the current commit", reason)
             | other -> failwithf "expected the single head-mismatch MalformedEvidence, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 the head-mismatch arm is now REACHABLE at pending, where the liveness clause masked it`` () =
+        match inspect (binding Ordinary 1 "head2" "impl") (facts acceptedChain PrPending None true) None None with
+        | Ok v ->
+            match v.State with
+            | MalformedEvidence [ reason ] ->
+                // Pre-change this was `["review checks are not green"]`. The reason string itself is
+                // untouched; what changed is that the reader now learns the thing that actually matters.
+                Assert.Equal("the accepted review chain is bound to a different head than the current commit", reason)
+            | other -> failwithf "expected the single head-mismatch MalformedEvidence, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 an UNREADABLE check state parks rather than authorizing delivery`` () =
+        // .github#2549 round-1 M1. `PrUnknown` is not a wait: `Landable.settled` scores it with
+        // `PrConflicted`, `Client` maps it to `ExitNoVerdict`, and `Reads.fsi` degrades a multi-page
+        // runs list to it deterministically. Grouping it with `PrPending` told the host to publish an
+        // authorization for a change whose checks nobody had read.
+        match inspect (binding Ordinary 1 "head1" "impl") (facts acceptedChain PrUnknown None true) None None with
+        | Ok v ->
+            Assert.Equal(AcceptedAwaitingChecks PrUnknown, v.State)
+            match v.NextAction with
+            | Park reason ->
+                Assert.Contains("could not be read", reason)
+                Assert.Contains("no-verdict", reason)
+            | AuthorizeDelivery _ ->
+                failwith "GATE INVERSION: an unreadable check state took the reassuring path — the exact defect this item exists to remove, reproduced inside its own new state"
+            | other -> failwithf "expected Park, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 an unreadable check state is not a finding against the change either`` () =
+        // The opposite over-reading: "the checks could not be read" is not evidence the tree is broken,
+        // so it must not route to the implementer with an unnamed failure to chase.
+        match inspect (binding Ordinary 1 "head1" "impl") (facts acceptedChain PrUnknown None true) None None with
+        | Ok v ->
+            match v.NextAction with
+            | ResumeImplementer _ -> failwith "an unreadable check state invented a defect in the change"
+            | _ -> ()
         | Error e -> failwithf "%A" e
 
     // ---- .github#2549: a repair whose subject is a PR comment rather than the tree -----------------

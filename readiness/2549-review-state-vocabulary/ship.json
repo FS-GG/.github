@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "d53a55710063bcb034927b125e38cddb8c8050cb7cf471895303b66618015504"
+        "value": "ba2341d3dbd86ec574a4e9d764f9f480aa05ad1268b995b0ec8c6e9923080092"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "source",
       "digest": {
         "algorithm": "sha256",
-        "value": "0d6a6730faf9cf79e5ffdf30ec6b2d3e7bdee50b8038b024e1e377c7819ca5ee"
+        "value": "263299347fd77571b67bf164b8955e4089e5cd7a649b6bff755690865ce758b0"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "693f4042bc94cb2d80207aabf33b02c37f1c4d7ebadab3f465f8285585d6fe33"
+        "value": "0435a97086d283a563428b31369a3a2cef1272fbfba39148f6898875743f5836"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "e3b69f29356d3a5991f43a01390eaf70a9a67a319dc96cce7c4a4665195d4353"
+        "value": "47aff7f0efee3d7383e37e0c78d5601b019e08c82fd9a15ba5bd785edb2d8ba7"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "b8b3654ffedae199d03b834a0096a22830e4cb5fe68279f3c6f48afff6fd5479"
+        "value": "6159ff19d657544a9f825ff180837940e7a2367c041f67e049bc1fbb1de33371"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "803d10e0f363d16459500644c065e0b1543c1d03eb6cbed1b88be0635674cc39"
+        "value": "69ce4c16a751a7e684201daba7ee468b396a8a29ba5e7c4c41cf27e2568edba2"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "d14b77f6d571c72240f135d03d571e31e04a1eaefca35c1aa1c54fd5145ca47d"
+        "value": "6df721ca585fe60db82c8640b5e16b9e32d5ab1018ee4c9de0e9f02e2b95cd79"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "b044a60d8060e65e59eb52c973607282f3d10daff3264e8f65ff63349b727937"
+        "value": "998b27a2f483396261843e5a6d8c4cf63c862e373a13274479d38ce3aa78c3cb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -121,7 +121,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "656add840c3dc4cf60ec202e834678d923b8cabbde4ec2ebb63b7a6f58e91819"
+        "value": "772796d2d9f6a3c0c89ebb6d5fb7447407018c89da2caec3d6809cd07dfc6aa8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -167,9 +167,9 @@
   "verificationReadiness": {
     "status": "verificationReady",
     "blockingFindingIds": [],
-    "evidenceSupportedCount": 24,
+    "evidenceSupportedCount": 27,
     "evidenceSelfAttestedCount": 0,
-    "evidenceObservedCount": 24,
+    "evidenceObservedCount": 27,
     "evidenceDeferredCount": 0,
     "evidenceMissingCount": 0,
     "evidenceStaleCount": 0,
@@ -364,6 +364,30 @@
     {
       "id": "ED-EV024",
       "obligationId": "EV024",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV025",
+      "obligationId": "EV025",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV026",
+      "obligationId": "EV026",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV028",
+      "obligationId": "EV028",
       "state": "supported",
       "observed": true,
       "severity": "ready",

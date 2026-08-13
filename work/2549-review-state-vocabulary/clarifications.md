@@ -90,9 +90,45 @@ publicOrToolFacingImpact: true
   failing CI run does not make durable review evidence malformed — reporting it as `malformedEvidence`
   is the identical category error this row exists to remove, merely less common. So the state is
   `AcceptedAwaitingChecks` carrying the live `PrState`, and the action differentiates: `AuthorizeDelivery`
-  for pending/unknown (the §6 call is what unblocks them), `ResumeImplementer` for red/conflicted (the
-  implementer genuinely owes a fix), and `Park` for merged/closed (nothing routine remains). This keeps
-  ONE new state rather than three, and makes the check state itself the payload a consumer reads.
+  for pending (the §6 call is what unblocks it), `ResumeImplementer` for red/conflicted (the implementer
+  genuinely owes a fix), `Park` for an unreadable state (DEC-006), and `Park` for merged/closed (nothing
+  routine remains). This keeps ONE new state rather than four, and makes the check state itself the
+  payload a consumer reads.
+
+  **SUPERSEDED IN PART BY DEC-006.** As first authored this decision put `PrUnknown` in the
+  `AuthorizeDelivery` arm alongside `PrPending`. That was wrong, and round-1 review measured it as a
+  surviving inversion — moving `PrUnknown` to the red arm left the whole suite green, because no test
+  constructed it.
+
+- DEC-006: **An UNREADABLE check state (`PrUnknown`) parks; it belongs with neither the pending arm nor
+  the red one.** Three settled conventions in this repository say so, and none of them is a preference:
+  `Landable.settled` scores `PrUnknown` alongside `PrConflicted` as SETTLED — waiting cannot improve it —
+  and explicitly not alongside `PrPending`, "the one verdict worth waiting on"; `Client` maps it to
+  `ExitNoVerdict`; and `Reads.fsi` records this exact defect ALREADY FIXED ONCE, an unresolvable state
+  answered as `PrPending`, "the one verdict the exit contract defines as worth retrying, for a state
+  that can never change".
+
+  It is not hypothetical: `Reads.fsi` degrades a multi-page runs list to `PrUnknown` deterministically,
+  so on a genuinely red pull request whose runs paginate, the pending grouping would have told the host
+  to publish an authorization for a change CI was failing, and never routed to the implementer who owed
+  the fix. `settled PrUnknown = true` means no retry absorbs it.
+
+  It is not `ResumeImplementer` either: "the checks could not be read" is not evidence the tree is
+  broken, and sending an implementer after an unnamed failure invents a fact in the other direction. So
+  the action is `Park` with a reason naming the no-verdict. An item whose entire subject is that an
+  unreadable fact must not take a reassuring path cannot reproduce that mistake inside its own new
+  state.
+
+- DEC-007: **The CLI wire is covered by xunit in `ReviewApplicationTests.fs`, not by a new shell
+  fixture.** The first draft recorded the gap and justified it by two live claims. Only one of those
+  survived checking — `.github#2544` had closed 9m29s before this PR was opened, and its `Paths:`
+  declared a single FILE, so a narrower token would never have collided. The remedy is therefore
+  coverage, not a better excuse. A shell fixture was rejected in favour of the existing xunit file
+  because `tests/FS.GG.Coord.Cli.Tests` is ALREADY wired into `coord-engine.yml`, so the coverage lands
+  CI-gated without touching `.github/workflows/coord-engine.yml` — which at the time of this repair was
+  itself held by a live claim (`.github#2563`). Compiler exhaustiveness plus `TreatWarningsAsErrors` was
+  the original argument and does not reach: an exhaustive `match` proves every case has an arm and
+  proves nothing about JSON key names, the absent-key path, or the refusal of a malformed value.
 
 - DEC-005: **The structural/liveness split is made at the source, not by matching message strings.**
   `Driver.validateReviewChain`'s nine clauses become one list of `(isStructural, message)` pairs;

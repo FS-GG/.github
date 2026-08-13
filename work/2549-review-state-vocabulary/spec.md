@@ -85,8 +85,9 @@ merge before or after this change. What is wrong is what the inspect verb **name
   `fsgg.coord.review/1` wire.
 - SB-007: `independent-review.md` (both kit-mirrored copies) states the post-acceptance §6 window, the
   new state word, and the repair-assertion grant with its guard conditions.
-- SB-008: One hermetic wire fixture under `tests/review-state-vocabulary` driving the COMPILED engine
-  over both new states, plus recorded gate-inversion evidence for every new leg.
+- SB-008: Wire coverage of the CLI boundary in `tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs`,
+  driving `Options.parse` + `ReviewApplication.run` over a real `--snapshot FILE` and asserting on raw
+  JSON text, plus recorded gate-inversion evidence for every new leg.
 
 ## Non-Goals
 
@@ -162,9 +163,12 @@ This row therefore leaves that arm byte-for-byte as it found it, and AC-006 pins
   the state is `AcceptedAwaitingChecks PrRed` and the action is `ResumeImplementer` whose reason names
   the failing checks — not `MalformedEvidence`, because red CI is not broken evidence.
 - AC-006 [US-002] [FR-004]: Given an accepted chain whose `reviewed-head` differs from
-  `Binding.HeadSha`, when `Review.inspect` runs, then the state is `MalformedEvidence [ "the accepted
-  review chain is bound to a different head than the current commit" ]` and the action is `Park` —
-  byte-for-byte as before this change, leaving `.github#2487`'s arm untouched.
+  `Binding.HeadSha` and GREEN checks, when `Review.inspect` runs, then the state is
+  `MalformedEvidence [ "the accepted review chain is bound to a different head than the current commit" ]`
+  and the action is `Park` — byte-for-byte as before this change. At a NON-GREEN check state the arm's
+  reason and shape are likewise untouched, but it is now REACHABLE where the liveness clause previously
+  masked it with `["review checks are not green"]`; that direction is toward `.github#2487`'s own
+  remedy and `.github#2487` still owns the arm.
 - AC-007 [US-003] [FR-005]: Given a chain whose latest verdict is `changes-required` at a
   `reviewed-head` equal to `Binding.HeadSha`, and a `RepairAssertionReceipt` whose `CandidateHeadSha`
   equals that head, whose `AnsweredReviewUrl` equals the latest review comment's URL, and whose
@@ -197,16 +201,26 @@ This row therefore leaves that arm byte-for-byte as it found it, and AC-006 pins
   is weakened (any one conjunct dropped), the corresponding refusal leg reds.
 - AC-016 [FR-009]: Given the merged diff, when its file list is read, then it contains no
   `src/FS.GG.Coord.Core/Landable.fs` and no `Protocol.fs`/`Protocol.fsi` path.
+- AC-017 [US-002] [FR-002]: Given an accepted chain bound to the current head and `checks: unknown`,
+  when `Review.inspect` runs, then the state is `AcceptedAwaitingChecks PrUnknown` and the action is
+  `Park` naming the unreadable check state — never `AuthorizeDelivery` (which would publish an
+  authorization for a change nobody has scored) and never `ResumeImplementer` (which would invent a
+  defect in the change).
+- AC-018 [US-005] [FR-007]: Given each of AC-001, AC-005, AC-007 and AC-017's inputs, when
+  `review --snapshot … --json` runs through the real CLI entrypoint, then the payload's JSON key names,
+  state word, action word and `stateErrors: null` are asserted on the raw wire text; a snapshot omitting
+  `repairAssertionGranted` renders the pre-change answer, and a non-object or partial value fails closed
+  naming the field.
 
 ## Functional Requirements
 
 - FR-001: `Driver` MUST expose the STRUCTURAL subset of the review-chain problem list separately from the live-check liveness problem, computed from ONE shared, order-preserving source rather than two hand-maintained lists, and `Review.acceptanceOutcome` MUST classify on the structural subset. (covers AC-003)
-- FR-002: A chain that is well-formed, host-accepted, critic-identified and bound to `Binding.HeadSha` MUST report the new `AcceptedAwaitingChecks` state whenever the live check state is not green, with `stateErrors` null; its action MUST be `AuthorizeDelivery` for a pending or unknown check state, `ResumeImplementer` for red or conflicted, and `Park` for merged or closed. (covers AC-001, AC-002, AC-005)
+- FR-002: A chain that is well-formed, host-accepted, critic-identified and bound to `Binding.HeadSha` MUST report the new `AcceptedAwaitingChecks` state whenever the live check state is not green, with `stateErrors` null; its action MUST be `AuthorizeDelivery` for a pending check state, `ResumeImplementer` for red or conflicted, and `Park` for an UNREADABLE (`unknown`) state and for merged or closed. `unknown` MUST NOT share the pending arm: this repository already settles it with `conflicted` (`Landable.settled`), maps it to `ExitNoVerdict` (`Client`), and records an unresolvable state answered as `pending` as a defect already fixed once (`Reads.fsi`). (covers AC-001, AC-002, AC-005, AC-017)
 - FR-003: `Driver.validateReviewChain` MUST return the identical messages in the identical order after the split as before it, so `Driver.receiptFresh` and every other existing caller is behaviourally unchanged. (covers AC-004)
 - FR-004: The head-mismatch and missing-critic arms of `acceptanceOutcome` MUST be unchanged, so `.github#2487`'s remedy lands on the code this row found rather than on code this row rewrote. (covers AC-006)
 - FR-005: A comment-shaped repair MUST be representable: at an unmoved head after a `changes-required` verdict, a valid `RepairAssertionReceipt` MUST route to the same-critic confirmation state in BOTH the ordinary and repair phases, through ONE shared guard function. (covers AC-007, AC-013)
 - FR-006: The receipt MUST be admitted only when it binds the current head, names the exact latest review comment URL, and carries a `GrantedBy` that is neither `Binding.ImplementerIdentity` nor the round's `critic:` identity; ANY failure MUST fall back to the pre-existing `ResumeImplementer` behaviour, with the refused-grant fact appended to the reason on the same near-miss convention `resumeSameCriticReason` already uses. (covers AC-008, AC-009, AC-010, AC-011, AC-012)
-- FR-007: `ReviewApplication.fs` MUST render the new state, its check-state reason, and the new action on the `fsgg.coord.review/1` wire, and MUST parse `repairAssertionGranted` additively so a snapshot that omits it behaves exactly as today. (covers AC-014)
+- FR-007: `ReviewApplication.fs` MUST render the new state, its check-state reason, and the new action on the `fsgg.coord.review/1` wire, and MUST parse `repairAssertionGranted` additively so a snapshot that omits it behaves exactly as today, and that wire contract MUST be asserted on the raw JSON text through the real CLI entrypoint. (covers AC-014, AC-018)
 - FR-008: Every new state and every refusal leg MUST ship with gate-inversion evidence: an executable fixture that reds when the split or any one guard conjunct is removed. (covers AC-015)
 - FR-009: `landable`'s CI verdict MUST stay wholly independent of the review chain, and no marker kind may be added. (covers AC-016)
 

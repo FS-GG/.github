@@ -37,11 +37,21 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2549-review-state-vocabulary/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "967cbfc6b970df343e288517cb25c8c2ff4568f2977259ba52025640d99d1c1e"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2549-review-state-vocabulary/checklist.md",
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "e3b69f29356d3a5991f43a01390eaf70a9a67a319dc96cce7c4a4665195d4353"
+        "value": "47aff7f0efee3d7383e37e0c78d5601b019e08c82fd9a15ba5bd785edb2d8ba7"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "b8b3654ffedae199d03b834a0096a22830e4cb5fe68279f3c6f48afff6fd5479"
+        "value": "6159ff19d657544a9f825ff180837940e7a2367c041f67e049bc1fbb1de33371"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "d14b77f6d571c72240f135d03d571e31e04a1eaefca35c1aa1c54fd5145ca47d"
+        "value": "6df721ca585fe60db82c8640b5e16b9e32d5ab1018ee4c9de0e9f02e2b95cd79"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "b044a60d8060e65e59eb52c973607282f3d10daff3264e8f65ff63349b727937"
+        "value": "998b27a2f483396261843e5a6d8c4cf63c862e373a13274479d38ce3aa78c3cb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "656add840c3dc4cf60ec202e834678d923b8cabbde4ec2ebb63b7a6f58e91819"
+        "value": "772796d2d9f6a3c0c89ebb6d5fb7447407018c89da2caec3d6809cd07dfc6aa8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -171,6 +181,26 @@
     {
       "id": "AR009",
       "sourcePath": "work/2549-review-state-vocabulary/clarifications.md",
+      "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceId": "DEC-006",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/2549-review-state-vocabulary/clarifications.md",
+      "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceId": "DEC-007",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/2549-review-state-vocabulary/clarifications.md",
       "targetPath": "work/2549-review-state-vocabulary/plan.md",
       "sourceId": null,
       "targetId": null,
@@ -179,7 +209,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR010",
+      "id": "AR012",
       "sourcePath": "work/2549-review-state-vocabulary/clarifications.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": null,
@@ -189,7 +219,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR013",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PC-001",
@@ -199,7 +229,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR014",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PC-002",
@@ -209,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR015",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "GV-001",
@@ -219,7 +249,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR016",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PM-001",
@@ -229,7 +259,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR017",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-001",
@@ -239,7 +269,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR018",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-002",
@@ -249,7 +279,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR019",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-003",
@@ -259,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR020",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-004",
@@ -269,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR021",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-005",
@@ -279,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR022",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-006",
@@ -289,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR023",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-007",
@@ -299,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR024",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-008",
@@ -309,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR025",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-009",
@@ -319,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR026",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "PD-010",
@@ -329,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR027",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": null,
@@ -339,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR028",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "VO-001",
@@ -349,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR029",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "VO-002",
@@ -359,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR030",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "VO-003",
@@ -369,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR031",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "VO-004",
@@ -379,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR032",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "VO-005",
@@ -389,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR033",
       "sourcePath": "work/2549-review-state-vocabulary/plan.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "VO-006",
@@ -399,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR034",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-001",
@@ -409,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR035",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-002",
@@ -419,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR036",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-003",
@@ -429,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR037",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-004",
@@ -439,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR038",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-005",
@@ -449,7 +479,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR039",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-006",
@@ -459,7 +489,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR040",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-007",
@@ -469,7 +499,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR039",
+      "id": "AR041",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-008",
@@ -479,7 +509,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR040",
+      "id": "AR042",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-009",
@@ -489,7 +519,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR041",
+      "id": "AR043",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-010",
@@ -499,7 +529,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR042",
+      "id": "AR044",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-011",
@@ -509,7 +539,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR043",
+      "id": "AR045",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-012",
@@ -519,7 +549,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR044",
+      "id": "AR046",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-013",
@@ -529,7 +559,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR045",
+      "id": "AR047",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-014",
@@ -539,7 +569,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR046",
+      "id": "AR048",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-015",
@@ -549,7 +579,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR047",
+      "id": "AR049",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "AC-016",
@@ -559,7 +589,27 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR048",
+      "id": "AR050",
+      "sourcePath": "work/2549-review-state-vocabulary/spec.md",
+      "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceId": "AC-017",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR051",
+      "sourcePath": "work/2549-review-state-vocabulary/spec.md",
+      "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceId": "AC-018",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR052",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/checklist.md",
       "sourceId": null,
@@ -569,7 +619,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR049",
+      "id": "AR053",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/plan.md",
       "sourceId": null,
@@ -579,7 +629,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR050",
+      "id": "AR054",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-001",
@@ -589,7 +639,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR051",
+      "id": "AR055",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-002",
@@ -599,7 +649,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR052",
+      "id": "AR056",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-003",
@@ -609,7 +659,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR053",
+      "id": "AR057",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-004",
@@ -619,7 +669,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR054",
+      "id": "AR058",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-005",
@@ -629,7 +679,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR055",
+      "id": "AR059",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-006",
@@ -639,7 +689,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR056",
+      "id": "AR060",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-007",
@@ -649,7 +699,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR057",
+      "id": "AR061",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-008",
@@ -659,7 +709,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR058",
+      "id": "AR062",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "FR-009",
@@ -669,7 +719,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR059",
+      "id": "AR063",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/clarifications.md",
       "sourceId": null,
@@ -679,7 +729,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR060",
+      "id": "AR064",
       "sourcePath": "work/2549-review-state-vocabulary/spec.md",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": null,
@@ -689,7 +739,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR061",
+      "id": "AR065",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T010",
@@ -699,7 +749,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR062",
+      "id": "AR066",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T011",
@@ -709,7 +759,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR063",
+      "id": "AR067",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T012",
@@ -719,7 +769,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR064",
+      "id": "AR068",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T013",
@@ -729,7 +779,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR065",
+      "id": "AR069",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T014",
@@ -739,7 +789,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR066",
+      "id": "AR070",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T015",
@@ -749,7 +799,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR067",
+      "id": "AR071",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T016",
@@ -759,7 +809,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR068",
+      "id": "AR072",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T017",
@@ -769,7 +819,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR069",
+      "id": "AR073",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T018",
@@ -779,7 +829,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR070",
+      "id": "AR074",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T019",
@@ -789,7 +839,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR071",
+      "id": "AR075",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T020",
@@ -799,7 +849,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR072",
+      "id": "AR076",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T021",
@@ -809,7 +859,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR073",
+      "id": "AR077",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T022",
@@ -819,7 +869,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR074",
+      "id": "AR078",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T023",
@@ -829,10 +879,40 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR075",
+      "id": "AR079",
       "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
       "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceId": "T024",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR080",
+      "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
+      "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceId": "T025",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR081",
+      "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
+      "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceId": "T026",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR082",
+      "sourcePath": "work/2549-review-state-vocabulary/tasks.yml",
+      "targetPath": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceId": "T028",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -841,7 +921,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 75,
+    "readyCount": 82,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,
@@ -856,7 +936,7 @@
     {
       "path": "readiness/2549-review-state-vocabulary/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

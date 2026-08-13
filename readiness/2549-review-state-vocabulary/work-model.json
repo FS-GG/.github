@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "e3b69f29356d3a5991f43a01390eaf70a9a67a319dc96cce7c4a4665195d4353"
+        "value": "47aff7f0efee3d7383e37e0c78d5601b019e08c82fd9a15ba5bd785edb2d8ba7"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b8b3654ffedae199d03b834a0096a22830e4cb5fe68279f3c6f48afff6fd5479"
+        "value": "6159ff19d657544a9f825ff180837940e7a2367c041f67e049bc1fbb1de33371"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "803d10e0f363d16459500644c065e0b1543c1d03eb6cbed1b88be0635674cc39"
+        "value": "69ce4c16a751a7e684201daba7ee468b396a8a29ba5e7c4c41cf27e2568edba2"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d14b77f6d571c72240f135d03d571e31e04a1eaefca35c1aa1c54fd5145ca47d"
+        "value": "6df721ca585fe60db82c8640b5e16b9e32d5ab1018ee4c9de0e9f02e2b95cd79"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b044a60d8060e65e59eb52c973607282f3d10daff3264e8f65ff63349b727937"
+        "value": "998b27a2f483396261843e5a6d8c4cf63c862e373a13274479d38ce3aa78c3cb"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "656add840c3dc4cf60ec202e834678d923b8cabbde4ec2ebb63b7a6f58e91819"
+        "value": "772796d2d9f6a3c0c89ebb6d5fb7447407018c89da2caec3d6809cd07dfc6aa8"
       }
     }
   ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 203,
+        "line": 217,
         "column": 1
       },
       "linkedTaskIds": [
@@ -149,18 +149,19 @@
     },
     {
       "id": "FR-002",
-      "title": "A chain that is well-formed, host-accepted, critic-identified and bound to \u0060Binding.HeadSha\u0060 MUST report the new \u0060AcceptedAwaitingChecks\u0060 state whenever the live check state is not green, with \u0060stateErrors\u0060 null; its action MUST be \u0060AuthorizeDelivery\u0060 for a pending or unknown check state, \u0060ResumeImplementer\u0060 for red or conflicted, and \u0060Park\u0060 for merged or closed. (covers AC-001, AC-002, AC-005)",
-      "text": "A chain that is well-formed, host-accepted, critic-identified and bound to \u0060Binding.HeadSha\u0060 MUST report the new \u0060AcceptedAwaitingChecks\u0060 state whenever the live check state is not green, with \u0060stateErrors\u0060 null; its action MUST be \u0060AuthorizeDelivery\u0060 for a pending or unknown check state, \u0060ResumeImplementer\u0060 for red or conflicted, and \u0060Park\u0060 for merged or closed. (covers AC-001, AC-002, AC-005)",
+      "title": "A chain that is well-formed, host-accepted, critic-identified and bound to \u0060Binding.HeadSha\u0060 MUST report the new \u0060AcceptedAwaitingChecks\u0060 state whenever the live check state is not green, with \u0060stateErrors\u0060 null; its action MUST be \u0060AuthorizeDelivery\u0060 for a pending check state, \u0060ResumeImplementer\u0060 for red or conflicted, and \u0060Park\u0060 for an UNREADABLE (\u0060unknown\u0060) state and for merged or closed. \u0060unknown\u0060 MUST NOT share the pending arm: this repository already settles it with \u0060conflicted\u0060 (\u0060Landable.settled\u0060), maps it to \u0060ExitNoVerdict\u0060 (\u0060Client\u0060), and records an unresolvable state answered as \u0060pending\u0060 as a defect already fixed once (\u0060Reads.fsi\u0060). (covers AC-001, AC-002, AC-005, AC-017)",
+      "text": "A chain that is well-formed, host-accepted, critic-identified and bound to \u0060Binding.HeadSha\u0060 MUST report the new \u0060AcceptedAwaitingChecks\u0060 state whenever the live check state is not green, with \u0060stateErrors\u0060 null; its action MUST be \u0060AuthorizeDelivery\u0060 for a pending check state, \u0060ResumeImplementer\u0060 for red or conflicted, and \u0060Park\u0060 for an UNREADABLE (\u0060unknown\u0060) state and for merged or closed. \u0060unknown\u0060 MUST NOT share the pending arm: this repository already settles it with \u0060conflicted\u0060 (\u0060Landable.settled\u0060), maps it to \u0060ExitNoVerdict\u0060 (\u0060Client\u0060), and records an unresolvable state answered as \u0060pending\u0060 as a defect already fixed once (\u0060Reads.fsi\u0060). (covers AC-001, AC-002, AC-005, AC-017)",
       "acceptanceCriteria": [
         "AC-001",
         "AC-002",
-        "AC-005"
+        "AC-005",
+        "AC-017"
       ],
       "priority": null,
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 204,
+        "line": 218,
         "column": 1
       },
       "linkedTaskIds": [
@@ -181,7 +182,7 @@
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 205,
+        "line": 219,
         "column": 1
       },
       "linkedTaskIds": [
@@ -202,7 +203,7 @@
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 206,
+        "line": 220,
         "column": 1
       },
       "linkedTaskIds": [
@@ -224,7 +225,7 @@
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 207,
+        "line": 221,
         "column": 1
       },
       "linkedTaskIds": [
@@ -249,7 +250,7 @@
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 208,
+        "line": 222,
         "column": 1
       },
       "linkedTaskIds": [
@@ -261,16 +262,17 @@
     },
     {
       "id": "FR-007",
-      "title": "\u0060ReviewApplication.fs\u0060 MUST render the new state, its check-state reason, and the new action on the \u0060fsgg.coord.review/1\u0060 wire, and MUST parse \u0060repairAssertionGranted\u0060 additively so a snapshot that omits it behaves exactly as today. (covers AC-014)",
-      "text": "\u0060ReviewApplication.fs\u0060 MUST render the new state, its check-state reason, and the new action on the \u0060fsgg.coord.review/1\u0060 wire, and MUST parse \u0060repairAssertionGranted\u0060 additively so a snapshot that omits it behaves exactly as today. (covers AC-014)",
+      "title": "\u0060ReviewApplication.fs\u0060 MUST render the new state, its check-state reason, and the new action on the \u0060fsgg.coord.review/1\u0060 wire, and MUST parse \u0060repairAssertionGranted\u0060 additively so a snapshot that omits it behaves exactly as today, and that wire contract MUST be asserted on the raw JSON text through the real CLI entrypoint. (covers AC-014, AC-018)",
+      "text": "\u0060ReviewApplication.fs\u0060 MUST render the new state, its check-state reason, and the new action on the \u0060fsgg.coord.review/1\u0060 wire, and MUST parse \u0060repairAssertionGranted\u0060 additively so a snapshot that omits it behaves exactly as today, and that wire contract MUST be asserted on the raw JSON text through the real CLI entrypoint. (covers AC-014, AC-018)",
       "acceptanceCriteria": [
-        "AC-014"
+        "AC-014",
+        "AC-018"
       ],
       "priority": null,
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 209,
+        "line": 223,
         "column": 1
       },
       "linkedTaskIds": [
@@ -291,7 +293,7 @@
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 210,
+        "line": 224,
         "column": 1
       },
       "linkedTaskIds": [
@@ -312,7 +314,7 @@
       "classification": [],
       "source": "work/2549-review-state-vocabulary/spec.md",
       "sourceLocation": {
-        "line": 211,
+        "line": 225,
         "column": 1
       },
       "linkedTaskIds": [
@@ -398,11 +400,43 @@
       "acceptanceRefs": [],
       "source": "work/2549-review-state-vocabulary/clarifications.md",
       "sourceLocation": {
-        "line": 97,
+        "line": 133,
         "column": 1
       },
       "linkedTaskIds": [
         "T014"
+      ]
+    },
+    {
+      "id": "DEC-006",
+      "title": "**An UNREADABLE check state (\u0060PrUnknown\u0060) parks; it belongs with neither the pending arm nor",
+      "decision": "**An UNREADABLE check state (\u0060PrUnknown\u0060) parks; it belongs with neither the pending arm nor",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2549-review-state-vocabulary/clarifications.md",
+      "sourceLocation": {
+        "line": 103,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T025"
+      ]
+    },
+    {
+      "id": "DEC-007",
+      "title": "**The CLI wire is covered by xunit in \u0060ReviewApplicationTests.fs\u0060, not by a new shell",
+      "decision": "**The CLI wire is covered by xunit in \u0060ReviewApplicationTests.fs\u0060, not by a new shell",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2549-review-state-vocabulary/clarifications.md",
+      "sourceLocation": {
+        "line": 122,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T026"
       ]
     }
   ],
@@ -449,6 +483,7 @@
         "AC-001",
         "AC-002",
         "AC-005",
+        "AC-017",
         "FR-002",
         "PD-002"
       ],
@@ -595,6 +630,7 @@
       "decisions": [],
       "sourceIds": [
         "AC-014",
+        "AC-018",
         "FR-007",
         "PD-008",
         "PD-010"
@@ -1078,6 +1114,91 @@
       "source": "work/2549-review-state-vocabulary/tasks.yml",
       "sourceLocation": {
         "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "T025",
+      "title": "Implement clarification decision DEC-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-006"
+      ],
+      "sourceIds": [
+        "DEC-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV025"
+      ],
+      "source": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "T026",
+      "title": "Implement clarification decision DEC-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-007"
+      ],
+      "sourceIds": [
+        "DEC-007"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV026"
+      ],
+      "source": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "T028",
+      "title": "Implement plan decision PD-009",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "AC-015",
+        "AC-018",
+        "FR-008",
+        "PD-009"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV028"
+      ],
+      "source": "work/2549-review-state-vocabulary/tasks.yml",
+      "sourceLocation": {
+        "line": 27,
         "column": 1
       }
     }
@@ -1679,8 +1800,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "readiness/2549-review-state-vocabulary/analysis.json",
-        "readiness/2549-review-state-vocabulary/work-model.json"
+        "readiness/2549-review-state-vocabulary/analysis.json"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1691,6 +1811,81 @@
       "source": "work/2549-review-state-vocabulary/evidence.yml",
       "sourceLocation": {
         "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV025",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T025",
+      "taskRefs": [
+        "T025"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Core/Review.fs",
+        "src/FS.GG.Coord.Core/Review.fsi",
+        "tests/FS.GG.Coord.Core.Tests/ReviewTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2549-review-state-vocabulary/evidence.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV026",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T026",
+      "taskRefs": [
+        "T026"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2549-review-state-vocabulary/evidence.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV028",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T028",
+      "taskRefs": [
+        "T028"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2549-review-state-vocabulary/evidence.yml",
+      "sourceLocation": {
+        "line": 27,
         "column": 1
       }
     }
@@ -1733,7 +1928,7 @@
           "path": "work/2549-review-state-vocabulary/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "e3b69f29356d3a5991f43a01390eaf70a9a67a319dc96cce7c4a4665195d4353"
+            "value": "47aff7f0efee3d7383e37e0c78d5601b019e08c82fd9a15ba5bd785edb2d8ba7"
           },
           "schemaVersion": 1
         },
@@ -1741,7 +1936,7 @@
           "path": "work/2549-review-state-vocabulary/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "b8b3654ffedae199d03b834a0096a22830e4cb5fe68279f3c6f48afff6fd5479"
+            "value": "6159ff19d657544a9f825ff180837940e7a2367c041f67e049bc1fbb1de33371"
           },
           "schemaVersion": 1
         },
@@ -1749,7 +1944,7 @@
           "path": "work/2549-review-state-vocabulary/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "803d10e0f363d16459500644c065e0b1543c1d03eb6cbed1b88be0635674cc39"
+            "value": "69ce4c16a751a7e684201daba7ee468b396a8a29ba5e7c4c41cf27e2568edba2"
           },
           "schemaVersion": 1
         },
@@ -1757,7 +1952,7 @@
           "path": "work/2549-review-state-vocabulary/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "d14b77f6d571c72240f135d03d571e31e04a1eaefca35c1aa1c54fd5145ca47d"
+            "value": "6df721ca585fe60db82c8640b5e16b9e32d5ab1018ee4c9de0e9f02e2b95cd79"
           },
           "schemaVersion": 1
         },
@@ -1765,7 +1960,7 @@
           "path": "work/2549-review-state-vocabulary/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "b044a60d8060e65e59eb52c973607282f3d10daff3264e8f65ff63349b727937"
+            "value": "998b27a2f483396261843e5a6d8c4cf63c862e373a13274479d38ce3aa78c3cb"
           },
           "schemaVersion": 1
         },
@@ -1773,14 +1968,14 @@
           "path": "work/2549-review-state-vocabulary/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "656add840c3dc4cf60ec202e834678d923b8cabbde4ec2ebb63b7a6f58e91819"
+            "value": "772796d2d9f6a3c0c89ebb6d5fb7447407018c89da2caec3d6809cd07dfc6aa8"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "1ee9804fb750dd068e827322c747d3a0abc3f32d4941b6dfe8db31db64e88a9c"
+        "value": "2a3167bc9f6fbd507872e29d6761ca92d019f7e6ec7ca7d27b5bc8aca3b5ded7"
       },
       "currency": "current"
     }

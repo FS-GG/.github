@@ -155,6 +155,11 @@ module Review =
         /// after host acceptance (.github#2549). Deliberately not `AwaitChecks`: by `.github#2504` the
         /// required `claim-generation` context cannot report until that call PATCHes the authorization
         /// marker onto this head, so waiting is a cycle the marker can never break.
+        ///
+        /// Returned for `PrPending` ONLY. `PrUnknown` parks instead — `Landable.settled` scores it with
+        /// `PrConflicted` rather than `PrPending`, `Client` maps it to `ExitNoVerdict`, and `Reads.fsi`
+        /// records an unresolvable state answered as `PrPending` as a defect already fixed once. An
+        /// unreadable check state must not take the reassuring path.
         | AuthorizeDelivery of reason: string
         | RequestHostAcceptance
         | EnterRepairPhase of RepairPhaseReceipt

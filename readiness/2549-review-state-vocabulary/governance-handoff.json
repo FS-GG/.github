@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2549-review-state-vocabulary/ship.json",
-      "digest": "sha256:8e5f155caff9a0a916d18322e5dacacbd53dca9070db74d937596961dae1df57",
+      "digest": "sha256:24bbb9d48bff5356ef549f1bf516fb15e2985978bfd6da92c0894417d42b16d9",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2549-review-state-vocabulary/verify.json",
-      "digest": "sha256:0d6a6730faf9cf79e5ffdf30ec6b2d3e7bdee50b8038b024e1e377c7819ca5ee",
+      "digest": "sha256:263299347fd77571b67bf164b8955e4089e5cd7a649b6bff755690865ce758b0",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2549-review-state-vocabulary/work-model.json",
-      "digest": "sha256:693f4042bc94cb2d80207aabf33b02c37f1c4d7ebadab3f465f8285585d6fe33",
+      "digest": "sha256:0435a97086d283a563428b31369a3a2cef1272fbfba39148f6898875743f5836",
       "schemaVersion": 1
     }
   ],
@@ -143,6 +143,21 @@
         "rationale": null
       },
       {
+        "id": "evidence:EV025",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV026",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV028",
+        "state": "real",
+        "rationale": null
+      },
+      {
         "id": "task:T001",
         "state": "pending",
         "rationale": null
@@ -261,6 +276,21 @@
         "id": "task:T024",
         "state": "pending",
         "rationale": null
+      },
+      {
+        "id": "task:T025",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T026",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T028",
+        "state": "pending",
+        "rationale": null
       }
     ],
     "dependencies": [
@@ -359,6 +389,18 @@
       {
         "dependent": "evidence:EV024",
         "dependency": "task:T024"
+      },
+      {
+        "dependent": "evidence:EV025",
+        "dependency": "task:T025"
+      },
+      {
+        "dependent": "evidence:EV026",
+        "dependency": "task:T026"
+      },
+      {
+        "dependent": "evidence:EV028",
+        "dependency": "task:T028"
       },
       {
         "dependent": "task:T001",
@@ -514,6 +556,30 @@
       },
       {
         "dependent": "task:T024",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T025",
+        "dependency": "evidence:EV025"
+      },
+      {
+        "dependent": "task:T025",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T026",
+        "dependency": "evidence:EV026"
+      },
+      {
+        "dependent": "task:T026",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T028",
+        "dependency": "evidence:EV028"
+      },
+      {
+        "dependent": "task:T028",
         "dependency": "task:T001"
       }
     ]

@@ -158,3 +158,127 @@ module ReviewApplicationTests =
         Assert.Contains("\"state\":\"repairPhaseSetup\"", out)
         Assert.Contains("\"action\":\"enterRepairPhase\"", out)
         Assert.Contains("\"newCriticIdentity\":\"fresh-critic\"", out)
+
+    // ---- .github#2549: the new state and the optional grant, ON THE WIRE ---------------------------
+    //
+    // WHY THESE LEGS EXIST (round-1 finding M2). `.github#2549` first shipped with no CI-gated coverage
+    // of its own wire additions, on the reasoning that an exhaustive `match` plus `TreatWarningsAsErrors`
+    // made the rendering safe. That does not reach: exhaustiveness proves every case has an arm and
+    // proves nothing about JSON KEY NAMES, the wire spelling of a state or action, the absent-key parse
+    // path, or the refusal of a malformed value — which are the four things a `fsgg.coord.review/1`
+    // consumer actually depends on. The legs assert on raw JSON substrings rather than a re-parsed
+    // object, deliberately: a renamed key must fail here, where a test that parsed the payload back with
+    // the producer's own vocabulary would follow the rename silently.
+
+    /// The `.github#2534` chain shape at `ordinaryBinding`'s head: an initial `changes-required`, a
+    /// round-1 `pass` confirmation at the SAME head (its finding was against a PR comment, not the
+    /// tree), and a bound host acceptance. `checks` is substituted so each leg varies only that field.
+    let private acceptedChainFacts (checks: string) =
+        let comments =
+            """[{"id":1,"url":"https://reviews/1","body":"<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head-a\nverdict: changes-required"},{"id":2,"url":"https://reviews/2","body":"<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/1\ncritic: kite\nround: 1\npreceding-review: https://reviews/1\nreviewed-head: head-a\nverdict: pass\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: fixture"},{"id":3,"url":"https://reviews/3","body":"<!-- fsgg:review-accepted:v1 -->\naccepted-head: head-a\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/2"}]"""
+        $$"""{"comments":{{comments}},"checks":"{{checks}}","repairPhaseGranted":null,"repairRouteAvailable":true}"""
+
+    /// The unmoved-head chain the grant legs answer: one initial `changes-required` and nothing else.
+    let private unmovedFacts (grantJson: string) =
+        let comments =
+            """[{"id":1,"url":"https://reviews/1","body":"<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head-a\nverdict: changes-required"}]"""
+        $$"""{"comments":{{comments}},"checks":"pending","repairPhaseGranted":null,"repairRouteAvailable":true{{grantJson}}}"""
+
+    [<Fact>]
+    let ``#2549 the post-acceptance pending window renders acceptedAwaitingChecks with NULL stateErrors`` () =
+        let exitCode, out, _err = runSnapshot (snapshotJson ordinaryBinding (acceptedChainFacts "pending"))
+        Assert.Equal(0, exitCode)
+        Assert.Contains("\"state\":\"acceptedAwaitingChecks\"", out)
+        Assert.Contains("\"action\":\"authorizeDelivery\"", out)
+        // The row's whole purpose: a consumer must tell "this chain is broken" from "this chain is fine
+        // and the next step is the delivery call" from the payload alone.
+        Assert.Contains("\"stateErrors\":null", out)
+        Assert.DoesNotContain("\"state\":\"malformedEvidence\"", out)
+        Assert.DoesNotContain("review checks are not green", out)
+        // Rendered through `Landable.name` — the same forward-only vocabulary the `checks` reader parses
+        // in reverse — so the word read back is the word supplied. Matched with a regex rather than a
+        // literal because `System.Text.Json` escapes the surrounding apostrophes to `\u0027`; pinning
+        // the escape sequence would assert the serializer's encoding choice rather than the contract.
+        Assert.Contains("\"stateReason\":\"the review chain is complete", out)
+        Assert.Matches("checks are .{0,8}pending", out)
+
+    [<Fact>]
+    let ``#2549 an UNREADABLE check state renders park, never authorizeDelivery`` () =
+        let exitCode, out, _err = runSnapshot (snapshotJson ordinaryBinding (acceptedChainFacts "unknown"))
+        Assert.Equal(0, exitCode)
+        Assert.Contains("\"state\":\"acceptedAwaitingChecks\"", out)
+        Assert.Contains("\"action\":\"park\"", out)
+        Assert.DoesNotContain("\"action\":\"authorizeDelivery\"", out)
+
+    [<Fact>]
+    let ``#2549 a red check state renders resumeImplementer, not broken evidence`` () =
+        let _exitCode, out, _err = runSnapshot (snapshotJson ordinaryBinding (acceptedChainFacts "red"))
+        Assert.Contains("\"state\":\"acceptedAwaitingChecks\"", out)
+        Assert.Contains("\"action\":\"resumeImplementer\"", out)
+        Assert.DoesNotContain("\"state\":\"malformedEvidence\"", out)
+
+    [<Fact>]
+    let ``#2549 green checks still render accepted, unchanged`` () =
+        let _exitCode, out, _err = runSnapshot (snapshotJson ordinaryBinding (acceptedChainFacts "green"))
+        Assert.Contains("\"state\":\"accepted\"", out)
+        Assert.Contains("\"action\":\"accept\"", out)
+        Assert.Contains("\"criticIdentity\":\"kite\"", out)
+
+    [<Fact>]
+    let ``#2549 an ABSENT repairAssertionGranted key parses exactly as before the field existed`` () =
+        // The backward-compatibility case every existing snapshot producer relies on: the key is not
+        // written at all, and the answer must be the pre-change one.
+        let exitCode, out, _err = runSnapshot (snapshotJson ordinaryBinding (unmovedFacts ""))
+        Assert.Equal(0, exitCode)
+        Assert.Contains("\"state\":\"awaitingImplementerRepair\"", out)
+        Assert.Contains("\"action\":\"resumeImplementer\"", out)
+        Assert.DoesNotContain("refused, not consumed", out)
+
+    [<Fact>]
+    let ``#2549 an explicit NULL repairAssertionGranted is the same fact spelled out`` () =
+        let exitCode, out, _err =
+            runSnapshot (snapshotJson ordinaryBinding (unmovedFacts ""","repairAssertionGranted":null"""))
+        Assert.Equal(0, exitCode)
+        Assert.Contains("\"action\":\"resumeImplementer\"", out)
+        Assert.DoesNotContain("refused, not consumed", out)
+
+    [<Fact>]
+    let ``#2549 a VALID grant is honored end to end on the wire`` () =
+        let grant =
+            ""","repairAssertionGranted":{"answeredReviewUrl":"https://reviews/1","candidateHeadSha":"head-a","grantedBy":"host-9b63","reason":"the obligations comment was repaired in place"}"""
+        let exitCode, out, _err = runSnapshot (snapshotJson ordinaryBinding (unmovedFacts grant))
+        Assert.Equal(0, exitCode)
+        Assert.Contains("\"state\":\"awaitingSameCriticConfirmation\"", out)
+        Assert.Contains("\"action\":\"resumeSameCritic\"", out)
+        // The granter is named, because the safety argument for advancing at an unmoved head is that an
+        // accountable third party — neither implementer nor critic — attested the repair.
+        Assert.Contains("host-9b63", out)
+
+    [<Fact>]
+    let ``#2549 a REFUSED grant is reported distinctly from no grant at all`` () =
+        let refused =
+            ""","repairAssertionGranted":{"answeredReviewUrl":"https://reviews/9","candidateHeadSha":"head-a","grantedBy":"host-9b63","reason":"answers the wrong review"}"""
+        let exitCode, out, _err = runSnapshot (snapshotJson ordinaryBinding (unmovedFacts refused))
+        Assert.Equal(0, exitCode)
+        Assert.Contains("\"action\":\"resumeImplementer\"", out)
+        Assert.Contains("refused, not consumed", out)
+
+    [<Fact>]
+    let ``#2549 a MALFORMED repairAssertionGranted fails CLOSED and names the field`` () =
+        // A non-object, non-null value must never read as "no grant was offered": those two lead to
+        // different next actions, and in the refusing direction they look identical on the wire.
+        let exitCode, _out, err =
+            runSnapshot (snapshotJson ordinaryBinding (unmovedFacts ""","repairAssertionGranted":42"""))
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("repairAssertionGranted", err)
+
+    [<Fact>]
+    let ``#2549 a grant missing a required field fails CLOSED rather than parsing as partial`` () =
+        let exitCode, _out, err =
+            runSnapshot (
+                snapshotJson
+                    ordinaryBinding
+                    (unmovedFacts ""","repairAssertionGranted":{"answeredReviewUrl":"https://reviews/1"}""")
+            )
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("candidateHeadSha", err)
