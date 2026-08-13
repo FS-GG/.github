@@ -132,7 +132,13 @@ module Review =
         { State: State
           NextAction: NextAction
           FreshnessToken: string
-          ActionKey: string }
+          ActionKey: string
+          /// Every chain this verdict excluded from its evidence because a host acceptance already
+          /// settled it at a head the pull request has since moved off (.github#2527) — the fact that
+          /// explains why a pull request visibly carrying two initial markers is being classified against
+          /// the later one. Empty for every verdict that retires nothing, and deliberately not folded
+          /// into `ActionKey`, which already covers the head and comments it is derived from.
+          RetiredChains: Driver.ChainRetirement list }
 
     /// Hash the complete binding the verdict is bound to. Any field in `Binding` changing — including
     /// `HeadSha` — changes this token and invalidates a prior verdict (acceptance 4/9).

@@ -120,7 +120,49 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.50.7 — a PATCH-LINE cut with NO ENGINE SOURCE CHANGE, published so the
+    <PackageReleaseNotes>0.51.0 — a MINOR coherent-set cut. The review protocol now represents a case it previously refused.
+
+`.github#2527`. A pull request whose head moves AFTER its review chain completed and was
+host-accepted had no representation. The only honest response to a moved head — a full fresh
+independent review of the tree that will actually merge — posts a second initial marker, and the
+chain then failed closed with "the initial review marker is carried by 2 comments; exactly one is
+required": a refusal that describes the symptom and names no remedy. Critic succession
+(`.github#2417`) requires a STUCK round and the repair phase requires EXHAUSTION, so neither reached
+a chain that had finished and was then invalidated by a push.
+
+WHAT THIS CUT ADDS. `Driver.liveReviewComments` partitions a pull request's review comments, and
+`Review` classifies the protocol state from the surviving set. A chain is retired when, and only
+when, a host-acceptance marker names that chain's initial-review comment URL AND carries an
+`accepted-head` other than the current head — both read from that marker's own already-required
+fields. `Review.Verdict` carries the retired chains, and `review --json` reports them as
+`retiredChains`.
+
+WHY MINOR RATHER THAN PATCH. This is receiver-visible behaviour, not prose: a receiver running
+`review` against unchanged comment evidence can now obtain a different action than it did before this
+cut, the JSON contract gains a field, and Core's published signature surface gains the retirement
+types that carry it.
+
+WHAT STAYS REFUSED, WHICH IS THE POINT. Two competing initial markers with no intervening
+accepted-then-moved head still fail closed. So does an acceptance whose `accepted-head` is the
+current head, and one whose `initial-review` names no initial marker on the pull request. Retirement
+is admitted only on what the acceptance marker's own required fields carry, rather than on a grant a
+caller supplies, because the one-initial-marker rule is what stops a stranger silently continuing
+another critic's chain. What is read is that marker's STRUCTURE, not the truth of its `accepted-head`:
+a forged acceptance marker will retire a live chain. That confers strictly less than the forgery it
+presupposes — a forged acceptance at the CURRENT head already yields an accepted chain outright, while
+this route yields only one awaiting a fresh acceptance at the current head — and the value is published
+in `retiredChains` where a reader can see it.
+Retirement never edits, reorders or drops evidence at the source: a retired chain stays exactly as
+its critic posted it.
+
+ALSO RIDING THIS CUT. `.github#2525` landed engine changes before this branch and could not move the
+coherent-set scalar itself, so its work is carried by this version rather than by one of its own. This
+entry describes what `.github#2527` adds; it is NOT an inventory of the tagged tree, which is whatever
+the tagged commit holds. `registry/CHANGELOG.md` and the tag range are the inventory.
+
+Adopt 0.51.0.
+
+0.50.7 — a PATCH-LINE cut with NO ENGINE SOURCE CHANGE, published so the
 coordination kit can carry a corrected `pnext-item` skill body. The three packages resolve one scalar
 (`FsggCoherentSetVersion`, `Directory.Build.props`) by construction, so a kit-only content fix moves this
 package's version too. That is the coherent-set design (`.github#2402`), not an engine delta.

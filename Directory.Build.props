@@ -128,8 +128,28 @@
        "stays advisory in the engine's own rollup". The published FS.GG.Kit 0.50.6 is byte-faithful to
        its tagged tree; the tagged tree simply predates this fix. So the corrected skill body cannot
        reach receivers under 0.50.6, and republishing 0.50.6 is impossible (immutable tags). -->
+  <!-- 0.50.7 to 0.51.0 (.github#2527): a MINOR bump, and the line change is the point. The three
+       preceding cuts (0.50.5, 0.50.6, 0.50.7) were prose and release-notes corrections on the patch
+       line. This one carries RECEIVER-VISIBLE BEHAVIOUR: the review protocol admits a case it
+       previously refused, so `review` can return a different action for comment evidence a receiver
+       already had, and the JSON render of `review` gains a `retiredChains` array.
+
+       WHY NOT PATCH, given Protocol.fs does not move. The "no verb, flag, help entry, render name,
+       result name or exit code moved" test the registry rows apply detects MOVED public surface; it
+       does not detect ADDED behaviour, so it is necessary and not sufficient. The rule this cut
+       follows is the one check-kit-published-coherence states itself: patch for a comment or doc
+       edit, MINOR when the change is receiver-visible behaviour, a distinction no gate can draw for
+       itself.
+
+       CONSEQUENCE TO EXPECT, NOT A FAULT: kit-auto-publish admits only a same-line patch bump
+       (.github#2442), so it will refuse this candidate with `candidate-not-next-patch`. That refusal
+       is the rail working as designed; a coherent-set version publishes through .github#2409's
+       release path instead, from three sibling tags at ONE commit.
+
+       NOTES AND SCALAR MOVE IN THIS SAME COMMIT, which is .github#2512's requirement and the whole
+       reason 0.50.5 is a permanent two-of-three set. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.50.7</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.51.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

@@ -225,6 +225,17 @@ module ReviewApplication =
            reason = receipt.Reason
            candidateHeadSha = receipt.CandidateHeadSha |}
 
+    /// .github#2527. Serialized on EVERY verdict, empty where nothing retired, so a consumer reads one
+    /// stable shape rather than a key that appears only in the recovery case. This is the fact that
+    /// answers "why is a pull request carrying two initial review markers being judged on the later
+    /// one" — without it the recovery is correct but unexplained, which for a rule whose whole job is to
+    /// stop a stranger continuing someone else's chain is not good enough.
+    let private retiredChainJson (retired: Driver.ChainRetirement) =
+        {| initialReview = retired.InitialReviewUrl
+           initialReviewCommentId = retired.InitialReviewCommentId
+           acceptedHead = retired.AcceptedHead
+           acceptanceCommentId = retired.AcceptanceCommentId |}
+
     let private acceptedJson (receipt: Review.AcceptedReceipt) =
         {| headSha = receipt.HeadSha
            criticIdentity = receipt.CriticIdentity
@@ -280,6 +291,7 @@ module ReviewApplication =
                         match verdict.NextAction with
                         | Review.Accept receipt -> Some(acceptedJson receipt)
                         | _ -> None
+                       retiredChains = verdict.RetiredChains |> List.map retiredChainJson
                        freshnessToken = verdict.FreshnessToken
                        actionKey = verdict.ActionKey |}
                 printfn "%s" (JsonSerializer.Serialize payload)
