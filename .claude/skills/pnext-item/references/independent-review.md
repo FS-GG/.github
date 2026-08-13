@@ -122,6 +122,31 @@ The host reserves a slot for the critic and keeps the implementing worker alive 
 The critic reviews requirements coverage, correctness, regressions, tests/evidence, architecture and
 ownership boundaries, release obligations, and touch-set honesty.
 
+**Critic dispatch belongs to the host, not the implementer.** "Ask the host to assign a fresh critic
+agent" (`pnext-item` §5) is a request the worker owes the host — never a task the worker discharges
+itself. A worker must not call the `Agent` tool (or any equivalent subagent mechanism) with
+`subagent_type: fsgg-critic-normal`, `fsgg-critic-best`, or any other `fsgg-critic-<route>` type to
+spawn its own critic. That is exactly the route two workers took independently within one run
+(`.github#2462`): each produced a complete, correctly-formed review chain — initial marker,
+`changes-required`, a repair, and a same-critic confirmation — that the host never dispatched and
+could not distinguish from a sanctioned one. Both disclosed the mechanism honestly when asked; the
+record must not depend on that disclosure.
+
+The one stated exception is a **solo `pnext-item` invocation running with no host to ask**. There,
+self-dispatch under `fsgg-critic-<route>` is the only route to review at all, and stays permitted —
+forbidding it outright would leave that supported mode with no review path whatsoever. Outside that
+exception, when no host is dispatching critics, "no independent agent mechanism is available"
+(`pnext-item` §5) applies: stop and report rather than dispatching one's own critic.
+
+**Enforcement here is by convention, not by construction, and this contract does not claim
+otherwise.** The host and every worker post from one shared GitHub account (`host-loop.md`: "every
+worker still authenticates as the one account"), so no marker field — a `dispatched-by` field, a
+host-recorded receipt, a counter-signature — can be made unforgeable between them; a self-dispatching
+worker could write any such field itself. The `critic` field's existing checks above (a minted,
+distinguishing identity; refused when it equals the implementer's own; refused when it is a generic
+agent-type string) remain the full mechanical detection this contract provides, and whether a critic
+was host-dispatched or self-dispatched is not a fact those checks can see.
+
 ## Runtime-route evidence gate
 
 Source review remains required, but it is not sufficient for a runtime-route divergence claim. When
