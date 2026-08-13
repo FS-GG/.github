@@ -1,0 +1,86 @@
+# Selftest for tests/kit-auto-publish/run.sh (.github#2558).
+#
+# WHY THIS FILE EXISTS. The fixture it runs was already thorough — 180+ checks over the auto-publish
+# state machine, the escalation step, the tag step, and now the evidence-PR step. It was also, until
+# this workflow, UNREACHABLE FROM A PULL REQUEST. Its only invocation was
+# `.github/workflows/kit-auto-publish.yml`'s own `Test the fail-closed state machine` step, and that
+# workflow triggers on `push: [main]`, `schedule` and `workflow_dispatch` — never on `pull_request`.
+#
+# So every regression this fixture can catch was caught only AFTER the change had already merged to
+# `main`, inside a scheduled publish run whose red reads like any other release failure. That is the
+# selectively-silent shape .github#2551 names: a gate that is quietest on exactly the change that
+# breaks it. The three defects in .github#2558 are the demonstration — all three shipped, and the
+# mechanism produced zero evidence entries for over a week without a single red PR check.
+#
+# THE `paths:` FILTER IS PART OF THE GATE, and the two lists are IDENTICAL on purpose
+# (check-paths-coherence.py grades that agreement). Every path below is a real INPUT to the fixture,
+# not a guess:
+#   - tests/kit-auto-publish/**                       the fixture itself
+#   - registry/CHANGELOG.md                           SEEDED INTO THE SANDBOX and read back by the
+#     registry/dependencies.yml                       evidence legs, so their sensitivity depends on
+#                                                     this data; omitting them left the fixture unable
+#                                                     to be re-run by the very change that alters what
+#                                                     it is seeded with (round-1 M1(b))
+#   - scripts/kit-auto-publish.py                     driven directly by the state-machine legs
+#   - scripts/prepend-registry-changelog-entry.py     copied into the sandbox and EXECUTED by the
+#     scripts/check-registry-changelog.py             evidence legs; a change to either can red this
+#                                                     fixture, so both must be able to trigger it
+#   - .github/workflows/kit-auto-publish.yml          parsed and its steps extracted and executed
+#   - this file                                       so a change to the wiring runs the wiring
+#
+# Adding `.github/workflows/kit-auto-publish.yml` here is the specific repair for defect 1's blast
+# radius: editing that workflow is precisely the change that could reintroduce a writer the registry
+# gate refuses, and before this file that edit triggered no PR check that ran this fixture at all.
+name: kit-auto-publish-selftest
+
+on:
+  pull_request:
+    paths:
+      - "tests/kit-auto-publish/**"
+      - "registry/CHANGELOG.md"
+      - "registry/dependencies.yml"
+      - "scripts/kit-auto-publish.py"
+      - "scripts/prepend-registry-changelog-entry.py"
+      - "scripts/check-registry-changelog.py"
+      - ".github/workflows/kit-auto-publish.yml"
+      - ".github/workflows/kit-auto-publish-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/kit-auto-publish/**"
+      - "registry/CHANGELOG.md"
+      - "registry/dependencies.yml"
+      - "scripts/kit-auto-publish.py"
+      - "scripts/prepend-registry-changelog-entry.py"
+      - "scripts/check-registry-changelog.py"
+      - ".github/workflows/kit-auto-publish.yml"
+      - ".github/workflows/kit-auto-publish-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kit-auto-publish-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # The fixture parses kit-auto-publish.yml with a real YAML load (`import yaml`) to extract the
+      # steps it executes, so PyYAML is a genuine dependency rather than a runner-image accident.
+      # It comes from the shared bootstrap action deliberately: check-policy-checker-inventory.py
+      # refuses any workflow that installs PyYAML for itself instead of taking the pinned shared one.
+      # (That refusal is a plain regex over the whole file, so it fires on PROSE too — this comment
+      # originally spelled the forbidden command out and reddened the gate that it was describing.)
+      #
+      # No `actions/setup-dotnet` here on purpose. kit-auto-publish.yml needs it for its later
+      # `dotnet msbuild -getProperty:Version` observation step; this fixture never invokes dotnet,
+      # and installing an SDK to run a bash fixture would be minutes of runner time per PR for
+      # nothing.
+      - uses: ./.github/actions/setup-policy-python
+      - name: Test the fail-closed state machine
+        run: bash tests/kit-auto-publish/run.sh
