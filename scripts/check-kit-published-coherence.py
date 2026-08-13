@@ -456,11 +456,19 @@ MERGE_AUTOMATION: tuple[MergeAutomation, ...] = (
 )
 
 # The engine's own filter, restated here because this arm must agree with it rather than hold a
-# second opinion about what a declaration is: `DeliveryApplication.fs:193` selects comments with
-# `Body.StartsWith "<!-- fsgg:delivery-obligation"` — AT BYTE 0. A comment that opens with prose and
-# carries a perfectly-formed marker on line 3 parses as ABSENT there, so it must parse as absent here
-# too; an arm that were more generous would flag declarations the engine cannot see, and stay quiet
-# about the byte-0 trap that made a fully-written declaration inert.
+# second opinion about what a declaration is: `DeliveryApplication.fs`'s `obligationsFromComments`
+# selects comments whose LEADING LINE — the first line of the trimmed body — starts with
+# `<!-- fsgg:delivery-obligation`. A comment that opens with prose and carries a perfectly-formed
+# marker on line 3 parses as ABSENT there, so it must parse as absent here too; an arm that were more
+# generous would flag declarations the engine cannot see, and stay quiet about the trap that made a
+# fully-written declaration inert.
+#
+# THIS SAID "AT BYTE 0" UNTIL .github#2544, AND THAT IS THE POINT OF THE ROW. The engine's candidate
+# pre-filter really was a raw `Body.StartsWith` while the parser it fed trimmed first, so a body
+# opening with a newline — what heredocs and `gh api --field` payloads add for free — was discarded
+# before the parser ran. The engine now asks the leading-line question once, and this arm follows it
+# rather than preserving the byte-0 reading it was written to mirror: an arm left stricter than the
+# engine would call a live declaration absent, which is the same invisibility one layer down.
 _DECLARATION_PREFIX = "<!-- fsgg:delivery-obligation"
 # `<!-- fsgg:delivery-obligations none head=<sha> -->` shares that prefix (plural, then a space), and
 # is the assertion that NOTHING is owed — not an obligation. It is skipped, not parsed.
@@ -476,6 +484,26 @@ _OBLIGATION_DECLARATION = re.compile(
     rf" kind=(?P<kind>{_OBLIGATION_KIND})"
     rf" head=(?P<head>{_DELIVERY_HEAD}) -->\Z"
 )
+
+
+def _leading_line(body: str) -> str:
+    """`DeliveryApplication.leadingLine`, restated — including its CommonMark indent limit.
+
+    Leading blank lines and up to THREE spaces of indentation render invisibly, so a marker behind
+    them is still the comment's leading line. FOUR spaces, or a tab (one tab stop), opens a CommonMark
+    INDENTED CODE BLOCK: the marker is then a visible code sample, and reading it as a declaration is
+    the fail-open the round-1 critic measured on `.github#2544` (a bystander's code sample destroying
+    somebody else's valid declaration, and an indented declaration+receipt pair reading `verified`).
+    The engine returns the line AS WRITTEN in that case so nothing can match it; so does this.
+    """
+    normalized = body.replace("\r\n", "\n")
+    first = next((line for line in normalized.split("\n") if line.strip()), None)
+    if first is None:
+        return ""
+    indent = first[: len(first) - len(first.lstrip(" \t"))]
+    if "\t" in indent or len(indent) >= 4:
+        return first
+    return body.strip().replace("\r\n", "\n").split("\n", 1)[0]
 
 # --- the tag arm (.github#1784, widened to every release namespace by .github#1790) ----------------
 # The tag scheme the #1772 resolver uses. Written once here; the workflow restates nothing.
@@ -1861,11 +1889,14 @@ def obligation_declarations(comments_path: str) -> tuple[list[Declaration], int]
 
     declarations: list[Declaration] = []
     for body in bodies:
-        if not body.startswith(_DECLARATION_PREFIX):
-            continue  # DeliveryApplication.fs:193's byte-0 filter. Not generosity — agreement.
-        if body.startswith(_NONE_PREFIX):
+        # ONE reading of "leading", used by the filter and the parse alike (.github#2544). Testing the
+        # raw body here and the trimmed leading line below is exactly the disagreement that row fixed
+        # in the engine; repeating it here would have re-created it in the gate that mirrors it.
+        leading = _leading_line(body)
+        if not leading.startswith(_DECLARATION_PREFIX):
+            continue  # Not the comment's leading line. Not generosity — agreement with the engine.
+        if leading.startswith(_NONE_PREFIX):
             continue  # `fsgg:delivery-obligations none head=…`: the assertion that nothing is owed.
-        leading = body.strip().replace("\r\n", "\n").split("\n", 1)[0]
         matched = _OBLIGATION_DECLARATION.match(leading)
         if not matched:
             raise GateError(

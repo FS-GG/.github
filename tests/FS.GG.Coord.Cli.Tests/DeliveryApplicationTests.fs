@@ -192,6 +192,184 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             Assert.False(obligation.Verified)
         | other -> failwithf "expected the real production declaration to parse with a real verdict, got %A" other
 
+    // .github#2544: `obligationsFromComments` selected its candidates with a RAW, untrimmed
+    // `Body.StartsWith` while every parse below that used `leadingLine`, which trims first. The pre-filter
+    // was therefore strictly STRICTER than the parser it fed, and a declaration opening with a newline or a
+    // space — which `leadingLine` was written to accept — was discarded before `leadingLine` ever ran.
+    //
+    // Legs A-E below are the exact matrix the issue measured against the real engine before it was filed.
+    // A and D were already green and are kept as controls that pin `.github#2347`'s fix in place; B, C and
+    // E were red. Leg E is NOT a parse change: a marker that is not the comment's own leading line stays
+    // INERT, and only the diagnostic learns to name the comment carrying it. The legs after E are that
+    // inertness boundary itself — if the trimmed pre-filter ever made a quoted or fenced marker live again,
+    // it would have broken exactly what `.github#2347` acceptance 2 and the `.github#2264` round-1
+    // anchoring fix exist to protect.
+    let private noneMarker = "<!-- fsgg:delivery-obligations none head=head-a -->"
+
+    [<Fact>]
+    let ``#2544 leg A the none declaration at byte 0 parses`` () =
+        match DeliveryApplication.obligationsFromComments "head-a" [ comment noneMarker ] with
+        | Ok [] -> ()
+        | other -> failwithf "expected the byte-0 declaration to clear, got %A" other
+
+    [<Fact>]
+    let ``#2544 leg B a leading newline before the marker parses exactly as byte 0 does`` () =
+        match DeliveryApplication.obligationsFromComments "head-a" [ comment ("\n" + noneMarker) ] with
+        | Ok [] -> ()
+        | other -> failwithf "expected a leading newline to parse as byte 0 does, got %A" other
+
+    [<Fact>]
+    let ``#2544 leg C a leading space before the marker parses exactly as byte 0 does`` () =
+        match DeliveryApplication.obligationsFromComments "head-a" [ comment (" " + noneMarker) ] with
+        | Ok [] -> ()
+        | other -> failwithf "expected a leading space to parse as byte 0 does, got %A" other
+
+    [<Fact>]
+    let ``#2544 leg D the marker, a blank line, then prose still parses`` () =
+        let body = noneMarker + "\n\nNo package, deployment, or registry surface moves in this change."
+        match DeliveryApplication.obligationsFromComments "head-a" [ comment body ] with
+        | Ok [] -> ()
+        | other -> failwithf "expected .github#2347's fix to remain green, got %A" other
+
+    [<Fact>]
+    let ``#2544 leg E prose above the marker stays inert, and the refusal names that comment`` () =
+        // The shape four independent lanes posted in a single session, each believing they had declared.
+        let body = "## Post-merge obligations: **none**\n\n" + noneMarker
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 4242L body ] with
+        | Ok _ -> failwith "leg E must NOT become a live declaration; only its diagnostic changes"
+        | Error reason ->
+            Assert.Contains("undeclared", reason)
+            Assert.Contains("4242", reason)
+            Assert.Contains("leading line", reason)
+
+    [<Fact>]
+    let ``#2544 a real obligation and its receipt parse when both bodies open with a newline`` () =
+        // The whole matrix above uses the `none` sentinel; this drives the same repair through the
+        // declaration and receipt grammars, which are separately filtered and separately parsed.
+        let comments =
+            [ commentWithId 51L "\n<!-- fsgg:delivery-obligation id=kit-0.49.0 kind=publication head=head-a -->\n\nTags and publishes the kit."
+              commentWithId 52L "\n<!-- fsgg:delivery-receipt id=kit-0.49.0 head=head-a evidence=https://nuget.example/kit -->" ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Ok [ obligation ] ->
+            Assert.Equal("kit-0.49.0", obligation.Id)
+            Assert.Equal("publication", obligation.Kind)
+            Assert.True(obligation.Verified)
+        | other -> failwithf "expected the newline-led declaration and receipt to parse, got %A" other
+
+    [<Fact>]
+    let ``#2544 a marker inside a fenced block is still inert once the pre-filter trims`` () =
+        // The fence is the comment's leading line, so the marker on line 2 is not a declaration. This is
+        // the boundary the trimmed pre-filter must not cross, stated as an executed leg rather than a claim.
+        let body = "```\n" + noneMarker + "\n```"
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 61L body ] with
+        | Ok _ -> failwith "a fenced marker must not become a live declaration"
+        | Error reason ->
+            Assert.Contains("undeclared", reason)
+            Assert.Contains("61", reason)
+
+    [<Fact>]
+    let ``#2544 a marker quoted inside a sentence is inert and is not accused of being a declaration`` () =
+        // Prose that merely mentions a marker mid-line is not a misplaced declaration, so the sharper
+        // diagnostic must not point at it — a message that names every comment discussing the protocol is
+        // no more actionable than the one it replaces.
+        let body = $"For context, a declaration will look like `{noneMarker}` once it is posted."
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 62L body ] with
+        | Ok _ -> failwith "a marker quoted inside a sentence must not become a live declaration"
+        | Error reason ->
+            Assert.Contains("undeclared", reason)
+            Assert.DoesNotContain("62", reason)
+
+    [<Fact>]
+    let ``#2544 a comment leading with a receipt is not reported as carrying an inert marker`` () =
+        // Its leading line IS a marker, so "the marker is not this comment's leading line" would be a
+        // false description of it even though a declaration marker sits further down.
+        let body =
+            "<!-- fsgg:delivery-receipt id=kit head=head-a evidence=https://nuget.example/kit -->\n\n\
+<!-- fsgg:delivery-obligation id=kit kind=publication head=head-a -->"
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 63L body ] with
+        | Ok _ -> failwith "a receipt with no declaration must still refuse"
+        | Error reason ->
+            Assert.Contains("undeclared", reason)
+            Assert.DoesNotContain("63", reason)
+
+    // ROUND-1 REVIEW REPAIR (.github#2544, critic `tern-bde7`). The first cut of this fix trimmed leading
+    // whitespace without limit, which did not merely make an inert marker live — it made the parse
+    // FAIL-OPEN and let a BYSTANDER break somebody else's PR. Four spaces (or a tab) opens a CommonMark
+    // indented code block, so a comment whose first content is an indented code SAMPLE was read as a real
+    // declaration. The limit below is CommonMark's own, and it is exactly the line between invisible and
+    // visible: 0-3 spaces render as nothing, 4+ render as a code block. `independent-review.md:16`'s
+    // generated review-policy block already states the rule this restores — a marker "inside a fence, an
+    // indented code block, or prose that only mentions it" is inert.
+
+    let private indentedSample = "    <!-- fsgg:delivery-obligation id=example kind=publication head=head-a -->"
+
+    [<Fact>]
+    let ``#2544 round 1: a bystander's indented code sample cannot destroy a valid declaration`` () =
+        // THE FINDING, as the critic executed it against live PR bytes: a good `none` declaration already
+        // on the PR, plus one added comment carrying an indented sample. Unlimited trimming turned the
+        // sample into a second declaration and the pair then collided, so the refusal accused the author
+        // of combining `none` with obligations when somebody had merely posted documentation.
+        let comments = [ commentWithId 71L noneMarker; commentWithId 72L indentedSample ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Ok [] -> ()
+        | other -> failwithf "a code sample must not disturb an existing valid declaration, got %A" other
+
+    [<Fact>]
+    let ``#2544 round 1: an indented declaration and receipt pair does not read as verified`` () =
+        // The fail-OPEN direction, and the one this subsystem must never move in: under unlimited
+        // trimming this pair reported `Verified = true` — a discharged obligation nobody declared.
+        let comments =
+            [ commentWithId 73L "    <!-- fsgg:delivery-obligation id=kit kind=publication head=head-a -->"
+              commentWithId 74L "    <!-- fsgg:delivery-receipt id=kit head=head-a evidence=https://nuget.example/kit -->" ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Ok obligations ->
+            failwithf "an indented code sample must never produce an obligation, let alone a verified one, got %A" obligations
+        | Error reason -> Assert.Contains("undeclared", reason)
+
+    [<Fact>]
+    let ``#2544 round 1: a four-space indented marker is inert, and is NAMED rather than silently ignored`` () =
+        // Both halves matter. Narrowing alone would send this declaration back to being invisible, which
+        // is the failure the whole row exists to kill — so criterion 2's diagnostic must reach it too.
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 75L ("    " + noneMarker) ] with
+        | Ok _ -> failwith "a four-space indented marker is a code block, not a declaration"
+        | Error reason ->
+            Assert.Contains("undeclared", reason)
+            Assert.Contains("75", reason)
+            Assert.Contains("leading line", reason)
+
+    [<Fact>]
+    let ``#2544 round 1: a tab-indented marker is inert, and is NAMED`` () =
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 76L ("\t" + noneMarker) ] with
+        | Ok _ -> failwith "a tab is one tab stop, so a tab-indented marker is a code block"
+        | Error reason ->
+            Assert.Contains("undeclared", reason)
+            Assert.Contains("76", reason)
+
+    [<Fact>]
+    let ``#2544 round 1: three spaces still declares, because three spaces render invisibly`` () =
+        // The boundary is CommonMark's, so it has to be pinned from BOTH sides: this is the widest
+        // indentation a reader cannot see, and leg C would be arbitrary if this one did not hold.
+        match DeliveryApplication.obligationsFromComments "head-a" [ comment ("   " + noneMarker) ] with
+        | Ok [] -> ()
+        | other -> failwithf "three spaces render as nothing, so the marker is still the leading line, got %A" other
+
+    [<Fact>]
+    let ``#2544 round 1: blank lines above a correctly-indented marker still declare`` () =
+        match DeliveryApplication.obligationsFromComments "head-a" [ comment ("\n\n  " + noneMarker) ] with
+        | Ok [] -> ()
+        | other -> failwithf "blank lines are not indentation, got %A" other
+
+    [<Fact>]
+    let ``#2544 round 1: the diagnostic does not tell a documentation author to make their sample declare`` () =
+        // The advice was unconditional — and under the indented-code-block case it was advice to perform
+        // the exact mutation that turns a code sample into a live declaration.
+        match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 77L indentedSample ] with
+        | Ok _ -> failwith "expected the indented sample to stay inert"
+        | Error reason ->
+            Assert.DoesNotContain("edit that comment to lead with it", reason)
+            Assert.Contains("meant to declare", reason)
+            Assert.Contains("code sample", reason)
+
     // Round-1 review repair (.github#2264 PR #2271): `Client.outstandingObligations` is the extracted,
     // directly-testable core of `reconcile`'s lifecycle fold, which previously scanned live PR comments
     // with bulk, unanchored `.Contains` — a comment quoting ANOTHER obligation's receipt marker in prose
