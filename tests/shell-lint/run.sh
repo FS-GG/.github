@@ -20,6 +20,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 GATE="$REPO_ROOT/scripts/lint-shell.sh"
 EXTRACT="$REPO_ROOT/scripts/lib/extract-workflow-shell.py"
+INSTALL="$REPO_ROOT/scripts/install-shellcheck.sh"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shell-lint-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -489,6 +490,107 @@ grep -qx 'scripts/fsgg-coord' <<<"$real_list" \
 grep -q '^workflow-embedded: \.github/workflows/kit-auto-publish\.yml:' <<<"$real_list" \
   && ok "#2493: the real subject includes workflow-embedded shell from kit-auto-publish.yml" \
   || bad "#2493: the real subject must include at least one real workflow's embedded shell — a green here with an empty workflow-embedded subject is discovery having broken, not a clean tree" "$real_list"
+
+# ---- 10. scripts/install-shellcheck.sh: THE ACQUISITION PATH ITSELF (.github#2501). ------------------
+#      Legs 1-9g above are entirely about scripts/lint-shell.sh — the LINTER. None of them ever put a
+#      network failure in front of the workflow's OWN binary-acquisition step, because none of them
+#      call install-shellcheck.sh at all. That gap is exactly how PR #2479 reddened on four `503`s from
+#      a PR that touched no shell whatsoever (run 31632742170): the acquisition step had no test of its
+#      own, hermetic or otherwise. These legs are that test, and they use `file://` URLs throughout —
+#      never a real host, reachable or not — so "network source unavailable" is exercised exactly, with
+#      no timeout, no flakiness of its own, and no dependence on this fixture's own network access.
+#
+#      A SYNTHETIC pin, deliberately NOT 0.11.0 / SHELLCHECK_SHA256 above: these legs test the
+#      ACQUISITION MECHANISM (cache-hit skips network, checksum retained regardless of source, a total
+#      failure is distinguishable from a lint finding), not today's real shellcheck release. Reusing
+#      the real pin would make this fixture's own network-independence depend on that release still
+#      existing, unrelated to what these legs are actually proving.
+inst_ver="9.9.9-fixture"
+inst_src="$WORK/install-src"
+mkdir -p "$inst_src"
+fake_bin_content='#!/usr/bin/env bash
+echo "fake shellcheck v9.9.9-fixture"
+'
+mkdir -p "$WORK/install-tarroot/shellcheck-v${inst_ver}"
+printf '%s' "$fake_bin_content" > "$WORK/install-tarroot/shellcheck-v${inst_ver}/shellcheck"
+chmod +x "$WORK/install-tarroot/shellcheck-v${inst_ver}/shellcheck"
+good_tar="$inst_src/shellcheck-v${inst_ver}.linux.x86_64.tar.xz"
+tar -cJf "$good_tar" -C "$WORK/install-tarroot" "shellcheck-v${inst_ver}"
+inst_sha="$(sha256sum "$good_tar" | awk '{print $1}')"
+
+# A second tarball whose CONTENT differs (so its checksum genuinely differs from $inst_sha) — the
+# "wrong artifact at a URL" case, distinct from "URL unreachable".
+mkdir -p "$WORK/install-tarroot-bad/shellcheck-v${inst_ver}"
+printf '%s' "$fake_bin_content"'# tampered
+' > "$WORK/install-tarroot-bad/shellcheck-v${inst_ver}/shellcheck"
+chmod +x "$WORK/install-tarroot-bad/shellcheck-v${inst_ver}/shellcheck"
+bad_tar="$inst_src/wrong-content.tar.xz"
+tar -cJf "$bad_tar" -C "$WORK/install-tarroot-bad" "shellcheck-v${inst_ver}"
+
+run_install() {
+  # run_install <cache-dir> <urls> -> sets IRC and IOUT ($3.. forwarded as extra positional args, unused)
+  IOUT="$(SHELLCHECK_URLS="$2" bash "$INSTALL" "$inst_ver" "$inst_sha" "$1" 2>&1)"; IRC=$?
+}
+
+# ---- 10a. Cold cache, a reachable+correct source: acquires, extracts, and the binary actually runs. ---
+d="$WORK/install-cold-ok"
+run_install "$d" "file://$good_tar"
+if [ "$IRC" = 0 ]; then
+  bin_path="$(printf '%s' "$IOUT" | tail -1)"
+  [ -x "$bin_path" ] && "$bin_path" 2>/dev/null | grep -q 'fake shellcheck v9.9.9-fixture' \
+    && ok "#2501: cold cache + reachable, correct source acquires a working, checksum-verified binary" \
+    || bad "#2501: the acquired binary must exist and run" "bin=$bin_path
+$IOUT"
+else
+  bad "#2501: acquisition from a reachable, correct source must succeed (rc=0)" "rc=$IRC
+$IOUT"
+fi
+
+# ---- 10b. WARM cache + an UNREACHABLE source: still succeeds, and never touches the source at all. ----
+#      This is the property the workflow's `actions/cache` restore depends on: once ANY run has
+#      acquired the tarball, every later run is zero-network, so a source outage cannot red the job.
+d="$WORK/install-warm-unreachable"
+mkdir -p "$d"
+cp "$good_tar" "$d/shellcheck-v${inst_ver}.linux.x86_64.tar.xz"
+run_install "$d" "file://$WORK/install-src/does-not-exist.tar.xz"
+[ "$IRC" = 0 ] \
+  && ok "#2501: a WARM cache acquires successfully even when every source URL is unreachable" \
+  || bad "#2501: a pre-verified cache entry must not require the network at all" "rc=$IRC
+$IOUT"
+
+# ---- 10c. COLD cache + an UNREACHABLE source: fails, and DISTINGUISHABLY — never a lint finding. ------
+#      Acceptance criterion 1 on .github#2501: an acquisition failure must not be able to produce a
+#      shell-lint verdict, and must be told apart from one. rc=2 (never 1, lint-shell.sh's finding
+#      code) and the message names a transport failure, not "shellcheck reported" anything.
+d="$WORK/install-cold-unreachable"
+run_install "$d" "file://$WORK/install-src/does-not-exist.tar.xz"
+[ "$IRC" = 2 ] \
+  && ok "#2501: cold cache + every source unreachable fails with rc=2 (transport, not a finding)" \
+  || bad "#2501: total acquisition failure must be rc=2" "rc=$IRC
+$IOUT"
+printf '%s' "$IOUT" | grep -q 'COULD NOT ACQUIRE' \
+  && ok "#2501: ...and the message is explicitly a COULD NOT ACQUIRE, distinguishable from a finding" \
+  || bad "#2501: the failure message must name itself as an acquisition failure" "$IOUT"
+printf '%s' "$IOUT" | grep -qi 'shellcheck reported\|shell-lint: shellcheck' \
+  && bad "#2501: an acquisition failure must never read as a shellcheck FINDING" "$IOUT" \
+  || ok "#2501: ...and it never launders as a shellcheck finding"
+
+# ---- 10d. Checksum mismatch FAILS CLOSED — a wrong-content source is refused, not silently accepted. --
+#      Acceptance criterion 2: checksum verification is retained and a mismatch still fails closed.
+#      This is the gate-inversion companion for the acquisition path itself: mutate the source content
+#      away from the pin and acquisition must red, exactly the way an unreachable source reds above.
+d="$WORK/install-checksum-mismatch"
+run_install "$d" "file://$bad_tar"
+[ "$IRC" = 2 ] \
+  && ok "#2501: a checksum MISMATCH fails closed (rc=2) — the wrong artifact is refused, not installed" \
+  || bad "#2501: a checksum mismatch must fail, never silently succeed" "rc=$IRC
+$IOUT"
+printf '%s' "$IOUT" | grep -qi 'checksum mismatch' \
+  && ok "#2501: ...and says so explicitly (checksum mismatch), not a generic failure" \
+  || bad "#2501: a checksum-mismatch failure should name itself" "$IOUT"
+[ -x "$d/extracted/shellcheck-v${inst_ver}/shellcheck" ] \
+  && bad "#2501: a checksum-mismatched artifact must never be extracted/installed" \
+  || ok "#2501: ...and nothing was extracted from the unverified artifact"
 
 echo
 echo "shell-lint fixture: $pass passed, $failcount failed"

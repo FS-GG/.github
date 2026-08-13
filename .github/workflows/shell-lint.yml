@@ -27,6 +27,19 @@
 # the diff in front of it, and the fix is always inside that diff. So it gates, honestly — and it
 # needs no `schedule:`, because nothing can stale a pure function of files that did not change.
 #
+# ACQUIRING THE PINNED BINARY IS NOT PART OF THAT PURE FUNCTION, AND USED TO SIT ON ITS CRITICAL PATH
+# ANYWAY (.github#2501). Both jobs below used to `curl` the tarball directly, on every run: four `503`s
+# from GitHub's release CDN reddened PR #2479 — a PR touching only `Directory.Build.props` and a
+# `.fsproj`, no shell whatsoever — and `.github#2433` makes `lint` a REQUIRED status context on `main`,
+# where a required context that cannot report deadlocks every merge with no bypass. `scripts/
+# install-shellcheck.sh` is the fix: an `actions/cache` restore keyed on the pin makes acquisition
+# ZERO-NETWORK once any run has succeeded, the script re-verifies the checksum on EVERY path (cache hit
+# or fresh download alike — a cache is trusted no more than the network), and a total acquisition
+# failure exits 2 with an `install-shellcheck:` title, in its OWN step, before `lint-shell.sh` ever
+# runs — never laundered into "shellcheck reported something". See that script's own header for the
+# full rationale, and tests/shell-lint/run.sh for the legs that exercise it with the network source
+# unavailable.
+#
 # THE SUBJECT ALSO INCLUDES WORKFLOW-EMBEDDED SHELL (.github#2493). A `run:` block in
 # `.github/workflows/*.yml` itself, or in a composite action's `action.yml`, is real hand-written shell
 # too — and this gate's own `lint` job showed `pass` on `.github#2489` without ever opening
@@ -85,15 +98,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install shellcheck (pinned + checksum-verified)
+      # Warm this, and scripts/install-shellcheck.sh below never touches the network at all (#2501) —
+      # see that script's own header, and the shared rationale in this file's own top-of-file comment.
+      - name: Restore cached shellcheck tarball
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/shellcheck-cache
+          key: shellcheck-${{ env.SHELLCHECK_VERSION }}-${{ env.SHELLCHECK_SHA256 }}
+
+      - name: Acquire shellcheck (pinned + checksum-verified)
         run: |
           set -euo pipefail
-          txz="$RUNNER_TEMP/shellcheck.tar.xz"
-          curl -fsSL --retry 3 -o "$txz" \
-            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
-          echo "${SHELLCHECK_SHA256}  ${txz}" | sha256sum -c -
-          tar -xJf "$txz" -C "$RUNNER_TEMP"
-          echo "SHELLCHECK=$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" >> "$GITHUB_ENV"
+          bin="$(bash scripts/install-shellcheck.sh "$SHELLCHECK_VERSION" "$SHELLCHECK_SHA256" "$RUNNER_TEMP/shellcheck-cache")"
+          echo "SHELLCHECK=$bin" >> "$GITHUB_ENV"
 
       - name: Run the shell-lint fixture (no network)
         run: bash tests/shell-lint/run.sh
@@ -115,15 +132,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install shellcheck (pinned + checksum-verified)
+      # Warm this, and scripts/install-shellcheck.sh below never touches the network at all (#2501) —
+      # see that script's own header, and the shared rationale in this file's own top-of-file comment.
+      - name: Restore cached shellcheck tarball
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/shellcheck-cache
+          key: shellcheck-${{ env.SHELLCHECK_VERSION }}-${{ env.SHELLCHECK_SHA256 }}
+
+      - name: Acquire shellcheck (pinned + checksum-verified)
         run: |
           set -euo pipefail
-          txz="$RUNNER_TEMP/shellcheck.tar.xz"
-          curl -fsSL --retry 3 -o "$txz" \
-            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
-          echo "${SHELLCHECK_SHA256}  ${txz}" | sha256sum -c -
-          tar -xJf "$txz" -C "$RUNNER_TEMP"
-          echo "SHELLCHECK=$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" >> "$GITHUB_ENV"
+          bin="$(bash scripts/install-shellcheck.sh "$SHELLCHECK_VERSION" "$SHELLCHECK_SHA256" "$RUNNER_TEMP/shellcheck-cache")"
+          echo "SHELLCHECK=$bin" >> "$GITHUB_ENV"
 
       - name: Lint
         id: check
