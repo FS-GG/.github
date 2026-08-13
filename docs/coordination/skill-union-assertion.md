@@ -581,6 +581,74 @@ reproduced every vector, and only the later revision is recorded, because the ga
 this repo can close that race. It is the cost of pinning a revision of a repository that moves
 independently, and it is the tripwire working rather than a defect in it.
 
+### It happened a third time, and the third turn closed the recurrence instead of the instance (#2521)
+
+The gate went red on `main` on **2026-08-08** and stayed red for **six consecutive scheduled runs**,
+this time on **`Schemas.fs`** — the second watched file, added to `derivedFrom.libraryFiles` by
+[#1577](https://github.com/FS-GG/.github/issues/1577). Ten days after #1880 closed by re-running the
+oracle, the same red was back one file over. That is the shape pnext-item §4 names: *if a fix keeps
+regenerating the same finding, the finding is not the bug — the thing that regenerates it is.* So
+[#2521](https://github.com/FS-GG/.github/issues/2521) was filed against the **recurrence**: a dated
+cross-repo snapshot with no owner and no re-derivation trigger. A third manual refresh buys a fourth.
+
+**Three questions, three mechanisms, and confusing any two of them is how this stays broken.**
+
+| question | mechanism | what it reads | when |
+| --- | --- | --- | --- |
+| Is the pin still **current**? | [`skillmirror-freshness.yml`](../../.github/workflows/skillmirror-freshness.yml) + `check-skillmirror-freshness.py` | the library's **default branch**, digests only | daily 07:11 |
+| Is the table **what its pin claims**? | `skillmirror-redrive.yml` job `derivation` + `skillmirror-redrive.py --assert-derived` | the library at **`derivedFrom.commit`**, every vector | every PR touching the table |
+| **Make** the pin current again | `skillmirror-redrive.yml` job `redrive` + `skillmirror-redrive.py --write` | the library's **default branch**, every vector | daily 07:41 |
+
+The middle row is new and is the one that makes the third row trustworthy: it reads at the *recorded*
+commit, which is exactly the read `check-skillmirror-freshness.py` **forbids itself** — there it would
+compare a digest to the bytes it was computed from and be green forever. Here the compared quantities
+are independent, so a PR that hand-edits a vector, or re-pins a commit without re-deriving, goes red.
+
+**What the bot may write, and the line it may not cross.** The oracle is deliberately *a checker and
+not a writer*, because "a generator that rewrote its own expectations from the implementation would
+green any divergence the moment it was regenerated". Automating the re-derivation must not quietly
+become that generator, so `skillmirror-redrive.py` writes **provenance only** — `derivedFrom.commit`,
+the `libraryFiles` digests, `digestVectors.measuredAgainst`, and the two dates — and never a measured
+column. A moved vector makes it **refuse and go red**, naming the vector. Two independent things
+enforce that: an allow-list of the oracle's provenance messages that treats anything unrecognised as
+a moved vector, and — because a message allow-list is a heuristic — a **re-run of the oracle after the
+write**, which reverts it if the derivation still disagrees.
+
+**It answers the question the freshness gate structurally cannot.** That gate compares digests: it can
+say the library moved, never whether the move altered `verify`. Running the *oracle* is what answers
+that, and it now happens **daily** rather than when someone remembers. A green there is a fresh
+measurement of behaviour across all 21 vectors, not a byte comparison.
+
+**It opens a PR; it does not merge one — unlike [`skill-registry-autofix.yml`](../../.github/workflows/skill-registry-autofix.yml).**
+That bot merges because its diff is mechanical digest churn produced hourly, and
+[#642](https://github.com/FS-GG/.github/issues/642) measured what an unmerged green bot PR is worth.
+This one differs in the way that matters: each re-pin **asserts that the library's behaviour is
+unchanged across a span of commits**, and this table's value has always rested on someone writing that
+span down — the paragraphs above and below are what that looks like. A bot cannot author them, and
+auto-merging would land the pin without them. So it opens a PR that is already green and already
+measured, turning hours of hand-derivation into minutes of review. The branch is pushed with the
+`fs-gg-cross-repo-dispatch` App token for the [#425](https://github.com/FS-GG/.github/issues/425)
+reason: a `GITHUB_TOKEN` push does not re-trigger `on: pull_request`, so the `derivation` job — the
+only independent check on the bot's own claim — would never run.
+
+**The #2521 turn's own measurement.** The oracle was run against **`745f4ba2`** and **no vector
+moved**: all 10 `fixtures[].library` blocks and all 11 `digestVectors[].digest` values reproduced
+exactly, and the run's only disagreement was `libraryFiles[Schemas.fs]`. The span
+`bc93f94..745f4ba2` is **48 commits** wide and does not touch `SkillMirror.fs` **at all** — its digest
+is unchanged from #1880's pin. It touches `Schemas.fs` in exactly **one** commit, `5a7fef7d`
+(FS.GG.SDD#804), which drops `.codex` from `Schemas.agentSkillRoots`, leaving `[".claude"; ".agents"]`.
+That is FS.GG.SDD adopting a decision **this repository had already made**: ADR-0067 §5 retired
+`.codex/skills` here at [#1636](https://github.com/FS-GG/.github/issues/1636). It cannot move `verify`,
+which takes root **labels** from its caller and never reads `agentSkillRoots` — and the oracle run is
+what turned that reasoning into a measurement rather than leaving it an argument.
+
+Two limits stated rather than implied. The vectors still name `.codex/skills`, **deliberately**:
+`verify` is root-agnostic, so the label is an arbitrary third root and the vectors remain a valid test
+of the fold; renaming them would edit a *measured* column for cosmetic realism, and that edit would
+have to be re-derived, not renamed. And `SkillMirror.fsi` **did** move in this span, while nothing here
+measures it — the oracle `#load`s the implementation files only, so a signature-file change is
+invisible to both the table and the gate.
+
 ### Intentional differences are asserted, not commented
 
 One vector carries a `divergence` block, and it is asserted in **both** directions — the shell must
