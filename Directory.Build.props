@@ -87,8 +87,13 @@
        also changes src/FS.GG.Coord.Core/Driver.fs and Review.fs, so coord-engine genuinely changes
        too; moving the whole coherent set together is honest rather than incidental, per the property
        group above's own rule (advancing this scalar is the ONLY way to bump any of the three). -->
+  <!-- 0.50.3 to 0.50.4 (.github#2500): another same-line patch bump, same cause and shape as 0.50.2
+       to 0.50.3 (3172d4ac). .github#2496 merged 182a2a62 after FS.GG.Kit 0.50.3 was packed at
+       42c63af9, editing pnext-item/SKILL.md — a kit-packed source — so the published 0.50.3 kit
+       drifted from canonical and check-kit-published-coherence reds on main. No engine source change;
+       this bump exists solely to let the coherent set republish with current canonical content. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.50.3</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.50.4</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
