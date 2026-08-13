@@ -238,9 +238,16 @@ This step moved ahead of the `landable` check (`.github#2504`) because `.github#
 `claim-generation` a required status context on `main`: GitHub now reports the PR `BLOCKED` — and
 `landable` reads that mergeability verdict, not only its own advisory rollup — until this call's marker
 is current, so waiting for `landable` green *before* making this call is a cycle the marker can never
-break. No push happens between this call and the merge below, so making the call here binds the marker
-to the identical head `landable` is about to score and the one that actually merges — the same property
-§6 has always required, reached one step earlier.
+break. No push should happen between this call and the merge below, and the ordinary flow does not
+produce one — but the reorder does not merely hope that holds: if a push ever did land in that window,
+`claim-generation`'s own check compares the marker's `head=` field against the PR's actual current head
+and fails closed on any mismatch (`scripts/check-claim-generation.py`), and the workflow re-runs on
+`synchronize` as well as on the marker's `edited` PATCH (`.github/workflows/coherence.yml`) — so a
+stale marker cannot silently carry a merge on a new head; it forces `claim-generation` red again until
+this call is re-issued, which is a zero-cost no-op PATCH-skip against an already-current marker and
+therefore always safe to make again. Making the call here binds the marker to the identical head
+`landable` is about to score and the one that actually merges — the same property §6 has always
+required, reached one step earlier.
 
 This call's JSON output may report `action: refreshReview, stage: reviewActive` at this point, because
 `claim-generation` and any other still-running checks have not yet reported against the marker this call
