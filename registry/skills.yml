@@ -251,7 +251,7 @@ skills:
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 9caebe34b35027cba3645003d9e48fd2cb761aa8e9d7845bd19ab7b34c0cb082, materializes-when: always }
+  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: c4da9c8e0ee92112dd2a0d27e16d2f96244afa3ffdd73852020d96b181ea4a0b, materializes-when: always }
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
