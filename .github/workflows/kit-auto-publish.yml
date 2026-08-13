@@ -126,6 +126,14 @@ jobs:
           [ -n "$org_latest" ] || org_latest=unknown; [ -n "$nuget_latest" ] || nuget_latest=unknown
           tag="kit/v${version}"; tag_exists=false
           git rev-parse -q --verify "refs/tags/$tag" >/dev/null && tag_exists=true || true
+          # .github#2495: the coherent-set siblings' own tag state, so the decision engine can tell a
+          # fresh eligible candidate (no tags yet) apart from a PARTIALLY tagged one (kit tagged, a
+          # sibling still missing — the state a prior run leaves behind now that the tag step pushes all
+          # three together, e.g. after an earlier single-tag run predating this fix). Peeled to the
+          # commit (`^{commit}`) so an annotated OR lightweight sibling tag resolves the same way;
+          # empty when the ref does not exist.
+          drivers_tag_sha="$(git rev-parse -q --verify "refs/tags/drivers/v${version}^{commit}" 2>/dev/null || true)"
+          coord_engine_tag_sha="$(git rev-parse -q --verify "refs/tags/coord-engine/v${version}^{commit}" 2>/dev/null || true)"
           # Resolve <Version> at a given commit/path, following ONE level of MSBuild property
           # indirection through Directory.Build.props.  .github#2410 (coherent-set versioning) made
           # FS.GG.Kit.csproj's <Version> a property REFERENCE, `$(FsggCoherentSetVersion)`, not a
@@ -291,19 +299,29 @@ jobs:
               [ -n "$run" ] && release="$(jq -c --arg commit "$org_commit" '. + {nuspecCommit:$commit}' <<<"$run")"
             fi
           fi
-          jq -n --arg version "$version" --arg sha "$source_sha" --argjson provenance "$provenance" --arg org "$org" --arg nuget "$nuget" --arg orgLatest "$org_latest" --arg nugetLatest "$nuget_latest" --argjson tag "$tag_exists" --argjson release "$release" '{version:$version,sourceSha:$sha,provenance:$provenance,orgFeed:$org,nugetFeed:$nuget,orgLatest:$orgLatest,nugetLatest:$nugetLatest,tagExists:$tag,releaseRun:$release}' > facts.json
+          jq -n --arg version "$version" --arg sha "$source_sha" --argjson provenance "$provenance" --arg org "$org" --arg nuget "$nuget" --arg orgLatest "$org_latest" --arg nugetLatest "$nuget_latest" --argjson tag "$tag_exists" --argjson release "$release" --arg driversTag "$drivers_tag_sha" --arg coordEngineTag "$coord_engine_tag_sha" '{version:$version,sourceSha:$sha,provenance:$provenance,orgFeed:$org,nugetFeed:$nuget,orgLatest:$orgLatest,nugetLatest:$nugetLatest,tagExists:$tag,releaseRun:$release,siblingTags:{drivers:$driversTag,coordEngine:$coordEngineTag}}' > facts.json
           python3 scripts/kit-auto-publish.py --facts facts.json --json | tee decision.json
           echo "action=$(jq -r .action decision.json)" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "source-sha=$source_sha" >> "$GITHUB_OUTPUT"
-      - name: Tag the sole eligible state
-        if: steps.observe.outputs.action == 'tag' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
+      - name: Tag the coherent-set siblings
+        if: (steps.observe.outputs.action == 'tag' || steps.observe.outputs.action == 'tagSiblings') && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
         env:
+          ACTION: ${{ steps.observe.outputs.action }}
           VERSION: ${{ steps.observe.outputs.version }}
+          SOURCE_SHA: ${{ steps.observe.outputs.source-sha }}
         run: |
           set -euo pipefail
-          tag="kit/v${VERSION}"
-          git rev-parse -q --verify "refs/tags/$tag" >/dev/null && { echo '::error::tag appeared after observation; refusing'; exit 1; }
+          kit_tag="kit/v${VERSION}"
+          # This TOCTOU guard only applies to the FRESH candidate ('tag'): the decision engine reached
+          # that action specifically because it observed `tagExists=false`, so the kit tag existing here
+          # means it appeared between observation and this write — refuse rather than act on stale
+          # information, exactly as before .github#2495. `tagSiblings` is the opposite case BY
+          # CONSTRUCTION (.github#2495): it only ever fires when the kit tag is ALREADY observed present,
+          # so the same check would refuse the very state this action exists to repair.
+          if [ "$ACTION" = tag ]; then
+            git rev-parse -q --verify "refs/tags/$kit_tag" >/dev/null && { echo '::error::tag appeared after observation; refusing'; exit 1; }
+          fi
           # `git tag -a` builds an annotated tag object, which requires a committer
           # identity — a hosted runner carries none by default, so an unconfigured
           # identity fails closed with `fatal: empty ident name ... not allowed`
@@ -312,8 +330,38 @@ jobs:
           # same identity before its own git operations; this mirrors it exactly.
           git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "Auto-publish FS.GG.Kit ${VERSION} after merged pr-arm evidence"
-          git push origin "refs/tags/$tag"
+          # .github#2495: FS.GG.Kit, FS.GG.Drivers and coord-engine release from one shared commit
+          # (.github#2402) and release-kit.yml/release-drivers.yml/release-coord-engine.yml each refuse
+          # to publish until ALL THREE tags exist and name that same commit (.github#2409 DEC-004). Tag
+          # and push whichever of the three are still missing, together, in one `git push` — matching
+          # `check_sibling_tag`'s own documented expectation ("push all three tags in one `git push`") so
+          # no sibling workflow can observe a state where only some of the trio are visible. Pinned to
+          # SOURCE_SHA rather than the checked-out HEAD: for a FRESH tag this is $GITHUB_SHA (identical to
+          # HEAD); for a REPAIR (`tagSiblings`) it is the commit the EXISTING kit tag already names, which
+          # may not be HEAD any more if main advanced after the earlier, partial run.
+          push_refs=()
+          tag_one() {
+            local tag="$1" label="$2"
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null && return 0
+            git tag -a "$tag" "$SOURCE_SHA" -m "Auto-publish FS.GG.$label ${VERSION} as part of the FS.GG coherent-set release (.github#2409)"
+            push_refs+=("refs/tags/$tag")
+          }
+          tag_one "$kit_tag" Kit
+          tag_one "drivers/v${VERSION}" Drivers
+          tag_one "coord-engine/v${VERSION}" Coord.Cli
+          if [ "${#push_refs[@]}" -eq 0 ]; then
+            echo '::error::nothing to tag/push — every coherent-set tag for '"$VERSION"' already exists at this commit; the decision engine should never have reached this step in that state'
+            exit 1
+          fi
+          # `--atomic`: a multi-ref push is NOT all-or-nothing by default — GitHub can accept some ref
+          # updates in one invocation and reject others (e.g. one tag name already exists on origin at a
+          # different commit, a genuine race this step cannot fully rule out from a single observation).
+          # Without `--atomic`, that partial acceptance is exactly how a split, mismatched coherent-set
+          # trio could land on `origin` even when this step's OWN logic is otherwise correct — the same
+          # split state `scripts/kit-auto-publish.py`'s sibling-tag check now also refuses to walk into
+          # from the read side (.github#2498 round-1 repair). `--atomic` closes the write side: either
+          # every ref in `push_refs` lands, or none do.
+          git push --atomic origin "${push_refs[@]}"
       - name: Escalate a non-eligible or partial state once
         if: steps.observe.outputs.action == 'refuse' || steps.observe.outputs.action == 'stickyEscalate'
         env:

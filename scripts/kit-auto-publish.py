@@ -98,7 +98,63 @@ def decide(facts):
         return result("refuse", "candidate-not-strictly-newer-than-frontier", version)
     if candidate[0] != org_latest[0] or candidate[1] != org_latest[1] + 1:
         return result("refuse", "candidate-not-next-patch", version)
+    # BEGIN sibling-tag-check (extracted verbatim by tests/kit-auto-publish/run.sh for mutation)
+    # .github#2495/.github#2498 round-1 repair 1: this check runs on EVERY path that can reach a tag
+    # write below — `tagExists` true (kit already tagged) OR false (about to tag kit fresh) — not only
+    # the former. The first draft of this fix put the whole check inside `if facts.get("tagExists"):`,
+    # which left the MIRROR case completely unread: kit not yet tagged, but a sibling tag ALREADY exists
+    # (from a prior run's partial push — see the workflow's own `--atomic` fix alongside this one — or
+    # any out-of-band source). `decide()` fell straight through to `"tag"`, and the tag step would then
+    # create+push kit and whichever sibling was ALSO missing at the CURRENT commit while leaving the
+    # pre-existing sibling untouched at its OLD commit: a split, mismatched coherent-set trio landed on
+    # `origin` by this very step, silently (exit 0). Independent review caught this reproduced end to
+    # end against a real remote before it shipped.
+    #
+    # `sourceSha` is the right commit to check against on EITHER path: the workflow computes it as the
+    # kit tag's own peeled commit when the kit tag exists, and falls back to `$GITHUB_SHA` — precisely
+    # the commit the tag step is about to create kit at — when it does not (see the workflow's own
+    # comment on `source_sha`). So "the commit every coherent-set tag for this version must name" is one
+    # fact, read once, checked against `siblingTags` the same way regardless of whether kit itself is
+    # tagged yet.
+    siblings = facts.get("siblingTags")
+    kit_sha = facts.get("sourceSha")
+    if (
+        not isinstance(siblings, dict)
+        or set(siblings) != {"drivers", "coordEngine"}
+        or not all(isinstance(siblings.get(key), str) for key in ("drivers", "coordEngine"))
+        or not isinstance(kit_sha, str)
+        or not kit_sha
+    ):
+        # A missing/malformed sibling-tag observation is not the same as a verified-absent sibling tag
+        # — folding the two together risks authorizing a WRITE from an incomplete read (fail-closed,
+        # same rationale as `REQUIRED_FACTS` above, scoped to this check because every OTHER decision
+        # path here — refusals decided before this point — is indifferent to sibling-tag state and never
+        # reaches a tag write at all).
+        return result("refuse", "sibling-tag-observation-missing", version)
+    mismatched = [name for name in ("drivers", "coordEngine") if siblings[name] and siblings[name] != kit_sha]
+    if mismatched:
+        # A sibling tag exists but names a DIFFERENT commit than the one this run's kit tag names (or
+        # will name). Tags are immutable once pushed (.github#1772) — silently moving or duplicating one
+        # is exactly the hazard that guarantee exists to prevent, so this is an anomaly for a human to
+        # resolve, not something kit-auto-publish overwrites or tags around on its own authority.
+        return result("stickyEscalate", "sibling-tag-commit-mismatch", version)
+    # END sibling-tag-check
     if facts.get("tagExists"):
+        # .github#2495: `kit/v$version` alone is not enough. FS.GG.Kit, FS.GG.Drivers and coord-engine
+        # release from one shared commit (.github#2402) and release-kit.yml's `check_sibling_tag`
+        # (.github#2409 DEC-004) refuses to publish until `drivers/v$version` and `coord-engine/v$version`
+        # ALSO resolve to that exact commit. kit-auto-publish's own tag step now pushes all three
+        # together (see the "tag" action below), so reaching here with the kit tag already present but a
+        # sibling missing means an EARLIER run completed only the kit half of that write — the live,
+        # currently-owed 0.50.3 is in exactly this state. `tagSiblings` is the typed, idempotent repair:
+        # it never re-tags kit (git itself will refuse an existing ref, and the workflow's own TOCTOU
+        # guard on the "tag" path assumes kit does not yet exist), it only supplies whichever sibling
+        # tag(s) are missing, pinned to the SAME commit the existing kit tag already names — not whatever
+        # commit main happens to be when this later run fires. (The mismatch/observation-missing checks
+        # above already ran, so by construction every sibling here is either absent or matches.)
+        missing = [name for name in ("drivers", "coordEngine") if not siblings[name]]
+        if missing:
+            return result("tagSiblings", "kit-tagged-siblings-missing", version)
         return result("stickyEscalate", "tag-exists-without-both-feed-publication", version)
     return result("tag", "eligible-authored-unpublished-patch", version)
 

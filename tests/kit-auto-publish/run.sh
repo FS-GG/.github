@@ -12,7 +12,11 @@ case_run() {
   [ "$actual" = "$expected" ] || { echo "$name: expected $expected, got $actual" >&2; exit 1; }
   checks=$((checks + 1))
 }
-base='"provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.27.0","tagExists":false'
+# .github#2498 round-1 repair 1: the sibling-tag check now runs on EVERY path that can reach a tag
+# write, including this FRESH one — so every fixture below that is meant to reach "tag" needs a
+# verified-absent `siblingTags` observation and a `sourceSha` (the commit the fresh tag will name),
+# not just the fixtures that were already exercising the `tagExists:true` repair branch.
+base='"provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.27.0","tagExists":false,"sourceSha":"cccccccccccccccccccccccccccccccccccccc","siblingTags":{"drivers":"","coordEngine":""}'
 case_run eligible tag "{\"version\":\"0.27.1\",$base}"
 case_run major refuse "{\"version\":\"1.0.0\",$base}"
 case_run partial stickyEscalate "{\"version\":\"0.27.1\",${base/\"orgFeed\":\"absent\"/\"orgFeed\":\"present\"},\"nugetFeed\":\"absent\"}"
@@ -20,6 +24,170 @@ case_run older-gap refuse '{"version":"0.27.1","provenance":{"mergedReachable":t
 case_run frontier-disagree stickyEscalate '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.28.0","tagExists":false}'
 case_run unrelated-later-pr refuse '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.27.0","tagExists":false}'
 case_run coherent-set-minor refuse '{"version":"0.51.0","provenance":{"mergedReachable":true,"introducedVersion":"0.51.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.50.2","nugetLatest":"0.50.2","tagExists":false}'
+
+# ---- .github#2495: `kit/v$version` alone leaves FS.GG.Kit unpublished forever — release-kit.yml's
+#      sibling-tag precondition (.github#2409 DEC-004) refuses until `drivers/v$version` and
+#      `coord-engine/v$version` ALSO resolve to the kit tag's commit. These fixtures reproduce the
+#      real, currently-owed live state (kit/v0.50.3 tagged alone at 42c63af9, both siblings absent,
+#      neither feed published yet) and its neighboring cases. ----
+assert_reason() {
+  local name="$1" expected="$2" actual
+  actual="$(python3 "$root/scripts/kit-auto-publish.py" --facts "$work/$name.json" --json | jq -r .reason)"
+  [ "$actual" = "$expected" ] || { echo "$name: expected reason $expected, got $actual" >&2; exit 1; }
+  checks=$((checks + 1))
+}
+tagged_base='"provenance":{"mergedReachable":true,"introducedVersion":"0.50.3","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.50.2","nugetLatest":"0.50.2","tagExists":true,"sourceSha":"deadbeef"'
+
+# Both siblings missing — the live 0.50.3 shape: repair by tagging both.
+case_run siblings-missing tagSiblings "{\"version\":\"0.50.3\",$tagged_base,\"siblingTags\":{\"drivers\":\"\",\"coordEngine\":\"\"}}"
+assert_reason siblings-missing kit-tagged-siblings-missing
+
+# One sibling already present (at the SAME commit) — repair only the other.
+case_run siblings-partial tagSiblings "{\"version\":\"0.50.3\",$tagged_base,\"siblingTags\":{\"drivers\":\"deadbeef\",\"coordEngine\":\"\"}}"
+assert_reason siblings-partial kit-tagged-siblings-missing
+
+# All three tags present at the same commit, feeds not yet published — genuinely just waiting on
+# release-kit.yml to run, nothing left for kit-auto-publish to write.
+case_run siblings-complete stickyEscalate "{\"version\":\"0.50.3\",$tagged_base,\"siblingTags\":{\"drivers\":\"deadbeef\",\"coordEngine\":\"deadbeef\"}}"
+assert_reason siblings-complete tag-exists-without-both-feed-publication
+
+# A sibling tag exists but names a DIFFERENT commit than kit's — an anomaly, never silently overwritten.
+case_run siblings-mismatch stickyEscalate "{\"version\":\"0.50.3\",$tagged_base,\"siblingTags\":{\"drivers\":\"wrongsha\",\"coordEngine\":\"\"}}"
+assert_reason siblings-mismatch sibling-tag-commit-mismatch
+
+# `siblingTags` absent entirely (an observation-step regression) — fail closed rather than treat a
+# missing read as "both siblings verified absent, safe to tag".
+case_run siblings-observation-missing refuse "{\"version\":\"0.50.3\",$tagged_base}"
+assert_reason siblings-observation-missing sibling-tag-observation-missing
+
+# `sourceSha` absent while `tagExists` is true — the same fail-closed rule; there is no commit to pin
+# a repair tag to.
+tagged_no_source_sha='"provenance":{"mergedReachable":true,"introducedVersion":"0.50.3","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.50.2","nugetLatest":"0.50.2","tagExists":true'
+case_run siblings-no-source-sha refuse "{\"version\":\"0.50.3\",$tagged_no_source_sha,\"siblingTags\":{\"drivers\":\"\",\"coordEngine\":\"\"}}"
+assert_reason siblings-no-source-sha sibling-tag-observation-missing
+
+# ---- .github#2498 round-1 repair 1: independent review reproduced, end to end against a real git
+#      remote, a blind spot in the FIRST draft of the sibling-tag check above: it lived entirely inside
+#      `if facts.get("tagExists"):`, so a candidate with kit NOT yet tagged but a SIBLING already
+#      present (e.g. left behind by a non-atomic partial push, or any out-of-band source) fell straight
+#      through to `"tag"` unchecked — the exact mirror of the case this item exists to repair, and
+#      reachable by this PR's own new multi-ref push before the `--atomic` fix below closed that
+#      specific cause. These fixtures are the FRESH path (`tagExists:false`) with a sibling already
+#      present, which the shipped code above now also covers (the check runs before the `tagExists`
+#      branch, not inside it). ----
+fresh_base='"provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.27.0","tagExists":false,"sourceSha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"'
+
+# A sibling tag already exists at a DIFFERENT commit than the one this run's fresh kit tag would name
+# — exactly the critic's reproduction (drivers seeded at commit A, candidate about to tag at commit B).
+case_run fresh-sibling-mismatch stickyEscalate "{\"version\":\"0.27.1\",$fresh_base,\"siblingTags\":{\"drivers\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"coordEngine\":\"\"}}"
+assert_reason fresh-sibling-mismatch sibling-tag-commit-mismatch
+
+# `siblingTags` absent entirely on the fresh path — fail closed, same as the already-tagged path.
+case_run fresh-siblings-observation-missing refuse "{\"version\":\"0.27.1\",$fresh_base}"
+assert_reason fresh-siblings-observation-missing sibling-tag-observation-missing
+
+# A sibling ALREADY exists but at the SAME commit the fresh kit tag would name — consistent, not an
+# anomaly (e.g. one sibling landed from an earlier successful partial push whose other refs failed);
+# `tag` proceeds, and `tag_one`'s own per-ref existence check will skip re-creating it.
+case_run fresh-siblings-already-consistent tag "{\"version\":\"0.27.1\",$fresh_base,\"siblingTags\":{\"drivers\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"coordEngine\":\"\"}}"
+
+# ---- GATE-INVERSION EVIDENCE (pnext-item §3) for round-1 repair 1: reproduce the EXACT pre-repair
+#      structure — the sibling-tag check moved back to living ONLY inside `if facts.get("tagExists"):`
+#      — by relocating the marked `sibling-tag-check` block from its current (unconditional) position to
+#      immediately inside that `if`, byte-identical to the round-1-reviewed shape. This must (a) let
+#      `fresh-sibling-mismatch` above fall through to `"tag"` again — the regression the critic found —
+#      while (b) leaving the already-tagged-path fixtures (`siblings-missing` etc., above) working
+#      exactly as before, since round 1's bug was ONLY that the check was misplaced, not that it was
+#      wrong. A mutation that cannot reproduce both halves has not isolated the real defect. ----
+mutate_to_round1_structure() {
+  python3 - "$root/scripts/kit-auto-publish.py" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+start_marker = "    # BEGIN sibling-tag-check"
+end_marker = "    # END sibling-tag-check\n"
+start = text.index(start_marker)
+end = text.index(end_marker, start) + len(end_marker)
+block = text[start:end]
+without_block = text[:start] + text[end:]
+indented_block = "".join(("    " + line if line.strip() else line) for line in block.splitlines(keepends=True))
+anchor = '    if facts.get("tagExists"):\n'
+anchor_idx = without_block.index(anchor)
+if anchor_idx > start:
+    anchor_idx -= len(block)
+insert_at = anchor_idx + len(anchor)
+mutated = without_block[:insert_at] + indented_block + without_block[insert_at:]
+if mutated == text:
+    sys.exit("mutate_to_round1_structure: sibling-tag-check block not found/unchanged")
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+}
+round1_script="$work/kit-auto-publish-round1.py"
+mutate_to_round1_structure "$round1_script"
+python3 -c "import ast; ast.parse(open('$round1_script').read())" \
+  || { echo "gate-inversion (round-1 structure): mutated script is not valid Python" >&2; exit 1; }
+checks=$((checks + 1))
+
+# (a) the regression reappears: the fresh-path mismatch is no longer caught.
+round1_action="$(python3 "$round1_script" --facts "$work/fresh-sibling-mismatch.json" --json | jq -r .action)"
+[ "$round1_action" = tag ] \
+  || { echo "gate-inversion (round-1 structure): reverted logic should let fresh-sibling-mismatch fall through to 'tag' (the exact regression), got $round1_action" >&2; exit 1; }
+checks=$((checks + 1))
+
+# (b) the already-tagged path is UNCHANGED by this mutation — isolates that round 1's bug was placement,
+#     not the check's own logic.
+round1_repair_action="$(python3 "$round1_script" --facts "$work/siblings-missing.json" --json | jq -r .action)"
+[ "$round1_repair_action" = tagSiblings ] \
+  || { echo "gate-inversion (round-1 structure): the already-tagged repair path must be unaffected by this mutation, got $round1_repair_action" >&2; exit 1; }
+checks=$((checks + 1))
+round1_mismatch_action="$(python3 "$round1_script" --facts "$work/siblings-mismatch.json" --json | jq -r .action)"
+[ "$round1_mismatch_action" = stickyEscalate ] \
+  || { echo "gate-inversion (round-1 structure): the already-tagged mismatch path must be unaffected by this mutation, got $round1_mismatch_action" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- .github#2498 round-1 repair 1, REAL-REMOTE REPRODUCTION: the critic's own reproduction, re-run
+#      against the FIXED code, gathering facts the way the REAL observation step does (git rev-parse
+#      against a real remote), not hand-typed JSON. Seed `drivers/v0.60.1` at commit A on a real bare
+#      remote, advance local HEAD to commit B (the fresh candidate's `sourceSha`/`$GITHUB_SHA`), and
+#      confirm the shipped decision engine now refuses to authorize `"tag"` in this state. ----
+real_remote_check_work="$esc_work/real-remote-sibling-check"
+mkdir -p "$real_remote_check_work"
+real_remote="$real_remote_check_work/origin.git"
+git init --quiet --bare "$real_remote"
+rr_home="$real_remote_check_work/home"; mkdir -p "$rr_home"
+rr_repo="$real_remote_check_work/repo"
+git -c init.defaultBranch=main clone --quiet "$real_remote" "$rr_repo"
+( cd "$rr_repo" && HOME="$rr_home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test commit --quiet --allow-empty -m commit-a \
+    && HOME="$rr_home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
+commit_a="$(git -C "$rr_repo" rev-parse HEAD)"
+( cd "$rr_repo" && HOME="$rr_home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test tag -a "drivers/v0.60.1" "$commit_a" -m seed \
+    && HOME="$rr_home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin refs/tags/drivers/v0.60.1 )
+( cd "$rr_repo" && HOME="$rr_home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test commit --quiet --allow-empty -m commit-b \
+    && HOME="$rr_home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
+commit_b="$(git -C "$rr_repo" rev-parse HEAD)"
+[ "$commit_a" != "$commit_b" ] || { echo "real-remote sibling check: sanity failed — commit A and B are identical" >&2; exit 1; }
+checks=$((checks + 1))
+# Read siblingTags exactly the way the real observation step does (peeled ^{commit}, against the clone
+# that already fetched everything via `clone`/`push` above — no separate fetch needed).
+rr_drivers_sha="$(git -C "$rr_repo" rev-parse -q --verify 'refs/tags/drivers/v0.60.1^{commit}' 2>/dev/null || true)"
+rr_coord_sha="$(git -C "$rr_repo" rev-parse -q --verify 'refs/tags/coord-engine/v0.60.1^{commit}' 2>/dev/null || true)"
+[ "$rr_drivers_sha" = "$commit_a" ] || { echo "real-remote sibling check: expected drivers tag to resolve to commit A, got $rr_drivers_sha" >&2; exit 1; }
+checks=$((checks + 1))
+python3 -c "
+import json
+json.dump({
+    'version': '0.60.1',
+    'provenance': {'mergedReachable': True, 'introducedVersion': '0.60.1', 'prArm': 'pass'},
+    'orgFeed': 'absent', 'nugetFeed': 'absent', 'orgLatest': '0.60.0', 'nugetLatest': '0.60.0',
+    'tagExists': False, 'sourceSha': '$commit_b',
+    'siblingTags': {'drivers': '$rr_drivers_sha', 'coordEngine': '$rr_coord_sha'},
+}, open('$real_remote_check_work/facts.json', 'w'))
+"
+rr_verdict="$(python3 "$root/scripts/kit-auto-publish.py" --facts "$real_remote_check_work/facts.json" --json)"
+rr_action="$(jq -r .action <<<"$rr_verdict")"; rr_reason="$(jq -r .reason <<<"$rr_verdict")"
+[ "$rr_action" = stickyEscalate ] && [ "$rr_reason" = sibling-tag-commit-mismatch ] \
+  || { echo "real-remote sibling check: expected stickyEscalate/sibling-tag-commit-mismatch, got $rr_action/$rr_reason" >&2; cat "$real_remote_check_work/facts.json" >&2; exit 1; }
+checks=$((checks + 1))
 
 # ---- .github#2442/.github#2435: a `candidate-not-next-patch` refusal on a coherent-set minor bump
 #      is the frontier rail working AS DESIGNED, not a defect (maintainer decision on #2442) — but
@@ -887,12 +1055,14 @@ observed_green="$(jq -r .prArm "$d/stdout.log" 2>/dev/null)"
   || { echo "gate-inversion (repair 3, GREEN/restore phase): expected the restored function to find the real match (prArm=pass), got: $(cat "$d/stdout.log")" >&2; exit 1; }
 checks=$((checks + 1))
 
-# ---- .github#2492: "Tag the sole eligible state" never configured a committer identity before
-#      `git tag -a`, so every eligible candidate crashed with `fatal: empty ident name` on any
-#      runner without a global git identity (every GitHub Actions runner has none). This extracts
-#      the REAL step out of the REAL workflow and runs it end to end against a real local git
-#      remote — a fixture that could tell only "the commands were invoked" from "a tag actually
-#      landed" would not have caught this (the issue's own acceptance criterion 3).
+# ---- .github#2492/.github#2495: "Tag the coherent-set siblings" (originally "Tag the sole eligible
+#      state") never configured a committer identity before `git tag -a` (.github#2492), and on its
+#      own only ever tagged `kit/v$VERSION` — leaving `drivers/v$VERSION`/`coord-engine/v$VERSION`
+#      permanently missing, which is what stops release-kit.yml's sibling-tag precondition from ever
+#      clearing (.github#2495). This extracts the REAL step out of the REAL workflow and runs it end
+#      to end against a real local git remote — a fixture that could tell only "the commands were
+#      invoked" from "a tag actually landed [at the right commit]" would not have caught either defect
+#      (the .github#2492 issue's own acceptance criterion 3; the same standard applies here).
 tag_work="$esc_work/tag-identity"
 mkdir -p "$tag_work"
 
@@ -909,7 +1079,7 @@ wf_path, out_path = sys.argv[1], sys.argv[2]
 with open(wf_path, encoding="utf-8") as fh:
     wf = yaml.safe_load(fh)
 steps = (wf.get("jobs") or {}).get("decide", {}).get("steps") or []
-step = next((s for s in steps if s.get("name") == "Tag the sole eligible state"), None)
+step = next((s for s in steps if s.get("name") == "Tag the coherent-set siblings"), None)
 if step is None:
     sys.exit("the tag step is GONE from kit-auto-publish.yml")
 run = step["run"].replace("${{ steps.app-token.outputs.app-slug }}", "test-bot")
@@ -954,7 +1124,8 @@ git init --quiet --bare "$tag_remote"
 # make_worktree <name> -> a fresh clone of the bare remote with a seed commit, printed. HOME points
 # at an empty, per-clone directory and GIT_CONFIG_NOSYSTEM=1 is set so neither this host's own
 # ~/.gitconfig identity nor any system config leaks in — matching a hosted runner's clean
-# environment, which is exactly the environment the live bug required.
+# environment, which is exactly the environment the live bug required. The seed commit's sha is left
+# in `$d/seed-sha` for callers that need it as SOURCE_SHA.
 make_worktree() {
   local d="$tag_work/$1"
   mkdir -p "$d/home"
@@ -962,23 +1133,44 @@ make_worktree() {
   ( cd "$d/repo" \
       && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test commit --quiet --allow-empty -m seed \
       && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
+  git -C "$d/repo" rev-parse HEAD > "$d/seed-sha"
   printf '%s' "$d"
 }
 
-# run_tag_step <dir> <version> <script> -> exit code; runs INSIDE the clone with the same isolated
-# HOME/GIT_CONFIG_NOSYSTEM so neither this host's global git identity nor any credential helper can
-# mask the defect.
+# advance_head <dir> -> commits one more empty commit on top of the seed (NOT pushed to the remote —
+# a real run's checkout only ever needs to resolve commit-ishes locally), printing the new sha. Models
+# main having moved on since an earlier, partial kit-auto-publish run tagged kit alone: the seed commit
+# (still what the pre-existing kit tag names) is no longer HEAD.
+advance_head() {
+  local d="$1"
+  ( cd "$d/repo" && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test commit --quiet --allow-empty -m advance )
+  git -C "$d/repo" rev-parse HEAD
+}
+
+# push_tag_at <dir> <tag> <sha> -> creates an annotated tag at <sha> and pushes it, standing in for an
+# earlier kit-auto-publish run (or, for kit itself, a human) having already tagged that ref.
+push_tag_at() {
+  local d="$1" tag="$2" sha="$3"
+  ( cd "$d/repo" \
+      && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -c user.name=seed -c user.email=seed@example.test tag -a "$tag" "$sha" -m seed \
+      && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin "refs/tags/$tag" )
+}
+
+# run_tag_step <dir> <version> <action> <source-sha> <script> -> exit code; runs INSIDE the clone with
+# the same isolated HOME/GIT_CONFIG_NOSYSTEM so neither this host's global git identity nor any
+# credential helper can mask the defect.
 run_tag_step() {
-  local dir="$1" version="$2" script="$3" rc=0
+  local dir="$1" version="$2" action="$3" source_sha="$4" script="$5" rc=0
   ( cd "$dir/repo" \
-      && HOME="$dir/home" GIT_CONFIG_NOSYSTEM=1 VERSION="$version" bash "$script" >"$dir/stdout.log" 2>"$dir/stderr.log" ) || rc=$?
+      && HOME="$dir/home" GIT_CONFIG_NOSYSTEM=1 ACTION="$action" VERSION="$version" SOURCE_SHA="$source_sha" bash "$script" >"$dir/stdout.log" 2>"$dir/stderr.log" ) || rc=$?
   return "$rc"
 }
 
 # ---- RED: the pre-fix step (no identity configured) fails closed exactly like the live runs cited
 #      in .github#2492, and no tag reaches the remote. ----
 d="$(make_worktree red)"
-rc=0; run_tag_step "$d" "9.9.1" "$tag_no_identity_script" || rc=$?
+seed_sha="$(cat "$d/seed-sha")"
+rc=0; run_tag_step "$d" "9.9.1" tag "$seed_sha" "$tag_no_identity_script" || rc=$?
 [ "$rc" -ne 0 ] \
   || { echo "gate-inversion (tag identity, RED phase): pre-fix step should have failed closed, exited 0" >&2; exit 1; }
 checks=$((checks + 1))
@@ -993,19 +1185,209 @@ git -C "$tag_remote" tag -l 'kit/v9.9.1' | grep -q . \
   && { echo "gate-inversion (tag identity, RED phase): no tag should have reached the remote" >&2; exit 1; }
 checks=$((checks + 1))
 
-# ---- GREEN: the REAL, currently-shipped step (identity configured) succeeds, and the tag actually
-#      lands on the remote — not merely that the commands were invoked without error. ----
+# ---- GREEN: the REAL, currently-shipped step (identity configured, action='tag', fresh candidate)
+#      succeeds, and ALL THREE coherent-set tags actually land on the remote at the SAME commit — not
+#      merely that the commands were invoked without error, and not only kit (.github#2495's gap). ----
 d="$(make_worktree green)"
-rc=0; run_tag_step "$d" "9.9.2" "$tag_script" || rc=$?
+seed_sha="$(cat "$d/seed-sha")"
+rc=0; run_tag_step "$d" "9.9.2" tag "$seed_sha" "$tag_script" || rc=$?
 [ "$rc" -eq 0 ] \
   || { echo "gate-inversion (tag identity, GREEN phase): expected exit 0, got $rc" >&2; cat "$d/stderr.log" >&2; exit 1; }
 checks=$((checks + 1))
-git -C "$tag_remote" tag -l 'kit/v9.9.2' | grep -qx 'kit/v9.9.2' \
-  || { echo "gate-inversion (tag identity, GREEN phase): expected kit/v9.9.2 to have reached the remote" >&2; exit 1; }
+for tag in kit/v9.9.2 drivers/v9.9.2 coord-engine/v9.9.2; do
+  git -C "$tag_remote" tag -l "$tag" | grep -qx "$tag" \
+    || { echo "gate-inversion (tag identity, GREEN phase): expected $tag to have reached the remote" >&2; exit 1; }
+  checks=$((checks + 1))
+  landed_sha="$(git -C "$tag_remote" rev-parse "refs/tags/$tag^{commit}")"
+  [ "$landed_sha" = "$seed_sha" ] \
+    || { echo "gate-inversion (tag identity, GREEN phase): $tag landed at $landed_sha, expected the seed commit $seed_sha" >&2; exit 1; }
+  checks=$((checks + 1))
+  tagger="$(git -C "$tag_remote" for-each-ref --format='%(taggername) %(taggeremail)' "refs/tags/$tag")"
+  [ "$tagger" = 'test-bot[bot] <297630107+test-bot[bot]@users.noreply.github.com>' ] \
+    || { echo "gate-inversion (tag identity, GREEN phase): unexpected tagger identity for $tag: $tagger" >&2; exit 1; }
+  checks=$((checks + 1))
+done
+
+# ---- .github#2495 leg 1 — TOCTOU guard is unaffected: 'tag' still refuses when kit's tag appears
+#      between observation and this write, and (new) no sibling tag reaches the remote either. ----
+d="$(make_worktree race)"
+seed_sha="$(cat "$d/seed-sha")"
+push_tag_at "$d" "kit/v9.9.3" "$seed_sha"
+rc=0; run_tag_step "$d" "9.9.3" tag "$seed_sha" "$tag_script" || rc=$?
+[ "$rc" -ne 0 ] \
+  || { echo ".github#2495 leg 1 (TOCTOU guard): expected the race guard to refuse, exited 0" >&2; cat "$d/stdout.log" >&2; exit 1; }
 checks=$((checks + 1))
-tagger="$(git -C "$tag_remote" for-each-ref --format='%(taggername) %(taggeremail)' refs/tags/kit/v9.9.2)"
-[ "$tagger" = 'test-bot[bot] <297630107+test-bot[bot]@users.noreply.github.com>' ] \
-  || { echo "gate-inversion (tag identity, GREEN phase): unexpected tagger identity: $tagger" >&2; exit 1; }
+grep -q 'tag appeared after observation' "$d/stdout.log" \
+  || { echo ".github#2495 leg 1 (TOCTOU guard): expected the original race-refusal message, got:" >&2; cat "$d/stdout.log" >&2; exit 1; }
 checks=$((checks + 1))
+for tag in drivers/v9.9.3 coord-engine/v9.9.3; do
+  git -C "$tag_remote" tag -l "$tag" | grep -q . \
+    && { echo ".github#2495 leg 1 (TOCTOU guard): $tag must not have been created on a refused run" >&2; exit 1; }
+  checks=$((checks + 1))
+done
+
+# ---- .github#2495 leg 2 — the REPAIR path: kit already tagged (by an earlier, partial run) at a
+#      commit that is NO LONGER HEAD (main has since advanced), both siblings missing. `tagSiblings`
+#      must supply exactly the two missing tags, pinned to kit's EXISTING commit — never re-touch kit,
+#      never point the siblings at whatever HEAD happens to be now. This is the live, currently-owed
+#      0.50.3 shape (kit/v0.50.3 already on origin at 42c63af9, both siblings absent) reproduced
+#      end-to-end against a real remote. ----
+d="$(make_worktree repair)"
+seed_sha="$(cat "$d/seed-sha")"
+push_tag_at "$d" "kit/v9.9.4" "$seed_sha"
+advanced_sha="$(advance_head "$d")"
+[ "$advanced_sha" != "$seed_sha" ] \
+  || { echo ".github#2495 leg 2 (repair): sanity check failed — advance_head did not move HEAD" >&2; exit 1; }
+checks=$((checks + 1))
+rc=0; run_tag_step "$d" "9.9.4" tagSiblings "$seed_sha" "$tag_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo ".github#2495 leg 2 (repair): expected exit 0, got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+for tag in drivers/v9.9.4 coord-engine/v9.9.4; do
+  git -C "$tag_remote" tag -l "$tag" | grep -qx "$tag" \
+    || { echo ".github#2495 leg 2 (repair): expected $tag to have been created and pushed" >&2; exit 1; }
+  checks=$((checks + 1))
+  landed_sha="$(git -C "$tag_remote" rev-parse "refs/tags/$tag^{commit}")"
+  [ "$landed_sha" = "$seed_sha" ] \
+    || { echo ".github#2495 leg 2 (repair): $tag landed at $landed_sha, expected kit's EXISTING commit $seed_sha (not the advanced HEAD $advanced_sha)" >&2; exit 1; }
+  checks=$((checks + 1))
+done
+# kit itself must be untouched — still the ORIGINAL tag object pushed by push_tag_at, tagged by "seed",
+# not re-created by this run (which would have overwritten the tagger identity to test-bot[bot]).
+kit_tagger="$(git -C "$tag_remote" for-each-ref --format='%(taggername) %(taggeremail)' refs/tags/kit/v9.9.4)"
+[ "$kit_tagger" = 'seed <seed@example.test>' ] \
+  || { echo ".github#2495 leg 2 (repair): kit/v9.9.4 must remain untouched (tagger 'seed'), got: $kit_tagger" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- .github#2495 leg 3 — the defensive "nothing to tag/push" guard: all three already present at
+#      the target commit (should be unreachable in production, since the decision engine's own
+#      `siblings-complete` case above never emits `tagSiblings` there — this exercises the step's own
+#      independent defense-in-depth). ----
+d="$(make_worktree complete)"
+seed_sha="$(cat "$d/seed-sha")"
+for tag in kit/v9.9.5 drivers/v9.9.5 coord-engine/v9.9.5; do push_tag_at "$d" "$tag" "$seed_sha"; done
+rc=0; run_tag_step "$d" "9.9.5" tagSiblings "$seed_sha" "$tag_script" || rc=$?
+[ "$rc" -ne 0 ] \
+  || { echo ".github#2495 leg 3 (nothing-to-do guard): expected a non-zero exit, got 0" >&2; exit 1; }
+checks=$((checks + 1))
+grep -q 'nothing to tag/push' "$d/stdout.log" \
+  || { echo ".github#2495 leg 3 (nothing-to-do guard): expected the 'nothing to tag/push' error, got:" >&2; cat "$d/stdout.log" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- .github#2495 leg 4 — GATE-INVERSION EVIDENCE for pinning to SOURCE_SHA rather than HEAD: mutate
+#      the REAL, currently-shipped step to drop the explicit commit-ish from `git tag -a` (so it
+#      defaults to HEAD, the naive/pre-fix-shaped mistake), and show that in the SAME repair scenario as
+#      leg 2 — kit already tagged at a commit that is no longer HEAD — the mutated step now tags the
+#      siblings at the WRONG (current, advanced) commit instead of kit's actual commit. A test that
+#      cannot fail on this exact reversion has not tested why SOURCE_SHA, not HEAD, is load-bearing. ----
+mutate_to_head() {
+  python3 - "$tag_script" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+target = 'git tag -a "$tag" "$SOURCE_SHA" -m'
+replacement = 'git tag -a "$tag" -m'
+if target not in text:
+    sys.exit("mutate_to_head: the SOURCE_SHA-pinned tag_one command is GONE from the real step")
+mutated = text.replace(target, replacement, 1)
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+}
+tag_head_script="$tag_work/tag-head-not-source-sha.sh"
+mutate_to_head "$tag_head_script"
+
+d="$(make_worktree gate-inversion-source-sha)"
+seed_sha="$(cat "$d/seed-sha")"
+push_tag_at "$d" "kit/v9.9.6" "$seed_sha"
+advanced_sha="$(advance_head "$d")"
+rc=0; run_tag_step "$d" "9.9.6" tagSiblings "$seed_sha" "$tag_head_script" || rc=$?
+[ "$rc" -eq 0 ] \
+  || { echo ".github#2495 leg 4 (gate-inversion, SOURCE_SHA): mutated step should still exit 0 (git tag -a succeeds against HEAD), got $rc" >&2; cat "$d/stdout.log" "$d/stderr.log" >&2; exit 1; }
+checks=$((checks + 1))
+landed_sha="$(git -C "$tag_remote" rev-parse 'refs/tags/drivers/v9.9.6^{commit}')"
+[ "$landed_sha" = "$advanced_sha" ] \
+  || { echo ".github#2495 leg 4 (gate-inversion, SOURCE_SHA): expected the mutated (HEAD-defaulting) step to land drivers/v9.9.6 at the WRONG advanced commit $advanced_sha, got $landed_sha" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$landed_sha" != "$seed_sha" ] \
+  || { echo ".github#2495 leg 4 (gate-inversion, SOURCE_SHA): mutation had no effect — landed at the correct commit despite dropping SOURCE_SHA" >&2; exit 1; }
+checks=$((checks + 1))
+
+# ---- .github#2498 round-1 repair 1 (write side) — ATOMIC PUSH: `git push origin "${push_refs[@]}"`
+#      (no `--atomic`) is not all-or-nothing. GitHub can accept some ref updates in one invocation and
+#      reject others — concretely here, one tag name already existing on `origin` at a DIFFERENT commit
+#      (a real race this step's single observation cannot fully rule out) is rejected while the OTHER
+#      refs in the SAME push still land, manufacturing exactly the split coherent-set trio this item
+#      exists to prevent. This reproduces that against a REAL remote: `kit/v0.60.2` is pre-created
+#      DIRECTLY on the bare remote (never fetched into the worktree clone, so `tag_one`'s local
+#      existence check cannot see it and will still attempt to create+push it) at a decoy commit, while
+#      `drivers`/`coord-engine` are genuinely new. ----
+d="$(make_worktree atomic-push-fixed)"
+seed_sha="$(cat "$d/seed-sha")"
+decoy_sha="$(advance_head "$d")"
+( cd "$d/repo" && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
+( HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -C "$tag_remote" -c user.name=decoy -c user.email=decoy@example.test tag -a "kit/v0.60.2" "$decoy_sha" -m decoy )
+rc=0; run_tag_step "$d" "0.60.2" tag "$seed_sha" "$tag_script" || rc=$?
+[ "$rc" -ne 0 ] \
+  || { echo ".github#2498 atomic push (fixed, RED-for-kit phase): expected the rejected kit ref to fail the whole step, got exit 0" >&2; exit 1; }
+checks=$((checks + 1))
+git -C "$tag_remote" tag -l 'kit/v0.60.2' | grep -qx 'kit/v0.60.2' \
+  || { echo ".github#2498 atomic push (fixed): the pre-existing decoy kit tag must still be present" >&2; exit 1; }
+checks=$((checks + 1))
+kit_landed="$(git -C "$tag_remote" rev-parse 'refs/tags/kit/v0.60.2^{commit}')"
+[ "$kit_landed" = "$decoy_sha" ] \
+  || { echo ".github#2498 atomic push (fixed): kit/v0.60.2 must remain at the decoy commit $decoy_sha (untouched), got $kit_landed" >&2; exit 1; }
+checks=$((checks + 1))
+# THE POINT: with --atomic, the two refs that COULD have landed (drivers, coord-engine) must NOT have,
+# because kit's ref update in the same push was rejected.
+for tag in drivers/v0.60.2 coord-engine/v0.60.2; do
+  git -C "$tag_remote" tag -l "$tag" | grep -q . \
+    && { echo ".github#2498 atomic push (fixed): $tag must NOT have landed — --atomic should have made the whole push all-or-nothing" >&2; exit 1; }
+  checks=$((checks + 1))
+done
+
+# ---- GATE-INVERSION EVIDENCE (pnext-item §3) for `--atomic`: strip it from a copy of the REAL step and
+#      re-run the IDENTICAL scenario. Without it, the same rejected kit ref must NOT stop the other two
+#      from landing — reproducing, on a real remote, the exact split/mismatched trio independent review
+#      named as reachable. A test that cannot fail on the dropped flag has not tested why it is there. ----
+mutate_drop_atomic() {
+  python3 - "$tag_script" "$1" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+target = "git push --atomic origin"
+replacement = "git push origin"
+if target not in text:
+    sys.exit("mutate_drop_atomic: the --atomic push is GONE from the real step")
+mutated = text.replace(target, replacement, 1)
+open(dst, "w", encoding="utf-8").write(mutated)
+PY
+}
+tag_no_atomic_script="$tag_work/tag-no-atomic.sh"
+mutate_drop_atomic "$tag_no_atomic_script"
+
+d="$(make_worktree atomic-push-mutated)"
+seed_sha="$(cat "$d/seed-sha")"
+decoy_sha="$(advance_head "$d")"
+( cd "$d/repo" && HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git push --quiet origin HEAD:main )
+( HOME="$d/home" GIT_CONFIG_NOSYSTEM=1 git -C "$tag_remote" -c user.name=decoy -c user.email=decoy@example.test tag -a "kit/v0.60.3" "$decoy_sha" -m decoy )
+rc=0; run_tag_step "$d" "0.60.3" tag "$seed_sha" "$tag_no_atomic_script" || rc=$?
+[ "$rc" -ne 0 ] \
+  || { echo "gate-inversion (atomic push): expected the overall push to still report non-zero (kit's ref is still rejected), got exit 0" >&2; exit 1; }
+checks=$((checks + 1))
+kit_landed_mutated="$(git -C "$tag_remote" rev-parse 'refs/tags/kit/v0.60.3^{commit}')"
+[ "$kit_landed_mutated" = "$decoy_sha" ] \
+  || { echo "gate-inversion (atomic push): kit/v0.60.3 must remain at the decoy commit (git itself still refuses to overwrite it), got $kit_landed_mutated" >&2; exit 1; }
+checks=$((checks + 1))
+# THE REGRESSION: without --atomic, drivers/coord-engine DO land even though kit's own ref in the SAME
+# push was rejected — a real, split, mismatched coherent-set trio on the remote.
+for tag in drivers/v0.60.3 coord-engine/v0.60.3; do
+  git -C "$tag_remote" tag -l "$tag" | grep -qx "$tag" \
+    || { echo "gate-inversion (atomic push): expected $tag to have landed WITHOUT --atomic (demonstrating the partial-push hazard), got none" >&2; git -C "$tag_remote" tag -l >&2; exit 1; }
+  checks=$((checks + 1))
+  landed="$(git -C "$tag_remote" rev-parse "refs/tags/$tag^{commit}")"
+  [ "$landed" = "$seed_sha" ] \
+    || { echo "gate-inversion (atomic push): expected $tag to have landed at $seed_sha, got $landed" >&2; exit 1; }
+  checks=$((checks + 1))
+done
 
 echo "kit auto-publish state machine: $checks passed"
