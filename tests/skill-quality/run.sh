@@ -627,6 +627,20 @@ printf '\nA future round may be dispatched as `fsgg-critic-turbo`.\n' \
 expect_agent_rejection "declared skill roots that resolve to nothing clear every named type" \
   ".agent-skill-roots declares 2 skill root(s) but .claude/skills-renamed, .agents/skills-renamed does not exist"
 
+# Repair 2 of the same review. Repair 1 guarded "the declared root is gone"; this is "the declared
+# root EXISTS and is empty", which produces the identical confident exit 0 and the identical vacuous
+# closure. It is also the shape a real migration produces, because a migration begins by mkdir-ing
+# the new root — not by deleting the old one — so this leg, not the one above, is the sequence the
+# repair-1 rationale actually described. The assertion it pins is on the MEASURED file count, so no
+# third spelling of "the roots look fine but hold nothing" gets a fresh escape.
+seed_agents
+mkdir -p "$WORK/tree/.claude/skills-v2" "$WORK/tree/.agents/skills-v2"
+printf '.claude/skills-v2\n.agents/skills-v2\n' >"$WORK/tree/.agent-skill-roots"
+printf '\nA future round may be dispatched as `fsgg-critic-turbo`.\n' \
+  >>"$WORK/tree/.claude/skills/pnext-item/references/independent-review.md"
+expect_agent_rejection "declared skill roots that exist but hold no skills clear every named type" \
+  "scanned 0 skill file(s) under .claude/skills-v2, .agents/skills-v2"
+
 # Epic #266's own class: a gate that does not run when its subject changes is green and wrong.
 seed_agents
 python3 - "$WORK/tree/.github/workflows/skill-quality.yml" <<'PY'

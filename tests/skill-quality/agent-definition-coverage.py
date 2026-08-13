@@ -14,7 +14,9 @@ Three failure directions, all fail-closed:
 1. COVERAGE. Every route the board variants define needs BOTH an `fsgg-worker-<route>` and an
    `fsgg-critic-<route>` definition, and every `fsgg-<role>-<route>` type any checked-in skill names
    as a literal string needs a definition too. A skill that names a new type without shipping its
-   definition reds here instead of merging.
+   definition reds here instead of merging. Because that second half is an argument from ABSENCE,
+   the scan behind it asserts its own MEASURED OUTCOME — every declared skill root resolves, and the
+   sweep actually read at least one file — rather than trusting the shape of the root declaration.
 2. ROUTE FIDELITY. Each definition's frontmatter `model`/`effort` must equal the Claude Code row of
    the routing table its route's skills mandate, and the variants sharing a route suffix must agree
    with each other. A drift between a variant's routing table and its agent definition is exactly the
@@ -87,8 +89,15 @@ def skill_roots(root: Path) -> list[Path]:
     the `.codex/skills` retirement — so the drift is a live shape, not a hypothetical.
 
     Requiring all of them, rather than at least one, is the same closed-world assumption
-    `scripts/skill-union-assert.sh` already enforces: the declared roots hold the byte-identical
-    union, so a declared root with no directory behind it is a broken tree in either gate's terms.
+    `scripts/skill-union-assert.sh` already enforces — in its own words, "an absent root stays a HARD
+    exit-2 at every level… absence must never degrade to a skip. Declaring roots narrows WHAT IS
+    ASKED FOR; it never weakens the answer." The check is on the DECLARED roots, so a tree that
+    legitimately ships one root declares one root, `missing` is empty, and it passes.
+
+    THIS IS ONLY THE PROXY. `is_dir()` answers "the declaration still points at something", not "the
+    scan will see anything" — an existing but EMPTY root satisfies it and defeats the property just
+    as completely. `named_types` below asserts the measured outcome instead; both are kept, because
+    a missing root can be named precisely here and an empty one cannot.
     """
     declaration = root / ".agent-skill-roots"
     require(declaration.is_file(), "no .agent-skill-roots declaration to read skill roots from")
@@ -100,13 +109,41 @@ def skill_roots(root: Path) -> list[Path]:
     require(bool(roots), ".agent-skill-roots declares no skill roots")
     resolved = [path for path in roots if path.is_dir()]
     missing = [str(path.relative_to(root)) for path in roots if not path.is_dir()]
+    # Says only what it measured. An earlier spelling claimed "this gate would scan no skills" for
+    # ANY missing root, which is false when a surviving root would still have been scanned; the
+    # scanned-nothing claim belongs to `named_types`, which actually counts.
     require(
         not missing,
         f".agent-skill-roots declares {len(roots)} skill root(s) but "
-        f"{', '.join(missing)} does not exist, so this gate would scan no skills and clear every "
-        "named agent type by looking at nothing",
+        f"{', '.join(missing)} does not exist; a declared root with no directory behind it is a "
+        "broken tree, and the union this gate scans cannot be trusted to name every agent type",
     )
     return resolved
+
+
+def named_types(root: Path, roots: list[Path]) -> tuple[dict[str, list[str]], int]:
+    """Every `fsgg-<role>-<route>` a checked-in skill names, AND how many files that answer came from.
+
+    The count is the load-bearing return value (repair 2, `.github#2510` review round 2), because the
+    whole AC3 closure is an argument from absence: "no skill names a type without a definition" is
+    proven by finding every named type, so a scan that read nothing proves it vacuously and reports
+    the same confident `exit 0` as a scan that read the world.
+
+    Repair 1 guarded `is_dir()`, which closes "the directory is gone" and leaves "the directory
+    exists and is empty" wide open — and the empty case is the one the migration this gate's own
+    docstring cites actually produces, because a migration begins by `mkdir`-ing the new root, not
+    by deleting the old one. Asserting on the measured file count instead of on the shape of the
+    declaration closes both, and cannot be defeated by a third spelling of "the roots look fine but
+    hold nothing".
+    """
+    named: dict[str, list[str]] = {}
+    scanned = 0
+    for skills in roots:
+        for path in sorted(skills.rglob("*.md")):
+            scanned += 1
+            for role, route in NAMED_TYPE.findall(path.read_text(encoding="utf-8")):
+                named.setdefault(f"fsgg-{role}-{route}", []).append(str(path.relative_to(root)))
+    return named, scanned
 
 
 def frontmatter(path: Path) -> dict:
@@ -162,13 +199,16 @@ def main(argv: list[str]) -> int:
 
     # (1) coverage: every route needs both roles, and every literally-named type needs a definition.
     required = {f"fsgg-{role}-{route}": route for route in routes for role in ROLES}
-    named: dict[str, list[str]] = {}
-    for skills in skill_roots(root):
-        for path in sorted(skills.rglob("*.md")):
-            for role, route in NAMED_TYPE.findall(path.read_text(encoding="utf-8")):
-                named.setdefault(f"fsgg-{role}-{route}", []).append(
-                    str(path.relative_to(root))
-                )
+    roots = skill_roots(root)
+    named, scanned = named_types(root, roots)
+    # THE MEASURED OUTCOME, not the proxy above: the closure below is an argument from absence, so a
+    # scan that read nothing clears every named type vacuously.
+    require(
+        scanned > 0,
+        f"scanned 0 skill file(s) under {', '.join(str(p.relative_to(root)) for p in roots)}: every "
+        "declared root resolved but none holds a skill, so every agent type a skill names would "
+        "clear here by default",
+    )
     for name, sources in sorted(named.items()):
         require(
             name in required,
@@ -227,10 +267,13 @@ def main(argv: list[str]) -> int:
             "change would bypass this gate entirely",
         )
 
+    # The success line states the BASIS of its own answer — the file count — so a green that rests on
+    # a blind scan is legible in a log rather than reading identically to a green that read the world.
     print(
         f"agent-definition-coverage: {len(required)} definitions cover "
         f"{len(routes)} routes ({', '.join(sorted(routes))}) at their mandated model/effort, "
-        f"{len(named)} skill-named types resolve, and the gate triggers on its own subject"
+        f"{len(named)} skill-named types resolve across {scanned} skill file(s) in "
+        f"{len(roots)} declared root(s), and the gate triggers on its own subject"
     )
     return 0
 
