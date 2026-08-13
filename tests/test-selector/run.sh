@@ -467,6 +467,99 @@ else
 fi
 
 echo
+echo "── wiring: --assert-wired turns the unwired REPORT into a verdict (.github#2537)"
+
+# #860 REPORTED unwired suites and nothing ever refused one, so "unwired" was a state work drifted into
+# in silence — `tests/review-critic-succession-wire/`, which is itself a gate-inversion proof, sat
+# uninvoked from the day it landed. These legs are that refusal's own evidence that it can fire.
+
+# A stray FAILS, and names the directory rather than only exiting non-zero.
+r="$(root assertwired)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on:
+  pull_request:
+    paths: ["src/**"]
+jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: "bash tests/wired/run.sh" }] } }
+EOF
+suite "$r" tests/wired/run.sh; suite "$r" tests/orphan/run.sh; seal "$r"
+expect "an unexplained unwired suite FAILS --assert-wired, by name" 1 "UNWIRED    tests/orphan/" \
+       "$r" --assert-wired
+
+# THE SAME ROOT, one `run:` step later. This is what makes the leg above a measurement rather than a
+# refusal that fires whatever the tree looks like: the only thing that changed is the wiring.
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on:
+  pull_request:
+    paths: ["src/**"]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "bash tests/wired/run.sh"
+      - run: "bash tests/orphan/run.sh"
+EOF
+expect "wiring that same suite clears the refusal" 0 "0 unexplained" "$r" --assert-wired
+
+# THE VACUITY TRAP, and .github#2534 measured this exact shape live: a gate that scanned an empty
+# corpus passed green. Every set --assert-wired compares is empty over a tests/ with no subdirectories,
+# so it would be at its most confident having examined nothing. It must refuse instead. (Reaching this
+# state needs a suite at `tests/run.sh` itself — a suite path with no directory component — which is
+# the one way `known` is non-empty while `tests/` has no subdirectory.)
+r="$(root assertwired-flat)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on:
+  pull_request:
+    paths: ["src/**"]
+jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: "bash tests/run.sh" }] } }
+EOF
+suite "$r" tests/run.sh; seal "$r"
+expect "an empty tests/ corpus is REFUSED, never passed" 3 "would pass having examined nothing" \
+       "$r" --assert-wired
+
+# An exemption that is no longer true fails too — the dangerous direction, because a stale entry would
+# silently re-bless its directory if somebody unwired it again.
+r="$(root assertwired-stale)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on:
+  pull_request:
+    paths: ["src/**"]
+jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: "bash tests/merge-guard/run.sh" }] } }
+EOF
+suite "$r" tests/merge-guard/run.sh; seal "$r"
+expect "a DELIBERATELY_UNWIRED entry for a suite that is wired now is STALE" 1 "STALE      tests/merge-guard/" \
+       "$r" --assert-wired
+
+# THE REAL TREE. This is the leg that reds when somebody deletes the `run:` step that invokes a fixture
+# from its workflow: the suite drops out of derivation, DELIBERATELY_UNWIRED does not explain it, and
+# this fails. It lives HERE rather than in the fixture being protected because a check that a workflow
+# edit can delete cannot detect that workflow edit — and this workflow triggers on `.github/workflows/**`,
+# so it runs on the very PR that would do it.
+expect "the real tree has no unexplained unwired suite" 0 "0 unexplained" "$REPO_ROOT" --assert-wired
+
+out="$(python3 "$TOOL" --root "$REPO_ROOT" --assert-wired 2>&1 || true)"
+
+# No dead entries: every DELIBERATELY_UNWIRED key names a directory that is actually here. `--assert-wired`
+# treats an absent one as INERT rather than failing, because it must also run over synthetic roots that
+# have none of them; this tree's own "no dead text" rule belongs here, where the tree is the subject.
+if grep -q "INERT" <<<"$out"; then
+  bad "DELIBERATELY_UNWIRED names a directory that is not on disk — delete the dead entry" "$out"
+else
+  ok "every DELIBERATELY_UNWIRED entry names a directory that exists"
+fi
+
+# .github#2537's own subject, pinned by name. The general leg above would catch this too; this one says
+# which suite and why, so the next reader does not have to re-derive it from a count.
+if grep -qF "tests/review-critic-succession-wire" <<<"$out"; then
+  bad "tests/review-critic-succession-wire is unwired again — it is the gate-inversion proof for critic succession, and .github#2537 wired it into coord-engine.yml" "$out"
+else
+  ok "tests/review-critic-succession-wire is still wired to a workflow (.github#2537)"
+fi
+
+echo
 echo "test-selector fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::test-selector fixture FAILED"; exit 1; }
 echo "test-selector fixture — OK"

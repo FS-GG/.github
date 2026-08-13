@@ -32,6 +32,7 @@ on:
       - "tests/coord-engine-mutation/**"
       - "tests/coord-engine-replay/**"
       - "tests/review-post-acceptance-head-move/**"
+      - "tests/review-critic-succession-wire/**"
       - "scripts/fsgg-coord"
       - "scripts/record-board-fixture.py"
       - "Directory.Build.props"
@@ -51,6 +52,7 @@ on:
       - "tests/coord-engine-mutation/**"
       - "tests/coord-engine-replay/**"
       - "tests/review-post-acceptance-head-move/**"
+      - "tests/review-critic-succession-wire/**"
       - "scripts/fsgg-coord"
       - "scripts/record-board-fixture.py"
       - "Directory.Build.props"
@@ -171,6 +173,24 @@ jobs:
       # function and requires the recovery leg to red, so the gate is measured rather than asserted.
       - name: A head that moved after acceptance recovers — and the laundering counterpart stays refused
         run: bash tests/review-post-acceptance-head-move/run.sh
+
+      # CRITIC SUCCESSION'S REFUSALS (.github#2417/#2451), AND THE REASON THIS STEP EXISTS AT ALL
+      # (.github#2537). The fixture shipped with #2417 as that change's gate-inversion proof and was
+      # then invoked by NO workflow — so the proof that succession can say NO had never once been
+      # executed, anywhere but on its author's machine. Wiring it was the obvious half and the smaller
+      # half: measured at `7ca9474a`, the fixture as it stood was 4-passed/0-failed against an engine
+      # with ANY ONE of the four refusals deleted from `Review.criticSuccessionValid` — exact-critic,
+      # exact-head, generic-identity, self-grant. Its four legs were wire-parsing legs (absent, null,
+      # valid, malformed), and none of them could observe a refusal going missing. A suite that runs
+      # and cannot fail is the #266 signature wearing a passing scorecard.
+      #
+      # So the fixture now carries a REFUSAL leg per conjunct — each differing from the accepted grant
+      # in exactly one field, each asserting the receipt was refused RATHER THAN never reached — and a
+      # gate-inversion leg per conjunct that deletes that conjunct from `Review.fs` in a scratch tree,
+      # rebuilds, and requires its own refusal leg to flip. Same discipline as the head-move step
+      # above; five mutants instead of one, at roughly ten seconds each.
+      - name: Critic succession's refusals can still say NO — measured, one mutant per refusal
+        run: bash tests/review-critic-succession-wire/run.sh
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
