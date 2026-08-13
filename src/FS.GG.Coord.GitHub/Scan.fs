@@ -865,14 +865,52 @@ module Scan =
                 try
                     use doc = JsonDocument.Parse response.Body
 
+                    // A 2xx BODY THAT IS VALID JSON BUT NOT AN OBJECT — `[]`, `"text"`, `7`, `true` — is
+                    // not a GraphQL response of any shape, and `TryGetProperty` on anything but an object
+                    // THROWS `InvalidOperationException` rather than answering `false` (`.github#2418`).
+                    // The `with` below catches `JsonException` and `KeyNotFoundException` and NEITHER of
+                    // those, so it escaped `snapshot` entirely and surfaced as `DEFECT —
+                    // InvalidOperationException` with a stack trace at exit 2, where a typed `Malformed`
+                    // refusal belongs. `.github#2534` hoisted this guard into `Reads.graphQlData` "where
+                    // every read gets it"; this site never routed through it, so it missed this clause for
+                    // the same reason it missed the classifier below — see `.github#2542`.
+                    if doc.RootElement.ValueKind <> JsonValueKind.Object then
+                        Error(
+                            Malformed(
+                                request.Subject,
+                                $"the GraphQL response is not a JSON object (%A{doc.RootElement.ValueKind}) — a GraphQL response is always `{{...}}`, so this is a FAILED READ, never an empty answer"
+                            )
+                        )
+                    else
+
                     match doc.RootElement.TryGetProperty "errors" with
                     | true, errors when errors.ValueKind = JsonValueKind.Array && errors.GetArrayLength() > 0 ->
+                        // ONE MESSAGE PER ERROR, NOT ONE GLUED STRING (.github#2542). This site used to
+                        // `String.concat "; "` the array into a SINGLE-element list, so every consumer that
+                        // inspects individual messages — `Budget.ofGraphQlErrors` itself, and `explain`'s
+                        // own `String.Join("; ", messages)` — saw one entry where every sibling site
+                        // carries the array. The classifier still matched (it tests each message as a
+                        // substring haystack), but the shape disagreed with the whole layer for no reason.
                         let messages =
                             errors.EnumerateArray()
                             |> Seq.map (fun error -> str error "message" |> Option.defaultValue "(no message)")
-                            |> String.concat "; "
+                            |> List.ofSeq
 
-                        Error(GraphQlErrors [ messages ])
+                        // RATE LIMIT FIRST, and this arm had NO classifier at all (.github#2542). GitHub
+                        // reports an exhausted GraphQL budget as a 200 whose `errors` carry the wording, so
+                        // a generic `GraphQlErrors` here maps through `Errors.exitCode` to **1** — the code
+                        // whose documented meaning is "permanent" — instead of EX_RATE 75, the back-off
+                        // signal that stops the fleet. `freshNodeFacts` is the claim scan's fresh
+                        // body/comment-cardinality read, on the hot path of every `take`, and a board scan
+                        // is precisely the operation that exhausts this budget: the single most likely
+                        // `errors` payload this site ever sees was the one it misreported.
+                        //
+                        // `ofGraphQlErrors` also tells a SECONDARY limit from the primary budget (#1666),
+                        // which is a different remedy — reduce concurrency, and there is no reset to wait
+                        // out — and which `isRateLimited` cannot distinguish.
+                        match Budget.ofGraphQlErrors messages with
+                        | Some limited -> Error limited
+                        | None -> Error(GraphQlErrors messages)
                     | _ ->
                         let data = doc.RootElement.GetProperty "data"
 
