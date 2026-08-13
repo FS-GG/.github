@@ -102,6 +102,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/roster-closure/run.sh",
       "workflow": ".github/workflows/coherence.yml"
+    },
+    {
+      "source": "scripts/check-claim-generation.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/claim-generation/run.sh",
+      "workflow": ".github/workflows/coherence.yml"
     }
   ]
 }

@@ -83,24 +83,33 @@ FOUR DIAGNOSES, EACH A DIFFERENT OBSERVABLE FACT (`#2342` AC2 — "missing" / "s
                 either way; the split exists so a human reading the job log can tell "try again" from
                 "fix a credential", not so the gate can be green on either.
 
-WHAT THIS GATE DOES AND DOES NOT ENFORCE TODAY. `#2342` AC6 requires the check to exist and be
-correctly wired where this repo's other required contexts run — NOT to be armed. Nothing in this
-change adds `fsgg:pr-authorization` to `FS-GG/.github`'s required status checks: that is an
-administrative branch-protection edit outside a merge (AC6's own text), and arming BEFORE `delivery`
-ever writes the marker would wedge every in-flight `item/<n>-*` PR (design doc §9.1's migration
-sequence, step 4/5, is explicit that slice 3 must land, and a full lease window must pass, before
-arming). Until an admin runs (after this lands, and after slice 3 lands):
+WHAT THIS GATE ENFORCES TODAY: IT IS ARMED, AND ITS RED BLOCKS THE MERGE. `claim-generation` is one of
+`FS-GG/.github`'s required status checks on `main`, read live on 2026-08-13:
+
+    $ gh api repos/FS-GG/.github/branches/main/protection \\
+        --jq '.required_status_checks.contexts'
+    ["contract-coherence / coherence","projection","roster-closure","drift","reconcile",
+     "claim-generation"]
+
+HOW IT GOT THERE, AS HISTORY (`#2342` AC6, arming by `.github#1858`). This gate shipped OBSERVE-ONLY:
+AC6 required the check to exist and be correctly wired where this repo's other required contexts run —
+NOT to be armed. No change to this file adds a context to `FS-GG/.github`'s required status checks:
+that is an administrative branch-protection edit outside a merge (AC6's own text), and arming BEFORE
+`delivery` ever wrote the marker would have wedged every in-flight `item/<n>-*` PR (design doc §9.1's
+migration sequence, step 4/5, is explicit that slice 3 must land, and a full lease window must pass,
+before arming). Slice 3 landed — `delivery` writes the marker, `.github#2395` — the window passed, and
+an admin ran:
 
     gh api -X PUT repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts \\
       -f "contexts[]=contract-coherence / coherence" -f "contexts[]=projection" \\
       -f "contexts[]=roster-closure" -f "contexts[]=drift" -f "contexts[]=reconcile" \\
       -f "contexts[]=claim-generation"
 
-...a red verdict from this job does not block a merge — it is observed, not enforced. That is a
-DELIBERATE, NAMED gap (AC6), not a silent one.
+...so a red verdict from this job now BLOCKS a merge: enforced, not merely observed. The DELIBERATE,
+NAMED gap AC6 recorded is closed, and this paragraph is the record of that, not a standing deferral.
 
-THAT PROMISE WAS TRUE FOR BRANCH PROTECTION AND FALSE FOR `landable` (`.github#2373`). Branch
-protection never gated on this job's own conclusion, exactly as designed above — but
+THAT PROMISE WAS TRUE FOR BRANCH PROTECTION AND FALSE FOR `landable` (`.github#2373`), BEFORE THE
+ARMING ABOVE. Branch protection did not then gate on this job's own conclusion, as designed — but
 `scripts/fsgg-coord landable`, the merge gate `pnext-item` names as authoritative for every fleet
 worker, scored EVERY live check-run unconditionally, `claim-generation` included, so a FINDING here
 (the ordinary, expected shape for any PR opened before its worker knew to write the marker) turned
@@ -109,10 +118,13 @@ worker, scored EVERY live check-run unconditionally, `claim-generation` included
 the manual workaround this gate's own design never asked workers to perform, and which (Actions
 replays the frozen `pull_request` event payload; a body edit alone never re-triggers this job) was
 often unreachable for a PR already open when `claim-generation` first landed. `.github#2373` fixed
-`Landable.fs` to hold the SAME "observed, not enforced" promise this gate's docstring already made:
-`claim-generation`'s FINDING conclusion is now excluded from `landable`'s rollup by name
-(`Landable.fs`'s `advisoryCheckNames`) until this job is genuinely armed into branch protection, at
-which point BOTH that name (here) and Landable's carve-out must be removed in the same change — see
+`Landable.fs` to hold the SAME "observed, not enforced" promise this gate's docstring made at the time,
+by excluding `claim-generation`'s FINDING conclusion from `landable`'s rollup by name — and this
+paragraph used to instruct that BOTH that name and Landable's carve-out be removed in the same change
+that armed the job. NEITHER IS OUTSTANDING, AND NO NAME REMAINS TO REMOVE: `.github#2517` deleted the
+`advisoryCheckNames` literal and made the advisory set the DERIVED COMPLEMENT of the base branch's own
+required contexts (`Landable.advisoryFrom`), so a check `main` requires is scored `Blocking` — this one
+included, given the arming above — with no source edit and no paired removal to remember. See
 `Landable.fsi`'s `scoreRequired` doc for the caller-side detail.
 
 CROSS-REPO ITEMS ARE READABLE-OR-UNREADABLE, NOT ASSUMED. `.github/workflows/coherence.yml` runs only

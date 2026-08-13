@@ -271,10 +271,12 @@ waiting on `landable` below.
   this org's inventory carries (ADR-0019 §1, `.github#2332`); routing this call through CI is refuted by
   that boundary, not merely undesirable.
 - **A failed call is reported, never silently swallowed — and never blocks the merge.** The write is the
-  only thing this call does; `claim-generation`'s conclusion stays advisory in the engine's own rollup
-  (excluded from `landable`'s own rollup by name, `.github#2373`) even though branch protection now makes
-  it merge-blocking regardless of that classification. Note the failure (to whoever dispatched you, or in
-  the item's own history) and proceed with the merge.
+  only thing this call does; `claim-generation`'s conclusion is no longer advisory anywhere —
+  `.github#1858` armed it into `main`'s required contexts, and `.github#2517` replaced `landable`'s
+  hand-written carve-out with the DERIVED COMPLEMENT of that required set (`Landable.advisoryFrom`), so
+  the engine's own rollup scores it `Blocking` too, agreeing with branch protection rather than
+  contradicting it. Note the failure (to whoever dispatched you, or in the item's own history) and
+  proceed with the merge.
 
 Now wait on the typed `landable` verdict for that exact same head SHA — the marker this call just wrote
 is what lets `claim-generation`, and therefore `landable`, go green. Merge only once `landable` reports

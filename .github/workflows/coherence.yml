@@ -156,27 +156,42 @@ jobs:
   # full design (it does not yet ground the marker against a merge election — that is a later slice,
   # out of this item's `Paths:`).
   #
-  # OBSERVE-ONLY TODAY (.github#2342 AC6). Nothing here adds `claim-generation` to branch protection.
-  # A red verdict is real and visible in this job's own result, but it does not yet BLOCK a merge —
-  # arming is a deliberate, separate, administrative action, correctly deferred until design slice 3
-  # (`delivery` writing the marker automatically) has landed and a full claim-lease window has passed
-  # with zero unmarked in-flight `item/<n>-*` pull requests (design doc §9.1's migration sequence).
-  # The command an admin would run once that is true (alongside this repo's existing five contexts,
-  # read live from `gh api repos/FS-GG/.github/branches/main/protection` on 2026-08-04):
+  # ARMED, AND MERGE-BLOCKING TODAY (armed by .github#1858; this paragraph restored by .github#2526).
+  # `claim-generation` IS one of `main`'s required status checks, so a red verdict here BLOCKS the merge.
+  # Read live on 2026-08-13:
+  #
+  #   $ gh api repos/FS-GG/.github/branches/main/protection \
+  #       --jq '.required_status_checks.contexts'
+  #   ["contract-coherence / coherence","projection","roster-closure","drift","reconcile",
+  #    "claim-generation"]
+  #
+  # HOW IT GOT THERE, AS HISTORY (.github#2342 AC6). This job shipped OBSERVE-ONLY, and nothing in this
+  # file adds a context to branch protection — arming is a deliberate, separate, administrative action,
+  # correctly deferred at the time until design slice 3 (`delivery` writing the marker automatically) had
+  # landed and a full claim-lease window had passed with zero unmarked in-flight `item/<n>-*` pull
+  # requests (design doc §9.1's migration sequence). Slice 3 landed (.github#2395), the window passed,
+  # and an admin ran the `PUT` that arming needs, alongside this repo's five other contexts:
   #
   #   gh api -X PUT repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts \
   #     -f "contexts[]=contract-coherence / coherence" -f "contexts[]=projection" \
   #     -f "contexts[]=roster-closure" -f "contexts[]=drift" -f "contexts[]=reconcile" \
   #     -f "contexts[]=claim-generation"
   #
-  # THIS JOB'S RED WAS BLOCKING ANYWAY, THROUGH A DIFFERENT DOOR (.github#2373). Branch protection never
-  # enforced it, as designed above — but `scripts/fsgg-coord landable`, the merge gate `pnext-item` names
+  # The armed state is a fact about the BRANCH, not about this file, which is why this comment — and the
+  # live read above — is the only place it can be recorded here.
+  #
+  # THIS JOB'S RED WAS BLOCKING BEFORE THAT, THROUGH A DIFFERENT DOOR (.github#2373). While branch
+  # protection still did not enforce it, `scripts/fsgg-coord landable`, the merge gate `pnext-item` names
   # as authoritative, scored every LIVE check-run unconditionally and did not know this one was meant to
   # be advisory, so a FINDING here (the ordinary shape for a PR opened before its worker knew to write the
   # `fsgg:pr-authorization` marker) read `landable` RED anyway — reproduced live across three PRs in one
-  # wave. `Landable.fs` now carries a NAMED exemption for this check (`advisoryCheckNames`) so the two
-  # subsystems agree. Remove BOTH the name there and this comment's deferral — never just one — in the
-  # same change that arms this job into branch protection above.
+  # wave. #2373's repair was a NAMED exemption for this check in `Landable.fs` (`advisoryCheckNames`), and
+  # this paragraph used to instruct that BOTH that name and this comment's deferral be removed in the same
+  # change that armed the job. NEITHER REMOVAL IS OUTSTANDING, AND NO NAME REMAINS TO REMOVE: .github#2517
+  # deleted that literal and made `Landable.fs`'s advisory set the DERIVED COMPLEMENT of the base branch's
+  # own required contexts (`Landable.advisoryFrom`). `claim-generation` is in that required set, so the
+  # engine's own rollup now scores it `Blocking` as well — the two subsystems agree by construction rather
+  # than by remembering to edit them together, and arming or disarming this job needs no source edit here.
   #
   # No `paths:` filter — inherited from this workflow's own `on:` above, which is deliberately
   # unfiltered (.github#1508: a required context must report on EVERY pull request, and GitHub never
@@ -252,9 +267,9 @@ jobs:
             echo "### claim-generation: this PR's authorization does not name the current live claim"
             echo
             echo 'See the job log above for which of the three — missing, stale, or mismatched — and'
-            echo 'why. This check is OBSERVE-ONLY today (branch protection does not yet require it);'
-            echo 'see scripts/check-claim-generation.py for the `fsgg:pr-authorization` marker a PR'
-            echo 'body needs to carry once design slice 3 (`delivery` writing it automatically) lands.'
+            echo 'why. This check is REQUIRED on `main` (.github#1858 armed it), so this red BLOCKS the'
+            echo 'merge; see scripts/check-claim-generation.py for the `fsgg:pr-authorization` marker a'
+            echo 'PR body needs to carry, and `pnext-item` §6 for the `delivery` call that writes it.'
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::error title=claim-generation: authorization is missing, stale, or mismatched::See the job log for which, and why."
           exit 1
