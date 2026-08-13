@@ -67,6 +67,48 @@ module Landable =
     /// SHA, which is #1039. `cgroup`, not the conclusion, is what keeps this fail-closed (#703).
     val supersede: runs: RunRow list -> RunRow list * int64 list
 
+    /// HOW THE ADVISORY CARVE-OUT WAS POPULATED (`.github#2517`). "Advisory" is the COMPLEMENT of the base
+    /// branch's own `required_status_checks.contexts`: a check the branch does not require cannot hold ITS
+    /// merge, so it must not hold this verdict either.
+    ///
+    /// IT REPLACED A ONE-NAME SOURCE LITERAL. `advisoryCheckNames = Set.ofList [ "claim-generation" ]` was,
+    /// by its own comment, "the sole source of advisory names", so every OTHER non-required check gated the
+    /// merge whether or not `main` required it. Measured on `.github` PR #2514: six required contexts
+    /// passing, the non-required `feed` arm failing, GitHub reporting the PR mergeable — and `landable`
+    /// `red`, refusing a reviewed, host-accepted PR by the org's own protocol.
+    ///
+    /// THE CASES ARE PRIVATE SO THE EMPTY-SET GUARD CANNOT BE BYPASSED. `advisoryFrom` is the only
+    /// constructor of a derivation, and it refuses to build one from an EMPTY required set: complement-of-
+    /// empty is everything, which would make every check advisory and score `landable` green on any
+    /// repository with no branch protection at all — a fail-open strictly worse than the defect this
+    /// repairs, and reachable through a SUCCESSFUL read (`Reads.classicRequired` answers `Ok []` both for a
+    /// 404 and for "protected, but not on status checks").
+    type AdvisorySet =
+        private
+        /// The branch's required contexts — read, and non-empty by construction.
+        | DerivedFrom of requiredContexts: Set<string>
+        /// No derivation: unreadable, or readable and empty. NOTHING is advisory, so every live check is
+        /// scored — the pre-#2517 behaviour, and the fail-CLOSED direction that keeps #1575/#463 satisfied
+        /// (a verdict may not rest on a read whose `administration: read` scope a workflow `GITHUB_TOKEN`
+        /// cannot hold).
+        | NoDerivation of why: string
+
+    /// The ONE constructor of a derivation, and the only place the empty-set guard lives (`.github#2517`
+    /// AC6). An empty (or all-blank) list of required contexts yields `NoDerivation`, verdict-identical to
+    /// an unreadable policy.
+    val advisoryFrom: requiredContexts: string list -> AdvisorySet
+
+    /// "The policy could not be read", carrying the caller's own sentence. Verdict-identical to an empty
+    /// read: nothing is advisory.
+    val noDerivation: why: string -> AdvisorySet
+
+    /// Did a derivation actually happen? Projection only — no verdict consults it. It exists so a caller or
+    /// a test can assert that an empty read produced NO derivation without the cases being public.
+    val isDerived: advisory: AdvisorySet -> bool
+
+    /// Why there is no derivation, for diagnostics; `None` when there is one.
+    val noDerivationReason: advisory: AdvisorySet -> string option
+
     /// Score a PR from its mergeability and the checks on its head SHA.
     ///
     /// `mergeable`: `None` = unknown (the caller could not read it, or GitHub returned `null`) → `PrUnknown`;
@@ -95,24 +137,43 @@ module Landable =
     /// `pending` never settles, so `--wait` rides out the transient case and refuses the permanent one when
     /// its tries run out. It ranks BELOW a red, so a real failure is still reported at once.
     ///
-    /// A NAMED HANDFUL OF CHECKS ARE EXCLUDED FROM `bad`/`pending` BY DEFAULT (#2373): checks whose own
-    /// design doc already says "observed, not enforced" (`claim-generation`, `.github#2342` AC6) and were
-    /// never wired into branch protection's required set to make that true. `scoreRequired` used to score
-    /// every live check unconditionally, so their FINDING conclusion turned `landable` red anyway — enforcing
-    /// a promise their own owner had explicitly declined to make yet. The caller can still opt back in by
-    /// naming such a check in `required` (a presence assertion only; it does not restore the check to the
-    /// rollup). Every OTHER non-required check remains scored, unconditionally — that is deliberate, and
-    /// is what lets `registry-coherence` gate the skill-registry-autofix bot's own merge.
+    /// NOTHING IS ADVISORY HERE (`.github#2517`): this is `scoreDerived` with no derivation, so every live
+    /// run and check-run is scored. It is the fail-CLOSED default and the FIRST pass
+    /// `Reads.prLandableRequire` scores with — a green verdict is therefore reached without asking the
+    /// branch policy anything, which is what keeps the merge path free of policy reads.
     ///
-    /// THE SAME EXEMPTION NOW REACHES THE CONTAINING WORKFLOW RUN, NOT JUST THE CHECK-RUN (#2400/#2379): a
-    /// run whose every live check-run is advisory is itself excluded from `bad`/`pending` — closing the gap
-    /// where a `coherence` run concluded `failure` SOLELY because its advisory `claim-generation` job did,
-    /// and that run's own (unfiltered) redness still gated the merge after #2373 filtered only the check-run
-    /// half. A run with NO live check-runs (`startup_failure`) or with even ONE genuinely non-advisory bad
-    /// check-run (the `registry-coherence` case) is unaffected and still gates exactly as before. Both halves
-    /// are now decided by one internal classification (`Blocking`/`Advisory`) that `score`/`scoreN`/
-    /// `scoreRequired` match on rather than a `Set<string>.Contains` consulted ad hoc inside the rollup.
+    /// UNTIL #2517 THIS CARRIED A NAMED CARVE-OUT OF ITS OWN (#2373): checks whose design doc already said
+    /// "observed, not enforced" (`claim-generation`, `.github#2342` AC6) but which were never wired into
+    /// branch protection's required set to make it true. That repair was right and its reasoning survives;
+    /// only its INPUT was hand-written, which made every other non-required check gate the merge. The set is
+    /// now derived from the branch's own required contexts (`AdvisorySet`), so the two subsystems move
+    /// together — including in the direction #2342 §9.1 asked for: `claim-generation` is in `.github`'s
+    /// required contexts today, so it is `Blocking` again, with no source edit.
     val scoreRequired:
+        required: string list ->
+        mergeable: bool option ->
+        runs: RunRow list ->
+        checks: CheckRow list ->
+            PrState * int
+
+    /// `scoreRequired`, given HOW the advisory carve-out was populated (`.github#2517`).
+    ///
+    /// A check-run is excluded from the `bad`/`pending`/`total` rollup when the derivation exists and does
+    /// not name it — and a workflow RUN whose every live FINDING is such a check is excluded with it
+    /// (#2400/#2379/#2454's rule, unchanged; only its input moved). A run with NO live check-runs
+    /// (`startup_failure`) or with even one genuinely required bad check-run is unaffected and gates exactly
+    /// as before.
+    ///
+    /// `required` STILL WINS (#2373's opt-in lever, #2517 AC2): a check the CALLER named with `--require` is
+    /// `Blocking` whatever the derivation says. That is what keeps `--require registry-coherence` — a check
+    /// branch protection cannot require, and the skill-registry-autofix bot's whole reason for calling this
+    /// command (#642/#425/#737) — working exactly as before.
+    ///
+    /// `noDerivation _` REPRODUCES THE PRE-#2517 ROLLUP EXACTLY, which is why an unreadable policy and an
+    /// empty one are indistinguishable at the verdict, and why nothing that lands today stops landing when
+    /// the read fails. The derivation can only ever WIDEN what merges, never narrow it.
+    val scoreDerived:
+        advisory: AdvisorySet ->
         required: string list ->
         mergeable: bool option ->
         runs: RunRow list ->
