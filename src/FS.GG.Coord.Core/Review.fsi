@@ -151,7 +151,7 @@ module Review =
         | ResumeImplementer of reason: string
         | ResumeSameCritic of reason: string
         | AwaitChecks
-        /// Make the one live `fsgg-coord delivery <ref> --pr <n>` call `pnext-item` §6 places directly
+        /// Make the one live `scripts/fsgg-coord delivery <ref> --pr <n>` call `pnext-item` §6 places directly
         /// after host acceptance (.github#2549). Deliberately not `AwaitChecks`: by `.github#2504` the
         /// required `claim-generation` context cannot report until that call PATCHes the authorization
         /// marker onto this head, so waiting is a cycle the marker can never break.

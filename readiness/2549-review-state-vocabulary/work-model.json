@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a7a12d6a4c7b0a2b276daf5e7dd2a7253c7c0e5bc9d6879cd131e4851f9ffd03"
+        "value": "da62f84c374e9a86c9dcc7c5540633c7eb69dd82064247ffdb1eeb968912e9f4"
       }
     },
     {
@@ -1749,7 +1749,7 @@
           "path": "work/2549-review-state-vocabulary/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "a7a12d6a4c7b0a2b276daf5e7dd2a7253c7c0e5bc9d6879cd131e4851f9ffd03"
+            "value": "da62f84c374e9a86c9dcc7c5540633c7eb69dd82064247ffdb1eeb968912e9f4"
           },
           "schemaVersion": 1
         },
@@ -1780,7 +1780,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "1fe2ba3272b7f1eccc1872913131d53131f5e5ec4d788e2c405eed021fb134a5"
+        "value": "1cda2bd3d7393d1f466f29f8321f752da444ccb2db2914ca097905df349eb372"
       },
       "currency": "current"
     }

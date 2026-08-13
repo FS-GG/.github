@@ -366,7 +366,7 @@ module Review =
                     AcceptedAwaitingChecks facts.Checks,
                     AuthorizeDelivery(
                         "the review chain is complete and accepted at this head; make the one live "
-                        + "`fsgg-coord delivery <ref> --pr <n>` call pnext-item section 6 places here, "
+                        + "`scripts/fsgg-coord delivery <ref> --pr <n>` call pnext-item section 6 places here, "
                         + "which PATCHes the pull request's fsgg:pr-authorization marker onto this head "
                         + "and is what lets the required claim-generation context report at all "
                         + "(.github#2504) — waiting for green before making it is a cycle the marker can "

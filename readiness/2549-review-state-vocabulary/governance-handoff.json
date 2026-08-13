@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2549-review-state-vocabulary/ship.json",
-      "digest": "sha256:31272e2e43da81422a8d976a43d378b9621382a01bba48f46dc65cffa0479f0f",
+      "digest": "sha256:d652656b8ec64f81c48199c1d7b7caac8757aa118b397db429ce37bff40c34e0",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2549-review-state-vocabulary/verify.json",
-      "digest": "sha256:26b54e22275ceffded505429c97f19203ad40732fb9790fa1d5a2d3517a8c5d0",
+      "digest": "sha256:308d311c1c9adac8646059deb18af90f60160ee15a7ed14fa2d1d266c21654f8",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2549-review-state-vocabulary/work-model.json",
-      "digest": "sha256:65e737a3fd56f63d3da5c8a150a2af1674e8855e5d26a0279dd2f8f840922b0a",
+      "digest": "sha256:0e51736ce6638849fd0d5daac29530459674b2942d866674c107ce72a9971ca6",
       "schemaVersion": 1
     }
   ],
