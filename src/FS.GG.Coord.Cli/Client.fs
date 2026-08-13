@@ -1813,11 +1813,35 @@ module Client =
     /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
     /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
     /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
-    /// elsewhere), the PR has already merged (nothing further to authorize), or the caller is not
-    /// applying a mutation (`--apply` gates every write this command makes, and this is one).
+    /// elsewhere), or the PR has already merged (nothing further to authorize).
     /// `rebindAuthorization`'s `AuthorizationCurrent` answer skips the PATCH entirely, so a routine
     /// status check that changed nothing spends one read and zero writes — the common case on every call
     /// after the first.
+    ///
+    /// NO LONGER GATED ON `--apply` (.github#2488). It used to be — `apply, pr, marker, merged` all had
+    /// to line up — on the theory that this was one of `delivery`'s writes and `--apply` gates every
+    /// write the command makes. Measured against the fleet's real PRs, that gating made the write
+    /// UNREACHABLE: five real `item/<n>-*` PRs merged after this function landed on `main` carried NO
+    /// `fsgg:pr-authorization` marker at all, because nothing in the fleet's real flow ever calls
+    /// `delivery --apply --pr N` — the documented merge step is a direct `gh api -X PUT …/pulls/<pr>/
+    /// merge` (`deep-detail.md`'s "MERGE over REST"), which never reaches this function, and even a
+    /// worker who DID pass `--apply` reached it too late: `--apply` immediately attempts the
+    /// `GuardedLand`/`Complete` transition in the SAME call, so by the time any CI re-evaluation could
+    /// see the freshly-PATCHed body the PR was often already merged or closed. Dropping the gate makes
+    /// every LIVE `delivery <ref> --pr N` call — including a plain, non-`--apply` status read — refresh
+    /// the marker as a side effect wherever a caller with a live GitHub credential DOES make that call
+    /// (a worker's own shell; `pnext-item` §5's own documented step routes to `--snapshot FILE`, an
+    /// IO-free path this change does not touch — nothing in that skill's CURRENT text calls the live
+    /// form, a distinct reachability gap tracked separately, not fixed by this signature change alone).
+    /// This is safe precisely because it is the ONLY thing this function does: unlike `delivery`'s
+    /// `GuardedLand`/`Complete` transitions (still exclusively `--apply`-gated, untouched here), a
+    /// PR-body PATCH of an HTML-comment marker takes no board-affecting action, so a read-only
+    /// inspection performing it carries none of the "did this quietly merge something" risk that gating
+    /// write-capable commands behind `--apply` exists to prevent. It ALSO cannot run from this repo's
+    /// own CI: the live form's first action is a Coordination Projects (v2) board bootstrap
+    /// (`Board.bootstrapCached`), a read this org's CI credential inventory does not carry (ADR-0019
+    /// §1, `.github#2332`) — see `.github/workflows/coherence.yml`'s `claim-generation` job comment for
+    /// the measured failure and why a CI-side self-heal was tried and deliberately dropped.
     ///
     /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
     /// endpoint is the one GitHub documents for it.
@@ -1835,10 +1859,9 @@ module Client =
         (pr: int option)
         (head: string)
         (merged: bool)
-        (apply: bool)
         : Errors.IoResult<unit> =
-        match apply, pr, marker, merged with
-        | true, Some prNumber, Some heldMarker, false ->
+        match pr, marker, merged with
+        | Some prNumber, Some heldMarker, false ->
             Reads.prBody ctx.Transport target.Owner target.Repo prNumber
             |> Result.bind (fun body ->
                 match rebindAuthorization body target.Canonical (string heldMarker.Id) head with
@@ -1965,12 +1988,18 @@ module Client =
                         // lifecycle facts below — a write to the PR body that no fact in
                         // `Delivery.Snapshot` reads, so folding it into the same `Result` here cannot
                         // change what `Delivery.inspect` decides; it only keeps the gate's read side
-                        // (`scripts/check-claim-generation.py`) from ever seeing a stale or absent
-                        // marker on the NEXT push (.github#2395).
+                        // (`scripts/check-claim-generation.py`) current.
+                        //
+                        // UNCONDITIONAL on `opts.Apply` (.github#2488, was gated on it — see
+                        // `ensureAuthorization`'s own doc comment for the measured reachability failure
+                        // that gating caused, and for what still has to call this LIVE form for the
+                        // write to actually happen). Every LIVE `delivery <ref> --pr N` call reaches
+                        // this now, apply or not — a plain status read is enough, not only a
+                        // `--apply` invocation.
                         let branchAndPr =
                             branchAndPr
                             |> Result.bind (fun (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations) ->
-                                ensureAuthorization ctx target marker pr head merged opts.Apply
+                                ensureAuthorization ctx target marker pr head merged
                                 |> Result.map (fun () ->
                                     (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations)))
 

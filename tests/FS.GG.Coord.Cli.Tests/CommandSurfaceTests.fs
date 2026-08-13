@@ -525,7 +525,11 @@ module CommandSurfaceTests =
         // change was being written, an emitter deliberately broken to drop every `writesWhen` object turned
         // the test above red and left THIS one green. A gate that survives its own incident is the shape
         // #266 names. So the flag-gated verbs are named: `reap` and `reconcile` are the pair #1534 was filed
-        // about, `flush` is the opposite polarity, and `delivery` is the head-SHA-guarded merge path.
+        // about, and `flush` is the opposite polarity. `delivery` is NOT here (.github#2488) — its
+        // `fsgg:pr-authorization` write is gated on runtime state (a live claim held by the caller, the
+        // named PR's merged status), not on any flag, so its `writesWhen` carries `argvCannotSay` rather
+        // than `flagGiven`/`flagAbsent`, and this set — specifically the FLAG-gated subset — correctly
+        // excludes it.
         let flagGated =
             rows
             |> Map.filter (fun _ row ->
@@ -535,7 +539,7 @@ module CommandSurfaceTests =
             |> Map.keys
             |> Set.ofSeq
 
-        Assert.Equal<Set<string>>(set [ "delivery"; "flush"; "reap"; "reconcile" ], flagGated)
+        Assert.Equal<Set<string>>(set [ "flush"; "reap"; "reconcile" ], flagGated)
 
         let bad =
             [ for verb, row in Map.toList rows do

@@ -18,8 +18,19 @@
 # daily schedule that is the only way to see SDD bump a version without touching a file in this repo.
 name: coherence
 
+# `pull_request.types` names `edited` explicitly (.github#2488), on top of the three GitHub defaults
+# `opened`/`synchronize`/`reopened` a bare `pull_request:` would otherwise fall back to. `claim-generation`
+# (below) reads `Client.ensureAuthorization`'s `fsgg:pr-authorization` marker, which a worker's own live
+# `delivery <ref> --pr N` call PATCHes into the PR body FROM OUTSIDE THIS WORKFLOW (see that job's comment
+# for why the write cannot happen IN CI) — a PATCH is edited, never a push, so without `edited` in this
+# list nothing ever re-evaluates the gate against a marker such a call just wrote, and every `item/<n>-*`
+# PR the fleet opens stays fenced on the `opened` event's ALREADY-STALE `github.event.pull_request.body`
+# forever (measured: five for five real PRs, #2488's evidence table). The other jobs below re-run on a
+# body edit too as a result — accepted, not free, and bounded to the rare case of an actual PR edit
+# (human or a worker's own authorization call), not every push.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
@@ -172,6 +183,31 @@ jobs:
   # skips a path-filtered required check — it never creates the check run at all, so branch protection
   # waits forever). This job decides its own applicability from the BRANCH SHAPE
   # (`item/<n>-*`) rather than from a trigger filter, so an unrelated PR still gets a real `success`.
+  #
+  # DOES NOT SELF-HEAL ITS OWN MARKER IN CI, AND THAT IS A DELIBERATE, MEASURED CHOICE (.github#2488
+  # round 1 repair). An earlier draft of this job ran `who --json` here to find the live claim holder,
+  # then re-invoked `delivery <ref> --pr N` under that identity to PATCH the body. Both calls' FIRST
+  # action is a live Coordination Projects (v2) board bootstrap (`Board.bootstrapCached`,
+  # `src/FS.GG.Coord.GitHub/Board.fs`) — and this org's CI credential inventory does not carry that
+  # read. This is not a bug this job could route around: `roster-closure`, three blocks above in this
+  # SAME file, and `docs/adr/0019-org-repo-roster-registry-and-coordination-kit.md`'s 2026-08-11
+  # amendment (`.github#2332`) already record it as an ACCEPTED org decision — `FSGG_DISPATCH_APP_ID`/
+  # `_PRIVATE_KEY`, `GITHUB_TOKEN`, and `NUGET_USER` are this org's whole CI credential inventory, and
+  # NONE of them carries organization or Projects (v2) read. A self-heal step built on either call
+  # would red identically to a missing one, every time, under any credential already available here —
+  # measured live: `who --json` failed `not found: no Projects v2 board titled 'Coordination' in
+  # FS-GG` on this PR's own first head (`da310d55`, run 31655633573/job 94309337287).
+  #
+  # THE EMISSION POINT, NAMED (.github#2488 AC2) AND WHERE IT ACTUALLY LIVES: `Client.ensureAuthorization`,
+  # reached through a plain LIVE `delivery <ref> --pr N` status read — no `--apply`, so it can never merge
+  # or close anything (see that function's own doc comment in `Client.fs`). That call is NOT made from
+  # this workflow; it is made from a WORKER's own shell, which already holds a working board/GitHub
+  # credential (the same one every other coordination-engine command in that worker's session uses) —
+  # exactly the credential this job's own token cannot be given under the accepted decision above. The
+  # `edited` type this workflow's `on:` block now carries exists FOR that external write: a worker's
+  # `delivery` call PATCHes the PR body from outside this job entirely, and `edited` is what makes THIS
+  # job re-evaluate against it, automatically, with no human intervention and no close/reopen — see the
+  # `on:` block's own comment for the "why `edited`" half of this story.
   claim-generation:
     runs-on: ubuntu-latest
     timeout-minutes: 10
