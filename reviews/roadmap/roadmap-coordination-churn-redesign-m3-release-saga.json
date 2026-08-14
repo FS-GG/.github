@@ -12,12 +12,19 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 3,
+  "repair_rounds": 10,
   "reviewed_commits": [
     "e163d9cdee2a95ca0f3ad951dabbfce5affde146",
     "ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660",
     "e1c836f9fcc336b896a337d3cb89cf3182af8e7c",
-    "a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c"
+    "a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c",
+    "9eb0ae4b230df7ed5c7214640bd23dde8cf1ff30",
+    "d155e4214bc3a828178c1021decb6225cf58e0e3",
+    "6a702b8caf33ff80d69fbbe9c3ea2f4a04db0f70",
+    "98fe1bcc3c983dfa503ad18f139a90e23c293f56",
+    "88703abf5ac8a5a9fa8831385f63040d8ebabdbf",
+    "6deea13859c973158640675b75de25eb867dea05",
+    "356b9d9a4a5a0202d147c3df45e769bf7477e0c2"
   ],
   "findings": [
     {
@@ -55,7 +62,10 @@
         "Verification: scripts/release-saga-ci.sh:119-125 records and uploads the current feed/package failure, and each package workflow has an `if: failure()` persistence step immediately after the irreversible feed sequence: engine lines 296-300, Kit lines 365-369, and Drivers lines 249-253.",
         "Verification: .github/workflows/release-saga-promote.yml:39-48 requires exactly three journal assets and merges them before external observation; scripts/release-saga.py:223-271 rejects a different contentId/descriptor or conflicting verified observation while monotonically unioning verified package state and attempts.",
         "Verification: .github/workflows/release-saga-prepare.yml:58-65 now compares an existing release's immutable contentId plus every package byte instead of comparing volatile manifest state bytes, so repeated preparation accepts identical descriptor/artifacts without depending on createdAt or updatedAt.",
-        "Verification: `bash tests/release-saga/run.sh`, `bash -n scripts/release-saga-ci.sh tests/release-saga/run.sh`, and `git diff --check e163d9cdee2a95ca0f3ad951dabbfce5affde146..ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660` all exited 0 on exact repair head ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660; shellcheck and actionlint were unavailable."
+        "Verification: `bash tests/release-saga/run.sh`, `bash -n scripts/release-saga-ci.sh tests/release-saga/run.sh`, and `git diff --check e163d9cdee2a95ca0f3ad951dabbfce5affde146..ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660` all exited 0 on exact repair head ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660; shellcheck and actionlint were unavailable.",
+        "Verification: live release assets downloaded from draft coherent-set/v0.54.0 on 2026-08-14 contain contentId sha256:0c4c9269a5ad16efc17543a60da679804ef4ec73ddeefcc4a4f370689401b3e8 and sourceSha 9c5f8c077e59c84301333b362596f2b185231d5a; all three package-specific journals preserve that same identity and record the failed GitHub observation stage.",
+        "Verification: failed engine run 31798611505 logged a successful GitHub Packages PUT followed by `release-saga: File is not a zip file`, matching the slashless PackageBaseAddress concatenation defect; repair-round-6 commit 6a702b8caf33ff80d69fbbe9c3ea2f4a04db0f70 strips trailing slashes and inserts exactly one separator in both scripts/release-saga-ci.sh and the promotion observer.",
+        "Verification: `bash tests/release-saga/run.sh`, `bash -n scripts/release-saga-ci.sh tests/release-saga/run.sh`, and `git diff --check 9c5f8c077e59c84301333b362596f2b185231d5a..6a702b8caf33ff80d69fbbe9c3ea2f4a04db0f70` all exited 0 in a detached worktree at exact repair-round-6 head."
       ]
     },
     {
@@ -96,22 +106,96 @@
         "Verification: `git tag --points-at e163d9cdee2a95ca0f3ad951dabbfce5affde146`, `git tag -l '*0.54.0*'`, and `git branch -r --contains e163d9cdee2a95ca0f3ad951dabbfce5affde146` produced no output in the supplied worktree; there is no repository evidence at the reviewed head of 0.54.0 release tags, a merged source, or a remotely published coherent set.",
         "Verification: the base-to-head diff changes registry/dependencies.yml package-version only by leaving it at 0.53.0 and adds no completed release manifest, external feed hashes, workflow run IDs, or stable-channel receipt for 0.54.0."
       ],
-      "disposition": "follow-up",
+      "disposition": "resolved",
       "resolution_evidence": [
         "Verification: registry/dependencies.yml:900-902 remains truthfully staged at source version 0.54.0 and package-version 0.53.0 on repair head ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660, and the roadmap remains unchecked; no release completion is claimed.",
         "Verification: the non-circular route is a preparatory implementation merge only, not milestone acceptance: .github/workflows/release-saga-prepare.yml is workflow_dispatch and the package workflows consume a draft bound to the exact merged GITHUB_SHA, so the new trusted workflow must first exist on default branch before it can prepare and publish that exact source.",
         "Verification: under the work-roadmap contract this finding remains a major completion gate: after the preparatory workflow repair lands, run the real 0.54.0 prepare/publish/promote sequence, externally verify the persisted hashes and runs, then return a new exact repository head carrying the package-version/roadmap evidence for this same critic's confirmation; do not mark M3 complete or accept the critique before that head.",
         "Verification: repair-round-2 head e1c836f9fcc336b896a337d3cb89cf3182af8e7c changes only the critique artifact, promotion implementation, and its fixture relative to ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660; registry/dependencies.yml still truthfully records package-version 0.53.0 and the roadmap remains unchecked.",
-        "Verification: on exact repair-round-3 head a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c, findings 001-003 are resolved and the local production-topology/state-machine fixture is green, so the architecture is ready for the narrowly scoped preparatory PR; this does not resolve finding 004 or authorize checking M3 before the real merged-source release evidence exists."
+        "Verification: on exact repair-round-3 head a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c, findings 001-003 are resolved and the local production-topology/state-machine fixture is green, so the architecture is ready for the narrowly scoped preparatory PR; this does not resolve finding 004 or authorize checking M3 before the real merged-source release evidence exists.",
+        "Verification: repair-round-4 head 9eb0ae4b230df7ed5c7214640bd23dde8cf1ff30 refreshes only the two mirrored generated publishing inventories and docs/architecture.md from registry source version 0.54.0/package-version 0.53.0, adapts one release-notes fixture selector to the saga prepared-or-dry-pack step, and advances this critique artifact; `git diff --numstat a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c..9eb0ae4b230df7ed5c7214640bd23dde8cf1ff30` reports one replacement line in each non-critique file.",
+        "Verification: on exact head 9eb0ae4b230df7ed5c7214640bd23dde8cf1ff30, `scripts/generate-projections --check` reported every projection current, `bash tests/engine-release-notes/run.sh` passed 25/25, `bash tests/skill-quality/run.sh` completed successfully including all rejection cases, `bash tests/release-saga/run.sh` passed, `bash -n tests/engine-release-notes/run.sh` passed, and `git diff --check a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c..9eb0ae4b230df7ed5c7214640bd23dde8cf1ff30` exited 0.",
+        "Verification: tests/engine-release-notes/run.sh:365 now accepts either the legacy literal Pack step or the honest `Use saga-prepared package (publish) or pack locally (dry run)` boundary and still requires the production release-notes checker to precede it; the change does not weaken the checker, version/notes assertions, length limit, standing-advisory checks, or trigger coverage exercised by the other 24 passing cases.",
+        "Verification: repair round 4 closes the observed preparatory-PR CI projection and fixture failures without changing release-saga production behavior; finding 004 remains open because registry/dependencies.yml still names package-version 0.53.0 and no merged-source 0.54.0 external release evidence has been added.",
+        "Verification: repair-round-5 commit d155e4214bc3a828178c1021decb6225cf58e0e3 changes only registry/driver-skill-manifest.json relative to 9eb0ae4b230df7ed5c7214640bd23dde8cf1ff30: publishing-and-deployment's operator row source/file hash moves to bf7fecaccff964bbaa20c5234a7faca5cc2f6f3ef9d0f6fdc2d52fafb32fc5e9 and its derived tree hash moves to 42021d3c014826771e0488d0bd5dd81295b4637e89cae933d9a4dfeb61f4a464.",
+        "Verification: `sha256sum .agents/skills/publishing-and-deployment/SKILL.md .claude/skills/publishing-and-deployment/SKILL.md` produced bf7fecaccff964bbaa20c5234a7faca5cc2f6f3ef9d0f6fdc2d52fafb32fc5e9 for both mirrors, exactly matching the refreshed manifest row; `scripts/generate-driver-manifest --check` reported both manifests current and `scripts/generate-projections --check` reported every projection current.",
+        "Verification: the publishing-and-deployment row remains `scope: operator` with `materializes-when: false`; `bash src/FS.GG.Drivers/verify-package.sh` proved 7 operator payloads withheld, 5 driver skills staged/content-addressed, and the nupkg carrying the manifest plus only the driver skill payloads. The manifest-row bytes are intentionally packaged even though the operator SKILL.md bytes are not.",
+        "Verification: `bash tests/skill-quality/run.sh` completed successfully and `git diff --check 9eb0ae4b230df7ed5c7214640bd23dde8cf1ff30..d155e4214bc3a828178c1021decb6225cf58e0e3` exited 0; round 5 changes no release-saga implementation, workflow, version scalar, or completed-release evidence, so findings 001-003 remain resolved and finding 004 remains open.",
+        "Verification: live `gh run view 31798384146` reports the prepare workflow succeeded at merged source 9c5f8c077e59c84301333b362596f2b185231d5a; draft coherent-set/v0.54.0 targets that SHA and carries the three nupkgs, manifest, and three failure journals.",
+        "Verification: `git ls-remote` shows coord-engine/v0.54.0, kit/v0.54.0, and drivers/v0.54.0 all peel to 9c5f8c077e59c84301333b362596f2b185231d5a. The downloaded manifest names contentId sha256:0c4c9269a5ad16efc17543a60da679804ef4ec73ddeefcc4a4f370689401b3e8 and its package input hashes exactly equal independent sha256sum results for all three downloaded draft nupkgs.",
+        "Verification: live package runs 31798611505, 31798611305, and 31798611673 failed after their GitHub pushes; the draft remains unpromoted, all journals leave NuGet pending, and no stable-channel.json asset exists. This is truthful fail-closed recovery state, not completion evidence.",
+        "Verification: finding 004 therefore remains open until a corrected recovery run publishes/observes the complete set on both feeds, promotion succeeds, and a later exact repository head records package-version and roadmap evidence.",
+        "Verification: during repair-round-9 review, direct nuget.org flat-container probes returned 200 for FS.GG.Drivers 0.54.0 and 404 for FS.GG.Kit and FS.GG.Coord.Cli 0.54.0; the mixed state confirms the stable set was then incomplete and correctly remained unpromoted.",
+        "Verification: exact terminal evidence head 356b9d9a4a5a0202d147c3df45e769bf7477e0c2 is based on merged main 6862485c00f5c4593c06f101fb2261bb4122300e and records M3 complete, registry source/package version 0.54.0, and the release evidence in the roadmap and registry changelog; `git status --short` was empty and `git diff --check 6862485c00f5c4593c06f101fb2261bb4122300e..356b9d9a4a5a0202d147c3df45e769bf7477e0c2` exited 0.",
+        "Verification: live `gh release view`/`gh release list` inspection found coherent-set/v0.54.0 published, non-draft, non-prerelease, and latest at 2026-08-14T13:04:31Z, targeting immutable source 9c5f8c077e59c84301333b362596f2b185231d5a with exactly the three nupkgs, three durable journals, release-manifest.json, and stable-channel.json.",
+        "Verification: independent `sha256sum` of the current release assets produced release-manifest SHA256 19cb9411774d25c9daf3b79ee51528f2bcbe8e2f28a9fccc2e7ba13cba23d374 and stable-channel SHA256 24abdeaad9cf2159ac4de515ce8e7baee2af316fc328cb6c2c3e4c032da65a71; the manifest names contentId sha256:0c4c9269a5ad16efc17543a60da679804ef4ec73ddeefcc4a4f370689401b3e8, release github:0.54.0, policy release-saga/1, previous stable 0.53.0, and source 9c5f8c077e59c84301333b362596f2b185231d5a.",
+        "Verification: `release-saga.py assert-artifacts` and `assert-identity` passed against the downloaded final manifest and nupkgs; the manifest's state has both feeds verified for all three packages with exact external payload hashes, channelPromotion state promoted, and recovery.resumptions=22, while stable-channel.json carries the same contentId/version/source.",
+        "Verification: live `git ls-remote origin 'refs/tags/kit/v0.54.0^{}' 'refs/tags/drivers/v0.54.0^{}' 'refs/tags/coord-engine/v0.54.0^{}'` showed all three annotated tags peel to exact source 9c5f8c077e59c84301333b362596f2b185231d5a.",
+        "Verification: live GitHub Actions queries found successful prepare run 31798384146, initial stable promotion 31803041325, clean package replays 31803203853/31803205820/31803208329, and idempotent promotion runs 31803249669/31803314176/31803356405; all reported conclusion success.",
+        "Verification: job-step inspection of each clean replay found `Observe public feed before any push` succeeded, `Push byte-identical package to nuget.org` was skipped, and `Record externally served public package` succeeded, demonstrating recovery by observing the immutable bytes without a duplicate public push.",
+        "Verification: live `check-release-coherence.py` selected coordinated release 0.54.0 at source 9c5f8c077e59 and reported FS.GG.Kit, FS.GG.Drivers, and FS.GG.Coord.Cli at 0.54.0 on both the org feed and nuget.org; live `check-feed-coherence.py registry/dependencies.yml` also reported coord-engine registry/org/nuget.org all 0.54.0 and every other mapped package coherent.",
+        "Verification: on exact terminal head, `bash tests/release-saga/run.sh`, `bash tests/release-coherence/run.sh` (17/17), `bash tests/registry-changelog/run.sh` (28/28), `bash tests/skill-quality/run.sh`, `bash tests/engine-release-notes/run.sh`, `bash tests/release-tag-anchors/run.sh`, `bash tests/registry-predicate/run.sh`, `bash tests/repos-registry/run.sh`, and `bash tests/adr-coherence/run.sh` all exited 0.",
+        "Verification: on exact terminal head, `bash scripts/generate-projections --check`, `python3 scripts/generate-driver-manifest --check`, `bash scripts/generate-skill-union-bundle --check`, and `dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --nologo` all exited 0; the generated projections, release evidence, registry flip, and compiled tooling are coherent.",
+        "Verification: the real forced failure/recovery history is retained in the 22 resumptions and durable journals, the terminal clean replays prove observation-only idempotence after publication, and stable promotion exposes the exact same contentId and source; together these satisfy M3's full coherent dual-feed release and byte-stable resume exit criterion."
+      ]
+    },
+    {
+      "id": "M3-RELEASE-SAGA-CRIT-005",
+      "severity": "major",
+      "summary": "Manual recovery of FS.GG.Kit is still bound to the recovery checkout SHA in its own-tag precondition, so the exact merged-source 0.54.0 recovery requested from newer main cannot reach the prepared package.",
+      "evidence": [
+        "Verification: repair-round-6 head 6a702b8caf33ff80d69fbbe9c3ea2f4a04db0f70 adds workflow_dispatch source_sha and correctly compares both sibling tags against it in all three workflows, while release-saga-ci init asserts the downloaded manifest identity against that source and every irreversible command consumes the exact downloaded package filename.",
+        "Verification: .github/workflows/release-kit.yml at exact head 6a702b8caf33ff80d69fbbe9c3ea2f4a04db0f70 still compares the manual publish's own kit/v$version tag with `$GITHUB_SHA` at lines 269-270, not `$source_sha`; the other two workflows have no equivalent raw manual own-tag `$GITHUB_SHA` comparison.",
+        "Verification: the three v0.54.0 tags peel to prepared source 9c5f8c077e59c84301333b362596f2b185231d5a, while a manual recovery dispatched after merging the recovery patch checks out newer main. Kit therefore rejects its valid immutable tag before downloading the draft, even when the operator supplies source_sha=9c5f8c077e59c84301333b362596f2b185231d5a.",
+        "Verification: a focused source scan at exact head printed `raw_manual_own_tag_github_sha=True` only for release-kit.yml. tests/release-saga/run.sh passed because its topology assertion checks that source_sha fields/outputs occur somewhere in each workflow but does not reject a remaining manual tag comparison to `$GITHUB_SHA`.",
+        "Verification: .github/workflows/release-saga-promote.yml in round 6 independently improves observer recovery by using current main tooling, reading sourceSha from the manifest, requiring all three peeled tags to equal it, and asserting manifest identity; that correct observer path does not repair Kit's earlier package-workflow refusal."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair-round-7 commit 98fe1bcc3c983dfa503ad18f139a90e23c293f56 changes Kit's manual own-tag comparison and diagnostic at .github/workflows/release-kit.yml:269-270 from the recovery checkout's `$GITHUB_SHA` to the immutable prepared `$source_sha`; the exact 6a702b8caf33ff80d69fbbe9c3ea2f4a04db0f70..98fe1bcc3c983dfa503ad18f139a90e23c293f56 production diff contains no other workflow behavior change.",
+        "Verification: tests/release-saga/run.sh now rejects the literal raw `tagged\" != \"$GITHUB_SHA` comparison in every package workflow. A focused exact-head scan found zero such comparisons and found one shared `$source_sha` tag comparison in Engine and Drivers and two in Kit, accounting for Kit's sibling-tag and own-tag guards.",
+        "Verification: `bash tests/release-saga/run.sh`, `bash -n scripts/release-saga-ci.sh tests/release-saga/run.sh`, and `git diff --check 6a702b8caf33ff80d69fbbe9c3ea2f4a04db0f70..98fe1bcc3c983dfa503ad18f139a90e23c293f56` all exited 0 in a detached worktree at exact repair head 98fe1bcc3c983dfa503ad18f139a90e23c293f56.",
+        "Verification: manual recovery can now check out newer main tooling while all three package workflows require every immutable v0.54.0 tag and the downloaded manifest identity to name prepared source 9c5f8c077e59c84301333b362596f2b185231d5a; irreversible pushes still consume only the downloaded manifest-bound nupkg filenames."
+      ]
+    },
+    {
+      "id": "M3-RELEASE-SAGA-CRIT-006",
+      "severity": "major",
+      "summary": "The Engine recovery workflow's handwritten source-SHA pattern had only 39 hexadecimal atoms and rejected the correct prepared 40-character SHA before manifest recovery could begin.",
+      "evidence": [
+        "Verification: live workflow_dispatch run 31799708999 supplied DISPATCH_SOURCE_SHA=9c5f8c077e59c84301333b362596f2b185231d5a and failed in `Resolve version + publish decision` with `manual publish recovery requires an exact 40-character lowercase source_sha`; the run's recovery checkout head was 3f0b72ab185bf9189725009aa65c931c1c9cbbf3.",
+        "Verification: independent parsing of the pre-repair workflow found Kit and Drivers each had 40 `[0-9a-f]` atoms, while Engine's validation rejected the known 40-character prepared SHA; the failure occurred before any package or feed action in the Engine recovery run."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair-round-8 commit 88703abf5ac8a5a9fa8831385f63040d8ebabdbf replaces only Engine's handwritten case pattern with the anchored Bash regex `^[0-9a-f]{40}$` and adds a static production-workflow assertion; no package, journal, feed, promotion, or tag behavior changes.",
+        "Verification: an independent Bash probe at exact repair head accepted 9c5f8c077e59c84301333b362596f2b185231d5a and rejected its 39-character truncation, a 41-character extension, and an uppercase variant, proving exact lowercase/full-length behavior.",
+        "Verification: a focused source inspection found Engine uses the anchored regex while the unchanged Kit and Drivers handwritten patterns each contain exactly 40 hexadecimal atoms.",
+        "Verification: `bash tests/release-saga/run.sh`, `bash -n scripts/release-saga-ci.sh tests/release-saga/run.sh`, and `git diff --check 98fe1bcc3c983dfa503ad18f139a90e23c293f56..88703abf5ac8a5a9fa8831385f63040d8ebabdbf` all exited 0 in a detached worktree at exact repair-round-8 head."
+      ]
+    },
+    {
+      "id": "M3-RELEASE-SAGA-CRIT-007",
+      "severity": "major",
+      "summary": "NuGet's accepted pushes can remain absent from the flat container beyond the original two-minute observation window, whose final 404 body was treated as a non-empty package and parsed as a zip.",
+      "evidence": [
+        "Verification: live Kit run 31799711113 and Drivers run 31799713633 each logged NuGet `Created` followed by `Your package was pushed`; their later observation steps failed with `release-saga: File is not a zip file` after the old 24-by-5-second loop.",
+        "Verification: the pre-repair nuget-record arm used `test -s` after the retry loop, while curl writes the non-empty 404 response body to the target path; record-observed then attempted to parse that response as a nupkg instead of reporting that no successful observation occurred."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair-round-9 commit 6deea13859c973158640675b75de25eb867dea05 retains the Engine exact-SHA repair and changes nuget-record to set `observed=true` only after an HTTP-200 download; after exhausting the loop it now fails explicitly instead of accepting a non-empty 404 body.",
+        "Verification: when the durable journal's lastFailure names the same package and NuGet stage, nuget-probe now performs up to sixty 10-second observations, records and uploads the exact externally served payload when it appears, emits push=false, and contains no dotnet nuget push command in that recovery arm.",
+        "Verification: this conservative recovery does not infer that a 404 means the accepted immutable write is absent; it fails durably after ten minutes without issuing a blind duplicate push, preserving the manifest-bound safety rule under unknown NuGet validation/indexing latency.",
+        "Verification: tests/release-saga/run.sh asserts the NuGet failure-journal guard, the no-blind-duplicate policy, and successful-observation requirements for both loops. `bash tests/release-saga/run.sh`, `bash -n scripts/release-saga-ci.sh tests/release-saga/run.sh`, and `git diff --check 88703abf5ac8a5a9fa8831385f63040d8ebabdbf..6deea13859c973158640675b75de25eb867dea05` exited 0 in a detached exact-head worktree.",
+        "Verification: an independent exact-head source probe confirmed the delayed recovery arm contains the 60-iteration observation loop and no push command, and both NuGet loops require observed=true before recording payload state."
       ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c",
-    "verdict": "changes-required",
-    "unresolved_blocker_major": [
-      "M3-RELEASE-SAGA-CRIT-004"
-    ]
+    "reviewed_commit": "356b9d9a4a5a0202d147c3df45e769bf7477e0c2",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
   },
   "human_escalation": null,
   "game_functionality": false,
