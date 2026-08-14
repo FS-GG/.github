@@ -158,53 +158,41 @@ publish was then REFUSED by `check-engine-release-notes` because the notes still
 `0.50.4` while `Version` had moved to `0.50.5`. Correcting that needs a new commit, and the
 sibling-tag precondition requires all three tags at the SAME commit, so 0.50.5 could not be
 finished from a corrected tree — re-cutting it is the re-pack divergence `.github#2240` documents.
-Adopt 0.50.6. Both sets are recorded the same way in `registry/dependencies.yml`.</FsggStandingAdvisories>
+Adopt 0.50.6.
 
-    <PackageReleaseNotes>0.52.0 — `fsgg-coord review` stops calling a designed wait broken evidence.
+DO NOT ADOPT 0.52.0. It is a different permanent partial set: `FS.GG.Kit` and `FS.GG.Drivers`
+published to both feeds, and `FS.GG.Coord.Cli` published to the org feed before nuget.org rejected
+its 37,279-character `PackageReleaseNotes`. NuGet versions are immutable and re-packing corrected
+bytes under 0.52.0 would make the same version identify different artifacts. Adopt 0.53.0, the next
+coherent set cut from corrected source. All three partial sets are recorded in
+`registry/dependencies.yml`.</FsggStandingAdvisories>
 
-WHAT MOVED, AND WHY IT IS A MINOR. Two new names on the `fsgg.coord.review/1` wire and one change in
-what an existing input produces. Both additions are additive; no existing state name, action name,
-payload key, or freshness/action-key derivation changes meaning, and a snapshot authored for 0.51.1
-parses and answers identically unless it opts into the new key.
+    <PackageReleaseNotes>0.53.0 — consolidation no longer invalidates a delivery-route decision, and the coherent set recovers from the incomplete 0.52.0 publish.
 
-THE DEFECT. `review` reported the post-acceptance, pre-`delivery` window of `pnext-item` section 6 as
-`malformedEvidence` — the same state a chain carrying two competing initial markers reaches, whose
-established recovery is to close the pull request WITHOUT MERGING. Measured on FS-GG/.github#2534 /
-PR #2541: the identical comment set returned `malformedEvidence`/`park` at `checks: pending` and
-`accepted`/`accept` at `checks: green`. Nothing about the evidence differed between the two runs. And
-by .github#2504 the required `claim-generation` context CANNOT be green at that moment, because its
-marker is written by the `delivery` call section 6 places after acceptance — so every ordinary landing
-passed through the state whose recovery is destructive. PR #2514 was closed and reopened as #2528 on
-exactly that reading on 2026-08-13, at the cost of a full fresh review.
+WHAT MOVED, AND WHY IT IS A MINOR. `delivery-route record` now writes an external locator for the
+exact subject lines the receipt judged. On read, the existing subject remains authorized when those
+lines survive byte-identically and in the same order among additive prose. The matched current lines
+are re-hashed at full SHA-256 width against the receipt's `subjectRevision`; the locator can select a
+candidate but cannot grant authorization. Scope-changing edits to judged lines remain stale.
 
-NEW STATE `acceptedAwaitingChecks`, carrying the live `PrState`, with `stateErrors: null`. The chain is
-complete: well-formed, host-accepted, one critic, bound to the current head. The ACTION differentiates
-rather than the state — new `authorizeDelivery` for pending/unknown (make the section 6 `delivery`
-call, which is what lets `claim-generation` report at all), `resumeImplementer` for red/conflicted (a
-failing change is not broken evidence), `park` for merged/closed.
+The additive arm refuses an empty judged subject before alignment, so an empty receipt cannot match
+an arbitrary later body vacuously. It diagnoses that case separately from an ordinary stale receipt.
+Claim/take mutation reports when it accepted an additive match; high-volume scheduling reads stay
+quiet. Production-derived consolidation bodies and explicit collision, empty-subject, semantic-edit,
+and notice controls preserve these boundaries.
 
-`malformedEvidence` now means the durable evidence is structurally wrong, and only that.
-`Driver.validateReviewChain` keeps its exact messages in its exact order — so `Delivery.reviewProblem`
-and `Driver.receiptFresh` are behaviourally unchanged — and the new `validateReviewChainStructure`
-exposes its structural subset, both derived from one ordered source so they cannot drift.
+The existing CommonMark four-space indent rule is also held by one shared corpus consumed through
+both the F# delivery parser and Python package-coherence parser. That is regression hardening, not a
+behavior change.
 
-NEW OPTIONAL INPUT `facts.repairAssertionGranted`, and a new `Review.RepairAssertionReceipt`. A
-critic finding whose subject is a pull request COMMENT rather than the tree — the post-merge
-obligations declaration is a standing artefact of every item — is repaired by a comment edit, so the
-head correctly does not move, and the state machine previously modelled a repair as A COMMIT and
-could never advance. The engine cannot observe such a repair (a comment record is id, url and body,
-so the current body is readable but "it changed in answer to this finding" is not), so it enters as an
-accountable grant, exactly as .github#2417's critic succession does. Absent a grant the previous
-behaviour is byte-for-byte unchanged, and the grant is refused when it names a different head, answers
-a different review comment, carries no granter, is granted by the implementer, or is granted by the
-round's own critic. It is resolved on the `review --snapshot` path; the live `review &lt;ref&gt; --pr N` path
-passes no grant and is unchanged.
-
-`landable` is untouched: its CI verdict stays wholly independent of the review chain (.github#2360).
+RELEASE RECOVERY. Version 0.52.0 is not a coherent release: `FS.GG.Kit` and `FS.GG.Drivers` reached
+both feeds, while `FS.GG.Coord.Cli` reached only the org feed after nuget.org rejected its oversized
+release notes. This 0.53.0 cut replaces the accumulated listing history with this bounded entry,
+retains permanent advisories separately, and publishes the three packages from one source commit.
 
 WHY THIS PACKAGE MOVES WITH THE KIT. The three packages resolve one scalar (`FsggCoherentSetVersion`,
-`Directory.Build.props`) by construction (.github#2402), so the coordination kit's corresponding
-`pnext-item` contract section ships at this same version.
+`Directory.Build.props`) by construction (.github#2402), so the coordination kit and drivers ship at
+this same version even where their own payload did not change.
 
 $(FsggStandingAdvisories)
 

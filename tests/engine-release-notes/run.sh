@@ -341,20 +341,20 @@ set -e
 expect 0 "the shipped engine project is coherent, in-budget and carries its advisories" \
   "Version $shipped_version agrees"
 
-# THE SHIPPED LISTING STILL CARRIES BOTH PERMANENT TWO-OF-THREE WARNINGS. This is the content
+# THE SHIPPED LISTING STILL CARRIES EVERY PERMANENT PARTIAL-SET WARNING. This is the content
 # 5d45ced4 had to restore once already; bounding the field must not lose it a second time. Read off
 # the EVALUATED property, so an advisory that is declared but does not resolve into the published
 # field fails here.
 shipped_notes="$(cd "$ROOT" && dotnet msbuild "$shipped" -getProperty:PackageReleaseNotes -getProperty:Version -nologo \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["Properties"]["PackageReleaseNotes"])')"
 missing=""
-for advisory in "DO NOT ADOPT 0.50.1" "DO NOT ADOPT 0.50.5"; do
+for advisory in "DO NOT ADOPT 0.50.1" "DO NOT ADOPT 0.50.5" "DO NOT ADOPT 0.52.0"; do
   grep -qF -- "$advisory" <<<"$shipped_notes" || missing="$missing $advisory;"
 done
 if [ -z "$missing" ]; then
-  ok "the shipped listing still warns about both permanent two-of-three sets"
+  ok "the shipped listing still warns about all permanent partial sets"
 else
-  bad "the shipped listing lost a permanent two-of-three warning" "missing:$missing"
+  bad "the shipped listing lost a permanent partial-set warning" "missing:$missing"
 fi
 
 echo

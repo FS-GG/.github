@@ -45,8 +45,9 @@ evaluated value, so the evaluated value is what the registry counts and what thi
 WHY THE STANDING-ADVISORY ARM EXISTS (.github#2579 DEC-002). Bounding the field means an author will
 one day trim it against a hard ceiling. `4fccc76d` already did exactly that and deleted every
 poisoned-set warning with it — the only channel by which a consumer learns that `FS.GG.Coord.Cli`
-0.50.1 and 0.50.5 are permanent two-of-three sets that must not be adopted, on listings that are
-immutable and can never be corrected. `5d45ced4` restored them, and its author's own words were "I
+0.50.1 and 0.50.5 are permanent two-of-three sets and 0.52.0 is a permanent dual-feed partial set
+that must not be adopted, on listings that are immutable and can never be corrected. `5d45ced4`
+restored the first two, and its author's own words were "I
 mentioned the truncation nowhere, because I had not noticed it". This gate was GREEN across that
 deletion. So the advisories now live in their own MSBuild property, `FsggStandingAdvisories`, which
 `PackageReleaseNotes` references: trimming the narrative and deleting a warning are edits to
