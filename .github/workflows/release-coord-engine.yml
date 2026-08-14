@@ -53,6 +53,10 @@ on:
         description: "Push to the org feed (false = pack-only dry run)"
         type: boolean
         default: false
+      source_sha:
+        description: "Immutable prepared source SHA (required when resuming a publish from main)"
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -90,6 +94,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref_name }}
           DISPATCH_PUBLISH: ${{ inputs.publish }}
+          DISPATCH_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
           proj=src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj
@@ -99,6 +104,15 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          source_sha="$GITHUB_SHA"
+          if [ "$EVENT" = workflow_dispatch ] && [ "$DISPATCH_PUBLISH" = true ]; then
+            case "$DISPATCH_SOURCE_SHA" in
+              [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) source_sha="$DISPATCH_SOURCE_SHA" ;;
+              *) echo "::error::manual publish recovery requires an exact 40-character lowercase source_sha."; exit 1 ;;
+            esac
+          fi
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
           # A `-preview` engine would be INVISIBLE to the shared Renovate preset (ignoreUnstable: true),
           # so receivers would never be bumped — and Renovate-invisibility is one of the stated reasons
@@ -129,8 +143,8 @@ jobs:
               echo "::error::refusing to publish FS.GG.Coord.Cli $version: sibling tag $sibling_tag does not exist yet. coord-engine, FS.GG.Kit and FS.GG.Drivers are a coherent set (.github#2402) and release together (.github#2409) — push all three tags (kit/v$version, drivers/v$version, coord-engine/v$version) at the same commit."
               exit 1
             fi
-            if [ "$tagged" != "$GITHUB_SHA" ]; then
-              echo "::error::refusing to publish FS.GG.Coord.Cli $version: sibling tag $sibling_tag points at $tagged, not the commit being packed ($GITHUB_SHA). All three coherent-set tags must name the same commit."
+            if [ "$tagged" != "$source_sha" ]; then
+              echo "::error::refusing to publish FS.GG.Coord.Cli $version: sibling tag $sibling_tag points at $tagged, not the immutable prepared source ($source_sha). All three coherent-set tags must name the same commit."
               exit 1
             fi
           }
@@ -188,7 +202,7 @@ jobs:
           if [ "${{ steps.v.outputs.push }}" = true ]; then
             gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
               --pattern "*.nupkg" --pattern release-manifest.json --dir artifacts/packages
-            bash scripts/release-saga-ci.sh init FS.GG.Coord.Cli "$VERSION" "$GITHUB_SHA"
+            bash scripts/release-saga-ci.sh init FS.GG.Coord.Cli "$VERSION" "${{ steps.v.outputs.source_sha }}"
           else
             dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release -o artifacts/packages
           fi
@@ -241,7 +255,7 @@ jobs:
         if: steps.v.outputs.push == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release-saga-ci.sh github FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+        run: bash scripts/release-saga-ci.sh github FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       # NUGET.ORG IS NOT A NICE-TO-HAVE HERE — IT IS THE ONLY ROAD INTO THE RECEIVERS.
       #
@@ -271,7 +285,7 @@ jobs:
         id: public
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release-saga-ci.sh nuget-probe FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+        run: bash scripts/release-saga-ci.sh nuget-probe FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       - name: NuGet login (OIDC → short-lived key)
         if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true' && steps.public.outputs.push == 'true'
@@ -291,13 +305,13 @@ jobs:
         if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release-saga-ci.sh nuget-record FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+        run: bash scripts/release-saga-ci.sh nuget-record FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       - name: Persist failed release step for exact resume
         if: failure() && steps.v.outputs.push == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release-saga-ci.sh failure FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+        run: bash scripts/release-saga-ci.sh failure FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       # ─────────────────────────────────────────────────────────────────────────────────────────
       # THE PUSH HALF (.github#1923). The mechanism, the refusal of `repository_dispatch`, and what
