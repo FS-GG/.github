@@ -362,7 +362,7 @@ echo "== reach: subject, declaration, trigger =="
 
 release_workflow="$ROOT/.github/workflows/release-coord-engine.yml"
 checker_line="$(grep -n 'python3 scripts/check-engine-release-notes.py' "$release_workflow" | head -1 | cut -d: -f1 || true)"
-pack_line="$(grep -n '^      - name: Pack$' "$release_workflow" | head -1 | cut -d: -f1 || true)"
+pack_line="$(grep -nE '^      - name: (Pack|Use saga-prepared package \(publish\) or pack locally \(dry run\))$' "$release_workflow" | head -1 | cut -d: -f1 || true)"
 if [ -n "$checker_line" ] && [ -n "$pack_line" ] && [ "$checker_line" -lt "$pack_line" ]; then
   ok "the release workflow refuses incoherent notes before packing"
 else
