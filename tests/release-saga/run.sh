@@ -162,6 +162,9 @@ for token in ("assert-identity", "merge-journals", "record-observed", "stable-ch
     assert token in promote, token
 for token in ("source_sha=", 'refs/tags/$tag^{}', "head -1 | sed 's:/*$::'", '"${github_base}/${lower}'):
     assert token in promote, token
+assert 'journal_count=$((journal_count + 1))' in promote
+assert '[ "$journal_count" -eq 3 ]' in promote
+assert '[ "${#journals[@]}" -eq 3 ]' not in promote
 print("production saga topology: pack-once, durable journals, org barrier, resume probes, identity, and promotion wired")
 PY
 

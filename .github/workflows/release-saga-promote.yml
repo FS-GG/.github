@@ -54,9 +54,11 @@ jobs:
             --release-id "github:$version" --version "$version" \
             --source-sha "$source_sha" --policy-version release-saga/1
           python3 scripts/release-saga.py assert-artifacts --manifest artifacts/packages/release-manifest.json
-          journals=()
-          for journal in artifacts/packages/journal-*.json; do [ -f "$journal" ] && journals+=(--journal "$journal"); done
-          [ "${#journals[@]}" -eq 3 ]
+          journals=(); journal_count=0
+          for journal in artifacts/packages/journal-*.json; do
+            if [ -f "$journal" ]; then journals+=(--journal "$journal"); journal_count=$((journal_count + 1)); fi
+          done
+          [ "$journal_count" -eq 3 ] || { echo "::error::expected exactly 3 package journals, found $journal_count"; exit 1; }
           python3 scripts/release-saga.py merge-journals --manifest artifacts/packages/release-manifest.json "${journals[@]}"
       - name: Observe both registries
         env:
