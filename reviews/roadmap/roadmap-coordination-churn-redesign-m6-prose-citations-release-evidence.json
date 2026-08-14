@@ -1,0 +1,31 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m6-prose-citations-release-evidence",
+  "milestone": "M6 successor #2587 — coherent-set 0.57.0 release evidence and adoption",
+  "critic": "m6-2587-critic",
+  "initial_reviewed_commit": "3ebfee35e6738a87f90cfe6bfafc1446328d8f89",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "pass",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "3ebfee35e6738a87f90cfe6bfafc1446328d8f89"
+  ],
+  "findings": [],
+  "confirmation": {
+    "reviewed_commit": "3ebfee35e6738a87f90cfe6bfafc1446328d8f89",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
