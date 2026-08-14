@@ -20,6 +20,7 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
     end = ("2026-08-24", "2026-08-31", "2026-09-07")[index]
     row = {
         "id": f"week-{index + 1}", "start": start + "T00:00:00Z", "end": end + "T00:00:00Z",
+        "start_sha": chr(ord('b')+index)*40, "end_sha": chr(ord('c')+index)*40,
         "issues_created": 1, "issues_closed": 2, "repair_commits": 20,
         "statement_only_repairs": 1, "intent_reversals": 0, "partial_success_reads": 0,
         "ambiguous_release_states": 0, "release_outcomes": ["no-release-owed"],
@@ -31,6 +32,7 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
     reproduce = ["python3","scripts/coordination-health-collector.py","--root",".","--output-dir","docs/reports/evidence/coordination-health"]
     observation = {"schema_version":1, "source_sha":"a"*40, "measured_at":"2026-09-07T00:00:00Z",
                    "period_id": row["id"], "start":row["start"], "end":row["end"],
+                   "start_sha":row["start_sha"], "end_sha":row["end_sha"],
                    "reproduce":reproduce, **{key: row[key] for key in (
         "issues_created", "issues_closed", "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
         "ambiguous_release_states", "release_outcomes", "policy_implementations_start",
@@ -40,11 +42,14 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
         "created": [{"id": 1}], "closed": [{"id": 1}, {"id": 2}],
         "repair_classification": ([{"statement_only": True}] + [{"statement_only": False}] * 19),
         "intent_reversal_events": [], "partial_success_events": [],
-        "machine_health_runs": [{"run_id":n,"artifact_id":n,"artifact_sha256":"sha256:fixture","shadow":[]} for n in range(1,8)],
+        "machine_health_runs": [{"run_id":n,"artifact_id":n,"artifact_sha256":"sha256:"+"a"*64,"shadow":[],
+                                 "health":{"completeReadBoundary":"typed-complete-success/1","subjectCount":0,"subjects":[]}} for n in range(1,8)],
         "release_classification": [],
-        "inventory_snapshots": {"start":{"policy_implementations":[1]*row["policy_implementations_start"],"check_scripts":[1]*row["check_scripts_start"],"workflows":[1]*row["workflows_start"]},
-                                "end":{"policy_implementations":[1]*row["policy_implementations_end"],"check_scripts":[1]*row["check_scripts_end"],"workflows":[1]*row["workflows_end"]}},
-        "byte_snapshots":{"start":{"generated":0,"implementation":0},"end":{"generated":5,"implementation":10}},
+        "inventory_snapshots": {"start":{"sha":row["start_sha"],"policy_implementations":[{"id":f"p{n}","path":f"p{n}","marker":f"m{n}"} for n in range(row["policy_implementations_start"])],"check_scripts":[f"c{n:03}" for n in range(row["check_scripts_start"])],"workflows":[f"w{n:03}" for n in range(row["workflows_start"])]},
+                                "end":{"sha":row["end_sha"],"policy_implementations":[{"id":f"p{n}","path":f"p{n}","marker":f"m{n}"} for n in range(row["policy_implementations_end"])],"check_scripts":[f"c{n:03}" for n in range(row["check_scripts_end"])],"workflows":[f"w{n:03}" for n in range(row["workflows_end"])]}},
+        "byte_snapshots":{"generated_prefixes":["docs/reports/evidence/","readiness/","work/"],
+                          "implementation_prefixes":["src/","tests/","scripts/","policy/",".github/actions/",".github/workflows/"],
+                          "start":{"sha":row["start_sha"],"generated":0,"implementation":0},"end":{"sha":row["end_sha"],"generated":5,"implementation":10}},
         "prose_citation_gate": "prose-citations: ok (fixture)"}
     payload = json.dumps(observation, sort_keys=True, separators=(",", ":")).encode()
     artifact = pathlib.Path("observations") / f"week-{index + 1}.json"

@@ -1,29 +1,23 @@
 {
   "schema_version": 1,
   "implementations": [
-    {
-      "id": "lifecycle-projection",
-      "paths": ["src/FS.GG.Coord.Core/LifecycleProjection.fs", "src/FS.GG.Coord.Cli/Client.fs"]
-    },
-    {
-      "id": "complete-graphql-reads",
-      "paths": ["src/FS.GG.Coord.GitHub/GraphQl.fs", "src/FS.GG.Coord.GitHub/Transport.fs"]
-    },
-    {
-      "id": "release-saga",
-      "paths": ["scripts/release-saga.py", "scripts/release-saga-ci.sh"]
-    },
-    {
-      "id": "structured-decisions",
-      "paths": ["src/FS.GG.Coord.Core/StructuredDecision.fs"]
-    },
-    {
-      "id": "policy-runner",
-      "paths": ["scripts/policy-runner.py", "policy/subjects.json"]
-    },
-    {
-      "id": "evidence-manifest",
-      "paths": ["scripts/evidence-manifest.py"]
-    }
+    {"id":"lifecycle-intent-reducer","path":"src/FS.GG.Coord.Core/LifecycleProjection.fs","marker":"let reduce policy intent observation"},
+    {"id":"lifecycle-legacy-rollback","path":"src/FS.GG.Coord.Core/LifecycleProjection.fs","marker":"| Legacy -> shadow.Legacy"},
+    {"id":"graphql-complete-adapter","path":"src/FS.GG.Coord.GitHub/GraphQl.fs","marker":"module GraphQl"},
+    {"id":"graphql-board-private-compat","path":"src/FS.GG.Coord.GitHub/Board.fs","marker":"let private graphQlData"},
+    {"id":"graphql-reads-private-compat","path":"src/FS.GG.Coord.GitHub/Reads.fs","marker":"let private graphQlData"},
+    {"id":"release-saga-core","path":"scripts/release-saga.py","marker":"content_id = \"sha256:\""},
+    {"id":"release-saga-engine-entry","path":".github/workflows/release-coord-engine.yml","marker":"scripts/release-saga-ci.sh"},
+    {"id":"release-saga-kit-entry","path":".github/workflows/release-kit.yml","marker":"scripts/release-saga-ci.sh"},
+    {"id":"release-saga-drivers-entry","path":".github/workflows/release-drivers.yml","marker":"scripts/release-saga-ci.sh"},
+    {"id":"release-saga-policy-gate","path":".github/workflows/release-saga-tooling.yml","marker":"scripts/release-saga-ci.sh"},
+    {"id":"structured-route-review-v2","path":"src/FS.GG.Coord.Core/StructuredDecision.fs","marker":"module StructuredDecision"},
+    {"id":"legacy-route-reader","path":"src/FS.GG.Coord.Cli/Client.fs","marker":"THE LATEST legacy delivery-route receipt"},
+    {"id":"policy-runner","path":"scripts/policy-runner.py","marker":"def inventory"},
+    {"id":"evidence-manifest","path":"scripts/evidence-manifest.py","marker":"def create"}
+  ],
+  "discoveries": [
+    {"id":"private-graphql-compat","marker":"let private graphQlData","roots":["src/FS.GG.Coord.GitHub"],"paths":["src/FS.GG.Coord.GitHub/Board.fs","src/FS.GG.Coord.GitHub/Reads.fs"]},
+    {"id":"package-release-entry-points","marker":"scripts/release-saga-ci.sh","roots":[".github/workflows"],"paths":[".github/workflows/release-coord-engine.yml",".github/workflows/release-drivers.yml",".github/workflows/release-kit.yml",".github/workflows/release-saga-tooling.yml"]}
   ]
 }

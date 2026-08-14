@@ -26,6 +26,11 @@ BEHAVIOUR_PREFIXES = ("src/", "tests/", "scripts/", ".github/", "policy/")
 GENERATED_PREFIXES = ("docs/reports/evidence/", "readiness/", "work/")
 IMPLEMENTATION_PREFIXES = ("src/", "tests/", "scripts/", "policy/", ".github/actions/", ".github/workflows/")
 HEALTH_WORKFLOW = "coord-board-reconcile.yml"
+INCIDENT_QUERIES = {
+    "intent_reversals": ['repo:FS-GG/.github is:issue "LIFECYCLE-PROJECTION-LAG"'],
+    "partial_success_reads": ["repo:FS-GG/.github is:issue GraphQL pagination",
+                              'repo:FS-GG/.github is:issue "partial read"'],
+}
 SUCCESSOR_QUERIES = [
     'repo:FS-GG/.github is:open is:issue "LIFECYCLE-PROJECTION-LAG"',
     "repo:FS-GG/.github is:open is:issue GraphQL pagination",
@@ -133,11 +138,27 @@ def inventory(root: Path, sha: str) -> dict[str, object]:
     implementations = policy_inventory.get("implementations") if isinstance(policy_inventory, dict) else None
     if not isinstance(implementations, list) or not implementations:
         raise ValueError(f"{sha}: policy implementation inventory is missing or empty")
+    identities: set[tuple[str, str]] = set()
+    ids: set[str] = set()
     for row in implementations:
-        if not isinstance(row, dict) or not row.get("id") or not isinstance(row.get("paths"), list) or not row["paths"]:
+        if not isinstance(row, dict) or not row.get("id") or not row.get("path") or not row.get("marker"):
             raise ValueError(f"{sha}: invalid policy implementation inventory row")
-        if any(path not in paths for path in row["paths"]):
+        if row["id"] in ids or (row["path"], row["marker"]) in identities:
+            raise ValueError(f"{sha}: duplicate policy implementation identity")
+        ids.add(row["id"]); identities.add((row["path"], row["marker"]))
+        if row["path"] not in paths or row["marker"] not in str(run(["git", "show", f"{sha}:{row['path']}"], root)):
             raise ValueError(f"{sha}: policy implementation inventory names an absent path")
+    discoveries = policy_inventory.get("discoveries")
+    if not isinstance(discoveries, list) or not discoveries:
+        raise ValueError(f"{sha}: policy implementation discovery rules are missing")
+    for discovery in discoveries:
+        marker, expected, roots = discovery.get("marker"), discovery.get("paths"), discovery.get("roots")
+        if not marker or not isinstance(expected, list) or not isinstance(roots, list) or not roots:
+            raise ValueError(f"{sha}: invalid policy discovery rule")
+        found = subprocess.run(["git", "grep", "-l", "-F", marker, sha, "--", *roots], cwd=root, text=True, capture_output=True)
+        actual = sorted(line.split(":", 1)[-1] for line in found.stdout.splitlines()) if found.returncode in (0, 1) else None
+        if actual != sorted(expected):
+            raise ValueError(f"{sha}: policy discovery {discovery.get('id')} drifted: {actual} != {sorted(expected)}")
     checks = sorted(path for path in paths if path.startswith("scripts/check-") and not path.endswith(".pyc"))
     workflows = sorted(path for path in paths if path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")))
     return {
@@ -164,15 +185,33 @@ def commit_measure(root: Path, start: datetime, end: datetime, end_sha: str) -> 
         for previous, commit in zip(reviewed, reviewed[1:]):
             if commit in seen:
                 continue
-            stamp = observed_at(str(run(["git", "show", "-s", "--format=%cI", commit], root)).strip())
+            commit_doc = gh_json(["--method", "GET", f"repos/{REPOSITORY}/commits/{commit}"], root)
+            stamp = observed_at(commit_doc.get("commit", {}).get("committer", {}).get("date"))
             if stamp is None or not start <= stamp < end:
                 continue
+            comparison = gh_json(["--method", "GET", f"repos/{REPOSITORY}/compare/{previous}...{commit}",
+                                  "-f", "per_page=100"], root)
+            files = comparison.get("files")
+            if (comparison.get("merge_base_commit", {}).get("sha") != previous or not isinstance(files, list)
+                    or len(files) >= 300):
+                raise ValueError(f"{artifact}: repair comparison {previous}...{commit} is incomplete or non-linear")
             seen.add(commit)
-            paths = str(run(["git", "diff", "--name-only", previous, commit], root)).splitlines()
-            subject = str(run(["git", "show", "-s", "--format=%s", commit], root)).strip()
-            statement_only = bool(paths) and not any(path.startswith(BEHAVIOUR_PREFIXES) for path in paths)
+            paths = [row["filename"] for row in files]
+            subject = commit_doc.get("commit", {}).get("message", "").splitlines()[0]
+            def behavioural(row: dict) -> bool:
+                path = row["filename"]
+                if not path.startswith(BEHAVIOUR_PREFIXES):
+                    return False
+                if path.endswith((".fsproj", ".props", ".targets")):
+                    patch = row.get("patch", "")
+                    changed = [line[1:] for line in patch.splitlines() if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
+                    tags = [line for line in changed if "<" in line and not line.lstrip().startswith("<!--")]
+                    return not ("PackageReleaseNotes" in patch and all("PackageReleaseNotes" in line for line in tags))
+                return True
+            statement_only = bool(files) and not any(behavioural(row) for row in files)
             rows.append({"sha": commit, "previous_reviewed_sha": previous, "artifact": artifact,
-                         "subject": subject, "paths": paths, "statement_only": statement_only})
+                         "subject": subject, "paths": paths, "files": files,
+                         "statement_only": statement_only})
     return len(rows), sum(row["statement_only"] for row in rows), rows
 
 
@@ -188,6 +227,12 @@ def issue_counts(start: datetime, end: datetime, root: Path) -> tuple[list[dict]
     return created, closed
 
 
+def incident_events(kind: str, start: datetime, end: datetime, root: Path) -> list[dict]:
+    rows = {item["html_url"]: item for query in INCIDENT_QUERIES[kind]
+            for item in period_items(query, "created_at", start, end, root)}
+    return [rows[url] for url in sorted(rows)]
+
+
 def workflow_health(start: datetime, end: datetime, root: Path) -> tuple[list[dict], list[dict]]:
     """Read live reducer/typed-read observations produced by the reconciliation workflow."""
     runs: list[dict] = []
@@ -201,7 +246,8 @@ def workflow_health(start: datetime, end: datetime, root: Path) -> tuple[list[di
                       if (stamp := observed_at(row.get("run_started_at"))) is not None and day_start <= stamp < day_end]
         observed = None
         for candidate in sorted(candidates, key=lambda row: row["id"], reverse=True):
-            if candidate.get("conclusion") != "success":
+            if (candidate.get("conclusion") != "success" or candidate.get("head_branch") != "main"
+                    or candidate.get("head_repository", {}).get("full_name") != REPOSITORY):
                 continue
             artifacts = gh_json(["--method", "GET", f"repos/{REPOSITORY}/actions/runs/{candidate['id']}/artifacts"], root)
             matches = [row for row in artifacts.get("artifacts", []) if row.get("name") == f"coordination-health-{candidate['id']}" and not row.get("expired")]
@@ -213,16 +259,25 @@ def workflow_health(start: datetime, end: datetime, root: Path) -> tuple[list[di
             with tempfile.TemporaryDirectory() as work:
                 archive = Path(work) / "health.zip"
                 archive.write_bytes(run(["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{matches[0]['id']}/zip"], root, binary=True))
+                if "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
+                    raise ValueError(f"health artifact digest mismatch for run {candidate['id']}")
                 import zipfile
                 with zipfile.ZipFile(archive) as zipped:
-                    payload = json.loads(zipped.read("lifecycle-shadow.json"))
-            if not isinstance(payload, list):
-                raise ValueError(f"health artifact for run {candidate['id']} is not a shadow array")
+                    shadow = json.loads(zipped.read("lifecycle-shadow.json"))
+                    payload = json.loads(zipped.read("health-observation.json"))
+            subjects = payload.get("subjects") if isinstance(payload, dict) else None
+            if (not isinstance(shadow, list) or payload.get("schemaVersion") != 1
+                    or payload.get("completeReadBoundary") != "typed-complete-success/1"
+                    or not isinstance(subjects, list) or payload.get("subjectCount") != len(subjects)
+                    or any(not isinstance(row, dict) or not row.get("subject") or not row.get("intent")
+                           or not row.get("intended") or not row.get("applied") or not isinstance(row.get("reversed"), bool)
+                           or not isinstance(row.get("readComplete"), bool)
+                           for row in subjects)):
+                raise ValueError(f"health artifact for run {candidate['id']} is incomplete")
             observed = {"run_id": candidate["id"], "head_sha": candidate["head_sha"],
                         "run_started_at": candidate["run_started_at"], "artifact_id": matches[0]["id"],
-                        "artifact_sha256": digest, "shadow": payload}
-            unexpected.extend({"run_id": candidate["id"], **row} for row in payload
-                              if isinstance(row, dict) and row.get("classification") == "unexpected")
+                        "artifact_sha256": digest, "shadow": shadow, "health": payload}
+            unexpected.extend({"run_id": candidate["id"], **row} for row in subjects if row["reversed"])
             break
         if observed is None:
             raise ValueError(f"no complete machine health observation for UTC day {day_start.date()}")
@@ -254,7 +309,15 @@ def classify_release_manifest(manifest: dict, channel: dict, components: set[str
     return identity_ok, feed_ok and components == {"coord-engine", "kit", "drivers"}
 
 
-def release_outcomes(start: datetime, end: datetime, root: Path) -> tuple[list[str], list[dict]]:
+def registry_release_version(root: Path, sha: str) -> str:
+    text = str(run(["git", "show", f"{sha}:registry/dependencies.yml"], root))
+    match = re.search(r"(?ms)^\s*- id: coord-engine\s+.*?^\s+package-version:\s*[\"']?([^\"'\s#]+)", text)
+    if not match:
+        raise ValueError(f"{sha}: coord-engine package-version authority is missing")
+    return match.group(1)
+
+
+def release_outcomes(start: datetime, end: datetime, start_sha: str, end_sha: str, root: Path) -> tuple[list[str], list[dict]]:
     releases = gh_json(["--method", "GET", f"repos/{REPOSITORY}/releases", "-f", "per_page=100", "--paginate", "--slurp"], root)
     flattened = [row for page in releases for row in page]
     in_period = [row for row in flattened if (stamp := observed_at(row.get("published_at"))) is not None and start <= stamp < end]
@@ -276,6 +339,11 @@ def release_outcomes(start: datetime, end: datetime, root: Path) -> tuple[list[s
                  "--dir", work, "--pattern", "release-manifest.json", "--pattern", "stable-channel.json"], root)
             manifest_path, channel_path = Path(work) / "release-manifest.json", Path(work) / "stable-channel.json"
             manifest, channel = json.loads(manifest_path.read_text()), json.loads(channel_path.read_text())
+            descriptor = manifest.get("descriptor", {})
+            run(["python3", "scripts/release-saga.py", "assert-identity", "--manifest", str(manifest_path),
+                 "--release-id", f"github:{version}", "--version", version,
+                 "--source-sha", str(descriptor.get("sourceSha", "")),
+                 "--policy-version", "release-saga/1"], root)
             identity_ok, feed_ok = classify_release_manifest(manifest, channel, components.get(version, set()), version)
             manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
             channel_sha = hashlib.sha256(channel_path.read_bytes()).hexdigest()
@@ -286,12 +354,17 @@ def release_outcomes(start: datetime, end: datetime, root: Path) -> tuple[list[s
                         "manifest_sha256": manifest_sha, "stable_channel_sha256": channel_sha,
                         "identity_ok": identity_ok, "dual_feed_payloads_verified": feed_ok,
                         "coherent": ok})
+    for version in sorted(set(components) - set(coherent_releases)):
+        details.append({"version": version, "components": sorted(components[version]),
+                        "manifest_sha256": None, "stable_channel_sha256": None,
+                        "identity_ok": False, "dual_feed_payloads_verified": False,
+                        "coherent": False})
     ambiguous = sorted((set(components) | set(coherent_releases)) - coherent)
     outcomes = ["coherent"] if coherent else []
-    if not components and not coherent_releases:
+    if not components and not coherent_releases and registry_release_version(root, start_sha) == registry_release_version(root, end_sha):
         outcomes = ["no-release-owed"]
     elif ambiguous and not coherent:
-        outcomes = ["visibly-resumable"]
+        outcomes = []  # incomplete release without an authenticated saga receipt is ambiguous, never resumable
     return outcomes, details
 
 
@@ -332,8 +405,12 @@ def collect(root: Path, output: Path, now: datetime) -> Path:
         start_sha, end_sha = first_parent_sha(root, source_sha, start), first_parent_sha(root, source_sha, end)
         created, closed = issue_counts(start, end, root)
         repairs, statements, commit_rows = commit_measure(root, start, end, end_sha)
-        health_runs, reversals = workflow_health(start, end, root)
-        release_values, release_rows = release_outcomes(start, end, root)
+        health_runs, machine_reversals = workflow_health(start, end, root)
+        reversal_incidents = incident_events("intent_reversals", start, end, root)
+        partial_incidents = incident_events("partial_success_reads", start, end, root)
+        incomplete_reads = [{"run_id": run_row["run_id"], **subject} for run_row in health_runs
+                            for subject in run_row["health"]["subjects"] if not subject["readComplete"]]
+        release_values, release_rows = release_outcomes(start, end, start_sha, end_sha, root)
         before, after = inventory(root, start_sha), inventory(root, end_sha)
         ambiguous = sum(not row["coherent"] for row in release_rows)
         outcomes = release_values
@@ -347,7 +424,8 @@ def collect(root: Path, output: Path, now: datetime) -> Path:
             "start_sha": start_sha, "end_sha": end_sha,
             "issues_created": len(created), "issues_closed": len(closed),
             "repair_commits": repairs, "statement_only_repairs": statements,
-            "intent_reversals": len(reversals), "partial_success_reads": 0,
+            "intent_reversals": len(machine_reversals) + len(reversal_incidents),
+            "partial_success_reads": len(incomplete_reads) + len(partial_incidents),
             "ambiguous_release_states": ambiguous, "release_outcomes": outcomes,
             "policy_implementations_start": len(before["policy_implementations"]),
             "policy_implementations_end": len(after["policy_implementations"]),
@@ -357,7 +435,8 @@ def collect(root: Path, output: Path, now: datetime) -> Path:
             "core_and_test_bytes_delta": implementation_end - implementation_start,
             "reproduce": reproduce,
             "raw": {"created": created, "closed": closed, "repair_classification": commit_rows,
-                    "intent_reversal_events": reversals, "partial_success_events": [],
+                    "intent_reversal_events": machine_reversals + reversal_incidents,
+                    "partial_success_events": incomplete_reads + partial_incidents,
                     "machine_health_runs": health_runs,
                     "release_classification": release_rows,
                     "inventory_snapshots": {"start": {"sha": start_sha, **before}, "end": {"sha": end_sha, **after}},
@@ -372,7 +451,7 @@ def collect(root: Path, output: Path, now: datetime) -> Path:
         artifact = output / f"week-{index}-{digest}.json"
         artifact.write_bytes(payload)
         row = {key: observation[key] for key in (
-            "period_id", "start", "end", "issues_created", "issues_closed", "repair_commits",
+            "period_id", "start", "end", "start_sha", "end_sha", "issues_created", "issues_closed", "repair_commits",
             "statement_only_repairs", "intent_reversals", "partial_success_reads",
             "ambiguous_release_states", "release_outcomes", "policy_implementations_start",
             "policy_implementations_end", "check_scripts_start", "check_scripts_end",

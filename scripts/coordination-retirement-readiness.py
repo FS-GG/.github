@@ -48,6 +48,8 @@ PROVENANCE_FIELDS = (
 ACCEPTANCE_ENABLED = False
 COLLECTOR_COMMAND = ["python3", "scripts/coordination-health-collector.py", "--root", ".",
                      "--output-dir", "docs/reports/evidence/coordination-health"]
+EXPECTED_GENERATED_PREFIXES = ["docs/reports/evidence/", "readiness/", "work/"]
+EXPECTED_IMPLEMENTATION_PREFIXES = ["src/", "tests/", "scripts/", "policy/", ".github/actions/", ".github/workflows/"]
 
 
 def timestamp(value: object, where: str, failures: list[str]) -> datetime | None:
@@ -104,6 +106,8 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
             continue
         start = timestamp(row.get("start"), f"{where}.start", failures)
         end = timestamp(row.get("end"), f"{where}.end", failures)
+        if not SHA.fullmatch(str(row.get("start_sha", ""))) or not SHA.fullmatch(str(row.get("end_sha", ""))):
+            failures.append(f"{where}: start_sha/end_sha must be exact commits")
         parsed.append((start, end))
         if start is not None and end is not None and end - start != timedelta(days=7):
             failures.append(f"{where}: roadmap measurement period must be exactly seven days")
@@ -196,6 +200,8 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                             "period_id": row.get("id"),
                             "start": row.get("start"),
                             "end": row.get("end"),
+                            "start_sha": row.get("start_sha"),
+                            "end_sha": row.get("end_sha"),
                             "reproduce": reproduce,
                         }
                         for field, expected in identity.items():
@@ -229,7 +235,10 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                             health_runs = raw.get("machine_health_runs")
                             if not isinstance(health_runs, list) or len(health_runs) != 7 or any(
                                 not isinstance(item, dict) or not item.get("run_id") or not item.get("artifact_id")
-                                or not item.get("artifact_sha256") or not isinstance(item.get("shadow"), list)
+                                or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(item.get("artifact_sha256", "")))
+                                or not isinstance(item.get("shadow"), list) or not isinstance(item.get("health"), dict)
+                                or item["health"].get("completeReadBoundary") != "typed-complete-success/1"
+                                or item["health"].get("subjectCount") != len(item["health"].get("subjects", []))
                                 for item in health_runs
                             ):
                                 failures.append(f"{where}.provenance: require seven complete machine health observations")
@@ -239,15 +248,29 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                             else:
                                 for side in ("start", "end"):
                                     snapshot = inventories.get(side, {})
+                                    if snapshot.get("sha") != row.get(f"{side}_sha"):
+                                        failures.append(f"{where}.provenance: {side} inventory does not bind its period SHA")
                                     for raw_name, count_name in (("policy_implementations", "policy_implementations"),
                                                                  ("check_scripts", "check_scripts"), ("workflows", "workflows")):
                                         expected = row.get(f"{count_name}_{side}")
                                         if not isinstance(snapshot.get(raw_name), list) or len(snapshot[raw_name]) != expected:
                                             failures.append(f"{where}.provenance: {side} {raw_name} inventory does not bind its count")
+                                        elif raw_name == "policy_implementations":
+                                            identities = [(item.get("id"), item.get("path"), item.get("marker"))
+                                                          for item in snapshot[raw_name] if isinstance(item, dict)]
+                                            if len(identities) != len(snapshot[raw_name]) or len(set(identities)) != len(identities) or any(not all(identity) for identity in identities):
+                                                failures.append(f"{where}.provenance: {side} policy inventory identities are invalid or duplicated")
+                                        elif snapshot[raw_name] != sorted(set(snapshot[raw_name])):
+                                            failures.append(f"{where}.provenance: {side} {raw_name} inventory must be an exact sorted unique path list")
                             byte_rows = raw.get("byte_snapshots")
                             if not isinstance(byte_rows, dict) or not all(isinstance(byte_rows.get(side), dict) for side in ("start", "end")):
                                 failures.append(f"{where}.provenance: exact byte snapshots are missing")
                             else:
+                                if list(byte_rows.get("generated_prefixes", [])) != EXPECTED_GENERATED_PREFIXES or list(byte_rows.get("implementation_prefixes", [])) != EXPECTED_IMPLEMENTATION_PREFIXES:
+                                    failures.append(f"{where}.provenance: byte snapshot prefixes are not canonical")
+                                for side in ("start", "end"):
+                                    if byte_rows[side].get("sha") != row.get(f"{side}_sha"):
+                                        failures.append(f"{where}.provenance: {side} byte snapshot does not bind its period SHA")
                                 if byte_rows["end"].get("generated", 0) - byte_rows["start"].get("generated", 0) != row.get("generated_evidence_bytes_delta"):
                                     failures.append(f"{where}.provenance: generated byte snapshots do not bind their delta")
                                 if byte_rows["end"].get("implementation", 0) - byte_rows["start"].get("implementation", 0) != row.get("core_and_test_bytes_delta"):
@@ -271,6 +294,8 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
         if previous_end is not None and current_start is not None and previous_end != current_start:
             failures.append(f"candidate_periods[{index}]: periods are not consecutive")
         if isinstance(rows[index - 1], dict) and isinstance(rows[index], dict):
+            if rows[index - 1].get("end_sha") != rows[index].get("start_sha"):
+                failures.append(f"candidate_periods[{index}]: commit snapshots are discontinuous")
             for prefix in ("policy_implementations", "check_scripts", "workflows"):
                 previous = rows[index - 1].get(f"{prefix}_end")
                 current = rows[index].get(f"{prefix}_start")

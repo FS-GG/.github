@@ -80,7 +80,16 @@ with tempfile.TemporaryDirectory() as work:
     subprocess.run(["git", "add", "."], cwd=repo, check=True); subprocess.run(["git", "commit", "-qm", "review evidence"], cwd=repo, check=True)
     end_sha = git("rev-parse", "HEAD")
     now = datetime.now(timezone.utc)
+    def fake_commit_api(args, _root):
+        endpoint = next(value for value in args if value.startswith("repos/"))
+        if "/commits/" in endpoint:
+            return {"commit":{"committer":{"date":collector.iso(now)},"message":"arbitrary reviewed repair"}}
+        previous, commit = endpoint.rsplit("/",1)[-1].split("...")
+        path = "docs/a.md" if commit == docs_commit else "scripts/gate.py"
+        return {"merge_base_commit":{"sha":previous},"files":[{"filename":path,"patch":"@@\n-old\n+new"}]}
+    collector.gh_json = fake_commit_api
     repairs, statements, rows = collector.commit_measure(repo, now-timedelta(days=1), now+timedelta(days=1), end_sha)
+    collector.gh_json = original_gh_json
     assert (repairs, statements) == (2, 1)
     assert [row["statement_only"] for row in rows] == [True, False]
 

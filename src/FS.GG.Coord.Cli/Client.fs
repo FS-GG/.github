@@ -3327,6 +3327,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Ok mode -> mode
                     | Error reason -> invalidArg "FSGG_COORD_LIFECYCLE_PROJECTION" reason
 
+                let resultLabel = function
+                    | LifecycleProjection.Project(status, _) -> statusWireName status
+                    | LifecycleProjection.Withheld reason -> $"withheld: %s{reason}"
+                let intentLabel = function
+                    | LifecycleProjection.Auto -> "auto"
+                    | LifecycleProjection.Backlog _ -> "backlog"
+                    | LifecycleProjection.HumanPark(AwaitingHumanDecision, _) -> "human-decision"
+                    | LifecycleProjection.HumanPark(AwaitingHumanAction, _) -> "human-action"
+                    | LifecycleProjection.Deferred _ -> "deferred"
+                let lifecycleHealthRows = ResizeArray<_>()
                 let lifecycleChores, lifecycleWatermarks, lifecycleShadowDifferences =
                     lifecycleItems
                     |> List.fold (fun (chores, watermarks, differences) item ->
@@ -3427,11 +3437,21 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             let shadow =
                                 LifecycleProjection.shadowAdvance
                                     LifecycleProjection.IntentStatusV1 intent watermark observation
+                            let selected = LifecycleProjection.select projectionMode shadow
+                            let deliberate = intentLabel intent <> "auto"
+                            lifecycleHealthRows.Add(
+                                {| applied = resultLabel selected
+                                   current = statusWireName item.Status
+                                   intended = resultLabel shadow.Intended
+                                   intent = intentLabel intent
+                                   readComplete = true
+                                   reversed = deliberate && resultLabel selected = "Ready"
+                                   subject = item.Ref.Canonical |})
                             let differences =
                                 match shadow.Difference with
                                 | LifecycleProjection.Same -> differences
                                 | difference -> (item.Ref, difference, shadow.Legacy, shadow.Intended) :: differences
-                            match LifecycleProjection.select projectionMode shadow with
+                            match selected with
                             | LifecycleProjection.Project(destination, timestamp) ->
                                 match Chore.lifecycleProjection item destination with
                                 | Some chore ->
@@ -3453,9 +3473,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 |> Option.ofObj
                 |> Option.filter (String.IsNullOrWhiteSpace >> not)
                 |> Option.iter (fun path ->
-                    let resultLabel = function
-                        | LifecycleProjection.Project(status, _) -> statusWireName status
-                        | LifecycleProjection.Withheld reason -> $"withheld: %s{reason}"
                     let rows =
                         lifecycleShadowDifferences
                         |> List.sortBy (fun (subject, _, _, _) -> subject.Canonical)
@@ -3470,6 +3487,21 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                legacy = resultLabel legacy
                                subject = subject.Canonical |})
                     File.WriteAllText(path, JsonSerializer.Serialize(rows, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
+
+                // A successful report is emitted only after the typed GraphQL boundary produced the
+                // complete lifecycleItems snapshot and every row's delivery evidence was readable.
+                // It records ALL subjects (not only shadow differences), making zero reversals and zero
+                // partial-success reads measured outcomes rather than absent telemetry.
+                Environment.GetEnvironmentVariable "FSGG_COORD_HEALTH_REPORT"
+                |> Option.ofObj
+                |> Option.filter (String.IsNullOrWhiteSpace >> not)
+                |> Option.iter (fun path ->
+                    let report =
+                        {| completeReadBoundary = "typed-complete-success/1"
+                           schemaVersion = 1
+                           subjectCount = lifecycleItems.Length
+                           subjects = lifecycleHealthRows |> Seq.sortBy (fun row -> row.subject) |> Seq.toArray |}
+                    File.WriteAllText(path, JsonSerializer.Serialize(report, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
 
                 // Once a non-Auto intent exists, the intent reducer owns Status. This removes the live-
                 // claim precedence hole where ClaimStatusLag/ClaimReviewLag wrote the same active column

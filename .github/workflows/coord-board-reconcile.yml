@@ -341,6 +341,7 @@ jobs:
           FSGG_LIFECYCLE_EVENT: ${{ github.event_name }}
           FSGG_LIFECYCLE_EVENT_AT: ${{ github.event.repository.updated_at || github.run_started_at }}
           FSGG_COORD_LIFECYCLE_SHADOW_REPORT: artifacts/coordination-health/lifecycle-shadow.json
+          FSGG_COORD_HEALTH_REPORT: artifacts/coordination-health/health-observation.json
         run: |
           mkdir -p artifacts/coordination-health
           set +e
@@ -365,6 +366,8 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: coordination-health-${{ github.run_id }}
-          path: artifacts/coordination-health/lifecycle-shadow.json
+          path: |
+            artifacts/coordination-health/lifecycle-shadow.json
+            artifacts/coordination-health/health-observation.json
           if-no-files-found: error
           retention-days: 90
