@@ -12,12 +12,13 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 3,
+  "repair_rounds": 4,
   "reviewed_commits": [
     "101343fbb4f5c5d5626822f4363d69c3d79e154e",
     "db64a53b5dde6f383c48ade10dad10c890a89288",
     "f4e26d71e4cfbdfd749af9aff30e2bba738093ee",
-    "2269324d73b49221e84a30f82da49ea064beaf2d"
+    "2269324d73b49221e84a30f82da49ea064beaf2d",
+    "28f0f6e3096e7abd7eddd42f02d550d63a6dbb26"
   ],
   "findings": [
     {
@@ -72,10 +73,27 @@
         "Verification: the repaired manifest's publishing-and-deployment file digest e687227d474ab1ea5a05976241baa260095e179844427b23faeb8b0efce45abf exactly equals `sha256sum .agents/skills/publishing-and-deployment/SKILL.md`; its regenerated tree digest is fd9d2bbe807559a85fb17ebdac7552d675b1f31130a9268ff02fb5d6951f4a51.",
         "Verification: `git diff --check 22eeec6ac0a2f6f050e64e1c6be2c2ed7201d558..2269324d73b49221e84a30f82da49ea064beaf2d` exited 0, and review of the full base-to-head name set found no post-confirmation implementation change beyond the mechanical manifest refresh."
       ]
+    },
+    {
+      "id": "M0-INTEGRATION-CRIT-004",
+      "severity": "major",
+      "summary": "After M0 merged, the absolute main-branch skill-registry gate remained red because registry/skills.yml retained the pre-M0 publishing-and-deployment digest even though the canonical producer body and generated manifest had advanced.",
+      "evidence": [
+        "Verification: GitHub Actions run 31784705208 on merged main commit e9dc41ddf362c0ac3ccb87216a53588dbfa642e6 failed its absolute `Assert registry = manifest = bytes` step with exactly one finding: `[digest-matches] publishing-and-deployment: declared 3e20282a… but source hashes to e687227d…`; the run used no baseline registry.",
+        "Verification: origin/main e9dc41ddf362c0ac3ccb87216a53588dbfa642e6 records 3e20282ac8c40a8894fdd502a3378f68b0127eba9ab7ec9874f42f461af6df7c in registry/skills.yml while both canonical publishing-and-deployment skill projections and the driver manifest record source digest e687227d474ab1ea5a05976241baa260095e179844427b23faeb8b0efce45abf, so M0's no-standing-red exit condition was not yet true on merged main."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: on exact repair head 28f0f6e3096e7abd7eddd42f02d550d63a6dbb26, `scripts/fsgg-skill-registry-check --repos-root /tmp/fsgg-m0-skill-repos-ubfldP` exited 0 with `registry = manifest = bytes`; the supplied roster exactly contains all eight names emitted by `--producers`: local .github plus FS.GG.Audio, FS.GG.Game, FS.GG.Governance, FS.GG.Net, FS.GG.Rendering, FS.GG.SDD, and FS.GG.Templates.",
+        "Verification: sha256sum of both .claude and .agents publishing-and-deployment SKILL.md files is e687227d474ab1ea5a05976241baa260095e179844427b23faeb8b0efce45abf, exactly matching registry/skills.yml and the regenerated driver manifest; `scripts/generate-driver-manifest --check` and `scripts/generate-projections --check` both exited 0.",
+        "Verification: the complete origin/main e9dc41ddf362c0ac3ccb87216a53588dbfa642e6 to repair-head diff changes only registry/skills.yml, registry/skills.CHANGELOG.md, and the M0 roadmap, and `git diff --check` exited 0; the registry data change is one sha256 scalar with no predicate, position, membership, or schema change.",
+        "Verification: registry/skills.yml has updated date 2026-08-14, and the first changelog entry has the same date, names publishing-and-deployment and merged producer PR #2593, identifies failing absolute run 31784705208, and accurately records one digest change with zero predicate or row-placement changes.",
+        "Verification: the roadmap's post-merge closure evidence names the same failed run and follow-up PR #2594; live GitHub metadata confirms run 31784705208 failed on main SHA e9dc41ddf362c0ac3ccb87216a53588dbfa642e6 at the registry equality step, PR #2593 merged as that SHA, and PR #2594 is open from exact reviewed head 28f0f6e3096e7abd7eddd42f02d550d63a6dbb26 against main."
+      ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "2269324d73b49221e84a30f82da49ea064beaf2d",
+    "reviewed_commit": "28f0f6e3096e7abd7eddd42f02d550d63a6dbb26",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
