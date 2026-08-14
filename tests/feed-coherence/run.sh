@@ -147,7 +147,7 @@ PY
   printf '%s' "$out"
 }
 
-gate() { python3 "$GATE" --fixture "$2" "$1" 2>&1; }
+gate() { python3 "$GATE" --fixture "$2" --fixture-nuget "${3:-$2}" "$1" 2>&1; }
 
 # must_pass <label> <registry> <feed>
 must_pass() {
@@ -170,15 +170,39 @@ must_fail() {
   fi
 }
 
+# must_fail_dual <label> <registry> <org-feed> <nuget-feed> <required-pattern>
+must_fail_dual() {
+  local out rc
+  out="$(gate "$2" "$3" "$4")" && rc=0 || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    bad "$1 (expected non-zero exit, got 0)" "$out"
+  elif ! grep -Eqi -- "$5" <<<"$out"; then
+    bad "$1 (failed, but not for the stated reason: /$5/)" "$out"
+  else
+    ok "$1"
+  fi
+}
+
 echo "--- the green baseline ---"
 must_pass "coherent registry == newest on the feed" "$BASE" "$FEED"
 
 echo
 echo "--- the drift the gate was built for (both directions) ---"
 must_fail "BEHIND: a release published, the registry was never flipped" \
-  "$(mutate behind fs-gg-ui-template 0.3.1-preview.1)" "$FEED" "BEHIND the feed"
+  "$(mutate behind fs-gg-ui-template 0.3.1-preview.1)" "$FEED" "BEHIND both feeds"
 must_fail "AHEAD: registry advertises a version consumers cannot restore" \
   "$(mutate ahead fsgg-contracts 9.9.9)" "$FEED" "AHEAD of the feed"
+
+# The live .github#2580 shape: org accepted 0.52.0, nuget.org did not. The old gate called this
+# BEHIND and instructed an unsafe registry flip. The repaired gate must name the incomplete release.
+PARTIAL_NUGET="$(feed_with partial-nuget FS.GG.Coord.Cli '["0.2.0", "0.1.1", "0.1.0"]')"
+must_fail_dual "org-ahead/nuget-behind is a PARTIAL RELEASE, never registry BEHIND" \
+  "$BASE" "$FEED" "$PARTIAL_NUGET" "PARTIAL RELEASE.*do not flip the registry"
+
+# Prove the new arm did not disable the old one: when BOTH feeds have advanced, this really is a
+# completed release whose registry row is behind and should still demand publish-before-flip step 2.
+must_fail_dual "a completed dual-feed release still reports registry BEHIND" \
+  "$(mutate both-behind coord-engine 0.2.0)" "$FEED" "$FEED" "BEHIND both feeds"
 
 echo
 echo "--- version ORDER, never substring (the .github#268 defect class) ---"
@@ -186,7 +210,7 @@ echo "--- version ORDER, never substring (the .github#268 defect class) ---"
 # The baseline (which declares 0.4.0 against a feed serving both) is the converse leg: a release
 # must not be reported as behind its own prerelease.
 must_fail "0.4.0-preview.1 declared while the feed's newest is 0.4.0" \
-  "$(mutate substring fs-gg-ui-template 0.4.0-preview.1)" "$FEED" "BEHIND the feed.*0\.4\.0"
+  "$(mutate substring fs-gg-ui-template 0.4.0-preview.1)" "$FEED" "BEHIND both feeds.*0\.4\.0"
 
 # The feed returns creation order. Newest must come from version order, so the same set in a
 # different order must reach the same verdict — and a newest that is not first must still win.
@@ -194,7 +218,7 @@ must_pass "newest is chosen by version order, not by the feed's ordering" \
   "$BASE" "$(feed_with reordered FS.GG.Contracts '["1.0.1", "1.1.1", "1.4.0", "1.2.0"]')"
 must_fail "a stale declaration is caught even when the feed lists newest last" \
   "$(mutate order-stale fsgg-contracts 1.2.0)" \
-  "$(feed_with tail-newest FS.GG.Contracts '["1.0.1", "1.2.0", "1.4.0"]')" "BEHIND the feed"
+  "$(feed_with tail-newest FS.GG.Contracts '["1.0.1", "1.2.0", "1.4.0"]')" "BEHIND both feeds"
 
 # A prerelease-only package is coherent at its newest prerelease (fs-gg-audio's real shape).
 must_pass "a prerelease-only feed is coherent at its newest prerelease" \
@@ -203,7 +227,7 @@ must_pass "a prerelease-only feed is coherent at its newest prerelease" \
 # still order correctly against a 3-segment sibling.
 must_fail "4-segment 1.2.1.1 orders above 1.2.1 (not string-compared)" \
   "$(mutate four-seg governance-reference-gate-set 1.2.1)" \
-  "$FEED" "BEHIND the feed.*1\.2\.1\.1"
+  "$FEED" "BEHIND both feeds.*1\.2\.1\.1"
 
 echo
 echo "--- fails CLOSED: an absent/unreadable/unmapped subject is an ERROR, not a skip ---"
@@ -257,7 +281,7 @@ if "package-version" not in row:
 del row["package-version"]
 yaml.safe_dump(doc, open(sys.argv[2], "w"))
 PY
-must_fail "a MAPPED row still present but stripped of `package-version` fails" \
+must_fail "a MAPPED row still present but stripped of package-version fails" \
   "$KEYLESS" "$FEED" "coord-engine.*leaves BOTH scopes at once"
 
 echo

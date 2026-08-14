@@ -94,3 +94,20 @@ if grep -q 'access attestation current' "$work/out"; then
   exit 1
 fi
 echo 'projects-audit fixture: OK'
+
+# The live workflow's credential wiring is part of the repair: the script fixture stubs `gh`, so it
+# cannot prove a runner will actually authenticate to the private organization ProjectV2.
+python3 - "$root/.github/workflows/projects-audit.yml" <<'PY'
+import sys, yaml
+doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+steps = doc["jobs"]["audit"]["steps"]
+mint = next((s for s in steps if s.get("id") == "app-token"), None)
+assert mint is not None, "projects-audit workflow does not mint the org App token"
+assert mint.get("uses") == "actions/create-github-app-token@v3"
+inputs = mint.get("with") or {}
+assert inputs.get("owner") == "FS-GG"
+assert inputs.get("permission-organization-projects") == "read"
+audit = next(s for s in steps if str(s.get("run", "")).startswith("scripts/projects-audit.sh "))
+assert (audit.get("env") or {}).get("GH_TOKEN") == "${{ steps.app-token.outputs.token }}"
+print("projects-audit workflow credential wiring: OK")
+PY
