@@ -1,0 +1,37 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[== engine release-notes coherence ==
+PASS  matching evaluated version and notes are green
+PASS  the measured stale-notes shape is red
+PASS  empty release notes are red
+PASS  a version with no coherent-set scalar behind it is red, never green
+PASS  a Version that did not come from the coherent-set scalar is red
+PASS  an unevaluable project is no verdict, never coherent
+
+== nuget.org's length limit (.github#2579) ==
+PASS  the limit is folded out of the checker, so this fixture holds no second copy of 35000
+PASS  notes of exactly the limit publish
+PASS  one character over the limit is red
+PASS  the green path reports remaining headroom, not only a verdict
+PASS  the green path reports percent-of-budget
+PASS  the red path reports the overage as well as refusing
+PASS  a NON-announcing coherent-set member over budget is red
+PASS  a coherent-set declaration with no PROJECTS is no verdict, never coherent
+PASS  an unreadable coherent-set declaration is no verdict, never coherent
+
+== the standing advisories (.github#2579 DEC-002) ==
+PASS  notes that stop referencing the advisory property are red, even when the text is inlined
+PASS  an emptied advisory property is red
+
+== the real tree this item repaired (.github#2579 criterion 4) ==
+PASS  the tree that took nuget.org's 400 is RED on the length arm
+PASS  the pre-repair fragment still evaluates to the measured 37,279 characters
+PASS  the pre-repair tree is also red on the advisory arm
+PASS  the shipped engine project is coherent, in-budget and carries its advisories
+PASS  the shipped listing still warns about both permanent two-of-three sets
+
+== reach: subject, declaration, trigger ==
+PASS  the release workflow refuses incoherent notes before packing
+PASS  nuget.org's limit has exactly one definition, in the checker, and no copy anywhere else
+PASS  PROJECTS is inside PATHS_SUBJECT, and both trigger filters select every PATHS_SUBJECT entry
+
+engine release-notes fixture: 25 passed, 0 failed
+]]></system-out></testcase></testsuite>

@@ -1,0 +1,613 @@
+schemaVersion: 1
+workId: 2579-release-notes-length-bound
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2579-release-notes-length-bound/spec.md
+sourceClarifications: work/2579-release-notes-length-bound/clarifications.md
+sourceChecklist: work/2579-release-notes-length-bound/checklist.md
+sourcePlan: work/2579-release-notes-length-bound/plan.md
+sourceTasks: work/2579-release-notes-length-bound/tasks.yml
+sourceAnalysis: readiness/2579-release-notes-length-bound/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2579-release-notes-length-bound/analysis.json
+    digest: 97c0403e2415411ee1cc0d8e75e9ffba32559619c72956e9dabcadef8a0a3eed
+    schemaVersion: 1
+  - label: checklist
+    path: work/2579-release-notes-length-bound/checklist.md
+    digest: eda09f9605279a4369ff1f9805ba7a421c895881ef984e6e75bbea985f40d792
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2579-release-notes-length-bound/clarifications.md
+    digest: 70fc9225351808eaf93d7f37064d95e76344083f1bc7026c8087f2bbca14d79e
+    schemaVersion: 1
+  - label: plan
+    path: work/2579-release-notes-length-bound/plan.md
+    digest: cdace501768581c46296d22365acfe9ae4091f366a127cc7a52f634508285b36
+    schemaVersion: 1
+  - label: spec
+    path: work/2579-release-notes-length-bound/spec.md
+    digest: 9628d7ab7aac6bd0f45dfe113647aea70d007b06b5847c0927d70277f4f42fe2
+    schemaVersion: 1
+  - label: tasks
+    path: work/2579-release-notes-length-bound/tasks.yml
+    digest: dcd3ff6c5090e8e7e88aa910b3b20e0cd6e12f1c9dcbbe642c2a63d055103de4
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [scripts/check-engine-release-notes.py, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Fixture leg 'a NON-announcing coherent-set member over budget is red' passes: the announcing project is publishable and a sibling is 500 over, exit 1.", "INVERSION INV-4: 'for project in length_subjects' changed to 'for project in [args.project]' (the pre-2579 subject). That leg went RED, 24 passed / 1 failed.", "Length arm measures every coherent-set member, folded from check-coherent-set-version.py PROJECTS by AST."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [scripts/check-engine-release-notes.py, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Fixture leg 'nuget.org's limit has exactly one definition, in the checker, and no copy anywhere else' passes: one assignment, zero occurrences in any other file under scripts/, .github/workflows/, tests/.", "Headroom is printed on both paths. Green: 'src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj: 6553 of 35000 characters used (18.7% of nuget.org's budget), 28447 remaining.' Red: '37279 of 35000 characters used (106.5% of nuget.org's budget), OVER BUDGET by 2279.'", "INVERSION INV-1: limit raised to 40000; the real-tree leg went RED, 22 passed / 3 failed.", "NUGET_ORG_RELEASE_NOTES_LIMIT = 35000 is the only definition; the fixture folds it by AST rather than restating it."]
+  - id: EV003
+    kind: implementation
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/criterion-4-main-vs-repaired.junit.xml
+      digest: "sha256:af270e4ae7f68e90b6bd28df053b18cd4b6e28c44d66cda3d0a59ce6ee804370"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Both permanent two-of-three warnings are carried forward into the advisory property: 'DO NOT ADOPT 0.50.1' and 'DO NOT ADOPT 0.50.5'.", "Evaluated length 37279 -> 6553 characters, 28447 of headroom. FsggCoherentSetVersion is NOT moved and the first token remains 0.52.0.", "PackageReleaseNotes restructured to exactly three parts: the 0.52.0 entry, then $(FsggStandingAdvisories), then the served-history pointer. The accumulated per-version narrative is removed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [scripts/check-engine-release-notes.py, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Both fixture cases are trees where the length arm AND the first-token arm are satisfied, so without this arm both would publish.", "INVERSION INV-2 (structural branch made unreachable): 'notes that stop referencing the advisory property are red' went RED, 23 passed / 2 failed. INVERSION INV-3 (semantic branch made unreachable): 'an emptied advisory property is red' went RED, 24 passed / 1 failed.", "Structural arm: the authored <PackageReleaseNotes> element must contain the literal $(FsggStandingAdvisories). Semantic arm: the evaluated property must be non-empty and present in the evaluated notes."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [scripts/check-engine-release-notes.py, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["All six pre-existing fixture legs pass unmodified in their assertions: matching version green, stale-notes red, empty notes red, no-coherent-scalar red, overridden-Version red, unevaluable project exit 2.", "The .github#1762 first-token comparison, the .github#2512 coherent-scalar comparison, the empty-notes arm and the exit-code contract (0/1/2) are unchanged in behaviour; the new arms are added around them."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [".github/workflows/engine-release-notes.yml", scripts/check-engine-release-notes.py, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Fixture asserts the whole chain PROJECTS subset-of PATHS_SUBJECT subset-of both triggers, folded from the real files by AST.", "INVERSION INV-6 (a coherent-set member dropped from PATHS_SUBJECT) and INV-7 (an entry dropped from the pull_request trigger only): both went RED on the reach leg, 24 passed / 1 failed each.", "PATHS_SUBJECT gains src/FS.GG.Kit/FS.GG.Kit.csproj, src/FS.GG.Drivers/FS.GG.Drivers.csproj and scripts/check-coherent-set-version.py; both pull_request and push paths: filters gain the same three.", "Reach demonstrated end to end by the repo's own derivation: 'python3 scripts/test --list --base origin/main' reports 'bash tests/engine-release-notes/run.sh <- engine-release-notes.yml: src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj'."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [tests/engine-release-notes/regression/release-notes-at-2579.xmlfragment, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/criterion-4-main-vs-repaired.junit.xml
+      digest: "sha256:af270e4ae7f68e90b6bd28df053b18cd4b6e28c44d66cda3d0a59ce6ee804370"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Criterion 4 was also demonstrated through the production entry point with no arguments: exit 1 on the origin/main fsproj, exit 0 on the repaired one.", "INVERSION INV-8 (fsproj reverted to origin/main): the shipped-project leg went RED, 23 passed / 2 failed. INVERSION INV-9 (fragment truncated to 500 bytes): the non-vacuity leg went RED, 23 passed / 2 failed.", "Ten inversions were applied one at a time, the whole fixture run under each, and green restored after each. Every one went red on its own leg and only its own leg.", "The length arm's red is observed against the REAL pre-repair tree, not only a fixture: release-notes-at-2579.xmlfragment is the verbatim <PackageReleaseNotes> element from origin/main, evaluated by the same MSBuild, reproducing 37279 characters exactly."]
+  - id: EV008
+    kind: implementation
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-001]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, work/2579-release-notes-length-bound/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 recorded with all three rejected options and the reason each was rejected: last-N truncation measures the wrong unit and ages the advisories out; a registry/CHANGELOG.md pointer does not hold the content and is the wrong channel for a safety warning; per-version-only deletes the correction channel that only the newest listing can carry."]
+  - id: EV009
+    kind: implementation
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-002]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, work/2579-release-notes-length-bound/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 recorded and implemented: the advisories are a separate MSBuild property the notes reference, and the gate refuses both its removal and its emptying. Evidence that it can fail is EV004."]
+  - id: EV010
+    kind: implementation
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-003]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [scripts/check-engine-release-notes.py, work/2579-release-notes-length-bound/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["DEC-003 recorded and implemented: subject folded from check-coherent-set-version.py PROJECTS by AST, quantity is the EVALUATED MSBuild property.", "The evaluated/raw distinction is worth 55 characters on this tree: raw 37334, evaluated 37279. 36 characters come from &lt;/&gt; unescaping and 19 from a $(FsggCoherentSetVersion) reference the notes themselves contain, which MSBuild expands to 0.52.0."]
+  - id: EV011
+    kind: implementation
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [scripts/check-engine-release-notes.py, work/2579-release-notes-length-bound/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["DEC-004 recorded and implemented: no second threshold; headroom reported on every run. Evidence is EV002."]
+  - id: EV012
+    kind: note
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-005]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [".github/workflows/release-coord-engine.yml", work/2579-release-notes-length-bound/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["DEC-005 recorded: no length arm added to release-kit.yml or release-drivers.yml, because neither package declares PackageReleaseNotes and the only way either gains one is a pull request editing its own .csproj, which the widened trigger now selects.", "The residual risk is stated rather than hidden, in release-coord-engine.yml's own step comment: the release-time arm is a backstop that runs after the sibling release workflows have already started on their own tags."]
+  - id: EV013
+    kind: note
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-006]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [work/2579-release-notes-length-bound/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["DEC-006 recorded: no 0.52.0 advisory in this item. 0.52.0 is a feed-parity gap, not a two-of-three set - all three v0.52.0 tags dereference to one commit 2bf6e726 and the org-feed package is complete and usable. Its disposition belongs to .github#2580 and the decided additive 0.52.1 re-cut, both landing after this item."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: [scripts/check-engine-release-notes.py, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["INVERSION INV-5: the fold made to fail open (return an empty set instead of raising). The 'no PROJECTS' leg went RED, wanted exit 2 got 0, 24 passed / 1 failed.", "PC-001: the 0 / 1 / 2 exit-code contract is preserved. The new arms map onto it; no fourth code is introduced. Exit 2 is reached by an unevaluable project AND by an unreadable or PROJECTS-less coherent-set declaration - 'I cannot tell what my subject is' never shares a code with 'checked, and it's fine'."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: [tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: 'bash tests/engine-release-notes/run.sh' is green on the repaired tree - 25 passed, 0 failed - with all six pre-existing legs' assertions unmodified."]
+  - id: EV016
+    kind: note
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [work/2579-release-notes-length-bound/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["PM-001: there is no migration to perform and one that must not be attempted. FS.GG.Coord.Cli 0.52.0 is already published on the org feed carrying the old over-limit notes and that artifact is immutable; this change cannot and does not correct it. The repaired notes first reach a feed at the next cut, which is a separate item."]
+  - id: EV017
+    kind: generated-view
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV017]
+    artifacts: [readiness/2579-release-notes-length-bound/analysis.json, work/2579-release-notes-length-bound/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: the SDD work model and analysis views regenerate from these sources. No other generated artifact in the repository is implicated: registry/coordination-kit-skill-manifest.json digests skill directories and none of this item's paths is a kit: source in registry/repos.yml, so no kit manifest regeneration and no kit release obligation arises."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV018]
+    artifacts: [src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["INVERSION INV-10: 'DO NOT ADOPT 0.50.5' deleted from the shipped advisory property. That leg went RED, 24 passed / 1 failed.", "PC-002: the published listing text changes, so the compatibility-preserving core is asserted directly. The fixture reads the EVALUATED PackageReleaseNotes of the shipped project and requires both 'DO NOT ADOPT 0.50.1' and 'DO NOT ADOPT 0.50.5' to be present, so an advisory that is declared but does not resolve into the published field fails here."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV019]
+    artifacts: [".github/workflows/engine-release-notes.yml", tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["PC-003: widening the subject without widening the trigger is the .github#2512 defect. The fixture refuses it. Evidence that it can fail is INV-6 and INV-7 under EV006."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV020]
+    artifacts: [scripts/check-engine-release-notes.py, tests/engine-release-notes/regression/release-notes-at-2579.xmlfragment, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/criterion-4-main-vs-repaired.junit.xml
+      digest: "sha256:af270e4ae7f68e90b6bd28df053b18cd4b6e28c44d66cda3d0a59ce6ee804370"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Production entry point, origin/main fsproj restored: exit 1, 'evaluated PackageReleaseNotes is 37279 characters, which exceeds nuget.org's limit of 35000 by 2279'.", "Production entry point, repaired tree: exit 0, 'Version 0.52.0 agrees with the first PackageReleaseNotes token ... and carries $(FsggStandingAdvisories) (2037 characters of standing advisories).'", "VO-002: the real-origin/main length leg observed RED before the repair and GREEN after, executed rather than asserted."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV021]
+    artifacts: [scripts/check-engine-release-notes.py, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["VO-003: the advisory arms observed red under two separate inversions, INV-2 and INV-3, each with the length arm and the first-token arm still satisfied - so the arm is shown to be what caught it."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV022]
+    artifacts: [".github/workflows/engine-release-notes.yml", tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["VO-004: a PATHS_SUBJECT entry removed from one trigger block reds the reachability leg. INV-7 removed src/FS.GG.Kit/FS.GG.Kit.csproj from the pull_request block ONLY, leaving push intact; the leg went RED."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV023]
+    artifacts: [scripts/check-engine-release-notes.py, tests/engine-release-notes/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2579-release-notes-length-bound/test-results/engine-release-notes-fixture.junit.xml
+      digest: "sha256:f9daed0de49326847f0a33046fc2c7aee946aa9de6511e55116ac1fd2b7b1c86"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["VO-005: the limit appears exactly once. Asserted as two separable facts - exactly one assignment line in the checker, and zero occurrences in any other file under scripts/, .github/workflows/ or tests/ - because the checker's docstring deliberately QUOTES nuget.org's refusal text, and that citation is the point of naming the constraint as external."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
