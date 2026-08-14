@@ -12,12 +12,13 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 3,
+  "repair_rounds": 4,
   "reviewed_commits": [
     "73f4cb9e12cebb5810e081a031e46ccfb50f04d5",
     "cf05e79a726d91f72d79aa4b9c9f3a32f428b933",
     "5f84ad851733730b9181dca9a28489ac0a3eb1db",
-    "97ed4e269c46621bed1e71849261a4ca6a00f9d1"
+    "97ed4e269c46621bed1e71849261a4ca6a00f9d1",
+    "ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c"
   ],
   "findings": [
     {
@@ -62,12 +63,14 @@
         "Verification: repair 3 at 97ed4e269c46621bed1e71849261a4ca6a00f9d1 wraps decode_node and stable-key extraction in scripts/graphql_complete_read.py:91-98, preserves an existing GraphQlReadError, and translates every other callback exception into a non-retryable typed GraphQlReadError.",
         "Verification: tests/test_graphql_complete_read.py adds the exact nodes=[{}], totalCount=1, hasNextPage=false regression and `PYTHONDONTWRITEBYTECODE=1 python -m unittest tests/test_graphql_complete_read.py` passed all 10 cases at 97ed4e269c46621bed1e71849261a4ca6a00f9d1.",
         "Verification: an independent focused probe at 97ed4e269c46621bed1e71849261a4ca6a00f9d1 observed GraphQlReadError with NOT_RETRYABLE metadata for the malformed individual node and separately proved an existing retryable PRIMARY GraphQlReadError survives execute unchanged.",
-        "Verification: `python scripts/check-graphql-boundary.py --root .`, `bash tests/graphql-boundary/run.sh`, and `git diff --check` all passed at 97ed4e269c46621bed1e71849261a4ca6a00f9d1."
+        "Verification: `python scripts/check-graphql-boundary.py --root .`, `bash tests/graphql-boundary/run.sh`, and `git diff --check` all passed at 97ed4e269c46621bed1e71849261a4ca6a00f9d1.",
+        "Verification: round-4 head ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c adds identical pull_request/push filters for scripts/graphql_complete_read.py, src/FS.GG.Coord.Core/**, tests/graphql-boundary/**, and tests/test_graphql_complete_read.py in .github/workflows/graphql-monopoly.yml, closing the CI trigger dependency set without changing boundary behavior.",
+        "Verification: `bash tests/paths-coherence/run.sh` passed 72/72, `python scripts/check-graphql-boundary.py --root .` returned VALID, `bash tests/graphql-boundary/run.sh` passed, `PYTHONDONTWRITEBYTECODE=1 python -m unittest tests/test_graphql_complete_read.py` passed 10/10, and `git diff --check` was clean at ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c."
       ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "97ed4e269c46621bed1e71849261a4ca6a00f9d1",
+    "reviewed_commit": "ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },

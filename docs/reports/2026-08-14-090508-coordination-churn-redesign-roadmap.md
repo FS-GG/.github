@@ -346,13 +346,13 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   fixture reject a raw F# envelope reader, a direct production shell transport,
   or a second production page parser.
 - **Acceptance:** Exact implementation head
-  `97ed4e269c46621bed1e71849261a4ca6a00f9d1` passes Core 863/863, GitHub
+  `ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c` passes Core 863/863, GitHub
   608/608, CLI 838/838, the Python fault matrix 10/10, archive planning 18/18,
   roster closure 79/79, replay 30/30, GraphQL monopoly 22/22, the boundary
   checker and its inversion fixture, and `git diff --check`.
 - **Critique:** The independent schema-v3 record at
   `reviews/roadmap/roadmap-coordination-churn-redesign-m2-complete-read-boundary.json`
-  records three repair rounds. Its two major findings—meter parsing outside the
+  records four repair rounds. Its two major findings—meter parsing outside the
   boundary and untyped audit/archive readers—are resolved; the same critic
   confirmed `pass` against the exact implementation head, with no unresolved
   blocker or major finding. The shipped validator accepts the record.
