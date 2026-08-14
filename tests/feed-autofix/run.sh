@@ -636,6 +636,52 @@ else
   bad "no package-bearing subject: a loud defect, not silence" "rc=$rc: $out"
 fi
 
+# ...and the SAME loss confined to ONE row (.github#2567). `subjects()` is shared with
+# check-feed-coherence.py, so a mapped row that is still present but has lost its `package-version`
+# stops being DETECTED and stops being FLIPPED in the same instant. The two halves agree — which is
+# precisely what makes the loss invisible to anyone comparing them — and the row's id is still
+# `known`, so the stale-mapping check does not see it either. It leaves both scopes at once.
+#
+# Measured on the pre-fix bot (3fd4951, this same registry): exit 0, the run reported success, and
+# game-sim-core simply did not appear among the reconciled rows. The bot cannot trust a subject set
+# it can silently lose a row from, so this is rc 2 (defect) and it must write nothing.
+registry "$WORK/r9b.yml" "0.10.0" "0.9.2 -> 0.10.0" "0.10.0" "0.9.2 -> 0.10.0" "fs-gg-ui-template/v0.10.0"
+python3 - "$WORK/r9b.yml" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+# Strip ONLY game-sim-core's package-version line, leaving the row itself in place — the whole point
+# is a row that is still there. A row-removing edit would be the stale-mapping case, not this one.
+new, n = re.subn(r'(\n  - id: game-sim-core\n    version: "0\.5\.0"\n)    package-version: "0\.5\.0"\n',
+                 r"\1", text)
+if n != 1:
+    sys.exit(f"vacuous fixture: expected to strip exactly one game-sim-core package-version, got {n}")
+open(path, "w", encoding="utf-8").write(new)
+PY
+before="$(cat "$WORK/r9b.yml")"
+out="$(python3 "$BOT" "$WORK/r9b.yml" --fixture "$WORK/f6.json" --write 2>&1)"; rc=$?
+if [ "$rc" -eq 2 ] && echo "$out" | grep -q "game-sim-core" \
+   && echo "$out" | grep -q "leaves BOTH scopes at once"; then
+  ok "a mapped row present but stripped of \`package-version\`: refused as a defect, naming the row"
+else
+  bad "a mapped row present but stripped of \`package-version\`: refused as a defect, naming the row" \
+      "rc=$rc: $out"
+fi
+if [ "$before" = "$(cat "$WORK/r9b.yml")" ]; then
+  ok "the stripped-key refusal leaves the registry BYTE-IDENTICAL"
+else
+  bad "the stripped-key refusal leaves the registry BYTE-IDENTICAL" "the bot wrote on a refusal"
+fi
+# The OTHER rows were healthy, so a bot that merely skipped the damaged row would have flipped them
+# and exited 0. Prove the refusal is total: fs-gg-ui-template is BEHIND the feed in this fixture and
+# still must not move. Without this, "rc=2" could coexist with a partial write.
+if grep -q 'package-version: "0.10.0"' "$WORK/r9b.yml"; then
+  ok "the stripped-key refusal withholds the OTHER rows' flips too"
+else
+  bad "the stripped-key refusal withholds the OTHER rows' flips too" \
+      "$(grep -E 'version' "$WORK/r9b.yml")"
+fi
+
 # A member with NO stable version, while the registry tracks the stable channel. Must be a FINDING,
 # not a silent fall-back to comparing against the prereleases — check-feed-coherence.py raises on
 # this exact condition, and two gates reading one feed must not disagree about what it says.
