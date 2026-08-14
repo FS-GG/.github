@@ -268,6 +268,7 @@ def workflow_health(start: datetime, end: datetime, root: Path) -> tuple[list[di
                     payload = json.loads(zipped.read("health-observation.json"))
             subjects = payload.get("subjects") if isinstance(payload, dict) else None
             if (not isinstance(shadow, list) or payload.get("schemaVersion") != 1
+                    or payload.get("applicationMode") != "verified-apply"
                     or payload.get("completeReadBoundary") != "typed-complete-success/1"
                     or not isinstance(subjects, list) or payload.get("subjectCount") != len(subjects)
                     or any(not isinstance(row, dict) or not row.get("subject") or not row.get("intent")

@@ -237,11 +237,28 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                                 not isinstance(item, dict) or not item.get("run_id") or not item.get("artifact_id")
                                 or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(item.get("artifact_sha256", "")))
                                 or not isinstance(item.get("shadow"), list) or not isinstance(item.get("health"), dict)
+                                or item["health"].get("applicationMode") != "verified-apply"
                                 or item["health"].get("completeReadBoundary") != "typed-complete-success/1"
                                 or item["health"].get("subjectCount") != len(item["health"].get("subjects", []))
                                 for item in health_runs
                             ):
                                 failures.append(f"{where}.provenance: require seven complete machine health observations")
+                            elif any(
+                                not isinstance(subject, dict)
+                                or not all(isinstance(subject.get(name), str) and subject.get(name) for name in ("subject", "current", "intent", "intended", "applied"))
+                                or not isinstance(subject.get("readComplete"), bool)
+                                or not isinstance(subject.get("reversed"), bool)
+                                or subject["reversed"] != (subject["intent"] != "auto" and not subject["intended"].startswith("withheld:") and subject["applied"] != subject["intended"])
+                                for run_row in health_runs for subject in run_row["health"].get("subjects", [])
+                            ):
+                                failures.append(f"{where}.provenance: machine health subject rows are invalid or reversal classification drifted")
+                            else:
+                                machine_reversals = sum(subject["reversed"] for run_row in health_runs for subject in run_row["health"]["subjects"])
+                                incomplete_reads = sum(not subject["readComplete"] for run_row in health_runs for subject in run_row["health"]["subjects"])
+                                if machine_reversals > len(raw.get("intent_reversal_events", [])):
+                                    failures.append(f"{where}.provenance: machine reversals are missing from intent_reversal_events")
+                                if incomplete_reads > len(raw.get("partial_success_events", [])):
+                                    failures.append(f"{where}.provenance: incomplete reads are missing from partial_success_events")
                             inventories = raw.get("inventory_snapshots")
                             if not isinstance(inventories, dict):
                                 failures.append(f"{where}.provenance: exact inventory snapshots are missing")

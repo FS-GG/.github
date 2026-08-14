@@ -95,6 +95,7 @@ import json, pathlib, sys
 row=json.loads(pathlib.Path(sys.argv[1]).read_text())
 subjects=row.get("subjects")
 assert row.get("schemaVersion") == 1
+assert row.get("applicationMode") == "dry-run"
 assert row.get("completeReadBoundary") == "typed-complete-success/1"
 assert isinstance(subjects, list) and row.get("subjectCount") == len(subjects) and subjects
 assert all(isinstance(item.get("readComplete"), bool) and isinstance(item.get("reversed"), bool)

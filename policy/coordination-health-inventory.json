@@ -13,11 +13,13 @@
     {"id":"release-saga-policy-gate","path":".github/workflows/release-saga-tooling.yml","marker":"scripts/release-saga-ci.sh"},
     {"id":"structured-route-review-v2","path":"src/FS.GG.Coord.Core/StructuredDecision.fs","marker":"module StructuredDecision"},
     {"id":"legacy-route-reader","path":"src/FS.GG.Coord.Cli/Client.fs","marker":"THE LATEST legacy delivery-route receipt"},
+    {"id":"legacy-review-v1-reader","path":"src/FS.GG.Coord.Core/Driver.fs","marker":"if List.isEmpty marked then Ok(comments, \"legacy-only\", None)"},
     {"id":"policy-runner","path":"scripts/policy-runner.py","marker":"def inventory"},
     {"id":"evidence-manifest","path":"scripts/evidence-manifest.py","marker":"def create"}
   ],
   "discoveries": [
     {"id":"private-graphql-compat","marker":"let private graphQlData","roots":["src/FS.GG.Coord.GitHub"],"paths":["src/FS.GG.Coord.GitHub/Board.fs","src/FS.GG.Coord.GitHub/Reads.fs"]},
+    {"id":"legacy-review-compat","marker":"legacy-only","roots":["src/FS.GG.Coord.Core/Driver.fs"],"paths":["src/FS.GG.Coord.Core/Driver.fs"]},
     {"id":"package-release-entry-points","marker":"scripts/release-saga-ci.sh","roots":[".github/workflows"],"paths":[".github/workflows/release-coord-engine.yml",".github/workflows/release-drivers.yml",".github/workflows/release-kit.yml",".github/workflows/release-saga-tooling.yml"]}
   ]
 }

@@ -3438,14 +3438,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 LifecycleProjection.shadowAdvance
                                     LifecycleProjection.IntentStatusV1 intent watermark observation
                             let selected = LifecycleProjection.select projectionMode shadow
-                            let deliberate = intentLabel intent <> "auto"
                             lifecycleHealthRows.Add(
-                                {| applied = resultLabel selected
-                                   current = statusWireName item.Status
+                                {| current = statusWireName item.Status
                                    intended = resultLabel shadow.Intended
                                    intent = intentLabel intent
                                    readComplete = true
-                                   reversed = deliberate && resultLabel selected = "Ready"
                                    subject = item.Ref.Canonical |})
                             let differences =
                                 match shadow.Difference with
@@ -3487,21 +3484,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                legacy = resultLabel legacy
                                subject = subject.Canonical |})
                     File.WriteAllText(path, JsonSerializer.Serialize(rows, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
-
-                // A successful report is emitted only after the typed GraphQL boundary produced the
-                // complete lifecycleItems snapshot and every row's delivery evidence was readable.
-                // It records ALL subjects (not only shadow differences), making zero reversals and zero
-                // partial-success reads measured outcomes rather than absent telemetry.
-                Environment.GetEnvironmentVariable "FSGG_COORD_HEALTH_REPORT"
-                |> Option.ofObj
-                |> Option.filter (String.IsNullOrWhiteSpace >> not)
-                |> Option.iter (fun path ->
-                    let report =
-                        {| completeReadBoundary = "typed-complete-success/1"
-                           schemaVersion = 1
-                           subjectCount = lifecycleItems.Length
-                           subjects = lifecycleHealthRows |> Seq.sortBy (fun row -> row.subject) |> Seq.toArray |}
-                    File.WriteAllText(path, JsonSerializer.Serialize(report, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
 
                 // Once a non-Auto intent exists, the intent reducer owns Status. This removes the live-
                 // claim precedence hole where ClaimStatusLag/ClaimReviewLag wrote the same active column
@@ -3649,6 +3631,43 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Json -> printfn "%s" (renderReconcileJson includeOutcome rows)
                     | Text -> ()
 
+                let emitHealth (applicationMode: string) (applied: ReconcileRow list) =
+                    let verifiedStatusWrites =
+                        applied
+                        |> List.choose (fun row ->
+                            match row.Write, row.Outcome, row.Observed with
+                            | Some("Status", value), Some Written, Some _ -> Some(row.Subject.Canonical, value)
+                            | _ -> None)
+                        |> Map.ofList
+                    Environment.GetEnvironmentVariable "FSGG_COORD_HEALTH_REPORT"
+                    |> Option.ofObj
+                    |> Option.filter (String.IsNullOrWhiteSpace >> not)
+                    |> Option.iter (fun path ->
+                        let subjects =
+                            lifecycleHealthRows
+                            |> Seq.map (fun row ->
+                                let finalApplied = Map.tryFind row.subject verifiedStatusWrites |> Option.defaultValue row.current
+                                let reversal =
+                                    row.intent <> "auto"
+                                    && not (row.intended.StartsWith("withheld:", StringComparison.Ordinal))
+                                    && finalApplied <> row.intended
+                                {| applied = finalApplied
+                                   current = row.current
+                                   intended = row.intended
+                                   intent = row.intent
+                                   readComplete = row.readComplete
+                                   reversed = reversal
+                                   subject = row.subject |})
+                            |> Seq.sortBy (fun row -> row.subject)
+                            |> Seq.toArray
+                        let report =
+                            {| applicationMode = applicationMode
+                               completeReadBoundary = "typed-complete-success/1"
+                               schemaVersion = 1
+                               subjectCount = lifecycleItems.Length
+                               subjects = subjects |}
+                        File.WriteAllText(path, JsonSerializer.Serialize(report, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
+
                 match opts.Render with
                 | Json -> ()
                 | Text ->
@@ -3665,6 +3684,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 if not opts.Apply || List.isEmpty chores then
                     // The DRY RUN, and the nothing-to-do apply. No outcome exists, so none is claimed: the
                     // six-key rows here are byte-identical to what this verb has always emitted.
+                    emitHealth (if opts.Apply then "verified-apply" else "dry-run") []
                     emitJson (chores |> List.map (fun c -> reconcileRow c None)) false
                     ExitGreen
                 else
@@ -3967,6 +3987,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                           failed <- true
                                           reconcileRow chore (Some(Failed(Errors.explain e))) ]
 
+                        emitHealth "verified-apply" applied
                         emitJson applied true
 
                         // The DEFERRED writes, said out loud ONCE, on stderr, under `--json` only.
