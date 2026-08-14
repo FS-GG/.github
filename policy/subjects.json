@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "subjects": [
+    {
+      "id": "checker-inventory",
+      "command": ["python3", "scripts/policy-runner.py", "inventory"],
+      "self_test": ["python3", "scripts/policy-runner.py", "inventory", "--self-test"]
+    },
+    {
+      "id": "projection-fixture",
+      "command": ["bash", "tests/projection/run.sh"]
+    },
+    {
+      "id": "policy-runner-fixture",
+      "command": ["bash", "tests/policy-runner/run.sh"]
+    },
+    {
+      "id": "evidence-manifest-fixture",
+      "command": ["bash", "tests/evidence-manifest/run.sh"]
+    }
+  ]
+}

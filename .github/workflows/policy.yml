@@ -1,0 +1,44 @@
+name: policy
+
+on:
+  pull_request:
+    paths:
+      - ".github/actions/setup-policy-python/**"
+      - ".github/workflows/**"
+      - "policy/**"
+      - "scripts/check-*"
+      - "scripts/policy-*"
+      - "scripts/policy-runner.py"
+      - "registry/dependencies.yml"
+      - "docs/registry/compatibility.md"
+      - "tests/projection/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/actions/setup-policy-python/**"
+      - ".github/workflows/**"
+      - "policy/**"
+      - "scripts/check-*"
+      - "scripts/policy-*"
+      - "scripts/policy-runner.py"
+      - "registry/dependencies.yml"
+      - "docs/registry/compatibility.md"
+      - "tests/projection/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  subjects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Discover and exercise every declared policy subject
+        run: python3 scripts/policy-runner.py run all

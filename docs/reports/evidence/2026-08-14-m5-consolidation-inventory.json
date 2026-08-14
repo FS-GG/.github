@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "baseline_sha": "7a9b8742f259af4d82b9562bfbe8e40d963b0be7",
+  "measurement_commands": {
+    "checkers": "git ls-tree -r --name-only <sha> scripts | rg '^scripts/check-' | wc -l",
+    "workflows": "git ls-tree -r --name-only <sha> .github/workflows | rg '\\.ya?ml$' | wc -l",
+    "trx_count": "git ls-tree -r --name-only <sha> | rg '\\.trx$' | wc -l",
+    "trx_bytes": "git ls-tree -rl <sha> | awk '$5 ~ /\\.trx$/ {s+=$4} END {print s+0}'"
+  },
+  "before": {
+    "checker_entry_points": 50,
+    "workflow_entry_points": 103,
+    "tracked_trx_files": 29,
+    "tracked_trx_bytes": 27532297,
+    "policy_subject_workflows_consolidated_by_m5": 2
+  },
+  "after": {
+    "checker_entry_points": 49,
+    "workflow_entry_points": 102,
+    "tracked_trx_files": 29,
+    "tracked_trx_bytes": 27532297,
+    "policy_subject_workflows_consolidated_by_m5": 1
+  },
+  "historical_data_disposition": "retained pending recoverable M6 artifact migration",
+  "new_bulk_evidence_disposition": "ignored in Git; upload to GitHub Actions and commit schema-v1 hash/URL manifest",
+  "rollback": "restore the two retired workflow files and inventory checker from baseline_sha; remove the new ignore rules only if checked-in bulk output is reinstated"
+}
