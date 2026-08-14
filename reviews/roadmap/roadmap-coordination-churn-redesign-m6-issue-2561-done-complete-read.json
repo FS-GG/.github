@@ -11,14 +11,34 @@
     "architecture",
     "roadmap-evidence"
   ],
-  "initial_verdict": "pass",
-  "repair_rounds": 0,
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
   "reviewed_commits": [
-    "e7d25700f83070780524e996932331d7970811ec"
+    "e7d25700f83070780524e996932331d7970811ec",
+    "657e81021c636cfb82dae241b4a7e71fdb29ddd8"
   ],
-  "findings": [],
+  "findings": [
+    {
+      "id": "M6-2561-CRIT-001",
+      "severity": "major",
+      "summary": "The receiver-visible done-stamp behavior change was presented as non-packaged work, leaving the coherent 0.56.0 release, source-ahead-of-feed registry state, and architecture-map disposition unrecorded.",
+      "evidence": [
+        "Verification: at initial reviewed commit e7d25700f83070780524e996932331d7970811ec, Directory.Build.props still declared FsggCoherentSetVersion 0.55.0 even though src/FS.GG.Coord.GitHub/Done.fs changed the behavior consumed by the packed FS.GG.Coord.Cli tool.",
+        "Verification: the live PR #2619 body read through `gh pr view 2619 --repo FS-GG/.github --json headRefOid,body,url` stated `No package release is owed: FS.GG.Coord.GitHub.fsproj is explicitly non-packable`, named no post-merge coherent-set release, and carried neither an `architecture-map: unaffected` line nor that opt-out label.",
+        "Verification: `.agents/skills/publishing-and-deployment/SKILL.md` requires the coherent FS.GG.Kit/FS.GG.Drivers/FS.GG.Coord.Cli set to move and publish together, records source-ahead-of-feed state before publication, and requires an explicit architecture-map opt-out when a routine registry version move does not alter system shape."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 657e81021c636cfb82dae241b4a7e71fdb29ddd8 advances FsggCoherentSetVersion and all three evaluated package versions to stable 0.56.0, bounds current FS.GG.Coord.Cli PackageReleaseNotes, advances registry coord-engine source while retaining package-version 0.55.0, updates the compatibility projection, and prepends the dated registry changelog entry.",
+        "Verification: `bash tests/coherent-set-version/run.sh && python3 scripts/check-coherent-set-version.py` passed 13/13 fixture assertions and resolved all three package projects to 0.56.0; `bash tests/engine-release-notes/run.sh && python3 scripts/check-engine-release-notes.py` passed 25/25 fixture assertions and measured 4422/35000 release-note characters.",
+        "Verification: `fsgg-sdd registry validate registry/dependencies.yml --text`, the 27/27 projection fixture plus live projection checker, the 28/28 registry-changelog fixture plus live checker, and the live dual-feed coherence check all passed; the live feed check confirmed coord-engine package-version 0.55.0 equals both feeds during the publish-before-flip window.",
+        "Verification: independent `dotnet pack` runs produced FS.GG.Kit.0.56.0.nupkg, FS.GG.Drivers.0.56.0.nupkg, and FS.GG.Coord.Cli.0.56.0.nupkg; nuspec inspection confirmed all three versions and the CLI's current 0.56.0 release narrative.",
+        "Verification: `gh pr view 2619 --repo FS-GG/.github --json headRefOid,body,url,state,title,labels,mergeable,statusCheckRollup` after repair reports exact head 657e81021c636cfb82dae241b4a7e71fdb29ddd8, a standalone `architecture-map: unaffected` line, the content-addressed GitHub-first/NuGet-second 0.56.0 post-merge obligation, the 0.55.0-until-verified registry rule, and no false `No package release is owed` claim; the architecture-map check had already completed successfully."
+      ]
+    }
+  ],
   "confirmation": {
-    "reviewed_commit": "e7d25700f83070780524e996932331d7970811ec",
+    "reviewed_commit": "657e81021c636cfb82dae241b4a7e71fdb29ddd8",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
