@@ -278,6 +278,13 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   nuspecs bind the packages to the merged SHA, and a fresh NuGet.org-only tool
   install reports `0.53.0.0`. The registry, generated compatibility projection,
   and canonical tool pin now select 0.53.0; 0.52.0 remains explicitly rejected.
+- **Post-merge projection closure:** The absolute main-branch skill-registry
+  [run 31784705208](https://github.com/FS-GG/.github/actions/runs/31784705208)
+  exposed that the generated `publishing-and-deployment` source digest had moved
+  while `registry/skills.yml` still named its pre-M0 digest. Follow-up PR
+  [#2594](https://github.com/FS-GG/.github/pull/2594) reconciles that one digest
+  from the producer manifest and records it in `registry/skills.CHANGELOG.md`;
+  no predicate, row position, or skill membership changes.
 
 ### Cross-cutting health measures
 
