@@ -89,6 +89,22 @@ if python3 "$TOOL" promote --manifest "$WORK/manifest.json" --previous-channel "
 fi
 python3 "$TOOL" merge-journals --manifest "$WORK/merge-base.json" --journal "$WORK/manifest.json"
 jq -e '.state.feeds.github.state == "verified" and .state.feeds.nuget.state == "verified"' "$WORK/merge-base.json" >/dev/null
+# Independent workflows observe identical immutable bytes at different times. The journal merge
+# accepts timestamp drift while retaining the latest observation, but still rejects hash drift.
+cp "$WORK/manifest.json" "$WORK/later-journal.json"
+jq '(.state.feeds.github.packages[].observedAt) = "2099-01-01T00:00:00Z"' \
+  "$WORK/later-journal.json" > "$WORK/later-journal.tmp"
+mv "$WORK/later-journal.tmp" "$WORK/later-journal.json"
+python3 "$TOOL" merge-journals --manifest "$WORK/merge-base.json" --journal "$WORK/later-journal.json"
+jq -e '[.state.feeds.github.packages[].observedAt == "2099-01-01T00:00:00Z"] | all' "$WORK/merge-base.json" >/dev/null
+cp "$WORK/later-journal.json" "$WORK/conflicting-journal.json"
+jq '.state.feeds.github.packages["FS.GG.Kit"].externalSha256 = "different"' \
+  "$WORK/conflicting-journal.json" > "$WORK/conflicting-journal.tmp"
+mv "$WORK/conflicting-journal.tmp" "$WORK/conflicting-journal.json"
+if python3 "$TOOL" merge-journals --manifest "$WORK/merge-base.json" \
+  --journal "$WORK/conflicting-journal.json" >/dev/null 2>&1; then
+  echo "expected conflicting external archive hash to fail closed" >&2; exit 1
+fi
 if python3 "$TOOL" promote --manifest "$WORK/merge-base.json" --previous-channel "$WORK/newer-stable.json" >/dev/null 2>&1; then
   echo "expected cross-release stable-channel regression to fail closed" >&2; exit 1
 fi

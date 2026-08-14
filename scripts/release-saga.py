@@ -239,9 +239,16 @@ def command_merge(args: argparse.Namespace) -> None:
                 if source_row["state"] != "verified":
                     continue
                 target_row = target_feed["packages"][package_id]
-                if target_row["state"] == "verified" and target_row != source_row:
-                    raise ValueError(f"{journal_path}: conflicting observation for {feed_name}/{package_id}")
-                target_feed["packages"][package_id] = source_row
+                if target_row["state"] == "verified":
+                    identity_fields = ("inputSha256", "externalSha256", "externalPayloadSha256")
+                    if any(target_row[field] != source_row[field] for field in identity_fields):
+                        raise ValueError(f"{journal_path}: conflicting observation for {feed_name}/{package_id}")
+                    # Independent package workflows observe the same immutable bytes at different
+                    # times. Timestamp drift is recovery evidence, not byte drift; retain the latest.
+                    if (source_row.get("observedAt") or "") > (target_row.get("observedAt") or ""):
+                        target_feed["packages"][package_id] = source_row
+                else:
+                    target_feed["packages"][package_id] = source_row
             for attempt in source_feed["attempts"]:
                 if attempt not in target_feed["attempts"]:
                     target_feed["attempts"].append(attempt)
