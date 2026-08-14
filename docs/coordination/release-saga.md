@@ -19,11 +19,15 @@ does not move the stable channel.
 
 Push `kit/v<version>`, `drivers/v<version>`, and `coord-engine/v<version>` together at the prepared
 source SHA. The existing package-owning workflows keep their trusted-publishing policy identities.
-For a real publish they download their archive from the draft, validate it against the manifest, push
-GitHub Packages first, and then send the same file to nuget.org. They never pack during the
-irreversible phase.
+For a real publish they download the full set from the draft, validate release/version/source/policy
+identity and every artifact hash, and observe their target before writing. Each package publishes to
+GitHub Packages and persists its own non-racing journal asset. Every workflow then waits until all
+three manifest-bound org packages are externally verified; only beyond that complete-set barrier may
+any workflow request its package-specific NuGet token and send the same file to nuget.org. They never
+pack during the irreversible phase.
 
-On retry, inspect the manifest and both feeds. A served package is progress only when its payload
+On retry, each package workflow resumes its durable `journal-<package>.json` and inspects both feeds.
+A served package is progress only when its payload
 matches the prepared artifact; archive hashes are retained separately because nuget.org may append a
 signature and regenerate package-services metadata. Missing packages resume from the manifest-bound
 archive. A different local hash or externally served payload is a terminal byte-drift refusal, not a

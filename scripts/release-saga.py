@@ -149,6 +149,7 @@ def command_prepare(args: argparse.Namespace) -> None:
         "version": args.version,
         "sourceSha": args.source_sha,
         "policyVersion": args.policy_version,
+        "previousStableVersion": args.previous_version,
         "channel": "stable",
         "feedOrder": list(FEEDS),
         "packages": rows,
@@ -202,6 +203,60 @@ def command_assert(args: argparse.Namespace) -> None:
     data = load(path)
     assert_bound(path, data, set(args.package) if args.package else None)
     print("manifest-bound artifact hashes verified")
+
+
+def command_identity(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data)
+    expected = {
+        "releaseId": args.release_id,
+        "version": args.version,
+        "sourceSha": args.source_sha,
+        "policyVersion": args.policy_version,
+    }
+    mismatches = [f"{key}: {data['descriptor'].get(key)!r} != {value!r}" for key, value in expected.items() if data["descriptor"].get(key) != value]
+    if data["descriptor"].get("channel") != "stable":
+        mismatches.append("channel is not stable")
+    if mismatches:
+        raise ValueError("manifest identity mismatch: " + "; ".join(mismatches))
+    print("manifest release/version/source/policy identity verified")
+
+
+def command_merge(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data)
+    for journal_path_value in args.journal:
+        journal_path = pathlib.Path(journal_path_value).resolve()
+        journal = load(journal_path)
+        if journal.get("contentId") != data.get("contentId") or journal.get("descriptor") != data.get("descriptor"):
+            raise ValueError(f"{journal_path}: journal belongs to different release bytes")
+        for feed_name in FEEDS:
+            target_feed = data["state"]["feeds"][feed_name]
+            source_feed = journal["state"]["feeds"][feed_name]
+            for package_id, source_row in source_feed["packages"].items():
+                if source_row["state"] != "verified":
+                    continue
+                target_row = target_feed["packages"][package_id]
+                if target_row["state"] == "verified" and target_row != source_row:
+                    raise ValueError(f"{journal_path}: conflicting observation for {feed_name}/{package_id}")
+                target_feed["packages"][package_id] = source_row
+            for attempt in source_feed["attempts"]:
+                if attempt not in target_feed["attempts"]:
+                    target_feed["attempts"].append(attempt)
+            target_feed["state"] = "verified" if all(row["state"] == "verified" for row in target_feed["packages"].values()) else ("partial" if any(row["state"] == "verified" for row in target_feed["packages"].values()) else "pending")
+        failure = journal["state"]["recovery"].get("lastFailure")
+        if failure and (data["state"]["recovery"].get("lastFailure") is None or failure["at"] > data["state"]["recovery"]["lastFailure"]["at"]):
+            data["state"]["recovery"]["lastFailure"] = failure
+        data["state"]["recovery"]["resumptions"] = max(data["state"]["recovery"]["resumptions"], journal["state"]["recovery"]["resumptions"])
+    if all(data["state"]["feeds"][feed]["state"] == "verified" for feed in FEEDS):
+        data["state"]["phase"] = "feeds-complete"
+    elif data["state"]["feeds"]["github"]["state"] == "verified":
+        data["state"]["phase"] = "org-complete"
+    data["state"]["updatedAt"] = now()
+    write_atomic(path, data)
+    print(f"merged {len(args.journal)} durable journal(s)")
 
 
 def command_failure(args: argparse.Namespace) -> None:
@@ -272,6 +327,24 @@ def command_promote(args: argparse.Namespace) -> None:
     incomplete = [feed for feed in FEEDS if data["state"]["feeds"][feed]["state"] != "verified"]
     if incomplete:
         raise ValueError("stable promotion refused; incomplete feeds: " + ", ".join(incomplete))
+    previous_version = data["descriptor"].get("previousStableVersion")
+    if args.previous_channel:
+        previous = json.loads(pathlib.Path(args.previous_channel).read_text(encoding="utf-8"))
+        if previous.get("contentId") == data["contentId"]:
+            raise ValueError("previous stable channel already names this content")
+        def stable_parts(value: str) -> tuple[int, ...]:
+            if "-" in value:
+                raise ValueError(f"stable channel version is prerelease: {value}")
+            try:
+                return tuple(int(part) for part in value.split("."))
+            except ValueError as error:
+                raise ValueError(f"stable channel version is malformed: {value}") from error
+        if previous.get("version") != previous_version:
+            raise ValueError("previous channel receipt does not match manifest baseline")
+    if not previous_version:
+        raise ValueError("manifest has no previous stable channel baseline")
+    if stable_parts(data["descriptor"]["version"]) <= stable_parts(str(previous_version)):
+        raise ValueError("stable channel version must advance monotonically")
     existing = data["state"]["channelPromotion"]
     if existing["state"] == "promoted":
         if existing["receipt"]["contentId"] != data["contentId"]:
@@ -297,6 +370,7 @@ def parser() -> argparse.ArgumentParser:
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--release-id", required=True); prepare.add_argument("--version", required=True)
     prepare.add_argument("--source-sha", required=True); prepare.add_argument("--policy-version", required=True)
+    prepare.add_argument("--previous-version", required=True)
     prepare.add_argument("--artifact-dir", required=True); prepare.add_argument("--expected-package", action="append", required=True)
     prepare.add_argument("--output", required=True); prepare.set_defaults(run=command_prepare)
     preflight = commands.add_parser("preflight")
@@ -305,6 +379,12 @@ def parser() -> argparse.ArgumentParser:
     preflight.add_argument("--max-release-notes-characters", type=int, default=35_000); preflight.set_defaults(run=command_preflight)
     assertion = commands.add_parser("assert-artifacts")
     assertion.add_argument("--manifest", required=True); assertion.add_argument("--package", action="append"); assertion.set_defaults(run=command_assert)
+    identity = commands.add_parser("assert-identity")
+    identity.add_argument("--manifest", required=True); identity.add_argument("--release-id", required=True)
+    identity.add_argument("--version", required=True); identity.add_argument("--source-sha", required=True)
+    identity.add_argument("--policy-version", required=True); identity.set_defaults(run=command_identity)
+    merge = commands.add_parser("merge-journals")
+    merge.add_argument("--manifest", required=True); merge.add_argument("--journal", action="append", required=True); merge.set_defaults(run=command_merge)
     failure = commands.add_parser("record-failure")
     failure.add_argument("--manifest", required=True); failure.add_argument("--feed", choices=FEEDS, required=True)
     failure.add_argument("--package", required=True); failure.add_argument("--detail", required=True); failure.set_defaults(run=command_failure)
@@ -312,7 +392,8 @@ def parser() -> argparse.ArgumentParser:
     record.add_argument("--manifest", required=True); record.add_argument("--feed", choices=FEEDS, required=True)
     record.add_argument("--observed", action="append", required=True); record.add_argument("--detail", required=True); record.set_defaults(run=command_record)
     promote = commands.add_parser("promote")
-    promote.add_argument("--manifest", required=True); promote.add_argument("--channel-output"); promote.set_defaults(run=command_promote)
+    promote.add_argument("--manifest", required=True); promote.add_argument("--channel-output")
+    promote.add_argument("--previous-channel"); promote.set_defaults(run=command_promote)
     return top
 
 

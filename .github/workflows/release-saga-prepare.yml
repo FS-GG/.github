@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 jobs:
   prepare:
@@ -41,10 +42,12 @@ jobs:
       - name: Create and preflight durable release manifest
         run: |
           set -euo pipefail
+          previous="$(awk '/^  - id: coord-engine$/{found=1} found && /^[[:space:]]+package-version:/{gsub(/"/, "", $2); print $2; exit}' registry/dependencies.yml)"
+          [ -n "$previous" ]
           python3 scripts/release-saga.py prepare \
             --release-id "github:${{ steps.version.outputs.version }}" \
             --version "${{ steps.version.outputs.version }}" --source-sha "$GITHUB_SHA" \
-            --policy-version release-saga/1 --artifact-dir artifacts/packages \
+            --policy-version release-saga/1 --previous-version "$previous" --artifact-dir artifacts/packages \
             --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit \
             --expected-package FS.GG.Drivers --output artifacts/packages/release-manifest.json
           python3 scripts/release-saga.py preflight --manifest artifacts/packages/release-manifest.json --feed both
@@ -58,7 +61,7 @@ jobs:
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             mkdir -p /tmp/prior
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir /tmp/prior
-            cmp /tmp/prior/release-manifest.json artifacts/packages/release-manifest.json
+            test "$(jq -r .contentId /tmp/prior/release-manifest.json)" = "$(jq -r .contentId artifacts/packages/release-manifest.json)"
             for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
               cmp "/tmp/prior/$package.$VERSION.nupkg" "artifacts/packages/$package.$VERSION.nupkg"
             done

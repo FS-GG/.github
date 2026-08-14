@@ -1,0 +1,98 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m3-release-saga",
+  "milestone": "M3 — release saga",
+  "critic": "/root/m3_release_saga/m3_critic",
+  "initial_reviewed_commit": "e163d9cdee2a95ca0f3ad951dabbfce5affde146",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "e163d9cdee2a95ca0f3ad951dabbfce5affde146"
+  ],
+  "findings": [
+    {
+      "id": "M3-RELEASE-SAGA-CRIT-001",
+      "severity": "major",
+      "summary": "The production publish topology does not enforce coherent-set org-first ordering: each of the three concurrent package workflows can push its package to nuget.org immediately after only its own GitHub Packages push.",
+      "evidence": [
+        "Verification: docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md requires one orchestrator with monotonic steps and the parent M3 brief requires org-first publication for the complete coherent set.",
+        "Verification: .github/workflows/release-saga-prepare.yml:72-77 tells the operator to push all three package tags together, which starts three independent workflows rather than a set-level publishing orchestrator.",
+        "Verification: .github/workflows/release-coord-engine.yml:240-284, .github/workflows/release-kit.yml:329-353, and .github/workflows/release-drivers.yml:213-237 each push one package to GitHub Packages and then immediately push that same package to nuget.org; no step waits until all three packages are externally verified on GitHub Packages.",
+        "Verification: scripts/release-saga.py:227-230 enforces complete-org-first only while recording a later observation, after the package workflows have already crossed the public-feed boundary; no package-owning workflow invokes record-observed before its nuget.org push.",
+        "Verification: bash tests/release-saga/run.sh passed on e163d9cdee2a95ca0f3ad951dabbfce5affde146, but tests/release-saga/run.sh:35-69 manually copies and records the complete GitHub set before it records any nuget.org observation, so it does not exercise the production workflow topology that permits interleaving."
+      ],
+      "disposition": "follow-up",
+      "resolution_evidence": [
+        "Verification: unverified; repair must make the production irreversible phase set-level and prove no nuget.org push is reachable until all three manifest-bound packages are externally verified on GitHub Packages."
+      ]
+    },
+    {
+      "id": "M3-RELEASE-SAGA-CRIT-002",
+      "severity": "major",
+      "summary": "The durable retry/recovery journal and resume decisions exercised by the fixture are not wired into production, and preparing the same release again compares a timestamp-mutated manifest byte-for-byte.",
+      "evidence": [
+        "Verification: scripts/release-saga.py:145-164 puts createdAt and updatedAt timestamps in every newly prepared manifest, while .github/workflows/release-saga-prepare.yml:58-65 regenerates that manifest and uses cmp against the prior release asset; even an identical descriptor and package set therefore produces a different manifest on a later run.",
+        "Verification: rg -n 'record-failure|record-observed' .github/workflows found record-observed only in .github/workflows/release-saga-promote.yml:63-66 and no production record-failure call; that promotion job runs only when a package workflow concludes success at .github/workflows/release-saga-promote.yml:20-21.",
+        "Verification: each package workflow downloads the original draft manifest, asserts only its local package, and then uses dotnet nuget push --skip-duplicate; .github/workflows/release-coord-engine.yml:181-191,240-284, .github/workflows/release-kit.yml:274-284,329-353, and .github/workflows/release-drivers.yml:149-159,213-237 neither read durable per-feed state nor observe an existing remote package before retrying the push.",
+        "Verification: tests/release-saga/run.sh:33-54 calls record-observed and record-failure directly on one local manifest before resuming, but no workflow follows that sequence; the green fixture therefore establishes the library's possible state transitions, not production crash recovery or durable resumption."
+      ],
+      "disposition": "follow-up",
+      "resolution_evidence": [
+        "Verification: unverified; repair must persist partial/failure observations at the operational durable boundary, make preparation idempotent by immutable content identity rather than volatile state bytes, and make retry inspect/resume manifest-bound remote state before any push."
+      ]
+    },
+    {
+      "id": "M3-RELEASE-SAGA-CRIT-003",
+      "severity": "major",
+      "summary": "Publish and promotion do not bind the downloaded manifest's release identity, version, source SHA, and policy to the running workflow, and channel promotion has no cross-release monotonicity guard.",
+      "evidence": [
+        "Verification: scripts/release-saga.py:101-118 assert_bound validates the descriptor contentId and artifact hashes but accepts no expected release ID, version, source SHA, or policy argument; its command-line assert-artifacts surface at lines 306-307 exposes no such expectations.",
+        "Verification: the package workflows call that unparameterized assertion after downloading by computed version at .github/workflows/release-coord-engine.yml:188-191, .github/workflows/release-kit.yml:281-284, and .github/workflows/release-drivers.yml:156-159; none checks descriptor.sourceSha against GITHUB_SHA or the descriptor's version/release/policy against the workflow inputs.",
+        "Verification: .github/workflows/release-saga-promote.yml:37-41 likewise downloads by the checkout's computed version and only calls assert-artifacts, so the observer does not prove that the draft descriptor names github.event.workflow_run.head_sha before it records and promotes external state.",
+        "Verification: scripts/release-saga.py:268-291 prevents a second promotion only inside one manifest, while .github/workflows/release-saga-promote.yml:75-80 unconditionally marks that release latest; it never reads the existing stable-channel receipt or rejects promotion of an older/different release, so re-running a fully served older set can move the repository's latest/stable pointer backward."
+      ],
+      "disposition": "follow-up",
+      "resolution_evidence": [
+        "Verification: unverified; repair must bind all operational commands to explicit expected release/version/source/policy values and compare promotion against a durable repository-wide channel state with an idempotent, monotonic transition rule."
+      ]
+    },
+    {
+      "id": "M3-RELEASE-SAGA-CRIT-004",
+      "severity": "major",
+      "summary": "M3 has not yet satisfied its exit criterion or the explicit release obligation: the reviewed head records 0.54.0 as source-ahead while the last externally evidenced coherent release remains 0.53.0.",
+      "evidence": [
+        "Verification: docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md leaves M3 unchecked and requires one full coherent-set release to reach both feeds plus a forced mid-publish resume with identical hashes.",
+        "Verification: registry/dependencies.yml:900-902 records coord-engine version 0.54.0 but package-version 0.53.0 and explicitly says the source remains ahead until the saga publishes and externally verifies all three packages on both feeds.",
+        "Verification: `git tag --points-at e163d9cdee2a95ca0f3ad951dabbfce5affde146`, `git tag -l '*0.54.0*'`, and `git branch -r --contains e163d9cdee2a95ca0f3ad951dabbfce5affde146` produced no output in the supplied worktree; there is no repository evidence at the reviewed head of 0.54.0 release tags, a merged source, or a remotely published coherent set.",
+        "Verification: the base-to-head diff changes registry/dependencies.yml package-version only by leaving it at 0.53.0 and adds no completed release manifest, external feed hashes, workflow run IDs, or stable-channel receipt for 0.54.0."
+      ],
+      "disposition": "follow-up",
+      "resolution_evidence": [
+        "Verification: unverified; after the architecture defects are repaired, the milestone must land and perform the real 0.54.0 coherent-set release, externally verify identical manifest payloads on both feeds, persist its recovery/promotion evidence, and only then update package-version and roadmap evidence."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "e163d9cdee2a95ca0f3ad951dabbfce5affde146",
+    "verdict": "changes-required",
+    "unresolved_blocker_major": [
+      "M3-RELEASE-SAGA-CRIT-001",
+      "M3-RELEASE-SAGA-CRIT-002",
+      "M3-RELEASE-SAGA-CRIT-003",
+      "M3-RELEASE-SAGA-CRIT-004"
+    ]
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

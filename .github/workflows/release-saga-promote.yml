@@ -38,7 +38,14 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           mkdir -p artifacts/packages
           gh release download "coherent-set/v$version" --repo "$GITHUB_REPOSITORY" --dir artifacts/packages
+          python3 scripts/release-saga.py assert-identity --manifest artifacts/packages/release-manifest.json \
+            --release-id "github:$version" --version "$version" \
+            --source-sha "${{ github.event.workflow_run.head_sha }}" --policy-version release-saga/1
           python3 scripts/release-saga.py assert-artifacts --manifest artifacts/packages/release-manifest.json
+          journals=()
+          for journal in artifacts/packages/journal-*.json; do [ -f "$journal" ] && journals+=(--journal "$journal"); done
+          [ "${#journals[@]}" -eq 3 ]
+          python3 scripts/release-saga.py merge-journals --manifest artifacts/packages/release-manifest.json "${journals[@]}"
       - name: Observe both registries
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,8 +71,17 @@ jobs:
             --feed github "${observations_github[@]}" --detail "GitHub Packages external observation from run ${{ github.run_id }}"
           python3 scripts/release-saga.py record-observed --manifest artifacts/packages/release-manifest.json \
             --feed nuget "${observations_nuget[@]}" --detail "nuget.org external observation from run ${{ github.run_id }}"
+          previous_tag="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 100 \
+            --json tagName --jq '[.[] | select(.tagName | startswith("coherent-set/v"))][0].tagName // ""')"
+          previous_args=()
+          if [ -n "$previous_tag" ]; then
+            mkdir -p artifacts/previous
+            gh release download "$previous_tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern stable-channel.json --dir artifacts/previous
+            previous_args=(--previous-channel artifacts/previous/stable-channel.json)
+          fi
           python3 scripts/release-saga.py promote --manifest artifacts/packages/release-manifest.json \
-            --channel-output artifacts/packages/stable-channel.json
+            "${previous_args[@]}" --channel-output artifacts/packages/stable-channel.json
       - name: Publish manifest and stable-channel receipt
         env:
           GH_TOKEN: ${{ github.token }}

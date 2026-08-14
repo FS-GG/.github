@@ -4,14 +4,26 @@ on:
   pull_request:
     paths:
       - "scripts/release-saga.py"
+      - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
       - ".github/workflows/release-saga-tooling.yml"
+      - ".github/workflows/release-saga-prepare.yml"
+      - ".github/workflows/release-saga-promote.yml"
+      - ".github/workflows/release-coord-engine.yml"
+      - ".github/workflows/release-kit.yml"
+      - ".github/workflows/release-drivers.yml"
   push:
     branches: [main]
     paths:
       - "scripts/release-saga.py"
+      - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
       - ".github/workflows/release-saga-tooling.yml"
+      - ".github/workflows/release-saga-prepare.yml"
+      - ".github/workflows/release-saga-promote.yml"
+      - ".github/workflows/release-coord-engine.yml"
+      - ".github/workflows/release-kit.yml"
+      - ".github/workflows/release-drivers.yml"
 
 permissions:
   contents: read
