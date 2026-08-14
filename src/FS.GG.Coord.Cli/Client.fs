@@ -2535,16 +2535,20 @@ module Client =
                         comments
                         |> List.choose (fun comment ->
                             if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
-                                Some(comment.Body.Substring(StructuredReviewMarker.Length).Trim())
+                                Some(comment, comment.Body.Substring(StructuredReviewMarker.Length).Trim())
                             else None)
-                    let decoded = marked |> List.map Driver.decodeStructuredReview
-                    let decodeErrors = decoded |> List.choose (function Error error -> Some error | Ok _ -> None)
+                    let decoded = marked |> List.map (fun (comment, payload) -> comment, Driver.decodeStructuredReview payload)
+                    let decodeErrors = decoded |> List.choose (fun (_, result) -> match result with Error error -> Some error | Ok _ -> None)
                     if not (List.isEmpty decodeErrors) then
                         let detail = String.concat "; " decodeErrors
                         eprint $"fsgg-coord-engine: review record: existing structured ledger is unreadable: %s{detail}"
                         ExitError
                     else
-                        let existing = decoded |> List.choose Result.toOption
+                        let pairs =
+                            decoded
+                            |> List.choose (fun (comment, result) ->
+                                result |> Result.toOption |> Option.map (fun record -> comment, record))
+                        let existing = pairs |> List.map snd
                         let existingValidation =
                             if List.isEmpty existing then Ok []
                             else StructuredDecision.validateReviewLedger expectedSubject existing
@@ -2557,27 +2561,66 @@ module Client =
                             eprint $"fsgg-coord-engine: review record: subject must be '%s{expectedSubject}'."
                             ExitError
                         | Ok _ ->
-                            let previous = existing |> List.tryLast |> Option.map _.Digest
-                            let unsigned =
-                                { draft with
-                                    Revision = existing.Length + 1
-                                    PreviousDigest = previous
-                                    Digest = "" }
-                            let candidate = { unsigned with Digest = StructuredDecision.reviewDigest unsigned }
-                            match StructuredDecision.validateReviewLedger expectedSubject (existing @ [ candidate ]) with
-                            | Error errors ->
-                                let detail = String.concat "; " errors
+                            let latestInitialUrl =
+                                pairs
+                                |> List.rev
+                                |> List.tryPick (fun (comment, record) ->
+                                    if record.Kind = StructuredDecision.Initial then Some comment.Url else None)
+                            let precedingUrl = pairs |> List.tryLast |> Option.map (fun (comment, _) -> comment.Url)
+                            let backlinkErrors =
+                                match draft.Kind with
+                                | StructuredDecision.Initial ->
+                                    [ if draft.InitialReview.IsSome then yield "initial review records cannot name initialReview"
+                                      if draft.PrecedingReview.IsSome then yield "initial review records cannot name precedingReview" ]
+                                | StructuredDecision.Confirmation
+                                | StructuredDecision.Acceptance ->
+                                    [ if draft.InitialReview <> latestInitialUrl then
+                                          yield "initialReview must equal the actual current generation's initial comment URL"
+                                      if draft.PrecedingReview <> precedingUrl then
+                                          yield "precedingReview must equal the actual immediately preceding structured comment URL" ]
+                            if not (List.isEmpty backlinkErrors) then
+                                let detail = String.concat "; " backlinkErrors
                                 eprint $"fsgg-coord-engine: review record: %s{detail}"
                                 ExitError
-                            | Ok _ ->
-                                let body = StructuredReviewMarker + "\n" + Driver.encodeStructuredReview candidate
-                                let prTarget = { target with Number = pr }
-                                match Writes.postIssueComment ctx.Transport prTarget body with
-                                | Error error -> fail error
-                                | Ok commentId ->
-                                    let commentUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
-                                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-record-result/v2"; subject = expectedSubject; revision = candidate.Revision; digest = candidate.Digest; commentId = commentId; commentUrl = commentUrl |})
-                                    ExitGreen
+                            else
+                                let previous = existing |> List.tryLast |> Option.map _.Digest
+                                let unsigned =
+                                    { draft with
+                                        Revision = existing.Length + 1
+                                        PreviousDigest = previous
+                                        Digest = "" }
+                                let candidate = { unsigned with Digest = StructuredDecision.reviewDigest unsigned }
+                                match StructuredDecision.validateReviewLedger expectedSubject (existing @ [ candidate ]) with
+                                | Error errors ->
+                                    let detail = String.concat "; " errors
+                                    eprint $"fsgg-coord-engine: review record: %s{detail}"
+                                    ExitError
+                                | Ok _ ->
+                                    let body = StructuredReviewMarker + "\n" + Driver.encodeStructuredReview candidate
+                                    let pendingUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-pending"
+                                    let pendingId = comments |> List.map _.Id |> List.fold max 0L |> (+) 1L
+                                    let projected =
+                                        comments
+                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                    let effectiveValidation =
+                                        if candidate.Kind <> StructuredDecision.Acceptance then Ok None
+                                        else
+                                            Driver.parseEffectiveReviewComments candidate.HeadSha
+                                                (projected @ [ { Id = pendingId; Url = pendingUrl; Body = body } ])
+                                            |> Result.map Some
+                                    match effectiveValidation with
+                                    | Error errors ->
+                                        let detail = String.concat "; " errors
+                                        eprint $"fsgg-coord-engine: review record: resulting accepted chain is invalid: %s{detail}"
+                                        ExitError
+                                    | Ok _ ->
+                                        let prTarget = { target with Number = pr }
+                                        match Writes.postIssueComment ctx.Transport prTarget body with
+                                        | Error error -> fail error
+                                        | Ok commentId ->
+                                            let commentUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
+                                            printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-record-result/v2"; subject = expectedSubject; revision = candidate.Revision; digest = candidate.Digest; commentId = commentId; commentUrl = commentUrl; effectiveChainValidated = (candidate.Kind = StructuredDecision.Acceptance) |})
+                                            ExitGreen
             with error -> eprint $"fsgg-coord-engine: review record: %s{error.Message}"; ExitError
 
     let review (ctx: Context) (opts: Options) : int =

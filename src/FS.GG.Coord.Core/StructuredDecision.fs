@@ -121,19 +121,36 @@ module StructuredDecision =
         if List.isEmpty errors then Ok(List.last records) else Error errors
 
     let validateReviewLedger (expectedSubject: string) (records: ReviewRecord list) =
-        let firstCritic = records |> List.tryHead |> Option.map _.Critic
+        let mutable generationCritic: string option = None
+        let mutable expectedConfirmationRound = 0
         let errors =
             [ if List.isEmpty records then yield "structured review ledger is empty"
               match records with
               | first :: _ when first.Kind <> Initial -> yield "structured review ledger must begin with an initial record"
               | _ -> ()
               for index, record in records |> List.indexed do
-                  if index > 0 && record.Kind = Initial then
-                      yield "only revision 1 may be an initial review record"
-                  if index > 0 && records[index - 1].Kind = Acceptance then
-                      yield "no review record may follow host acceptance"
-                  if record.Kind = Acceptance && index <> records.Length - 1 then
-                      yield "host acceptance must be the final review record"
+                  let preceding = if index = 0 then None else Some records[index - 1]
+                  match record.Kind, preceding with
+                  | Initial, None ->
+                      generationCritic <- Some record.Critic
+                      expectedConfirmationRound <- 0
+                  | Initial, Some prior when prior.Kind = Acceptance ->
+                      generationCritic <- Some record.Critic
+                      expectedConfirmationRound <- 0
+                      if prior.HeadSha = record.HeadSha then
+                          yield "a new review generation requires head movement after host acceptance"
+                  | Initial, Some _ ->
+                      yield "a new initial review is allowed only after host acceptance"
+                  | (Confirmation | Acceptance), Some prior when prior.Kind = Acceptance ->
+                      yield "host acceptance may be followed only by a new initial review generation"
+                  | Confirmation, _ ->
+                      expectedConfirmationRound <- expectedConfirmationRound + 1
+                      if record.Round <> expectedConfirmationRound then
+                          yield $"confirmation round must be contiguous within its generation: expected %d{expectedConfirmationRound}"
+                  | Acceptance, _ -> ()
+                  | _, _ -> ()
+                  if record.Kind <> Initial && generationCritic <> Some record.Critic then
+                      yield "every record in one review generation must bind the same critic"
               for record in records do
                   if record.Schema <> ReviewSchema then yield $"schema must be '%s{ReviewSchema}'"
                   if record.Subject <> expectedSubject then yield "subject does not match the pull request"
@@ -157,13 +174,14 @@ module StructuredDecision =
                   | _ -> yield "review records must carry pass or changes-required"
                   if record.Kind = Initial && record.Round <> 0 then yield "initial review round must be zero"
                   if record.Kind = Confirmation && record.Round < 1 then yield "confirmation round must be positive"
+                  if record.Kind = Initial && (record.InitialReview.IsSome || record.PrecedingReview.IsSome) then
+                      yield "initial review records cannot carry review back-references"
                   if record.Kind <> Initial && record.InitialReview |> Option.exists String.IsNullOrWhiteSpace then
                       yield "initialReview must be non-empty when present"
                   if record.Kind <> Initial && record.InitialReview.IsNone then
                       yield "confirmation and acceptance records must bind the initial review"
                   if record.Kind <> Initial && record.PrecedingReview.IsNone then
                       yield "confirmation and acceptance records must bind the preceding review"
-                  if firstCritic <> Some record.Critic then yield "every record in one review ledger must bind the same critic"
                   if record.Kind = Acceptance && not (List.isEmpty record.AcceptedExceptions) then
                       yield "accepted exceptions belong to critic review records, not host acceptance"
                   if record.AcceptedExceptions |> List.exists String.IsNullOrWhiteSpace then

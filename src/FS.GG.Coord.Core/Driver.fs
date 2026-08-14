@@ -1081,6 +1081,14 @@ module Driver =
     let parseReviewCommentsWithFacts mechanicallyRequired trustedAudit comments =
         parseNormalized (Some(mechanicallyRequired, trustedAudit)) comments
 
+    /// Validate the one structured generation effective at `currentHead`. Accepted generations for
+    /// earlier heads remain append-only evidence but are retired by `liveReviewComments` before the
+    /// ordinary chain parser enforces exact URL/head linkage on the live generation.
+    let parseEffectiveReviewComments currentHead comments =
+        let live = liveReviewComments currentHead comments
+        if not (List.isEmpty live.StructuredErrors) then Error live.StructuredErrors
+        else parseReviewComments live.Live
+
     type Receipt =
         { ObservedAt: int64
           SourceSha: string

@@ -122,6 +122,11 @@ module Driver =
         comments: ReviewComment list ->
             Result<ReviewChain, string list>
 
+    /// Parse the structured review generation effective at the current PR head after retiring accepted
+    /// generations for older heads.
+    val parseEffectiveReviewComments:
+        currentHead: string -> comments: ReviewComment list -> Result<ReviewChain, string list>
+
     type Receipt =
         { ObservedAt: int64
           SourceSha: string

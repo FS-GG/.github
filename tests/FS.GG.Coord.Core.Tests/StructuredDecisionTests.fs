@@ -188,3 +188,35 @@ module StructuredDecisionTests =
             { Id = 2L; Url = "https://review/v2"; Body = "<!-- fsgg:review-decision/v2 -->\n{}" }
         Assert.True(Driver.parseReviewComments [ legacy; malformed ] |> Result.isError)
         Assert.NotEmpty((Driver.reviewPhaseFacts [ legacy; malformed ]).StructuredErrors)
+
+    [<Fact>]
+    let ``M4 accepted structured generation is retired after head movement and fresh review`` () =
+        let seal (record: StructuredDecision.ReviewRecord) =
+            { record with Digest = StructuredDecision.reviewDigest { record with Digest = "" } }
+        let initialA = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        let acceptedA =
+            review 2 (Some initialA.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0
+                (Some "https://review/1") (Some "https://review/1")
+        let initialB =
+            { review 3 (Some acceptedA.Digest) StructuredDecision.Initial StructuredDecision.Pass 0 None None with
+                HeadSha = String.replicate 40 "b"; Critic = "tern-43"; Digest = "" }
+            |> seal
+        let acceptedB =
+            { review 4 (Some initialB.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0
+                (Some "https://review/3") (Some "https://review/3") with
+                HeadSha = initialB.HeadSha; Critic = initialB.Critic; Digest = "" }
+            |> seal
+        let records = [ initialA; acceptedA; initialB; acceptedB ]
+        Assert.True(StructuredDecision.validateReviewLedger initialA.Subject records |> Result.isOk)
+        let comments =
+            records
+            |> List.mapi (fun index record ->
+                let id = int64 (index + 1)
+                ({ Id = id; Url = $"https://review/%d{index + 1}"
+                   Body = "<!-- fsgg:review-decision/v2 -->\n" + reviewJson record }: Driver.ReviewComment))
+        let live = Driver.liveReviewComments initialB.HeadSha comments
+        Assert.Single live.Retired |> ignore
+        Assert.Equal(2, live.Live.Length)
+        Assert.True(Driver.parseEffectiveReviewComments initialB.HeadSha comments |> Result.isOk)
+        let unmoved = { initialB with HeadSha = initialA.HeadSha; Digest = "" } |> seal
+        Assert.True(StructuredDecision.validateReviewLedger initialA.Subject [ initialA; acceptedA; unmoved ] |> Result.isError)

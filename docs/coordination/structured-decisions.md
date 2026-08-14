@@ -22,7 +22,14 @@ Each `<!-- fsgg:review-decision/v2 -->` pull-request comment carries schema
 exact 40-hex head SHA, minted critic identity, `pass`/`changes-required`/`accepted` verdict, accepted
 exception identifiers, runtime-route applicability evidence, policy version, record kind and round,
 review back-references, timestamp, and digest. One ledger begins with `initial`; confirmations and host
-acceptance bind the initial and immediately preceding review. All records bind the same critic.
+acceptance bind the initial and immediately preceding review. All records in one generation bind the
+same critic.
+
+If a PR head moves after acceptance, the accepted generation remains immutable and the next contiguous
+revision may start a new `initial` generation at the new head. A new generation is legal only immediately
+after acceptance and only when its head differs; its critic and confirmation rounds start fresh. The live
+reader retires accepted older-head generations and parses only the generation effective at the current
+head. This is an append-only recovery, not a rewrite or deletion.
 
 The adapter projects a validated v2 ledger into the existing pure review state machine. Any malformed or
 tampered v2 record blocks; it is never ignored in favor of a passing v1 marker.
@@ -61,9 +68,13 @@ scripts/fsgg-coord review record FS.GG.Repo#42 review-draft.json --pr 77 --json
 ```
 
 For `confirmation`, use a positive `round`, `pass` or `changes-required`, and bind both
-`initialReview` and `precedingReview` to the relevant comment URLs. For `acceptance`, use verdict
+`initialReview` and `precedingReview` to the exact GitHub comment URLs returned by the preceding writer
+calls. The writer compares both values with the actual structured comments and refuses a mismatch before
+posting. For `acceptance`, use verdict
 `accepted`, bind both URLs, and keep `acceptedExceptions` empty; exceptions accepted by the critic
-belong on the initial or confirmation record. The command rejects legacy v1 input before any write.
+belong on the initial or confirmation record. Every acceptance is preflighted through the live generation
+retirement and terminal-chain parser; successful output reports `effectiveChainValidated: true`. The
+command rejects legacy v1 input before any write.
 
 `review --json` emits `evidenceClassification` on every verdict so dual-read `equivalent` and
 `divergent` states are observable during M4–M5.
