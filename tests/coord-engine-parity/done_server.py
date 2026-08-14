@@ -58,10 +58,18 @@ def done_facts():
     """The one query behind `Done.facts`: #42 is CLOSED, closed by a MERGED PR #7, no children."""
     return {"data": {"repository": {"issue": {
         "number": ITEM, "state": "CLOSED",
-        "closedByPullRequestsReferences": {"nodes": [{"number": CLOSING_PR, "merged": True}]},
+        "closedByPullRequestsReferences": {"totalCount": 1, "nodes": [{
+            "number": CLOSING_PR,
+            "merged": True,
+            "closingIssuesReferences": {"totalCount": 1, "nodes": [{
+                "number": ITEM, "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"},
+            }]},
+        }]},
         "timelineItems": {"nodes": [{"closer": {"__typename": "PullRequest", "number": CLOSING_PR}}]},
         "subIssues": {"totalCount": 0, "nodes": []},
-        "projectItems": {"nodes": [{"project": {"number": 12}, "status": {"name": "In progress"}}]},
+        "projectItems": {"totalCount": 1, "nodes": [
+            {"project": {"number": 12}, "status": {"name": "In progress"}},
+        ]},
         "parent": None,
     }}}, "rateLimit": RATE}
 
