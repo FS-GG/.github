@@ -204,9 +204,15 @@
        A two-of-three set is permanent and uncompletable from a corrected tree — that is how 0.50.1 and
        0.50.5 became permanent gaps — so all three sibling tags publish at the SAME merge commit.
 
-       NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entries above record. -->
+       NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entries above record.
+
+       0.53.0 -> 0.54.0 is a MINOR. M1 adds explicit scheduling intent and the pure lifecycle
+       reducer; M2 makes complete GraphQL reads a typed boundary. Both are additive coordination
+       behavior shipped by FS.GG.Coord.Cli. M3 also replaces the three independent re-pack paths
+       with a content-addressed prepare/resume/promote saga. The source delta since the 0.53.0 tag
+       therefore requires a real coherent-set release, not a documentation-only rehearsal. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.53.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.54.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

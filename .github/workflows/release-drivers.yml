@@ -146,8 +146,20 @@ jobs:
       - name: Verify — derive, pack, content-address, fail-loud
         run: bash src/FS.GG.Drivers/verify-package.sh
 
-      - name: Pack
-        run: dotnet pack src/FS.GG.Drivers/FS.GG.Drivers.csproj -c Release -o artifacts/packages
+      - name: Use saga-prepared package (publish) or pack locally (dry run)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/packages
+          if [ "${{ steps.v.outputs.push }}" = true ]; then
+            gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --pattern "FS.GG.Drivers.$VERSION.nupkg" --pattern release-manifest.json --dir artifacts/packages
+            python3 scripts/release-saga.py assert-artifacts --manifest artifacts/packages/release-manifest.json --package FS.GG.Drivers
+          else
+            dotnet pack src/FS.GG.Drivers/FS.GG.Drivers.csproj -c Release -o artifacts/packages
+          fi
 
       # A PACKAGE THAT PACKS BUT DOES NOT RESOLVE FROM A REAL RESTORE is the failure mode here. The gate
       # above packs the nupkg; this drives it the way the SDD CLI will — a throwaway consumer with a real

@@ -178,8 +178,20 @@ jobs:
           dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release
           dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release
 
-      - name: Pack
-        run: dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release -o artifacts/packages
+      - name: Use saga-prepared package (publish) or pack locally (dry run)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/packages
+          if [ "${{ steps.v.outputs.push }}" = true ]; then
+            gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --pattern "FS.GG.Coord.Cli.$VERSION.nupkg" --pattern release-manifest.json --dir artifacts/packages
+            python3 scripts/release-saga.py assert-artifacts --manifest artifacts/packages/release-manifest.json --package FS.GG.Coord.Cli
+          else
+            dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release -o artifacts/packages
+          fi
 
       # A TOOL THAT PACKS BUT DOES NOT RUN IS THE FAILURE MODE HERE — the payload is a private
       # ProjectReference (FS.GG.Coord.Core) plus FSharp.Core, and `dotnet pack` succeeding says nothing

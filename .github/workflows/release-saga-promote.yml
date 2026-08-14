@@ -1,0 +1,80 @@
+name: release-saga-promote
+
+# Every successful package workflow asks this observer to reconcile durable external state. Earlier
+# runs may truthfully remain red/partial. The final one promotes the draft only after both feeds serve
+# the complete payload-identical set. No package is pushed here and no release is re-packed here.
+on:
+  workflow_run:
+    workflows: [release-coord-engine, release-kit, release-drivers]
+    types: [completed]
+
+permissions:
+  contents: write
+  packages: read
+
+concurrency:
+  group: release-saga-promotion-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  observe-and-promote:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Download prepared manifest and exact input artifacts
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/packages
+          gh release download "coherent-set/v$version" --repo "$GITHUB_REPOSITORY" --dir artifacts/packages
+          python3 scripts/release-saga.py assert-artifacts --manifest artifacts/packages/release-manifest.json
+      - name: Observe both registries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/observed/github artifacts/observed/nuget
+          github_base="$(curl -fsSL -u "$GITHUB_ACTOR:$GH_TOKEN" https://nuget.pkg.github.com/FS-GG/index.json | jq -r '.resources[] | select(."@type" == "PackageBaseAddress/3.0.0") | ."@id"' | head -1)"
+          [ -n "$github_base" ]
+          observations_github=(); observations_nuget=()
+          for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
+            lower="$(printf '%s' "$package" | tr '[:upper:]' '[:lower:]')"
+            github_path="artifacts/observed/github/$package.$VERSION.nupkg"
+            nuget_path="artifacts/observed/nuget/$package.$VERSION.nupkg"
+            curl --retry 12 --retry-delay 10 --retry-all-errors -fsSL -u "$GITHUB_ACTOR:$GH_TOKEN" \
+              "${github_base}${lower}/${VERSION}/${lower}.${VERSION}.nupkg" -o "$github_path"
+            curl --retry 12 --retry-delay 10 --retry-all-errors -fsSL \
+              "https://api.nuget.org/v3-flatcontainer/${lower}/${VERSION}/${lower}.${VERSION}.nupkg" -o "$nuget_path"
+            observations_github+=(--observed "$package=$github_path")
+            observations_nuget+=(--observed "$package=$nuget_path")
+          done
+          python3 scripts/release-saga.py record-observed --manifest artifacts/packages/release-manifest.json \
+            --feed github "${observations_github[@]}" --detail "GitHub Packages external observation from run ${{ github.run_id }}"
+          python3 scripts/release-saga.py record-observed --manifest artifacts/packages/release-manifest.json \
+            --feed nuget "${observations_nuget[@]}" --detail "nuget.org external observation from run ${{ github.run_id }}"
+          python3 scripts/release-saga.py promote --manifest artifacts/packages/release-manifest.json \
+            --channel-output artifacts/packages/stable-channel.json
+      - name: Publish manifest and stable-channel receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="coherent-set/v$VERSION"
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber \
+            artifacts/packages/release-manifest.json artifacts/packages/stable-channel.json
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest \
+            --title "FS.GG coherent set $VERSION" \
+            --notes "Both feeds serve all manifest-bound packages. See release-manifest.json and stable-channel.json for hashes, observations, recovery, and promotion receipt."

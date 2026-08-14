@@ -271,8 +271,20 @@ jobs:
       - name: Verify — derive, pack, materialize, fail-loud
         run: bash src/FS.GG.Kit/verify-package.sh
 
-      - name: Pack
-        run: dotnet pack src/FS.GG.Kit/FS.GG.Kit.csproj -c Release -o artifacts/packages
+      - name: Use saga-prepared package (publish) or pack locally (dry run)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/packages
+          if [ "${{ steps.v.outputs.push }}" = true ]; then
+            gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --pattern "FS.GG.Kit.$VERSION.nupkg" --pattern release-manifest.json --dir artifacts/packages
+            python3 scripts/release-saga.py assert-artifacts --manifest artifacts/packages/release-manifest.json --package FS.GG.Kit
+          else
+            dotnet pack src/FS.GG.Kit/FS.GG.Kit.csproj -c Release -o artifacts/packages
+          fi
 
       # A PACKAGE THAT PACKS BUT DOES NOT MATERIALIZE FROM A REAL RESTORE is the failure mode here. The gate
       # above invokes the materialize target directly; this drives it the way a receiver will — a throwaway

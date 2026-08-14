@@ -1,0 +1,26 @@
+name: release-saga-tooling
+
+on:
+  pull_request:
+    paths:
+      - "scripts/release-saga.py"
+      - "tests/release-saga/**"
+      - ".github/workflows/release-saga-tooling.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/release-saga.py"
+      - "tests/release-saga/**"
+      - ".github/workflows/release-saga-tooling.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  release-saga-tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise forced mid-publish recovery
+        run: bash tests/release-saga/run.sh

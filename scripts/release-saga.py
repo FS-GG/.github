@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+"""Content-addressed, resumable dual-feed release saga.
+
+The manifest is both the immutable release descriptor and the durable journal.  It never
+publishes by itself: feed credentials stay in the package-owning workflows.  Those workflows
+must publish the manifest-bound file and then record the externally served package here.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import pathlib
+import tempfile
+import xml.etree.ElementTree as ET
+import zipfile
+
+SCHEMA = "fsgg.release-saga/1"
+FEEDS = ("github", "nuget")
+
+
+def now() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def sha256(path: pathlib.Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def canonical(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
+def write_atomic(path: pathlib.Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def nuspec(path: pathlib.Path) -> tuple[str, str, str, list[dict[str, str]]]:
+    with zipfile.ZipFile(path) as archive:
+        names = [name for name in archive.namelist() if name.lower().endswith(".nuspec")]
+        if len(names) != 1:
+            raise ValueError(f"{path}: expected exactly one nuspec, found {len(names)}")
+        raw = archive.read(names[0])
+    root = ET.fromstring(raw)
+    metadata = next((node for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "metadata"), None)
+    if metadata is None:
+        raise ValueError(f"{path}: nuspec has no metadata")
+    scalar = {node.tag.rsplit("}", 1)[-1]: (node.text or "") for node in metadata}
+    dependencies = []
+    for node in metadata.iter():
+        if node.tag.rsplit("}", 1)[-1] == "dependency":
+            dependencies.append({"id": node.attrib.get("id", ""), "version": node.attrib.get("version", "")})
+    dependencies.sort(key=lambda row: (row["id"].lower(), row["version"]))
+    return scalar.get("id", ""), scalar.get("version", ""), scalar.get("releaseNotes", ""), dependencies
+
+
+def payload(path: pathlib.Path) -> dict[str, str]:
+    with zipfile.ZipFile(path) as archive:
+        return {
+            name: hashlib.sha256(archive.read(name)).hexdigest()
+            for name in sorted(archive.namelist())
+            # Registries may append a signature and regenerate the package-services metadata.
+            # Neither is producer payload; every other entry remains byte-bound to the manifest.
+            if name.lower() != ".signature.p7s" and not name.lower().endswith(".psmdcp") and not name.endswith("/")
+        }
+
+
+def load(path: pathlib.Path) -> dict:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != SCHEMA:
+        raise ValueError(f"{path}: expected schema {SCHEMA}")
+    return data
+
+
+def artifact_path(manifest_path: pathlib.Path, package: dict) -> pathlib.Path:
+    path = pathlib.Path(package["artifact"]["path"])
+    return path if path.is_absolute() else (manifest_path.parent / path).resolve()
+
+
+def assert_bound(manifest_path: pathlib.Path, data: dict, selected: set[str] | None = None) -> None:
+    descriptor = data["descriptor"]
+    expected_content = "sha256:" + hashlib.sha256(canonical(descriptor)).hexdigest()
+    if data.get("contentId") != expected_content:
+        raise ValueError("manifest descriptor drift: contentId does not match immutable descriptor")
+    known = {row["id"] for row in descriptor["packages"]}
+    if selected and not selected <= known:
+        raise ValueError(f"unknown package(s): {', '.join(sorted(selected - known))}")
+    for package in descriptor["packages"]:
+        if selected and package["id"] not in selected:
+            continue
+        path = artifact_path(manifest_path, package)
+        if not path.is_file():
+            raise ValueError(f"manifest-bound artifact is missing: {path}")
+        observed = sha256(path)
+        if observed != package["artifact"]["sha256"]:
+            raise ValueError(f"byte drift for {package['id']}: expected {package['artifact']['sha256']}, got {observed}")
+
+
+def package_map(data: dict) -> dict[str, dict]:
+    return {row["id"]: row for row in data["descriptor"]["packages"]}
+
+
+def command_prepare(args: argparse.Namespace) -> None:
+    root = pathlib.Path(args.artifact_dir).resolve()
+    expected = set(args.expected_package)
+    rows = []
+    for path in sorted(root.glob("*.nupkg")):
+        package_id, version, release_notes, dependencies = nuspec(path)
+        if package_id not in expected:
+            continue
+        if version != args.version:
+            raise ValueError(f"{path}: package version {version} != release version {args.version}")
+        rows.append({
+            "id": package_id,
+            "version": version,
+            "dependencies": dependencies,
+            "releaseNotesCharacters": len(release_notes),
+            "artifact": {
+                "path": os.path.relpath(path, pathlib.Path(args.output).resolve().parent),
+                "sha256": sha256(path),
+                "size": path.stat().st_size,
+                "payloadSha256": "sha256:" + hashlib.sha256(canonical(payload(path))).hexdigest(),
+            },
+        })
+    found = {row["id"] for row in rows}
+    if found != expected:
+        raise ValueError(f"coherent set mismatch: expected {sorted(expected)}, found {sorted(found)}")
+    rows.sort(key=lambda row: row["id"].lower())
+    descriptor = {
+        "releaseId": args.release_id,
+        "version": args.version,
+        "sourceSha": args.source_sha,
+        "policyVersion": args.policy_version,
+        "channel": "stable",
+        "feedOrder": list(FEEDS),
+        "packages": rows,
+    }
+    content_id = "sha256:" + hashlib.sha256(canonical(descriptor)).hexdigest()
+    state = {
+        "phase": "prepared",
+        "createdAt": now(),
+        "updatedAt": now(),
+        "preflight": {feed: {"state": "pending", "checkedAt": None, "constraints": {}} for feed in FEEDS},
+        "feeds": {
+            feed: {
+                "state": "pending",
+                "packages": {row["id"]: {"state": "pending", "inputSha256": row["artifact"]["sha256"], "externalSha256": None, "externalPayloadSha256": None, "observedAt": None} for row in rows},
+                "attempts": [],
+            } for feed in FEEDS
+        },
+        "recovery": {"resumptions": 0, "lastFailure": None},
+        "channelPromotion": {"state": "pending", "promotedAt": None, "receipt": None},
+    }
+    output = pathlib.Path(args.output).resolve()
+    write_atomic(output, {"schema": SCHEMA, "contentId": content_id, "descriptor": descriptor, "state": state})
+    print(content_id)
+
+
+def command_preflight(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data)
+    targets = FEEDS if args.feed == "both" else (args.feed,)
+    for feed in targets:
+        current = data["state"]["preflight"][feed]["state"]
+        if current == "passed":
+            continue
+        for package in data["descriptor"]["packages"]:
+            if package["artifact"]["size"] > args.max_package_bytes:
+                raise ValueError(f"{package['id']}: {feed} package size limit exceeded")
+            if package["releaseNotesCharacters"] > args.max_release_notes_characters:
+                raise ValueError(f"{package['id']}: {feed} PackageReleaseNotes limit exceeded")
+        data["state"]["preflight"][feed] = {
+            "state": "passed", "checkedAt": now(),
+            "constraints": {"maxPackageBytes": args.max_package_bytes, "maxReleaseNotesCharacters": args.max_release_notes_characters},
+        }
+    data["state"]["updatedAt"] = now()
+    write_atomic(path, data)
+    print("preflight passed: " + ",".join(targets))
+
+
+def command_assert(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data, set(args.package) if args.package else None)
+    print("manifest-bound artifact hashes verified")
+
+
+def command_failure(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data)
+    feed = data["state"]["feeds"][args.feed]
+    if feed["state"] == "verified":
+        raise ValueError(f"{args.feed}: cannot record failure after verified completion")
+    stamp = now()
+    feed["attempts"].append({"at": stamp, "outcome": "failure", "package": args.package, "detail": args.detail})
+    feed["state"] = "partial" if any(row["state"] == "verified" for row in feed["packages"].values()) else "pending"
+    data["state"]["recovery"]["lastFailure"] = {"feed": args.feed, "package": args.package, "at": stamp, "detail": args.detail}
+    data["state"]["updatedAt"] = stamp
+    write_atomic(path, data)
+    print(f"failure journaled for {args.feed}/{args.package}")
+
+
+def command_record(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data)
+    if data["state"]["preflight"][args.feed]["state"] != "passed":
+        raise ValueError(f"{args.feed}: preflight has not passed")
+    if args.feed == "nuget" and data["state"]["feeds"]["github"]["state"] != "verified":
+        raise ValueError("nuget: org-first policy requires the complete GitHub Packages set")
+    packages = package_map(data)
+    observations: dict[str, pathlib.Path] = {}
+    for item in args.observed:
+        package_id, separator, value = item.partition("=")
+        if not separator:
+            raise ValueError("--observed must be PACKAGE=PATH")
+        observations[package_id] = pathlib.Path(value).resolve()
+    feed = data["state"]["feeds"][args.feed]
+    previously_partial = feed["state"] == "partial" or data["state"]["recovery"]["lastFailure"] is not None
+    stamp = now()
+    for package_id, observed in observations.items():
+        if package_id not in packages:
+            raise ValueError(f"unknown observed package: {package_id}")
+        if not observed.is_file():
+            raise ValueError(f"observed package does not exist: {observed}")
+        original = artifact_path(path, packages[package_id])
+        if payload(original) != payload(observed):
+            raise ValueError(f"externally observed payload differs for {package_id} on {args.feed}")
+        row = feed["packages"][package_id]
+        external_hash = sha256(observed)
+        external_payload_hash = "sha256:" + hashlib.sha256(canonical(payload(observed))).hexdigest()
+        if row["state"] == "verified" and (row["externalSha256"] != external_hash or row["externalPayloadSha256"] != external_payload_hash):
+            raise ValueError(f"non-monotonic external observation for {package_id} on {args.feed}")
+        row.update({"state": "verified", "externalSha256": external_hash, "externalPayloadSha256": external_payload_hash, "observedAt": stamp})
+        feed["attempts"].append({"at": stamp, "outcome": "verified", "package": package_id, "detail": args.detail})
+    feed["state"] = "verified" if all(row["state"] == "verified" for row in feed["packages"].values()) else "partial"
+    if previously_partial:
+        data["state"]["recovery"]["resumptions"] += 1
+    if all(data["state"]["feeds"][feed_name]["state"] == "verified" for feed_name in FEEDS):
+        data["state"]["phase"] = "feeds-complete"
+    elif data["state"]["feeds"]["github"]["state"] == "verified":
+        data["state"]["phase"] = "org-complete"
+    data["state"]["updatedAt"] = stamp
+    write_atomic(path, data)
+    print(f"recorded {len(observations)} observation(s); {args.feed}={feed['state']}")
+
+
+def command_promote(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data)
+    incomplete = [feed for feed in FEEDS if data["state"]["feeds"][feed]["state"] != "verified"]
+    if incomplete:
+        raise ValueError("stable promotion refused; incomplete feeds: " + ", ".join(incomplete))
+    existing = data["state"]["channelPromotion"]
+    if existing["state"] == "promoted":
+        if existing["receipt"]["contentId"] != data["contentId"]:
+            raise ValueError("stable channel already promoted to different bytes")
+        if args.channel_output:
+            write_atomic(pathlib.Path(args.channel_output).resolve(), existing["receipt"])
+        print("stable channel already promoted to these bytes")
+        return
+    stamp = now()
+    receipt = {"contentId": data["contentId"], "version": data["descriptor"]["version"], "sourceSha": data["descriptor"]["sourceSha"], "promotedAt": stamp}
+    data["state"]["channelPromotion"] = {"state": "promoted", "promotedAt": stamp, "receipt": receipt}
+    data["state"]["phase"] = "promoted"
+    data["state"]["updatedAt"] = stamp
+    write_atomic(path, data)
+    if args.channel_output:
+        write_atomic(pathlib.Path(args.channel_output).resolve(), receipt)
+    print("stable channel promoted")
+
+
+def parser() -> argparse.ArgumentParser:
+    top = argparse.ArgumentParser()
+    commands = top.add_subparsers(dest="command", required=True)
+    prepare = commands.add_parser("prepare")
+    prepare.add_argument("--release-id", required=True); prepare.add_argument("--version", required=True)
+    prepare.add_argument("--source-sha", required=True); prepare.add_argument("--policy-version", required=True)
+    prepare.add_argument("--artifact-dir", required=True); prepare.add_argument("--expected-package", action="append", required=True)
+    prepare.add_argument("--output", required=True); prepare.set_defaults(run=command_prepare)
+    preflight = commands.add_parser("preflight")
+    preflight.add_argument("--manifest", required=True); preflight.add_argument("--feed", choices=("both",) + FEEDS, required=True)
+    preflight.add_argument("--max-package-bytes", type=int, default=250_000_000)
+    preflight.add_argument("--max-release-notes-characters", type=int, default=35_000); preflight.set_defaults(run=command_preflight)
+    assertion = commands.add_parser("assert-artifacts")
+    assertion.add_argument("--manifest", required=True); assertion.add_argument("--package", action="append"); assertion.set_defaults(run=command_assert)
+    failure = commands.add_parser("record-failure")
+    failure.add_argument("--manifest", required=True); failure.add_argument("--feed", choices=FEEDS, required=True)
+    failure.add_argument("--package", required=True); failure.add_argument("--detail", required=True); failure.set_defaults(run=command_failure)
+    record = commands.add_parser("record-observed")
+    record.add_argument("--manifest", required=True); record.add_argument("--feed", choices=FEEDS, required=True)
+    record.add_argument("--observed", action="append", required=True); record.add_argument("--detail", required=True); record.set_defaults(run=command_record)
+    promote = commands.add_parser("promote")
+    promote.add_argument("--manifest", required=True); promote.add_argument("--channel-output"); promote.set_defaults(run=command_promote)
+    return top
+
+
+def main() -> int:
+    try:
+        args = parser().parse_args()
+        args.run(args)
+        return 0
+    except (OSError, ValueError, KeyError, json.JSONDecodeError, zipfile.BadZipFile, ET.ParseError) as error:
+        print(f"release-saga: {error}", file=os.sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
