@@ -19,6 +19,18 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **coord-engine coherent set `0.55.0` published and adopted**
+  (owner `github`; [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.55.0);
+  [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
+  `package-version` catches up with source `0.55.0` after stable promotion. Prepare run
+  `31821043249` packed the set once from merged source
+  `69b59c2ec718ade12d8c7c2deec298e8ada65c51`; manifest-bound resumptions
+  `31821910308`, `31821912638`, and `31821914724` verified both feeds, and promotion observer
+  `31822085433` passed. Content ID is
+  `sha256:9c54b273b225b4d0a2a8b52ac8b7bc20b10b154e34469b565a3087761c8aca0a`; final manifest and
+  stable-channel SHA-256 values are `71935c0f629969f3f1bd9e05a3c77ba019ce88274a89b3977019233121589415`
+  and `70eb50bdc007e3873459f084ecfd98333e8d41651519065b11a6a518136eb91e`.
+
 - **2026-08-14** — **coord-engine source `0.55.0`: revision-bound structured decisions**
   (owner `github`; [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
   The source scalar moves from `0.54.0` to stable MINOR `0.55.0`; `package-version` remains
