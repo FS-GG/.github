@@ -21,8 +21,8 @@ ignore the gate.
 
 ## Decision
 
-`scripts/check-prose-citations.py` gates tracked, live Markdown under `docs/`. A path is local only
-when it begins with a repository-owned root/namespace. A cross-repository citation uses a URL or the
+`scripts/check-prose-citations.py` gates every tracked live Markdown file. A path is local only when
+its top-level root (or `src/` namespace) is present in the tracked repository. A cross-repository citation uses a URL or the
 explicit `OWNER/REPOSITORY@REVISION:path:line` form; a bare basename is not guessed to be local.
 The target must occur in `git ls-files`: merely existing in a developer's worktree is insufficient.
 
@@ -46,6 +46,8 @@ must return no-verdict rather than vacuous green.
 
 ## Consequences
 
-The gate has a deliberately small, repeatable claim and explicit false-positive boundary. It will not
+The workflow is unfiltered because a future tracked Markdown root is part of the subject; enumerating
+today's roots in trigger filters would make the gate fail open on tomorrow's. The gate has a
+deliberately small, repeatable claim and explicit false-positive boundary. It will not
 catch remote-body drift or semantic prose drift; review evidence owns those classes until a structured
 source exists. Expanding the parser requires a new measurement and an inversion for the added grammar.

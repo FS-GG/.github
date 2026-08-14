@@ -892,15 +892,13 @@ fi
 # coverage was measured in both directions before this number moved: `tests/skill-union/skillmirror-
 # oracle.fsx` was deleted from that workflow's two filters, rule (c) named it as the omission, and it
 # was restored.
-# 20 -> 21 on 2026-08-14 (#2587): prose-citations.yml names its gate, whose composed subject is the
-# live docs tree. The prose-citations fixture independently mutates that subject and proves it reds.
 # The number is the point: it is a census, not a threshold, so it moves only with a reviewed change
 # that adds or removes a declaration, and a workflow that silently STOPS naming its gate still reds.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "21" ]; then
+if [ "${s:-0}" = "20" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 21 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 20 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"

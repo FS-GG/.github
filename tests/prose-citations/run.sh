@@ -53,6 +53,13 @@ git -C "$EXTERNAL" add docs/guide/live.md
 expect "bare basenames, foreign source namespaces, and qualified repo citations are ignored" \
   0 "1 local citations" "$EXTERNAL"
 
+OTHER_ROOT="$WORK/other-root"; fixture "$OTHER_ROOT"
+mkdir -p "$OTHER_ROOT/.fsgg"
+printf '# policy\n\nSee `scripts/live.py:1` and `.fsgg/removed.yml:1`.\n' > "$OTHER_ROOT/.fsgg/policy.md"
+git -C "$OTHER_ROOT" add .fsgg/policy.md
+expect "a tracked Markdown root outside docs is audited, and its missing local target is red" \
+  1 ".fsgg/removed.yml:1 does not name a tracked file" "$OTHER_ROOT"
+
 HISTORY="$WORK/history"; fixture "$HISTORY"
 mkdir -p "$HISTORY/docs/adr" "$HISTORY/docs/reports"
 printf '# old decision\n\n`scripts/gone.py:4`\n' > "$HISTORY/docs/adr/0001-old.md"

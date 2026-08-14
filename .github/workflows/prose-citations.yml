@@ -1,19 +1,11 @@
 name: prose-citations
 
 on:
+  # The subject is every tracked Markdown file, including a future top-level root. An unfiltered
+  # trigger is the only closed-world selection; a hand-maintained roots list would recreate #2587.
   pull_request:
-    paths:
-      - "docs/**"
-      - "scripts/check-prose-citations.py"
-      - "tests/prose-citations/**"
-      - ".github/workflows/prose-citations.yml"
   push:
     branches: [main]
-    paths:
-      - "docs/**"
-      - "scripts/check-prose-citations.py"
-      - "tests/prose-citations/**"
-      - ".github/workflows/prose-citations.yml"
   workflow_dispatch:
 
 permissions:

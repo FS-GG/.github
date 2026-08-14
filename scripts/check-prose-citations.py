@@ -2,7 +2,7 @@
 """Reject broken repository-local ``path:line`` citations in live documentation.
 
 The gate intentionally answers one narrow question: does a path-shaped citation in live
-``docs/`` prose name a file tracked by this repository? It does not check line ranges, parse
+tracked Markdown prose name a file tracked by this repository? It does not check line ranges, parse
 free-form counts, or infer that a bare basename belongs to this repository. ADRs and dated reports
 are historical records and are excluded.
 
@@ -23,15 +23,7 @@ import sys
 from pathlib import Path
 
 OK, FINDING, NO_VERDICT = 0, 1, 3
-DOC_SURFACE = ("docs",)
 EXEMPT_PREFIXES = ("docs/adr/", "docs/reports/")
-PATHS_SUBJECT = DOC_SURFACE
-
-LOCAL_PREFIXES = (
-    ".agents/", ".claude/", ".github/", "dist/", "docs/", "policy/", "profile/",
-    "readiness/", "registry/", "scripts/", "tests/", "work/", "src/FS.GG.Coord.",
-    "src/FS.GG.Drivers/", "src/FS.GG.Kit/",
-)
 QUALIFIED = re.compile(
     r"(?<![\w.-])[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[^\s:`]+:"
     r"(?:\.?[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+:\d+(?:-\d+)?"
@@ -56,8 +48,16 @@ def normalize(raw: str) -> str:
     return raw[2:] if raw.startswith("./") else raw
 
 
-def is_local(path: str) -> bool:
-    return path.startswith(LOCAL_PREFIXES)
+def local_prefixes(tracked: set[str]) -> tuple[str, ...]:
+    """Derive owned roots from git, while keeping foreign ``src/X`` references out of scope."""
+    top_levels = {path.split("/", 1)[0] + "/" for path in tracked if "/" in path}
+    top_levels.discard("src/")
+    source_namespaces = {
+        "/".join(path.split("/", 2)[:2]) + "/"
+        for path in tracked
+        if path.startswith("src/") and path.count("/") >= 2
+    }
+    return tuple(sorted(top_levels | source_namespaces))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -72,12 +72,12 @@ def main(argv: list[str] | None = None) -> int:
         return NO_VERDICT
 
     subjects = sorted(path for path in tracked if path.endswith(".md")
-                      and path.startswith("docs/")
                       and not path.startswith(EXEMPT_PREFIXES))
     if not subjects:
         print("::error::prose-citations: no live tracked Markdown subjects", file=sys.stderr)
         return NO_VERDICT
 
+    owned = local_prefixes(tracked)
     examined = 0
     findings: list[str] = []
     for relative in subjects:
@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             line = QUALIFIED.sub("", original)
             for match in CITATION.finditer(line):
                 target = normalize(match.group("path"))
-                if not is_local(target):
+                if not target.startswith(owned):
                     continue
                 examined += 1
                 if target not in tracked:
