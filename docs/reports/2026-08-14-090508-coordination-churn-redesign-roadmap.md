@@ -184,15 +184,75 @@ The goal is not less evidence. It is fewer independently mutable descriptions of
 
 Durations are sequencing estimates, not calendar commitments. Each milestone has an exit condition that prevents an incomplete migration from becoming another permanent compatibility layer.
 
-| Milestone | Target | Deliverables | Exit criteria |
-| --- | --- | --- | --- |
-| M0 — stabilize | 0–2 days | Land bounded release, feed-coherence, project-audit, engine-pin, and claim-auth repairs; triage lint; pause new process features; capture replay fixtures and baseline metrics | Main has no standing red checks; open repair PRs are mergeable or explicitly superseded; baseline is reproducible |
-| M1 — intent/status split | Days 3–7 | Add `SchedulingIntent`; implement pure reducer; shadow old/new projections; migrate deliberate parks | Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch |
-| M2 — complete-read boundary | Week 1 | Add typed GraphQL adapter and generic connection draining; migrate all production readers; add fault-injection tests | No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success |
-| M3 — release saga | Week 2 | Add release manifest; pack once; validate exact artifacts; add resumable orchestration and coherent-channel promotion | One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes |
-| M4 — structured decisions | Weeks 2–3 | Add route and review revision records; dual-read legacy evidence; migrate active items | Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision |
-| M5 — evidence and CI consolidation | Weeks 3–4 | Introduce compact evidence manifests and artifact retention; generate skill projections; consolidate policy runners and subject discovery | Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss |
-| M6 — retire compatibility paths | After 3 stable cycles | Remove old reducer, raw GraphQL helpers, legacy body hashes, and superseded release paths; document operations | Three consecutive operating cycles meet the health measures below; no same-class successor issue remains open |
+- [ ] **M0 — stabilize**
+  - Target: 0–2 days
+  - Deliverables: Land bounded release, feed-coherence, project-audit, engine-pin, and claim-auth repairs; triage lint; pause new process features; capture replay fixtures and baseline metrics
+  - Exit criteria: Main has no standing red checks; open repair PRs are mergeable or explicitly superseded; baseline is reproducible
+
+- [ ] **M1 — intent/status split**
+  - Target: Days 3–7
+  - Deliverables: Add `SchedulingIntent`; implement pure reducer; shadow old/new projections; migrate deliberate parks
+  - Exit criteria: Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch
+
+- [ ] **M2 — complete-read boundary**
+  - Target: Week 1
+  - Deliverables: Add typed GraphQL adapter and generic connection draining; migrate all production readers; add fault-injection tests
+  - Exit criteria: No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success
+
+- [ ] **M3 — release saga**
+  - Target: Week 2
+  - Deliverables: Add release manifest; pack once; validate exact artifacts; add resumable orchestration and coherent-channel promotion
+  - Exit criteria: One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes
+
+- [ ] **M4 — structured decisions**
+  - Target: Weeks 2–3
+  - Deliverables: Add route and review revision records; dual-read legacy evidence; migrate active items
+  - Exit criteria: Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision
+
+- [ ] **M5 — evidence and CI consolidation**
+  - Target: Weeks 3–4
+  - Deliverables: Introduce compact evidence manifests and artifact retention; generate skill projections; consolidate policy runners and subject discovery
+  - Exit criteria: Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss
+
+- [ ] **M6 — retire compatibility paths**
+  - Target: After 3 stable cycles
+  - Deliverables: Remove old reducer, raw GraphQL helpers, legacy body hashes, and superseded release paths; document operations
+  - Exit criteria: Three consecutive operating cycles meet the health measures below; no same-class successor issue remains open
+
+### M0 stabilization evidence
+
+- **Temporary feature freeze:** From the start of M0 until its exit criteria are
+  satisfied, this repository accepts only bounded stabilization repairs and the
+  integration needed to prove them. New process features resume with M1; M0 does
+  not extend the current process machinery.
+- **Baseline fixture:** The report header fixes the source baseline at
+  `cb33188c`, the evidence window at 2026-08-10 through 2026-08-14, and the
+  point-in-time issue, PR, board, release, workflow, source, test, and evidence
+  measurements in the first table. The issue and PR values are reproduced by
+  `gh api -X GET search/issues -f 'q=repo:FS-GG/.github is:<issue|pr> created:2026-08-09T22:00:00Z..2026-08-14T07:05:08Z <state>' -f per_page=1 --jq .total_count`,
+  using `is:closed` for closed issues and `is:merged`, `is:open`, or
+  `is:closed -is:merged` for the three PR dispositions. The Git-backed
+  workflow/checker counts are
+  reproducible with `git ls-tree -r --name-only cb33188c .github/workflows` and
+  `git ls-tree -r --name-only cb33188c scripts | rg '^scripts/check-'`. GitHub
+  measurements remain timestamped observations; later live reads are comparison
+  samples, not rewrites of this baseline.
+- **Replay fixtures:** The bounded-release failure is preserved at
+  `tests/engine-release-notes/regression/release-notes-at-2579.xmlfragment` and
+  exercised by `tests/engine-release-notes/run.sh`. Feed split-brain and
+  ordering cases are exercised by `tests/feed-coherence/run.sh` and
+  `tests/feed-coherence/feed_reader_cases.py`. Engine-pin partial-release cases
+  are exercised by `tests/engine-pin/run.sh`. Claim-authorization consolidation
+  cases use the production-derived corpus in
+  `tests/FS.GG.Coord.Cli.Tests/consolidation-corpus/` and
+  `ConsolidationTaxTests.fs`.
+- **Lint triage:** Pinned ShellCheck 0.11.0 reports no repository finding through
+  `tests/shell-lint/run.sh` and `scripts/lint-shell.sh`; no lint debt is deferred
+  by M0.
+- **Lifecycle exception:** This kit-source tree has no usable SDD cycle or
+  feedback-report machinery. The user-authorized break-glass integration records
+  no fabricated SDD, cycle, or feedback artifact; independent tests, critique,
+  GitHub checks, and exact merged-head inspection are the acceptance evidence.
 
 ### Cross-cutting health measures
 
