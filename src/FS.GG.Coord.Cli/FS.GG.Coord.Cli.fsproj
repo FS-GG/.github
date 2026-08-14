@@ -167,28 +167,19 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.53.0 — consolidation no longer invalidates a delivery-route decision, and the coherent set recovers from the incomplete 0.52.0 publish.
+    <PackageReleaseNotes>0.54.0 — scheduling intent, complete GitHub reads, and coherent-set publication now cross typed, resumable boundaries.
 
-WHAT MOVED, AND WHY IT IS A MINOR. `delivery-route record` now writes an external locator for the
-exact subject lines the receipt judged. On read, the existing subject remains authorized when those
-lines survive byte-identically and in the same order among additive prose. The matched current lines
-are re-hashed at full SHA-256 width against the receipt's `subjectRevision`; the locator can select a
-candidate but cannot grant authorization. Scope-changing edits to judged lines remain stale.
+WHAT MOVED, AND WHY IT IS A MINOR. Scheduling intent is now explicit and the lifecycle projection is
+a pure reducer, so deliberate Backlog and human-park choices survive reconciliation without another
+status exception. Production GitHub readers now consume complete typed results through one adapter;
+raw GraphQL envelopes and partial connections no longer escape as successful domain reads.
 
-The additive arm refuses an empty judged subject before alignment, so an empty receipt cannot match
-an arbitrary later body vacuously. It diagnoses that case separately from an ordinary stale receipt.
-Claim/take mutation reports when it accepted an additive match; high-volume scheduling reads stay
-quiet. Production-derived consolidation bodies and explicit collision, empty-subject, semantic-edit,
-and notice controls preserve these boundaries.
-
-The existing CommonMark four-space indent rule is also held by one shared corpus consumed through
-both the F# delivery parser and Python package-coherence parser. That is regression hardening, not a
-behavior change.
-
-RELEASE RECOVERY. Version 0.52.0 is not a coherent release: `FS.GG.Kit` and `FS.GG.Drivers` reached
-both feeds, while `FS.GG.Coord.Cli` reached only the org feed after nuget.org rejected its oversized
-release notes. This 0.53.0 cut replaces the accumulated listing history with this bounded entry,
-retains permanent advisories separately, and publishes the three packages from one source commit.
+RELEASE SAGA. The coherent set is packed once at one source SHA into a content-addressed manifest.
+The package-owning workflows retain their trusted-publishing identities but consume those exact
+prepared bytes, publish GitHub Packages first and nuget.org second, and never re-pack on retry. A
+separate observer records externally served archive and payload hashes, durable retry/recovery state,
+and promotes the stable release only after both feeds serve all three members. A forced failure after
+the first irreversible push proves restart from the same manifest and rejects byte drift.
 
 WHY THIS PACKAGE MOVES WITH THE KIT. The three packages resolve one scalar (`FsggCoherentSetVersion`,
 `Directory.Build.props`) by construction (.github#2402), so the coordination kit and drivers ship at
@@ -201,12 +192,8 @@ published version's own notes remain readable, permanently, on that version's ow
 https://www.nuget.org/packages/FS.GG.Coord.Cli — and each cut's evidence is recorded in
 `registry/dependencies.yml` and `registry/CHANGELOG.md` at https://github.com/FS-GG/.github.
 
-WHY THIS FIELD NO LONGER ACCUMULATES. Until 0.52.0 these notes carried every prior version's entry,
-so they grew monotonically and crossed nuget.org's 35,000-character limit at 37,279 evaluated
-characters. The 0.52.0 cut published `FS.GG.Kit` and `FS.GG.Drivers` to both feeds and was then
-refused by nuget.org with a hard 400 on this package alone. Re-shipping a listing's own history in
-every LATER listing duplicated what the registry already serves; a correction ABOUT an earlier
-listing is what only a later one can carry, and that is what the standing advisories above are.
+The release notes remain bounded: previous-version history stays on the registry listings and only
+the standing safety advisories carry forward.
 </PackageReleaseNotes>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

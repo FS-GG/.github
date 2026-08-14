@@ -1,0 +1,87 @@
+name: release-saga-prepare
+
+# Preparation is intentionally separate from publishing. It packs every coherent-set member once,
+# validates those exact archives against both feeds' constraints, and places the immutable inputs in
+# a draft release. The three package-owning workflows retain their existing Trusted Publishing
+# identities and consume these bytes. Publishing starts only when an operator pushes all three tags.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Resolve stable coherent-set version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
+          case "$version" in ''|*-*) echo "::error::a non-empty stable version is required"; exit 1;; esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build and test release source
+        run: |
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release
+          dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release
+      - name: Pack coherent set exactly once
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/packages
+          dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore -o artifacts/packages
+          dotnet pack src/FS.GG.Kit/FS.GG.Kit.csproj -c Release -o artifacts/packages
+          dotnet pack src/FS.GG.Drivers/FS.GG.Drivers.csproj -c Release -o artifacts/packages
+      - name: Create and preflight durable release manifest
+        run: |
+          set -euo pipefail
+          previous="$(awk '/^  - id: coord-engine$/{found=1} found && /^[[:space:]]+package-version:/{gsub(/"/, "", $2); print $2; exit}' registry/dependencies.yml)"
+          [ -n "$previous" ]
+          python3 scripts/release-saga.py prepare \
+            --release-id "github:${{ steps.version.outputs.version }}" \
+            --version "${{ steps.version.outputs.version }}" --source-sha "$GITHUB_SHA" \
+            --policy-version release-saga/1 --previous-version "$previous" --artifact-dir artifacts/packages \
+            --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit \
+            --expected-package FS.GG.Drivers --output artifacts/packages/release-manifest.json
+          python3 scripts/release-saga.py preflight --manifest artifacts/packages/release-manifest.json --feed both
+      - name: Create immutable draft release inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="coherent-set/v$VERSION"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            mkdir -p /tmp/prior
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir /tmp/prior
+            test "$(jq -r .contentId /tmp/prior/release-manifest.json)" = "$(jq -r .contentId artifacts/packages/release-manifest.json)"
+            for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
+              cmp "/tmp/prior/$package.$VERSION.nupkg" "artifacts/packages/$package.$VERSION.nupkg"
+            done
+            echo "Existing draft contains the identical manifest-bound bytes; no asset was replaced."
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft \
+              --title "FS.GG coherent set $VERSION (publishing)" \
+              --notes "Prepared content-addressed release. This remains draft until both feeds serve all three manifest-bound artifacts."
+            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" artifacts/packages/*.nupkg artifacts/packages/release-manifest.json
+          fi
+          {
+            echo 'Preparation complete. To start the irreversible phase, push these three refs together:'
+            echo "git tag kit/v$VERSION $GITHUB_SHA"
+            echo "git tag drivers/v$VERSION $GITHUB_SHA"
+            echo "git tag coord-engine/v$VERSION $GITHUB_SHA"
+            echo "git push origin kit/v$VERSION drivers/v$VERSION coord-engine/v$VERSION"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: coherent-set-${{ steps.version.outputs.version }}
+          path: artifacts/packages/
+          if-no-files-found: error
+          retention-days: 90

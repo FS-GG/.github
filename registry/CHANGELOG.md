@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **coord-engine source `0.54.0`: intent/read boundaries and release saga**
+  (owner `github`; [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
+  The source scalar moves from `0.53.0` to stable MINOR `0.54.0`; `package-version` remains
+  `0.53.0` until the content-addressed saga has published the complete coherent set to GitHub
+  Packages first and nuget.org second and recorded externally observed payload hashes. M1 and M2
+  changed engine behavior after the `0.53.0` tag, so this is a real release obligation rather than
+  a workflow-only rehearsal.
+
 - **2026-08-14** — **registry: adopt the recovered coherent set `0.53.0` and move both `coord-engine` scalars**
   (owner `github`; [PR #2591](https://github.com/FS-GG/.github/pull/2591); refs
   [#2588](https://github.com/FS-GG/.github/pull/2588),

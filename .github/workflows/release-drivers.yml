@@ -61,7 +61,7 @@ jobs:
     # Least-privilege: only this job gains packages: write, and the push uses the run-scoped GITHUB_TOKEN,
     # never a PAT. id-token: write mints the GitHub OIDC token for nuget.org Trusted Publishing (ADR-0013).
     permissions:
-      contents: read
+      contents: write     # durable per-package saga journal assets on the prepared draft release
       packages: write
       id-token: write
     steps:
@@ -146,8 +146,20 @@ jobs:
       - name: Verify — derive, pack, content-address, fail-loud
         run: bash src/FS.GG.Drivers/verify-package.sh
 
-      - name: Pack
-        run: dotnet pack src/FS.GG.Drivers/FS.GG.Drivers.csproj -c Release -o artifacts/packages
+      - name: Use saga-prepared package (publish) or pack locally (dry run)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/packages
+          if [ "${{ steps.v.outputs.push }}" = true ]; then
+            gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --pattern "*.nupkg" --pattern release-manifest.json --dir artifacts/packages
+            bash scripts/release-saga-ci.sh init FS.GG.Drivers "$VERSION" "$GITHUB_SHA"
+          else
+            dotnet pack src/FS.GG.Drivers/FS.GG.Drivers.csproj -c Release -o artifacts/packages
+          fi
 
       # A PACKAGE THAT PACKS BUT DOES NOT RESOLVE FROM A REAL RESTORE is the failure mode here. The gate
       # above packs the nupkg; this drives it the way the SDD CLI will — a throwaway consumer with a real
@@ -198,31 +210,47 @@ jobs:
           dotnet build   "$work/Consumer.csproj" -c Release --no-restore
           echo "packaged driver: a real consumer restore reached the manifest + complete multi-file driver payloads" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Push to org GitHub Packages feed
+      - name: Resume manifest-bound org push and await the complete org set
         if: steps.v.outputs.push == 'true'
-        run: |
-          dotnet nuget push "artifacts/packages/FS.GG.Drivers.*.nupkg" \
-            --source https://nuget.pkg.github.com/FS-GG/index.json \
-            --api-key ${{ secrets.GITHUB_TOKEN }} \
-            --skip-duplicate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release-saga-ci.sh github FS.GG.Drivers "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
 
       # nuget.org dual-publish (ADR-0012/0013). Gated on vars.NUGET_ORG_PUBLISH so org-feed releases keep
       # working until an org-owner creates the Trusted Publishing policy for THIS workflow + FS.GG.Drivers
       # (see the header). Pushes the BYTE-IDENTICAL org-feed .nupkg, no re-pack.
-      - name: NuGet login (OIDC → short-lived key)
+      - name: Observe public feed before any push
         if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        id: public
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release-saga-ci.sh nuget-probe FS.GG.Drivers "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+
+      - name: NuGet login (OIDC → short-lived key)
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true' && steps.public.outputs.push == 'true'
         id: login
         uses: NuGet/login@v1
         with:
           user: ${{ secrets.NUGET_USER }}
 
       - name: Push byte-identical package to nuget.org
-        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true' && steps.public.outputs.push == 'true'
         run: |
-          dotnet nuget push "artifacts/packages/FS.GG.Drivers.*.nupkg" \
+          dotnet nuget push "artifacts/packages/FS.GG.Drivers.${{ steps.v.outputs.version }}.nupkg" \
             --source https://api.nuget.org/v3/index.json \
-            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
-            --skip-duplicate
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+
+      - name: Record externally served public package
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release-saga-ci.sh nuget-record FS.GG.Drivers "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+
+      - name: Persist failed release step for exact resume
+        if: failure() && steps.v.outputs.push == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release-saga-ci.sh failure FS.GG.Drivers "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
 
       - name: Summary
         run: |
