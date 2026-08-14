@@ -228,10 +228,18 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
 - **Baseline fixture:** The report header fixes the source baseline at
   `cb33188c`, the evidence window at 2026-08-10 through 2026-08-14, and the
   point-in-time issue, PR, board, release, workflow, source, test, and evidence
-  measurements in the first table. The issue and PR values are reproduced by
-  `gh api -X GET search/issues -f 'q=repo:FS-GG/.github is:<issue|pr> created:2026-08-09T22:00:00Z..2026-08-14T07:05:08Z <state>' -f per_page=1 --jq .total_count`,
-  using `is:closed` for closed issues and `is:merged`, `is:open`, or
-  `is:closed -is:merged` for the three PR dispositions. The Git-backed
+  measurements in the first table. The issue and PR values are frozen in the
+  content-addressed as-of manifest
+  `docs/reports/evidence/2026-08-14-coordination-churn-as-of.json`. Its cohort was
+  selected by the recorded GitHub GraphQL search, then `ClosedEvent`,
+  `ReopenedEvent`, and `MergedEvent` values were replayed only through the exact
+  `2026-08-14T07:05:08Z` cutoff. The manifest records the complete cohort and its
+  disjoint as-of classifications; `jq '.summary'` reproduces 131/103 issue
+  created/closed and 146/135/9/2 PR created/merged/open/closed-unmerged. Verify
+  the counts and partitions with
+  `jq -e '(.summary.issues_created == (.cohorts.issues.created | length)) and (.summary.issues_closed == (.cohorts.issues.closed_as_of | length)) and (.summary.pull_requests_created == (.cohorts.pull_requests.created | length)) and (.summary.pull_requests_merged == (.cohorts.pull_requests.merged_as_of | length)) and (.summary.pull_requests_open == (.cohorts.pull_requests.open_as_of | length)) and (.summary.pull_requests_closed_unmerged == (.cohorts.pull_requests.closed_unmerged_as_of | length)) and (((.cohorts.pull_requests.merged_as_of + .cohorts.pull_requests.open_as_of + .cohorts.pull_requests.closed_unmerged_as_of) | sort) == (.cohorts.pull_requests.created | sort))' docs/reports/evidence/2026-08-14-coordination-churn-as-of.json`.
+  Present-day `is:open`/`is:closed` searches are intentionally not reproduction
+  commands because later lifecycle transitions change their answers. The Git-backed
   workflow/checker counts are
   reproducible with `git ls-tree -r --name-only cb33188c .github/workflows` and
   `git ls-tree -r --name-only cb33188c scripts | rg '^scripts/check-'`. GitHub
