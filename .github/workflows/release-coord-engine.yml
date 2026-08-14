@@ -153,7 +153,17 @@ jobs:
 
       # #1762 — 0.13.0 moved Version and shipped 0.12.0's notes. Evaluate both properties through
       # MSBuild and refuse before restore/pack/push if the listing would announce another release.
-      - name: Require PackageReleaseNotes to announce this version
+      #
+      # .github#2579 — the same checker now also refuses notes longer than nuget.org's 35,000
+      # characters, for EVERY member of the coherent set, and reports each package's remaining
+      # headroom in this job's log. THIS ARM IS THE BACKSTOP, NOT THE GATE: it runs after
+      # `release-kit` and `release-drivers` have already been started by their own sibling tags, so
+      # by the time it refuses, the siblings may have published — which is exactly how 0.52.0 left
+      # FS.GG.Coord.Cli on the org feed and absent from nuget.org. The arm that actually prevents
+      # that is the PR-time one in `engine-release-notes.yml`, whose filter selects every project
+      # whose notes this scores. Keep both; this one is what makes an already-tagged tree fail
+      # loudly rather than silently mis-publish.
+      - name: Require PackageReleaseNotes to announce this version and fit nuget.org's limit
         run: python3 scripts/check-engine-release-notes.py
 
       - name: Restore (locked)

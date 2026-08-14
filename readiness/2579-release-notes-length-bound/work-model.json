@@ -1,0 +1,1695 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2579-release-notes-length-bound",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2579-release-notes-length-bound/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "eda09f9605279a4369ff1f9805ba7a421c895881ef984e6e75bbea985f40d792"
+      }
+    },
+    {
+      "path": "work/2579-release-notes-length-bound/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "70fc9225351808eaf93d7f37064d95e76344083f1bc7026c8087f2bbca14d79e"
+      }
+    },
+    {
+      "path": "work/2579-release-notes-length-bound/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ea8c4184ced216a7221f89009d159a8cdf76d25c201cb9061a9d5b9f945618ce"
+      }
+    },
+    {
+      "path": "work/2579-release-notes-length-bound/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "cdace501768581c46296d22365acfe9ae4091f366a127cc7a52f634508285b36"
+      }
+    },
+    {
+      "path": "work/2579-release-notes-length-bound/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "9628d7ab7aac6bd0f45dfe113647aea70d007b06b5847c0927d70277f4f42fe2"
+      }
+    },
+    {
+      "path": "work/2579-release-notes-length-bound/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "dcd3ff6c5090e8e7e88aa910b3b20e0cd6e12f1c9dcbbe642c2a63d055103de4"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2579-release-notes-length-bound",
+    "title": "bounding PackageReleaseNotes, and gating the length the registry actually enforces",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The checker evaluates \u0060PackageReleaseNotes\u0060 through MSBuild for every member of the coherent set, reading that set from \u0060check-coherent-set-version.py\u0060\u0027s \u0060PROJECTS\u0060 rather than restating it, and exits 1 when any member\u0027s evaluated value exceeds the limit. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The checker evaluates \u0060PackageReleaseNotes\u0060 through MSBuild for every member of the coherent set, reading that set from \u0060check-coherent-set-version.py\u0060\u0027s \u0060PROJECTS\u0060 rather than restating it, and exits 1 when any member\u0027s evaluated value exceeds the limit. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2579-release-notes-length-bound/spec.md",
+      "sourceLocation": {
+        "line": 124,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "The limit is one named module constant citing nuget.org\u0027s own error text, and every run reports used/remaining/percent for every member. (Stories: US-002; Acceptance: AC-002)",
+      "text": "The limit is one named module constant citing nuget.org\u0027s own error text, and every run reports used/remaining/percent for every member. (Stories: US-002; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2579-release-notes-length-bound/spec.md",
+      "sourceLocation": {
+        "line": 125,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "\u0060PackageReleaseNotes\u0060 is bounded to \u0060$(FsggStandingAdvisories)\u0060 plus the current release entry plus a history pointer, and the accumulated per-version narrative is removed. (Stories: US-003; Acceptance: AC-003)",
+      "text": "\u0060PackageReleaseNotes\u0060 is bounded to \u0060$(FsggStandingAdvisories)\u0060 plus the current release entry plus a history pointer, and the accumulated per-version narrative is removed. (Stories: US-003; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2579-release-notes-length-bound/spec.md",
+      "sourceLocation": {
+        "line": 126,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "The checker refuses an authored \u0060\u003CPackageReleaseNotes\u003E\u0060 that does not reference \u0060$(FsggStandingAdvisories)\u0060, and refuses an empty or absent advisory property. (Stories: US-004; Acceptance: AC-004)",
+      "text": "The checker refuses an authored \u0060\u003CPackageReleaseNotes\u003E\u0060 that does not reference \u0060$(FsggStandingAdvisories)\u0060, and refuses an empty or absent advisory property. (Stories: US-004; Acceptance: AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2579-release-notes-length-bound/spec.md",
+      "sourceLocation": {
+        "line": 127,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "\u0060.github#1762\u0060\u0027s first-token check and \u0060.github#2512\u0060\u0027s coherent-scalar check are preserved unchanged in behaviour. (Stories: US-001; Acceptance: AC-005)",
+      "text": "\u0060.github#1762\u0060\u0027s first-token check and \u0060.github#2512\u0060\u0027s coherent-scalar check are preserved unchanged in behaviour. (Stories: US-001; Acceptance: AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2579-release-notes-length-bound/spec.md",
+      "sourceLocation": {
+        "line": 128,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "\u0060PATHS_SUBJECT\u0060 names every project this gate scores, and both triggers in \u0060engine-release-notes.yml\u0060 select every \u0060PATHS_SUBJECT\u0060 entry. (Stories: US-002; Acceptance: AC-006)",
+      "text": "\u0060PATHS_SUBJECT\u0060 names every project this gate scores, and both triggers in \u0060engine-release-notes.yml\u0060 select every \u0060PATHS_SUBJECT\u0060 entry. (Stories: US-002; Acceptance: AC-006)",
+      "acceptanceCriteria": [
+        "AC-006"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2579-release-notes-length-bound/spec.md",
+      "sourceLocation": {
+        "line": 129,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    },
+    {
+      "id": "FR-007",
+      "title": "Every arm added here ships with a recorded inversion and an observed red, and the length arm\u0027s red is observed against the real \u0060origin/main\u0060 tree. (Stories: US-005; Acceptance: AC-007)",
+      "text": "Every arm added here ships with a recorded inversion and an observed red, and the length arm\u0027s red is observed against the real \u0060origin/main\u0060 tree. (Stories: US-005; Acceptance: AC-007)",
+      "acceptanceCriteria": [
+        "AC-007"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2579-release-notes-length-bound/spec.md",
+      "sourceLocation": {
+        "line": 130,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ],
+      "linkedEvidenceIds": [
+        "EV007"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "**BOUND \u0060PackageReleaseNotes\u0060 TO THREE PARTS: \u0060$(FsggStandingAdvisories)\u0060 \u002B the current release\u0027s entry \u002B a pointer to the served per-version history.** The accumulated narrative is removed because the registry already serves it per version, immutably, at stable URLs. REJECTED \u2014 **truncate to the last N versions**: it measures the wrong unit (entries here range 289 to 4,932 characters, a 17-fold spread, so no N bounds the field in *characters*, which is what nuget.org enforces \u2014 reintroducing this item\u0027s own defect class inside its fix), and it ages the \u0060DO NOT ADOPT 0.50.5\u0060 advisory out silently, because that advisory lives inside \u00600.50.6\u0060\u0027s entry and a count-based window would delete it as a side effect of an unrelated cut. REJECTED \u2014 **replace the notes with a pointer to \u0060registry/CHANGELOG.md\u0060**: that file is a log of \u0060dependencies.yml\u0060 changes, not of engine release notes, so it does not contain the content being removed and the pointer would not be a relocation; and a link is the wrong channel for a safety warning, because the consumer deciding whether to \u0060dotnet tool install\u0060 reads the listing text, often inside an IDE package pane, so a two-hop link degrades exactly the message that had to be preserved. Retained in reduced form: a pointer IS kept, for the narrative history, which is not safety-critical. REJECTED \u2014 **per-version notes only (current entry, nothing else)**: it is semantically the correct meaning of the field and it bounds hardest, but it deletes the correction channel outright; older listings are immutable, so the newest listing is the only place the org can say \u0060DO NOT ADOPT 0.50.5\u0060. Per-version-only is right for everything a listing says about *itself* and wrong for everything it must say about its *predecessors*.",
+      "decision": "**BOUND \u0060PackageReleaseNotes\u0060 TO THREE PARTS: \u0060$(FsggStandingAdvisories)\u0060 \u002B the current release\u0027s entry \u002B a pointer to the served per-version history.** The accumulated narrative is removed because the registry already serves it per version, immutably, at stable URLs. REJECTED \u2014 **truncate to the last N versions**: it measures the wrong unit (entries here range 289 to 4,932 characters, a 17-fold spread, so no N bounds the field in *characters*, which is what nuget.org enforces \u2014 reintroducing this item\u0027s own defect class inside its fix), and it ages the \u0060DO NOT ADOPT 0.50.5\u0060 advisory out silently, because that advisory lives inside \u00600.50.6\u0060\u0027s entry and a count-based window would delete it as a side effect of an unrelated cut. REJECTED \u2014 **replace the notes with a pointer to \u0060registry/CHANGELOG.md\u0060**: that file is a log of \u0060dependencies.yml\u0060 changes, not of engine release notes, so it does not contain the content being removed and the pointer would not be a relocation; and a link is the wrong channel for a safety warning, because the consumer deciding whether to \u0060dotnet tool install\u0060 reads the listing text, often inside an IDE package pane, so a two-hop link degrades exactly the message that had to be preserved. Retained in reduced form: a pointer IS kept, for the narrative history, which is not safety-critical. REJECTED \u2014 **per-version notes only (current entry, nothing else)**: it is semantically the correct meaning of the field and it bounds hardest, but it deletes the correction channel outright; older listings are immutable, so the newest listing is the only place the org can say \u0060DO NOT ADOPT 0.50.5\u0060. Per-version-only is right for everything a listing says about *itself* and wrong for everything it must say about its *predecessors*.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2579-release-notes-length-bound/clarifications.md",
+      "sourceLocation": {
+        "line": 84,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "**THE ADVISORIES BECOME A SEPARATE MSBuild PROPERTY, \u0060\u003CFsggStandingAdvisories\u003E\u0060, REFERENCED FROM \u0060\u003CPackageReleaseNotes\u003E\u0060, AND THE GATE REFUSES BOTH ITS REMOVAL AND ITS EMPTYING.** Trimming the narrative and deleting a \u0060DO NOT ADOPT\u0060 warning become edits to different properties. The structural arm checks the AUTHORED element text for the literal \u0060$(FsggStandingAdvisories)\u0060; the semantic arm checks the EVALUATED property is non-empty and present in the evaluated notes. This mirrors \u0060check-coherent-set-version.py\u0060\u0027s stated reason for carrying both arms: a structural check alone passes text that does not resolve, and a semantic check alone passes an inlined copy that the next trim deletes.",
+      "decision": "**THE ADVISORIES BECOME A SEPARATE MSBuild PROPERTY, \u0060\u003CFsggStandingAdvisories\u003E\u0060, REFERENCED FROM \u0060\u003CPackageReleaseNotes\u003E\u0060, AND THE GATE REFUSES BOTH ITS REMOVAL AND ITS EMPTYING.** Trimming the narrative and deleting a \u0060DO NOT ADOPT\u0060 warning become edits to different properties. The structural arm checks the AUTHORED element text for the literal \u0060$(FsggStandingAdvisories)\u0060; the semantic arm checks the EVALUATED property is non-empty and present in the evaluated notes. This mirrors \u0060check-coherent-set-version.py\u0060\u0027s stated reason for carrying both arms: a structural check alone passes text that does not resolve, and a semantic check alone passes an inlined copy that the next trim deletes.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2579-release-notes-length-bound/clarifications.md",
+      "sourceLocation": {
+        "line": 85,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "**SUBJECT = \u0060check-coherent-set-version.py\u0060\u0027s \u0060PROJECTS\u0060, READ BY AST AND NEVER RESTATED; QUANTITY = THE EVALUATED MSBuild PROPERTY.** Read by AST rather than imported, on the same discipline \u0060tests/engine-release-notes/run.sh\u0060 already applies to \u0060PATHS_SUBJECT\u0060 \u2014 the gate must not execute another gate to learn its own subject. \u0060scripts/check-coherent-set-version.py\u0060 therefore becomes an operand of this gate and joins \u0060PATHS_SUBJECT\u0060 and both trigger filters.",
+      "decision": "**SUBJECT = \u0060check-coherent-set-version.py\u0060\u0027s \u0060PROJECTS\u0060, READ BY AST AND NEVER RESTATED; QUANTITY = THE EVALUATED MSBuild PROPERTY.** Read by AST rather than imported, on the same discipline \u0060tests/engine-release-notes/run.sh\u0060 already applies to \u0060PATHS_SUBJECT\u0060 \u2014 the gate must not execute another gate to learn its own subject. \u0060scripts/check-coherent-set-version.py\u0060 therefore becomes an operand of this gate and joins \u0060PATHS_SUBJECT\u0060 and both trigger filters.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2579-release-notes-length-bound/clarifications.md",
+      "sourceLocation": {
+        "line": 86,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T010"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "**NO SECOND THRESHOLD. REPORT HEADROOM ON EVERY RUN INSTEAD** \u2014 used, remaining, and percent of budget, per package, green or red. The single constant is nuget.org\u0027s 35,000, named as the external constraint it is and cited to the observed \u0060400\u0060 text.",
+      "decision": "**NO SECOND THRESHOLD. REPORT HEADROOM ON EVERY RUN INSTEAD** \u2014 used, remaining, and percent of budget, per package, green or red. The single constant is nuget.org\u0027s 35,000, named as the external constraint it is and cited to the observed \u0060400\u0060 text.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2579-release-notes-length-bound/clarifications.md",
+      "sourceLocation": {
+        "line": 87,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T011"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "**NO LENGTH ARM IN \u0060release-kit.yml\u0060 OR \u0060release-drivers.yml\u0060.** Neither package declares \u0060PackageReleaseNotes\u0060, and the only way either gains one is a pull request editing its \u0060.csproj\u0060, which this gate\u0027s widened trigger now selects. Adding release-time arms would place the refusal after the point where the sibling packages already publish in parallel, which is the failure shape rather than a fix for it.",
+      "decision": "**NO LENGTH ARM IN \u0060release-kit.yml\u0060 OR \u0060release-drivers.yml\u0060.** Neither package declares \u0060PackageReleaseNotes\u0060, and the only way either gains one is a pull request editing its \u0060.csproj\u0060, which this gate\u0027s widened trigger now selects. Adding release-time arms would place the refusal after the point where the sibling packages already publish in parallel, which is the failure shape rather than a fix for it.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2579-release-notes-length-bound/clarifications.md",
+      "sourceLocation": {
+        "line": 88,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T012"
+      ]
+    },
+    {
+      "id": "DEC-006",
+      "title": "**NO \u00600.52.0\u0060 ADVISORY IN THIS ITEM.** \u00600.52.0\u0060 is a feed-parity gap, not a two-of-three set \u2014 all three tags name one commit and the org-feed package is complete and usable. Its disposition belongs to \u0060.github#2580\u0060 and the decided additive \u00600.52.1\u0060 re-cut, which land after this item. \u0060\u003CFsggStandingAdvisories\u003E\u0060 is the place such a warning would go if that item concludes one is owed.",
+      "decision": "**NO \u00600.52.0\u0060 ADVISORY IN THIS ITEM.** \u00600.52.0\u0060 is a feed-parity gap, not a two-of-three set \u2014 all three tags name one commit and the org-feed package is complete and usable. Its disposition belongs to \u0060.github#2580\u0060 and the decided additive \u00600.52.1\u0060 re-cut, which land after this item. \u0060\u003CFsggStandingAdvisories\u003E\u0060 is the place such a warning would go if that item concludes one is owed.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2579-release-notes-length-bound/clarifications.md",
+      "sourceLocation": {
+        "line": 89,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T013"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-006",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement requirement FR-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-007"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-007",
+        "FR-007",
+        "PD-007"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement clarification decision DEC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement clarification decision DEC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-002"
+      ],
+      "sourceIds": [
+        "DEC-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Implement clarification decision DEC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-003"
+      ],
+      "sourceIds": [
+        "DEC-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Implement clarification decision DEC-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-004"
+      ],
+      "sourceIds": [
+        "DEC-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Implement clarification decision DEC-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-005"
+      ],
+      "sourceIds": [
+        "DEC-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Implement clarification decision DEC-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-006"
+      ],
+      "sourceIds": [
+        "DEC-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Update contract surface PC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "T015",
+      "title": "Record verification evidence VO-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV015"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "T016",
+      "title": "Handle migration posture PM-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PC-002",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV016"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "T017",
+      "title": "Refresh generated view impact GV-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV017"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "T018",
+      "title": "Update contract surface PC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV018"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "T019",
+      "title": "Update contract surface PC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV019"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "T020",
+      "title": "Record verification evidence VO-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-007",
+        "VO-002"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV020"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "T021",
+      "title": "Record verification evidence VO-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-004",
+        "VO-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV021"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "id": "T022",
+      "title": "Record verification evidence VO-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-006",
+        "VO-004"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV022"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "id": "T023",
+      "title": "Record verification evidence VO-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-002",
+        "VO-005"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV023"
+      ],
+      "source": "work/2579-release-notes-length-bound/tasks.yml",
+      "sourceLocation": {
+        "line": 23,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "implementation",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        ".github/workflows/engine-release-notes.yml",
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [
+        "FR-007"
+      ],
+      "artifactRefs": [
+        "tests/engine-release-notes/regression/release-notes-at-2579.xmlfragment",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "implementation",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "work/2579-release-notes-length-bound/clarifications.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "implementation",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "work/2579-release-notes-length-bound/clarifications.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "implementation",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "work/2579-release-notes-length-bound/clarifications.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "implementation",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "work/2579-release-notes-length-bound/clarifications.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "note",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        ".github/workflows/release-coord-engine.yml",
+        "work/2579-release-notes-length-bound/clarifications.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "note",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/2579-release-notes-length-bound/clarifications.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV015",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T015",
+      "taskRefs": [
+        "T015"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV016",
+      "kind": "note",
+      "subjectType": "task",
+      "subjectId": "T016",
+      "taskRefs": [
+        "T016"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/2579-release-notes-length-bound/plan.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV017",
+      "kind": "generated-view",
+      "subjectType": "task",
+      "subjectId": "T017",
+      "taskRefs": [
+        "T017"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "readiness/2579-release-notes-length-bound/analysis.json",
+        "work/2579-release-notes-length-bound/plan.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV018",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T018",
+      "taskRefs": [
+        "T018"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV019",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T019",
+      "taskRefs": [
+        "T019"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        ".github/workflows/engine-release-notes.yml",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV020",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T020",
+      "taskRefs": [
+        "T020"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/regression/release-notes-at-2579.xmlfragment",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV021",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T021",
+      "taskRefs": [
+        "T021"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV022",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T022",
+      "taskRefs": [
+        "T022"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        ".github/workflows/engine-release-notes.yml",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV023",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T023",
+      "taskRefs": [
+        "T023"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-engine-release-notes.py",
+        "tests/engine-release-notes/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2579-release-notes-length-bound/evidence.yml",
+      "sourceLocation": {
+        "line": 23,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2579-release-notes-length-bound/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2579-release-notes-length-bound/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "eda09f9605279a4369ff1f9805ba7a421c895881ef984e6e75bbea985f40d792"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2579-release-notes-length-bound/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "70fc9225351808eaf93d7f37064d95e76344083f1bc7026c8087f2bbca14d79e"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2579-release-notes-length-bound/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ea8c4184ced216a7221f89009d159a8cdf76d25c201cb9061a9d5b9f945618ce"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2579-release-notes-length-bound/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "cdace501768581c46296d22365acfe9ae4091f366a127cc7a52f634508285b36"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2579-release-notes-length-bound/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "9628d7ab7aac6bd0f45dfe113647aea70d007b06b5847c0927d70277f4f42fe2"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2579-release-notes-length-bound/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "dcd3ff6c5090e8e7e88aa910b3b20e0cd6e12f1c9dcbbe642c2a63d055103de4"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "43b216fbdfa8f3a1407c7164d5971cf56301c1ffe39a9350fa93ea78032d770c"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}
