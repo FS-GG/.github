@@ -1,0 +1,49 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m0-stabilize",
+  "milestone": "M0 — stabilize",
+  "critic": "/root/m0_stabilize/m0_critic",
+  "initial_reviewed_commit": "3e7499d4d7c116144b6cd3be22a2dd9d8004f76b",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
+  "reviewed_commits": [
+    "3e7499d4d7c116144b6cd3be22a2dd9d8004f76b",
+    "c42bcb51062391f3c6b58a589a079eb45aadba01"
+  ],
+  "findings": [
+    {
+      "id": "M0-CRIT-001",
+      "severity": "major",
+      "summary": "The initial engine-pin repair advanced the canonical tool manifest to an org-only version that the declared nuget.org read path could not resolve.",
+      "evidence": [
+        "Initial diff 3e7499d4 changed dist/dotnet/.config/dotnet-tools.json from 0.50.0 to 0.52.0, while /tmp/m0-feed-live-a7c91.log recorded FS.GG.Coord.Cli 0.52.0 on the org feed and only 0.51.1 on nuget.org.",
+        "docs/adr/0039-nuget-org-is-the-read-path.md decisions 1 and 3 identify nuget.org as the anonymous read and restore path and make its publish critical.",
+        "A live review query through scripts/fsgg_feed.nuget_org_versions returned newest stable 0.51.1 and confirmed that 0.52.0 was absent; git show 068954a9 showed Renovate had advanced this native NuGet pin to 0.51.1 from that read path."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Repair commit c42bcb51062391f3c6b58a589a079eb45aadba01 restores dist/dotnet/.config/dotnet-tools.json to 0.51.1 and changes scripts/check-engine-pin.py to compare the org feed with nuget.org while selecting the pin target from nuget.org.",
+        "tests/engine-pin/run.sh at c42bcb5 adds the org-ahead partial-release case and a negative control proving that an org-only pin is rejected as AHEAD of the read feed; the suite passed 20 of 20 assertions.",
+        "/tmp/m0-pin-live-r1-a7c91.log confirms the exact repaired head retains pin 0.51.1, observes org 0.52.0, classifies the state as PARTIAL RELEASE, and exits successfully without demanding an unresolvable bump."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "c42bcb51062391f3c6b58a589a079eb45aadba01",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
