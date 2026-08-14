@@ -12,11 +12,12 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 2,
+  "repair_rounds": 3,
   "reviewed_commits": [
     "e163d9cdee2a95ca0f3ad951dabbfce5affde146",
     "ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660",
-    "e1c836f9fcc336b896a337d3cb89cf3182af8e7c"
+    "e1c836f9fcc336b896a337d3cb89cf3182af8e7c",
+    "a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c"
   ],
   "findings": [
     {
@@ -67,7 +68,7 @@
         "Verification: .github/workflows/release-saga-promote.yml:37-41 likewise downloads by the checkout's computed version and only calls assert-artifacts, so the observer does not prove that the draft descriptor names github.event.workflow_run.head_sha before it records and promotes external state.",
         "Verification: scripts/release-saga.py:268-291 prevents a second promotion only inside one manifest, while .github/workflows/release-saga-promote.yml:75-80 unconditionally marks that release latest; it never reads the existing stable-channel receipt or rejects promotion of an older/different release, so re-running a fully served older set can move the repository's latest/stable pointer backward."
       ],
-      "disposition": "follow-up",
+      "disposition": "resolved",
       "resolution_evidence": [
         "Verification: repair ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660 resolves the identity half: scripts/release-saga.py:206-224 adds assert-identity for releaseId/version/sourceSha/policyVersion/stable channel, scripts/release-saga-ci.sh:40-54 applies it to both the prepared manifest and resumed journal, and .github/workflows/release-saga-promote.yml:40-43 binds promotion to github.event.workflow_run.head_sha.",
         "Verification: repair ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660 adds previousStableVersion to the content-addressed descriptor, reads the preceding published coherent-set stable-channel receipt in .github/workflows/release-saga-promote.yml:74-84, and scripts/release-saga.py:330-347 rejects a mismatched baseline or non-advancing stable version.",
@@ -78,7 +79,11 @@
         "Verification: this repository currently has no preceding saga channel receipt: both `git tag -l 'coherent-set/*'` and `gh release list --repo FS-GG/.github --limit 100 --json tagName,isDraft,isLatest --jq '.[] | select(.tagName | startswith(\"coherent-set/v\"))'` produced no output on 2026-08-14. The first 0.54.0 promotion therefore supplies no --previous-channel from .github/workflows/release-saga-promote.yml:74-84.",
         "Verification: on that no-previous-channel path, stable_parts is defined only inside `if args.previous_channel` at scripts/release-saga.py:339-349 but is called unconditionally at line 354; an AST inspection printed `{'stable_parts_definitions': [343], 'stable_parts_calls': [354, 354]}`. Python local function binding is not executed when the branch is false, so the first real saga promotion raises UnboundLocalError rather than promoting 0.54.0.",
         "Verification: tests/release-saga/run.sh always supplies a previous-channel receipt for first promotion and tests a different non-advancing release only with an unpromoted merge-base manifest, so neither the first-ever channel path nor replay of an older already-promoted manifest is covered.",
-        "Verification: unverified; repair must support the first saga promotion using descriptor.previousStableVersion when no coherent-set receipt exists, accept exact same-content replay only when the live channel still names that content, reject replay of an older promoted manifest after a newer channel exists, and add both regressions."
+        "Verification: repair-round-3 commit a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c defines stable_parts before either receipt branch at scripts/release-saga.py:330-336, so first-ever promotion with no --previous-channel uses descriptor.previousStableVersion and reaches the monotonic comparison at lines 349-359 without an unbound local.",
+        "Verification: scripts/release-saga.py:337-348 now permits already-promoted crash recovery with no live receipt and exact replay when the supplied live receipt has the same contentId, but rejects an older promoted manifest whenever the live receipt names different content before the workflow can mark that older release latest.",
+        "Verification: tests/release-saga/run.sh:77-94 explicitly exercises first-ever no-receipt promotion, byte-identical current-content replay, refusal of an older promoted manifest against a newer live receipt, and refusal of a pending non-advancing release.",
+        "Verification: `bash tests/release-saga/run.sh`, `bash -n scripts/release-saga-ci.sh tests/release-saga/run.sh`, `python3 -m py_compile scripts/release-saga.py`, and `git diff --check e1c836f9fcc336b896a337d3cb89cf3182af8e7c..a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c` all exited 0 on exact repair head a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c; shellcheck and actionlint were unavailable.",
+        "Verification: review of the exact e1c836f9fcc336b896a337d3cb89cf3182af8e7c..a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c diff found no production change outside command_promote; the repair preserves the identity, journal, complete-org barrier, and external-payload checks confirmed in rounds 1 and 2."
       ]
     },
     {
@@ -96,15 +101,15 @@
         "Verification: registry/dependencies.yml:900-902 remains truthfully staged at source version 0.54.0 and package-version 0.53.0 on repair head ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660, and the roadmap remains unchecked; no release completion is claimed.",
         "Verification: the non-circular route is a preparatory implementation merge only, not milestone acceptance: .github/workflows/release-saga-prepare.yml is workflow_dispatch and the package workflows consume a draft bound to the exact merged GITHUB_SHA, so the new trusted workflow must first exist on default branch before it can prepare and publish that exact source.",
         "Verification: under the work-roadmap contract this finding remains a major completion gate: after the preparatory workflow repair lands, run the real 0.54.0 prepare/publish/promote sequence, externally verify the persisted hashes and runs, then return a new exact repository head carrying the package-version/roadmap evidence for this same critic's confirmation; do not mark M3 complete or accept the critique before that head.",
-        "Verification: repair-round-2 head e1c836f9fcc336b896a337d3cb89cf3182af8e7c changes only the critique artifact, promotion implementation, and its fixture relative to ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660; registry/dependencies.yml still truthfully records package-version 0.53.0 and the roadmap remains unchecked."
+        "Verification: repair-round-2 head e1c836f9fcc336b896a337d3cb89cf3182af8e7c changes only the critique artifact, promotion implementation, and its fixture relative to ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660; registry/dependencies.yml still truthfully records package-version 0.53.0 and the roadmap remains unchecked.",
+        "Verification: on exact repair-round-3 head a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c, findings 001-003 are resolved and the local production-topology/state-machine fixture is green, so the architecture is ready for the narrowly scoped preparatory PR; this does not resolve finding 004 or authorize checking M3 before the real merged-source release evidence exists."
       ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "e1c836f9fcc336b896a337d3cb89cf3182af8e7c",
+    "reviewed_commit": "a9ddbeb3adf8dbf6611e19280b1b1ebfb4bbac6c",
     "verdict": "changes-required",
     "unresolved_blocker_major": [
-      "M3-RELEASE-SAGA-CRIT-003",
       "M3-RELEASE-SAGA-CRIT-004"
     ]
   },
