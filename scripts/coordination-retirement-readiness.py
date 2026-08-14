@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -35,7 +36,7 @@ CANONICAL_SUCCESSOR_QUERIES = [
     'repo:FS-GG/.github is:open is:issue "bulky evidence"',
 ]
 PROVENANCE_FIELDS = (
-    "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
+    "issues_created", "issues_closed", "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
     "ambiguous_release_states", "release_outcomes", "policy_implementations_start",
     "policy_implementations_end", "check_scripts_start", "check_scripts_end", "workflows_start",
     "workflows_end", "generated_evidence_bytes_delta", "core_and_test_bytes_delta",
@@ -45,6 +46,10 @@ PROVENANCE_FIELDS = (
 # reviewed canonical collector can replay those observations. Pure validation remains
 # testable, but cannot authorize retirement.
 ACCEPTANCE_ENABLED = False
+COLLECTOR_COMMAND = ["python3", "scripts/coordination-health-collector.py", "--root", ".",
+                     "--output-dir", "docs/reports/evidence/coordination-health"]
+EXPECTED_GENERATED_PREFIXES = ["docs/reports/evidence/", "readiness/", "work/"]
+EXPECTED_IMPLEMENTATION_PREFIXES = ["src/", "tests/", "scripts/", "policy/", ".github/actions/", ".github/workflows/"]
 
 
 def timestamp(value: object, where: str, failures: list[str]) -> datetime | None:
@@ -82,6 +87,9 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
         failures.append("schema_version must be 1")
     if not SHA.fullmatch(str(document.get("source_sha", ""))):
         failures.append("source_sha must be an exact lowercase 40-hex commit")
+    collector = document.get("collector")
+    if collector != {"schema_version": 1, "command": COLLECTOR_COMMAND}:
+        failures.append("collector must name the reviewed canonical schema-1 command exactly")
     measured_at = timestamp(document.get("measured_at"), "measured_at", failures)
 
     rows = document.get("candidate_periods")
@@ -98,6 +106,8 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
             continue
         start = timestamp(row.get("start"), f"{where}.start", failures)
         end = timestamp(row.get("end"), f"{where}.end", failures)
+        if not SHA.fullmatch(str(row.get("start_sha", ""))) or not SHA.fullmatch(str(row.get("end_sha", ""))):
+            failures.append(f"{where}: start_sha/end_sha must be exact commits")
         parsed.append((start, end))
         if start is not None and end is not None and end - start != timedelta(days=7):
             failures.append(f"{where}: roadmap measurement period must be exactly seven days")
@@ -170,6 +180,8 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                 failures.append(f"{where}.provenance.sha256: require an exact lowercase SHA-256")
             elif not isinstance(reproduce, list) or not reproduce or not all(isinstance(value, str) and value for value in reproduce):
                 failures.append(f"{where}.provenance.reproduce: require a non-empty argv array")
+            elif reproduce != COLLECTOR_COMMAND:
+                failures.append(f"{where}.provenance.reproduce: must be the canonical collector command")
             else:
                 try:
                     resolved_root = root.resolve(strict=True)
@@ -188,6 +200,8 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                             "period_id": row.get("id"),
                             "start": row.get("start"),
                             "end": row.get("end"),
+                            "start_sha": row.get("start_sha"),
+                            "end_sha": row.get("end_sha"),
                             "reproduce": reproduce,
                         }
                         for field, expected in identity.items():
@@ -196,6 +210,99 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                         for field in PROVENANCE_FIELDS:
                             if observed.get(field) != row.get(field):
                                 failures.append(f"{where}.provenance: artifact does not bind {field}")
+                        if observed.get("schema_version") != 1:
+                            failures.append(f"{where}.provenance: collector schema_version must be 1")
+                        raw = observed.get("raw")
+                        if not isinstance(raw, dict):
+                            failures.append(f"{where}.provenance: canonical raw observations are missing")
+                        else:
+                            bindings = (
+                                ("created", "issues_created"), ("closed", "issues_closed"),
+                                ("repair_classification", "repair_commits"),
+                                ("intent_reversal_events", "intent_reversals"),
+                                ("partial_success_events", "partial_success_reads"),
+                            )
+                            for raw_name, count_name in bindings:
+                                if not isinstance(raw.get(raw_name), list) or len(raw[raw_name]) != row.get(count_name):
+                                    failures.append(f"{where}.provenance: raw {raw_name} does not bind {count_name}")
+                            classified = raw.get("repair_classification", [])
+                            if isinstance(classified, list) and sum(
+                                item.get("statement_only") is True for item in classified if isinstance(item, dict)
+                            ) != row.get("statement_only_repairs"):
+                                failures.append(f"{where}.provenance: raw repair classification does not bind statement_only_repairs")
+                            if not str(raw.get("prose_citation_gate", "")).startswith("prose-citations: ok"):
+                                failures.append(f"{where}.provenance: landed prose-citation gate was not green")
+                            health_runs = raw.get("machine_health_runs")
+                            if not isinstance(health_runs, list) or len(health_runs) != 7 or any(
+                                not isinstance(item, dict) or not item.get("run_id") or not item.get("artifact_id")
+                                or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(item.get("artifact_sha256", "")))
+                                or not isinstance(item.get("shadow"), list) or not isinstance(item.get("health"), dict)
+                                or item["health"].get("applicationMode") != "verified-apply"
+                                or item["health"].get("completeReadBoundary") != "typed-complete-success/1"
+                                or item["health"].get("subjectCount") != len(item["health"].get("subjects", []))
+                                for item in health_runs
+                            ):
+                                failures.append(f"{where}.provenance: require seven complete machine health observations")
+                            elif any(
+                                not isinstance(subject, dict)
+                                or not all(isinstance(subject.get(name), str) and subject.get(name) for name in ("subject", "current", "intent", "intended", "applied"))
+                                or not isinstance(subject.get("readComplete"), bool)
+                                or not isinstance(subject.get("reversed"), bool)
+                                or subject["reversed"] != (subject["intent"] != "auto" and not subject["intended"].startswith("withheld:") and subject["applied"] != subject["intended"])
+                                for run_row in health_runs for subject in run_row["health"].get("subjects", [])
+                            ):
+                                failures.append(f"{where}.provenance: machine health subject rows are invalid or reversal classification drifted")
+                            else:
+                                machine_reversals = sum(subject["reversed"] for run_row in health_runs for subject in run_row["health"]["subjects"])
+                                incomplete_reads = sum(not subject["readComplete"] for run_row in health_runs for subject in run_row["health"]["subjects"])
+                                if machine_reversals > len(raw.get("intent_reversal_events", [])):
+                                    failures.append(f"{where}.provenance: machine reversals are missing from intent_reversal_events")
+                                if incomplete_reads > len(raw.get("partial_success_events", [])):
+                                    failures.append(f"{where}.provenance: incomplete reads are missing from partial_success_events")
+                            inventories = raw.get("inventory_snapshots")
+                            if not isinstance(inventories, dict):
+                                failures.append(f"{where}.provenance: exact inventory snapshots are missing")
+                            else:
+                                for side in ("start", "end"):
+                                    snapshot = inventories.get(side, {})
+                                    if snapshot.get("sha") != row.get(f"{side}_sha"):
+                                        failures.append(f"{where}.provenance: {side} inventory does not bind its period SHA")
+                                    for raw_name, count_name in (("policy_implementations", "policy_implementations"),
+                                                                 ("check_scripts", "check_scripts"), ("workflows", "workflows")):
+                                        expected = row.get(f"{count_name}_{side}")
+                                        if not isinstance(snapshot.get(raw_name), list) or len(snapshot[raw_name]) != expected:
+                                            failures.append(f"{where}.provenance: {side} {raw_name} inventory does not bind its count")
+                                        elif raw_name == "policy_implementations":
+                                            identities = [(item.get("id"), item.get("path"), item.get("marker"))
+                                                          for item in snapshot[raw_name] if isinstance(item, dict)]
+                                            if len(identities) != len(snapshot[raw_name]) or len(set(identities)) != len(identities) or any(not all(identity) for identity in identities):
+                                                failures.append(f"{where}.provenance: {side} policy inventory identities are invalid or duplicated")
+                                        elif snapshot[raw_name] != sorted(set(snapshot[raw_name])):
+                                            failures.append(f"{where}.provenance: {side} {raw_name} inventory must be an exact sorted unique path list")
+                            byte_rows = raw.get("byte_snapshots")
+                            if not isinstance(byte_rows, dict) or not all(isinstance(byte_rows.get(side), dict) for side in ("start", "end")):
+                                failures.append(f"{where}.provenance: exact byte snapshots are missing")
+                            else:
+                                if list(byte_rows.get("generated_prefixes", [])) != EXPECTED_GENERATED_PREFIXES or list(byte_rows.get("implementation_prefixes", [])) != EXPECTED_IMPLEMENTATION_PREFIXES:
+                                    failures.append(f"{where}.provenance: byte snapshot prefixes are not canonical")
+                                for side in ("start", "end"):
+                                    if byte_rows[side].get("sha") != row.get(f"{side}_sha"):
+                                        failures.append(f"{where}.provenance: {side} byte snapshot does not bind its period SHA")
+                                if byte_rows["end"].get("generated", 0) - byte_rows["start"].get("generated", 0) != row.get("generated_evidence_bytes_delta"):
+                                    failures.append(f"{where}.provenance: generated byte snapshots do not bind their delta")
+                                if byte_rows["end"].get("implementation", 0) - byte_rows["start"].get("implementation", 0) != row.get("core_and_test_bytes_delta"):
+                                    failures.append(f"{where}.provenance: implementation byte snapshots do not bind their delta")
+                            releases = raw.get("release_classification")
+                            if not isinstance(releases, list):
+                                failures.append(f"{where}.provenance: release classification is missing")
+                            else:
+                                ambiguous = sum(item.get("coherent") is not True for item in releases if isinstance(item, dict))
+                                if ambiguous != row.get("ambiguous_release_states"):
+                                    failures.append(f"{where}.provenance: release classification does not bind ambiguous_release_states")
+                                expected_outcomes = (["coherent"] if any(item.get("coherent") is True for item in releases if isinstance(item, dict))
+                                                     else ["visibly-resumable"] if releases else ["no-release-owed"])
+                                if expected_outcomes != row.get("release_outcomes"):
+                                    failures.append(f"{where}.provenance: release classification does not bind release_outcomes")
                 except (OSError, json.JSONDecodeError, ValueError) as error:
                     failures.append(f"{where}.provenance: cannot read artifact: {error}")
 
@@ -204,6 +311,8 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
         if previous_end is not None and current_start is not None and previous_end != current_start:
             failures.append(f"candidate_periods[{index}]: periods are not consecutive")
         if isinstance(rows[index - 1], dict) and isinstance(rows[index], dict):
+            if rows[index - 1].get("end_sha") != rows[index].get("start_sha"):
+                failures.append(f"candidate_periods[{index}]: commit snapshots are discontinuous")
             for prefix in ("policy_implementations", "check_scripts", "workflows"):
                 previous = rows[index - 1].get(f"{prefix}_end")
                 current = rows[index].get(f"{prefix}_start")
@@ -259,7 +368,15 @@ def search(query: str) -> list[dict]:
                "-f", "per_page=100", "--paginate", "--slurp"]
     result = subprocess.run(command, check=True, text=True, capture_output=True)
     pages = json.loads(result.stdout)
-    return [item for page in pages for item in page.get("items", [])]
+    if not isinstance(pages, list) or not pages:
+        raise ValueError("GitHub Search returned no complete response envelope")
+    items = [item for page in pages for item in page.get("items", [])]
+    if any(page.get("incomplete_results") is not False for page in pages):
+        raise ValueError(f"GitHub Search reported incomplete results for {query!r}")
+    totals = {page.get("total_count") for page in pages}
+    if len(totals) != 1 or next(iter(totals)) != len({item.get("html_url") for item in items}):
+        raise ValueError(f"GitHub Search result count is incomplete or capped for {query!r}")
+    return items
 
 
 def collect_live(document: dict) -> dict:
@@ -302,6 +419,32 @@ def validate_live(document: dict, observed: object) -> list[str]:
     return failures
 
 
+def replay_canonical(document: dict, root: Path) -> list[str]:
+    """Re-run the producer; caller-authored non-GitHub values are never accepted."""
+    with tempfile.TemporaryDirectory(prefix=".m6-health-replay-", dir=root) as work:
+        relative = str(Path(work).relative_to(root))
+        command = ["python3", "scripts/coordination-health-collector.py", "--root", ".",
+                   "--output-dir", relative]
+        result = subprocess.run(command, cwd=root, check=True, text=True, capture_output=True)
+        replayed = json.loads(Path(result.stdout.strip()).read_text(encoding="utf-8"))
+        failures = [f"canonical replay: {failure}" for failure in validate(replayed, root)]
+    keys = ("source_sha", "candidate_periods", "successor_queries", "successor_census", "same_class_open")
+    # Provenance filenames include the collection instant. Compare every measured value and raw-bound
+    # digest through validate(), but exclude verification/provenance envelopes from semantic equality.
+    def semantic(rows: object) -> object:
+        if not isinstance(rows, list):
+            return rows
+        return [{key: value for key, value in row.items() if key not in ("verification", "provenance")}
+                if isinstance(row, dict) else row for row in rows]
+    for key in keys:
+        actual, expected = replayed.get(key), document.get(key)
+        if key == "candidate_periods":
+            actual, expected = semantic(actual), semantic(expected)
+        if actual != expected:
+            failures.append(f"canonical collector replay does not match {key}")
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("evidence", type=Path)
@@ -318,11 +461,10 @@ def main() -> int:
         try:
             if args.live_github:
                 failures.extend(validate_live(document, collect_live(document)))
-                if not failures and not ACCEPTANCE_ENABLED:
-                    failures.append(
-                        "production retirement acceptance is disabled until a reviewed canonical "
-                        "collector independently replays every non-GitHub health measure"
-                    )
+                if not failures and ACCEPTANCE_ENABLED:
+                    failures.extend(replay_canonical(document, args.root.resolve(strict=True)))
+                elif not failures:
+                    failures.append("production retirement acceptance is disabled until the canonical collector review passes")
             else:
                 failures.append("positive readiness requires --live-github authenticated evidence")
         except (OSError, json.JSONDecodeError, subprocess.CalledProcessError, KeyError, ValueError) as error:

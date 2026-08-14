@@ -89,6 +89,21 @@ common_env() {
   export FSGG_COORD_CACHE="$cache_dir"
 }
 
+health_report_valid() {
+  python3 - "$1" <<'PY'
+import json, pathlib, sys
+row=json.loads(pathlib.Path(sys.argv[1]).read_text())
+subjects=row.get("subjects")
+assert row.get("schemaVersion") == 1
+assert row.get("applicationMode") == "dry-run"
+assert row.get("completeReadBoundary") == "typed-complete-success/1"
+assert isinstance(subjects, list) and row.get("subjectCount") == len(subjects) and subjects
+assert all(isinstance(item.get("readComplete"), bool) and isinstance(item.get("reversed"), bool)
+           and item.get("subject") and item.get("intent") and item.get("applied") and item.get("intended")
+           for item in subjects)
+PY
+}
+
 # ---- leg 0: self-check — a DIRECT hermetic connection must equal the smoke fixture's expectation ----
 common_env
 PORT0="$(start_server "$REPO_ROOT/tests/coord-engine-e2e/stateful_server.py")"
@@ -101,9 +116,12 @@ else
     shadow_out=""
     if [ "$cmd" = reconcile ]; then
       shadow_out="$(mktemp -p "$TMP_ROOT")"
+      health_out="$(mktemp -p "$TMP_ROOT")"
       export FSGG_COORD_LIFECYCLE_SHADOW_REPORT="$shadow_out"
+      export FSGG_COORD_HEALTH_REPORT="$health_out"
     else
       unset FSGG_COORD_LIFECYCLE_SHADOW_REPORT
+      unset FSGG_COORD_HEALTH_REPORT
     fi
     run_command "$cmd" FS.GG.SDD >"$out" 2>"$TMP_ROOT/direct-$cmd.err"
     rc=$?
@@ -121,6 +139,11 @@ else
           ok "self-check: direct \`reconcile\` records classified intent shadow differences"
         else
           bad "self-check: direct \`reconcile\` records classified intent shadow differences" "$shadow_diff"
+        fi
+        if health_report_valid "$health_out"; then
+          ok "self-check: direct \`reconcile\` records complete per-subject machine health"
+        else
+          bad "self-check: direct \`reconcile\` records complete per-subject machine health"
         fi
       fi
     else
@@ -177,9 +200,12 @@ else:
     shadow_out=""
     if [ "$cmd" = reconcile ]; then
       shadow_out="$(mktemp -p "$TMP_ROOT")"
+      health_out="$(mktemp -p "$TMP_ROOT")"
       export FSGG_COORD_LIFECYCLE_SHADOW_REPORT="$shadow_out"
+      export FSGG_COORD_HEALTH_REPORT="$health_out"
     else
       unset FSGG_COORD_LIFECYCLE_SHADOW_REPORT
+      unset FSGG_COORD_HEALTH_REPORT
     fi
     run_command "$cmd" "$repo" >"$out" 2>"$TMP_ROOT/$name-$cmd.err"
     rc=$?
@@ -211,6 +237,11 @@ else:
             ok "$name/$cmd records its classified intent shadow differences"
           else
             bad "$name/$cmd records its classified intent shadow differences" "$shadow_diff"
+          fi
+          if health_report_valid "$health_out"; then
+            ok "$name/$cmd records complete per-subject machine health"
+          else
+            bad "$name/$cmd records complete per-subject machine health"
           fi
         fi
       fi

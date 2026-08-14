@@ -2,7 +2,7 @@
   "schema_version": 3,
   "cycle_id": "roadmap-coordination-churn-redesign-m6-retire-compatibility",
   "milestone": "M6 — retirement-readiness preparation (M6 remains unchecked)",
-  "critic": "fresh independent critic /root/m6_retire_compat/m6_readiness_critic",
+  "critic": "fresh independent critics /root/m6_retire_compat/m6_readiness_critic and /root/m6_health_collector/m6_health_critic",
   "initial_reviewed_commit": "835b3e719409a409fd169a7bff218c3ac3f5a256",
   "scope": [
     "requirements",
@@ -12,12 +12,17 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 3,
+  "repair_rounds": 8,
   "reviewed_commits": [
     "835b3e719409a409fd169a7bff218c3ac3f5a256",
     "2a3e65b649788cea0c65f078f50448ad49f8db72",
     "3c0f70ea36a7d9906f58c67aea953cdfefd1f1a2",
-    "bc9beb07074eea0d16a64cbe03599239ababa8a9"
+    "bc9beb07074eea0d16a64cbe03599239ababa8a9",
+    "8716d1a812d7329913336b12341f360303546d7f",
+    "4f02bc644bf73f83da923431f1ea6a6f0ab0eb08",
+    "ab900d50d2d7a49e7c80669860220496d8a4ea45",
+    "2d18ef9d8333fd00667aa4ea7758dd77abcafd78",
+    "8d605a8dcf089e88e878f164a78b098bbe0d26f4"
   ],
   "findings": [
     {
@@ -104,10 +109,89 @@
         "Verification: repair commit 2a3e65b649788cea0c65f078f50448ad49f8db72 adds docs/reports/evidence/** exactly once to each pull_request and main-push path filter in .github/workflows/policy.yml.",
         "Verification: tests/policy-runner/run.sh at repair head requires docs/reports/evidence/** to occur exactly twice; `bash tests/policy-runner/run.sh` reports `policy trigger coverage: ok`, closing the executable evidence dependency gap."
       ]
+    },
+    {
+      "id": "M6-HEALTH-HC-B1",
+      "severity": "blocker",
+      "summary": "Intent-reversal and partial-read zeros were initially inferred from absent or incomplete telemetry rather than complete machine observations of final applied outcomes.",
+      "evidence": [
+        "Verification: round 4 used nonexistent health labels, and round 5 hardcoded partial-success reads while lifecycle-shadow.json contained only reducer differences; neither source established a complete observation population.",
+        "Verification: round 6 health rows described the selected reducer proposal before reconcileStatusPrecedence, so a later winning legacy Status chore could reverse deliberate intent without appearing in the report."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: exact reviewed commit 8d605a8dcf089e88e878f164a78b098bbe0d26f4 emits health after final precedence and apply, accepts a Status winner only when its write is fresh-verified, and otherwise records the typed-scan current value.",
+        "Verification: every non-Auto, non-withheld finalApplied != intended result is a reversal; readiness independently recomputes every subject row, and production requires verified-apply mode plus seven successful main-branch daily artifacts whose downloaded ZIP bytes match the Actions digest.",
+        "Verification: Release build passed with zero warnings/errors and coord-engine replay passed 38/38 at the reviewed commit."
+      ]
+    },
+    {
+      "id": "M6-HEALTH-HC-B2",
+      "severity": "blocker",
+      "summary": "Repair classification initially depended on squash subjects and locally available ephemeral review commits, so it could not reproduce the #2587 review-round measure.",
+      "evidence": [
+        "Verification: the first collector scanned first-parent fix/docs subjects and missed behavior-changing commits with other subjects; the next repair still required PR commits to exist in the local clone."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: the final collector derives the schema-v3 reviewed-commit population and reads commits/comparisons through authenticated GitHub APIs, requires the expected merge base, and fails closed on the comparison file cap.",
+        "Verification: classification is subject-independent; PackageReleaseNotes-only project changes remain statement repairs unless behavior paths also change, preserving the #2587 prose-statement mechanism."
+      ]
+    },
+    {
+      "id": "M6-HEALTH-HC-B3",
+      "severity": "blocker",
+      "summary": "Release health initially treated tag presence or absence as sufficient evidence of coherent, resumable, or not-owed outcomes.",
+      "evidence": [
+        "Verification: adversarial round-4 and round-5 probes showed a coherent-set tag with only one component could be classified healthy without a complete publication saga."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: component-only publication now produces an incoherent raw row and no supported outcome; coherent publication requires all three component tags, the production assert-identity validator, descriptor/channel promotion identity, and two verified feed payloads.",
+        "Verification: no-release-owed is available only when exact-SHA coherent-set version authority is unchanged; visibly-resumable is conservatively not accepted without bound saga evidence."
+      ]
+    },
+    {
+      "id": "M6-HEALTH-HC-M1",
+      "severity": "major",
+      "summary": "GitHub Search results initially ignored incomplete responses and the 1000-result ceiling.",
+      "evidence": [
+        "Verification: a response with total_count 1500 and only 1000 items was accepted in the initial adversarial probe."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: exact reviewed commit 8d605a8dcf089e88e878f164a78b098bbe0d26f4 refuses incomplete_results, total/unique mismatches, duplicate/capped envelopes, and unknown successor results; the collector inversion fixture passes 16/16."
+      ]
+    },
+    {
+      "id": "M6-HEALTH-HC-M2",
+      "severity": "major",
+      "summary": "The policy implementation measure initially counted files or feature names instead of exhaustive independently removable implementation arms.",
+      "evidence": [
+        "Verification: the first inventory counted policy/subjects.json; later inventories omitted the Driver.fs legacy v1 review fallback, so retiring it would not change the measure."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: the final exact-SHA inventory contains 15 unique marker-bound arms, including old lifecycle behavior, both private GraphQL shims, legacy route and v1 review readers, and release entry points.",
+        "Verification: scoped discovery rules bind duplicate GraphQL, legacy-only review, and release-workflow families; missing paths, markers, duplicate identities, or discovery drift fail closed."
+      ]
+    },
+    {
+      "id": "M6-HEALTH-HC-M3",
+      "severity": "major",
+      "summary": "Raw observations and canonical replay initially did not bind all source inventories, byte populations, archive bytes, and reproduction identity.",
+      "evidence": [
+        "Verification: early raw envelopes omitted exact inventory paths and byte prefixes, and temp replay storage changed the embedded collector command so a genuine replay rejected itself."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: raw observations bind period SHAs, fixed prefix sets, exact unique inventories, byte snapshots, health runs, release rows, and downloaded Actions archive digests; replay validates its produced artifact before semantic comparison.",
+        "Verification: commit 2d18ef9d8333fd00667aa4ea7758dd77abcafd78 preserves the canonical reproduction argv independently of temporary replay storage; readiness passed 18/18 and policy runner all passed at the terminal reviewed head."
+      ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "bc9beb07074eea0d16a64cbe03599239ababa8a9",
+    "reviewed_commit": "8d605a8dcf089e88e878f164a78b098bbe0d26f4",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },

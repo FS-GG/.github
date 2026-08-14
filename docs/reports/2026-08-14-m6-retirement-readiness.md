@@ -26,8 +26,17 @@ snapshot harness imports the pure validators directly and cannot emit the produc
 Every non-GitHub measure must also equal a repository-relative observation artifact bound by SHA-256
 and carrying the source, measured-at instant, period boundaries, and structured reproduction argv;
 realpath containment rejects symlink escape. Arbitrary verification prose cannot authorize retirement.
-The production PASS path is deliberately disabled until a separately reviewed canonical collector can
-independently replay those non-GitHub observations. This preparatory change can block, never authorize.
+The production PASS path remains disabled while the separately reviewed canonical collector is under
+critique. `scripts/coordination-health-collector.py` owns the fixed UTC windows and independently derives
+GitHub counts, schema-v3 critique repair rounds, machine lifecycle/read observations, saga manifest and
+stable-channel release coherence, reviewed exact-SHA policy inventories, and tree-byte deltas across all
+implementation surfaces. The live reconciliation workflow retains a digest-bearing shadow artifact for
+each admitted run; the collector requires one successful complete observation on every UTC day and counts
+unexpected lifecycle differences. A successful typed-boundary reconciliation is also the machine basis for
+zero partial-success reads. It refuses a non-current authenticated `main`, incomplete/capped GitHub Search,
+missing release/feed receipts, and missing daily observations; it writes content-addressed raw evidence and
+accepts no caller-controlled period, count, or verdict. This preparatory change can still block, never
+authorize.
 
 ## Live successor disposition
 
@@ -36,11 +45,10 @@ the dual-feed fixture passed 28/28 and the live gate observed all 11 package-bea
 on both feeds. `.github#2586` was closed only after the lifecycle reducer suite passed 24/24 and the
 focused CLI precedence test passed 1/1.
 
-Compatibility retirement remains blocked by `.github#2561`, `.github#2569`, `.github#2587`, and the
-adjacent evidence/release-path rows enumerated in the JSON census. In particular, `Done.fs` still has
-the four bare connection windows described by #2561, and `Board.fs`/`Reads.fs` still carry the private
-GraphQL compatibility shims named by #2569. Their continued presence is evidence against retirement,
-not permission to delete them early.
+The refreshed fixed-query census removes closed #2106, #2409, #2561, #2582, and #2587. Compatibility
+retirement remains blocked by `.github#2569`: `Board.fs`/`Reads.fs` still carry the private GraphQL
+compatibility shims it names. Their continued presence is evidence against retirement, not permission
+to delete them early.
 
 ## Earliest honest continuation
 

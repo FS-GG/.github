@@ -3327,6 +3327,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Ok mode -> mode
                     | Error reason -> invalidArg "FSGG_COORD_LIFECYCLE_PROJECTION" reason
 
+                let resultLabel = function
+                    | LifecycleProjection.Project(status, _) -> statusWireName status
+                    | LifecycleProjection.Withheld reason -> $"withheld: %s{reason}"
+                let intentLabel = function
+                    | LifecycleProjection.Auto -> "auto"
+                    | LifecycleProjection.Backlog _ -> "backlog"
+                    | LifecycleProjection.HumanPark(AwaitingHumanDecision, _) -> "human-decision"
+                    | LifecycleProjection.HumanPark(AwaitingHumanAction, _) -> "human-action"
+                    | LifecycleProjection.Deferred _ -> "deferred"
+                let lifecycleHealthRows = ResizeArray<_>()
                 let lifecycleChores, lifecycleWatermarks, lifecycleShadowDifferences =
                     lifecycleItems
                     |> List.fold (fun (chores, watermarks, differences) item ->
@@ -3427,11 +3437,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             let shadow =
                                 LifecycleProjection.shadowAdvance
                                     LifecycleProjection.IntentStatusV1 intent watermark observation
+                            let selected = LifecycleProjection.select projectionMode shadow
+                            lifecycleHealthRows.Add(
+                                {| current = statusWireName item.Status
+                                   intended = resultLabel shadow.Intended
+                                   intent = intentLabel intent
+                                   readComplete = true
+                                   subject = item.Ref.Canonical |})
                             let differences =
                                 match shadow.Difference with
                                 | LifecycleProjection.Same -> differences
                                 | difference -> (item.Ref, difference, shadow.Legacy, shadow.Intended) :: differences
-                            match LifecycleProjection.select projectionMode shadow with
+                            match selected with
                             | LifecycleProjection.Project(destination, timestamp) ->
                                 match Chore.lifecycleProjection item destination with
                                 | Some chore ->
@@ -3453,9 +3470,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 |> Option.ofObj
                 |> Option.filter (String.IsNullOrWhiteSpace >> not)
                 |> Option.iter (fun path ->
-                    let resultLabel = function
-                        | LifecycleProjection.Project(status, _) -> statusWireName status
-                        | LifecycleProjection.Withheld reason -> $"withheld: %s{reason}"
                     let rows =
                         lifecycleShadowDifferences
                         |> List.sortBy (fun (subject, _, _, _) -> subject.Canonical)
@@ -3617,6 +3631,43 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Json -> printfn "%s" (renderReconcileJson includeOutcome rows)
                     | Text -> ()
 
+                let emitHealth (applicationMode: string) (applied: ReconcileRow list) =
+                    let verifiedStatusWrites =
+                        applied
+                        |> List.choose (fun row ->
+                            match row.Write, row.Outcome, row.Observed with
+                            | Some("Status", value), Some Written, Some _ -> Some(row.Subject.Canonical, value)
+                            | _ -> None)
+                        |> Map.ofList
+                    Environment.GetEnvironmentVariable "FSGG_COORD_HEALTH_REPORT"
+                    |> Option.ofObj
+                    |> Option.filter (String.IsNullOrWhiteSpace >> not)
+                    |> Option.iter (fun path ->
+                        let subjects =
+                            lifecycleHealthRows
+                            |> Seq.map (fun row ->
+                                let finalApplied = Map.tryFind row.subject verifiedStatusWrites |> Option.defaultValue row.current
+                                let reversal =
+                                    row.intent <> "auto"
+                                    && not (row.intended.StartsWith("withheld:", StringComparison.Ordinal))
+                                    && finalApplied <> row.intended
+                                {| applied = finalApplied
+                                   current = row.current
+                                   intended = row.intended
+                                   intent = row.intent
+                                   readComplete = row.readComplete
+                                   reversed = reversal
+                                   subject = row.subject |})
+                            |> Seq.sortBy (fun row -> row.subject)
+                            |> Seq.toArray
+                        let report =
+                            {| applicationMode = applicationMode
+                               completeReadBoundary = "typed-complete-success/1"
+                               schemaVersion = 1
+                               subjectCount = lifecycleItems.Length
+                               subjects = subjects |}
+                        File.WriteAllText(path, JsonSerializer.Serialize(report, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
+
                 match opts.Render with
                 | Json -> ()
                 | Text ->
@@ -3633,6 +3684,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 if not opts.Apply || List.isEmpty chores then
                     // The DRY RUN, and the nothing-to-do apply. No outcome exists, so none is claimed: the
                     // six-key rows here are byte-identical to what this verb has always emitted.
+                    emitHealth (if opts.Apply then "verified-apply" else "dry-run") []
                     emitJson (chores |> List.map (fun c -> reconcileRow c None)) false
                     ExitGreen
                 else
@@ -3935,6 +3987,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                           failed <- true
                                           reconcileRow chore (Some(Failed(Errors.explain e))) ]
 
+                        emitHealth "verified-apply" applied
                         emitJson applied true
 
                         // The DEFERRED writes, said out loud ONCE, on stderr, under `--json` only.

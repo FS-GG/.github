@@ -340,7 +340,10 @@ jobs:
           FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
           FSGG_LIFECYCLE_EVENT: ${{ github.event_name }}
           FSGG_LIFECYCLE_EVENT_AT: ${{ github.event.repository.updated_at || github.run_started_at }}
+          FSGG_COORD_LIFECYCLE_SHADOW_REPORT: artifacts/coordination-health/lifecycle-shadow.json
+          FSGG_COORD_HEALTH_REPORT: artifacts/coordination-health/health-observation.json
         run: |
+          mkdir -p artifacts/coordination-health
           set +e
           result="$(scripts/fsgg-coord reconcile --repo FS-GG/.github --apply --json --worker coord-board-reconcile)"
           rc=$?
@@ -358,3 +361,13 @@ jobs:
             exit 0
           fi
           exit "$rc"
+      - name: Retain the machine lifecycle/read-health observation
+        if: always() && steps.budget.outputs.defer != 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: coordination-health-${{ github.run_id }}
+          path: |
+            artifacts/coordination-health/lifecycle-shadow.json
+            artifacts/coordination-health/health-observation.json
+          if-no-files-found: error
+          retention-days: 90

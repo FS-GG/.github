@@ -11,12 +11,14 @@ on:
       - "scripts/policy-runner.py"
       - "scripts/evidence-manifest.py"
       - "scripts/coordination-retirement-readiness.py"
+      - "scripts/coordination-health-collector.py"
       - "registry/dependencies.yml"
       - "docs/registry/compatibility.md"
       - "tests/projection/**"
       - "tests/policy-runner/**"
       - "tests/evidence-manifest/**"
       - "tests/coordination-retirement-readiness/**"
+      - "tests/coordination-health-collector/**"
       - "docs/reports/evidence/**"
   push:
     branches: [main]
@@ -29,12 +31,14 @@ on:
       - "scripts/policy-runner.py"
       - "scripts/evidence-manifest.py"
       - "scripts/coordination-retirement-readiness.py"
+      - "scripts/coordination-health-collector.py"
       - "registry/dependencies.yml"
       - "docs/registry/compatibility.md"
       - "tests/projection/**"
       - "tests/policy-runner/**"
       - "tests/evidence-manifest/**"
       - "tests/coordination-retirement-readiness/**"
+      - "tests/coordination-health-collector/**"
       - "docs/reports/evidence/**"
   workflow_dispatch:
 

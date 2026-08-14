@@ -20,6 +20,7 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
     end = ("2026-08-24", "2026-08-31", "2026-09-07")[index]
     row = {
         "id": f"week-{index + 1}", "start": start + "T00:00:00Z", "end": end + "T00:00:00Z",
+        "start_sha": chr(ord('b')+index)*40, "end_sha": chr(ord('c')+index)*40,
         "issues_created": 1, "issues_closed": 2, "repair_commits": 20,
         "statement_only_repairs": 1, "intent_reversals": 0, "partial_success_reads": 0,
         "ambiguous_release_states": 0, "release_outcomes": ["no-release-owed"],
@@ -28,14 +29,30 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
         "workflows_start": 102-index, "workflows_end": 101-index,
         "generated_evidence_bytes_delta": 5, "core_and_test_bytes_delta": 10,
         "verification": ["fixture"]}
-    reproduce = ["fixture-collector", row["id"]]
-    observation = {"source_sha":"a"*40, "measured_at":"2026-09-07T00:00:00Z",
+    reproduce = ["python3","scripts/coordination-health-collector.py","--root",".","--output-dir","docs/reports/evidence/coordination-health"]
+    observation = {"schema_version":1, "source_sha":"a"*40, "measured_at":"2026-09-07T00:00:00Z",
                    "period_id": row["id"], "start":row["start"], "end":row["end"],
+                   "start_sha":row["start_sha"], "end_sha":row["end_sha"],
                    "reproduce":reproduce, **{key: row[key] for key in (
-        "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
+        "issues_created", "issues_closed", "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
         "ambiguous_release_states", "release_outcomes", "policy_implementations_start",
         "policy_implementations_end", "check_scripts_start", "check_scripts_end", "workflows_start",
         "workflows_end", "generated_evidence_bytes_delta", "core_and_test_bytes_delta")}}
+    observation["raw"] = {
+        "created": [{"id": 1}], "closed": [{"id": 1}, {"id": 2}],
+        "repair_classification": ([{"statement_only": True}] + [{"statement_only": False}] * 19),
+        "intent_reversal_events": [], "partial_success_events": [],
+        "machine_health_runs": [{"run_id":n,"artifact_id":n,"artifact_sha256":"sha256:"+"a"*64,"shadow":[],
+                                 "health":{"applicationMode":"verified-apply","completeReadBoundary":"typed-complete-success/1","subjectCount":1,
+                                           "subjects":[{"subject":"FS-GG/example","current":"Ready","intent":"auto","intended":"Ready",
+                                                        "applied":"Ready","readComplete":True,"reversed":False}]}} for n in range(1,8)],
+        "release_classification": [],
+        "inventory_snapshots": {"start":{"sha":row["start_sha"],"policy_implementations":[{"id":f"p{n}","path":f"p{n}","marker":f"m{n}"} for n in range(row["policy_implementations_start"])],"check_scripts":[f"c{n:03}" for n in range(row["check_scripts_start"])],"workflows":[f"w{n:03}" for n in range(row["workflows_start"])]},
+                                "end":{"sha":row["end_sha"],"policy_implementations":[{"id":f"p{n}","path":f"p{n}","marker":f"m{n}"} for n in range(row["policy_implementations_end"])],"check_scripts":[f"c{n:03}" for n in range(row["check_scripts_end"])],"workflows":[f"w{n:03}" for n in range(row["workflows_end"])]}},
+        "byte_snapshots":{"generated_prefixes":["docs/reports/evidence/","readiness/","work/"],
+                          "implementation_prefixes":["src/","tests/","scripts/","policy/",".github/actions/",".github/workflows/"],
+                          "start":{"sha":row["start_sha"],"generated":0,"implementation":0},"end":{"sha":row["end_sha"],"generated":5,"implementation":10}},
+        "prose_citation_gate": "prose-citations: ok (fixture)"}
     payload = json.dumps(observation, sort_keys=True, separators=(",", ":")).encode()
     artifact = pathlib.Path("observations") / f"week-{index + 1}.json"
     (root / artifact).write_bytes(payload)
@@ -43,6 +60,7 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
                          "reproduce": reproduce}
     rows.append(row)
 json.dump({"schema_version": 1, "measured_at": "2026-09-07T00:00:00Z", "source_sha": "a"*40,
+           "collector":{"schema_version":1,"command":["python3","scripts/coordination-health-collector.py","--root",".","--output-dir","docs/reports/evidence/coordination-health"]},
            "candidate_periods": rows, "same_class_open": [],
            "successor_queries": [
              'repo:FS-GG/.github is:open is:issue "LIFECYCLE-PROJECTION-LAG"',
