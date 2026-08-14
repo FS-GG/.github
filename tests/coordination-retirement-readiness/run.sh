@@ -12,12 +12,13 @@ fi
 grep -q 'issue creation must be below closure (0 !< 0)' "$WORK/live.out"
 grep -q 'same-class successor census is not empty' "$WORK/live.out"
 
-python3 - "$WORK/pass.json" <<'PY'
-import json, sys
+python3 - "$WORK/pass.json" "$WORK" <<'PY'
+import hashlib, json, pathlib, sys
 rows = []
+root = pathlib.Path(sys.argv[2]); (root / "observations").mkdir()
 for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
     end = ("2026-08-24", "2026-08-31", "2026-09-07")[index]
-    rows.append({
+    row = {
         "id": f"week-{index + 1}", "start": start + "T00:00:00Z", "end": end + "T00:00:00Z",
         "issues_created": 1, "issues_closed": 2, "repair_commits": 20,
         "statement_only_repairs": 1, "intent_reversals": 0, "partial_success_reads": 0,
@@ -26,25 +27,45 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
         "check_scripts_start": 49-index, "check_scripts_end": 48-index,
         "workflows_start": 102-index, "workflows_end": 101-index,
         "generated_evidence_bytes_delta": 5, "core_and_test_bytes_delta": 10,
-        "verification": ["fixture"]})
+        "verification": ["fixture"]}
+    observation = {"period_id": row["id"], **{key: row[key] for key in (
+        "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
+        "ambiguous_release_states", "release_outcomes", "policy_implementations_start",
+        "policy_implementations_end", "check_scripts_start", "check_scripts_end", "workflows_start",
+        "workflows_end", "generated_evidence_bytes_delta", "core_and_test_bytes_delta")}}
+    payload = json.dumps(observation, sort_keys=True, separators=(",", ":")).encode()
+    artifact = pathlib.Path("observations") / f"week-{index + 1}.json"
+    (root / artifact).write_bytes(payload)
+    row["provenance"] = {"artifact": str(artifact), "sha256": hashlib.sha256(payload).hexdigest(),
+                         "reproduce": ["fixture-collector", row["id"]]}
+    rows.append(row)
 json.dump({"schema_version": 1, "measured_at": "2026-09-07T00:00:00Z", "source_sha": "a"*40,
            "candidate_periods": rows, "same_class_open": [],
-           "successor_queries": ["fixture-query"],
+           "successor_queries": [
+             'repo:FS-GG/.github is:open is:issue "LIFECYCLE-PROJECTION-LAG"',
+             'repo:FS-GG/.github is:open is:issue GraphQL pagination',
+             'repo:FS-GG/.github is:open is:issue "partial read"',
+             'repo:FS-GG/.github is:open is:issue "feed coherence"',
+             'repo:FS-GG/.github is:open is:issue "partial publish"',
+             'repo:FS-GG/.github is:open is:issue "body hash"',
+             'repo:FS-GG/.github is:open is:issue "delivery-route receipt"',
+             'repo:FS-GG/.github is:open is:issue "legacy-only"',
+             'repo:FS-GG/.github is:open is:issue "statement" "projection"',
+             'repo:FS-GG/.github is:open is:issue "bulky evidence"'],
            "successor_census": [{"url":"https://example.invalid/not-same", "disposition":"not-same-class", "reason":"fixture"}]},
           open(sys.argv[1], "w"))
 PY
 cat >"$WORK/live.json" <<'JSON'
 {"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","periods":[{"id":"week-1","issues_created":1,"issues_closed":2},{"id":"week-2","issues_created":1,"issues_closed":2},{"id":"week-3","issues_created":1,"issues_closed":2}],"successor_urls":["https://example.invalid/not-same"]}
 JSON
-if python3 "$CHECK" "$WORK/pass.json" >"$WORK/offline.out"; then
+if python3 "$CHECK" "$WORK/pass.json" --root "$WORK" >"$WORK/offline.out"; then
   echo 'caller-authored positive evidence passed without live authentication' >&2; exit 1
 fi
 grep -q 'positive readiness requires --live-github' "$WORK/offline.out"
-FSGG_RETIREMENT_FIXTURE_OK=1 python3 "$CHECK" "$WORK/pass.json" \
-  --fixture-live-snapshot "$WORK/live.json" >"$WORK/pass.out"
-grep -q 'retirement readiness: PASS' "$WORK/pass.out"
+python3 "$ROOT/tests/coordination-retirement-readiness/fixture_validate.py" \
+  "$CHECK" "$WORK/pass.json" "$WORK/live.json" "$WORK" >"$WORK/pass.out"
 
-for mutation in equality gap partial successor evidence_growth nonweekly future inventory_reset live_mismatch; do
+for mutation in equality gap partial successor evidence_growth nonweekly future inventory_reset live_mismatch query_narrow provenance_tamper; do
   jq --arg mutation "$mutation" '
     if $mutation == "equality" then .candidate_periods[1].issues_closed = 1
     elif $mutation == "gap" then .candidate_periods[1].start = "2026-08-25T00:00:00Z"
@@ -55,14 +76,16 @@ for mutation in equality gap partial successor evidence_growth nonweekly future 
     elif $mutation == "future" then .measured_at = "2026-08-30T00:00:00Z"
     elif $mutation == "inventory_reset" then .candidate_periods[1].check_scripts_start = 100
     elif $mutation == "live_mismatch" then .source_sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    elif $mutation == "query_narrow" then .successor_queries = [.successor_queries[0]]
+    elif $mutation == "provenance_tamper" then .candidate_periods[0].repair_commits = 19
     else . end' "$WORK/pass.json" >"$WORK/$mutation.json"
-  if FSGG_RETIREMENT_FIXTURE_OK=1 python3 "$CHECK" "$WORK/$mutation.json" \
-       --fixture-live-snapshot "$WORK/live.json" >"$WORK/$mutation.out"; then
+  if python3 "$ROOT/tests/coordination-retirement-readiness/fixture_validate.py" \
+       "$CHECK" "$WORK/$mutation.json" "$WORK/live.json" "$WORK" >"$WORK/$mutation.out"; then
     echo "$mutation mutation unexpectedly passed" >&2; exit 1
   fi
 done
 
-FSGG_RETIREMENT_FIXTURE_OK=1 python3 "$CHECK" "$WORK/pass.json" \
-  --fixture-live-snapshot "$WORK/live.json" >"$WORK/repeat.out"
+python3 "$ROOT/tests/coordination-retirement-readiness/fixture_validate.py" \
+  "$CHECK" "$WORK/pass.json" "$WORK/live.json" "$WORK" >"$WORK/repeat.out"
 cmp "$WORK/pass.out" "$WORK/repeat.out"
-echo 'coordination retirement readiness: 13 passed, 0 failed'
+echo 'coordination retirement readiness: 15 passed, 0 failed'

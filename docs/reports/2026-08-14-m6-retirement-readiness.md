@@ -22,7 +22,9 @@ Missing and null values fail closed.
 Schema-valid positive evidence still cannot pass offline: the acceptance invocation adds
 `--live-github`, which resolves the source commit, re-derives each period's issue counts, and requires
 the union of the fixed successor searches to equal the fully classified candidate census. The test-only
-snapshot seam is environment-locked and cannot silently replace the live read.
+snapshot harness imports the pure validators directly and cannot emit the production CLI acceptance.
+Every non-GitHub measure must also equal a repository-relative observation artifact bound by SHA-256
+and carrying a structured reproduction argv; arbitrary verification prose cannot authorize retirement.
 
 ## Live successor disposition
 

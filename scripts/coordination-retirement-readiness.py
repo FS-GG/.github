@@ -12,16 +12,34 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timedelta
+import hashlib
 import json
 from pathlib import Path
 import re
-import os
 import subprocess
 import sys
 
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 RELEASE_OUTCOMES = {"coherent", "visibly-resumable", "no-release-owed"}
+CANONICAL_SUCCESSOR_QUERIES = [
+    'repo:FS-GG/.github is:open is:issue "LIFECYCLE-PROJECTION-LAG"',
+    "repo:FS-GG/.github is:open is:issue GraphQL pagination",
+    'repo:FS-GG/.github is:open is:issue "partial read"',
+    'repo:FS-GG/.github is:open is:issue "feed coherence"',
+    'repo:FS-GG/.github is:open is:issue "partial publish"',
+    'repo:FS-GG/.github is:open is:issue "body hash"',
+    'repo:FS-GG/.github is:open is:issue "delivery-route receipt"',
+    'repo:FS-GG/.github is:open is:issue "legacy-only"',
+    'repo:FS-GG/.github is:open is:issue "statement" "projection"',
+    'repo:FS-GG/.github is:open is:issue "bulky evidence"',
+]
+PROVENANCE_FIELDS = (
+    "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
+    "ambiguous_release_states", "release_outcomes", "policy_implementations_start",
+    "policy_implementations_end", "check_scripts_start", "check_scripts_end", "workflows_start",
+    "workflows_end", "generated_evidence_bytes_delta", "core_and_test_bytes_delta",
+)
 
 
 def timestamp(value: object, where: str, failures: list[str]) -> datetime | None:
@@ -51,7 +69,7 @@ def signed_integer(row: dict, name: str, where: str, failures: list[str]) -> int
     return value
 
 
-def validate(document: object) -> list[str]:
+def validate(document: object, root: Path = Path(".")) -> list[str]:
     failures: list[str] = []
     if not isinstance(document, dict):
         return ["root must be an object"]
@@ -136,6 +154,32 @@ def validate(document: object) -> list[str]:
             isinstance(value, str) and value.strip() for value in verification
         ):
             failures.append(f"{where}.verification: require at least one reproducible basis")
+        provenance = row.get("provenance")
+        if not isinstance(provenance, dict):
+            failures.append(f"{where}.provenance: require a content-addressed observation artifact")
+        else:
+            artifact, digest, reproduce = provenance.get("artifact"), provenance.get("sha256"), provenance.get("reproduce")
+            if not isinstance(artifact, str) or not artifact or Path(artifact).is_absolute() or ".." in Path(artifact).parts:
+                failures.append(f"{where}.provenance.artifact: require a repository-relative non-escaping path")
+            elif not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                failures.append(f"{where}.provenance.sha256: require an exact lowercase SHA-256")
+            elif not isinstance(reproduce, list) or not reproduce or not all(isinstance(value, str) and value for value in reproduce):
+                failures.append(f"{where}.provenance.reproduce: require a non-empty argv array")
+            else:
+                path = root / artifact
+                try:
+                    payload = path.read_bytes()
+                    observed = json.loads(payload)
+                    if hashlib.sha256(payload).hexdigest() != digest:
+                        failures.append(f"{where}.provenance: artifact SHA-256 mismatch")
+                    elif not isinstance(observed, dict) or observed.get("period_id") != row.get("id"):
+                        failures.append(f"{where}.provenance: artifact period_id mismatch")
+                    else:
+                        for field in PROVENANCE_FIELDS:
+                            if observed.get(field) != row.get(field):
+                                failures.append(f"{where}.provenance: artifact does not bind {field}")
+                except (OSError, json.JSONDecodeError) as error:
+                    failures.append(f"{where}.provenance: cannot read artifact: {error}")
 
     for index in range(1, len(parsed)):
         previous_end, current_start = parsed[index - 1][1], parsed[index][0]
@@ -169,8 +213,8 @@ def validate(document: object) -> list[str]:
         failures.append(f"same-class successor census is not empty ({len(successors)} open)")
     queries = document.get("successor_queries")
     census = document.get("successor_census")
-    if not isinstance(queries, list) or not queries or not all(isinstance(value, str) and value for value in queries):
-        failures.append("successor_queries must be a non-empty string array")
+    if queries != CANONICAL_SUCCESSOR_QUERIES:
+        failures.append("successor_queries must exactly equal the validator's canonical query universe")
     if not isinstance(census, list) or not census:
         failures.append("successor_census must be a non-empty classified candidate array")
     else:
@@ -218,7 +262,7 @@ def collect_live(document: dict) -> dict:
             "issues_created": sum(start <= datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")) < end for item in created),
             "issues_closed": sum(item.get("closed_at") is not None and start <= datetime.fromisoformat(item["closed_at"].replace("Z", "+00:00")) < end for item in closed),
         })
-    urls = sorted({item["html_url"] for query in document["successor_queries"] for item in search(query)})
+    urls = sorted({item["html_url"] for query in CANONICAL_SUCCESSOR_QUERIES for item in search(query)})
     return {"source_sha": source_sha, "periods": periods, "successor_urls": urls}
 
 
@@ -244,23 +288,17 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("evidence", type=Path)
     parser.add_argument("--live-github", action="store_true")
-    parser.add_argument("--fixture-live-snapshot", type=Path)
+    parser.add_argument("--root", type=Path, default=Path("."))
     args = parser.parse_args()
     try:
         document = json.loads(args.evidence.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         print(f"retirement readiness: ERROR: cannot read {args.evidence}: {error}", file=sys.stderr)
         return 1
-    failures = validate(document)
+    failures = validate(document, args.root)
     if not failures:
         try:
-            if args.fixture_live_snapshot:
-                if os.environ.get("FSGG_RETIREMENT_FIXTURE_OK") != "1":
-                    failures.append("--fixture-live-snapshot is test-only and requires FSGG_RETIREMENT_FIXTURE_OK=1")
-                else:
-                    observed = json.loads(args.fixture_live_snapshot.read_text(encoding="utf-8"))
-                    failures.extend(validate_live(document, observed))
-            elif args.live_github:
+            if args.live_github:
                 failures.extend(validate_live(document, collect_live(document)))
             else:
                 failures.append("positive readiness requires --live-github authenticated evidence")
