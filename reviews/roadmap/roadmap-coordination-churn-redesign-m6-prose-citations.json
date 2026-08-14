@@ -1,0 +1,65 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m6-prose-citations",
+  "milestone": "M6 successor #2587 — live prose citation contracts",
+  "critic": "m6-2587-critic",
+  "initial_reviewed_commit": "56a1dde200d36e36d0db015084183a92954fd7f8",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
+  "reviewed_commits": [
+    "56a1dde200d36e36d0db015084183a92954fd7f8",
+    "5fa82dfddf85025bb93245d392e2d9598f250deb"
+  ],
+  "findings": [
+    {
+      "id": "M6-2587-MAJ-001",
+      "severity": "major",
+      "summary": "The initial gate's hand-maintained subject and locality lists silently ignored live Markdown and broken citations under repository-owned roots outside its selected docs and prefix set.",
+      "evidence": [
+        "Verification: initial commit 56a1dde200d36e36d0db015084183a92954fd7f8, scripts/check-prose-citations.py:26-34 and :74-100 limited subjects to docs/** and locality to LOCAL_PREFIXES.",
+        "Verification: `python3 scripts/check-prose-citations.py --root /tmp/prose-probe.SGHS2S` at the initial commit exited 0 and examined only scripts/live.py:1 while the same tracked live Markdown cited missing `.fsgg/removed.yml:1`.",
+        "Verification: `gh issue view 2587 --repo FS-GG/.github --json body` AC1 requires a gate over repo-local path:line citations in tracked prose, and the issue's measured corpus was every tracked Markdown file."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: final commit 5fa82dfddf85025bb93245d392e2d9598f250deb derives owned roots and src namespaces from `git ls-files`, selects every tracked nonhistorical Markdown file, and runs the workflow without path filters; see scripts/check-prose-citations.py:25-111 and .github/workflows/prose-citations.yml:1-56.",
+        "Verification: `bash tests/prose-citations/run.sh` at final commit passed 8/8, including the exact outside-docs `.fsgg/removed.yml:1` escape; `python3 scripts/check-prose-citations.py --root .` passed over 396 live Markdown documents and 73 local citations.",
+        "Verification: `bash tests/paths-coherence/run.sh` at final commit passed 72/72, including the shipped workflow closure checks."
+      ]
+    },
+    {
+      "id": "M6-2587-MAJ-002",
+      "severity": "major",
+      "summary": "The initial ADR assigned issue and pull-request body claims to an equivalent review-time control that the operational review contract did not contain.",
+      "evidence": [
+        "Verification: initial commit 56a1dde200d36e36d0db015084183a92954fd7f8, docs/adr/0074-live-prose-citations-are-local-file-contracts.md:33-39 required repository/revision and command-or-check provenance for remote body claims, but the diff made no corresponding operational review-guidance change.",
+        "Verification: `rg -n 'path:line|suite[- ]green|suite is green|repository/revision' .agents/skills .claude/skills docs/coordination policy profile` at the initial commit found only generic handoff provenance; .agents/skills/pnext-item/references/independent-review.md:332-344 allowed a file:line basis without the ADR's body-specific repository/revision or count/suite command rule.",
+        "Verification: `gh issue view 2587 --repo FS-GG/.github --json body` AC3 requires the implementation to state where the equivalent issue/PR-body check lives when remote bodies are outside the static gate."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: final commit 5fa82dfddf85025bb93245d392e2d9598f250deb adds the issue-and-pull-request body evidence rule to both packed pnext-item independent-review roots, requiring repository/revision or stable URL for cross-repository citations, command/check provenance for counts and suite verdicts, and excluding unverified claims from acceptance evidence.",
+        "Verification: `bash tests/skill-quality/run.sh` at final commit passed the live semantic/projection checks and all 46 rejection cases, proving both runtime projections agree and the packed protocol remains valid.",
+        "Verification: `bash tests/kit-package/run.sh`, `bash tests/kit-published-coherence/run.sh`, `bash tests/coherent-set-version/run.sh`, and `bash tests/engine-release-notes/run.sh` at final commit passed 16/16, 181/181, 13/13, and 25/25 respectively; coherent version 0.57.0 and its release rationale/notes cover the receiver-visible review protocol change."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "5fa82dfddf85025bb93245d392e2d9598f250deb",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

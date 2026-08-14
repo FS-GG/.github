@@ -493,6 +493,11 @@
          diagnostic, which is receiver-visible; under the coherent-set scheme (#2402) that bump belongs
          to $(FsggCoherentSetVersion) in Directory.Build.props, not a literal here, and is scheduled by
          `kit-auto-publish` rather than authored by this PR. -->
+    <!-- 0.56.0 -> 0.57.0, a MINOR (.github#2587): packed pnext-item independent-review guidance now
+         rejects issue/PR body path, count, and suite-verdict claims as acceptance evidence unless
+         they carry repository/revision (or stable-URL) and command/check provenance. That is a new
+         receiver-visible reviewer protocol boundary. The engine and drivers move only because the
+         packages share $(FsggCoherentSetVersion). -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>

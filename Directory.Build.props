@@ -210,9 +210,15 @@
        large closure and project-item sets: four previously bare GraphQL windows now refuse an
        incomplete read instead of silently deriving red, green, or NoStatus from a hidden tail.
        This new refusal boundary is observable coordination behaviour, so a patch would understate
-       the change and the coherent set requires a real release. -->
+       the change and the coherent set requires a real release.
+
+       0.56.0 -> 0.57.0 is a MINOR. .github#2587 changes receiver-visible packed pnext-item review
+       guidance: issue and pull-request body path/count/suite claims now require repository/revision
+       and command/check provenance before they can serve as acceptance evidence. This is a new
+       reviewer protocol boundary, not a correction to an existing description; the engine and
+       drivers move only because all three packages are one coherent set. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.56.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.57.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

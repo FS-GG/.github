@@ -1032,7 +1032,7 @@ distinction is load-bearing):
 | probe | result |
 | --- | --- |
 | `tests/composition/lib/skill-union.sh` | **exists** — blob `468096b`, 47 291 B; defines `assert_skill_union` |
-| `assert_skill_union` callers | `tests/composition/stages/05-build.sh:157` (orchestrated lane, co-tenants `fs-gg-sdd-*`) and `tests/composition/stages/05b-standalone.sh:44` (standalone spec-kit lane, `speckit-*`) — **both lanes** |
+| `assert_skill_union` callers | `FS-GG/FS.GG.Templates@574e90cba82653f4c1aab9f2777eb17fa683c1ba:tests/composition/stages/05-build.sh:157` (orchestrated lane, co-tenants `fs-gg-sdd-*`) and `FS-GG/FS.GG.Templates@574e90cba82653f4c1aab9f2777eb17fa683c1ba:tests/composition/stages/05b-standalone.sh:44` (standalone spec-kit lane, `speckit-*`) — **both lanes** |
 | first landed | [`574e90c`](https://github.com/FS-GG/FS.GG.Templates/commit/574e90cba82653f4c1aab9f2777eb17fa683c1ba), merged **2026-07-02**, PR [Templates#51](https://github.com/FS-GG/FS.GG.Templates/pull/51), which discharged Templates#49 by a closing keyword in its body |
 | the grep-and-skip shape | **retired by that same PR** — it removed the `scaffold.providerWroteSddTree` grep-and-SKIP lockstep ([Templates#47](https://github.com/FS-GG/FS.GG.Templates/issues/47)) in favour of hard failure; `assert_skill_union`'s unreachable-fetch arm calls `bad`, never `skip` |
 | how it runs the assertion | **the same authority script, not a reimplementation** — `dist/skill-union-assert.sh` (the self-contained bundle generated from `scripts/skill-union-assert.sh`), fetched content-addressed at a pinned 40-hex `SKILL_ASSERT_REF` |

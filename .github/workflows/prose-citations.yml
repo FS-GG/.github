@@ -1,0 +1,56 @@
+name: prose-citations
+
+on:
+  # The subject is every tracked Markdown file, including a future top-level root. An unfiltered
+  # trigger is the only closed-world selection; a hand-maintained roots list would recreate #2587.
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prose-citations-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Prove the gate can reject a genuine offender
+        run: bash tests/prose-citations/run.sh
+
+  live-prose:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Check tracked live prose
+        id: check
+        run: |
+          rc=0
+          python3 scripts/check-prose-citations.py --root . || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+      - name: 'OK: every local citation resolves'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: echo "prose-citations OK" >> "$GITHUB_STEP_SUMMARY"
+      - name: 'FINDING: a local citation names no tracked file'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: exit 1
+      - name: 'NO VERDICT: subject or corpus is empty'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: exit 1
+      - name: 'INCONCLUSIVE: unknown exit code'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: exit 1

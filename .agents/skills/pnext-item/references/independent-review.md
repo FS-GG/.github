@@ -289,7 +289,7 @@ anything, because `if: false` on every step and `continue-on-error` are each gre
 
 ### Worked example
 
-`FS.GG.Templates#379`'s lane-coverage guard states at `tests/composition/lib/lane-coverage.sh:37-38`
+`FS.GG.Templates#379`'s lane-coverage guard states at `FS-GG/FS.GG.Templates@9e59fab2de74c7190055eedd30507074301d411a:tests/composition/lib/lane-coverage.sh:122-125`
 that it exists *"so that deleting the step reds too"*. It was implemented as an **unanchored**
 `grep -qF 'tests/composition/run.sh'`, and `composition.yml` carries that string twice: once at the
 real invocation, and once inside a `#` comment. Replacing the real invocation with
@@ -342,6 +342,16 @@ verify that the `Verification:` field is present and contains either a reproduci
 `unverified`. A missing field is a detectable incomplete handoff, never evidence that the assertion was
 checked. This requirement binds the host when relaying worker or critic claims onward, as well as the
 worker and critic who authored them.
+
+### Issue and pull-request body evidence
+
+Before accepting a newly filed or materially edited issue/PR body, independently re-derive every
+checkable `path:line`, count, and suite-green claim it relies on. A local citation names the exact
+tracked path; a cross-repository citation names `OWNER/REPOSITORY@REVISION:path:line` or a stable URL.
+A count or suite verdict names the command or check URL that produced it. Record that basis in the
+handoff's `Verification:` field. If no reproducible basis exists, write `Verification: unverified` and
+do not treat the claim as acceptance evidence. This review-time check owns remote bodies because a
+source-only CI checkout cannot enumerate existing issue/PR text (`ADR-0074`, `.github#2587`).
 
 ## Body-edit provenance — the REST timeline does not surface body edits
 
