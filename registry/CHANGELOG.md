@@ -19,6 +19,21 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **coord-engine coherent set `0.57.0` published, adopted, and pinned**
+  (owner `github`; [.github#2587](https://github.com/FS-GG/.github/issues/2587);
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.57.0)).
+  `package-version` catches up with source `0.57.0`, and the distributed dotnet-tool manifest moves
+  from `0.56.0` to `0.57.0`, only after stable promotion. Prepare run `31842081260` packed the set
+  once from merged source `5fd45a7987e60cfc532837992c5f1d1f2aa31c01`; the initial publishers
+  reached both feeds but timed out awaiting nuget.org indexing, so manifest-bound observation-only
+  resumptions `31842740819`, `31842743671`, and `31842745926` completed without repacking. Promotion
+  observer `31842920120` passed. Content ID is
+  `sha256:1fa1359b0716fbf22dd6939d34dcbc9973a1666cb9ee6e947c9d9b956ceb7a30`; final manifest and
+  stable-channel SHA-256 values are `8c2d8906c29784d4694e52cebe714ed677130a110c6e8b67692ac3336b49f945`
+  and `757e526d918eac5295b9570a5df63beda287fb8ec9ef4c0569bffbf8110ec5ae`.
+  Both feeds serve all three packages at `0.57.0`; their normalized payload hashes match the prepared
+  artifacts (`Coord.Cli` `2726db17…`, Drivers `122cb045…`, Kit `079f827b…`).
+
 - **2026-08-14** — **coord-engine coherent set `0.56.0` published, adopted, and pinned**
   (owner `github`; [.github#2561](https://github.com/FS-GG/.github/issues/2561);
   [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.56.0)).
