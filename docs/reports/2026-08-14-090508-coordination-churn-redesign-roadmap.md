@@ -259,6 +259,9 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   scripts, tests, and documentation but no packable product bytes, version, registry row, or release manifest,
   so the objective coherent-set release gate says no release is owed. M6 owns removal of retained historical
   TRX and other compatibility paths after its three-cycle health gate.
+- **Delivery:** PR [#2616](https://github.com/FS-GG/.github/pull/2616) carries the bounded M5 change from
+  exact base `7a9b8742f259af4d82b9562bfbe8e40d963b0be7`; the implementation critique remains bound to
+  `c909b8ed580f7b6de6b3d9c9115bdcbe96aa6896`, before the roadmap-only evidence commits.
 
 ### M0 stabilization evidence
 
