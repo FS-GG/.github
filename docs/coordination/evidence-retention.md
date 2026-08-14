@@ -26,6 +26,8 @@ projections, and `scripts/skill-view check --source .agents/skills --tree .` pro
 the same bytes. M5 does not replace those product-specific sources or their generation gate. The CI subjects
 consolidated here live in `policy/subjects.json` and are executed by one runner and one workflow. Adding another
 subject in this family changes the inventory instead of adding another entry-point workflow.
+The local workflow-derived selector recognizes that runner invocation and expands the same inventory,
+so consolidated subjects remain wired without restating their commands in workflow YAML.
 
 The `policy` workflow demonstrates the operational retention path: it captures the runner's potentially long
 output, creates its content-addressed manifest, and uploads both with `retention-days: 90`. The workflow run URL
