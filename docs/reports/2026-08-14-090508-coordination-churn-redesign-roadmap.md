@@ -204,7 +204,7 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   - Deliverables: Add release manifest; pack once; validate exact artifacts; add resumable orchestration and coherent-channel promotion
   - Exit criteria: One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes
 
-- [ ] **M4 — structured decisions**
+- [x] **M4 — structured decisions**
   - Target: Weeks 2–3
   - Deliverables: Add route and review revision records; dual-read legacy evidence; migrate active items
   - Exit criteria: Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision
@@ -421,6 +421,83 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   provider. The user-authorized Chainsaw path bypassed only those unavailable lifecycle mechanics;
   M3 fabricated no SDD, cycle, or feedback artifact and retained credentials, trusted publishing,
   security, review, CI, exact-artifact, registry, and post-merge verification requirements.
+
+### M4 structured-decisions evidence
+
+- **Structured authority boundary:** Route records now bind the subject, scope, dependencies,
+  touch set, policy inputs, route, revision, predecessor digest, gates, and rationale. Review records
+  bind the subject, exact 40-hex head, critic, verdict, accepted exceptions, policy inputs,
+  revision, predecessor digest, review kind, round, and actual comment backlinks. Narrative issue or
+  pull-request body edits are not inputs to either effective-decision reducer. Verification:
+  `tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs`,
+  `tests/FS.GG.Coord.Cli.Tests/DeliveryRouteCliTests.fs`, and
+  `tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs` exercise canonical encoding, revision and
+  digest linkage, stale revision, changed structured input, malformed marker, and body-only edit
+  cases through the production reducers and CLI projections.
+- **Append-only review generations:** The v2-only `review record` writer derives revisions and
+  digests, checks backlinks against the actual observed comment URLs before writing, and preflights
+  acceptance through the effective review parser. An accepted generation may be followed by a fresh
+  critic generation only after the exact PR head moves; the global revision/digest ledger remains
+  contiguous and the prior accepted generation is retained as retired history. Verification:
+  `tests/coord-engine-e2e/writes.sh` passed 151/151 assertions using writer-returned URLs, refusing a
+  fabricated backlink without posting and validating both an ordinary accepted generation and a
+  moved-head replacement. `tests/review-post-acceptance-head-move/run.sh` and the structured Core
+  tests refuse same-head restart and preserve fresh-critic succession.
+- **Complete reads, dual-read, and migration:** Every effective v2 route/review decision drains the
+  complete comment connection; records buried beyond the former 100-comment window still validate,
+  while a missing or tampered predecessor fails closed. Legacy v1 evidence remains read-only and
+  the live JSON/text boundaries emit `legacy-only`, `structured-only`, `equivalent`, or `divergent`;
+  any malformed v2 evidence prevents fallback to v1. Verification: the corrected live migration
+  census at `docs/reports/evidence/2026-08-14-m4-structured-decision-migration.json` drained 125 open
+  FS-GG issue/PR collections and every comments connection. It found 30 historical v1 route markers
+  across 22 open issues and no review markers. Twenty-one currently effective `legacy-only` routes
+  were appended through the production v2-only writer; every immediate and final production reread
+  classified the pair `equivalent`, with zero divergence. The remaining v1 marker on `.github#1858`
+  is inactive: the production reader refuses it because its subject revision is stale. The final
+  effective recensus is therefore 21 equivalent, zero divergent, and zero active legacy-only
+  decisions. The production-derived representative replay remains fixed at
+  `tests/FS.GG.Coord.Core.Tests/fixtures/structured-decisions/active-migration.json`.
+- **Compatibility trigger:** V1 decoding is removed only in M6 after three consecutive healthy
+  operating cycles have zero unexplained dual-read differences, zero active legacy-only decisions,
+  and a successful rollback rehearsal. Verification: the owner, metrics, rollback, and removal
+  trigger are stated in `docs/coordination/structured-decisions.md`; authoring guidance writes only
+  v2 and refuses legacy markers.
+- **Tests and independent review:** The final workflow-derived selector passed 48/48 suites in 843
+  seconds, including Core 875/875, CLI 843/843, GitHub 608/608, E2E 151/151, parity 648/648 with zero
+  unmeasured cases, head-move 6/6, critic-succession 16/16, pinned ShellCheck 48/48, and 521 shipped
+  shell files clean. Verification: the same independent critic reviewed the exact implementation
+  chain through `15a1a48e2bbc3fb803265c521c4996ab4475006a`, resolved five major findings over four repair
+  rounds, and recorded a passing schema-v3 verdict with no unresolved blocker/major in
+  `reviews/roadmap/roadmap-coordination-churn-redesign-m4-structured-decisions.json`.
+- **Normal delivery and post-merge release:** Preparatory
+  [PR #2610](https://github.com/FS-GG/.github/pull/2610) passed 64 checks with one intentional skip
+  and merged normally as `69b59c2ec718ade12d8c7c2deec298e8ada65c51`. Prepare run
+  [31821043249](https://github.com/FS-GG/.github/actions/runs/31821043249) packed the coherent 0.55.0
+  set once from that exact SHA. Release ID `github:0.55.0`, policy `release-saga/1`, and content ID
+  `sha256:9c54b273b225b4d0a2a8b52ac8b7bc20b10b154e34469b565a3087761c8aca0a` bind the
+  [stable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.55.0); all three
+  package tags resolve to the merge SHA. Verification: input/GitHub archive SHA-256 values are
+  Coord.Cli `be51325182c319d077582325c0fee3a1ee22b8e1aff0c3e27579de61f4406a02`, Drivers
+  `fc7b6dfe94dc2145551c176fa1a201e47fb119aab48b392933ce89e1aa6c78ae`, and Kit
+  `6801d5f55dcd7e595ae7b147028c995c65947ec046bfb209179ea2c6f8388dde`; NuGet signed archives are
+  `707bc0f645b723f6917468a55deeb0beb6461e6c1762128ba6a4ad020dc1e96e`,
+  `06808e1ddff2057ead71b42ab8d5a19a440c987ee4b743bcf12e467f8c9ffbce`, and
+  `9041134d36e534ceb3a3b9cb492260d127807aa56519278c9aef9cfe6bfa8f68`, with identical payload hashes
+  `c2011c8e0c75a54cee982b5cc390347375d792d7c77ec35d661121ce8f2b2da0`,
+  `e33131fb176f8ae6cf089d362124d7c5ee6f64d15581e107428ecfefb3a741fc`, and
+  `a8af8855c9a6ac94dac7be8936d778e556fd8700636f8609576e8d043cb48b6f`. Initial trusted-publisher
+  runs `31821283125`, `31821283003`, and `31821283498` recorded accepted-but-not-yet-indexed NuGet
+  pushes; after all three flat-container probes returned 200, manifest-bound resumptions
+  `31821910308`, `31821912638`, and `31821914724` and final promotion observer `31822085433` passed
+  without repacking or replacing bytes. The final manifest and stable receipt SHA-256 values are
+  `71935c0f629969f3f1bd9e05a3c77ba019ce88274a89b3977019233121589415` and
+  `70eb50bdc007e3873459f084ecfd98333e8d41651519065b11a6a518136eb91e`;
+  `scripts/check-release-coherence.py` reports the full 0.55.0 trio on both feeds and no completion gap.
+- **Lifecycle exception:** This kit-source tree still has no usable SDD cycle or feedback-report
+  provider. Verification: the user-authorized Chainsaw path bypassed only those unavailable
+  lifecycle mechanics; M4 fabricated no SDD, cycle, or feedback artifact and retained safety,
+  independent critique, normal PR checks and merge, trusted publishing, and exact external
+  verification.
 
 ### Cross-cutting health measures
 

@@ -12,13 +12,15 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 4,
+  "repair_rounds": 6,
   "reviewed_commits": [
     "9f259a689485f9e2e66b52ad929fb7e0b091c54f",
     "7521234bcebbd96386abedfe990333b1626344a4",
     "1b370441a977187509c9ebf5c45cc56dc38ff288",
     "6aa5a4748b40d13e950ca323618f8bea667e6af4",
-    "15a1a48e2bbc3fb803265c521c4996ab4475006a"
+    "15a1a48e2bbc3fb803265c521c4996ab4475006a",
+    "21beadf3c58967bb4bc62e1d0c0d07084aeb5968",
+    "52de1d2707ffc8b9f192e77597bdc4e6c62165bb"
   ],
   "findings": [
     {
@@ -95,7 +97,11 @@
         "Verification: registry/dependencies.yml truthfully leaves package-version at 0.54.0 and no 0.55.0 external feed evidence exists before merge; the normal post-merge coherent-set release and external verification remain required before milestone completion.",
         "Verification: exact repair-round-2 head retains coherent source version 0.55.0 and regenerated Kit/Drivers/publishing projections; the PR-arm publication gate remains green. This resolves the implementation/review gate while leaving the explicitly recorded post-merge release and external-verification obligation for the host before milestone completion.",
         "Verification: repair-round-3 exact head 6aa5a4748b40d13e950ca323618f8bea667e6af4 changes only registry/CHANGELOG.md relative to the passing critique head and adds the required human 0.55.0 source-intent entry while truthfully retaining package-version 0.54.0 until publication; `python3 scripts/check-registry-changelog.py --changed registry/CHANGELOG.md` and `git diff --check 2ced02a3cb8450d2f1cf4adf5674a1733ea19657..6aa5a4748b40d13e950ca323618f8bea667e6af4` both exit 0.",
-        "Verification: repair-round-4 exact head 15a1a48e2bbc3fb803265c521c4996ab4475006a changes only the two deterministic skill manifests after the round-3 critique commit: pnext-item SKILL/reference and publishing-and-deployment file/tree digests advance to match the already-reviewed 0.55 guidance bytes. `scripts/generate-driver-manifest --check` reports both manifests current and `git diff --check 6aa5a4748b40d13e950ca323618f8bea667e6af4..15a1a48e2bbc3fb803265c521c4996ab4475006a` exits 0."
+        "Verification: repair-round-4 exact head 15a1a48e2bbc3fb803265c521c4996ab4475006a changes only the two deterministic skill manifests after the round-3 critique commit: pnext-item SKILL/reference and publishing-and-deployment file/tree digests advance to match the already-reviewed 0.55 guidance bytes. `scripts/generate-driver-manifest --check` reports both manifests current and `git diff --check 6aa5a4748b40d13e950ca323618f8bea667e6af4..15a1a48e2bbc3fb803265c521c4996ab4475006a` exits 0.",
+        "Verification: round-5 live `gh release view coherent-set/v0.55.0` reports a public non-draft stable release targeting exact merged source 69b59c2ec718ade12d8c7c2deec298e8ada65c51; prepare run 31821043249, resumptions 31821910308/31821912638/31821914724, and promotion 31822085433 all completed successfully at that exact source.",
+        "Verification: all three remote v0.55.0 package tags resolve to 69b59c2ec718ade12d8c7c2deec298e8ada65c51. Independent release-asset downloads reproduce manifest SHA-256 71935c0f629969f3f1bd9e05a3c77ba019ce88274a89b3977019233121589415, stable receipt SHA-256 70eb50bdc007e3873459f084ecfd98333e8d41651519065b11a6a518136eb91e, and all three documented input archive hashes.",
+        "Verification: the downloaded manifest binds release github:0.55.0, policy release-saga/1, source 69b59c2ec718ade12d8c7c2deec298e8ada65c51, content sha256:9c54b273b225b4d0a2a8b52ac8b7bc20b10b154e34469b565a3087761c8aca0a, both feeds verified for every package, and channel promoted; direct NuGet flat-container probes return HTTP 200 for all three 0.55.0 packages.",
+        "Verification: at round-5 evidence head 21beadf3c58967bb4bc62e1d0c0d07084aeb5968, `python3 scripts/check-release-coherence.py`, `python3 scripts/check-kit-published-coherence.py`, projection/manifest/changelog checks, `scripts/test --assert-wired`, and diff-check all exit 0. The release obligation is externally complete."
       ]
     },
     {
@@ -116,10 +122,30 @@
         "Verification: repair-round-2 E2E appends both accepted generations through the live v2-only writer using actual returned comment URLs; both acceptance outputs report effectiveChainValidated=true and writes.sh passes 151 of 151 assertions.",
         "Verification: the uninterrupted workflow-derived selector in /tmp/m4-selector-repair2.log passed all 48 selected suites at exact repair-round-2 head, including review-post-acceptance-head-move and the structured Core/CLI tests."
       ]
+    },
+    {
+      "id": "M4-STRUCTURED-CRIT-006",
+      "severity": "major",
+      "summary": "The claimed empty active-migration set is false: open FS-GG items still carry current, effective legacy-only route authorizations.",
+      "evidence": [
+        "Verification: a fresh complete GitHub REST census at round-5 review paginated the org:FS-GG state:open search and every returned issue/PR comment collection; 125 current open collections contain 30 comments whose bodies canonically begin with v1 route/review markers.",
+        "Verification: canonical v1 markers occur on open .github items #2587, #2586, #2584, #2581, #2580, #2576, #2575, #2571, #2569, #2561, #2557, #2556, #2555, #2551, #2546, #2545, #2469, #2409, #2396, #2249, #2230, and #1858; `gh issue view` confirms the sampled items remain open and their comments begin with the exact v1 marker.",
+        "Verification: live production `scripts/fsgg-coord delivery-route show --json` reports evidenceClassification legacy-only, kind current, and revision null for .github#2587, #2551, #2396, and #2249. These records are effective machine authorization, not inert quotations or stale history.",
+        "Verification: docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md at evidence head 21beadf3c58967bb4bc62e1d0c0d07084aeb5968 nevertheless checks M4 complete and claims a scan of 123 collections found zero active v1 route/review markers; the claim is contradicted by live complete reads and M4's required active-item migration remains incomplete."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at repair round 5; safely append structured v2 migrations for every currently effective legacy-only decision, classify/review any divergence, rerun a complete effective-decision census, and correct the roadmap evidence before M4 can pass.",
+        "Verification: repair-round-6 evidence head 52de1d2707ffc8b9f192e77597bdc4e6c62165bb adds a content-addressed migration evidence document and corrects the roadmap claim. Its JSON invariants prove 125 fully drained open collections, 30 historical v1 route markers, 21 v2 route markers, zero review markers, 21 unique migrated subjects/comment IDs/digests, 21 equivalent classifications, zero divergent, and zero effective legacy-only decisions.",
+        "Verification: an independent live production replay ran `delivery-route show --json` for every one of the 21 evidence subjects and matched the recorded revision 1, exact digest, and equivalent classification with zero mismatches. `.github#1858` independently exits 1 with `subjectRevision is stale`, confirming the sole v1-only record is inactive and grants no authorization.",
+        "Verification: independent live reads of all 21 issues compared each appended v2 record against the latest legacy record and current body: scope equals declaredImpacts, dependencies equals observedFacts, touchSet equals the last canonical Paths declaration, route/SDD bindings are identical, and the evidence comment ID/digest match. All 21 mappings passed with zero errors.",
+        "Verification: an independent parallel complete census at confirmation time drained all 125 current open org collections and 255 comments and reproduced routeV1=30, routeV2=21, reviewV1=0, and reviewV2=0. Effective production reads distinguish the 21 equivalent pairs from the one stale inactive v1-only subject.",
+        "Verification: /tmp/m4-evidence-selector.log records the post-migration workflow-derived selector passing 26 of 26 suites in 216 seconds; projection, manifest, changelog, release coherence, Kit published coherence, wired-suite, evidence JSON, and diff gates were also green at exact repair-round-6 head."
+      ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "15a1a48e2bbc3fb803265c521c4996ab4475006a",
+    "reviewed_commit": "52de1d2707ffc8b9f192e77597bdc4e6c62165bb",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
