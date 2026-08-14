@@ -70,6 +70,34 @@ module ApplicationServiceTests =
         Assert.Empty(Client.filingLaneOfOne narrow (TouchSet.parse "Paths: docs/reports/new-file.md") existing)
         Assert.Empty(Client.filingLaneOfOne otherRepo (TouchSet.parse "Paths: docs/reports") existing)
 
+    [<Fact>]
+    let ``M1 explicit Backlog lifecycle projection owns precedence over live-claim lag`` () =
+        let item =
+            Snapshot.parse
+                """{"schema":"fsgg.coord.snapshot/1","allowBacklog":false,"items":[{"owner":"FS-GG","repo":"FS.GG.SDD","number":42,"status":"Backlog","state":"OPEN","body":"Paths: src/A.fs","claim":{"worker":"w-a","ageSeconds":1,"prevStatus":"Backlog","liveness":{"kind":"lease-held"}}}]}"""
+            |> Result.defaultWith (fun errors -> failwithf "fixture snapshot did not parse: %A" errors)
+            |> fun request -> request.Candidates.Head.Item
+        let legacy = Chore.derive [ item ]
+        let lifecycle = Chore.lifecycleProjection item InProgress |> Option.toList
+        let backlogIntent =
+            LifecycleProjection.Backlog
+                { Revision = 42L
+                  Reason = "operator park" }
+        let watermark : LifecycleProjection.Watermark =
+            { ObservedAt = 42L
+              Status = InProgress
+              Intent = Some backlogIntent }
+
+        let selected =
+            Client.reconcileStatusPrecedence legacy lifecycle (Map.ofList [ item.Ref, watermark ])
+
+        Assert.Equal<string list>([ "LIFECYCLE-PROJECTION-LAG" ], selected |> List.map _.Kind.RuleId)
+
+        let automatic = { watermark with Intent = Some LifecycleProjection.Auto }
+        let control =
+            Client.reconcileStatusPrecedence legacy lifecycle (Map.ofList [ item.Ref, automatic ])
+        Assert.Equal<string list>([ "CLAIM-STATUS-LAG" ], control |> List.map _.Kind.RuleId)
+
     let private row number repo title status state isPullRequest : Scan.Row =
         { Ref =
             { Owner = "FS-GG"

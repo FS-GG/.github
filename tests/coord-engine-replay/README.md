@@ -18,15 +18,15 @@ This directory does not replace either of those suites and deletes nothing from 
 - `compare.py` — diffs a command's actual JSON output against a fixture's checked-in expectation.
 - `run.sh` — the CI leg (`.github/workflows/coord-engine.yml`, `.github/workflows/release-coord-engine.yml`).
 - `fixtures/<name>/transcript.json` — the recorded request/response pairs.
-- `fixtures/<name>/expected/{reconcile,ready,driver-events}.json` — the checked-in expectation each is
-  replayed against.
+- `fixtures/<name>/expected/{reconcile,ready,driver-events}.json` — the checked-in command expectation;
+  `reconcile-shadow.json` records classified legacy/intent differences from the same run.
 - `fixtures/<name>/manifest.json` *(optional)* — names commands allowed to mismatch
   (`expectFailure.commands`) and why. Not currently used by any checked-in fixture: it existed for
   `fixtures/2216-oscillation/` until `.github#2384` fixed the defect that marker tracked; kept here as
   the mechanism for the next fixture that needs to prove an instrument catches a bug this suite does not
   yet fix.
 
-## Fixtures (3, ~152 KB total — see `du -sh fixtures/*` to recheck)
+## Fixtures (4, ~200 KB total — see `du -sh fixtures/*` to recheck)
 
 - **`smoke`** (~52 KB, 22 recorded requests) — captured from `tests/coord-engine-e2e/stateful_server.py`,
   the existing hermetic multi-item board. `run.sh`'s leg 0 also drives the engine DIRECTLY against that
@@ -60,6 +60,10 @@ This directory does not replace either of those suites and deletes nothing from 
   AC2 ("two consecutive `reconcile` passes ... produce no board write") proven end to end rather than
   asserted in prose. No `manifest.json`: unlike `2216-oscillation`, this fixture's expectation is what
   the FIXED engine actually outputs, not a deliberate override of a bug that is still open.
+- **`m1-backlog-park`** (~48 KB, 9 recorded requests) — one otherwise-ready OPEN row deliberately in
+  `Backlog`, with no claim, PR, blocker, or delivery fact to override scheduling intent. Two consecutive
+  reconcile passes remain no-ops, while `expected/reconcile-shadow.json` records the one explained
+  old/new difference: legacy `Ready` versus intended `Backlog`, classified `deliberate-park-preserved`.
 
 ## Refreshing a fixture
 
