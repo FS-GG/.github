@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **coord-engine source `0.56.0`: complete done-stamp evidence reads**
+  (owner `github`; [.github#2561](https://github.com/FS-GG/.github/issues/2561)).
+  The source scalar moves from `0.55.0` to stable MINOR `0.56.0`; `package-version` remains
+  `0.55.0` until the coherent set is published and externally verified. Four whole-set GraphQL
+  connections used by `Done.facts` now refuse hidden tails rather than silently deriving a red or
+  green stamp, or a measured `NoStatus`, from incomplete closure and project-item evidence.
+
 - **2026-08-14** — **coord-engine coherent set `0.55.0` published and adopted**
   (owner `github`; [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.55.0);
   [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
