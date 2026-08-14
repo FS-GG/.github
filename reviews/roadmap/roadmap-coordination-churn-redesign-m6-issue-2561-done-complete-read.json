@@ -12,12 +12,13 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 3,
+  "repair_rounds": 4,
   "reviewed_commits": [
     "e7d25700f83070780524e996932331d7970811ec",
     "657e81021c636cfb82dae241b4a7e71fdb29ddd8",
     "3861b4d5e23165ba9e4dba6c4345d76a12d69ea5",
-    "5c720426993472921e5968b09cdbe46070446ccc"
+    "5c720426993472921e5968b09cdbe46070446ccc",
+    "c4802a31c28cda91f57abfa616173be40fab849d"
   ],
   "findings": [
     {
@@ -69,10 +70,26 @@
         "Verification: `python3 scripts/generate-driver-manifest --check` reports both driver and coordination-kit manifests current; `bash scripts/generate-projections --check` reports current; `bash tests/skill-quality/run.sh` passes semantic checks and all 46 rejection cases.",
         "Verification: final-head regression gates remain green: FS.GG.Coord.GitHub.Tests passed 613/613; coherent-set projects resolve to 0.56.0; release notes measure 4422/35000 characters; typed registry validation reports 0 diagnostics; and registry compatibility projection passes."
       ]
+    },
+    {
+      "id": "M6-2561-CRIT-004",
+      "severity": "major",
+      "summary": "The end-to-end done parity server still emitted the pre-#2561 bare connection shape, so the production fail-closed reader rejected the fixture and four #533 parity assertions failed.",
+      "evidence": [
+        "Verification: at prior reviewed head 5c720426993472921e5968b09cdbe46070446ccc, tests/coord-engine-parity/done_server.py emitted `closedByPullRequestsReferences` without totalCount, omitted each PR's `closingIssuesReferences` connection, and emitted projectItems without totalCount, contradicting the completeness metadata now selected and required by Done.facts.",
+        "Verification: GitHub Actions run 31834142812 at head 3d546567435039549f29cfedaa01bf29dc96e796 failed only the coord-engine parity step; `gh run view 31834142812 --repo FS-GG/.github --log-failed` records 644/648 passing, four #533 failures, and the production refusal `PR #7's closing-issue connection is missing, so its completeness cannot be established` while all preceding build/write steps succeeded."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit c4802a31c28cda91f57abfa616173be40fab849d changes only tests/coord-engine-parity/done_server.py beyond the previously reviewed round-3 artifact: it adds closedByPullRequestsReferences totalCount=1, an explicit nested closingIssuesReferences totalCount=1 edge from PR #7 to FS-GG/FS.GG.SDD#42, and projectItems totalCount=1 without weakening production code.",
+        "Verification: `bash tests/coord-engine-parity/run.sh` at c4802a31c28cda91f57abfa616173be40fab849d passed all 648 assertions with 0 failed and 0 not measured, including all four #533 done/claim behaviors that failed in run 31834142812.",
+        "Verification: `python3 -m py_compile tests/coord-engine-parity/done_server.py` and exact prior-head/full-base `git diff --check` pass.",
+        "Verification: final-head regression gates remain green: FS.GG.Coord.GitHub.Tests passed 613/613; driver manifests and projections report current; coherent-set projects resolve to 0.56.0; and release notes measure 4422/35000 characters."
+      ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "5c720426993472921e5968b09cdbe46070446ccc",
+    "reviewed_commit": "c4802a31c28cda91f57abfa616173be40fab849d",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
