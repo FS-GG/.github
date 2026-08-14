@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "cycle_id": "roadmap-coordination-churn-redesign-m6-retire-compatibility",
+  "measured_at": "2026-08-14T18:28:02Z",
+  "source_sha": "597b26c9b2593305e45f6abcf7ec5d1fe60f5db0",
+  "verdict": "blocked",
+  "github_day_census": {
+    "query_basis": [
+      "GitHub Search API: org:FS-GG created:2026-08-14 type:issue",
+      "GitHub Search API: org:FS-GG closed:2026-08-14 type:issue"
+    ],
+    "created": [
+      {"url": "https://github.com/FS-GG/.github/issues/2576", "created_at": "2026-08-14T00:08:24Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2579", "created_at": "2026-08-14T00:45:20Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2580", "created_at": "2026-08-14T00:49:59Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2581", "created_at": "2026-08-14T01:28:21Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2582", "created_at": "2026-08-14T05:11:13Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2583", "created_at": "2026-08-14T05:12:32Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2584", "created_at": "2026-08-14T05:14:49Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2586", "created_at": "2026-08-14T05:20:16Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2587", "created_at": "2026-08-14T05:25:07Z"}
+    ],
+    "closed": [
+      {"url": "https://github.com/FS-GG/.github/issues/2549", "closed_at": "2026-08-14T00:28:54Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2547", "closed_at": "2026-08-14T00:42:05Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2567", "closed_at": "2026-08-14T00:51:44Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2563", "closed_at": "2026-08-14T01:22:53Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2583", "closed_at": "2026-08-14T08:06:29Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2579", "closed_at": "2026-08-14T08:06:29Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2580", "closed_at": "2026-08-14T18:26:58Z"},
+      {"url": "https://github.com/FS-GG/.github/issues/2586", "closed_at": "2026-08-14T18:27:42Z"}
+    ]
+  },
+  "candidate_periods": [
+    {
+      "id": "m3-release-saga",
+      "start": "2026-08-14T10:53:39Z",
+      "end": "2026-08-14T13:22:07Z",
+      "issues_created": 0,
+      "issues_closed": 0,
+      "repair_commits": null,
+      "statement_only_repairs": null,
+      "intent_reversals": null,
+      "partial_success_reads": null,
+      "ambiguous_release_states": null,
+      "release_outcomes": [],
+      "policy_implementations_start": null,
+      "policy_implementations_end": null,
+      "check_scripts_start": null,
+      "check_scripts_end": null,
+      "workflows_start": null,
+      "workflows_end": null,
+      "generated_evidence_bytes_delta": null,
+      "core_and_test_bytes_delta": null,
+      "verification": [
+        "git show -s --format=%cI 9193a4622bf57e8aa5c6a6f0afbd52451da84a94 81f3887692503f6aa012c64cb1f8cdf3a232d646",
+        "GitHub Search API: org:FS-GG created:2026-08-14 type:issue and org:FS-GG closed:2026-08-14 type:issue, filtered by created_at/closed_at"
+      ]
+    },
+    {
+      "id": "m4-structured-decisions",
+      "start": "2026-08-14T13:22:07Z",
+      "end": "2026-08-14T17:37:58Z",
+      "issues_created": 0,
+      "issues_closed": 0,
+      "repair_commits": null,
+      "statement_only_repairs": null,
+      "intent_reversals": null,
+      "partial_success_reads": null,
+      "ambiguous_release_states": null,
+      "release_outcomes": [],
+      "policy_implementations_start": null,
+      "policy_implementations_end": null,
+      "check_scripts_start": null,
+      "check_scripts_end": null,
+      "workflows_start": null,
+      "workflows_end": null,
+      "generated_evidence_bytes_delta": null,
+      "core_and_test_bytes_delta": null,
+      "verification": [
+        "git show -s --format=%cI 81f3887692503f6aa012c64cb1f8cdf3a232d646 ac2fa851e3d58fc9a959bde55524d29a4f8f2b3c",
+        "GitHub Search API: org:FS-GG created:2026-08-14 type:issue and org:FS-GG closed:2026-08-14 type:issue, filtered by created_at/closed_at"
+      ]
+    },
+    {
+      "id": "m5-evidence-ci-consolidation",
+      "start": "2026-08-14T17:37:58Z",
+      "end": "2026-08-14T18:18:52Z",
+      "issues_created": 0,
+      "issues_closed": 0,
+      "repair_commits": null,
+      "statement_only_repairs": null,
+      "intent_reversals": null,
+      "partial_success_reads": null,
+      "ambiguous_release_states": null,
+      "release_outcomes": [],
+      "policy_implementations_start": null,
+      "policy_implementations_end": null,
+      "check_scripts_start": null,
+      "check_scripts_end": null,
+      "workflows_start": null,
+      "workflows_end": null,
+      "generated_evidence_bytes_delta": null,
+      "core_and_test_bytes_delta": null,
+      "verification": [
+        "git show -s --format=%cI ac2fa851e3d58fc9a959bde55524d29a4f8f2b3c 597b26c9b2593305e45f6abcf7ec5d1fe60f5db0",
+        "GitHub Search API: org:FS-GG created:2026-08-14 type:issue and org:FS-GG closed:2026-08-14 type:issue, filtered by created_at/closed_at"
+      ]
+    }
+  ],
+  "successor_queries": [
+    "repo:FS-GG/.github is:open is:issue \"LIFECYCLE-PROJECTION-LAG\"",
+    "repo:FS-GG/.github is:open is:issue GraphQL pagination",
+    "repo:FS-GG/.github is:open is:issue \"partial read\"",
+    "repo:FS-GG/.github is:open is:issue \"feed coherence\"",
+    "repo:FS-GG/.github is:open is:issue \"partial publish\"",
+    "repo:FS-GG/.github is:open is:issue \"body hash\"",
+    "repo:FS-GG/.github is:open is:issue \"delivery-route receipt\"",
+    "repo:FS-GG/.github is:open is:issue \"legacy-only\"",
+    "repo:FS-GG/.github is:open is:issue \"statement\" \"projection\"",
+    "repo:FS-GG/.github is:open is:issue \"bulky evidence\""
+  ],
+  "successor_census": [
+    {"url":"https://github.com/FS-GG/.github/issues/54","disposition":"not-same-class","reason":"Dependency dashboard; returned only because its body aggregates unrelated terms."},
+    {"url":"https://github.com/FS-GG/.github/issues/1858","disposition":"not-same-class","reason":"Claim-lock executor identity defect, not an M1-M5 compatibility path."},
+    {"url":"https://github.com/FS-GG/.github/issues/2106","disposition":"blocking","reason":"Pre-saga Kit auto-publish path remains open work and cannot be silently treated as retired."},
+    {"url":"https://github.com/FS-GG/.github/issues/2130","disposition":"not-same-class","reason":"Broader deterministic-protocol epic; not one of the compatibility boundaries retired by M6."},
+    {"url":"https://github.com/FS-GG/.github/issues/2230","disposition":"not-same-class","reason":"Routes-plugin dispatch slice; not legacy structured-decision evidence."},
+    {"url":"https://github.com/FS-GG/.github/issues/2249","disposition":"not-same-class","reason":"Receiver engine-pin drift, not a compatibility reader/writer."},
+    {"url":"https://github.com/FS-GG/.github/issues/2381","disposition":"not-same-class","reason":"Standing release debt measurement, not a superseded publication implementation."},
+    {"url":"https://github.com/FS-GG/.github/issues/2409","disposition":"blocking","reason":"Superseded release-train issue needs explicit saga-era disposition when retirement is authorized."},
+    {"url":"https://github.com/FS-GG/.github/issues/2551","disposition":"not-same-class","reason":"Generic gate-inversion discipline, not a compatibility path."},
+    {"url":"https://github.com/FS-GG/.github/issues/2555","disposition":"not-same-class","reason":"Test-selector command vocabulary defect, outside M6 compatibility scope."},
+    {"url":"https://github.com/FS-GG/.github/issues/2556","disposition":"not-same-class","reason":"Unwired fixtures, outside M6 compatibility scope."},
+    {"url":"https://github.com/FS-GG/.github/issues/2557","disposition":"not-same-class","reason":"Review predicate mutation coverage, not the v1 review-reader compatibility arm."},
+    {"url":"https://github.com/FS-GG/.github/issues/2561","disposition":"blocking","reason":"Done.fs still uses four bare bounded GraphQL connections."},
+    {"url":"https://github.com/FS-GG/.github/issues/2569","disposition":"blocking","reason":"Board.fs and Reads.fs retain private graphQlData compatibility shims."},
+    {"url":"https://github.com/FS-GG/.github/issues/2582","disposition":"blocking","reason":"Duplicate host-reasoning/evidence-record decision remains open in the evidence-multiplier class."},
+    {"url":"https://github.com/FS-GG/.github/issues/2584","disposition":"not-same-class","reason":"Root-cause analyst operating-process proposal, not compatibility retirement."},
+    {"url":"https://github.com/FS-GG/.github/issues/2587","disposition":"blocking","reason":"Repeatable statement/projection repair measurement remains unimplemented."}
+  ],
+  "same_class_open": [
+    {
+      "url": "https://github.com/FS-GG/.github/issues/2561",
+      "reason": "Done.fs still uses four bare bounded GraphQL connections; exact FactsDoc inspection shows no totalCount/pageInfo protection for those sets."
+    },
+    {
+      "url": "https://github.com/FS-GG/.github/issues/2569",
+      "reason": "Board.fs and Reads.fs retain private graphQlData compatibility shims; M6 is their recorded removal milestone."
+    },
+    {
+      "url": "https://github.com/FS-GG/.github/issues/2587",
+      "reason": "The required repeatable statement/projection repair measurement and prose-citation boundary remain unimplemented."
+    },
+    {
+      "url": "https://github.com/FS-GG/.github/issues/2582",
+      "reason": "The duplicate host-reasoning/evidence-record decision remains open and is part of the evidence-multiplier failure class."
+    },
+    {
+      "url": "https://github.com/FS-GG/.github/issues/2106",
+      "reason": "The pre-saga Kit auto-publish path remains open work and cannot be silently treated as retired before the M6 cut."
+    },
+    {
+      "url": "https://github.com/FS-GG/.github/issues/2409",
+      "reason": "The superseded release-train issue remains open and needs explicit saga-era disposition when retirement is authorized."
+    }
+  ],
+  "objectively_resolved_during_census": [
+    {
+      "url": "https://github.com/FS-GG/.github/issues/2580",
+      "verification": "bash tests/feed-coherence/run.sh (28/28); python3 scripts/check-feed-coherence.py (all 11 live contracts coherent on both feeds); closed 2026-08-14"
+    },
+    {
+      "url": "https://github.com/FS-GG/.github/issues/2586",
+      "verification": "LifecycleProjectionTests 24/24 and focused CLI explicit-Backlog test 1/1 at source_sha; closed 2026-08-14"
+    }
+  ],
+  "earliest_honest_continuation": {
+    "not_before": "2026-09-07T00:00:00Z",
+    "reason": "The roadmap says to measure weekly. Starting with the first complete future UTC week, three consecutive periods are 2026-08-17/24, 2026-08-24/31, and 2026-08-31/09-07. This is only the earliest possible date: every period must still satisfy every validator field and same_class_open must be empty."
+  }
+}

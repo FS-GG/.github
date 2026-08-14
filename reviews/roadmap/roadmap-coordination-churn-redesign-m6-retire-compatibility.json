@@ -1,0 +1,120 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m6-retire-compatibility",
+  "milestone": "M6 — retirement-readiness preparation (M6 remains unchecked)",
+  "critic": "fresh independent critic /root/m6_retire_compat/m6_readiness_critic",
+  "initial_reviewed_commit": "835b3e719409a409fd169a7bff218c3ac3f5a256",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 3,
+  "reviewed_commits": [
+    "835b3e719409a409fd169a7bff218c3ac3f5a256",
+    "2a3e65b649788cea0c65f078f50448ad49f8db72",
+    "3c0f70ea36a7d9906f58c67aea953cdfefd1f1a2",
+    "bc9beb07074eea0d16a64cbe03599239ababa8a9"
+  ],
+  "findings": [
+    {
+      "id": "M6-READINESS-CRIT-001",
+      "severity": "major",
+      "summary": "The retirement gate accepts future measurement periods, so it can authorize M6 before the documented three-week observation window has elapsed.",
+      "evidence": [
+        "Verification: scripts/coordination-retirement-readiness.py:25-33 parses period timestamps and :73-77 checks only seven-day duration; no check binds a period end to measured_at, an externally supplied as-of instant, or the current time.",
+        "Verification: tests/coordination-retirement-readiness/run.sh:18-34 constructs periods ending 2026-09-07 and expects PASS while the repository's current date and the report's measured_at are 2026-08-14; the fixture therefore positively encodes premature acceptance rather than a future-period rejection.",
+        "Verification: at exact reviewed commit 835b3e719409a409fd169a7bff218c3ac3f5a256, piping a syntactically complete document whose three consecutive periods run 2099-01-01 through 2099-01-22 into `python3 scripts/coordination-retirement-readiness.py /dev/stdin` exits 0 and prints `retirement readiness: PASS`.",
+        "Verification: docs/reports/2026-08-14-m6-retirement-readiness.md:32-40 and roadmap lines 275-280 state that 2026-09-07 is the earliest possible end and grants nothing without fresh evidence; a validator that passes 2099 observations on 2026-08-14 does not enforce that fail-closed continuation claim."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at initial review round 0; repair must bind the latest period to a trustworthy as-of boundary, reject future/unelapsed periods, and add a gate-inversion fixture proving premature windows fail.",
+        "Verification: repair commit 2a3e65b649788cea0c65f078f50448ad49f8db72 changes scripts/coordination-retirement-readiness.py:59-80 so measured_at is mandatory and every period end later than measured_at fails; the positive fixture now sets measured_at to its final boundary rather than relying on the host's earlier date.",
+        "Verification: tests/coordination-retirement-readiness/run.sh at repair head adds a `future` mutation that places measured_at before the final period and requires nonzero; `bash tests/coordination-retirement-readiness/run.sh` passed 13/13 at exact repair head, including that negative leg.",
+        "Verification: positive offline validation now fails with `positive readiness requires --live-github authenticated evidence`; live collection re-derives created/closed timestamps from GitHub, so future periods cannot acquire the required creation-below-closure counts before their events exist."
+      ]
+    },
+    {
+      "id": "M6-READINESS-CRIT-002",
+      "severity": "major",
+      "summary": "Every retirement measure and the empty-successor decision remain unauthenticated caller assertions, so arbitrary prose can satisfy the purported evidence gate.",
+      "evidence": [
+        "Verification: scripts/coordination-retirement-readiness.py:56-59 checks only that source_sha looks like 40 lowercase hex characters; it neither resolves the object nor binds measurements to that tree, and the passing fixture at tests/coordination-retirement-readiness/run.sh:29-31 deliberately uses the nonexistent value `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.",
+        "Verification: scripts/coordination-retirement-readiness.py:129-133 accepts any non-empty verification string as a reproducible basis; the shipped positive fixture uses only `fixture`, and an adversarial positive run using only `not-a-reproducible-command` exits 0.",
+        "Verification: scripts/coordination-retirement-readiness.py:52-156 never reads github_day_census, cycle_id, measured_at, or verdict and does not derive issues_created/issues_closed from raw census entries; changing caller-authored scalar values is sufficient to change the result.",
+        "Verification: scripts/coordination-retirement-readiness.py:147-155 trusts an empty same_class_open array without querying or validating the classified issue set, while independent `gh api repos/FS-GG/.github/issues/{2561,2569,2582,2587,2106,2409}` reads on 2026-08-14 returned state=open for all six rows.",
+        "Verification: the same adversarial /dev/stdin run that supplied a fake SHA, arbitrary verification prose, invented issue counts, and same_class_open=[] printed PASS, demonstrating a reachable false retirement authorization rather than a hypothetical schema concern."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at initial review round 0; repair must validate structured authoritative observations (including a resolvable source and complete issue/successor censuses) or explicitly separate schema lint from an independently enforced live-evidence acceptance gate, with mutation tests that arbitrary strings and empty caller lists cannot satisfy.",
+        "Verification: round-1 commit 2a3e65b649788cea0c65f078f50448ad49f8db72 improves scripts/coordination-retirement-readiness.py by resolving source_sha through `gh api`, re-deriving issue counts, and comparing a live query union with successor_census; independent GitHub reads confirm the committed current census includes the six known blocking rows.",
+        "Verification: round-1 confirmation remains changes-required because scripts/coordination-retirement-readiness.py:129-133 still treats arbitrary non-empty verification prose as evidence for repair classification, intent reversals, partial reads, release outcomes, policy inventories, and byte-growth measures; validate_live authenticates only source_sha, issue counts, and successor URLs.",
+        "Verification: successor_queries is read directly from the caller-authored evidence at scripts/coordination-retirement-readiness.py:185-188 and collect_live queries exactly that mutable set at :213; no canonical constant or digest prevents narrowing the purported fixed-query universe to an unrelated issue.",
+        "Verification: at exact round-1 head, a structurally passing document with `verification:[\"arbitrary prose, not an authenticated observation\"]`, a fake SHA, caller-chosen query/classification, and matching caller snapshot exits 0 and prints the ordinary PASS verdict when invoked as `FSGG_RETIREMENT_FIXTURE_OK=1 python3 scripts/coordination-retirement-readiness.py <doc> --fixture-live-snapshot <snapshot>`; the environment lock is not an authentication boundary and the result is indistinguishable from live acceptance.",
+        "Verification: repair round 2 must remove the production PASS-capable fixture bypass, make the successor query universe canonical rather than evidence-selected, and require structured/replayable provenance for every non-GitHub health measure instead of accepting arbitrary strings.",
+        "Verification: round-2 commit 3c0f70ea36a7d9906f58c67aea953cdfefd1f1a2 removes --fixture-live-snapshot from the production parser; the exact former invocation now exits 2 as an unrecognized argument, while tests/coordination-retirement-readiness/fixture_validate.py imports validate/validate_live directly and never prints the production PASS sentence.",
+        "Verification: scripts/coordination-retirement-readiness.py at round-2 head defines CANONICAL_SUCCESSOR_QUERIES in code, requires evidence equality at :216, and collect_live uses that constant at :265; the query_narrow mutation in the focused suite fails and `bash tests/coordination-retirement-readiness/run.sh` passes 15/15.",
+        "Verification: round-2 confirmation remains changes-required because the SHA-256 at scripts/coordination-retirement-readiness.py:169-180 covers only the observation JSON metrics and period_id; provenance.reproduce is stored outside those hashed bytes and is merely checked as any non-empty argv at :161-167, so changing a real reproduction command to arbitrary argv leaves the digest valid and passes schema/provenance validation.",
+        "Verification: the hashed observation lacks source_sha, start, end, measured_at, and the reproduction argv, so the same caller-authored artifact can be rebound to a different measurement interval/source by retaining period_id; neither validate nor validate_live replays provenance.reproduce to compare collector output.",
+        "Verification: the claimed non-escaping artifact check at scripts/coordination-retirement-readiness.py:161-170 is lexical only; `(root / artifact).read_bytes()` follows a repository-relative symlink outside root because the resolved path is never checked with relative_to(root.resolve()).",
+        "Verification: repair round 3 must bind reproduction argv and measurement/source identity inside the hashed observation, independently replay the structured collector or otherwise authenticate its output before PASS, and reject resolved artifact paths outside root (including symlink escape).",
+        "Verification: repair commit bc9beb07074eea0d16a64cbe03599239ababa8a9 changes scripts/coordination-retirement-readiness.py:171-200 so the SHA-covered JSON must bind source_sha, measured_at, period_id, start, end, reproduce argv, and every non-GitHub metric to the evidence envelope.",
+        "Verification: the round-3 validator resolves root and artifact with strict=True, requires `path.relative_to(resolved_root)` before read, and catches ValueError; tests/coordination-retirement-readiness/run.sh creates a symlink to /etc/passwd and confirms the resolved escape fails.",
+        "Verification: tests/coordination-retirement-readiness/run.sh adds reproduce_tamper and symlink-escape negative legs and asserts ACCEPTANCE_ENABLED is exactly False; `bash tests/coordination-retirement-readiness/run.sh` passed 18/18 at exact repaired head.",
+        "Verification: scripts/coordination-retirement-readiness.py:43-48 declares ACCEPTANCE_ENABLED=False, and main lines 321-326 adds a blocking failure after authenticated live checks whenever the preparatory document would otherwise pass; there is no production PASS path until a separately reviewed canonical collector change deliberately enables it.",
+        "Verification: docs/reports/2026-08-14-m6-retirement-readiness.md:22-31 and roadmap lines 275-283 now state the exact boundary: this preparatory validator can block but cannot authorize compatibility retirement; M6 remains unchecked and a reviewed canonical collector is still required.",
+        "Verification: `python3 -m py_compile scripts/coordination-retirement-readiness.py tests/coordination-retirement-readiness/fixture_validate.py`, the 18/18 focused fixture, policy trigger fixture, and `git diff --check 3c0f70ea36a7d9906f58c67aea953cdfefd1f1a2..bc9beb07074eea0d16a64cbe03599239ababa8a9` all pass at the exact round-3 head."
+      ]
+    },
+    {
+      "id": "M6-READINESS-CRIT-003",
+      "severity": "major",
+      "summary": "The policy/check/workflow trend can pass across discontinuous snapshots, so the validator does not establish that those inventories actually declined through the three periods.",
+      "evidence": [
+        "Verification: scripts/coordination-retirement-readiness.py:115-118 checks only each row's local end is not greater than its start, while :140-145 compares only the sum of the first starts with the sum of the final ends; it never requires period N end to equal period N+1 start for any inventory.",
+        "Verification: at exact reviewed commit, an adversarial document with each inventory moving 10->9 in week 1, resetting to 100->99 in week 2, then resetting to 8->7 in week 3 exits 0 and prints PASS; the period timestamps themselves remain consecutive.",
+        "Verification: roadmap lines 570-580 require the number of independent policy implementations, check scripts, and workflows to trend down; accepting an unaccounted 9->100 jump between adjacent periods makes that health measure false even though the validator reports success.",
+        "Verification: tests/coordination-retirement-readiness/run.sh:36-48 mutates timestamp gaps but contains no inventory-boundary continuity mutation, so the false-pass path is not covered by the focused suite."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at initial review round 0; repair must enforce per-metric snapshot continuity (or derive period deltas from content-addressed inventories) and add a discontinuous-reset negative fixture.",
+        "Verification: repair commit 2a3e65b649788cea0c65f078f50448ad49f8db72 changes scripts/coordination-retirement-readiness.py:141-153 to require each policy_implementations, check_scripts, and workflows end snapshot to equal the next period's start snapshot.",
+        "Verification: tests/coordination-retirement-readiness/run.sh at repair head adds an `inventory_reset` mutation and requires nonzero; the focused 13/13 run passed, and direct inspection confirms the earlier 9->100 reset now reaches `snapshot is discontinuous`."
+      ]
+    },
+    {
+      "id": "M6-READINESS-CRIT-004",
+      "severity": "major",
+      "summary": "The consolidated policy workflow is not triggered by retirement evidence changes, so the file that will eventually request M6 authorization can change without running its validator subject.",
+      "evidence": [
+        "Verification: .github/workflows/policy.yml:3-36 includes the validator implementation and fixture paths in both filtered triggers but omits docs/reports/evidence/** and the M6 readiness report/roadmap paths.",
+        "Verification: policy/subjects.json:21-24 registers only `bash tests/coordination-retirement-readiness/run.sh`; tests/coordination-retirement-readiness/run.sh:7-13 reads the committed M6 evidence file, so that evidence file is an executable dependency of the declared subject.",
+        "Verification: tests/policy-runner/run.sh:22-30 checks workflow coverage for scripts/coordination-retirement-readiness.py and tests/coordination-retirement-readiness/** but omits docs/reports/evidence/2026-08-14-m6-retirement-readiness.json; consequently `bash tests/policy-runner/run.sh` passes despite the missing trigger dependency.",
+        "Verification: the base-to-head diff adds docs/reports/evidence/2026-08-14-m6-retirement-readiness.json as the machine-readable retirement census, and docs/reports/2026-08-14-m6-retirement-readiness.md:7-15 instructs operators to run the validator against it; a PR changing only that input does not match policy.yml's pull_request paths."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at initial review round 0; repair must add the authoritative retirement evidence path(s) to both workflow triggers and extend trigger-coverage regression checks so an omitted evidence dependency fails.",
+        "Verification: repair commit 2a3e65b649788cea0c65f078f50448ad49f8db72 adds docs/reports/evidence/** exactly once to each pull_request and main-push path filter in .github/workflows/policy.yml.",
+        "Verification: tests/policy-runner/run.sh at repair head requires docs/reports/evidence/** to occur exactly twice; `bash tests/policy-runner/run.sh` reports `policy trigger coverage: ok`, closing the executable evidence dependency gap."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "bc9beb07074eea0d16a64cbe03599239ababa8a9",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
