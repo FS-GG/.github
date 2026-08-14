@@ -3095,6 +3095,42 @@ module Client =
         | Errors.NotFound subject -> subject.StartsWith("no Projects v2 board titled ", StringComparison.Ordinal)
         | _ -> false
 
+    /// One Status authority per subject. Explicit scheduling intent owns lifecycle Status; Auto keeps
+    /// the established legacy precedence for touch-set-specific destinations and coupled writes.
+    let reconcileStatusPrecedence
+        (legacyChores: Chore.Chore list)
+        (lifecycleChores: Chore.Chore list)
+        (lifecycleWatermarks: Map<Ref, LifecycleProjection.Watermark>)
+        : Chore.Chore list =
+        let explicitIntentSubjects =
+            lifecycleWatermarks
+            |> Map.toSeq
+            |> Seq.choose (fun (subject, watermark) ->
+                match watermark.Intent with
+                | Some LifecycleProjection.Auto
+                | None -> None
+                | Some _ -> Some subject)
+            |> Set.ofSeq
+
+        let retainedLegacy =
+            legacyChores
+            |> List.filter (fun chore ->
+                match chore.Kind.Write with
+                | Some("Status", _) when explicitIntentSubjects.Contains chore.Subject -> false
+                | _ -> true)
+
+        let legacyStatusSubjects =
+            retainedLegacy
+            |> List.choose (fun chore ->
+                match chore.Kind.Write with
+                | Some("Status", _) -> Some chore.Subject
+                | _ -> None)
+            |> Set.ofList
+
+        retainedLegacy
+        @ (lifecycleChores
+           |> List.filter (fun chore -> not (legacyStatusSubjects.Contains chore.Subject)))
+
     let reconcile (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx { opts with Limit = None } Cache.Reconciling with
         | Error e when boardUnreachable e ->
@@ -3144,12 +3180,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // #2264: the board column is a projection, not the source of lifecycle truth.  Gather the
                 // facts again at the reconciliation boundary and send every coherent observation through
                 // the typed projector before handing its one repair to the existing verified write path.
-                // Comments are read for terminal/review rows and Ready rows. Besides delivery evidence
+                // Comments are read for terminal rows and every live derived column. Besides delivery evidence
                 // they carry the verified projection watermark. M1 deliberately adds Ready: the bounded
                 // legacy rollback can project an explicit Backlog intent to Ready while persisting that
-                // intent in a v2 watermark. Reading Ready is what lets switching back to intent-v1 restore
-                // the park rather than making rollback destructive. Settled Done remains the only
-                // historical population and is still skipped below; Ready is the small live queue.
+                // intent in a v2 watermark. Reading live columns is also what carries that intent across
+                // claim/review and machine-block transitions. Settled Done remains the only historical
+                // population and is still skipped below; these columns are the small live queue.
                 //
                 // TWO comment threads, not one (round-1 review repair). The watermark and the done receipt
                 // are ISSUE facts — `Writes.lifecycleWatermark`/`Writes.doneReceipt` both post to `ref`,
@@ -3209,7 +3245,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                         let needsDeliveryRead =
                             not settledDone
-                            && (item.State = Closed || item.Status = InReview || item.Status = BoardStatus.Ready)
+                            && (item.State = Closed
+                                || item.Status = InReview
+                                || item.Status = InProgress
+                                || item.Status = Blocked
+                                || item.Status = BoardStatus.Ready)
 
                         let delivery =
                             if not needsDeliveryRead then Some (({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery), None)
@@ -3310,6 +3350,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                subject = subject.Canonical |})
                     File.WriteAllText(path, JsonSerializer.Serialize(rows, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
 
+                // Once a non-Auto intent exists, the intent reducer owns Status. This removes the live-
+                // claim precedence hole where ClaimStatusLag/ClaimReviewLag wrote the same active column
+                // first, filtered out LifecycleProjectionLag, and therefore skipped its durable v2
+                // watermark. Automatic rows retain the established legacy precedence (including
+                // touch-set-specific BLOCKER-CLEARED destinations).
                 let legacyChores = Chore.derive lifecycleItems
 
                 // A reconcile pass is allowed one Status decision per item.  The long-standing Chore
@@ -3319,17 +3364,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // fills the remaining gaps (PR/review/CI, delivery and verified terminal evidence); it is
                 // never appended as a second competing writer.  This is precedence, not a de-dup after
                 // the fact: the losing observation produces no receipt and no mutation.
-                let legacyStatusSubjects =
-                    legacyChores
-                    |> List.choose (fun chore ->
-                        match chore.Kind.Write with
-                        | Some("Status", _) -> Some chore.Subject
-                        | _ -> None)
-                    |> Set.ofList
-
                 let chores =
-                    legacyChores
-                    @ (lifecycleChores |> List.filter (fun chore -> not (legacyStatusSubjects.Contains chore.Subject)))
+                    reconcileStatusPrecedence legacyChores lifecycleChores lifecycleWatermarks
 
                 // .github#2079: BLOCKER-CLEARED must not promote a row whose BODY's `Blocked by:` line
                 // names ref(s) the FIELD does not carry — the `FS.GG.Templates#348` shape, where the
