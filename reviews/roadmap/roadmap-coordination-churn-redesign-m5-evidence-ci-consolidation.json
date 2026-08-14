@@ -1,0 +1,101 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m5-evidence-ci-consolidation",
+  "milestone": "M5 — evidence and CI consolidation",
+  "critic": "fresh independent critic /root/m5_evidence_ci/m5_critic",
+  "initial_reviewed_commit": "9e0ceaca10ff0e9a715a1c3967f2000657216d5b",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 3,
+  "reviewed_commits": [
+    "9e0ceaca10ff0e9a715a1c3967f2000657216d5b",
+    "6fecfa618313ec8b9df007dd7c746aab96632732",
+    "9ed3002a8c705b5c331c5b5bf04136a117d91cb8",
+    "c909b8ed580f7b6de6b3d9c9115bdcbe96aa6896"
+  ],
+  "findings": [
+    {
+      "id": "M5-CRIT-001",
+      "severity": "major",
+      "summary": "The artifact-retention deliverable is documented but not wired into CI, so M5 does not demonstrate that new bulky execution evidence is actually retained outside Git and represented by compact manifests.",
+      "evidence": [
+        "Verification: `git diff --name-status 7a9b8742f259af4d82b9562bfbe8e40d963b0be7..9e0ceaca10ff0e9a715a1c3967f2000657216d5b` adds scripts/evidence-manifest.py, tests/evidence-manifest/run.sh, documentation, and ignore rules, but no workflow or action that uploads output and creates or verifies a retained-artifact manifest.",
+        "Verification: `rg -n 'upload-artifact|evidence-manifest' .github/workflows .github/actions scripts tests docs/coordination policy` at exact reviewed head finds evidence-manifest only in its local fixture, policy subject inventory, and documentation; workflow upload-artifact uses are pre-existing release/archive/freshness paths and none invokes scripts/evidence-manifest.py.",
+        "Verification: docs/coordination/evidence-retention.md:3-6 states that new TRX files, long logs, coverage trees, and generated reports are uploaded once with actions/upload-artifact and represented by a schema-v1 manifest, but the exact base-to-head implementation contains no operational producer of that claimed pair."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at initial review; repair required at least one real CI execution-output path to upload retained bytes and create its compact manifest, plus focused evidence that the operational path preserves digest identity and retention metadata.",
+        "Verification: repair commit 6fecfa618313ec8b9df007dd7c746aab96632732 changes .github/workflows/policy.yml:49-75 so the real consolidated workflow captures the policy runner's complete output, creates a manifest bound to github.sha, run URL, reproduction command, byte count, SHA-256, and a 90-day expiry, then uploads both payload and manifest with actions/upload-artifact@v6 and retention-days 90; all retention steps use `if: always()` so failed policy output remains evidence.",
+        "Verification: docs/coordination/evidence-retention.md at repair head now identifies the policy workflow as the operational retention path and distinguishes the stable run URL from digest-based content identity; `git diff --name-status 9e0ceaca10ff0e9a715a1c3967f2000657216d5b..6fecfa618313ec8b9df007dd7c746aab96632732` confirms the workflow, manifest tool, fixtures, and documentation form the complete repair touch set."
+      ]
+    },
+    {
+      "id": "M5-CRIT-002",
+      "severity": "major",
+      "summary": "The evidence verifier can report success without observing any retained artifact bytes, allowing a caller-authored digest and URL to pass as verified evidence.",
+      "evidence": [
+        "Verification: scripts/evidence-manifest.py:103-123 defines `--artifact` as an optional append argument with default `[]`; the verify branch validates document shape and iterates only supplied bindings, without requiring a binding for every declared artifact.",
+        "Verification: at exact reviewed head, a manifest produced by tests/evidence-manifest/run.sh passes `python3 scripts/evidence-manifest.py verify <manifest> --now 2026-08-15T00:00:00Z` with no `--artifact`, and the fixture itself relies on unbound verification for malformed-hash and expiry cases.",
+        "Verification: docs/coordination/evidence-retention.md:8-12 says consumers download the named artifact and compare SHA-256 and that verification fails closed; a successful unbound `verify` result does not establish that the named retained bytes exist or match the manifest."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at initial review; repair required acceptance verification to require exactly one local payload binding for every declared artifact, or a distinctly named schema-only command while `verify` fails closed on zero or partial bindings, with negative tests.",
+        "Verification: scripts/evidence-manifest.py:114-130 at exact repair head tracks unique supplied artifact names, rejects duplicate bindings, and rejects every missing declared name after hashing supplied files, so zero-binding and partial-binding calls cannot print the success verdict.",
+        "Verification: tests/evidence-manifest/run.sh:19-49 at exact repair head proves a fully bound payload passes; zero bindings, a partial two-row binding, a mutated payload, a malformed hash, and an expired artifact fail; and historical --allow-expired inspection still requires the payload binding. `bash tests/evidence-manifest/run.sh` passed with each negative leg observably returning nonzero."
+      ]
+    },
+    {
+      "id": "M5-CRIT-003",
+      "severity": "major",
+      "summary": "The consolidated policy workflow does not trigger when the new evidence verifier or either new runner fixture changes, creating a direct coverage loss in the replacement gate.",
+      "evidence": [
+        "Verification: .github/workflows/policy.yml:6-15 and :18-27 include policy/**, scripts/check-*, scripts/policy-*, registry/docs projection inputs, and tests/projection/**, but omit scripts/evidence-manifest.py, tests/evidence-manifest/**, and tests/policy-runner/**.",
+        "Verification: policy/subjects.json declares tests/policy-runner/run.sh and tests/evidence-manifest/run.sh as subjects run by the policy workflow, yet edits confined to either fixture do not match that workflow's pull_request or push path filters; edits confined to scripts/evidence-manifest.py also do not match `scripts/policy-*`.",
+        "Verification: deleted .github/workflows/policy-checker-inventory.yml used the broad tests/** trigger, while the replacement narrows test triggers without a dependency-to-trigger invariant; `python3 scripts/policy-runner.py run all` passes at the exact reviewed head but does not protect a future fixture-only change when the workflow is not scheduled."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at initial review; repair required complete path triggers for every declared subject's executable and fixture dependencies and a regression check that fails when an inventory dependency is not covered by the consolidated workflow.",
+        "Verification: .github/workflows/policy.yml:3-32 at exact repair head includes scripts/evidence-manifest.py, tests/policy-runner/**, and tests/evidence-manifest/** in both pull_request and main-push filters while retaining policy/**, the policy runner, checker surfaces, and projection fixture inputs.",
+        "Verification: tests/policy-runner/run.sh:22-30 now requires every central subject implementation/fixture dependency pattern exactly twice in the workflow, once per filtered trigger; `bash tests/policy-runner/run.sh` reports `policy trigger coverage: ok`, `python3 scripts/check-paths-coherence.py` reports 68 dual-filter workflows coherent, and the full `python3 scripts/policy-runner.py run all` passes all four declared subjects at exact repair head."
+      ]
+    },
+    {
+      "id": "M5-CRIT-004",
+      "severity": "major",
+      "summary": "The workflow-derived selector expands only policy subject commands and omits subject self-tests even though the production policy runner executes both, leaving a valid neutral-inventory suite unwired.",
+      "evidence": [
+        "Verification: scripts/policy-runner.py:158 at exact round-2 head 9ed3002a8c705b5c331c5b5bf04136a117d91cb8 executes each optional row[`self_test`] before row[`command`], establishing both arrays as executable subject dependencies.",
+        "Verification: scripts/test:281-289 at exact round-2 head recognizes `policy-runner.py run all` but passes only `[row.get(\"command\") ...]` to scrape_commands; no self_test value is scraped, so a valid subject whose self-test is `bash tests/example/run.sh` remains classified unwired even though the real workflow executes it.",
+        "Verification: policy/subjects.json:5-8 already uses the live self_test field for checker-inventory, while `rg -n 'policy|unreadable|empty inventory' tests/test-selector/run.sh` finds no focused neutral-inventory fixture; repair commit 9ed3002a8c705b5c331c5b5bf04136a117d91cb8 changes scripts/test and documentation but no test file.",
+        "Verification: `bash tests/test-selector/run.sh` passes 44/44 and `python3 scripts/test --assert-wired` reports 87 wired, 6 explained, 0 unexplained, and 0 stale at the exact round-2 head; these green real-tree results cover current command-bearing subjects but do not exercise the omitted legal self_test suite shape."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at round-2 confirmation; repair required selector expansion of both self_test and command in production execution order and focused synthetic tests for command expansion, self-test expansion, unreadable JSON, empty inventory, and malformed inventory refusal.",
+        "Verification: repair commit c909b8ed580f7b6de6b3d9c9115bdcbe96aa6896 changes scripts/test:283-301 to require a non-empty schema-v1 inventory, validate every subject id, command, and optional self_test, and append self_test before command to the same scraper, matching scripts/policy-runner.py:158 production execution order.",
+        "Verification: tests/test-selector/run.sh at exact round-3 head adds a synthetic policy-runner workflow and inventory; its five new assertions prove command expansion, self_test expansion, unreadable-JSON refusal, empty-inventory refusal, and malformed-command refusal. `bash tests/test-selector/run.sh` passes 49/49.",
+        "Verification: `python3 scripts/test --assert-wired` at exact round-3 head reports 93 test directories, 87 wired, 6 durably explained, 0 unexplained, and 0 stale; `python3 scripts/policy-runner.py run all`, Python compilation of the three changed/new Python entry points, and `git diff --check 7a9b8742f259af4d82b9562bfbe8e40d963b0be7..c909b8ed580f7b6de6b3d9c9115bdcbe96aa6896` all pass."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "c909b8ed580f7b6de6b3d9c9115bdcbe96aa6896",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
