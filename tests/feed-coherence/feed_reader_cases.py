@@ -252,10 +252,10 @@ check("stable registry is coherent despite a newer prerelease on the feed",
       "0.5.0", ["0.5.0", "0.6.0-preview.1"], expect="")
 # ...but the filter must not over-reach: a newer STABLE release is still a real BEHIND.
 check("stable registry is still BEHIND a newer stable release",
-      "0.5.0", ["0.5.0", "0.6.0"], expect="BEHIND the feed")
+      "0.5.0", ["0.5.0", "0.6.0"], expect="BEHIND both feeds")
 # A prerelease registry is on the preview channel, so a newer preview IS a behind — no filtering.
 check("preview-channel registry still tracks a newer prerelease",
-      "0.6.0-preview.1", ["0.6.0-preview.1", "0.6.0-preview.2"], expect="BEHIND the feed")
+      "0.6.0-preview.1", ["0.6.0-preview.1", "0.6.0-preview.2"], expect="BEHIND both feeds")
 check("preview-channel registry is coherent at the newest prerelease",
       "0.6.0-preview.2", ["0.6.0-preview.1", "0.6.0-preview.2"], expect="")
 # Fail CLOSED: a stable registry against a feed carrying ONLY prereleases names a version no

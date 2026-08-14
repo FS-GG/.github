@@ -1,0 +1,16 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[--- repaired tree ---
+ok: FS.GG.Coord.Cli.fsproj Version 0.52.0 agrees with the first PackageReleaseNotes token, resolves from FsggCoherentSetVersion in Directory.Build.props, and carries $(FsggStandingAdvisories) (2037 characters of standing advisories).
+release-notes budget (nuget.org's limit, per coherent-set package):
+  src/FS.GG.Kit/FS.GG.Kit.csproj: declares no PackageReleaseNotes — 0 of 35000 characters used, 35000 remaining.
+  src/FS.GG.Drivers/FS.GG.Drivers.csproj: declares no PackageReleaseNotes — 0 of 35000 characters used, 35000 remaining.
+  src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj: 6553 of 35000 characters used (18.7% of nuget.org's budget), 28447 remaining.
+--- origin/main tree ---
+::error::check-engine-release-notes: src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj's <PackageReleaseNotes> does not reference $(FsggStandingAdvisories). The standing DO-NOT-ADOPT advisories live in that property so that trimming the release narrative and deleting a permanent two-of-three warning are different edits (.github#2579). Those listings are immutable and this is the only channel that can correct them — 4fccc76d deleted them while this gate was green. Restore the reference.
+::error::check-engine-release-notes: FsggStandingAdvisories is empty or undeclared for src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj. An empty advisory property publishes a listing that silently stops warning about the permanent two-of-three sets; if an advisory is genuinely retired, retire it deliberately rather than by emptying the property.
+::error::check-engine-release-notes: src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj's evaluated PackageReleaseNotes is 37279 characters, which exceeds nuget.org's limit of 35000 by 2279. nuget.org refuses the push outright ("A nuget package's ReleaseNotes property may not be more than 35000 characters long."), and the org GitHub Packages feed does not, so a coherent-set cut from this tree publishes some packages and then fails on this one — the .github#2579 shape.
+release-notes budget (nuget.org's limit, per coherent-set package):
+  src/FS.GG.Kit/FS.GG.Kit.csproj: declares no PackageReleaseNotes — 0 of 35000 characters used, 35000 remaining.
+  src/FS.GG.Drivers/FS.GG.Drivers.csproj: declares no PackageReleaseNotes — 0 of 35000 characters used, 35000 remaining.
+  src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj: 37279 of 35000 characters used (106.5% of nuget.org's budget), OVER BUDGET by 2279.
+repaired exit=0 (want 0); origin/main exit=1 (want 1)
+]]></system-out></testcase></testsuite>

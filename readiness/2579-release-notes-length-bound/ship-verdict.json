@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2579-release-notes-length-bound",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 23,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 23
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

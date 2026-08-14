@@ -109,7 +109,7 @@
     <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
     <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Coord.Cli</PackageProjectUrl>
 
-    <!-- THE RELEASE NOTES ARE WHERE THE BREAK IS ANNOUNCED, and that is the point of them here.
+<!-- THE RELEASE NOTES ARE WHERE THE BREAK IS ANNOUNCED, and that is the point of them here.
          nuget.org renders this on the package listing and `dotnet tool` consumers read it there. A
          changelog that said only "fixes" while a previously-accepted flag started exiting 1 would be
          the #266 shape in its purest form: the org knowing a thing, and the consumer discovering it
@@ -119,532 +119,94 @@
          notes reading "0.12.0 — BREAKING...", so the nuget.org listing for 0.13.0 announced the PREVIOUS
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
-         failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.52.0 — `fsgg-coord review` stops calling a designed wait broken evidence.
+         failed by it exactly as much as one who finds nothing.
 
-WHAT MOVED, AND WHY IT IS A MINOR. Two new names on the `fsgg.coord.review/1` wire and one change in
-what an existing input produces. Both additions are additive; no existing state name, action name,
-payload key, or freshness/action-key derivation changes meaning, and a snapshot authored for 0.51.1
-parses and answers identically unless it opts into the new key.
+         THIS FIELD IS BOUNDED, AND ITS SHAPE IS LOAD-BEARING (.github#2579). It is exactly three
+         parts, in this order: THIS release's entry, then $(FsggStandingAdvisories), then the pointer
+         to the served history. It does NOT accumulate prior entries — that is what crossed
+         nuget.org's 35,000-character limit and left FS.GG.Coord.Cli 0.52.0 published on the org feed
+         and absent from nuget.org. The first token must remain the version (#1762), so the current
+         entry stays first and the advisories are referenced, never prepended.
 
-THE DEFECT. `review` reported the post-acceptance, pre-`delivery` window of `pnext-item` section 6 as
-`malformedEvidence` — the same state a chain carrying two competing initial markers reaches, whose
-established recovery is to close the pull request WITHOUT MERGING. Measured on FS-GG/.github#2534 /
-PR #2541: the identical comment set returned `malformedEvidence`/`park` at `checks: pending` and
-`accepted`/`accept` at `checks: green`. Nothing about the evidence differed between the two runs. And
-by .github#2504 the required `claim-generation` context CANNOT be green at that moment, because its
-marker is written by the `delivery` call section 6 places after acceptance — so every ordinary landing
-passed through the state whose recovery is destructive. PR #2514 was closed and reopened as #2528 on
-exactly that reading on 2026-08-13, at the cost of a full fresh review.
+         WHEN YOU CUT THE NEXT RELEASE: REPLACE the entry below with the new version's, do not
+         prepend to it. Leave the advisory reference and the pointer where they are. If this cut
+         creates a new permanent partial set, add it to $(FsggStandingAdvisories) — that property is
+         the only part of this field that persists across cuts, deliberately, and
+         scripts/check-engine-release-notes.py refuses a listing that drops the reference or empties
+         it. -->
+    <FsggStandingAdvisories>STANDING ADVISORIES — these are NOT this release's notes, and they do not age out.
 
-NEW STATE `acceptedAwaitingChecks`, carrying the live `PrState`, with `stateErrors: null`. The chain is
-complete: well-formed, host-accepted, one critic, bound to the current head. The ACTION differentiates
-rather than the state — new `authorizeDelivery` for pending/unknown (make the section 6 `delivery`
-call, which is what lets `claim-generation` report at all), `resumeImplementer` for red/conflicted (a
-failing change is not broken evidence), `park` for merged/closed.
+Two published FS.GG.Coord.Cli versions must never be adopted. Their own listings are immutable and
+cannot be corrected, so the NEWEST listing is the only channel that can say so — and an unpinned
+`dotnet tool install` resolves the newest version, which makes this the entry a consumer reads.
+They live in their own MSBuild property (`FsggStandingAdvisories`) rather than inside the release
+narrative below, so that trimming the narrative and deleting a warning are different edits
+(.github#2579). `scripts/check-engine-release-notes.py` refuses a listing that stops referencing
+this property or empties it; 4fccc76d deleted these warnings once while that gate was green.
 
-`malformedEvidence` now means the durable evidence is structurally wrong, and only that.
-`Driver.validateReviewChain` keeps its exact messages in its exact order — so `Delivery.reviewProblem`
-and `Driver.receiptFresh` are behaviourally unchanged — and the new `validateReviewChainStructure`
-exposes its structural subset, both derived from one ordered source so they cannot drift.
+DO NOT ADOPT 0.50.1. It is a permanent two-of-three set. The 0.50.1 cut published `FS.GG.Kit` and
+`FS.GG.Drivers` to both feeds and was then REFUSED for this package by `check-engine-release-notes`
+(`.github#1762`), which correctly flagged that the release notes still began with `0.50.0`. Both
+sibling packages were already immutable at 0.50.1 and `.github#1772`'s sibling-tag precondition
+requires all three tags to name the SAME commit, so 0.50.1 could not be completed from a corrected
+tree. `FS.GG.Kit 0.50.1` and `FS.GG.Drivers 0.50.1` should not be adopted on their own; adopt
+0.50.2, which is the whole set cut from one commit.
 
-NEW OPTIONAL INPUT `facts.repairAssertionGranted`, and a new `Review.RepairAssertionReceipt`. A
-critic finding whose subject is a pull request COMMENT rather than the tree — the post-merge
-obligations declaration is a standing artefact of every item — is repaired by a comment edit, so the
-head correctly does not move, and the state machine previously modelled a repair as A COMMIT and
-could never advance. The engine cannot observe such a repair (a comment record is id, url and body,
-so the current body is readable but "it changed in answer to this finding" is not), so it enters as an
-accountable grant, exactly as .github#2417's critic succession does. Absent a grant the previous
-behaviour is byte-for-byte unchanged, and the grant is refused when it names a different head, answers
-a different review comment, carries no granter, is granted by the implementer, or is granted by the
-round's own critic. It is resolved on the `review --snapshot` path; the live `review &lt;ref&gt; --pr N` path
-passes no grant and is unchanged.
+DO NOT ADOPT 0.50.5. It is a permanent two-of-three set, the same shape and the same cause as
+0.50.1. `FS.GG.Kit 0.50.5` and `FS.GG.Drivers 0.50.5` published to both feeds; this package's
+publish was then REFUSED by `check-engine-release-notes` because the notes still began with
+`0.50.4` while `Version` had moved to `0.50.5`. Correcting that needs a new commit, and the
+sibling-tag precondition requires all three tags at the SAME commit, so 0.50.5 could not be
+finished from a corrected tree — re-cutting it is the re-pack divergence `.github#2240` documents.
+Adopt 0.50.6.
 
-`landable` is untouched: its CI verdict stays wholly independent of the review chain (.github#2360).
+DO NOT ADOPT 0.52.0. It is a different permanent partial set: `FS.GG.Kit` and `FS.GG.Drivers`
+published to both feeds, and `FS.GG.Coord.Cli` published to the org feed before nuget.org rejected
+its 37,279-character `PackageReleaseNotes`. NuGet versions are immutable and re-packing corrected
+bytes under 0.52.0 would make the same version identify different artifacts. Adopt 0.53.0, the next
+coherent set cut from corrected source. All three partial sets are recorded in
+`registry/dependencies.yml`.</FsggStandingAdvisories>
+
+    <PackageReleaseNotes>0.53.0 — consolidation no longer invalidates a delivery-route decision, and the coherent set recovers from the incomplete 0.52.0 publish.
+
+WHAT MOVED, AND WHY IT IS A MINOR. `delivery-route record` now writes an external locator for the
+exact subject lines the receipt judged. On read, the existing subject remains authorized when those
+lines survive byte-identically and in the same order among additive prose. The matched current lines
+are re-hashed at full SHA-256 width against the receipt's `subjectRevision`; the locator can select a
+candidate but cannot grant authorization. Scope-changing edits to judged lines remain stale.
+
+The additive arm refuses an empty judged subject before alignment, so an empty receipt cannot match
+an arbitrary later body vacuously. It diagnoses that case separately from an ordinary stale receipt.
+Claim/take mutation reports when it accepted an additive match; high-volume scheduling reads stay
+quiet. Production-derived consolidation bodies and explicit collision, empty-subject, semantic-edit,
+and notice controls preserve these boundaries.
+
+The existing CommonMark four-space indent rule is also held by one shared corpus consumed through
+both the F# delivery parser and Python package-coherence parser. That is regression hardening, not a
+behavior change.
+
+RELEASE RECOVERY. Version 0.52.0 is not a coherent release: `FS.GG.Kit` and `FS.GG.Drivers` reached
+both feeds, while `FS.GG.Coord.Cli` reached only the org feed after nuget.org rejected its oversized
+release notes. This 0.53.0 cut replaces the accumulated listing history with this bounded entry,
+retains permanent advisories separately, and publishes the three packages from one source commit.
 
 WHY THIS PACKAGE MOVES WITH THE KIT. The three packages resolve one scalar (`FsggCoherentSetVersion`,
-`Directory.Build.props`) by construction (.github#2402), so the coordination kit's corresponding
-`pnext-item` contract section ships at this same version.
-
---- 0.51.1 — a PATCH-LINE cut with NO ENGINE BEHAVIOUR CHANGE, published so the
-coordination kit can carry a corrected `pnext-item` skill body. The three packages resolve one scalar
-(`FsggCoherentSetVersion`, `Directory.Build.props`) by construction, so a kit-only content fix moves this
-package's version too. That is the coherent-set design (`.github#2402`), not an engine delta.
-
-WHAT THE KIT GAINS. `.github#2533`. `pnext-item`'s `merge-and-release.md` now states which post-merge
-acts this repository performs AUTOMATICALLY on a merge into `main` and which a worker still owes, and
-states the rule that a pre-act stop condition on an automated act belongs in a PRE-MERGE gate, because
-a condition readable only after the act is not a stop condition. A worker writing a delivery obligation
-no longer has to infer either from workflow files.
-
-WHAT THIS CUT DOES NOT ADD, stated because a listing that overclaims fails its reader exactly as much as
-one that says nothing. No verb, flag, help entry, render name, result name or exit code moves. `review`,
-`delivery` and every other command answer as they did in 0.51.0. The item's enforcement half is a new arm
-of a CI gate in this repository (`check-kit-published-coherence.py --obligation-arm`), which is not
-carried by any published package and therefore changes nothing a receiver restores.
-
-Adopt 0.51.1.
-
-0.51.0 — a MINOR coherent-set cut. The review protocol now represents a case it previously refused.
-
-`.github#2527`. A pull request whose head moves AFTER its review chain completed and was
-host-accepted had no representation. The only honest response to a moved head — a full fresh
-independent review of the tree that will actually merge — posts a second initial marker, and the
-chain then failed closed with "the initial review marker is carried by 2 comments; exactly one is
-required": a refusal that describes the symptom and names no remedy. Critic succession
-(`.github#2417`) requires a STUCK round and the repair phase requires EXHAUSTION, so neither reached
-a chain that had finished and was then invalidated by a push.
-
-WHAT THIS CUT ADDS. `Driver.liveReviewComments` partitions a pull request's review comments, and
-`Review` classifies the protocol state from the surviving set. A chain is retired when, and only
-when, a host-acceptance marker names that chain's initial-review comment URL AND carries an
-`accepted-head` other than the current head — both read from that marker's own already-required
-fields. `Review.Verdict` carries the retired chains, and `review --json` reports them as
-`retiredChains`.
-
-WHY MINOR RATHER THAN PATCH. This is receiver-visible behaviour, not prose: a receiver running
-`review` against unchanged comment evidence can now obtain a different action than it did before this
-cut, the JSON contract gains a field, and Core's published signature surface gains the retirement
-types that carry it.
-
-WHAT STAYS REFUSED, WHICH IS THE POINT. Two competing initial markers with no intervening
-accepted-then-moved head still fail closed. So does an acceptance whose `accepted-head` is the
-current head, and one whose `initial-review` names no initial marker on the pull request. Retirement
-is admitted only on what the acceptance marker's own required fields carry, rather than on a grant a
-caller supplies, because the one-initial-marker rule is what stops a stranger silently continuing
-another critic's chain. What is read is that marker's STRUCTURE, not the truth of its `accepted-head`:
-a forged acceptance marker will retire a live chain. That confers strictly less than the forgery it
-presupposes — a forged acceptance at the CURRENT head already yields an accepted chain outright, while
-this route yields only one awaiting a fresh acceptance at the current head — and the value is published
-in `retiredChains` where a reader can see it.
-Retirement never edits, reorders or drops evidence at the source: a retired chain stays exactly as
-its critic posted it.
-
-ALSO RIDING THIS CUT. `.github#2525` landed engine changes before this branch and could not move the
-coherent-set scalar itself, so its work is carried by this version rather than by one of its own. This
-entry describes what `.github#2527` adds; it is NOT an inventory of the tagged tree, which is whatever
-the tagged commit holds. `registry/CHANGELOG.md` and the tag range are the inventory.
-
-Adopt 0.51.0.
-
-0.50.7 — a PATCH-LINE cut with NO ENGINE SOURCE CHANGE, published so the
-coordination kit can carry a corrected `pnext-item` skill body. The three packages resolve one scalar
-(`FsggCoherentSetVersion`, `Directory.Build.props`) by construction, so a kit-only content fix moves this
-package's version too. That is the coherent-set design (`.github#2402`), not an engine delta.
-
-NO COMPILED ENGINE SOURCE MOVED SINCE 0.50.6, and this claim is measured rather than copied from the
-entry below. `git diff --name-only` over `src/FS.GG.Coord.Cli`, `src/FS.GG.Coord.Core` and
-`src/FS.GG.Coord.GitHub`, between the `kit/v0.50.6` tag commit and the commit these notes ship at, names
-exactly ONE path: `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj` — this project file, carrying this very
-property. No `.fs` file differs. The only other change in the cut is the coherent-set scalar in
-`Directory.Build.props`, which is outside those three trees.
-
-Stated that way deliberately. An earlier draft of this paragraph said the diff "is EMPTY", which was
-true when it was measured — one commit before these notes existed — and false the moment the sentence
-was written into the file it was describing. A release note is read at the version it ships with, so an
-evidence claim in one must hold AT that commit, not at the commit it was taken on.
-
-WHY IT COULD NOT RIDE 0.50.6 (`.github#2526`). Three places in this repository stated as current fact
-that `claim-generation` is advisory-only "until this job is genuinely armed into branch protection". It
-has been a REQUIRED status context on `main` since `.github#1858`, and `.github#2517` replaced
-`Landable.fs`'s hand-written `advisoryCheckNames` literal with the derived COMPLEMENT of the base
-branch's required contexts, so the engine's own rollup scores it `Blocking` as well. Those three prose
-claims were the last copies of the old answer, and one of them is packed into the kit as
-`pnext-item/SKILL.md`. No behaviour changed: no gate, workflow trigger, or engine path was edited.
-
-`kit-auto-publish` tags on merge to `main`, so `FS.GG.Kit 0.50.6` was cut and published from
-`.github#2512`'s merge commit minutes before this branch merged `origin/main`. The published 0.50.6 is
-byte-faithful to its tagged tree — the pack was correct — but that tree predates this fix, and its
-`SKILL.md` still contains "stays advisory in the engine's own rollup". Tags are immutable, so the
-corrected body cannot reach receivers under 0.50.6. This cut is how it does.
-
-0.50.6 — a PATCH-LINE cut that COMPLETES a coherent set that 0.50.5 could not
-complete, and that carries the engine changes which landed between 0.50.4 and the commit it is tagged at.
-
-DO NOT ADOPT 0.50.5. It is a permanent two-of-three set. `FS.GG.Kit 0.50.5` and `FS.GG.Drivers 0.50.5`
-published to both feeds; this package's publish was then REFUSED by `check-engine-release-notes`
-(`.github#1762`) because this very property still began with `0.50.4` while `Version` had moved to
-`0.50.5`. Correcting that needs a new commit, and `.github#1772`'s sibling-tag precondition requires
-all three tags to name the SAME commit, so 0.50.5 could not be finished from a corrected tree —
-re-cutting it is the re-pack divergence `.github#2240` documents. This is the same shape 0.50.1 had,
-and it is recorded the same way in `registry/dependencies.yml`. Adopt 0.50.6.
-
-WHAT ACTUALLY CHANGED (`.github#2512`). `check-engine-release-notes` had a PR-time arm already, but
-its workflow `paths:` filter selected only this project file — not `Directory.Build.props`, where
-`FsggCoherentSetVersion` (and therefore this package's `Version`) is declared. PR #2507 bumped the
-scalar there and touched nothing else that filter selected, so the gate never ran on the PR that
-created the mismatch and first spoke at release time, after two packages had shipped irrevocably.
-That filter and the checker's own `PATHS_SUBJECT` now both name `Directory.Build.props`; the checker
-additionally refuses a `Version` that does not resolve from `FsggCoherentSetVersion`, so a version it
-cannot trace to the coherent-set scalar is no longer something it will bless.
-
-THE ENGINE SOURCE IS *NOT* BYTE-IDENTICAL TO 0.50.4. `.github#2324` is among the changes it carries.
-
-THESE NOTES DO NOT ENUMERATE THE REST, AND THAT IS DELIBERATE — DO NOT "FIX" IT BY ADDING A LIST.
-Earlier drafts of this entry tried three times to state the engine delta exactly, and each attempt was
-wrong in a new way: one copied the "byte-identical to 0.50.4" line from the entry below, after a commit
-had already landed underneath it; one added a corroborating aside about neighbouring entries which
-itself endorsed a false claim; one gave an exhaustive count, and a later merge to `main` falsified it
-almost immediately.
-
-THE COMMON FAULT WAS NOT CARELESSNESS, IT WAS ADDRESS. A release note is written before the commit it
-ships from exists — the tag lands on a MERGE commit, and `main` keeps moving until it does. So an
-exhaustive claim about the tagged tree is not merely hard to get right here, it is not answerable from
-here at all, and the sibling-tag precondition (`.github#1772`) forbids the follow-up commit that would
-correct it. The remedy is to stop asserting it, not to assert it more carefully.
-
-FOR THE AUTHORITATIVE LIST, ASK THE TAGGED TREE. `python3 scripts/check-engine-freshness.py` enumerates
-the engine commits since `coord-engine/v0.50.4`, and this coherent set's row in
-`registry/dependencies.yml` records the range with its evidence. `.github#2512`'s post-merge release
-obligation re-runs that enumeration against the actual merge commit immediately before tagging, so the
-record is made where the evidence exists rather than guessed here.
-
-PATCH-LINE, AND CHECKED RATHER THAN ASSERTED.
-`git diff coord-engine/v0.50.4..coord-engine/v0.50.6 -- src/FS.GG.Coord.Core/Protocol.fs` is this repo's
-standing test — no verb, flag, help entry, render name, result name or exit code may move. That command
-is run against the merge commit before the tag is cut, and a non-empty result means this cut is not a
-patch and these notes are wrong.
-
-0.50.4 — no engine behavior change. `.github#2496` edited kit-packed content
-(`pnext-item/SKILL.md`) after `FS.GG.Kit 0.50.3` had already been packed at `42c63af9`, so
-`check-kit-published-coherence` reds on `main`: the published 0.50.3 kit manifest differs from
-canonical on that one file. This bump exists to let the coherent set republish with current canonical
-content, not to announce a new engine fix; the engine source under `src/FS.GG.Coord.*` is
-byte-identical to 0.50.3. See 0.50.3's own notes below for the prior release's substantive changes.
-
-0.50.3 — no engine behavior change. `.github#2471` edited kit-packed content
-(the `pnext-item` skill and the `stale_guard` shell module) after 0.50.2 had already published, so
-`check-kit-published-coherence`'s PR arm required this coherent-set scalar to advance again before that
-PR could land (0.50.2 is not STRICTLY GREATER than the already-published 0.50.2). This bump exists to
-satisfy that gate, not to announce a new engine fix; the engine source under `src/FS.GG.Coord.*` is
-byte-identical to 0.50.2. See 0.50.2's own notes below for the substantive engine changes.
-
-0.50.2 — the completed coherent-set cut. FOUR DEFECT-CLASS ENGINE FIXES
-plus two hardening changes, and the first version at which FS.GG.Kit, FS.GG.Drivers and this engine
-are all three published together since 0.50.0 (.github#2381).
-
-WHY 0.50.2 AND NOT 0.50.1. The 0.50.1 cut published FS.GG.Kit and FS.GG.Drivers to both feeds and
-then REFUSED to publish this engine: `check-engine-release-notes` (.github#1762) correctly red-flagged
-that this property still began with `0.50.0`, so the package listing would have announced another
-release's notes. Both sibling packages were already immutable at 0.50.1 and the coherent-set gate
-requires all three tags to name the SAME commit, so 0.50.1 could not be completed from a corrected
-tree — it stands as a permanent two-of-three set. 0.50.2 is the whole set, cut from one commit with
-this property corrected first. FS.GG.Kit 0.50.1 and FS.GG.Drivers 0.50.1 should not be adopted on
-their own; adopt 0.50.2.
-
-WHAT SHIPS SINCE 0.50.0 (defect-class marked DEFECT):
-
-DEFECT  landable now attributes run gating to bad/pending check-runs rather than suite membership
-        (.github#2454). Before this, a merge gate could red on a check merely BELONGING to a suite
-        rather than on that check having failed.
-DEFECT  the markerless-row PR probe widened to `In review`, not just `Ready`/`Backlog`
-        (.github#2384) — the projection oscillation that made an unclaimed in-review row flip
-        columns between reads.
-DEFECT  `done`'s .github#2427 passed-over-foreign-closer advisory now goes to stderr rather than
-        stdout and the durable receipt (.github#2444), restoring stdout purity for callers that
-        parse it.
-DEFECT  critic-succession's "exact critic" guard no longer accepts a generic agent-type string as
-        proof of "the same critic" (.github#2451) — it bound to a review-marker field that is not
-        always a minted identity, weakening the independent-review contract itself.
-        `isGenericCriticIdentity` is kept private to Driver.fs/Review.fs.
-        the #353 collision scan now runs on `claim`, warning by default and refusing with
-        `--refuse-overlap` (.github#2459) — `claim` previously bypassed the overlap check entirely,
-        so two workers could hold intersecting touch-sets.
-        the accepted fsgg-sdd validator `toolVersion` is now an explicit vetted set rather than a
-        bare literal (.github#2465), with an error naming the reported version and the accepted set.
-        Previously ANY FS.GG.SDD.Cli release — patch included — broke `cycle advance` until someone
-        edited F# source.
-
-NO WIRE-SURFACE CHANGE. `git diff coord-engine/v0.50.0..HEAD -- src/FS.GG.Coord.Core/Protocol.fs` is
-empty across all of the above: no verb, flag, help entry, render name, result name or exit code is
-added, removed or re-spelled. This is a patch-line cut.
-
-PRIOR 0.50.0.
-
-0.50.0 — VERSIONING-SCHEME CHANGE, NOT A BEHAVIOR CUT (.github#2402):
-
-FS.GG.Coord.Cli's `&lt;Version&gt;` is no longer this project's own independent literal. FS.GG.Kit,
-FS.GG.Drivers and this engine are now released from one shared MSBuild property
-($(FsggCoherentSetVersion), Directory.Build.props), so a bump to any one of the three moves all
-three together and the three cannot diverge from each other the way FS.GG.Kit 0.49.0 and
-FS.GG.Drivers 0.18.0 diverged from this engine's 0.23.0 twenty minutes apart on 2026-08-10
-(commits f26da6ed/d48e1ec2). The set starts one MINOR above 0.49.0 — FS.GG.Kit's version at the
-time the set was declared, the highest of the three prior independent versions — rather than at
-0.49.0 itself, because 0.49.0 was already the newest FS.GG.Kit published on nuget.org and any PR
-editing FS.GG.Kit.csproj (which adopting this property does) must declare a version strictly
-greater than what is already published. Either way no member appears to downgrade (see
-docs/registry/compatibility.md for the full migration note).
-
-THIS IS NOT THE USUAL PATCH/MINOR CLASSIFICATION. `git diff coord-engine/v0.23.0..HEAD --
-src/FS.GG.Coord.Core/Protocol.fs src/FS.GG.Coord.Cli/Options.fs` is empty: no verb, flag, help
-entry, render name, result name or exit code is added, removed or re-spelled by this cut, which
-under this repository's usual 0.x rule would make it a PATCH. The jump from 0.23.0 to 0.50.0 is
-instead dictated entirely by the coherent-set adoption above, stated here rather than left to look
-like an unexplained large PATCH-shaped bump.
-
-PREVIOUS RELEASE NOTES (0.23.0):
-
-0.23.0 — MINOR on the 0.x line: `driver --events [--cursor FILE]` (.github#2135,
-PR #2327) derives material transitions and the complete active-item inventory from live board/claim/
-PR/review/delivery facts, with an optional durable idempotency cursor file — a caller-visible flag,
-help entry, and render mode `driver` did not have before. Two repair rounds close #2135's residue:
-persistent-Unreadable silence, corrupt-cursor collapse and CLI coverage (round 1); a directory at the
---cursor path is now refused rather than silently treated as absent (round 2).
-
-This cut also ships #2264's lifecycle Status projection (PR #2271): board reconciliation now converges
-the Project Status field from live PR/review/CI/delivery facts instead of relying on point-in-time
-writes at claim/release time, with orphan-claim handling and a single reconciled status writer so two
-passes cannot disagree.
-
-TWO DEFECT-class fixes are included:
-
-- #2306 (PR #2323) — a `widen`/`set-paths` call refused with `OVERLAP` no longer mutates the held
-  item's touch-set declaration. Before this fix, the refused paths were written into the declaration
-  anyway, so a caller who read the refusal as "nothing changed" held a wider, silently-drifted
-  declaration than they asked for or than the refusal implied.
-- #2245 acceptance 6 (PR #2326) — `RepoScope.resolve` now maps the rostered short id `sir` to
-  `EHotwagner/S.I.R.`, closing the scheduling-namespace split where a receiver's board rows (Repo
-  Scope `sir`) and the engine's own `--repo`/reservation keys (canonical `S.I.R.`) resolved to two
-  different repositories: `batch --repo S.I.R.` and `batch --repo sir` could each admit candidates
-  that overlapped the other's live reservations.
-
-EIGHTEEN merged engine commits since 0.22.1. `src/FS.GG.Coord.Core/Protocol.fs` (the exit-code wire
-contract) is untouched by this cut — the MINOR classification is carried entirely by the new
-`--events`/`--cursor` flag surface in `Options.fs`, consistent with this repository's 0.x policy that
-new CLI vocabulary is the caller-observable-change signal whenever there is no Major line to take.
-
-PREVIOUS RELEASE NOTES (0.22.1):
-
-0.22.1 — PATCH: #2308 fixes empty claim-marker reads so an unreadable or empty
-response refuses instead of inventing a safe-looking unclaimed state. The CLI verb, flag, result, and
-exit-code vocabulary is unchanged; this is stable (no prerelease suffix).
-
-PREVIOUS RELEASE NOTES (0.22.0):
-
-0.22.0 — MINOR on the 0.x line: explicit source-bound delivery-route receipts and
-typed intake transactions add caller-visible command, result, and refusal vocabulary. This cut also ships
-the #2300 scheduling and #2313 reconcile read-amplification defect fixes. The release is intentionally
-minor because Protocol.fs changes make the new delivery-route gate and transaction surface observable to
-every receiver; it remains stable (no prerelease suffix).
-
-PREVIOUS RELEASE NOTES (0.21.1):
-
-0.21.1 — PATCH: a CLOSED but UNSTAMPED item is still in flight, and review-marker
-recognition stops discarding the markers it cannot place (.github#2225, .github#2221).
-
-FOUR merged engine commits since 0.21.0. The wire surface `src/FS.GG.Coord.Core/Protocol.fs` is
-UNTOUCHED — and so is the CLI verb table, `src/FS.GG.Coord.Cli/Options.fs`. PATCH is MEASURED rather
-than argued: `git diff coord-engine/v0.21.0..HEAD -- src/FS.GG.Coord.Core/Protocol.fs
-src/FS.GG.Coord.Cli/Options.fs` is empty, so no verb, flag, help entry, render name, result name or
-exit code is added, removed or re-spelled. The four commits touch only `Client.fs`, `Snapshot.fs`,
-`Driver.fs` and `Scan.fs`. This registry contract's declared surface names the CLI VERB surface
-first and independently of the exit-code contract — that is what made 0.21.0 a MINOR — and this cut
-adds no verb, so the same reading makes this one a PATCH.
-
-A CLOSED, UNSTAMPED ITEM IS STILL IN FLIGHT (.github#2225 — DEFECT class, and why this cut is OWED
-rather than merely due). Closing is the MIDDLE of an item in this protocol, not its end: the merge
-that closes the issue is followed by publication, receipts and registry records, and only then a
-done stamp. Three read paths used `state = Closed` as a stand-in for "terminal" at the point where
-facts are SELECTED, so the whole post-merge window went unread, and the one substitution failed in
-three registers — `who` reported EMPTY for a live claim ("nothing in flight", not "cannot see");
-`batch` reserved NOTHING, so a second worker could be dispatched into the holder's tree (.github#1858's
-class); and `delivery` blamed the item's own `Paths:` line for the reader's blindness. `Scan.fs`'s
-sweep is now gated on the done STAMP rather than on `Closed`; `Snapshot.fs`'s tolerance for an absent
-body narrows to match across all four body-derived parsers, so a missing body on a closed, unstamped
-row is a REFUSED document rather than an invented touch-set; and `who` gains arm C — closed board rows
-that are not yet Done — which widens the READ and never the verdict, so a markerless closed row stays
-silent rather than becoming UNCLAIMED. An overlapping candidate is refused with the byte-identical
-sentence used for an open holder, naming the holder. Cost measured on the live 2119-row board: 2086
-rows are closed and every one is stamped Done, so the extra reads are bounded by the number of workers
-actually inside the post-merge window.
-
-A QUOTED REVIEW MARKER IS INERT, NOT FATAL TO THE WHOLE PR (.github#2221). A comment that merely
-QUOTES a review marker no longer invalidates every genuine marker on the pull request.
-
-A MISPLACED MARKER IS REFUSED BY NAME, NOT SILENTLY DROPPED (.github#2221 round 1). A marker that is
-prose-first, or carries one leading space, was dropped and the chain then reported as accepted. It is
-now refused by name.
-
-AND THE MISPLACEMENT RULE IS NOT VACUOUS FOR THE FIELD-LESS KINDS (.github#2221 round 2). Round 1's
-discriminator required a protocol field key unconditionally, which made it vacuous for exactly the two
-kinds that carry no field grammar — escalation and repair-phase — so seven of eight real prose-first
-escalation shapes still vanished. Both kinds are now covered. Marker and field-read errors name the
-offending comment id/URL, the field, and missing-versus-duplicated.
-
-Every review chain this org parses until receivers restore 0.21.1 is parsed by the 0.21.0 engine that
-.github#2221 was filed about, and every claim on a closed, unstamped row still reserves nothing.
-
-PREVIOUS RELEASE NOTES (0.21.0):
-
-0.21.0 — MINOR on the 0.x line: the typed semantic diff-audit becomes a
-caller-visible engine command, and a mandatory, engine-recomputed gate on the live delivery path
-(.github#2144).
-
-FIFTEEN merged engine commits since 0.20.1 — fourteen from .github#2144 and its repair phase, plus
-one DEFECT-class fix from .github#2220. The wire surface `src/FS.GG.Coord.Core/Protocol.fs` is
-UNTOUCHED by this cut, so no exit code and no existing verb's contract changes.
-
-BLOCKER-CLEARED NOW CHOOSES ITS REMEDY FROM THE ROW'S TOUCH-SET (.github#2220). The rule emitted
-`Status = Ready` unconditionally, which is a correct answer to "do the recorded blockers still
-hold?" applied to rows for which `Ready` is not a REACHABLE state. A row declaring `Paths: none`
-(unschedulable by design) or declaring no touch-set line at all was advertised to every reader and
-then refused by the scheduler on every pass — a permanently unfillable lane at the head of the
-queue, observed live for six days on the board's only Critical row. Such rows now clear to
-`Backlog`, the file-less chore case still clears to `Ready`, and an unreadable body yields no
-destination rather than a guessed one. Receivers running 0.20.1 still reconcile the old way, which
-is why this cut is owed rather than merely due.
-
-NEW COMMAND VOCABULARY — `diff-audit`. `fsgg-coord-engine diff-audit &lt;base&gt; &lt;head&gt; &lt;old&gt; &lt;new&gt;
-[receipt.json|-] [item-body.md] --paths P... [--repo ROOT] [--json]` inventories the exact
-git-object changes between two immutable commits and classifies every changed occurrence with a
-typed disposition. It is JSON-only, reads no board and opens no network connection, and accepts a
-bare `-` to read a receipt from stdin. `--paths` is now accepted for it as well as for `widen` and
-`set-paths`. THIS IS WHY THE CUT IS A MINOR AND NOT A PATCH: receivers gain a verb, a help entry, a
-flag applicability, a render name and a refusal vocabulary that 0.20.1 did not have. The 0.x line
-has no major available to take, so MINOR is this repository's caller-observable-change signal.
-
-THE GATE. Review-chain parsing now binds a mandatory diff audit to an inventory the engine
-recomputes ITSELF from the live PR base/head blobs, so a submitted receipt is evidence only where
-the engine can reproduce it. Requiredness is derived from the live item body, the immutable head
-declaration and an occurrence threshold — never from a review marker's own claim, and never from
-caller environment variables. A receipt that is stale, incomplete, duplicated, malformed, or
-outside the declared paths is refused, and unreadable live facts supply NO trusted facts and
-require the audit rather than waiving it.
-
-MEASURED IN OCCURRENCES, NOT FILES. Where no receipt supplies the rename tokens, the engine
-recovers them from the live diff and counts OCCURRENCES. The changed-file count is a different and
-always smaller quantity, and substituting it let a one-file/six-occurrence rename pass under the
-default threshold of 5. Both arms — with and without a submitted receipt — now measure the same
-way, from diff-aligned renames rather than from an unaligned whole-file multiset difference.
-
-COVERAGE. A receipt carries one rename pair, and the gate is satisfied by the UNION of every
-receipt the review chain carries: each must be honest about the pair it names, and together they
-must cover every occurrence discovered across the whole diff. Before this, a receipt honestly
-covering 6 of 12 discovered occurrences over 1 of 2 changed paths was accepted, so the author still
-chose how much of the diff the audit applied to.
-
-PERFORMANCE. Rename discovery buckets candidates by line skeleton, so a bulk rename over a large
-diff terminates instead of degenerating into an all-pairs comparison.
-
-Six refusal causes stay distinguishable rather than collapsing into one message: no receipts, a
-malformed receipt, an honest-but-partial receipt, an unrecomputed rename pair, and a stale or
-unresolved-disposition receipt each name themselves; only a covering union is `Ok`.
-
-PREVIOUS RELEASE NOTES (0.20.1):
-
-0.20.1 — PATCH: an organization board's row for an issue owned OUTSIDE the
-board owner is now read from the board side, so cross-owner coordination reports the truth (#2204/#2209).
-
-`Board.itemStatus` and `Board.itemBlockedBy` resolved a row's `Status`/`Blocked by` through the
-issue-side `repository.issue.projectItems` connection, which does not surface an organization project's
-row for an issue in a differently-owned repository. The narrowing found nothing and returned a DEFINITE
-`Ok None` — "not on this board, or on it with no column" — manufactured out of a connection that had
-merely filtered the row away. Both readers now route an external owner through one shared
-`externalItemField`: the row is resolved by the cached item id and the field read as a one-point
-`node(id:)` call, so the thrift that keeps `take` -> `claim` off a full-board scan is preserved, and the
-board owner's own issues keep the existing issue-side read unchanged. An unresolvable lookup is now
-`Error`; `Ok None` means measured absence only.
-
-Three caller-visible behaviors are repaired for cross-owner rows, each pinned by a fixture reproducing
-the pre-fix symptom: `claim`/`take --json` can report `converged: true` (it was permanently false);
-bare `release` restores the pre-claim column instead of stranding the row at `In progress`; and `add` no
-longer lays the `Backlog` default over a live external column.
-
-Patch is correct: no verb, flag, result or exit-code vocabulary is added or removed, and the wire
-surface `src/FS.GG.Coord.Core/Protocol.fs` is untouched by this cut. This is a compatibility-preserving
-correctness fix to 0.20.0's behavior.
-
-PREVIOUS RELEASE NOTES (0.20.0):
-
-0.20.0 — MINOR on the 0.x line: deterministic, resumable coordination cycles
-are now a caller-visible engine command (#2133/#2197).
-
-The new `cycle` surface inspects, registers, advances, updates, and completes source-bound roadmap and
-workspace units through one typed ledger. Stable provider-cycle identities bind implementation, critique,
-feedback, candidate head, merge evidence, and durable update history; stale or wrong-cycle artifacts fail
-closed. The default journal resolves through Git's per-worktree path, so restart/resume works in the linked
-worktrees used by normal workers.
-
-Provider validation executes only the canonical validators shipped beside the engine, with pinned byte
-identities. Caller-controlled artifact roots cannot substitute executable validators, tampered bundled
-validators are refused, and the SDD provider is bound to the supported 1.0.0 tool/report/work identity.
-
-PREVIOUS RELEASE NOTES (0.19.1):
-
-0.19.1 — PATCH: coherent Blocked parking is now enforced consistently across every board-writing
-transport route (#2109/#2184).
-
-The packaged coordination engine rejects an incoherent `Status: Blocked` write before it can leave a
-board row parked without a concrete blocker or the explicit human/action sentinel. The centralized
-coverage inventory includes add, release, reconcile, and restored-status writers, so future transport
-routes cannot silently bypass the same guard. This is a compatibility-preserving correctness patch to
-0.19.0's caller-visible lifecycle contract.
-
-PREVIOUS RELEASE NOTES (0.18.0):
-
-Runtime changes merged after 0.17.0 make the packaged engine match the coordination and product-board
-guidance already carried by Kit 0.24.0 and the driver manifest.
-
-REPOSITORY-SCOPED TOUCH SETS (#2011): path declarations are interpreted in their declared Repo Scope,
-so identical relative paths in different repositories no longer contend accidentally.
-
-BOARD FACTS AND DIAGNOSTICS (#2040/#2042): scheduler facts are extracted behind a typed application
-boundary, overlap refusals name the reserving holder, and board drivers receive structured rate-limit
-classes instead of parsing prose (#2041).
-
-SAFE RECONCILIATION (#1984/#2000/#2037): blocker-cleared repairs fail closed when the live PR probe
-cannot be read, lint covers blocked verdicts, and deliberate human parks are distinguished from stale
-blockers.
-
-COMMAND AND SCHEDULER CORRECTIONS (#1991/#1992/#1993/#2031): option ownership and rendered flag
-spellings agree with the command contract, dead scan rendering is removed, and filing a single-item
-parallel lane is diagnosed rather than silently presented as fan-out.
-
-Patch is not defensible: the 0.x tool gains result vocabulary, repository-scoped scheduling semantics,
-and caller-visible refusal/diagnostic behavior.
-
-PREVIOUS RELEASE NOTES (0.17.0):
-
-TWO merged engine commits since 0.16.0.
-
-REFUSAL SPELLINGS (#1573): refusal text is now derived from the command-contract flag spelling table,
-including the non-long `-n` limit spelling. Contract output and a refusal can no longer silently name
-different flags.
-
-SAFE ROTATED-SESSION RECOVERY (#1857): a live claim carrying this worker id but a different session
-still refuses — the #419 twin guard is not weakened — but its diagnostic now names the marker session
-and the `CLAUDE_CODE_SESSION_ID`/`FSGG_WORKER` pin needed for a worker whose harness rotated sessions.
-It explicitly warns not to mint a new id and strand the live claim.
-
-Patch is not defensible: both changes alter caller-visible diagnostic/recovery behavior on a 0.x tool.
-No Protocol.fs wire-surface change is included.
-
-PREVIOUS RELEASE NOTES (0.16.0):
-
-EIGHT merged engine commits since 0.15.0 across 32 source/project files. The #1900 squash commit
-consolidates four reviewed input commits, making eleven pre-merge inputs in total. Protocol.fs moved,
-so the generated worker contract and the published engine were out of step until this release.
-
-FOLLOW-UP QUEUES AND THE DONE BOUNDARY (.github#1900/#1952): `followup audit` now observes every local
-queue, previews reconciliation, and applies safe removal only after a durable GitHub disposition is
-verified. `done` audits residual promises before stamping completion. `--apply` is now valid for the
-followup command, and the JSON/text result vocabulary gains the audit and reconciliation outcomes.
-
-FAIL-CLOSED MARKER SCANS (.github#1896/#1949): scheduler selection, claim/adopt/reap checks, and active
-touch-set decisions no longer continue from a partial comment scan. A previously successful operation
-may now refuse with an incomplete/undetermined result rather than silently ignoring a hidden claim.
-
-SCHEDULING AND RANKING: BLOCKER-CLEARED respects an in-flight implementation (.github#1738/#1921);
-decision items stay out of the worker queue (.github#1887/#1946); Severity is an ordered rank axis
-(.github#1901); and `lint` names consolidation candidates when overlapping work is one cause
-(.github#1915).
-
-SKILL AND KIT DIAGNOSTICS: skill views are derived from receiver declarations (.github#1948), and KIT
-DIGEST gives correct claim advice for skill files (.github#1942).
-
-KNOWN RESIDUE: .github#1892 still decides whether secondary rate limits receive a distinct exit code or
-remain EX_RATE with richer data. .github#1857 still tracks a session id rotating mid-item and stranding
-the worker's own heartbeat/release/done operations. Neither behavior is claimed fixed by this release.
+`Directory.Build.props`) by construction (.github#2402), so the coordination kit and drivers ship at
+this same version even where their own payload did not change.
+
+$(FsggStandingAdvisories)
+
+FULL PER-VERSION HISTORY IS SERVED BY THE REGISTRY, NOT REPEATED HERE (`.github#2579`). Every
+published version's own notes remain readable, permanently, on that version's own listing at
+https://www.nuget.org/packages/FS.GG.Coord.Cli — and each cut's evidence is recorded in
+`registry/dependencies.yml` and `registry/CHANGELOG.md` at https://github.com/FS-GG/.github.
+
+WHY THIS FIELD NO LONGER ACCUMULATES. Until 0.52.0 these notes carried every prior version's entry,
+so they grew monotonically and crossed nuget.org's 35,000-character limit at 37,279 evaluated
+characters. The 0.52.0 cut published `FS.GG.Kit` and `FS.GG.Drivers` to both feeds and was then
+refused by nuget.org with a hard 400 on this package alone. Re-shipping a listing's own history in
+every LATER listing duplicated what the registry already serves; a correction ABOUT an earlier
+listing is what only a later one can carry, and that is what the standing advisories above are.
 </PackageReleaseNotes>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

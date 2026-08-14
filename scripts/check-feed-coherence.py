@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate the registry's `package-version` against the live org feed (.github#267, epic #266).
+"""Gate the registry's `package-version` against both feeds consumers use (.github#267/#2580).
 
 `contract-coherence.yml` validates registry/dependencies.yml against its SCHEMA and against its
 PROJECTION. Nothing validated it against REALITY: the packages actually served by
@@ -10,10 +10,12 @@ before the registry says so — was a convention with no enforcement, and drifte
 For every contract carrying `package-version`, this asserts:
 
     registry.package-version  ==  newest version live on the org feed
+                              ==  newest version live on nuget.org
 
 failing on EITHER direction, with different messages:
 
-  * BEHIND the feed  -> a release published and the registry was never flipped (the observed one).
+  * PARTIAL release  -> the feeds disagree; do not flip the registry.
+  * BEHIND the feeds -> a release completed on both feeds and the registry was never flipped.
   * AHEAD of the feed -> the registry advertises a version consumers cannot restore (the FR-007
     inversion; never yet observed, and equally undetected).
 
@@ -69,6 +71,7 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     feed_versions,
     is_prerelease,
     newest,
+    nuget_org_versions,
     parse_version,
 )
 
@@ -85,8 +88,27 @@ from registry_packages import (  # noqa: E402  (path shim above must run first)
 )
 
 
-def check_contract(contract_id: str, declared: str, resolve) -> list[str]:
-    """Compare `declared` to the newest feed version of each mapped package. Returns problems."""
+def _channel_versions(contract_id: str, package: str, declared: str, label: str, live: list[str]) -> list[str]:
+    """Apply the registry row's stable/preview channel to one feed, failing closed."""
+    if is_prerelease(declared):
+        return live
+    stable = [v for v in live if not is_prerelease(v)]
+    if not stable:
+        raise GateError(
+            f"{contract_id}: {label} serves no stable version of {package} — only prereleases "
+            f"{sorted(live)}, while the registry declares the stable {declared!r}, which no "
+            f"consumer can restore. Publish the stable package, or move the registry to a "
+            f"prerelease channel."
+        )
+    return stable
+
+
+def check_contract(contract_id: str, declared: str, resolve_org, resolve_nuget=None) -> list[str]:
+    """Compare `declared` to both feeds for every mapped package. Returns problems.
+
+    `resolve_nuget` defaults to `resolve_org` only for the older focused unit callers that exercise
+    channel policy with one synthetic feed. Production and the fixture CLI always provide both.
+    """
     problems: list[str] = []
     want = parse_version(declared)
     # Channel policy, mirroring Renovate's `ignoreUnstable: true` (default.json, .github#386): a
@@ -98,33 +120,40 @@ def check_contract(contract_id: str, declared: str, resolve) -> list[str]:
     # The filter lives here, not in newest(): "which channel to compare on" is this gate's policy,
     # not a version-ordering fact — and check-pin-coherence.py shares newest() unchanged.
     stable_channel = not is_prerelease(declared)
+    resolve_nuget = resolve_nuget or resolve_org
     for pkg in packages_for(contract_id):
-        live = resolve(pkg)
-        if stable_channel:
-            stable = [v for v in live if not is_prerelease(v)]
-            if not stable:
-                problems.append(
-                    f"{contract_id}: the feed serves no stable version of {pkg} — only prereleases "
-                    f"{sorted(live)}, while the registry declares the stable {declared!r}, which no "
-                    f"consumer can restore. Publish the stable package, or move the registry to a "
-                    f"prerelease channel."
-                )
-                continue
-            live = stable
-        top = newest(live)
+        try:
+            org_live = resolve_org(pkg)
+            nuget_live = resolve_nuget(pkg)
+            if stable_channel:
+                org_live = _channel_versions(contract_id, pkg, declared, "the org feed", org_live)
+                nuget_live = _channel_versions(contract_id, pkg, declared, "nuget.org", nuget_live)
+        except GateError as e:
+            problems.append(str(e))
+            continue
+        org_top = newest(org_live)
+        nuget_top = newest(nuget_live)
+        if parse_version(org_top) != parse_version(nuget_top):
+            problems.append(
+                f"{contract_id}: PARTIAL RELEASE — {pkg} newest on the org feed is {org_top!r} but "
+                f"newest on nuget.org is {nuget_top!r}. The dual publish did not complete; do not "
+                f"flip the registry to either feed's private state. Resume or supersede the release."
+            )
+            continue
+        top = org_top
         got = parse_version(top)
         if got == want:
-            print(f"  ok   {contract_id:31} {pkg:33} == {top}")
+            print(f"  ok   {contract_id:31} {pkg:33} org=nuget.org={top}")
         elif want < got:
             problems.append(
-                f"{contract_id}: registry `package-version` is BEHIND the feed — declares "
-                f"{declared!r} but {pkg} newest on the org feed is {top!r}. A release published "
-                f"and the registry was never flipped (publish-before-flip step 2, FR-007)."
+                f"{contract_id}: registry `package-version` is BEHIND both feeds — declares "
+                f"{declared!r} but {pkg} newest on the org feed and nuget.org is {top!r}. A release "
+                f"completed and the registry was never flipped (publish-before-flip step 2, FR-007)."
             )
         else:
             problems.append(
                 f"{contract_id}: registry `package-version` is AHEAD of the feed — declares "
-                f"{declared!r} but {pkg} newest on the org feed is {top!r}. The registry "
+                f"{declared!r} but {pkg} newest on both feeds is {top!r}. The registry "
                 f"advertises a version consumers cannot restore (the FR-007 inversion)."
             )
     return problems
@@ -133,13 +162,18 @@ def check_contract(contract_id: str, declared: str, resolve) -> list[str]:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("registry", nargs="?", default="registry/dependencies.yml")
-    ap.add_argument("--fixture", help="read the feed from a JSON file (tests only, never in CI)")
+    ap.add_argument("--fixture", help="read the org feed from a JSON file (tests only, never in CI)")
+    ap.add_argument("--fixture-nuget", help="read nuget.org from a JSON file (tests only; requires --fixture)")
     args = ap.parse_args(argv)
 
     try:
         doc = yaml.safe_load(open(args.registry, encoding="utf-8"))
     except OSError as e:
         print(f"::error::check-feed-coherence: cannot read registry: {e}", file=sys.stderr)
+        return 1
+
+    if args.fixture_nuget and not args.fixture:
+        print("::error::check-feed-coherence: --fixture-nuget requires --fixture.", file=sys.stderr)
         return 1
 
     if args.fixture:
@@ -157,19 +191,32 @@ def main(argv: list[str]) -> int:
             )
             return 1
         # Loud on purpose: a fixture run must never be mistaken for a live-feed run in a log.
-        print(f"FIXTURE MODE — reading {args.fixture}, NOT the live feed. Not a coherence signal.")
+        nuget_fixture = args.fixture_nuget or args.fixture
+        print(
+            f"FIXTURE MODE — reading {args.fixture} (org) and {nuget_fixture} (nuget.org), "
+            "NOT the live feeds. Not a coherence signal."
+        )
         try:
-            table = json.load(open(args.fixture, encoding="utf-8"))
+            org_table = json.load(open(args.fixture, encoding="utf-8"))
+            nuget_table = json.load(open(nuget_fixture, encoding="utf-8"))
         except (OSError, ValueError) as e:
             print(f"::error::check-feed-coherence: cannot read fixture: {e}", file=sys.stderr)
             return 1
 
-        def resolve(pkg: str) -> list[str]:
-            if pkg not in table:
+        def resolve_org(pkg: str) -> list[str]:
+            if pkg not in org_table:
                 raise GateError(f"package {pkg!r} is not on the org feed (fixture: absent)")
-            vs = table[pkg]
+            vs = org_table[pkg]
             if not vs:
-                raise GateError(f"the feed served zero versions for {pkg!r}")
+                raise GateError(f"the org feed served zero versions for {pkg!r}")
+            return list(vs)
+
+        def resolve_nuget(pkg: str) -> list[str]:
+            if pkg not in nuget_table:
+                raise GateError(f"package {pkg!r} is not on nuget.org (fixture: absent)")
+            vs = nuget_table[pkg]
+            if not vs:
+                raise GateError(f"nuget.org served zero versions for {pkg!r}")
             return list(vs)
     else:
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
@@ -182,8 +229,11 @@ def main(argv: list[str]) -> int:
             )
             return 1
 
-        def resolve(pkg: str) -> list[str]:
+        def resolve_org(pkg: str) -> list[str]:
             return feed_versions(pkg, token)
+
+        def resolve_nuget(pkg: str) -> list[str]:
+            return nuget_org_versions(pkg)
 
     contracts = doc.get("contracts") or []
     subject_rows = subjects(contracts)
@@ -212,7 +262,7 @@ def main(argv: list[str]) -> int:
             print(f"::error::check-feed-coherence: {problem}", file=sys.stderr)
         return 1
 
-    print(f"comparing {len(subject_rows)} package-bearing contract(s) against the org feed:")
+    print(f"comparing {len(subject_rows)} package-bearing contract(s) against both feeds:")
     problems: list[str] = []
     for c in subject_rows:
         cid = str(c.get("id", "")).strip()
@@ -229,7 +279,7 @@ def main(argv: list[str]) -> int:
             )
             continue
         try:
-            problems += check_contract(cid, declared, resolve)
+            problems += check_contract(cid, declared, resolve_org, resolve_nuget)
         except GateError as e:
             problems.append(f"{cid}: {e}")
 
@@ -240,7 +290,7 @@ def main(argv: list[str]) -> int:
         print(f"\ncheck-feed-coherence: {len(problems)} problem(s).", file=sys.stderr)
         return 1
 
-    print(f"\nok: every `package-version` equals the newest version live on the {ORG} feed.")
+    print(f"\nok: every `package-version` equals the newest version live on the {ORG} feed and nuget.org.")
     return 0
 
 

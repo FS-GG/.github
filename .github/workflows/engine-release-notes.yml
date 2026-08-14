@@ -9,11 +9,25 @@ name: engine-release-notes
 # two-of-three set because of it. `scripts/check-engine-release-notes.py` declares the same pair in
 # its PATHS_SUBJECT, and check-paths-coherence rule (c) keeps these two lists from drifting apart
 # again.
+#
+# THE SIBLING PROJECTS AND THE COHERENT-SET DECLARATION ARE OPERANDS TOO, FOR THE SAME REASON ONE
+# LINK FURTHER OUT (.github#2579). This gate now also refuses a `PackageReleaseNotes` longer than
+# nuget.org's limit, for EVERY member of the coherent set — and the membership is declared in
+# `scripts/check-coherent-set-version.py`'s `PROJECTS`. Only FS.GG.Coord.Cli carries notes today, so
+# the only way a sibling gains any is a pull request editing its own `.csproj`; if this filter did
+# not select those files, that PR would run none of this and the refusal would first speak at
+# release time — which is precisely where it is too late, because the three release workflows run in
+# parallel on the three sibling tag pushes and the siblings publish first. That is the 0.52.0 shape.
+# `tests/engine-release-notes/run.sh` asserts the whole chain mechanically: every `PROJECTS` entry
+# is in PATHS_SUBJECT, and every PATHS_SUBJECT entry is in BOTH filters below.
 on:
   pull_request:
     paths:
       - "Directory.Build.props"
       - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      - "src/FS.GG.Kit/FS.GG.Kit.csproj"
+      - "src/FS.GG.Drivers/FS.GG.Drivers.csproj"
+      - "scripts/check-coherent-set-version.py"
       - "scripts/check-engine-release-notes.py"
       - "tests/engine-release-notes/**"
       - ".github/workflows/engine-release-notes.yml"
@@ -23,6 +37,9 @@ on:
     paths:
       - "Directory.Build.props"
       - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      - "src/FS.GG.Kit/FS.GG.Kit.csproj"
+      - "src/FS.GG.Drivers/FS.GG.Drivers.csproj"
+      - "scripts/check-coherent-set-version.py"
       - "scripts/check-engine-release-notes.py"
       - "tests/engine-release-notes/**"
       - ".github/workflows/engine-release-notes.yml"

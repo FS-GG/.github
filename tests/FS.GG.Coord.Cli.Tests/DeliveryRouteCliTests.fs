@@ -216,7 +216,13 @@ module DeliveryRouteCliTests =
             let code, out = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
 
             Assert.Equal(0, code)
-            Assert.Equal<string list>([ DeliveryRouteMarker + "\n" + (sddRequiredReceipt "no-package-2298") ], thread.Bodies)
+            // .github#2583: `record` now writes a derived locator marker BETWEEN the route marker and
+            // the agent's receipt. The receipt JSON itself is still byte-verbatim, which is what this
+            // assertion has always been about; `ConsolidationTaxTests` owns the locator's own contract.
+            // This fixture's body is a single `Paths:` line, so its subject is EMPTY and the marker
+            // carries no locators — the degenerate shape, pinned here on purpose.
+            let locatorMarker = "<!-- fsgg:delivery-route-subject-lines/v1  -->"
+            Assert.Equal<string list>([ DeliveryRouteMarker + "\n" + locatorMarker + "\n" + (sddRequiredReceipt "no-package-2298") ], thread.Bodies)
 
             let result = JsonDocument.Parse(out.Trim()).RootElement
             Assert.Equal("recorded", result.GetProperty("kind").GetString())

@@ -1,12 +1,12 @@
-# Gate the registry's `package-version` against the LIVE org feed (.github#267, epic #266).
+# Gate the registry's `package-version` against both LIVE feeds (.github#267/#2580, epic #266).
 #
 # contract-coherence.yml validates registry/dependencies.yml against its SCHEMA and its PROJECTION.
 # Neither validates it against REALITY, so publish-before-flip (FR-007) was a convention nothing
 # enforced, and it drifted three times (.github#250; the missed fs-gg-ui-template 0.4.0-preview.1
 # flip; .github#263). scripts/check-feed-coherence.py closes that: for every contract carrying a
-# `package-version` it asserts the literal equals the newest version served by
-# nuget.pkg.github.com/FS-GG, failing on BOTH directions (behind = a release that never flipped the
-# registry; ahead = the registry advertising a version consumers cannot restore).
+# `package-version` it asserts the literal equals the newest version served by both
+# nuget.pkg.github.com/FS-GG and nuget.org. A disagreement between feeds is an incomplete release,
+# never an instruction to flip the registry toward the feed that happened to publish first.
 #
 # The two triggers are the two halves of the acceptance criteria in #267:
 #   * pull_request — a PR that flips `package-version` to a version not on the feed fails CI.
@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-policy-python
-      - name: Assert every `package-version` == newest on the org feed
+      - name: Assert every `package-version` == newest on both feeds
         env:
           # Env-passed, never interpolated into the run script — the org's uniform anti-injection
           # pattern (cf. architecture-map.yml, contract-coherence.yml). The run-scoped token carries

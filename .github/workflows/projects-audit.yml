@@ -6,6 +6,9 @@ on:
     # Project access can change without a repository commit; audit it daily.
     - cron: '17 4 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   audit:
     runs-on: ubuntu-latest
@@ -14,5 +17,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify the audit fixture
         run: bash tests/projects-audit/run.sh
+      # The Coordination board is org-owned and private. A repository GITHUB_TOKEN cannot read it;
+      # mint the already-provisioned org App at the narrow read scope used by this audit.
+      - name: Mint an installation token with Projects v2 read access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-organization-projects: read
       - name: Audit Coordination Project access boundary
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: scripts/projects-audit.sh --project FS-GG/Coordination --visibility private --trusted-writers EHotwagner,nuklearwanze

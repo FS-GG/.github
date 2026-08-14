@@ -1,0 +1,53 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m0-stabilize",
+  "milestone": "M0 — stabilize",
+  "critic": "/root/m0_integration/m0_integrated_critic",
+  "initial_reviewed_commit": "101343fbb4f5c5d5626822f4363d69c3d79e154e",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
+  "reviewed_commits": [
+    "101343fbb4f5c5d5626822f4363d69c3d79e154e",
+    "db64a53b5dde6f383c48ade10dad10c890a89288"
+  ],
+  "findings": [
+    {
+      "id": "M0-INTEGRATION-CRIT-001",
+      "severity": "major",
+      "summary": "The integrated head still produces a standing-red feed-coherence verdict for the known 0.52.0 split publication, so it does not satisfy M0's explicit no-standing-red exit criterion.",
+      "evidence": [
+        "Verification: docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md states that M0 exits only when main has no standing red checks; .github/workflows/feed-coherence.yml runs the repaired live checker on pushes to main and on a daily schedule.",
+        "Verification: on reviewed commit 101343fbb4f5c5d5626822f4363d69c3d79e154e, `GITHUB_TOKEN=*** python3 scripts/check-feed-coherence.py registry/dependencies.yml` exited 1 and reported `coord-engine: PARTIAL RELEASE` because FS.GG.Coord.Cli newest on the org feed is 0.52.0 while newest on nuget.org is 0.51.1.",
+        "Verification: on the same reviewed commit, `GITHUB_TOKEN=*** python3 scripts/check-engine-pin.py` exited 0 and correctly retained pin 0.51.1, showing that the pin repair is sound but does not recover or supersede the split release that keeps feed-coherence red.",
+        "Verification: the base-to-head diff contains detection and diagnostic changes for the split release but no release recovery record, successful nuget.org publication evidence, or explicit supersession that makes the live dual-feed check green."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit db64a53b5dde6f383c48ade10dad10c890a89288 advances the one FsggCoherentSetVersion scalar from 0.52.0 to the unused stable 0.53.0; `python3 scripts/check-coherent-set-version.py` passed and `tests/coherent-set-version/run.sh` passed 13 of 13 assertions, proving FS.GG.Kit, FS.GG.Drivers, and FS.GG.Coord.Cli all evaluate to 0.53.0.",
+        "Verification: the repair replaces the accumulated engine listing with bounded 0.53.0 content, retains the standing-advisory property, and adds `DO NOT ADOPT 0.52.0`; `tests/engine-release-notes/run.sh` passed 25 of 25 assertions, including all three permanent partial-set warnings, while the production checker reported 5,383 of 35,000 characters used and 29,617 remaining.",
+        "Verification: SHA-256 verification against /tmp/fsgg-m0-053-local-sha256.txt succeeded for all three locally packed 0.53.0 nupkgs. Their nuspecs name versions 0.53.0 and repository commit db64a53b5dde6f383c48ade10dad10c890a89288; the engine nuspec's releaseNotes value is 5,382 characters.",
+        "Verification: the three release workflows require all sibling 0.53.0 tags to resolve to one commit, pack independently from that tagged checkout, push each resulting nupkg first to the org feed and then byte-identically to nuget.org, and the live repository variable NUGET_ORG_PUBLISH is true. The prior 0.52.0 sibling tags all peel to one commit, demonstrating that the same tag precondition is operational.",
+        "Verification: a focused dual-feed simulation with org versions 0.51.1/0.52.0/0.53.0 and nuget.org versions 0.51.1/0.53.0 made check-feed-coherence accept registry version 0.53.0, and a focused engine-pin fixture accepted a 0.53.0 pin. This proves the superseding version can converge both repaired gates without repacking immutable 0.52.0 bytes.",
+        "Verification: the 0.53.0 tags, feed publications, registry package-version flip, and canonical engine-pin bump are post-merge operations and have not yet occurred; confirmation accepts the repaired implementation and recovery route, not completion of those operational obligations."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "db64a53b5dde6f383c48ade10dad10c890a89288",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
