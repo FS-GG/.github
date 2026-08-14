@@ -21,6 +21,10 @@
     {
       "id": "coordination-retirement-readiness-fixture",
       "command": ["bash", "tests/coordination-retirement-readiness/run.sh"]
+    },
+    {
+      "id": "coordination-health-collector-fixture",
+      "command": ["bash", "tests/coordination-health-collector/run.sh"]
     }
   ]
 }

@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -35,7 +36,7 @@ CANONICAL_SUCCESSOR_QUERIES = [
     'repo:FS-GG/.github is:open is:issue "bulky evidence"',
 ]
 PROVENANCE_FIELDS = (
-    "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
+    "issues_created", "issues_closed", "repair_commits", "statement_only_repairs", "intent_reversals", "partial_success_reads",
     "ambiguous_release_states", "release_outcomes", "policy_implementations_start",
     "policy_implementations_end", "check_scripts_start", "check_scripts_end", "workflows_start",
     "workflows_end", "generated_evidence_bytes_delta", "core_and_test_bytes_delta",
@@ -45,6 +46,8 @@ PROVENANCE_FIELDS = (
 # reviewed canonical collector can replay those observations. Pure validation remains
 # testable, but cannot authorize retirement.
 ACCEPTANCE_ENABLED = False
+COLLECTOR_COMMAND = ["python3", "scripts/coordination-health-collector.py", "--root", ".",
+                     "--output-dir", "docs/reports/evidence/coordination-health"]
 
 
 def timestamp(value: object, where: str, failures: list[str]) -> datetime | None:
@@ -82,6 +85,9 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
         failures.append("schema_version must be 1")
     if not SHA.fullmatch(str(document.get("source_sha", ""))):
         failures.append("source_sha must be an exact lowercase 40-hex commit")
+    collector = document.get("collector")
+    if collector != {"schema_version": 1, "command": COLLECTOR_COMMAND}:
+        failures.append("collector must name the reviewed canonical schema-1 command exactly")
     measured_at = timestamp(document.get("measured_at"), "measured_at", failures)
 
     rows = document.get("candidate_periods")
@@ -170,6 +176,8 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                 failures.append(f"{where}.provenance.sha256: require an exact lowercase SHA-256")
             elif not isinstance(reproduce, list) or not reproduce or not all(isinstance(value, str) and value for value in reproduce):
                 failures.append(f"{where}.provenance.reproduce: require a non-empty argv array")
+            elif reproduce != COLLECTOR_COMMAND:
+                failures.append(f"{where}.provenance.reproduce: must be the canonical collector command")
             else:
                 try:
                     resolved_root = root.resolve(strict=True)
@@ -196,6 +204,28 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
                         for field in PROVENANCE_FIELDS:
                             if observed.get(field) != row.get(field):
                                 failures.append(f"{where}.provenance: artifact does not bind {field}")
+                        if observed.get("schema_version") != 1:
+                            failures.append(f"{where}.provenance: collector schema_version must be 1")
+                        raw = observed.get("raw")
+                        if not isinstance(raw, dict):
+                            failures.append(f"{where}.provenance: canonical raw observations are missing")
+                        else:
+                            bindings = (
+                                ("created", "issues_created"), ("closed", "issues_closed"),
+                                ("repair_classification", "repair_commits"),
+                                ("intent_reversal_events", "intent_reversals"),
+                                ("partial_success_events", "partial_success_reads"),
+                            )
+                            for raw_name, count_name in bindings:
+                                if not isinstance(raw.get(raw_name), list) or len(raw[raw_name]) != row.get(count_name):
+                                    failures.append(f"{where}.provenance: raw {raw_name} does not bind {count_name}")
+                            classified = raw.get("repair_classification", [])
+                            if isinstance(classified, list) and sum(
+                                item.get("statement_only") is True for item in classified if isinstance(item, dict)
+                            ) != row.get("statement_only_repairs"):
+                                failures.append(f"{where}.provenance: raw repair classification does not bind statement_only_repairs")
+                            if not str(raw.get("prose_citation_gate", "")).startswith("prose-citations: ok"):
+                                failures.append(f"{where}.provenance: landed prose-citation gate was not green")
                 except (OSError, json.JSONDecodeError, ValueError) as error:
                     failures.append(f"{where}.provenance: cannot read artifact: {error}")
 
@@ -302,6 +332,32 @@ def validate_live(document: dict, observed: object) -> list[str]:
     return failures
 
 
+def replay_canonical(document: dict, root: Path) -> list[str]:
+    """Re-run the producer; caller-authored non-GitHub values are never accepted."""
+    with tempfile.TemporaryDirectory(prefix=".m6-health-replay-", dir=root) as work:
+        relative = str(Path(work).relative_to(root))
+        command = ["python3", "scripts/coordination-health-collector.py", "--root", ".",
+                   "--output-dir", relative]
+        result = subprocess.run(command, cwd=root, check=True, text=True, capture_output=True)
+        replayed = json.loads(Path(result.stdout.strip()).read_text(encoding="utf-8"))
+    failures: list[str] = []
+    keys = ("source_sha", "candidate_periods", "successor_queries", "successor_census", "same_class_open")
+    # Provenance filenames include the collection instant. Compare every measured value and raw-bound
+    # digest through validate(), but exclude verification/provenance envelopes from semantic equality.
+    def semantic(rows: object) -> object:
+        if not isinstance(rows, list):
+            return rows
+        return [{key: value for key, value in row.items() if key not in ("verification", "provenance")}
+                if isinstance(row, dict) else row for row in rows]
+    for key in keys:
+        actual, expected = replayed.get(key), document.get(key)
+        if key == "candidate_periods":
+            actual, expected = semantic(actual), semantic(expected)
+        if actual != expected:
+            failures.append(f"canonical collector replay does not match {key}")
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("evidence", type=Path)
@@ -318,11 +374,10 @@ def main() -> int:
         try:
             if args.live_github:
                 failures.extend(validate_live(document, collect_live(document)))
-                if not failures and not ACCEPTANCE_ENABLED:
-                    failures.append(
-                        "production retirement acceptance is disabled until a reviewed canonical "
-                        "collector independently replays every non-GitHub health measure"
-                    )
+                if not failures and ACCEPTANCE_ENABLED:
+                    failures.extend(replay_canonical(document, args.root.resolve(strict=True)))
+                elif not failures:
+                    failures.append("production retirement acceptance is disabled until the canonical collector review passes")
             else:
                 failures.append("positive readiness requires --live-github authenticated evidence")
         except (OSError, json.JSONDecodeError, subprocess.CalledProcessError, KeyError, ValueError) as error:
