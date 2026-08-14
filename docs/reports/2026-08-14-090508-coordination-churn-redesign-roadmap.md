@@ -194,7 +194,7 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   - Deliverables: Add `SchedulingIntent`; implement pure reducer; shadow old/new projections; migrate deliberate parks
   - Exit criteria: Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch
 
-- [ ] **M2 — complete-read boundary**
+- [x] **M2 — complete-read boundary**
   - Target: Week 1
   - Deliverables: Add typed GraphQL adapter and generic connection draining; migrate all production readers; add fault-injection tests
   - Exit criteria: No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success
@@ -327,6 +327,46 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   M1 deliberately produced no fabricated SDD, cycle, or feedback artifact. The
   direct source/test patch, rollback switch, replay evidence, independent critique,
   normal pull-request checks, and exact post-merge inspection remain mandatory.
+
+### M2 complete-read boundary evidence
+
+- **One typed contract:** `GraphQl.fs` owns GraphQL envelopes, mixed
+  `data`/`errors`, typed retry/rate-limit classification, decoding, and generic
+  Relay connection draining. Drains have explicit page/item limits and reject
+  missing or malformed page information, empty continuing pages, repeated
+  cursors or identities, changing `totalCount`, and an incomplete final count.
+  `GraphQlEnvelope.fs` is the internal metering half of the same boundary;
+  `Budget.fs` no longer opens response envelopes.
+- **Production migration:** Board discovery, scans, done checks, audit reads,
+  and related production readers now pass through the complete-read contract.
+  The Python/shell audit and archive entry points use the explicitly temporary
+  `graphql_complete_read.py` compatibility frontend, whose typed failure
+  metadata distinguishes primary and secondary limits, retryability, reset
+  time, and retry-after duration. The architectural checker and inversion
+  fixture reject a raw F# envelope reader, a direct production shell transport,
+  or a second production page parser.
+- **Acceptance:** Exact implementation head
+  `97ed4e269c46621bed1e71849261a4ca6a00f9d1` passes Core 863/863, GitHub
+  608/608, CLI 838/838, the Python fault matrix 10/10, archive planning 18/18,
+  roster closure 79/79, replay 30/30, GraphQL monopoly 22/22, the boundary
+  checker and its inversion fixture, and `git diff --check`.
+- **Critique:** The independent schema-v3 record at
+  `reviews/roadmap/roadmap-coordination-churn-redesign-m2-complete-read-boundary.json`
+  records three repair rounds. Its two major findings—meter parsing outside the
+  boundary and untyped audit/archive readers—are resolved; the same critic
+  confirmed `pass` against the exact implementation head, with no unresolved
+  blocker or major finding. The shipped validator accepts the record.
+- **Rollback and removal:** The F# reader migrations retain narrow compatibility
+  decoders until M6. The Python frontend is removed in M6 only after typed F# CLI
+  equivalents exist for project visibility/id, repository policy, board scan,
+  archive mutation, and meter reads and those paths complete three stable
+  operating cycles. Until then, rollback is the ordinary revert of the M2
+  commits; incomplete reads continue to fail closed on either path.
+- **Lifecycle exception:** This kit-source tree still has no usable SDD cycle or
+  feedback-report provider. Under the user-authorized Chainsaw break-glass path,
+  M2 produced no fabricated SDD, cycle, or feedback artifact. Direct source and
+  test evidence, the independent critique, normal pull-request checks, and exact
+  post-merge inspection remain mandatory.
 
 ### Cross-cutting health measures
 
