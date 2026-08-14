@@ -16,6 +16,11 @@ __pycache__/
 # never authored, so it is never in a `Paths:` touch-set and never in a commit.
 bin/
 obj/
+
+# Local coordination session telemetry is a disposable projection, not an authority. Durable host
+# reasoning belongs in the issue/PR comment that records the decision (including structured
+# delivery-route and review receipts); board fields remain projections of those records.
+.fsgg/coord-report/
 # M5: bulky execution output belongs in immutable CI artifacts. Existing tracked
 # files remain tracked until their recoverable M6 migration; this prevents new copies.
 **/test-results/
