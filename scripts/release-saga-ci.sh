@@ -103,15 +103,37 @@ case "$command" in
       upload_journal
       echo "push=false" >> "$GITHUB_OUTPUT"
     else
-      rc=$?; [ "$rc" -eq 4 ] || exit "$rc"; echo "push=true" >> "$GITHUB_OUTPUT"
+      rc=$?; [ "$rc" -eq 4 ] || exit "$rc"
+      # A preceding attempt may have received success from nuget.org's push endpoint while the
+      # immutable version is still being validated/indexed. Its durable failure journal proves the
+      # write was attempted; never issue a blind duplicate push. Resume by observing until the exact
+      # payload appears, or fail durably again without changing external state.
+      if jq -e --arg package "$package" \
+        '.state.recovery.lastFailure.feed == "nuget" and .state.recovery.lastFailure.package == $package' \
+        "$journal" >/dev/null; then
+        observed=false
+        for _ in $(seq 1 60); do
+          if download nuget "$package" "$target"; then observed=true; break
+          else rc=$?; [ "$rc" -eq 4 ] || exit "$rc"; sleep 10; fi
+        done
+        [ "$observed" = true ] || { echo "nuget.org accepted the prior push but has not served it yet" >&2; exit 1; }
+        python3 "$tool" record-observed --manifest "$journal" --feed nuget \
+          --observed "$package=$target" --detail "resumed external observation after accepted push"
+        upload_journal
+        echo "push=false" >> "$GITHUB_OUTPUT"
+      else
+        echo "push=true" >> "$GITHUB_OUTPUT"
+      fi
     fi
     ;;
   nuget-record)
     target="artifacts/observed/nuget/$package.$version.nupkg"
+    observed=false
     for _ in $(seq 1 24); do
-      if download nuget "$package" "$target"; then break; else rc=$?; [ "$rc" -eq 4 ] || exit "$rc"; sleep 5; fi
+      if download nuget "$package" "$target"; then observed=true; break
+      else rc=$?; [ "$rc" -eq 4 ] || exit "$rc"; sleep 5; fi
     done
-    test -s "$target"
+    [ "$observed" = true ] || { echo "nuget.org accepted the push but has not served it yet" >&2; exit 1; }
     python3 "$tool" record-observed --manifest "$journal" --feed nuget \
       --observed "$package=$target" --detail "post-push external observation"
     upload_journal

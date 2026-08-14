@@ -146,9 +146,14 @@ for name, package in subjects.items():
     assert 'echo "source_sha=$source_sha"' in text, name
     assert 'steps.v.outputs.source_sha' in text, name
     assert 'tagged" != "$GITHUB_SHA' not in text, name
+    if name == "release-coord-engine.yml":
+        assert '[[ "$DISPATCH_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]' in text, name
 adapter = (root / "scripts/release-saga-ci.sh").read_text()
 assert "github_base | sed 's:/*$::'" in adapter
 assert "printf '%s/%s/%s/%s.%s.nupkg'" in adapter
+assert 'lastFailure.feed == "nuget"' in adapter
+assert "never issue a blind duplicate push" in adapter
+assert adapter.count('[ "$observed" = true ] ||') == 2
 prepare = (root / ".github/workflows/release-saga-prepare.yml").read_text()
 for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
     assert prepare.count(f"dotnet pack src/{project}/") == 1, project
