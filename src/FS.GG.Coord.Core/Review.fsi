@@ -63,6 +63,26 @@ module Review =
           Reason: string
           CandidateHeadSha: string }
 
+    /// The accountable grant that lets a repair whose subject is a PULL REQUEST COMMENT rather than the
+    /// tree advance a round (.github#2549) — the third instance of the `RepairPhaseReceipt` /
+    /// `CriticSuccessionReceipt` pattern, and admitted on the same test: a comment's current body is
+    /// observable, but "it changed in answer to this finding" is not, so the fact can only be granted.
+    ///
+    /// It SUPPLEMENTS the head-equality rule rather than replacing it. Absent a valid grant, an unmoved
+    /// head after a changes-required verdict still routes to the implementer, so a critic is never sent
+    /// to confirm a head no one repaired. Where a grant IS admitted the guard is strictly stronger than
+    /// the rule it stands in for: a moved head can be an empty commit the implementer produced alone,
+    /// whereas `GrantedBy` names an accountable third party and is refused when it is the implementer or
+    /// the round's own critic.
+    ///
+    /// `AnsweredReviewUrl` binds the grant to the exact review comment it answers, so a grant made for
+    /// an earlier round cannot be replayed against a later one; `CandidateHeadSha` binds it to the head.
+    type RepairAssertionReceipt =
+        { AnsweredReviewUrl: string
+          CandidateHeadSha: string
+          GrantedBy: string
+          Reason: string }
+
     /// Facts read live by the caller — PR comments, check state, and the two facts this pure engine
     /// cannot observe itself (clarifications DEC-002): whether a fresh repair phase has already been
     /// granted, and whether a repair route (fresh critic/worker capacity) is available at all.
@@ -89,6 +109,17 @@ module Review =
         | AwaitingSameCriticConfirmation of round: int
         | PassedAwaitingChecks
         | AwaitingHostAcceptance
+        /// The chain is COMPLETE — well-formed, host-accepted, critic-identified and bound to the
+        /// current head — and the only outstanding condition is the pull request's live check state,
+        /// carried here so a consumer reads why from the verdict (.github#2549).
+        ///
+        /// Distinct from `MalformedEvidence` by design and not as a softer synonym for it: this state
+        /// asserts that nothing about the evidence is wrong, so the recovery `MalformedEvidence`
+        /// teaches — close the pull request without merging — is never correct from here. Before
+        /// .github#2549 every ordinary landing passed through `MalformedEvidence` at this exact point,
+        /// because `.github#2504` makes `claim-generation` un-green until the post-acceptance `delivery`
+        /// call runs.
+        | AcceptedAwaitingChecks of checks: PrState
         | OrdinaryExhaustion
         | RepairPhaseSetup
         | RepairPhaseActive of round: int
@@ -120,6 +151,16 @@ module Review =
         | ResumeImplementer of reason: string
         | ResumeSameCritic of reason: string
         | AwaitChecks
+        /// Make the one live `scripts/fsgg-coord delivery <ref> --pr <n>` call `pnext-item` §6 places directly
+        /// after host acceptance (.github#2549). Deliberately not `AwaitChecks`: by `.github#2504` the
+        /// required `claim-generation` context cannot report until that call PATCHes the authorization
+        /// marker onto this head, so waiting is a cycle the marker can never break.
+        ///
+        /// Returned for `PrPending` ONLY. `PrUnknown` parks instead — `Landable.settled` scores it with
+        /// `PrConflicted` rather than `PrPending`, `Client` maps it to `ExitNoVerdict`, and `Reads.fsi`
+        /// records an unresolvable state answered as `PrPending` as a defect already fixed once. An
+        /// unreadable check state must not take the reassuring path.
+        | AuthorizeDelivery of reason: string
         | RequestHostAcceptance
         | EnterRepairPhase of RepairPhaseReceipt
         | EnterCriticSuccession of CriticSuccessionReceipt
@@ -150,7 +191,15 @@ module Review =
     /// equals the implementer identity (acceptance 5). `successionGranted` (.github#2417) is the
     /// explicit, out-of-band critic-succession grant, if any; every caller that never grants one passes
     /// `None` and observes byte-for-byte the same behavior as before this parameter existed.
-    val inspect: Binding -> Facts -> successionGranted: CriticSuccessionReceipt option -> Result<Verdict, string list>
+    /// `repairAssertionGranted` (.github#2549) is the explicit, out-of-band comment-shaped-repair
+    /// grant, if any; every caller that never grants one passes `None` and observes byte-for-byte the
+    /// same behavior as before that parameter existed.
+    val inspect:
+        Binding ->
+        Facts ->
+        successionGranted: CriticSuccessionReceipt option ->
+        repairAssertionGranted: RepairAssertionReceipt option ->
+            Result<Verdict, string list>
 
     /// Confirm that a caller is still advancing the exact verdict it inspected (acceptance 9). A
     /// changed binding, facts, or succession grant — including a new head SHA — invalidates the
@@ -162,4 +211,5 @@ module Review =
         Binding ->
         Facts ->
         successionGranted: CriticSuccessionReceipt option ->
+        repairAssertionGranted: RepairAssertionReceipt option ->
             Result<Verdict, string list>

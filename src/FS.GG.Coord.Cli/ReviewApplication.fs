@@ -124,6 +124,23 @@ module ReviewApplication =
         | Some _ -> invalidArg "criticSuccessionGranted" "must be an object or null"
         | None -> None
 
+    let private repairAssertionReceipt (element: JsonElement) : Review.RepairAssertionReceipt =
+        { AnsweredReviewUrl = readString "answeredReviewUrl" element
+          CandidateHeadSha = readString "candidateHeadSha" element
+          GrantedBy = readString "grantedBy" element
+          Reason = readString "reason" element }
+
+    /// Additive exactly as `criticSuccessionGranted` is (.github#2549): a snapshot producer that
+    /// predates this field, or one with no grant to report, omits the key and MUST parse exactly as it
+    /// always has. A present-but-not-an-object value is still an error rather than a silent `None` —
+    /// a malformed grant must never read as "no grant was offered", because those two lead to
+    /// different, and in the refusing direction identical-looking, next actions.
+    let private repairAssertionGranted (element: JsonElement) : Review.RepairAssertionReceipt option =
+        match optionalProperty "repairAssertionGranted" element with
+        | Some value when value.ValueKind = JsonValueKind.Object -> Some(repairAssertionReceipt value)
+        | Some _ -> invalidArg "repairAssertionGranted" "must be an object or null"
+        | None -> None
+
     /// `DiffAuditTrusted` is not yet on this wire contract — the pure snapshot path this command serves
     /// (a worker or the #2135 event projection asking "what next") does not need the live, engine-
     /// recomputed diff-audit inventory `Driver.parseReviewCommentsWithFacts` optionally consumes; a
@@ -143,7 +160,13 @@ module ReviewApplication =
 
     let private snapshot
         (raw: string)
-        : Result<Review.Binding * Review.Facts * Review.CriticSuccessionReceipt option, string> =
+        : Result<
+            Review.Binding
+            * Review.Facts
+            * Review.CriticSuccessionReceipt option
+            * Review.RepairAssertionReceipt option,
+            string
+          > =
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
@@ -152,7 +175,12 @@ module ReviewApplication =
             if bindingElement.ValueKind <> JsonValueKind.Object then invalidArg "binding" "must be an object"
             let factsElement = required "facts" root
             if factsElement.ValueKind <> JsonValueKind.Object then invalidArg "facts" "must be an object"
-            Ok(binding bindingElement, facts factsElement, criticSuccessionGranted factsElement)
+            Ok(
+                binding bindingElement,
+                facts factsElement,
+                criticSuccessionGranted factsElement,
+                repairAssertionGranted factsElement
+            )
         with error -> Error error.Message
 
     let private stateName (value: Review.State) =
@@ -163,6 +191,7 @@ module ReviewApplication =
         | Review.AwaitingSameCriticConfirmation _ -> "awaitingSameCriticConfirmation"
         | Review.PassedAwaitingChecks -> "passedAwaitingChecks"
         | Review.AwaitingHostAcceptance -> "awaitingHostAcceptance"
+        | Review.AcceptedAwaitingChecks _ -> "acceptedAwaitingChecks"
         | Review.OrdinaryExhaustion -> "ordinaryExhaustion"
         | Review.RepairPhaseSetup -> "repairPhaseSetup"
         | Review.RepairPhaseActive _ -> "repairPhaseActive"
@@ -183,6 +212,12 @@ module ReviewApplication =
         match value with
         | Review.TerminalHumanPark reason
         | Review.GuardViolation reason -> Some reason
+        // .github#2549. The check word is rendered through `Landable.name` — the SAME forward-only
+        // `PrState -> string` vocabulary the `checks` reader above parses in reverse — so the state a
+        // consumer reads back is spelled exactly as the one it supplied.
+        | Review.AcceptedAwaitingChecks checks ->
+            Some
+                $"the review chain is complete and accepted at this head; the pull request's checks are '%s{Landable.name checks}'"
         | _ -> None
 
     let private stateErrors (value: Review.State) : string list option =
@@ -196,6 +231,7 @@ module ReviewApplication =
         | Review.ResumeImplementer _ -> "resumeImplementer"
         | Review.ResumeSameCritic _ -> "resumeSameCritic"
         | Review.AwaitChecks -> "awaitChecks"
+        | Review.AuthorizeDelivery _ -> "authorizeDelivery"
         | Review.RequestHostAcceptance -> "requestHostAcceptance"
         | Review.EnterRepairPhase _ -> "enterRepairPhase"
         | Review.EnterCriticSuccession _ -> "enterCriticSuccession"
@@ -206,6 +242,7 @@ module ReviewApplication =
         match value with
         | Review.ResumeImplementer reason
         | Review.ResumeSameCritic reason
+        | Review.AuthorizeDelivery reason
         | Review.Park reason -> Some reason
         | _ -> None
 
@@ -257,8 +294,9 @@ module ReviewApplication =
         (binding: Review.Binding)
         (facts: Review.Facts)
         (successionGranted: Review.CriticSuccessionReceipt option)
+        (repairAssertionGranted: Review.RepairAssertionReceipt option)
         : int =
-        match Review.inspect binding facts successionGranted with
+        match Review.inspect binding facts successionGranted repairAssertionGranted with
         | Error reasons ->
             match opts.Render with
             | Json ->
@@ -301,7 +339,7 @@ module ReviewApplication =
     /// The live path's entrypoint — always `None` for the succession grant; see `renderVerdict`'s doc
     /// comment for why this stays a fixed 3-arg wrapper rather than growing a parameter.
     let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
-        renderVerdict opts binding facts None
+        renderVerdict opts binding facts None None
 
     let run (opts: Options) : int =
         let raw = input opts
@@ -313,4 +351,5 @@ module ReviewApplication =
             | Error error ->
                 eprint $"fsgg-coord-engine: review snapshot is malformed: %s{error}"
                 ExitCode.toInt ExitCode.Error
-            | Ok(binding, facts, successionGranted) -> renderVerdict opts binding facts successionGranted
+            | Ok(binding, facts, successionGranted, repairAssertionGranted) ->
+                renderVerdict opts binding facts successionGranted repairAssertionGranted

@@ -1182,3 +1182,82 @@ module DriverTests =
         let withQuote = reviewPhaseFacts [ quoted ]
         Assert.Equal(0, withQuote.InitialCount)
         Assert.False(withQuote.InitialPresent)
+
+    // ---- .github#2549: structural chain problems vs live-check liveness ---------------------------
+
+    /// A chain that fails every one of `validateReviewChain`'s nine clauses at once.
+    let private allNineFailing : ReviewChain =
+        { MarkerValid = false
+          CriticIdentity = None
+          HeadSha = None
+          Rounds = [ 2; 3; 4; 5 ]
+          RepairPhase = false
+          ChecksGreen = false
+          HostAccepted = false
+          RuntimeRouteEvidence = None
+          DiffAuditRequired = true
+          DiffAuditHead = Some "a-head-that-is-not-none" }
+
+    /// COMPATIBILITY PIN, not gate-inversion evidence: this leg is authored to pass both before and
+    /// after .github#2549's structural/liveness split, and that is the point. `Delivery.reviewProblem`
+    /// joins these messages into one string and `Driver.receiptFresh` tests the list for emptiness, and
+    /// neither file is inside .github#2549's declared paths — so "same messages, same order" is the
+    /// property that lets the split be made without touching them.
+    [<Fact>]
+    let ``#2549 validateReviewChain reports the same nine messages in the same order as before the split`` () =
+        Assert.Equal<string list>(
+            [ "review marker is missing or invalid"
+              "critic identity is missing"
+              "review head SHA is missing"
+              "review rounds are not ordered from one"
+              "review round ceiling exceeded"
+              "runtime-route applicability evidence is missing"
+              "required diff-audit receipt is missing, stale, or unresolved"
+              "review checks are not green"
+              "host acceptance is missing" ],
+            validateReviewChain 3 allNineFailing
+        )
+
+    [<Fact>]
+    let ``#2549 validateReviewChainStructure withholds the live-check clause and nothing else`` () =
+        let full = validateReviewChain 3 allNineFailing
+        let structural = validateReviewChainStructure 3 allNineFailing
+        Assert.Equal<string list>(full |> List.filter (fun m -> m <> "review checks are not green"), structural)
+        Assert.DoesNotContain("review checks are not green", structural)
+        // The two derive from ONE ordered source, so the structural subset is a genuine subsequence of
+        // the full list rather than an independently maintained second list that could drift.
+        Assert.Equal(full.Length - 1, structural.Length)
+
+    [<Fact>]
+    let ``#2549 a chain whose ONLY problem is un-green checks is structurally clean`` () =
+        let healthy =
+            { allNineFailing with
+                MarkerValid = true
+                CriticIdentity = Some "kite"
+                HeadSha = Some "head1"
+                Rounds = [ 1 ]
+                HostAccepted = true
+                RuntimeRouteEvidence = Some(NotMeaningful "no meaningful runtime-route comparison")
+                DiffAuditRequired = false
+                DiffAuditHead = None }
+        Assert.Equal<string list>([ "review checks are not green" ], validateReviewChain 3 healthy)
+        Assert.Empty(validateReviewChainStructure 3 healthy)
+
+    [<Fact>]
+    let ``#2549 reviewPhaseFacts exposes the URL of the comment the latest verdict was read from`` () =
+        let initial : ReviewComment =
+            { Id = 1L
+              Url = "https://reviews/1"
+              Body = "<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head1\nverdict: changes-required" }
+        Assert.Equal(Some "https://reviews/1", (reviewPhaseFacts [ initial ]).LatestReviewUrl)
+
+        let confirmation : ReviewComment =
+            { Id = 2L
+              Url = "https://reviews/2"
+              Body =
+                "<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/1\ncritic: kite\nround: 1\npreceding-review: https://reviews/1\nreviewed-head: head1\nverdict: pass" }
+        // The latest CONFIRMATION wins, and it is the same comment `LatestVerdict` is read from — the
+        // two can never name different comments, which is what makes a grant bindable to one review.
+        let facts = reviewPhaseFacts [ initial; confirmation ]
+        Assert.Equal(Some "https://reviews/2", facts.LatestReviewUrl)
+        Assert.Equal(Some "pass", facts.LatestVerdict)

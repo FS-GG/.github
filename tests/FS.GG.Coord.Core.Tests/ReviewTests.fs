@@ -58,7 +58,7 @@ module ReviewTests =
 
     [<Fact>]
     let ``#2175 no comments yields awaiting initial review and dispatch critic`` () =
-        match inspect (binding Ordinary 1 "head1" "impl") (facts [] PrPending None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts [] PrPending None true) None None with
         | Ok v ->
             Assert.Equal(AwaitingInitialReview, v.State)
             Assert.Equal(DispatchCritic, v.NextAction)
@@ -67,7 +67,7 @@ module ReviewTests =
     [<Fact>]
     let ``#2175 a confirmation with no initial predecessor is malformed, not silently dispatched`` () =
         let comments = [ confirmation 2L "kite" 1 "https://reviews/1" "head1" "pass" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrPending None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrPending None true) None None with
         | Ok v ->
             // No initial marker present at all: reads as AwaitingInitialReview (the confirmation is
             // simply not counted — `Driver.reviewPhaseFacts` only reads confirmations relative to an
@@ -80,7 +80,7 @@ module ReviewTests =
     [<Fact>]
     let ``#2175 pass with checks not yet green awaits checks`` () =
         let comments = [ initialPass "kite" "head1" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrPending None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrPending None true) None None with
         | Ok v ->
             Assert.Equal(PassedAwaitingChecks, v.State)
             Assert.Equal(AwaitChecks, v.NextAction)
@@ -89,7 +89,7 @@ module ReviewTests =
     [<Fact>]
     let ``#2175 pass with checks green and no acceptance yet requests host acceptance`` () =
         let comments = [ initialPass "kite" "head1" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             Assert.Equal(AwaitingHostAcceptance, v.State)
             Assert.Equal(RequestHostAcceptance, v.NextAction)
@@ -100,7 +100,7 @@ module ReviewTests =
         let comments =
             [ initialPass "kite" "head1"
               accepted 2L "head1" "https://reviews/1" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             Assert.Equal(Accepted, v.State)
             match v.NextAction with
@@ -117,7 +117,7 @@ module ReviewTests =
     [<Fact>]
     let ``#2175 changes-required at the current head awaits implementer repair`` () =
         let comments = [ initialChangesRequired "kite" "head1" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrPending None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrPending None true) None None with
         | Ok v ->
             Assert.Equal(AwaitingImplementerRepair 1, v.State)
             match v.NextAction with
@@ -129,7 +129,7 @@ module ReviewTests =
     let ``#2175 a new commit after changes-required awaits the same critic's confirmation`` () =
         let comments = [ initialChangesRequired "kite" "head1" ]
         // The implementer pushed head2; the critic has not yet re-reviewed it.
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) None with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) None None with
         | Ok v ->
             Assert.Equal(AwaitingSameCriticConfirmation 1, v.State)
             match v.NextAction with
@@ -141,26 +141,26 @@ module ReviewTests =
     let ``#2175 multiple repair rounds advance through repeated changes-required to a final pass`` () =
         // Round 1: changes-required at head1.
         let round1 = [ initialChangesRequired "kite" "head1" ]
-        match inspect (binding Ordinary 1 "head2" "impl") (facts round1 PrPending None true) None with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts round1 PrPending None true) None None with
         | Ok v -> Assert.Equal(AwaitingSameCriticConfirmation 1, v.State)
         | Error e -> failwithf "%A" e
 
         // Critic confirms round 1 as changes-required again at head2.
         let round2 =
             round1 @ [ confirmation 2L "kite" 1 "https://reviews/1" "head2" "changes-required" ]
-        match inspect (binding Ordinary 1 "head2" "impl") (facts round2 PrPending None true) None with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts round2 PrPending None true) None None with
         | Ok v -> Assert.Equal(AwaitingImplementerRepair 2, v.State)
         | Error e -> failwithf "%A" e
 
         // A further commit lands (head3); the same critic must confirm again.
-        match inspect (binding Ordinary 1 "head3" "impl") (facts round2 PrPending None true) None with
+        match inspect (binding Ordinary 1 "head3" "impl") (facts round2 PrPending None true) None None with
         | Ok v -> Assert.Equal(AwaitingSameCriticConfirmation 2, v.State)
         | Error e -> failwithf "%A" e
 
         // Critic confirms pass at head3.
         let round3 =
             round2 @ [ confirmation 3L "kite" 2 "https://reviews/2" "head3" "pass" ]
-        match inspect (binding Ordinary 1 "head3" "impl") (facts round3 PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head3" "impl") (facts round3 PrGreen None true) None None with
         | Ok v ->
             Assert.Equal(AwaitingHostAcceptance, v.State)
             Assert.Equal(RequestHostAcceptance, v.NextAction)
@@ -172,7 +172,7 @@ module ReviewTests =
             [ initialPass "kite" "head1"
               accepted 2L "head1" "https://reviews/1" ]
         // A new commit landed after acceptance was posted: the accepted chain is for a stale head.
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | MalformedEvidence _ -> ()
@@ -195,7 +195,7 @@ module ReviewTests =
         let comments =
             [ initialPass "kite" "head1"
               comment 5L "https://reviews/5" ($"<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: head1\nverdict: pass" + notMeaningful) ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | MalformedEvidence errors -> Assert.Contains(errors, fun e -> e.Contains "2 comments")
@@ -208,7 +208,7 @@ module ReviewTests =
             [ initialPass "kite" "head1"
               accepted 2L "head1" "https://reviews/1"
               accepted 3L "head1" "https://reviews/1" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | MalformedEvidence errors -> Assert.Contains(errors, fun e -> e.Contains "acceptance")
@@ -222,7 +222,7 @@ module ReviewTests =
                   ("<!-- fsgg:independent-review:v1 -->\n<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head1\nverdict: pass"
                    + notMeaningful)
               accepted 2L "head1" "https://reviews/1" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | MalformedEvidence _ -> ()
@@ -246,7 +246,7 @@ module ReviewTests =
                   1L
                   "https://reviews/1"
                   "<!-- fsgg:independent-review:v1 -->\n**Critic:** kite\n**Reviewed-head:** head1\n**Verdict:** pass" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | MalformedEvidence errors ->
@@ -263,7 +263,7 @@ module ReviewTests =
                   2L
                   "https://reviews/2"
                   "<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/1\ncritic: kite\nround: 1\npreceding-review: https://reviews/1\nreviewed-head: head1\n**Verdict:** pass" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | MalformedEvidence errors -> Assert.Contains(errors, fun e -> e.Contains "verdict: <value>")
@@ -276,7 +276,7 @@ module ReviewTests =
         // pins that the near-miss addition never fires on a case it does not apply to.
         let comments =
             [ comment 1L "https://reviews/1" "<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head1" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | MalformedEvidence errors ->
@@ -299,7 +299,7 @@ module ReviewTests =
     [<Fact>]
     let ``#2175 an implementer acting as its own critic fails closed`` () =
         let comments = [ initialPass "impl" "head1" ]
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | GuardViolation _ -> ()
@@ -324,7 +324,7 @@ module ReviewTests =
             Assert.Equal(Some "impl", chain.CriticIdentity)
         | Error e -> failwithf "the underlying chain must be valid for this test to prove anything: %A" e
         // `Review.inspect`, with the SAME facts, must fail closed instead of accepting.
-        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None with
+        match inspect (binding Ordinary 1 "head1" "impl") (facts comments PrGreen None true) None None with
         | Ok v ->
             match v.State with
             | GuardViolation _ -> ()
@@ -345,7 +345,7 @@ module ReviewTests =
 
     [<Fact>]
     let ``#2175 ordinary exhaustion with a repair route available parks for the host to mint one`` () =
-        match inspect (binding Ordinary 1 "head4" "impl") (facts exhaustedOrdinaryChain PrPending None true) None with
+        match inspect (binding Ordinary 1 "head4" "impl") (facts exhaustedOrdinaryChain PrPending None true) None None with
         | Ok v ->
             Assert.Equal(OrdinaryExhaustion, v.State)
             match v.NextAction with
@@ -355,7 +355,7 @@ module ReviewTests =
 
     [<Fact>]
     let ``#2175 unavailable repair route at exhaustion is terminal human park`` () =
-        match inspect (binding Ordinary 1 "head4" "impl") (facts exhaustedOrdinaryChain PrPending None false) None with
+        match inspect (binding Ordinary 1 "head4" "impl") (facts exhaustedOrdinaryChain PrPending None false) None None with
         | Ok v ->
             match v.State with
             | TerminalHumanPark _ -> ()
@@ -372,7 +372,7 @@ module ReviewTests =
               NewImplementerIdentity = "fresh-impl"
               NewCriticIdentity = "fresh-critic"
               CandidateHeadSha = "head3" }
-        match inspect (binding Ordinary 1 "head4" "impl") (facts exhaustedOrdinaryChain PrPending (Some receipt) true) None with
+        match inspect (binding Ordinary 1 "head4" "impl") (facts exhaustedOrdinaryChain PrPending (Some receipt) true) None None with
         | Ok v ->
             Assert.Equal(RepairPhaseSetup, v.State)
             Assert.Equal(EnterRepairPhase receipt, v.NextAction)
@@ -387,7 +387,7 @@ module ReviewTests =
             { ExhaustedPr = 42; EscalationCommentId = 99L; NewClaimGeneration = "gen-2"
               NewBranchOrPr = "item/2175-repair"; NewImplementerIdentity = "fresh-impl"
               NewCriticIdentity = "fresh-critic"; CandidateHeadSha = "head3" }
-        match inspect (binding Ordinary 1 "head4" "impl") (facts exhaustedOrdinaryChain PrPending (Some firstReceipt) true) None with
+        match inspect (binding Ordinary 1 "head4" "impl") (facts exhaustedOrdinaryChain PrPending (Some firstReceipt) true) None None with
         | Ok v -> Assert.Equal(EnterRepairPhase firstReceipt, v.NextAction)
         | Error e -> failwithf "%A" e
 
@@ -396,7 +396,7 @@ module ReviewTests =
     [<Fact>]
     let ``#2175 repair-phase setup awaits the fresh critic's dispatch`` () =
         let comments : ReviewComment list = []
-        match inspect (binding Repair 1 "head3" "fresh-impl") (facts comments PrPending None true) None with
+        match inspect (binding Repair 1 "head3" "fresh-impl") (facts comments PrPending None true) None None with
         | Ok v ->
             match v.State, v.NextAction with
             | RepairPhaseSetup, DispatchCritic -> ()
@@ -408,7 +408,7 @@ module ReviewTests =
     let ``#2175 repair-phase active review resumes the fresh implementer on changes-required`` () =
         let comments =
             [ comment 1L "https://reviews/repair-1" "<!-- fsgg:independent-review-repair-phase:v1 -->\n<!-- fsgg:independent-review:v1 -->\ncritic: fresh-critic\nreviewed-head: head3\nverdict: changes-required" ]
-        match inspect (binding Repair 1 "head3" "fresh-impl") (facts comments PrPending None true) None with
+        match inspect (binding Repair 1 "head3" "fresh-impl") (facts comments PrPending None true) None None with
         | Ok v ->
             Assert.Equal(RepairPhaseActive 1, v.State)
             match v.NextAction with
@@ -425,7 +425,7 @@ module ReviewTests =
             [ comment 1L "https://reviews/repair-1" (repairMarker + "<!-- fsgg:independent-review:v1 -->\ncritic: fresh-critic\nreviewed-head: head0\nverdict: changes-required") ]
             @ [ for round in 1 .. 11 ->
                     confirmation (int64 (round + 1)) "fresh-critic" round $"https://reviews/{round}" $"head%d{round}" "changes-required" ]
-        match inspect (binding Repair 1 "head11" "fresh-impl") (facts comments PrPending None true) None with
+        match inspect (binding Repair 1 "head11" "fresh-impl") (facts comments PrPending None true) None None with
         | Ok v ->
             match v.State with
             | TerminalHumanPark _ -> ()
@@ -439,9 +439,9 @@ module ReviewTests =
         let comments = [ initialChangesRequired "kite" "head1" ]
         let b = binding Ordinary 1 "head1" "impl"
         let f = facts comments PrPending None true
-        match inspect b f None with
+        match inspect b f None None with
         | Ok verdict ->
-            match advance verdict.FreshnessToken verdict.ActionKey b f None with
+            match advance verdict.FreshnessToken verdict.ActionKey b f None None with
             | Ok replay ->
                 Assert.Equal(verdict.State, replay.State)
                 Assert.Equal(verdict.FreshnessToken, replay.FreshnessToken)
@@ -454,11 +454,11 @@ module ReviewTests =
         let comments = [ initialChangesRequired "kite" "head1" ]
         let b = binding Ordinary 1 "head1" "impl"
         let f = facts comments PrPending None true
-        match inspect b f None with
+        match inspect b f None None with
         | Ok verdict ->
             // Facts moved on (a new commit landed) but the caller replays the STALE token/key.
             let movedOn = binding Ordinary 1 "head2" "impl"
-            match advance verdict.FreshnessToken verdict.ActionKey movedOn f None with
+            match advance verdict.FreshnessToken verdict.ActionKey movedOn f None None with
             | Error _ -> ()
             | Ok stale -> failwithf "GATE INVERSION: a stale replay against a moved head was authorized: %A" stale
         | Error e -> failwithf "%A" e
@@ -466,7 +466,7 @@ module ReviewTests =
     [<Fact>]
     let ``#2175 an unreadable binding fails closed rather than defaulting to a permissive state`` () =
         let badBinding = { binding Ordinary 1 "head1" "impl" with ItemRef = "" }
-        match inspect badBinding (facts [] PrPending None true) None with
+        match inspect badBinding (facts [] PrPending None true) None None with
         | Error reasons -> Assert.Contains(reasons, fun r -> r.Contains "item ref")
         | Ok v -> failwithf "expected a fail-closed no-verdict for an incomplete binding, got %A" v
 
@@ -477,7 +477,7 @@ module ReviewTests =
         // Byte-for-byte the same fixture as the pre-#2417 case above, but explicit that a caller who
         // never grants succession sees the identical, unmodified behavior (acceptance AC-001).
         let comments = [ initialChangesRequired "kite" "head1" ]
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) None with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) None None with
         | Ok v ->
             Assert.Equal(AwaitingSameCriticConfirmation 1, v.State)
             match v.NextAction with
@@ -489,7 +489,7 @@ module ReviewTests =
     let ``#2417 a valid granted receipt yields EnterCriticSuccession in the ordinary phase`` () =
         let comments = [ initialChangesRequired "kite" "head1" ]
         let receipt = successionReceipt "kite" "fresh-critic" "host-9b63" "head2"
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) None with
         | Ok v ->
             Assert.Equal(AwaitingSameCriticConfirmation 1, v.State)
             Assert.Equal(EnterCriticSuccession receipt, v.NextAction)
@@ -500,7 +500,7 @@ module ReviewTests =
         let comments =
             [ comment 1L "https://reviews/repair-1" "<!-- fsgg:independent-review-repair-phase:v1 -->\n<!-- fsgg:independent-review:v1 -->\ncritic: fresh-critic\nreviewed-head: head3\nverdict: changes-required" ]
         let receipt = successionReceipt "fresh-critic" "second-critic" "host-9b63" "head4"
-        match inspect (binding Repair 1 "head4" "fresh-impl") (facts comments PrPending None true) (Some receipt) with
+        match inspect (binding Repair 1 "head4" "fresh-impl") (facts comments PrPending None true) (Some receipt) None with
         | Ok v ->
             Assert.Equal(RepairPhaseActive 1, v.State)
             Assert.Equal(EnterCriticSuccession receipt, v.NextAction)
@@ -513,7 +513,7 @@ module ReviewTests =
         // DIFFERENT original critic.
         let comments = [ initialChangesRequired "kite" "head1" ]
         let receipt = successionReceipt "some-other-critic" "fresh-critic" "host-9b63" "head2"
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) None with
         | Ok v ->
             match v.NextAction with
             | ResumeSameCritic reason -> Assert.Contains("refused, not consumed", reason)
@@ -526,7 +526,7 @@ module ReviewTests =
         // grant no longer matches the exact stuck round and must not be silently reused.
         let comments = [ initialChangesRequired "kite" "head1" ]
         let receipt = successionReceipt "kite" "fresh-critic" "host-9b63" "head2"
-        match inspect (binding Ordinary 1 "head3" "impl") (facts comments PrPending None true) (Some receipt) with
+        match inspect (binding Ordinary 1 "head3" "impl") (facts comments PrPending None true) (Some receipt) None with
         | Ok v ->
             match v.NextAction with
             | ResumeSameCritic reason -> Assert.Contains("refused, not consumed", reason)
@@ -537,7 +537,7 @@ module ReviewTests =
     let ``#2417 a receipt naming the implementer as successor is refused`` () =
         let comments = [ initialChangesRequired "kite" "head1" ]
         let receipt = successionReceipt "kite" "impl" "host-9b63" "head2"
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) None with
         | Ok v ->
             match v.NextAction with
             | ResumeSameCritic _ -> ()
@@ -548,7 +548,7 @@ module ReviewTests =
     let ``#2417 a receipt granted by the implementer is refused`` () =
         let comments = [ initialChangesRequired "kite" "head1" ]
         let receipt = successionReceipt "kite" "fresh-critic" "impl" "head2"
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) None with
         | Ok v ->
             match v.NextAction with
             | ResumeSameCritic _ -> ()
@@ -562,7 +562,7 @@ module ReviewTests =
         // in `criticSuccessionValid` rather than only a disjunction of individually-necessary checks.
         let comments = [ initialChangesRequired "kite" "head1" ]
         let wrongCriticReceipt = successionReceipt "not-kite" "fresh-critic" "host-9b63" "head2"
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some wrongCriticReceipt) with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some wrongCriticReceipt) None with
         | Ok v ->
             match v.NextAction with
             | EnterCriticSuccession _ -> failwith "GATE INVERSION: a receipt naming the wrong original critic was admitted"
@@ -580,7 +580,7 @@ module ReviewTests =
         // `ResumeSameCritic`, exactly like a receipt naming the wrong critic.
         let comments = [ initialChangesRequired "fsgg-critic-normal" "head1" ]
         let receipt = successionReceipt "fsgg-critic-normal" "fresh-critic" "host-9b63" "head2"
-        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) with
+        match inspect (binding Ordinary 1 "head2" "impl") (facts comments PrPending None true) (Some receipt) None with
         | Ok v ->
             match v.NextAction with
             | EnterCriticSuccession _ ->
@@ -595,13 +595,287 @@ module ReviewTests =
         let receipt = successionReceipt "kite" "fresh-critic" "host-9b63" "head2"
         let b = binding Ordinary 1 "head2" "impl"
         let f = facts comments PrPending None true
-        match inspect b f (Some receipt) with
+        match inspect b f (Some receipt) None with
         | Ok verdict ->
             Assert.Equal(EnterCriticSuccession receipt, verdict.NextAction)
-            match advance verdict.FreshnessToken verdict.ActionKey b f (Some receipt) with
+            match advance verdict.FreshnessToken verdict.ActionKey b f (Some receipt) None with
             | Ok replay ->
                 Assert.Equal(verdict.NextAction, replay.NextAction)
                 Assert.Equal(verdict.FreshnessToken, replay.FreshnessToken)
                 Assert.Equal(verdict.ActionKey, replay.ActionKey)
             | Error e -> failwithf "restart replay should re-converge: %A" e
+        | Error e -> failwithf "%A" e
+
+    // ---- .github#2549: the designed post-acceptance §6 window is not malformed evidence -------------
+    //
+    // Reproduced from the LIVE chain of `.github#2534` / PR #2541, whose comment set was fetched with
+    // `gh api repos/FS-GG/.github/issues/2541/comments` and fed to the shipped engine at head
+    // `30aa766ff68c2ef33282ee9bace3fc153756327a`: `checks: pending` returned
+    // `{"state":"malformedEvidence","stateErrors":["review checks are not green"],"action":"park"}`
+    // while the IDENTICAL comment set at `checks: green` returned `accepted`/`accept`. The evidence was
+    // the same in both runs; only the live check state differed. `malformedEvidence` is also what a
+    // chain carrying two competing initial markers reports, and the recovery that word teaches — close
+    // the pull request without merging — ran on PR #2514 on 2026-08-13.
+    //
+    // The shape below is that chain: an initial `changes-required`, a round-1 `pass` confirmation at
+    // the SAME head (the finding was against a PR comment, not the tree), and a bound host acceptance.
+
+    let acceptedChain =
+        [ initialChangesRequired "kite" "head1"
+          confirmation 2L "kite" 1 "https://reviews/1" "head1" "pass"
+          accepted 3L "head1" "https://reviews/2" ]
+
+    [<Fact>]
+    let ``#2549 an accepted chain whose checks have not reported is complete, not malformed`` () =
+        match inspect (binding Ordinary 1 "head1" "impl") (facts acceptedChain PrPending None true) None None with
+        | Ok v ->
+            Assert.Equal(AcceptedAwaitingChecks PrPending, v.State)
+            match v.NextAction with
+            | AuthorizeDelivery reason ->
+                // The action must name the §6 call, because by .github#2504 `claim-generation` cannot
+                // report until that call writes the authorization marker: passive waiting is a cycle.
+                Assert.Contains("delivery", reason)
+                Assert.Contains("claim-generation", reason)
+            | other -> failwithf "expected AuthorizeDelivery, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 the same accepted chain with green checks still accepts, unchanged`` () =
+        match inspect (binding Ordinary 1 "head1" "impl") (facts acceptedChain PrGreen None true) None None with
+        | Ok v ->
+            Assert.Equal(Accepted, v.State)
+            match v.NextAction with
+            | Accept receipt ->
+                Assert.Equal("kite", receipt.CriticIdentity)
+                Assert.Equal<int list>([ 1 ], receipt.Rounds)
+                Assert.True receipt.ChecksGreen
+            | other -> failwithf "expected Accept, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 an accepted chain with RED checks is a failing change, not broken evidence`` () =
+        match inspect (binding Ordinary 1 "head1" "impl") (facts acceptedChain PrRed None true) None None with
+        | Ok v ->
+            Assert.Equal(AcceptedAwaitingChecks PrRed, v.State)
+            match v.NextAction with
+            | ResumeImplementer reason -> Assert.Contains("checks are failing", reason)
+            | other -> failwithf "expected ResumeImplementer, got %A" other
+        | Error e -> failwithf "%A" e
+
+    /// A chain the terminal parser ACCEPTS but whose round count exceeds the ceiling the BINDING's phase
+    /// imposes: four confirmations under a repair-phase marker (parser ceiling 10) inspected as an
+    /// ordinary chain (`Review` ceiling 3). This is the one structural clause reachable with a
+    /// successfully parsed chain, so it is what pins that the checks message no longer travels with a
+    /// structural malformation.
+    let ceilingMismatchChain =
+        [ comment
+              1L
+              "https://reviews/1"
+              "<!-- fsgg:independent-review-repair-phase:v1 -->\n<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head0\nverdict: changes-required"
+          confirmation 2L "kite" 1 "https://reviews/1" "head1" "changes-required"
+          confirmation 3L "kite" 2 "https://reviews/2" "head2" "changes-required"
+          confirmation 4L "kite" 3 "https://reviews/3" "head3" "changes-required"
+          confirmation 5L "kite" 4 "https://reviews/4" "head4" "pass"
+          accepted 6L "head4" "https://reviews/5" ]
+
+    [<Fact>]
+    let ``#2549 a structurally malformed chain with pending checks reports ONLY the structural error`` () =
+        match inspect (binding Ordinary 1 "head4" "impl") (facts ceilingMismatchChain PrPending None true) None None with
+        | Ok v ->
+            match v.State with
+            | MalformedEvidence errors ->
+                Assert.Contains("review round ceiling exceeded", errors)
+                // GATE INVERSION TARGET. Before .github#2549 this list also carried the liveness
+                // message, so a consumer could not tell "this chain is broken" from "this chain is fine
+                // and CI has not reported". Re-tagging the checks clause structural in
+                // `Driver.reviewChainProblems` reds exactly this assertion.
+                Assert.DoesNotContain("review checks are not green", errors)
+            | other -> failwithf "expected MalformedEvidence, got %A" other
+        | Error e -> failwithf "%A" e
+
+    /// THE ARM IS UNCHANGED; ITS REACHABILITY IS NOT — and the first draft of this file claimed
+    /// otherwise (.github#2549 round-1 M3). At GREEN checks this is byte-for-byte the pre-change
+    /// behaviour, which the leg below pins. At a NON-GREEN check state it is not: before the
+    /// structural/liveness split, `validateReviewChain` returned `["review checks are not green"]`, that
+    /// list was non-empty, and the head-mismatch arm was never reached — the chain reported the checks
+    /// message instead. So the honest statement is that the arm's reason and shape are untouched and it
+    /// is now REACHABLE where the liveness clause previously masked it.
+    ///
+    /// The direction is benign and toward `.github#2487`'s own remedy: a chain bound to the wrong head
+    /// now says so at every check state instead of only at green. `.github#2487` still owns the arm, and
+    /// this row does not rewrite it.
+    [<Fact>]
+    let ``#2549 an acceptance bound to a different head is malformed evidence at GREEN checks, byte-for-byte`` () =
+        match inspect (binding Ordinary 1 "head2" "impl") (facts acceptedChain PrGreen None true) None None with
+        | Ok v ->
+            match v.State with
+            | MalformedEvidence [ reason ] ->
+                Assert.Equal("the accepted review chain is bound to a different head than the current commit", reason)
+            | other -> failwithf "expected the single head-mismatch MalformedEvidence, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 the head-mismatch arm is now REACHABLE at pending, where the liveness clause masked it`` () =
+        match inspect (binding Ordinary 1 "head2" "impl") (facts acceptedChain PrPending None true) None None with
+        | Ok v ->
+            match v.State with
+            | MalformedEvidence [ reason ] ->
+                // Pre-change this was `["review checks are not green"]`. The reason string itself is
+                // untouched; what changed is that the reader now learns the thing that actually matters.
+                Assert.Equal("the accepted review chain is bound to a different head than the current commit", reason)
+            | other -> failwithf "expected the single head-mismatch MalformedEvidence, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 an UNREADABLE check state parks rather than authorizing delivery`` () =
+        // .github#2549 round-1 M1. `PrUnknown` is not a wait: `Landable.settled` scores it with
+        // `PrConflicted`, `Client` maps it to `ExitNoVerdict`, and `Reads.fsi` degrades a multi-page
+        // runs list to it deterministically. Grouping it with `PrPending` told the host to publish an
+        // authorization for a change whose checks nobody had read.
+        match inspect (binding Ordinary 1 "head1" "impl") (facts acceptedChain PrUnknown None true) None None with
+        | Ok v ->
+            Assert.Equal(AcceptedAwaitingChecks PrUnknown, v.State)
+            match v.NextAction with
+            | Park reason ->
+                Assert.Contains("could not be read", reason)
+                Assert.Contains("no-verdict", reason)
+            | AuthorizeDelivery _ ->
+                failwith "GATE INVERSION: an unreadable check state took the reassuring path — the exact defect this item exists to remove, reproduced inside its own new state"
+            | other -> failwithf "expected Park, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 an unreadable check state is not a finding against the change either`` () =
+        // The opposite over-reading: "the checks could not be read" is not evidence the tree is broken,
+        // so it must not route to the implementer with an unnamed failure to chase.
+        match inspect (binding Ordinary 1 "head1" "impl") (facts acceptedChain PrUnknown None true) None None with
+        | Ok v ->
+            match v.NextAction with
+            | ResumeImplementer _ -> failwith "an unreadable check state invented a defect in the change"
+            | _ -> ()
+        | Error e -> failwithf "%A" e
+
+    // ---- .github#2549: a repair whose subject is a PR comment rather than the tree -----------------
+
+    let repairAssertion url head grantedBy : RepairAssertionReceipt =
+        { AnsweredReviewUrl = url
+          CandidateHeadSha = head
+          GrantedBy = grantedBy
+          Reason = "the finding was against the post-merge obligations comment, repaired in place" }
+
+    /// The state the live `.github#2534` chain sat in the moment its comment-shaped repair was complete:
+    /// one initial `changes-required` at the current head, and no commit — because none was owed.
+    let unmovedAfterChangesRequired = [ initialChangesRequired "kite" "head1" ]
+
+    [<Fact>]
+    let ``#2549 a granted repair assertion advances an unmoved head to the same critic`` () =
+        let grant = repairAssertion "https://reviews/1" "head1" "host-9b63"
+        match inspect (binding Ordinary 1 "head1" "impl") (facts unmovedAfterChangesRequired PrPending None true) None (Some grant) with
+        | Ok v ->
+            Assert.Equal(AwaitingSameCriticConfirmation 1, v.State)
+            match v.NextAction with
+            | ResumeSameCritic reason ->
+                Assert.Contains("host-9b63", reason)
+                Assert.Contains("rather than the tree", reason)
+            | other -> failwithf "expected ResumeSameCritic, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 the same grant works in the repair phase, through the one shared guard`` () =
+        let comments =
+            [ comment
+                  1L
+                  "https://reviews/repair-1"
+                  "<!-- fsgg:independent-review-repair-phase:v1 -->\n<!-- fsgg:independent-review:v1 -->\ncritic: fresh-critic\nreviewed-head: head3\nverdict: changes-required" ]
+        let grant = repairAssertion "https://reviews/repair-1" "head3" "host-9b63"
+        match inspect (binding Repair 1 "head3" "fresh-impl") (facts comments PrPending None true) None (Some grant) with
+        | Ok v ->
+            Assert.Equal(RepairPhaseActive 1, v.State)
+            match v.NextAction with
+            | ResumeSameCritic _ -> ()
+            | other -> failwithf "expected ResumeSameCritic in the repair phase, got %A" other
+        | Error e -> failwithf "%A" e
+
+    /// Every refusal leg asserts the SAME pre-existing outcome, because the guard's whole contract is
+    /// that a failed conjunct is indistinguishable from no grant at all in what it permits. Each of
+    /// these is a gate-inversion target: dropping the named conjunct from `repairAssertionValid` turns
+    /// that leg into `ResumeSameCritic` and reds it.
+    let private assertRefused (grant: RepairAssertionReceipt option) =
+        match inspect (binding Ordinary 1 "head1" "impl") (facts unmovedAfterChangesRequired PrPending None true) None grant with
+        | Ok v ->
+            Assert.Equal(AwaitingImplementerRepair 1, v.State)
+            match v.NextAction with
+            | ResumeImplementer reason ->
+                Assert.Contains("no new commit has landed yet", reason)
+                if grant.IsSome then
+                    Assert.Contains("refused, not consumed", reason)
+            | other -> failwithf "GATE INVERSION: expected ResumeImplementer, got %A" other
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 with NO grant an unmoved head still resumes the implementer, byte-for-byte`` () = assertRefused None
+
+    [<Fact>]
+    let ``#2549 a grant bound to a different head is refused`` () =
+        assertRefused (Some(repairAssertion "https://reviews/1" "head0" "host-9b63"))
+
+    [<Fact>]
+    let ``#2549 a grant answering a different review comment is refused`` () =
+        assertRefused (Some(repairAssertion "https://reviews/9" "head1" "host-9b63"))
+
+    [<Fact>]
+    let ``#2549 an implementer can never grant its own repair assertion`` () =
+        assertRefused (Some(repairAssertion "https://reviews/1" "head1" "impl"))
+
+    [<Fact>]
+    let ``#2549 the round's own critic can never grant the trigger it will then confirm`` () =
+        assertRefused (Some(repairAssertion "https://reviews/1" "head1" "kite"))
+
+    [<Fact>]
+    let ``#2549 a grant with no accountable granter is refused`` () =
+        assertRefused (Some(repairAssertion "https://reviews/1" "head1" "   "))
+
+    [<Fact>]
+    let ``#2549 advance re-converges idempotently on a granted comment-shaped repair`` () =
+        let grant = repairAssertion "https://reviews/1" "head1" "host-9b63"
+        let b = binding Ordinary 1 "head1" "impl"
+        let f = facts unmovedAfterChangesRequired PrPending None true
+        match inspect b f None (Some grant) with
+        | Ok verdict ->
+            match advance verdict.FreshnessToken verdict.ActionKey b f None (Some grant) with
+            | Ok replay ->
+                Assert.Equal(verdict.NextAction, replay.NextAction)
+                Assert.Equal(verdict.ActionKey, replay.ActionKey)
+            | Error e -> failwithf "replay should re-converge: %A" e
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 a grant cannot survive the head moving under it`` () =
+        // The freshness token folds the full binding including `HeadSha`, and the guard independently
+        // re-checks `CandidateHeadSha`. Both must hold, so a verdict inspected at head1 can never
+        // authorize a transition at head2.
+        let grant = repairAssertion "https://reviews/1" "head1" "host-9b63"
+        let b = binding Ordinary 1 "head1" "impl"
+        let f = facts unmovedAfterChangesRequired PrPending None true
+        match inspect b f None (Some grant) with
+        | Ok verdict ->
+            let moved = binding Ordinary 1 "head2" "impl"
+            match advance verdict.FreshnessToken verdict.ActionKey moved f None (Some grant) with
+            | Ok _ -> failwith "GATE INVERSION: a stale verdict authorized a transition at a moved head"
+            | Error _ -> ()
+        | Error e -> failwithf "%A" e
+
+    [<Fact>]
+    let ``#2549 a review comment carrying no URL can never be answered by a grant`` () =
+        // Without the non-blank check, a grant whose `AnsweredReviewUrl` is empty would MATCH a review
+        // comment that also carries no URL — binding the grant to nothing at all while looking bound.
+        let noUrl =
+            [ comment 1L "" "<!-- fsgg:independent-review:v1 -->\ncritic: kite\nreviewed-head: head1\nverdict: changes-required" ]
+        let grant = repairAssertion "" "head1" "host-9b63"
+        match inspect (binding Ordinary 1 "head1" "impl") (facts noUrl PrPending None true) None (Some grant) with
+        | Ok v ->
+            Assert.Equal(AwaitingImplementerRepair 1, v.State)
+            match v.NextAction with
+            | ResumeImplementer reason -> Assert.Contains("refused, not consumed", reason)
+            | other -> failwithf "GATE INVERSION: expected ResumeImplementer, got %A" other
         | Error e -> failwithf "%A" e

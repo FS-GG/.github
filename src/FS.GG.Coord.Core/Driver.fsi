@@ -53,6 +53,12 @@ module Driver =
           /// what the underlying field grammar accepts, only what a refusal can explain.
           LatestVerdictNearMissHints: string list
           LatestReviewedHeadSha: string option
+          /// The URL of the comment `LatestVerdict` and `LatestReviewedHeadSha` were read from — the
+          /// latest confirmation's when one exists, else the single initial-review comment's
+          /// (.github#2549). It exists so an out-of-band grant can be bound to the EXACT review it
+          /// answers, rather than to "some review", which would let a grant left over from an earlier
+          /// round pass as one answering the current one.
+          LatestReviewUrl: string option
           EscalationPresent: bool
           RepairPhasePresent: bool
           /// How many comments canonically carry the host-acceptance marker; see `InitialCount`.
@@ -187,7 +193,21 @@ module Driver =
         | DispatchWave of slots: int
         | ContinueCurrentWave
 
+    /// Every problem a review chain carries — structural malformations AND the live-check liveness
+    /// clause — in one list. Unchanged by .github#2549: the messages and their order are identical
+    /// before and after that split, which is what keeps `Delivery.reviewProblem` and `receiptFresh`
+    /// behaviourally untouched.
     val validateReviewChain: maxRounds: int -> ReviewChain -> string list
+
+    /// The STRUCTURAL subset of `validateReviewChain`: what is wrong with the durable review evidence
+    /// itself, with `"review checks are not green"` withheld (.github#2549).
+    ///
+    /// Both lists are derived from one shared, ordered source, so they cannot drift. This is the
+    /// question `Review.acceptanceOutcome` asks, so that `MalformedEvidence` means only "a host must
+    /// inspect this chain" and never "CI has not reported yet" — a conflation that sent a host to the
+    /// close-and-reopen recovery on a healthy chain. An empty result asserts nothing about merge
+    /// readiness, which remains `landable`'s independent verdict (.github#2360).
+    val validateReviewChainStructure: maxRounds: int -> ReviewChain -> string list
 
     val nextAction:
         model: WaveModel ->
