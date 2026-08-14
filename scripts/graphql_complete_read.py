@@ -1,16 +1,44 @@
 #!/usr/bin/env python3
-"""The sole complete-read boundary for production Python/shell GraphQL readers."""
+"""Temporary Python frontend to the cross-language GraphQL complete-read contract.
+
+GraphQl.fs is the canonical typed implementation. This compatibility frontend exists only for the
+audit/archive entry points that cannot yet call equivalent F# CLI operations. M6 removes this file
+once typed F# CLI project-visibility, project-id, repository-policy, board-scan, archive-mutation,
+and meter operations exist and have completed three stable operating cycles. Until then the
+architectural checker permits raw envelope/page fields here and nowhere else in those surfaces.
+"""
 from __future__ import annotations
 
 import argparse
 import json
 import subprocess
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Callable
 
 
+class RetryClassification(Enum):
+    RETRYABLE = "retryable"
+    NOT_RETRYABLE = "not-retryable"
+
+
+class RateLimitKind(Enum):
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
+
+
+@dataclass(frozen=True)
+class FailureMetadata:
+    retry: RetryClassification
+    rate_limit: RateLimitKind | None = None
+    reset_at: str | None = None
+    retry_after_seconds: int | None = None
+
+
 class GraphQlReadError(RuntimeError):
-    pass
+    def __init__(self, message: str, metadata: FailureMetadata | None = None):
+        super().__init__(message)
+        self.metadata = metadata or FailureMetadata(RetryClassification.NOT_RETRYABLE)
 
 
 @dataclass(frozen=True)
@@ -40,10 +68,20 @@ def execute(query: str, variables: dict[str, Any], decode: Callable[[dict[str, A
         raise GraphQlReadError("GraphQL envelope was not an object")
     errors = envelope.get("errors")
     if errors:
-        messages = [str(e.get("message", "(no message)")) for e in errors if isinstance(e, dict)]
-        limited = any("rate limit" in m.lower() or "abuse" in m.lower() for m in messages)
-        kind = "rate-limited/retryable" if limited else "not-retryable"
-        raise GraphQlReadError(f"GraphQL refused the query ({kind}): {'; '.join(messages)}")
+        records = [e for e in errors if isinstance(e, dict)]
+        messages = [str(e.get("message", "(no message)")) for e in records]
+        lowered = " ".join(messages).lower()
+        secondary = "secondary rate limit" in lowered or "abuse" in lowered
+        primary = not secondary and ("rate limit" in lowered or "rate_limit" in lowered)
+        extension = next((e.get("extensions") for e in records if isinstance(e.get("extensions"), dict)), {})
+        reset_at = extension.get("resetAt") if isinstance(extension.get("resetAt"), str) else None
+        retry_after = extension.get("retryAfter")
+        retry_after = retry_after if isinstance(retry_after, int) and retry_after >= 0 else None
+        rate_kind = RateLimitKind.SECONDARY if secondary else RateLimitKind.PRIMARY if primary else None
+        metadata = FailureMetadata(RetryClassification.RETRYABLE if rate_kind else RetryClassification.NOT_RETRYABLE,
+                                   rate_kind, reset_at, retry_after)
+        kind = f"{rate_kind.value} rate-limited/retryable" if rate_kind else "not-retryable"
+        raise GraphQlReadError(f"GraphQL refused the query ({kind}): {'; '.join(messages)}", metadata)
     data = envelope.get("data")
     if not isinstance(data, dict):
         raise GraphQlReadError("GraphQL envelope carried neither object data nor errors")
