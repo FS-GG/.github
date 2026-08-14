@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "implementations": [
+    {
+      "id": "lifecycle-projection",
+      "paths": ["src/FS.GG.Coord.Core/LifecycleProjection.fs", "src/FS.GG.Coord.Cli/Client.fs"]
+    },
+    {
+      "id": "complete-graphql-reads",
+      "paths": ["src/FS.GG.Coord.GitHub/GraphQl.fs", "src/FS.GG.Coord.GitHub/Transport.fs"]
+    },
+    {
+      "id": "release-saga",
+      "paths": ["scripts/release-saga.py", "scripts/release-saga-ci.sh"]
+    },
+    {
+      "id": "structured-decisions",
+      "paths": ["src/FS.GG.Coord.Core/StructuredDecision.fs"]
+    },
+    {
+      "id": "policy-runner",
+      "paths": ["scripts/policy-runner.py", "policy/subjects.json"]
+    },
+    {
+      "id": "evidence-manifest",
+      "paths": ["scripts/evidence-manifest.py"]
+    }
+  ]
+}

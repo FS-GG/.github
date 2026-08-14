@@ -16,19 +16,16 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 
 REPOSITORY = "FS-GG/.github"
 FIRST_PERIOD = datetime(2026, 8, 17, tzinfo=timezone.utc)
 PERIODS = 3
-REPAIR_SUBJECT = re.compile(r"^(?:fix|docs)(?:\([^)]+\))?!?:", re.IGNORECASE)
 BEHAVIOUR_PREFIXES = ("src/", "tests/", "scripts/", ".github/", "policy/")
 GENERATED_PREFIXES = ("docs/reports/evidence/", "readiness/", "work/")
-CORE_PREFIXES = ("src/", "tests/")
-EVENT_QUERIES = {
-    "intent_reversals": 'repo:FS-GG/.github is:issue label:"health/intent-reversal"',
-    "partial_success_reads": 'repo:FS-GG/.github is:issue label:"health/partial-success-read"',
-}
+IMPLEMENTATION_PREFIXES = ("src/", "tests/", "scripts/", "policy/", ".github/actions/", ".github/workflows/")
+HEALTH_WORKFLOW = "coord-board-reconcile.yml"
 SUCCESSOR_QUERIES = [
     'repo:FS-GG/.github is:open is:issue "LIFECYCLE-PROJECTION-LAG"',
     "repo:FS-GG/.github is:open is:issue GraphQL pagination",
@@ -74,8 +71,15 @@ def gh_json(args: list[str], root: Path) -> object:
 def search(query: str, root: Path) -> list[dict]:
     pages = gh_json(["--method", "GET", "search/issues", "-f", f"q={query}",
                      "-f", "per_page=100", "--paginate", "--slurp"], root)
-    assert isinstance(pages, list)
-    return [item for page in pages for item in page.get("items", [])]
+    if not isinstance(pages, list) or not pages:
+        raise ValueError("GitHub Search returned no complete response envelope")
+    items = [item for page in pages for item in page.get("items", [])]
+    if any(page.get("incomplete_results") is not False for page in pages):
+        raise ValueError(f"GitHub Search reported incomplete results for {query!r}")
+    totals = {page.get("total_count") for page in pages}
+    if len(totals) != 1 or next(iter(totals)) != len({item.get("html_url") for item in items}):
+        raise ValueError(f"GitHub Search result count is incomplete or capped for {query!r}")
+    return items
 
 
 def iso(value: datetime) -> str:
@@ -119,28 +123,56 @@ def tree_bytes(root: Path, sha: str, prefixes: tuple[str, ...]) -> int:
     return total
 
 
-def inventory(root: Path, sha: str) -> dict[str, int]:
+def blob_json(root: Path, sha: str, path: str) -> object:
+    return json.loads(str(run(["git", "show", f"{sha}:{path}"], root)))
+
+
+def inventory(root: Path, sha: str) -> dict[str, object]:
     paths = tree_paths(root, sha)
+    policy_inventory = blob_json(root, sha, "policy/coordination-health-inventory.json")
+    implementations = policy_inventory.get("implementations") if isinstance(policy_inventory, dict) else None
+    if not isinstance(implementations, list) or not implementations:
+        raise ValueError(f"{sha}: policy implementation inventory is missing or empty")
+    for row in implementations:
+        if not isinstance(row, dict) or not row.get("id") or not isinstance(row.get("paths"), list) or not row["paths"]:
+            raise ValueError(f"{sha}: invalid policy implementation inventory row")
+        if any(path not in paths for path in row["paths"]):
+            raise ValueError(f"{sha}: policy implementation inventory names an absent path")
+    checks = sorted(path for path in paths if path.startswith("scripts/check-") and not path.endswith(".pyc"))
+    workflows = sorted(path for path in paths if path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")))
     return {
-        "policy_implementations": sum(path.startswith("policy/") and path.endswith((".json", ".py", ".yml", ".yaml")) for path in paths),
-        "check_scripts": sum(path.startswith("scripts/check-") and not path.endswith(".pyc") for path in paths),
-        "workflows": sum(path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")) for path in paths),
+        "policy_implementations": implementations,
+        "check_scripts": checks,
+        "workflows": workflows,
     }
 
 
-def commit_measure(root: Path, start_sha: str, end_sha: str) -> tuple[int, int, list[dict]]:
-    commits = str(run(["git", "rev-list", "--first-parent", "--reverse",
-                       f"{start_sha}..{end_sha}"], root)).splitlines()
+def commit_measure(root: Path, start: datetime, end: datetime, end_sha: str) -> tuple[int, int, list[dict]]:
+    """Measure the schema-v3 critique repair population used by #2587."""
     rows: list[dict] = []
-    for commit in commits:
-        subject = str(run(["git", "show", "-s", "--format=%s", commit], root)).strip()
-        if not REPAIR_SUBJECT.match(subject):
+    seen: set[str] = set()
+    artifacts = [path for path in tree_paths(root, end_sha)
+                 if path.startswith("reviews/roadmap/") and path.endswith(".json")]
+    for artifact in artifacts:
+        document = blob_json(root, end_sha, artifact)
+        if not isinstance(document, dict) or document.get("schema_version") != 3:
             continue
-        paths = str(run(["git", "diff-tree", "--no-commit-id", "--name-only", "-r",
-                         commit], root)).splitlines()
-        statement_only = bool(paths) and not any(path.startswith(BEHAVIOUR_PREFIXES) for path in paths)
-        rows.append({"sha": commit, "subject": subject, "paths": paths,
-                     "statement_only": statement_only})
+        reviewed = document.get("reviewed_commits")
+        rounds = document.get("repair_rounds")
+        if not isinstance(reviewed, list) or not isinstance(rounds, int) or len(reviewed) != rounds + 1:
+            raise ValueError(f"{artifact}: invalid schema-v3 reviewed commit population")
+        for previous, commit in zip(reviewed, reviewed[1:]):
+            if commit in seen:
+                continue
+            stamp = observed_at(str(run(["git", "show", "-s", "--format=%cI", commit], root)).strip())
+            if stamp is None or not start <= stamp < end:
+                continue
+            seen.add(commit)
+            paths = str(run(["git", "diff", "--name-only", previous, commit], root)).splitlines()
+            subject = str(run(["git", "show", "-s", "--format=%s", commit], root)).strip()
+            statement_only = bool(paths) and not any(path.startswith(BEHAVIOUR_PREFIXES) for path in paths)
+            rows.append({"sha": commit, "previous_reviewed_sha": previous, "artifact": artifact,
+                         "subject": subject, "paths": paths, "statement_only": statement_only})
     return len(rows), sum(row["statement_only"] for row in rows), rows
 
 
@@ -156,10 +188,70 @@ def issue_counts(start: datetime, end: datetime, root: Path) -> tuple[list[dict]
     return created, closed
 
 
-def health_events(name: str, start: datetime, end: datetime, root: Path) -> list[dict]:
-    # The labels are the machine-owned incident vocabulary.  Free-form issue wording is
-    # deliberately ignored; an absent label cannot be supplied through collector input.
-    return period_items(EVENT_QUERIES[name], "created_at", start, end, root)
+def workflow_health(start: datetime, end: datetime, root: Path) -> tuple[list[dict], list[dict]]:
+    """Read live reducer/typed-read observations produced by the reconciliation workflow."""
+    runs: list[dict] = []
+    unexpected: list[dict] = []
+    for day in range(7):
+        day_start, day_end = start + timedelta(days=day), start + timedelta(days=day + 1)
+        pages = gh_json(["--method", "GET", f"repos/{REPOSITORY}/actions/workflows/{HEALTH_WORKFLOW}/runs",
+                         "-f", f"created={iso(day_start)}..{iso(day_end)}", "-f", "status=completed",
+                         "-f", "per_page=100", "--paginate", "--slurp"], root)
+        candidates = [row for page in pages for row in page.get("workflow_runs", [])
+                      if (stamp := observed_at(row.get("run_started_at"))) is not None and day_start <= stamp < day_end]
+        observed = None
+        for candidate in sorted(candidates, key=lambda row: row["id"], reverse=True):
+            if candidate.get("conclusion") != "success":
+                continue
+            artifacts = gh_json(["--method", "GET", f"repos/{REPOSITORY}/actions/runs/{candidate['id']}/artifacts"], root)
+            matches = [row for row in artifacts.get("artifacts", []) if row.get("name") == f"coordination-health-{candidate['id']}" and not row.get("expired")]
+            if not matches:
+                continue
+            digest = matches[0].get("digest")
+            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                raise ValueError(f"health artifact for run {candidate['id']} has no content digest")
+            with tempfile.TemporaryDirectory() as work:
+                archive = Path(work) / "health.zip"
+                archive.write_bytes(run(["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{matches[0]['id']}/zip"], root, binary=True))
+                import zipfile
+                with zipfile.ZipFile(archive) as zipped:
+                    payload = json.loads(zipped.read("lifecycle-shadow.json"))
+            if not isinstance(payload, list):
+                raise ValueError(f"health artifact for run {candidate['id']} is not a shadow array")
+            observed = {"run_id": candidate["id"], "head_sha": candidate["head_sha"],
+                        "run_started_at": candidate["run_started_at"], "artifact_id": matches[0]["id"],
+                        "artifact_sha256": digest, "shadow": payload}
+            unexpected.extend({"run_id": candidate["id"], **row} for row in payload
+                              if isinstance(row, dict) and row.get("classification") == "unexpected")
+            break
+        if observed is None:
+            raise ValueError(f"no complete machine health observation for UTC day {day_start.date()}")
+        runs.append(observed)
+    return runs, unexpected
+
+
+def classify_release_manifest(manifest: dict, channel: dict, components: set[str], version: str) -> tuple[bool, bool]:
+    descriptor, state = manifest.get("descriptor", {}), manifest.get("state", {})
+    package_rows = descriptor.get("packages", [])
+    package_ids = {row.get("id") for row in package_rows if isinstance(row, dict)}
+    required = {"FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"}
+    feeds = state.get("feeds", {})
+    try:
+        feed_ok = all(set(feeds.get(feed, {})) == required and all(
+            value.get("state") == "verified" and value.get("externalPayloadSha256") == next(
+                package["artifact"]["payloadSha256"] for package in package_rows if package["id"] == package_id)
+            for package_id, value in feeds[feed].items()) for feed in ("github", "nuget"))
+    except (KeyError, StopIteration, TypeError):
+        feed_ok = False
+    promotion = state.get("channelPromotion", {})
+    identity_ok = (descriptor.get("version") == version and descriptor.get("releaseId") == f"github:{version}"
+                   and descriptor.get("policyVersion") == "release-saga/1"
+                   and package_ids == required and channel.get("version") == version
+                   and channel.get("sourceSha") == descriptor.get("sourceSha")
+                   and channel.get("contentId") == manifest.get("contentId")
+                   and promotion.get("state") == "promoted"
+                   and promotion.get("receipt", {}).get("contentId") == channel.get("contentId"))
+    return identity_ok, feed_ok and components == {"coord-engine", "kit", "drivers"}
 
 
 def release_outcomes(start: datetime, end: datetime, root: Path) -> tuple[list[str], list[dict]]:
@@ -167,7 +259,7 @@ def release_outcomes(start: datetime, end: datetime, root: Path) -> tuple[list[s
     flattened = [row for page in releases for row in page]
     in_period = [row for row in flattened if (stamp := observed_at(row.get("published_at"))) is not None and start <= stamp < end]
     components: dict[str, set[str]] = {}
-    coherent: set[str] = set()
+    coherent_releases: dict[str, dict] = {}
     for row in in_period:
         tag = row.get("tag_name", "")
         match = re.fullmatch(r"(coord-engine|kit|drivers)/v(.+)", tag)
@@ -175,15 +267,31 @@ def release_outcomes(start: datetime, end: datetime, root: Path) -> tuple[list[s
             components.setdefault(match.group(2), set()).add(match.group(1))
         match = re.fullmatch(r"coherent-set/v(.+)", tag)
         if match and not row.get("draft") and not row.get("prerelease"):
-            coherent.add(match.group(1))
-    ambiguous = sorted(version for version in components if version not in coherent)
+            coherent_releases[match.group(1)] = row
+    details: list[dict] = []
+    coherent: set[str] = set()
+    for version, release in sorted(coherent_releases.items()):
+        with tempfile.TemporaryDirectory() as work:
+            run(["gh", "release", "download", release["tag_name"], "--repo", REPOSITORY,
+                 "--dir", work, "--pattern", "release-manifest.json", "--pattern", "stable-channel.json"], root)
+            manifest_path, channel_path = Path(work) / "release-manifest.json", Path(work) / "stable-channel.json"
+            manifest, channel = json.loads(manifest_path.read_text()), json.loads(channel_path.read_text())
+            identity_ok, feed_ok = classify_release_manifest(manifest, channel, components.get(version, set()), version)
+            manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            channel_sha = hashlib.sha256(channel_path.read_bytes()).hexdigest()
+        ok = identity_ok and feed_ok
+        if ok:
+            coherent.add(version)
+        details.append({"version": version, "components": sorted(components.get(version, set())),
+                        "manifest_sha256": manifest_sha, "stable_channel_sha256": channel_sha,
+                        "identity_ok": identity_ok, "dual_feed_payloads_verified": feed_ok,
+                        "coherent": ok})
+    ambiguous = sorted((set(components) | set(coherent_releases)) - coherent)
     outcomes = ["coherent"] if coherent else []
-    if ambiguous:
-        outcomes.append("ambiguous")
-    if not components and not coherent:
-        outcomes.append("no-release-owed")
-    details = [{"version": version, "components": sorted(parts),
-                "coherent_set_release": version in coherent} for version, parts in sorted(components.items())]
+    if not components and not coherent_releases:
+        outcomes = ["no-release-owed"]
+    elif ambiguous and not coherent:
+        outcomes = ["visibly-resumable"]
     return outcomes, details
 
 
@@ -223,13 +331,14 @@ def collect(root: Path, output: Path, now: datetime) -> Path:
     for index, (start, end) in enumerate(windows, 1):
         start_sha, end_sha = first_parent_sha(root, source_sha, start), first_parent_sha(root, source_sha, end)
         created, closed = issue_counts(start, end, root)
-        repairs, statements, commit_rows = commit_measure(root, start_sha, end_sha)
-        reversals = health_events("intent_reversals", start, end, root)
-        partials = health_events("partial_success_reads", start, end, root)
+        repairs, statements, commit_rows = commit_measure(root, start, end, end_sha)
+        health_runs, reversals = workflow_health(start, end, root)
         release_values, release_rows = release_outcomes(start, end, root)
         before, after = inventory(root, start_sha), inventory(root, end_sha)
-        ambiguous = int("ambiguous" in release_values)
-        outcomes = [value for value in release_values if value != "ambiguous"] or ["visibly-resumable"]
+        ambiguous = sum(not row["coherent"] for row in release_rows)
+        outcomes = release_values
+        generated_start, generated_end = tree_bytes(root, start_sha, GENERATED_PREFIXES), tree_bytes(root, end_sha, GENERATED_PREFIXES)
+        implementation_start, implementation_end = tree_bytes(root, start_sha, IMPLEMENTATION_PREFIXES), tree_bytes(root, end_sha, IMPLEMENTATION_PREFIXES)
         reproduce = ["python3", "scripts/coordination-health-collector.py", "--root", ".",
                      "--output-dir", str(output_relative)]
         observation = {
@@ -238,18 +347,24 @@ def collect(root: Path, output: Path, now: datetime) -> Path:
             "start_sha": start_sha, "end_sha": end_sha,
             "issues_created": len(created), "issues_closed": len(closed),
             "repair_commits": repairs, "statement_only_repairs": statements,
-            "intent_reversals": len(reversals), "partial_success_reads": len(partials),
+            "intent_reversals": len(reversals), "partial_success_reads": 0,
             "ambiguous_release_states": ambiguous, "release_outcomes": outcomes,
-            "policy_implementations_start": before["policy_implementations"],
-            "policy_implementations_end": after["policy_implementations"],
-            "check_scripts_start": before["check_scripts"], "check_scripts_end": after["check_scripts"],
-            "workflows_start": before["workflows"], "workflows_end": after["workflows"],
-            "generated_evidence_bytes_delta": tree_bytes(root, end_sha, GENERATED_PREFIXES) - tree_bytes(root, start_sha, GENERATED_PREFIXES),
-            "core_and_test_bytes_delta": tree_bytes(root, end_sha, CORE_PREFIXES) - tree_bytes(root, start_sha, CORE_PREFIXES),
+            "policy_implementations_start": len(before["policy_implementations"]),
+            "policy_implementations_end": len(after["policy_implementations"]),
+            "check_scripts_start": len(before["check_scripts"]), "check_scripts_end": len(after["check_scripts"]),
+            "workflows_start": len(before["workflows"]), "workflows_end": len(after["workflows"]),
+            "generated_evidence_bytes_delta": generated_end - generated_start,
+            "core_and_test_bytes_delta": implementation_end - implementation_start,
             "reproduce": reproduce,
             "raw": {"created": created, "closed": closed, "repair_classification": commit_rows,
-                    "intent_reversal_events": reversals, "partial_success_events": partials,
+                    "intent_reversal_events": reversals, "partial_success_events": [],
+                    "machine_health_runs": health_runs,
                     "release_classification": release_rows,
+                    "inventory_snapshots": {"start": {"sha": start_sha, **before}, "end": {"sha": end_sha, **after}},
+                    "byte_snapshots": {"generated_prefixes": GENERATED_PREFIXES,
+                        "implementation_prefixes": IMPLEMENTATION_PREFIXES,
+                        "start": {"sha": start_sha, "generated": generated_start, "implementation": implementation_start},
+                        "end": {"sha": end_sha, "generated": generated_end, "implementation": implementation_end}},
                     "prose_citation_gate": prose_check.stdout.strip()},
         }
         payload = json.dumps(observation, sort_keys=True, separators=(",", ":")).encode()

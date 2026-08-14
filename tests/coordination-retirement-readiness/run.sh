@@ -40,7 +40,12 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
         "created": [{"id": 1}], "closed": [{"id": 1}, {"id": 2}],
         "repair_classification": ([{"statement_only": True}] + [{"statement_only": False}] * 19),
         "intent_reversal_events": [], "partial_success_events": [],
-        "release_classification": [], "prose_citation_gate": "prose-citations: ok (fixture)"}
+        "machine_health_runs": [{"run_id":n,"artifact_id":n,"artifact_sha256":"sha256:fixture","shadow":[]} for n in range(1,8)],
+        "release_classification": [],
+        "inventory_snapshots": {"start":{"policy_implementations":[1]*row["policy_implementations_start"],"check_scripts":[1]*row["check_scripts_start"],"workflows":[1]*row["workflows_start"]},
+                                "end":{"policy_implementations":[1]*row["policy_implementations_end"],"check_scripts":[1]*row["check_scripts_end"],"workflows":[1]*row["workflows_end"]}},
+        "byte_snapshots":{"start":{"generated":0,"implementation":0},"end":{"generated":5,"implementation":10}},
+        "prose_citation_gate": "prose-citations: ok (fixture)"}
     payload = json.dumps(observation, sort_keys=True, separators=(",", ":")).encode()
     artifact = pathlib.Path("observations") / f"week-{index + 1}.json"
     (root / artifact).write_bytes(payload)

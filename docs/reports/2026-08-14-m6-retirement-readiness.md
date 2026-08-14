@@ -28,10 +28,15 @@ and carrying the source, measured-at instant, period boundaries, and structured 
 realpath containment rejects symlink escape. Arbitrary verification prose cannot authorize retirement.
 The production PASS path remains disabled while the separately reviewed canonical collector is under
 critique. `scripts/coordination-health-collector.py` owns the fixed UTC windows and independently derives
-GitHub counts, first-parent repair classifications, incident events, release coherence, exact-SHA policy
-inventories, and tree-byte deltas. It refuses a non-current authenticated `main`, writes content-addressed
-raw observations, and accepts no caller-controlled period, count, or verdict. This preparatory change can
-still block, never authorize.
+GitHub counts, schema-v3 critique repair rounds, machine lifecycle/read observations, saga manifest and
+stable-channel release coherence, reviewed exact-SHA policy inventories, and tree-byte deltas across all
+implementation surfaces. The live reconciliation workflow retains a digest-bearing shadow artifact for
+each admitted run; the collector requires one successful complete observation on every UTC day and counts
+unexpected lifecycle differences. A successful typed-boundary reconciliation is also the machine basis for
+zero partial-success reads. It refuses a non-current authenticated `main`, incomplete/capped GitHub Search,
+missing release/feed receipts, and missing daily observations; it writes content-addressed raw evidence and
+accepts no caller-controlled period, count, or verdict. This preparatory change can still block, never
+authorize.
 
 ## Live successor disposition
 
