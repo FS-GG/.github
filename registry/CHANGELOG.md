@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **auto-publish evidence: FS.GG.Kit 0.56.0** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.56.0) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.56.0/FS.GG.Kit.0.56.0.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.56.0/fs.gg.kit.0.56.0.nupkg). Both served nuspecs record repository commit ed6b0c01536c6c859089e4df7e189062811adc39.
+
 - **2026-08-14** — **coord-engine coherent set `0.56.0` published, adopted, and pinned**
   (owner `github`; [.github#2561](https://github.com/FS-GG/.github/issues/2561);
   [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.56.0)).
