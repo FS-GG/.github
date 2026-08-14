@@ -209,7 +209,7 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   - Deliverables: Add route and review revision records; dual-read legacy evidence; migrate active items
   - Exit criteria: Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision
 
-- [ ] **M5 — evidence and CI consolidation**
+- [x] **M5 — evidence and CI consolidation**
   - Target: Weeks 3–4
   - Deliverables: Introduce compact evidence manifests and artifact retention; generate skill projections; consolidate policy runners and subject discovery
   - Exit criteria: Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss
@@ -218,6 +218,50 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   - Target: After 3 stable cycles
   - Deliverables: Remove old reducer, raw GraphQL helpers, legacy body hashes, and superseded release paths; document operations
   - Exit criteria: Three consecutive operating cycles meet the health measures below; no same-class successor issue remains open
+
+### M5 evidence and CI consolidation evidence
+
+- **Compact retained evidence:** `scripts/evidence-manifest.py` binds every retained artifact to an exact
+  source SHA, byte count, SHA-256, GitHub Actions run URL, expiry, and local reproduction command. Its
+  acceptance `verify` requires one local payload binding for every declared row; zero, partial, duplicate,
+  missing, tampered, malformed, and expired evidence fail closed. The `policy` workflow captures its long
+  execution log, emits the compact manifest, and uploads both outside Git for 90 days. Verify positive,
+  payload-mutation, metadata-tamper, partial/zero binding, and expiry behavior with
+  `bash tests/evidence-manifest/run.sh`.
+- **Recoverable staged migration:** The 29 historical TRX files (27,532,297 bytes at M5's exact base
+  `7a9b8742f259af4d82b9562bfbe8e40d963b0be7`) remain in Git; M5 does not destroy audit history.
+  `.gitignore` prevents new `test-results` and root `TestResults` output. M6 may remove historical bytes only
+  after exact upload plus hash/URL manifest, and rollback restores the baseline files and removes the ignore
+  rules. The policy, retention, expired-artifact response, and rollback procedure are in
+  `docs/coordination/evidence-retention.md`.
+- **Neutral policy and runtime projections:** Material coordination rules remain authored once in the typed
+  sources and registries named by `scripts/generate-projections`; generated regions in both runtime skill
+  roots are checked from those sources. `bash scripts/skill-view check --source .agents/skills --tree .`
+  passed with 17/17 skills visible in each of two roots. M5 consolidates the checker-inventory and projection
+  fixture family behind `policy/subjects.json`, `scripts/policy-runner.py`, and one `policy.yml` workflow;
+  it does not claim to replace unrelated product-specific policy sources.
+- **Measured reduction without coverage loss:** The content-addressed inventory at
+  `docs/reports/evidence/2026-08-14-m5-consolidation-inventory.json` records checker entry points 50→49,
+  workflows 103→102, and the two consolidated subject workflows 2→1. `scripts/test` expands both `self_test`
+  and `command` from the neutral inventory, so the workflow-derived selector reports 87 wired suites, six
+  explained, zero unexplained, and zero stale. Its mutation fixture passes 49/49, including command/self-test
+  expansion and unreadable, empty, and malformed inventories.
+- **Independent verification:** The exact implementation head
+  `c909b8ed580f7b6de6b3d9c9115bdcbe96aa6896` passed the base-derived selector: 28/28 suites in 195 seconds,
+  including pinned checksum-verified ShellCheck 0.11.0 (48/48), policy/evidence fixtures, projection mutation,
+  skill quality/projection currency, path coherence, permissions, and timeout coverage. The fresh independent
+  critic resolved four major findings over three bounded repair rounds and confirmed that exact head; schema-v3
+  artifact `reviews/roadmap/roadmap-coordination-churn-redesign-m5-evidence-ci-consolidation.json` passes the
+  canonical validator with `game_functionality: false` and no outstanding finding.
+- **Lifecycle and release disposition:** This kit-source tree still has no usable SDD cycle or
+  feedback-report machinery. The user-authorized chainsaw cut bypassed only those unavailable lifecycle
+  projections; it records no fabricated SDD, cycle, or feedback success. This change alters repository CI,
+  scripts, tests, and documentation but no packable product bytes, version, registry row, or release manifest,
+  so the objective coherent-set release gate says no release is owed. M6 owns removal of retained historical
+  TRX and other compatibility paths after its three-cycle health gate.
+- **Delivery:** PR [#2616](https://github.com/FS-GG/.github/pull/2616) carries the bounded M5 change from
+  exact base `7a9b8742f259af4d82b9562bfbe8e40d963b0be7`; the implementation critique remains bound to
+  `c909b8ed580f7b6de6b3d9c9115bdcbe96aa6896`, before the roadmap-only evidence commits.
 
 ### M0 stabilization evidence
 

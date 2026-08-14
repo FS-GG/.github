@@ -16,3 +16,7 @@ __pycache__/
 # never authored, so it is never in a `Paths:` touch-set and never in a commit.
 bin/
 obj/
+# M5: bulky execution output belongs in immutable CI artifacts. Existing tracked
+# files remain tracked until their recoverable M6 migration; this prevents new copies.
+**/test-results/
+TestResults/
