@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2583-consolidation-tax/ship.json",
-      "digest": "sha256:f6dea6ee5f4761077ed5927a613c906770a244a722a4424b95e741ca202ae1ba",
+      "digest": "sha256:c9c5a9b21a8376085c1980b138b5b690a9937f31c8bd27a61cf2ff623177d4c0",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2583-consolidation-tax/verify.json",
-      "digest": "sha256:58513297a80781e6c02c733169ab975f7c94fec7868f4a543058c0dcc9455756",
+      "digest": "sha256:87d8fd1c5437f46228b875bad32a7b93985ec2226538318a2b70d8f0967a013a",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2583-consolidation-tax/work-model.json",
-      "digest": "sha256:9560658eae403778e327dae683f44b7ea5d3c69d6556c23d8f7e5cfd7ffbe6c9",
+      "digest": "sha256:e8a37b46ce625d90f07a977f44ed30d47456ff1b666ce9c44dbe363a442d2b01",
       "schemaVersion": 1
     }
   ],

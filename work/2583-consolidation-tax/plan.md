@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2583-consolidation-tax/spec.md sha256:b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0 schemaVersion:1
-- clarifications: work/2583-consolidation-tax/clarifications.md sha256:e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5 schemaVersion:1
-- checklist: work/2583-consolidation-tax/checklist.md sha256:b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40 schemaVersion:1
+- spec: work/2583-consolidation-tax/spec.md sha256:539d885e05352d6df6f360fe2073711b394fdc92b75381ba197c9bffbf3b9fc3 schemaVersion:1
+- clarifications: work/2583-consolidation-tax/clarifications.md sha256:fb17e82429e2f3c0f8fa21ba8b13ad83946304486be8aec65edcafeba3ed6053 schemaVersion:1
+- checklist: work/2583-consolidation-tax/checklist.md sha256:4d579461c2e2535fc178e7a261d2745c6cd239a48db404d7ff7901e91849b15f schemaVersion:1
 
 ## Plan Scope
 - Work item 2583-consolidation-tax is planned from the current specification, clarification, and checklist facts.
@@ -65,7 +65,7 @@ a search to find that greedy leftmost matching would miss.
 that `DeliveryRoute.fs` compiles **ahead of** `Markdown.fs` in `FS.GG.Coord.Core.fsproj`. A Core-side
 rule would have to reorder that compile graph or keep a second copy of the subject filter. The subject
 *scheme* has always been `Client.fs`'s; `DeliveryRoute.decide` owns receipt *policy* and is unchanged.
-- PD-010 [AC-008] [FR-008] complete: Guard `additiveSubjectMatch` with an explicit empty-`recorded` arm returning `None` BEFORE alignment. Without it `align` consumes an empty want-list vacuously and the full-width check compares `hashHex ""` against a recorded revision that IS `hashHex ""` — satisfied by construction, for every possible body, with no collision. The guard is load-bearing, not defensive, and the safety claim on `subjectLineLocator` is rewritten to carry its condition rather than assert the unconditional form that shipped in review round 1.
+- PD-010 [AC-008] [FR-008] complete: Give `additiveSubjectMatch` a three-case `AdditiveOutcome` and decide the empty-`recorded` case as `JudgedNothing` BEFORE alignment, appending its own diagnosis to the refusal via `withReason`. The shape is PORTED from `scripts/check-gate-finding-history.py` — this repository's only other anti-vacuity floor — whose zero-runs arm is decided before the floor is consulted and carries its own detail string; its `LOW-SAMPLE` arm deliberately does NOT port, because a judged subject has no sample-size gradient. The first cut refused in the right place but returned a bare `None`, reporting the degenerate case as an ordinary stale receipt. Without it `align` consumes an empty want-list vacuously and the full-width check compares `hashHex ""` against a recorded revision that IS `hashHex ""` — satisfied by construction, for every possible body, with no collision. The guard is load-bearing, not defensive, and the safety claim on `subjectLineLocator` is rewritten to carry its condition rather than assert the unconditional form that shipped in review round 1.
 - PD-011 [CR-009] acceptedDeferral: The checklist-stage mirror of DEC-005, arriving a second time with FR-008's regeneration; same disposition as PD-008/PD-009 and no separate obligation.
 
 ## Contract Impact
@@ -78,7 +78,7 @@ rule would have to reorder that compile graph or keep a second copy of the subje
 - VO-002 [PD-005] [PC-002] semanticTest: Gate-inversion. Delete the third candidate arm from `decideDeliveryRoute`, run `tests/FS.GG.Coord.Cli.Tests`, and record the exact mutation and the observed failing legs. A surviving inversion is a material finding by definition (`.github#2551`).
 - VO-003 [PD-003] [PC-002] semanticTest: Regression floor for `.github#2392`. A `Paths:`/`Class:`/`Blocked on:`/`Blocked by:` edit and a pre-`.github#2392` whole-body receipt both still resolve `Current`, and the legacy arm is exercised on a receipt the canonical arm rejects.
 - VO-004 [PD-005] [PC-002] semanticTest: Non-vacuity. The corpus of real issue bodies is asserted non-empty and at a fixed floor, so a fixture that silently emptied cannot pass the additive legs.
-- VO-006 [PD-010] [PC-002] semanticTest: Degenerate-body legs, outside the corpus floor: an empty-subject receipt refuses a wholesale body replacement and refuses a strictly additive edit, while an unchanged empty-subject body stays `Current` through the CANONICAL arm. Inverting the empty guard reds the two refusal legs and only those.
+- VO-006 [PD-010] [PC-002] semanticTest: FIVE mutations now, the fifth being the ported NAMING: deleting `withReason`'s diagnosis leaves the refusal correct and reds only the leg that reads it, so the naming is shown load-bearing independently of the refusal. A discriminator leg asserts an ordinary stale receipt does NOT carry the diagnosis. Degenerate-body legs, outside the corpus floor: an empty-subject receipt refuses a wholesale body replacement and refuses a strictly additive edit, while an unchanged empty-subject body stays `Current` through the CANONICAL arm. Inverting the empty guard reds the two refusal legs and only those.
 - VO-007 [PD-004] [PC-002] semanticTest: The claim/take mutation boundary emits the additive notice, stays silent on a canonical match, and still refuses a modified judged line — the third leg being the discriminator that stops the first two being explained by "the route check never runs". Inverting the notice reds the first leg and only it.
 - VO-005 [PD-004] [PC-002] semanticTest: The workflow that runs these legs is reached by the changed paths. `.github/workflows/coord-engine.yml` lists `src/FS.GG.Coord.Cli/**` and `tests/FS.GG.Coord.Cli.Tests/**` in both its `pull_request` and `push` `paths:` filters; confirm on the live pull request that `coord-engine` actually ran.
 

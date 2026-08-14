@@ -102,7 +102,9 @@ The same tax is visible without any hypothetical: `delivery-route show .github#1
 - AC-008 [US-002] [FR-008]: Given a receipt recorded against a body whose subject is EMPTY — every line
   a volatile declaration or blank — then no later body resolves `Current` through the additive
   candidate, including a wholesale replacement by unrelated content and a strictly additive edit. A body
-  whose subject is still empty remains `Current` through the canonical candidate, unchanged.
+  whose subject is still empty remains `Current` through the canonical candidate, unchanged. The refusal
+  additionally carries its **own named diagnosis**, distinct from an ordinary stale receipt, so a reader
+  is told the receipt judged nothing rather than sent hunting for a damaged locator record.
 
 ## Functional Requirements
 
@@ -133,6 +135,18 @@ The same tax is visible without any hypothetical: `delivery-route show .github#1
   pay it? The per-candidate scheduling read runs many times per command, so "everywhere" is not free.
 
 ## Review History
+
+**The degenerate case's shape is ported, not invented.** `scripts/check-gate-finding-history.py` is this
+repository's only other anti-vacuity floor (`DEFAULT_MIN_RUNS = 10`) and it does not exclude its
+degenerate case: zero runs gets its own verdicts with their own detail strings, decided *before* the
+floor is consulted (`NEVER-RAN`, `REUSABLE-ELSEWHERE`), and `--min-runs 0` is refused outright with the
+reason recorded at the site. The mapping was verified arm by arm before porting rather than assumed:
+
+| that gate's arm | maps here? |
+| --- | --- |
+| degenerate case gets its own verdict *before* the floor | **yes** — `AdditiveOutcome.JudgedNothing`, decided before alignment, carrying its own reason |
+| `LOW-SAMPLE` for below-floor-but-nonzero | **no** — and inventing one would force a fit. Sample size is a gradient for run history; it is not one for a judged subject. The full-width hash over one judged line is exactly as strong as over seventy. Zero is a discontinuity, not a small sample |
+| refuse a floor configured to zero | **in reasoning only** — there is no runtime knob here to refuse, so the port is a consumed-site assertion that both corpus floors exceed zero, with the reason at the site |
 
 Independent review round 1 (`merlin-0da3`, head `f090fb48`) upheld the AMB-001 ruling explicitly and
 returned two material findings against this specification's own new arm: the empty-subject false

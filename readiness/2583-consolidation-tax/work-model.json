@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40"
+        "value": "4d579461c2e2535fc178e7a261d2745c6cd239a48db404d7ff7901e91849b15f"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5"
+        "value": "fb17e82429e2f3c0f8fa21ba8b13ad83946304486be8aec65edcafeba3ed6053"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "3078048de41e1e4eb6891be2d6395be4f95c3c8d028ff4f22a71012f8ee23f89"
+        "value": "6d823b578e5e598e7a81c9dbd9454ffd86e60e754ddf96a6a3cb84e0aeff4344"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c"
+        "value": "131acc3572b6107ca0704f2e48a0e8c3a1ea00ebfedd773b924102b1fe578d1d"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0"
+        "value": "539d885e05352d6df6f360fe2073711b394fdc92b75381ba197c9bffbf3b9fc3"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2bb20b7c7b24ccf78770f09fa30aa1c324aa9e127f7722fce676e8b25c02cbf8"
+        "value": "963a05e33c1c095fa3657d17ecf4c7fb24d0e998c8ee06402cf8e94e00423cf3"
       }
     }
   ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 109,
+        "line": 111,
         "column": 1
       },
       "linkedTaskIds": [
@@ -158,7 +158,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 110,
+        "line": 112,
         "column": 1
       },
       "linkedTaskIds": [
@@ -179,7 +179,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 111,
+        "line": 113,
         "column": 1
       },
       "linkedTaskIds": [
@@ -200,7 +200,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 112,
+        "line": 114,
         "column": 1
       },
       "linkedTaskIds": [
@@ -221,7 +221,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 113,
+        "line": 115,
         "column": 1
       },
       "linkedTaskIds": [
@@ -242,7 +242,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 114,
+        "line": 116,
         "column": 1
       },
       "linkedTaskIds": [
@@ -263,7 +263,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 115,
+        "line": 117,
         "column": 1
       },
       "linkedTaskIds": [
@@ -284,7 +284,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 116,
+        "line": 118,
         "column": 1
       },
       "linkedTaskIds": [
@@ -378,8 +378,8 @@
     },
     {
       "id": "DEC-006",
-      "title": "Refuse the additive candidate when the recorded locator record is empty \u2014 \u0022nothing was judged\u0022 is never permission (#266) \u2014 and record that the full-width safety claim is conditional on a non-empty judged subject, in the source and in the pull request. Cover it with a degenerate-body leg held OUTSIDE the corpus floor that excluded the shape.",
-      "decision": "Refuse the additive candidate when the recorded locator record is empty \u2014 \u0022nothing was judged\u0022 is never permission (#266) \u2014 and record that the full-width safety claim is conditional on a non-empty judged subject, in the source and in the pull request. Cover it with a degenerate-body leg held OUTSIDE the corpus floor that excluded the shape.",
+      "title": "Give the empty judged subject its OWN named outcome (\u0060AdditiveOutcome.JudgedNothing\u0060) decided before alignment, carrying its own diagnosis into the refusal \u2014 the shape ported from \u0060scripts/check-gate-finding-history.py\u0060\u0027s zero-runs arm after verifying the mapping arm by arm, rather than invented. Refuse the additive candidate when the recorded locator record is empty \u2014 \u0022nothing was judged\u0022 is never permission (#266) \u2014 and record that the full-width safety claim is conditional on a non-empty judged subject, in the source and in the pull request. Cover it with a degenerate-body leg held OUTSIDE the corpus floor that excluded the shape.",
+      "decision": "Give the empty judged subject its OWN named outcome (\u0060AdditiveOutcome.JudgedNothing\u0060) decided before alignment, carrying its own diagnosis into the refusal \u2014 the shape ported from \u0060scripts/check-gate-finding-history.py\u0060\u0027s zero-runs arm after verifying the mapping arm by arm, rather than invented. Refuse the additive candidate when the recorded locator record is empty \u2014 \u0022nothing was judged\u0022 is never permission (#266) \u2014 and record that the full-width safety claim is conditional on a non-empty judged subject, in the source and in the pull request. Cover it with a degenerate-body leg held OUTSIDE the corpus floor that excluded the shape.",
       "requirementRefs": [],
       "storyRefs": [],
       "acceptanceRefs": [],
@@ -2102,7 +2102,7 @@
           "path": "work/2583-consolidation-tax/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40"
+            "value": "4d579461c2e2535fc178e7a261d2745c6cd239a48db404d7ff7901e91849b15f"
           },
           "schemaVersion": 1
         },
@@ -2110,7 +2110,7 @@
           "path": "work/2583-consolidation-tax/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5"
+            "value": "fb17e82429e2f3c0f8fa21ba8b13ad83946304486be8aec65edcafeba3ed6053"
           },
           "schemaVersion": 1
         },
@@ -2118,7 +2118,7 @@
           "path": "work/2583-consolidation-tax/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "3078048de41e1e4eb6891be2d6395be4f95c3c8d028ff4f22a71012f8ee23f89"
+            "value": "6d823b578e5e598e7a81c9dbd9454ffd86e60e754ddf96a6a3cb84e0aeff4344"
           },
           "schemaVersion": 1
         },
@@ -2126,7 +2126,7 @@
           "path": "work/2583-consolidation-tax/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c"
+            "value": "131acc3572b6107ca0704f2e48a0e8c3a1ea00ebfedd773b924102b1fe578d1d"
           },
           "schemaVersion": 1
         },
@@ -2134,7 +2134,7 @@
           "path": "work/2583-consolidation-tax/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0"
+            "value": "539d885e05352d6df6f360fe2073711b394fdc92b75381ba197c9bffbf3b9fc3"
           },
           "schemaVersion": 1
         },
@@ -2142,14 +2142,14 @@
           "path": "work/2583-consolidation-tax/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "2bb20b7c7b24ccf78770f09fa30aa1c324aa9e127f7722fce676e8b25c02cbf8"
+            "value": "963a05e33c1c095fa3657d17ecf4c7fb24d0e998c8ee06402cf8e94e00423cf3"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "559f02b38f79d4875fd24d1ae0b541c0e502f83d2a9d643ebc2085df2f6e5fba"
+        "value": "fdc85ede0aa53c548b11f7ca5e292412529a34637605cb2ff661845d1321b94d"
       },
       "currency": "current"
     }

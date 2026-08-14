@@ -127,6 +127,20 @@ module ConsolidationTaxTests =
     /// Every corpus leg runs through here so the non-vacuity floors are asserted BEFORE any verdict is
     /// compared, in every leg, rather than once in a test that could be skipped.
     let private forEachBody (leg: string -> string -> unit) =
+        // A FLOOR THAT CAN BE SET TO ZERO IS NOT A FLOOR — ported from
+        // `scripts/check-gate-finding-history.py:951`, which refuses `--min-runs 0` outright with its
+        // reason at the site: "a floor of 0 would make every never-red gate an EXERCISED-adjacent pass
+        // over a sample of nothing." That gate has a runtime flag to refuse; these are compile-time
+        // literals, so the faithful port is the REASONING rather than the mechanism — assert them here,
+        // where they are consumed, so lowering either to zero fails loudly instead of quietly emptying
+        // every leg below.
+        Assert.True(CorpusBodyCount > 0, "CorpusBodyCount of 0 would make every corpus leg pass over no bodies at all")
+
+        Assert.True(
+            MinimumSubjectLinesPerBody > 0,
+            "MinimumSubjectLinesPerBody of 0 would readmit the degenerate empty-subject shape into the corpus, where the vacuous-alignment false positive of review round 1 would once again be indistinguishable from a real match"
+        )
+
         Assert.Equal(CorpusBodyCount, List.length corpus)
 
         for name, body in corpus do
@@ -619,6 +633,24 @@ module ConsolidationTaxTests =
         let code, out, err = recordThenEdit emptySubjectBody replacement
 
         assertStale code out err
+
+        // ARM 1 OF THE PORTED SHAPE, and the half the first cut missed: the degenerate case carries its
+        // OWN diagnosis, not merely its own refusal. `check-gate-finding-history.py` gives zero-runs
+        // `NEVER-RAN`/`REUSABLE-ELSEWHERE` with their own detail strings rather than folding them into
+        // the floor; refusing correctly while reporting it as an ordinary stale receipt would send a
+        // reader hunting for a damaged locator record that is in fact perfectly well formed.
+        Assert.Contains("judged an EMPTY subject", err)
+        Assert.Contains("re-record the receipt against the current body", err)
+
+    [<Fact>]
+    let ``#2583 an ORDINARY stale receipt does NOT carry the vacuous-subject diagnosis`` () =
+        // The discriminator for the leg above. A named verdict that fires on every refusal names nothing.
+        forEachBody (fun _ body ->
+            let target = subjectLines body |> List.last
+            let _, _, err = recordThenEdit body (body.Replace(target, target + " AND ALSO EVERYTHING ELSE"))
+
+            Assert.Contains("subjectRevision is stale", err)
+            Assert.DoesNotContain("judged an EMPTY subject", err))
 
     [<Fact>]
     let ``#2583 an empty judged subject is still CANONICALLY current while the body's subject stays empty`` () =

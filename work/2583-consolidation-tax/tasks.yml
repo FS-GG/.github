@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2583-consolidation-tax/spec.md
-    digest: b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0
+    digest: 539d885e05352d6df6f360fe2073711b394fdc92b75381ba197c9bffbf3b9fc3
     schemaVersion: 1
   - label: clarifications
     path: work/2583-consolidation-tax/clarifications.md
-    digest: e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5
+    digest: fb17e82429e2f3c0f8fa21ba8b13ad83946304486be8aec65edcafeba3ed6053
     schemaVersion: 1
   - label: checklist
     path: work/2583-consolidation-tax/checklist.md
-    digest: b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40
+    digest: 4d579461c2e2535fc178e7a261d2745c6cd239a48db404d7ff7901e91849b15f
     schemaVersion: 1
   - label: plan
     path: work/2583-consolidation-tax/plan.md
-    digest: 6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c
+    digest: 131acc3572b6107ca0704f2e48a0e8c3a1ea00ebfedd773b924102b1fe578d1d
     schemaVersion: 1
 tasks:
   - id: T001

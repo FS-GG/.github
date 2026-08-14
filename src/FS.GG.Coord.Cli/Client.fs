@@ -577,7 +577,36 @@ module Client =
     /// hashed. Transplanting evidence as a comment has never touched a receipt in either direction, and
     /// still does not. The same goes for the issue TITLE, measured on .github#2555, which stayed
     /// `kind: current` across a retitle.
-    let private additiveSubjectMatch (recorded: string list) (body: string) (recordedRevision: string) : int option =
+    /// What the additive candidate concluded — THREE outcomes, not two, because "this receipt judged
+    /// nothing" and "this receipt's judgement did not survive" are opposite facts that happen to share a
+    /// verdict (#266).
+    ///
+    /// THE SHAPE IS PORTED, NOT INVENTED. `scripts/check-gate-finding-history.py` is this repository's
+    /// only other anti-vacuity floor (`DEFAULT_MIN_RUNS = 10`), and it does not EXCLUDE its degenerate
+    /// case — it gives zero-runs its own verdicts (`NEVER-RAN`, `REUSABLE-ELSEWHERE`) with their own
+    /// detail strings, decided BEFORE the floor is consulted at all. `JudgedNothing` is that arm here.
+    /// The first cut of this fix refused the degenerate case in the right PLACE but returned a bare
+    /// `None`, which is the same value as "the judged lines did not survive" — refusing it correctly
+    /// while reporting it as something it is not.
+    ///
+    /// WHAT DOES NOT PORT, stated so the next reader does not go looking for it: that gate's SECOND arm,
+    /// `LOW-SAMPLE` for a below-floor-but-nonzero sample, has no analogue here and inventing one would be
+    /// forcing a fit. Sample size is a gradient for run history; it is not one for a judged subject. The
+    /// full-width hash over ONE judged line is exactly as strong as over seventy — the reconstruction
+    /// either matches `subjectRevision` or it does not. Zero is not "a small sample", it is the single
+    /// point at which the check becomes vacuous: a discontinuity, not a gradient.
+    type private AdditiveOutcome =
+        /// Every judged line survived, in order, byte-identical, and the reconstruction re-hashed to the
+        /// recorded revision. Carries how many lines were inserted around them.
+        | AdditiveAccepted of addedLines: int
+        /// The receipt's judged subject is EMPTY, so it constrains nothing and can never authorise an
+        /// additive match against any body. Named rather than folded into `NoAdditiveEvidence`.
+        | JudgedNothing
+        /// A judged line was modified, removed, or reordered — or the reconstruction did not re-hash to
+        /// the recorded revision.
+        | NoAdditiveEvidence
+
+    let private additiveSubjectMatch (recorded: string list) (body: string) (recordedRevision: string) : AdditiveOutcome =
         let current = deliveryRouteSubjectLines body
 
         let rec align (want: string list) (have: string list) (matched: string list) =
@@ -614,16 +643,30 @@ module Client =
         // different reasons worth keeping distinct: absent is "I could not read what this judged"
         // (`splitSubjectLineLocators`), empty is "I read it, and it constrains nothing". Fail-closed
         // either way, never conflated.
-        | [] -> None
+        | [] -> JudgedNothing
         | _ ->
             match align recorded current [] with
             // The located lines are taken from the CURRENT body and re-hashed at FULL width. This, not
             // the locator comparison above, is what accepts or refuses — and, given a non-empty judged
             // subject, satisfying it on text that is not the judged subject is a full SHA-256 collision.
             | Some matched when hashHex (String.concat "\n" matched) = recordedRevision ->
-                Some(List.length current - List.length matched)
+                AdditiveAccepted(List.length current - List.length matched)
             | Some _
-            | None -> None
+            | None -> NoAdditiveEvidence
+
+    /// The `JudgedNothing` detail string, kept beside the outcome it explains.
+    [<Literal>]
+    let private vacuousJudgedSubjectReason =
+        "the recorded route decision judged an EMPTY subject (every body line was a Paths:/Class:/Blocked on:/Blocked by: declaration or blank), so it constrains nothing and can never resolve additively against any body — re-record the receipt against the current body rather than looking for a damaged locator record"
+
+    /// Append one explanation to a non-`Current` verdict, preserving its case and its existing reasons.
+    /// A `Current` verdict is returned untouched: this adds diagnosis to a refusal, never to an
+    /// acceptance.
+    let private withReason (verdict: DeliveryRoute.Verdict) (reason: string) =
+        match verdict with
+        | DeliveryRoute.Stale reasons -> DeliveryRoute.Stale(reasons @ [ reason ])
+        | DeliveryRoute.Unreadable reasons -> DeliveryRoute.Unreadable(reasons @ [ reason ])
+        | DeliveryRoute.Current _ -> verdict
 
     /// ONE spelling of the additive notice, shared by every boundary that emits it (.github#2583 repair 2).
     /// `delivery-route show` and the claim/take mutation boundary both say this, and a second copy is one
@@ -685,11 +728,18 @@ module Client =
                 match receipt with
                 | Some(candidate, Some locators) ->
                     match additiveSubjectMatch locators body candidate.SubjectRevision with
-                    | Some added ->
+                    | AdditiveAccepted added ->
                         match DeliveryRoute.decide subject (Some candidate.SubjectRevision) bare with
                         | DeliveryRoute.Current _ as current -> current, AdditiveSubject added
                         | _ -> canonicalVerdict, NoSubjectMatch
-                    | None -> canonicalVerdict, NoSubjectMatch
+                    // THE DEGENERATE CASE CARRIES ITS OWN EXPLANATION, not merely its own refusal — the
+                    // second half of the ported arm. The verdict is `Stale` either way, so an agent that
+                    // only reads the verdict learns nothing about WHY this particular receipt can never
+                    // resolve additively, and would reasonably suspect a broken locator record. This row
+                    // is permanently stale-on-any-prose-edit until it is re-recorded, and saying so is
+                    // the difference between a refusal and a diagnosis.
+                    | JudgedNothing -> withReason canonicalVerdict vacuousJudgedSubjectReason, NoSubjectMatch
+                    | NoAdditiveEvidence -> canonicalVerdict, NoSubjectMatch
                 | _ -> canonicalVerdict, NoSubjectMatch
 
     /// The verdict alone, for the two callers that DELIBERATELY do not report the match:
