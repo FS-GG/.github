@@ -40,6 +40,11 @@ PROVENANCE_FIELDS = (
     "policy_implementations_end", "check_scripts_start", "check_scripts_end", "workflows_start",
     "workflows_end", "generated_evidence_bytes_delta", "core_and_test_bytes_delta",
 )
+# Preparatory M6 work must not invent a generic executable collector for qualitative
+# health measures. The production CLI therefore has no PASS path until a separately
+# reviewed canonical collector can replay those observations. Pure validation remains
+# testable, but cannot authorize retirement.
+ACCEPTANCE_ENABLED = False
 
 
 def timestamp(value: object, where: str, failures: list[str]) -> datetime | None:
@@ -166,19 +171,32 @@ def validate(document: object, root: Path = Path(".")) -> list[str]:
             elif not isinstance(reproduce, list) or not reproduce or not all(isinstance(value, str) and value for value in reproduce):
                 failures.append(f"{where}.provenance.reproduce: require a non-empty argv array")
             else:
-                path = root / artifact
                 try:
+                    resolved_root = root.resolve(strict=True)
+                    path = (resolved_root / artifact).resolve(strict=True)
+                    path.relative_to(resolved_root)
                     payload = path.read_bytes()
                     observed = json.loads(payload)
                     if hashlib.sha256(payload).hexdigest() != digest:
                         failures.append(f"{where}.provenance: artifact SHA-256 mismatch")
-                    elif not isinstance(observed, dict) or observed.get("period_id") != row.get("id"):
-                        failures.append(f"{where}.provenance: artifact period_id mismatch")
+                    elif not isinstance(observed, dict):
+                        failures.append(f"{where}.provenance: artifact root must be an object")
                     else:
+                        identity = {
+                            "source_sha": document.get("source_sha"),
+                            "measured_at": document.get("measured_at"),
+                            "period_id": row.get("id"),
+                            "start": row.get("start"),
+                            "end": row.get("end"),
+                            "reproduce": reproduce,
+                        }
+                        for field, expected in identity.items():
+                            if observed.get(field) != expected:
+                                failures.append(f"{where}.provenance: artifact does not bind {field}")
                         for field in PROVENANCE_FIELDS:
                             if observed.get(field) != row.get(field):
                                 failures.append(f"{where}.provenance: artifact does not bind {field}")
-                except (OSError, json.JSONDecodeError) as error:
+                except (OSError, json.JSONDecodeError, ValueError) as error:
                     failures.append(f"{where}.provenance: cannot read artifact: {error}")
 
     for index in range(1, len(parsed)):
@@ -300,6 +318,11 @@ def main() -> int:
         try:
             if args.live_github:
                 failures.extend(validate_live(document, collect_live(document)))
+                if not failures and not ACCEPTANCE_ENABLED:
+                    failures.append(
+                        "production retirement acceptance is disabled until a reviewed canonical "
+                        "collector independently replays every non-GitHub health measure"
+                    )
             else:
                 failures.append("positive readiness requires --live-github authenticated evidence")
         except (OSError, json.JSONDecodeError, subprocess.CalledProcessError, KeyError, ValueError) as error:

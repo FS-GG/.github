@@ -24,7 +24,10 @@ Schema-valid positive evidence still cannot pass offline: the acceptance invocat
 the union of the fixed successor searches to equal the fully classified candidate census. The test-only
 snapshot harness imports the pure validators directly and cannot emit the production CLI acceptance.
 Every non-GitHub measure must also equal a repository-relative observation artifact bound by SHA-256
-and carrying a structured reproduction argv; arbitrary verification prose cannot authorize retirement.
+and carrying the source, measured-at instant, period boundaries, and structured reproduction argv;
+realpath containment rejects symlink escape. Arbitrary verification prose cannot authorize retirement.
+The production PASS path is deliberately disabled until a separately reviewed canonical collector can
+independently replay those non-GitHub observations. This preparatory change can block, never authorize.
 
 ## Live successor disposition
 
@@ -45,7 +48,8 @@ Because the roadmap says these measures are weekly, the first possible new three
 2026-08-17T00:00:00Z and ends 2026-09-07T00:00:00Z. That date is not a forecast or automatic approval.
 After the third full week, refresh the GitHub census and every raw measure, make the open successor list
 empty through real resolution or evidenced non-applicability, and rerun the validator. Only a pass
-with `--live-github` authorizes removal of the reducer rollback switch, GraphQL shims, v1 decision readers, pre-saga release
+with `--live-github` *after the canonical collector and production acceptance switch land under review*
+authorizes removal of the reducer rollback switch, GraphQL shims, v1 decision readers, pre-saga release
 paths, or the recoverable TRX history.
 
 The user-authorized Chainsaw cut bypasses unavailable kit-source SDD/feedback/cycle machinery only.

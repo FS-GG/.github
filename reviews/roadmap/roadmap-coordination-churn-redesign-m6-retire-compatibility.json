@@ -12,10 +12,11 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 1,
+  "repair_rounds": 2,
   "reviewed_commits": [
     "835b3e719409a409fd169a7bff218c3ac3f5a256",
-    "2a3e65b649788cea0c65f078f50448ad49f8db72"
+    "2a3e65b649788cea0c65f078f50448ad49f8db72",
+    "3c0f70ea36a7d9906f58c67aea953cdfefd1f1a2"
   ],
   "findings": [
     {
@@ -54,7 +55,13 @@
         "Verification: round-1 confirmation remains changes-required because scripts/coordination-retirement-readiness.py:129-133 still treats arbitrary non-empty verification prose as evidence for repair classification, intent reversals, partial reads, release outcomes, policy inventories, and byte-growth measures; validate_live authenticates only source_sha, issue counts, and successor URLs.",
         "Verification: successor_queries is read directly from the caller-authored evidence at scripts/coordination-retirement-readiness.py:185-188 and collect_live queries exactly that mutable set at :213; no canonical constant or digest prevents narrowing the purported fixed-query universe to an unrelated issue.",
         "Verification: at exact round-1 head, a structurally passing document with `verification:[\"arbitrary prose, not an authenticated observation\"]`, a fake SHA, caller-chosen query/classification, and matching caller snapshot exits 0 and prints the ordinary PASS verdict when invoked as `FSGG_RETIREMENT_FIXTURE_OK=1 python3 scripts/coordination-retirement-readiness.py <doc> --fixture-live-snapshot <snapshot>`; the environment lock is not an authentication boundary and the result is indistinguishable from live acceptance.",
-        "Verification: repair round 2 must remove the production PASS-capable fixture bypass, make the successor query universe canonical rather than evidence-selected, and require structured/replayable provenance for every non-GitHub health measure instead of accepting arbitrary strings."
+        "Verification: repair round 2 must remove the production PASS-capable fixture bypass, make the successor query universe canonical rather than evidence-selected, and require structured/replayable provenance for every non-GitHub health measure instead of accepting arbitrary strings.",
+        "Verification: round-2 commit 3c0f70ea36a7d9906f58c67aea953cdfefd1f1a2 removes --fixture-live-snapshot from the production parser; the exact former invocation now exits 2 as an unrecognized argument, while tests/coordination-retirement-readiness/fixture_validate.py imports validate/validate_live directly and never prints the production PASS sentence.",
+        "Verification: scripts/coordination-retirement-readiness.py at round-2 head defines CANONICAL_SUCCESSOR_QUERIES in code, requires evidence equality at :216, and collect_live uses that constant at :265; the query_narrow mutation in the focused suite fails and `bash tests/coordination-retirement-readiness/run.sh` passes 15/15.",
+        "Verification: round-2 confirmation remains changes-required because the SHA-256 at scripts/coordination-retirement-readiness.py:169-180 covers only the observation JSON metrics and period_id; provenance.reproduce is stored outside those hashed bytes and is merely checked as any non-empty argv at :161-167, so changing a real reproduction command to arbitrary argv leaves the digest valid and passes schema/provenance validation.",
+        "Verification: the hashed observation lacks source_sha, start, end, measured_at, and the reproduction argv, so the same caller-authored artifact can be rebound to a different measurement interval/source by retaining period_id; neither validate nor validate_live replays provenance.reproduce to compare collector output.",
+        "Verification: the claimed non-escaping artifact check at scripts/coordination-retirement-readiness.py:161-170 is lexical only; `(root / artifact).read_bytes()` follows a repository-relative symlink outside root because the resolved path is never checked with relative_to(root.resolve()).",
+        "Verification: repair round 3 must bind reproduction argv and measurement/source identity inside the hashed observation, independently replay the structured collector or otherwise authenticate its output before PASS, and reject resolved artifact paths outside root (including symlink escape)."
       ]
     },
     {
@@ -93,7 +100,7 @@
     }
   ],
   "confirmation": {
-    "reviewed_commit": "2a3e65b649788cea0c65f078f50448ad49f8db72",
+    "reviewed_commit": "3c0f70ea36a7d9906f58c67aea953cdfefd1f1a2",
     "verdict": "changes-required",
     "unresolved_blocker_major": [
       "M6-READINESS-CRIT-002"

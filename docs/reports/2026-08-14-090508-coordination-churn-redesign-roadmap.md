@@ -278,7 +278,9 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   period gaps, unelapsed periods, discontinuous inventories, unauthenticated positive evidence,
   partial-success reads, evidence-growth inversion, non-weekly windows, successor issues, live-binding
   mismatch, and deterministic repeat output. Positive acceptance additionally requires `--live-github`
-  to resolve the source commit and rederive period counts and the fixed-query successor universe. The earliest possible new three-week run ends
+  to resolve the source commit and rederive period counts and the fixed-query successor universe. This
+  preparatory gate deliberately has no production PASS until a separately reviewed canonical collector
+  can replay every non-GitHub measure; it can block but cannot authorize early retirement. The earliest possible new three-week run ends
   `2026-09-07T00:00:00Z`; that date grants nothing unless fresh evidence passes the validator.
 - **Live issue recensus:** `.github#2580` and `.github#2586` were objectively resolved by landed M0/M1
   behavior and closed only after focused regressions and live-feed verification. `.github#2561`,
