@@ -39,11 +39,12 @@ let private serving (body: string) =
               NextLink = None; Headers = Map.empty })
 
 /// The done-stamp query's response, with the pieces a test wants to vary.
-let private response
+let private responseWithProjectItems
     (state: string)
     (closingPrs: string)
     (closedEvent: string)
     (subIssues: string)
+    (projectItems: string)
     (parent: string)
     =
     $"""{{"data":{{"repository":{{"issue":{{
@@ -51,8 +52,17 @@ let private response
         "closedByPullRequestsReferences":{{"nodes":[%s{closingPrs}]}},
         "timelineItems":{{"nodes":[%s{closedEvent}]}},
         "subIssues":%s{subIssues},
-        "projectItems":{{"nodes":[{{"project":{{"number":12}},"status":{{"name":"In progress"}}}}]}},
+        "projectItems":%s{projectItems},
         "parent":%s{parent}}}}}}}}}"""
+
+let private response state closingPrs closedEvent subIssues parent =
+    responseWithProjectItems
+        state
+        closingPrs
+        closedEvent
+        subIssues
+        """{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]}"""
+        parent
 
 let private noSubs = """{"totalCount":0,"nodes":[]}"""
 
@@ -301,6 +311,77 @@ let ``all children closed is AllResolved`` () =
     | Ok f -> Assert.Equal(AllResolved 2, f.Children)
     | Error e -> failwith $"parse failed — got %A{e}"
 
+// ---- .github#2561: every whole-set closure/status connection refuses a hidden tail -------------------
+
+let private expectTruncation (body: string) (connectionName: string) =
+    match facts (serving body) board ref with
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains(connectionName, detail)
+        Assert.Contains("TRUNCATED", detail)
+    | other -> failwith $"a truncated %s{connectionName} read must refuse the fact set — got %A{other}"
+
+[<Fact>]
+let ``#2561 a full closing-PR window with a hidden tail refuses the fact set`` () =
+    let ten = [ 1..10 ] |> List.map (fun n -> closesThis (400 + n)) |> String.concat ","
+    let body = response "CLOSED" ten "" noSubs "null"
+
+    let truncated =
+        body.Replace(
+            "\"closedByPullRequestsReferences\":{\"nodes\"",
+            "\"closedByPullRequestsReferences\":{\"totalCount\":11,\"nodes\""
+        )
+
+    expectTruncation truncated "closing-PR reference connection"
+
+[<Fact>]
+let ``#2561 a full nested closing-issue window with a hidden tail refuses the fact set`` () =
+    let refs =
+        [ 1..10 ]
+        |> List.map (fun n -> $"""{{"number":{n},"repository":{{"nameWithOwner":"FS-GG/other"}}}}""")
+        |> String.concat ","
+
+    let pr =
+        $"""{{"number":399,"merged":true,"closingIssuesReferences":{{"totalCount":11,"nodes":[%s{refs}]}}}}"""
+
+    expectTruncation (response "CLOSED" pr "" noSubs "null") "closing-issue connection"
+
+[<Fact>]
+let ``#2561 a full associated-PR window with a hidden tail refuses the fact set`` () =
+    let prs =
+        [ 1..5 ]
+        |> List.map (fun n -> $"""{{"number":{n},"merged":true}}""")
+        |> String.concat ","
+
+    let event =
+        $"""{{"closer":{{"__typename":"Commit","oid":"abc","associatedPullRequests":{{"totalCount":6,"nodes":[%s{prs}]}}}}}}"""
+
+    expectTruncation (response "CLOSED" "" event noSubs "null") "associated-PR connection"
+
+[<Fact>]
+let ``#2561 a full project-item window with our row hidden refuses instead of reporting NoStatus`` () =
+    let nodes =
+        [ 1..20 ]
+        |> List.map (fun n -> $"""{{"project":{{"number":{100 + n}}},"status":{{"name":"Ready"}}}}""")
+        |> String.concat ","
+
+    let items = $"""{{"totalCount":21,"nodes":[%s{nodes}]}}"""
+    let body = responseWithProjectItems "CLOSED" "" "" noSubs items "null"
+    expectTruncation body "project-item connection"
+
+[<Fact>]
+let ``#2561 genuinely short connections remain a complete successful fact read`` () =
+    // Every first:N connection is short here: 1/10 outer, 1/10 nested, 1/5 associated, and 1/20 items.
+    // Missing totalCount is accepted only because a short page itself proves there was no hidden tail.
+    let event =
+        """{"closer":{"__typename":"Commit","oid":"abc","associatedPullRequests":{"nodes":[{"number":401,"merged":true}]}}}"""
+
+    match facts (serving (response "CLOSED" (closesThis 399) event noSubs "null")) board ref with
+    | Ok f ->
+        Assert.Single f.ClosingPrs |> ignore
+        Assert.Single f.CloserPrs |> ignore
+        Assert.Equal(InProgress, f.BoardStatus)
+    | Error error -> failwith $"short connections are complete and must remain readable — got %A{error}"
+
 // ---- the parent edge ----------------------------------------------------------------------------------
 
 [<Fact>]
@@ -308,7 +389,14 @@ let ``the parent ref is read, cross-repo, so the roll-up can climb`` () =
     let parent =
         """{"number":417,"repository":{"name":".github","owner":{"login":"FS-GG"}}}"""
 
-    let transport = serving (response "CLOSED" """{"number":399,"merged":true}""" "" noSubs parent)
+    let transport =
+        serving
+            (response
+                "CLOSED"
+                """{"number":399,"merged":true,"closingIssuesReferences":{"nodes":[]}}"""
+                ""
+                noSubs
+                parent)
 
     match facts transport board ref with
     | Ok f ->

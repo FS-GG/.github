@@ -167,12 +167,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.55.0 — route and review authority now uses revisioned, digest-chained structured records.
+    <PackageReleaseNotes>0.56.0 — done-stamp closure and board evidence now refuses incomplete GraphQL windows.
 
-WHAT MOVED, AND WHY IT IS A MINOR. Route decisions bind scope, dependencies, touch-set, policy, and
-revision outside narrative bodies. Review decisions bind the exact head, critic, verdict, accepted
-exceptions, and revision. Legacy evidence remains read-only with classified differences; new writes
-use only v2 records and fail closed on tamper, gaps, stale predecessors, or incomplete ledgers.
+WHAT MOVED, AND WHY IT IS A MINOR. The done-stamp reader now proves completeness for closing-PR
+references, each candidate PR's closing-issue references, closing-commit associated PRs, and project
+items. A hidden tail refuses the fact read instead of silently producing a red or green stamp, or a
+measured NoStatus. The recent `timelineItems(last: 10)` intent is unchanged. This adds a caller-visible
+refusal path for large issue histories, so a patch would understate the behavioural change.
 
 RELEASE SAGA. The coherent set is packed once at one source SHA into a content-addressed manifest.
 The package-owning workflows retain their trusted-publishing identities but consume those exact

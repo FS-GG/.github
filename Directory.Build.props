@@ -206,12 +206,13 @@
 
        NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entries above record.
 
-       0.54.0 -> 0.55.0 is a MINOR. M4 adds receiver-visible structured route and review decision
-       records, new-only authoring, classified compatibility reads, and revision/digest validation to
-       FS.GG.Coord.Cli plus Kit-delivered review guidance. These are additive public coordination
-       behaviours, so this requires a real coherent-set release. -->
+       0.55.0 -> 0.56.0 is a MINOR. .github#2561 changes receiver-visible done-stamp behaviour for
+       large closure and project-item sets: four previously bare GraphQL windows now refuse an
+       incomplete read instead of silently deriving red, green, or NoStatus from a hidden tail.
+       This new refusal boundary is observable coordination behaviour, so a patch would understate
+       the change and the coherent set requires a real release. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.55.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.56.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

@@ -1,0 +1,102 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m6-issue-2561-done-complete-read",
+  "milestone": "M6 successor #2561 — make Done.facts whole-set GraphQL reads complete",
+  "critic": "/root/m6_successor_2561/critic_2561",
+  "initial_reviewed_commit": "e7d25700f83070780524e996932331d7970811ec",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 4,
+  "reviewed_commits": [
+    "e7d25700f83070780524e996932331d7970811ec",
+    "657e81021c636cfb82dae241b4a7e71fdb29ddd8",
+    "3861b4d5e23165ba9e4dba6c4345d76a12d69ea5",
+    "5c720426993472921e5968b09cdbe46070446ccc",
+    "c4802a31c28cda91f57abfa616173be40fab849d"
+  ],
+  "findings": [
+    {
+      "id": "M6-2561-CRIT-001",
+      "severity": "major",
+      "summary": "The receiver-visible done-stamp behavior change was presented as non-packaged work, leaving the coherent 0.56.0 release, source-ahead-of-feed registry state, and architecture-map disposition unrecorded.",
+      "evidence": [
+        "Verification: at initial reviewed commit e7d25700f83070780524e996932331d7970811ec, Directory.Build.props still declared FsggCoherentSetVersion 0.55.0 even though src/FS.GG.Coord.GitHub/Done.fs changed the behavior consumed by the packed FS.GG.Coord.Cli tool.",
+        "Verification: the live PR #2619 body read through `gh pr view 2619 --repo FS-GG/.github --json headRefOid,body,url` stated `No package release is owed: FS.GG.Coord.GitHub.fsproj is explicitly non-packable`, named no post-merge coherent-set release, and carried neither an `architecture-map: unaffected` line nor that opt-out label.",
+        "Verification: `.agents/skills/publishing-and-deployment/SKILL.md` requires the coherent FS.GG.Kit/FS.GG.Drivers/FS.GG.Coord.Cli set to move and publish together, records source-ahead-of-feed state before publication, and requires an explicit architecture-map opt-out when a routine registry version move does not alter system shape."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 657e81021c636cfb82dae241b4a7e71fdb29ddd8 advances FsggCoherentSetVersion and all three evaluated package versions to stable 0.56.0, bounds current FS.GG.Coord.Cli PackageReleaseNotes, advances registry coord-engine source while retaining package-version 0.55.0, updates the compatibility projection, and prepends the dated registry changelog entry.",
+        "Verification: `bash tests/coherent-set-version/run.sh && python3 scripts/check-coherent-set-version.py` passed 13/13 fixture assertions and resolved all three package projects to 0.56.0; `bash tests/engine-release-notes/run.sh && python3 scripts/check-engine-release-notes.py` passed 25/25 fixture assertions and measured 4422/35000 release-note characters.",
+        "Verification: `fsgg-sdd registry validate registry/dependencies.yml --text`, the 27/27 projection fixture plus live projection checker, the 28/28 registry-changelog fixture plus live checker, and the live dual-feed coherence check all passed; the live feed check confirmed coord-engine package-version 0.55.0 equals both feeds during the publish-before-flip window.",
+        "Verification: independent `dotnet pack` runs produced FS.GG.Kit.0.56.0.nupkg, FS.GG.Drivers.0.56.0.nupkg, and FS.GG.Coord.Cli.0.56.0.nupkg; nuspec inspection confirmed all three versions and the CLI's current 0.56.0 release narrative.",
+        "Verification: `gh pr view 2619 --repo FS-GG/.github --json headRefOid,body,url,state,title,labels,mergeable,statusCheckRollup` after repair reports exact head 657e81021c636cfb82dae241b4a7e71fdb29ddd8, a standalone `architecture-map: unaffected` line, the content-addressed GitHub-first/NuGet-second 0.56.0 post-merge obligation, the 0.55.0-until-verified registry rule, and no false `No package release is owed` claim; the architecture-map check had already completed successfully."
+      ]
+    },
+    {
+      "id": "M6-2561-CRIT-002",
+      "severity": "major",
+      "summary": "The 0.56.0 source-version move left three canonical generated release/version projections at 0.55.0, making the projection and semantic skill-quality gates fail.",
+      "evidence": [
+        "Verification: at prior confirmed head 657e81021c636cfb82dae241b4a7e71fdb29ddd8, the generated release-inventory rows in `.agents/skills/publishing-and-deployment/SKILL.md` and `.claude/skills/publishing-and-deployment/SKILL.md` each still recorded coord-engine source version 0.55.0, and the generated `fsgg-versions` row in docs/architecture.md also recorded source 0.55.0, while registry/dependencies.yml declared source 0.56.0.",
+        "Verification: `git diff --name-status 657e81021c636cfb82dae241b4a7e71fdb29ddd8..3861b4d5e23165ba9e4dba6c4345d76a12d69ea5` identifies the two publishing skill mirrors and docs/architecture.md as the generated projection repairs, alongside the previously reviewed critique artifact update."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5 changes only the coord-engine source-version cell from 0.55.0 to 0.56.0 in each of the three generated regions; published/package version and coherent-set identity remain correctly at verified 0.55.0, and no architecture topology prose or edge changes.",
+        "Verification: `bash scripts/generate-projections --check` at 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5 returned `projections: current`; the component-count fixture passed 6/6.",
+        "Verification: `bash tests/skill-quality/run.sh` at 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5 completed successfully, including `skill-quality: OK`, current projections, and all 46 rejection cases.",
+        "Verification: final-head live checks remain green: FS.GG.Coord.GitHub.Tests passed 613/613; coherent-set projects resolve to 0.56.0; release notes measure 4422/35000 characters; typed registry validation reports 0 diagnostics; registry compatibility projection passes; and both feeds still equal retained package-version 0.55.0."
+      ]
+    },
+    {
+      "id": "M6-2561-CRIT-003",
+      "severity": "major",
+      "summary": "Regenerating the publishing skill's 0.56.0 release inventory left its canonical driver-skill manifest integrity fields bound to the previous bytes, failing registry coherence.",
+      "evidence": [
+        "Verification: at prior reviewed head 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5, registry/driver-skill-manifest.json recorded publishing-and-deployment SKILL.md/file SHA-256 `07a387522fb64300075273220c91c32c606873720972289efbd9ead20306900b` and tree SHA-256 `e5dc3b5caa52a303b7bf60e931fc9042d5107b6f776bbebe7cf3af1516fa5a02`, while the regenerated `.claude/skills/publishing-and-deployment/SKILL.md` bytes hash to `8ed210977728e60d50438bc5c6d9b9e9c92ce8c0c2c58131627de4cc9c757227`.",
+        "Verification: `git diff --unified=40 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5..5c720426993472921e5968b09cdbe46070446ccc -- registry/driver-skill-manifest.json` shows the stale content/file/tree integrity fields as the only manifest values requiring repair."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 5c720426993472921e5968b09cdbe46070446ccc updates only publishing-and-deployment's manifest content/file SHA-256 to `8ed210977728e60d50438bc5c6d9b9e9c92ce8c0c2c58131627de4cc9c757227` and tree SHA-256 to `596a9b9b1d5a98ac13dc28f098220e99b93710475404879ed04178ce2a4a5463`; scope, supplied-by, materialization policy, agent file hash, and every other manifest row remain unchanged.",
+        "Verification: independent SHA-256 computation over `.claude/skills/publishing-and-deployment/SKILL.md` equals the repaired manifest content/file hash `8ed210977728e60d50438bc5c6d9b9e9c92ce8c0c2c58131627de4cc9c757227`.",
+        "Verification: `python3 scripts/generate-driver-manifest --check` reports both driver and coordination-kit manifests current; `bash scripts/generate-projections --check` reports current; `bash tests/skill-quality/run.sh` passes semantic checks and all 46 rejection cases.",
+        "Verification: final-head regression gates remain green: FS.GG.Coord.GitHub.Tests passed 613/613; coherent-set projects resolve to 0.56.0; release notes measure 4422/35000 characters; typed registry validation reports 0 diagnostics; and registry compatibility projection passes."
+      ]
+    },
+    {
+      "id": "M6-2561-CRIT-004",
+      "severity": "major",
+      "summary": "The end-to-end done parity server still emitted the pre-#2561 bare connection shape, so the production fail-closed reader rejected the fixture and four #533 parity assertions failed.",
+      "evidence": [
+        "Verification: at prior reviewed head 5c720426993472921e5968b09cdbe46070446ccc, tests/coord-engine-parity/done_server.py emitted `closedByPullRequestsReferences` without totalCount, omitted each PR's `closingIssuesReferences` connection, and emitted projectItems without totalCount, contradicting the completeness metadata now selected and required by Done.facts.",
+        "Verification: GitHub Actions run 31834142812 at head 3d546567435039549f29cfedaa01bf29dc96e796 failed only the coord-engine parity step; `gh run view 31834142812 --repo FS-GG/.github --log-failed` records 644/648 passing, four #533 failures, and the production refusal `PR #7's closing-issue connection is missing, so its completeness cannot be established` while all preceding build/write steps succeeded."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit c4802a31c28cda91f57abfa616173be40fab849d changes only tests/coord-engine-parity/done_server.py beyond the previously reviewed round-3 artifact: it adds closedByPullRequestsReferences totalCount=1, an explicit nested closingIssuesReferences totalCount=1 edge from PR #7 to FS-GG/FS.GG.SDD#42, and projectItems totalCount=1 without weakening production code.",
+        "Verification: `bash tests/coord-engine-parity/run.sh` at c4802a31c28cda91f57abfa616173be40fab849d passed all 648 assertions with 0 failed and 0 not measured, including all four #533 done/claim behaviors that failed in run 31834142812.",
+        "Verification: `python3 -m py_compile tests/coord-engine-parity/done_server.py` and exact prior-head/full-base `git diff --check` pass.",
+        "Verification: final-head regression gates remain green: FS.GG.Coord.GitHub.Tests passed 613/613; driver manifests and projections report current; coherent-set projects resolve to 0.56.0; and release notes measure 4422/35000 characters."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "c4802a31c28cda91f57abfa616173be40fab849d",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
