@@ -1,0 +1,75 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m1-intent-status-split",
+  "milestone": "M1 — intent/status split",
+  "critic": "/root/m1_intent_status/m1_critic",
+  "initial_reviewed_commit": "dfa61085163d6e06350c59d0b390f5a9e93b049c",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 3,
+  "reviewed_commits": [
+    "dfa61085163d6e06350c59d0b390f5a9e93b049c",
+    "3a4077891f13f7244444a1764a6e23ffacb7b385",
+    "996d72b7bbf8fd3b2a49aaf1216698a4cbeb93c2",
+    "1e3b8b4c96173c6f9b8478c746635adb293481a8"
+  ],
+  "findings": [
+    {
+      "id": "M1-INTENT-CRIT-001",
+      "severity": "major",
+      "summary": "Backlog intent is not durable or independent of the Status projection, so an active lifecycle transition erases the deliberate park that M1 is required to preserve.",
+      "evidence": [
+        "Verification: docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md:131-141 requires independent ObservedFacts, SchedulingIntent, and DerivedStatus values, says Projects Status is output rather than input, and requires attributable revisioned non-automatic intent; M1's exit criterion at lines 192-195 requires explicit Backlog to survive reconciliation.",
+        "Verification: src/FS.GG.Coord.Cli/Client.fs:3239-3256 creates a fresh observedAt on every reconciliation and passes the current item.Status plus that timestamp to migrateIntent; there is no read of a separately persisted SchedulingIntent value in the base-to-head diff (`git diff --name-status 81c5978fd8667ae4af8369e5ebb907023ca98d54..dfa61085163d6e06350c59d0b390f5a9e93b049c` lists only Client.fs, LifecycleProjection.fs/.fsi, and LifecycleProjectionTests.fs).",
+        "Verification: src/FS.GG.Coord.Core/LifecycleProjection.fs:151-163 reconstructs Backlog intent only while the mutable board Status equals Backlog and otherwise returns Auto, while lines 130-142 project active PR/claim facts to InReview/InProgress ahead of Backlog; therefore the sequence `Backlog + active claim -> InProgress`, followed by the next pass, reconstructs Auto from InProgress and permanently loses the original park when the claim clears.",
+        "Verification: tests/FS.GG.Coord.Core.Tests/LifecycleProjectionTests.fs:144-163 explicitly asserts that active facts override Backlog and tests migrateIntent only as isolated single calls; the idempotence test at lines 183-195 reuses the same in-memory intent instead of re-running the production migration from the first projected Status, so it does not cover the loss sequence. `dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release --no-restore --no-build` passed 860/860 on exact head dfa61085163d6e06350c59d0b390f5a9e93b049c, confirming the green suite does not detect this acceptance failure."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 3a4077891f13f7244444a1764a6e23ffacb7b385 adds a v2 Watermark carrying SchedulingIntent and restores receipt.Intent before reducing at src/FS.GG.Coord.Cli/Client.fs:3255-3283; src/FS.GG.Coord.Core/LifecycleProjection.fs:53-155 retains backward parsing of v1 receipts and round-trips v2 intent.",
+        "Verification: the original production failure remains for the live-claim paths. src/FS.GG.Coord.Core/Chore.fs:387-421 derives ClaimReviewLag or ClaimStatusLag for a Backlog item with a held claim; src/FS.GG.Coord.Cli/Client.fs:3322-3332 then treats that legacy Status chore as authoritative and filters out the LifecycleProjectionLag chore. Although the lifecycle fold created an intent-carrying watermark, src/FS.GG.Coord.Cli/Client.fs:3728-3730 persists it only when the executed chore kind is LifecycleProjectionLag. The legacy winning chore therefore changes Backlog to InReview/InProgress without the v2 receipt, and the next pass still migrates Auto from the derived Status.",
+        "Verification: the new unit at tests/FS.GG.Coord.Core.Tests/LifecycleProjectionTests.fs:227-259 avoids the precedence path by setting Claim=None and manually constructing the v2 receipt instead of exercising the production write/read boundary. The m1-backlog-park replay fixture contains no active claim or PR and performs dry-run no-op reconciles, as stated in tests/coord-engine-replay/README.md and its transcript/scenario, so it likewise cannot detect a filtered lifecycle chore failing to persist intent.",
+        "Verification: `dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release --no-restore` passed 863/863 and `bash tests/coord-engine-replay/run.sh` passed 30/30 on exact repair head 3a4077891f13f7244444a1764a6e23ffacb7b385; the green results confirm the added cases pass but do not exercise the unresolved production precedence sequence.",
+        "Verification: repair-round-2 commit 996d72b7bbf8fd3b2a49aaf1216698a4cbeb93c2 changes only src/FS.GG.Coord.Cli/Client.fs:3144-3151 and 3208-3212 so Ready rows read v2 watermarks after a Legacy projection. That closes the separate Legacy Backlog-to-Ready rollback restoration gap, but does not change Chore.derive, legacyStatusSubjects filtering, or the LifecycleProjectionLag-only watermark write at lines 3728-3730; the live-claim loss remains on exact round-2 head.",
+        "Verification: repair-round-3 commit 1e3b8b4c96173c6f9b8478c746635adb293481a8 adds reconcileStatusPrecedence at src/FS.GG.Coord.Cli/Client.fs:3098-3132. Subjects whose prepared lifecycle watermark carries non-Auto intent lose conflicting legacy Status chores, so LifecycleProjectionLag remains selected; Auto/legacy receipts retain established legacy precedence. The production caller uses this selector at lines 3353-3368, and the verified lifecycle write persists the prepared v2 watermark at lines 3760-3775.",
+        "Verification: round 3 also expands issue-comment/watermark reads to Ready, InProgress, InReview, and Blocked live columns at src/FS.GG.Coord.Cli/Client.fs:3244-3258, so the receipt survives the active derived column and is restored on the next reducer pass; settled Done remains excluded from the live read population.",
+        "Verification: tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs:73-99 constructs a Backlog item with a held claim and proves explicit Backlog selects only LIFECYCLE-PROJECTION-LAG while the otherwise-identical Auto control selects only CLAIM-STATUS-LAG. `dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --no-restore` passed 838/838 and `bash tests/coord-engine-replay/run.sh` passed 30/30 on exact repaired head 1e3b8b4c96173c6f9b8478c746635adb293481a8; `git diff --check 996d72b7bbf8fd3b2a49aaf1216698a4cbeb93c2..1e3b8b4c96173c6f9b8478c746635adb293481a8` exited 0."
+      ]
+    },
+    {
+      "id": "M1-INTENT-CRIT-002",
+      "severity": "major",
+      "summary": "The production path computes but discards shadow differences, and no representative historical replay records or explains old/new divergence.",
+      "evidence": [
+        "Verification: docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md:141 requires representative historical snapshots to be replayed through both reducers with classified differences and no unexplained movement; lines 192-195 require shadow old/new projections and explained replay differences; lines 305-312 explicitly require recording classified shadow differences.",
+        "Verification: src/FS.GG.Coord.Cli/Client.fs:3254-3264 computes a Shadow but immediately passes it to select and consumes only the selected Result; it never reads, emits, persists, or reports shadow.Difference, so unexpected production divergence is silent and the comment's claim that rollback remains observable is not implemented by this call site.",
+        "Verification: `git diff --numstat 81c5978fd8667ae4af8369e5ebb907023ca98d54..dfa61085163d6e06350c59d0b390f5a9e93b049c -- docs tests/coord-engine-replay` produced no output, and the only new shadow test at tests/FS.GG.Coord.Core.Tests/LifecycleProjectionTests.fs:165-181 is a synthetic otherwise-ready Backlog unit case; there is no production-derived replay fixture, difference manifest, or unexpected-difference assertion in the milestone diff.",
+        "Verification: `bash tests/coord-engine-replay/run.sh` passed 17/17 and `bash tests/coord-engine-e2e/run.sh` passed 14/14 on exact head dfa61085163d6e06350c59d0b390f5a9e93b049c, but their output covered existing smoke, 2216-oscillation, and 2450-claimed-review-lag transcripts and reported no legacy-versus-intent difference classification; those green regressions therefore do not establish M1's replay-difference exit criterion.",
+        "Verification: `dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore` succeeded with 0 warnings/errors, and the CLI and GitHub suites passed 837/837 and 602/602 respectively on exact head dfa61085163d6e06350c59d0b390f5a9e93b049c; these broad green checks establish regression health but provide no missing shadow observability or classified replay evidence."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 3a4077891f13f7244444a1764a6e23ffacb7b385 collects every non-Same shadow classification and, when FSGG_COORD_LIFECYCLE_SHADOW_REPORT is set, writes a subject-sorted deterministic JSON report containing classification plus legacy/intended results at src/FS.GG.Coord.Cli/Client.fs:3266-3311; Unexpected is explicitly rendered as `unexpected`.",
+        "Verification: tests/coord-engine-replay/run.sh:98-124 and 168-215 enable the production report for every direct/replayed reconcile and compare it with a required checked-in reconcile-shadow.json. The new m1-backlog-park expectation records FS-GG/FS.GG.SDD#500 as `deliberate-park-preserved`, legacy Ready, intended Backlog; the other representative fixtures record empty classified-difference arrays.",
+        "Verification: `bash tests/coord-engine-replay/run.sh` passed 30/30 on exact repair head 3a4077891f13f7244444a1764a6e23ffacb7b385, including classified shadow checks for smoke, 2216-oscillation, 2450-claimed-review-lag, and both m1-backlog-park reconciles. `git diff --check dfa61085163d6e06350c59d0b390f5a9e93b049c..3a4077891f13f7244444a1764a6e23ffacb7b385` exited 0."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "1e3b8b4c96173c6f9b8478c746635adb293481a8",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

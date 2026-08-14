@@ -189,7 +189,7 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   - Deliverables: Land bounded release, feed-coherence, project-audit, engine-pin, and claim-auth repairs; triage lint; pause new process features; capture replay fixtures and baseline metrics
   - Exit criteria: Main has no standing red checks; open repair PRs are mergeable or explicitly superseded; baseline is reproducible
 
-- [ ] **M1 — intent/status split**
+- [x] **M1 — intent/status split**
   - Target: Days 3–7
   - Deliverables: Add `SchedulingIntent`; implement pure reducer; shadow old/new projections; migrate deliberate parks
   - Exit criteria: Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch
@@ -285,6 +285,48 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   [#2594](https://github.com/FS-GG/.github/pull/2594) reconciles that one digest
   from the producer manifest and records it in `registry/skills.CHANGELOG.md`;
   no predicate, row position, or skill membership changes.
+
+### M1 intent/status split evidence
+
+- **Independent intent and pure projection:** `LifecycleProjection.fs` defines the
+  revisioned `SchedulingIntent` cases `Auto`, `Backlog`, `HumanPark`, and
+  `Deferred`, separates observed facts from intent, and reduces them through a
+  policy-versioned pure function. Production reconciliation computes legacy and
+  intended results together, selects with the bounded
+  `FSGG_COORD_LIFECYCLE_PROJECTION=legacy|intent-v1` switch, and defaults to the
+  intended projection.
+- **Durable deliberate parks:** Lifecycle watermark v2 persists scheduling intent
+  independently of the derived board column while remaining backward-readable
+  with v1 receipts. Watermarks are restored from every live derived column, and
+  explicit non-`Auto` intent owns Status precedence so legacy live-claim chores
+  cannot suppress the lifecycle write and its receipt. The Backlog-plus-held-claim
+  regression and `Auto` control are exercised in `ApplicationServiceTests.fs`;
+  human parks and idempotent reconciliation are exercised in
+  `LifecycleProjectionTests.fs`.
+- **Classified shadow replay:** Setting
+  `FSGG_COORD_LIFECYCLE_SHADOW_REPORT` records deterministic subject-sorted
+  legacy/intended differences and distinguishes `same`, expected policy movement,
+  deliberate-park preservation, and `unexpected`. The replay harness now requires
+  a checked-in `reconcile-shadow.json` for every fixture. The two-pass
+  `m1-backlog-park` transcript records legacy `Ready`, intended `Backlog`, and the
+  explained `deliberate-park-preserved` classification; all representative replay
+  fixtures pass 30/30 with no unexplained difference.
+- **Acceptance:** Exact implementation head
+  `1e3b8b4c96173c6f9b8478c746635adb293481a8` builds in Release with zero warnings
+  and errors. Core passes 863/863, CLI 838/838, GitHub 602/602, replay 30/30,
+  hermetic end-to-end 14/14, write-path 149/149, parity 648/648 with zero not
+  measured, and mutation-corpus anchors 13/13. `git diff --check` is clean.
+- **Critique:** The independent schema-v3 record at
+  `reviews/roadmap/roadmap-coordination-churn-redesign-m1-intent-status-split.json`
+  records three repair rounds. Its two major findings—intent loss through mutable
+  Status/live-claim precedence and discarded/unrecorded shadow differences—are
+  resolved, and the same critic confirmed `pass` against the exact implementation
+  head above. The shipped validator accepts the record.
+- **Lifecycle exception:** This kit-source tree still has no usable SDD cycle or
+  feedback-report provider. Under the user-authorized Chainsaw break-glass path,
+  M1 deliberately produced no fabricated SDD, cycle, or feedback artifact. The
+  direct source/test patch, rollback switch, replay evidence, independent critique,
+  normal pull-request checks, and exact post-merge inspection remain mandatory.
 
 ### Cross-cutting health measures
 
