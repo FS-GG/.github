@@ -19,6 +19,19 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **coord-engine coherent set `0.54.0` published and adopted**
+  (owner `github`; [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.54.0);
+  [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
+  `package-version` catches up with source `0.54.0` only after stable promotion. Prepare run
+  `31798384146` packed the three artifacts once from merged source
+  `9c5f8c077e59c84301333b362596f2b185231d5a`; promotion run `31803041325` verified the
+  complete set on GitHub Packages first and nuget.org second. The durable manifest has content ID
+  `sha256:0c4c9269a5ad16efc17543a60da679804ef4ec73ddeefcc4a4f370689401b3e8`
+  and final post-replay SHA-256 `19cb9411774d25c9daf3b79ee51528f2bcbe8e2f28a9fccc2e7ba13cba23d374`.
+  Its recorded recovery history has 22 resumptions without replacing any immutable artifact. A
+  final observation-only coherent replay (engine `31803203853`, Kit `31803205820`, Drivers
+  `31803208329`) and all three resulting idempotent promotions passed without a package push.
+
 - **2026-08-14** — **coord-engine source `0.54.0`: intent/read boundaries and release saga**
   (owner `github`; [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
   The source scalar moves from `0.53.0` to stable MINOR `0.54.0`; `package-version` remains

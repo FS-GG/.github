@@ -199,7 +199,7 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   - Deliverables: Add typed GraphQL adapter and generic connection draining; migrate all production readers; add fault-injection tests
   - Exit criteria: No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success
 
-- [ ] **M3 — release saga**
+- [x] **M3 — release saga**
   - Target: Week 2
   - Deliverables: Add release manifest; pack once; validate exact artifacts; add resumable orchestration and coherent-channel promotion
   - Exit criteria: One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes
@@ -367,6 +367,60 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   M2 produced no fabricated SDD, cycle, or feedback artifact. Direct source and
   test evidence, the independent critique, normal pull-request checks, and exact
   post-merge inspection remain mandatory.
+
+### M3 release-saga evidence
+
+- **Immutable identity and policy:** Prepare run
+  [31798384146](https://github.com/FS-GG/.github/actions/runs/31798384146) packed the coherent
+  `0.54.0` set once from merged source
+  `9c5f8c077e59c84301333b362596f2b185231d5a`. Release ID `github:0.54.0`, policy
+  `release-saga/1`, and content ID
+  `sha256:0c4c9269a5ad16efc17543a60da679804ef4ec73ddeefcc4a4f370689401b3e8`
+  bind the [published stable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.54.0).
+  The final manifest SHA-256 is
+  `19cb9411774d25c9daf3b79ee51528f2bcbe8e2f28a9fccc2e7ba13cba23d374` after the final clean
+  replay; the stable-channel
+  receipt SHA-256 is `24abdeaad9cf2159ac4de515ce8e7baee2af316fc328cb6c2c3e4c032da65a71`.
+- **Exact artifacts and feed order:** Input/GitHub archive SHA-256 values are Coord.Cli
+  `36f0f0d62221ad6689e190207f59815789a205f48d79166794446cc82fc7639e`, Drivers
+  `887c926cc9b92734fa0b6b51cff0d0ab47b0c92f23b19a11a1dd6c47d83a5f2f`, and Kit
+  `e548749eea2b3e0f694873ee762a60abb3daa2d4b92e876c33d77280cce3340d`. NuGet's signed
+  archives are respectively `9f59951e93891e2f54c9611206b76d2386d86094c435cf37fb9e7b722f29d04c`,
+  `9ba54b538fdd0de76052b1c7272d66bc400671b4e1fcecf464935275e4e6db38`, and
+  `9887f44b41333f88f64db68b84c8047397e498dba8cc1b99bfc5649f14bf305e`.
+  Entry-by-entry comparison, excluding only NuGet's appended signature, proves identical payload
+  hashes `61dc5e03a79eb23cf8359a1925cb106ea6b2e34ccc485bcbb37ea3eb81b0288a`,
+  `60adee44ad4b00ee820d2be5743a8029a7240d02cabd850d0a7262a692a6c1aa`, and
+  `51888ea07145a2c9c77ba51bd25b5f5bb9a30777ba014077187315fa904532b5`.
+  Promotion run [31803041325](https://github.com/FS-GG/.github/actions/runs/31803041325)
+  observed the full GitHub set before the full NuGet set and only then promoted stable.
+- **Recovery and clean completion:** The durable manifest records every failed attempt, per-feed
+  monotonic state, externally observed hashes, and 22 resumptions without byte drift or a duplicate
+  immutable push. The forced mid-publish fixture in `tests/release-saga/run.sh` persists a failure,
+  resumes from the same manifest and hashes, and rejects changed bytes. After recovery, a fresh
+  observation-only coherent pass—engine
+  [31803203853](https://github.com/FS-GG/.github/actions/runs/31803203853), Kit
+  [31803205820](https://github.com/FS-GG/.github/actions/runs/31803205820), and Drivers
+  [31803208329](https://github.com/FS-GG/.github/actions/runs/31803208329)—completed without
+  manual recovery or a push; its idempotent promotion runs `31803249669`, `31803314176`, and
+  `31803356405` all passed against the same live channel receipt.
+- **Rollback and compatibility removal:** Published `0.54.0` bytes and tags are immutable. A bad
+  release is not deleted, overwritten, or demoted to an older receipt; rollback is a newly prepared,
+  higher coherent version from a reviewed source, promoted only after both feeds serve the full set.
+  The three superseded independent publisher paths remain compatibility shims until M6 and are
+  removed only after three stable operating cycles.
+- **Delivery and critique:** Preparatory and production-recovery changes landed through normal PRs
+  [#2600](https://github.com/FS-GG/.github/pull/2600),
+  [#2601](https://github.com/FS-GG/.github/pull/2601),
+  [#2602](https://github.com/FS-GG/.github/pull/2602),
+  [#2604](https://github.com/FS-GG/.github/pull/2604), and
+  [#2605](https://github.com/FS-GG/.github/pull/2605). The same independent critic's schema-v3
+  record at `reviews/roadmap/roadmap-coordination-churn-redesign-m3-release-saga.json` covers the
+  implementation and exact external release evidence; the shipped validator accepts it.
+- **Lifecycle exception:** This kit-source tree still has no usable SDD cycle or feedback-report
+  provider. The user-authorized Chainsaw path bypassed only those unavailable lifecycle mechanics;
+  M3 fabricated no SDD, cycle, or feedback artifact and retained credentials, trusted publishing,
+  security, review, CI, exact-artifact, registry, and post-merge verification requirements.
 
 ### Cross-cutting health measures
 
