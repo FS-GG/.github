@@ -8,6 +8,20 @@ module Done =
     open Errors
     open Transport
 
+    exception private IncompleteFactsRead of IoError
+
+    let private requireComplete subject what window connection =
+        match Reads.connectionComplete subject what window connection with
+        | Ok () -> ()
+        | Error error -> raise (IncompleteFactsRead error)
+
+    let private missingConnection subject what =
+        raise (
+            IncompleteFactsRead(
+                Malformed(subject, $"%s{what} is missing, so its completeness cannot be established — this is a FAILED READ, never an absence")
+            )
+        )
+
     type Closure =
         /// `passedOverForeign`: a foreign-repository true closer that existed but was NOT chosen, because a
         /// same-repository closer is preferred regardless of merge time (.github#2427) — `Some(pr, repo)`
@@ -315,13 +329,25 @@ module Done =
          repository(owner: $owner, name: $repo) { \
            issue(number: $number) { \
              number state \
-             closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } closingIssuesReferences(first: 10) { nodes { number repository { nameWithOwner } } } } } \
-             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } } ... on Commit { oid associatedPullRequests(first: 5) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } } } } } } } } \
+             closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { totalCount nodes { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } closingIssuesReferences(first: 10) { totalCount nodes { number repository { nameWithOwner } } } } } \
+             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } } ... on Commit { oid associatedPullRequests(first: 5) { totalCount nodes { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } } } } } } } } \
              subIssues(first: 100) { totalCount nodes { number state } } \
-             projectItems(first: 20) { nodes { project { number } status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } \
+             projectItems(first: 20) { totalCount nodes { project { number } status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } \
              parent { number repository { name owner { login } } } \
            } \
          } rateLimit { cost remaining } }"
+
+    [<Literal>]
+    let private ClosedByPullRequestsWindow = 10
+
+    [<Literal>]
+    let private ClosingIssuesWindow = 10
+
+    [<Literal>]
+    let private AssociatedPullRequestsWindow = 5
+
+    [<Literal>]
+    let private ProjectItemsWindow = 20
 
     let private boardStatusOf (s: string) =
         match s.Trim().ToLowerInvariant() with
@@ -419,6 +445,11 @@ module Done =
             let closingPrs =
                 match issue.TryGetProperty "closedByPullRequestsReferences" with
                 | true, refs ->
+                    // Closure evidence is a whole-set read. A hidden tail could contain the actual latest
+                    // merged closer, so incompleteness is an unverified read rather than evidence that the
+                    // work is not done (#2561/#600).
+                    requireComplete subject "this issue's closing-PR reference connection" ClosedByPullRequestsWindow refs
+
                     match refs.TryGetProperty "nodes" with
                     | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
                         nodes.EnumerateArray()
@@ -429,6 +460,12 @@ module Done =
                                 let closesThis =
                                     match n.TryGetProperty "closingIssuesReferences" with
                                     | true, cir ->
+                                        requireComplete
+                                            subject
+                                            $"PR #%d{num.GetInt32()}'s closing-issue connection"
+                                            ClosingIssuesWindow
+                                            cir
+
                                         match cir.TryGetProperty "nodes" with
                                         | true, cn when cn.ValueKind = JsonValueKind.Array ->
                                             cn.EnumerateArray()
@@ -446,7 +483,7 @@ module Done =
                                                 num = Some ref.Number
                                                 && String.Equals(nwo, $"%s{ref.Owner}/%s{ref.Repo}", StringComparison.OrdinalIgnoreCase))
                                         | _ -> false
-                                    | _ -> false
+                                    | _ -> missingConnection subject $"PR #%d{num.GetInt32()}'s closing-issue connection"
 
                                 Some
                                     { Number = num.GetInt32()
@@ -458,7 +495,7 @@ module Done =
                             | _ -> None)
                         |> List.ofSeq
                     | _ -> []
-                | _ -> []
+                | _ -> missingConnection subject "this issue's closing-PR reference connection"
 
             // THE CLOSED_EVENT CLOSERS. A PullRequest closer names its own number; a Commit closer (a squash
             // whose subject carried the keyword) names the PR(s) associated with it (#558). Both are the PR that
@@ -483,11 +520,17 @@ module Done =
                                     // A Commit closer — resolve through to the PR(s) it is associated with.
                                     match c.TryGetProperty "associatedPullRequests" with
                                     | true, apr ->
+                                        requireComplete
+                                            subject
+                                            "the closing commit's associated-PR connection"
+                                            AssociatedPullRequestsWindow
+                                            apr
+
                                         match apr.TryGetProperty "nodes" with
                                         | true, an when an.ValueKind = JsonValueKind.Array ->
                                             an.EnumerateArray() |> Seq.choose closerPrOf
                                         | _ -> Seq.empty
-                                    | _ -> Seq.empty
+                                    | _ -> missingConnection subject "the closing commit's associated-PR connection"
                             | _ -> Seq.empty)
                         |> List.ofSeq
                         |> List.distinctBy (fun p -> p.Number)
@@ -542,6 +585,10 @@ module Done =
             let boardStatus =
                 match issue.TryGetProperty "projectItems" with
                 | true, items ->
+                    // `NoStatus` is a measured answer only after the whole project-item set was read. If our
+                    // board row was hidden past the window, refuse the facts instead of manufacturing absence.
+                    requireComplete subject "this issue's project-item connection" ProjectItemsWindow items
+
                     match items.TryGetProperty "nodes" with
                     | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
                         nodes.EnumerateArray()
@@ -567,7 +614,7 @@ module Done =
                                 | _ -> Some NoStatus)
                         |> Option.defaultValue NoStatus
                     | _ -> NoStatus
-                | _ -> NoStatus
+                | _ -> missingConnection subject "this issue's project-item connection"
 
             let parent =
                 match issue.TryGetProperty "parent" with
@@ -595,7 +642,9 @@ module Done =
                   BoardStatus = boardStatus
                   Parent = parent }
 
-          with :? JsonException as e ->
+          with
+          | IncompleteFactsRead error -> Error error
+          | :? JsonException as e ->
             Error(Malformed(subject, $"the done-stamp query's response is not JSON: %s{e.Message}"))
 
     // ---- closing an issue ---------------------------------------------------------------------------
