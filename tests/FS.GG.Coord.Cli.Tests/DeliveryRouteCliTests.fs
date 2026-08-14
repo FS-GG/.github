@@ -74,8 +74,29 @@ module DeliveryRouteCliTests =
     [<Literal>]
     let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
 
+    [<Literal>]
+    let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
+
     let private sddRequiredReceipt workId =
         $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"FS-GG/FS.GG.SDD#42","subjectRevision":"%s{issueRevision}","route":"sdd-required","agent":"fixture-2298","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture sdd-required receipt for #2298","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":"%s{workId}","specHome":"work/%s{workId}/spec.md","requiredGates":["implementationReady","analyze","verify","ship"]}}"""
+
+    let private sddRequiredRecord workId =
+        let draft : StructuredDecision.RouteRecord =
+            { Schema = StructuredDecision.RouteSchema; Subject = "FS-GG/FS.GG.SDD#42"; Revision = 1
+              PreviousDigest = None; Scope = [ "fixture route scope" ]; Dependencies = [ "none" ]
+              TouchSet = [ "src/Thing.fs" ]; PolicyVersion = StructuredDecision.PolicyVersion
+              Route = Some DeliveryRoute.SddRequired; Agent = "fixture-2298"; Timestamp = "2026-01-01T00:00:00Z"
+              ReasonCodes = [ "fixture" ]; Rationale = "fixture structured route for #2298"
+              SddWorkId = Some workId; SpecHome = Some $"work/%s{workId}/spec.md"
+              RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ]; Digest = "" }
+        let record = { draft with Digest = StructuredDecision.routeDigest draft }
+        JsonSerializer.Serialize
+            {| schema = record.Schema; subject = record.Subject; revision = record.Revision
+               previousDigest = record.PreviousDigest; scope = record.Scope; dependencies = record.Dependencies
+               touchSet = record.TouchSet; policyVersion = record.PolicyVersion; route = "sdd-required"
+               agent = record.Agent; timestamp = record.Timestamp; reasonCodes = record.ReasonCodes
+               rationale = record.Rationale; sddWorkId = record.SddWorkId; specHome = record.SpecHome
+               requiredGates = record.RequiredGates; digest = record.Digest |}
 
     /// A `lightweight` receipt bound to the given `subjectRevision` — the field `claim`'s refusal turns
     /// on when it disagrees with the live issue body's own hash.
@@ -211,7 +232,7 @@ module DeliveryRouteCliTests =
             let thread = Thread []
             let transport = world thread
             let path = Path.Combine(root, "receipt.json")
-            File.WriteAllText(path, sddRequiredReceipt "no-package-2298")
+            File.WriteAllText(path, sddRequiredRecord "no-package-2298")
 
             let code, out = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
 
@@ -221,8 +242,7 @@ module DeliveryRouteCliTests =
             // assertion has always been about; `ConsolidationTaxTests` owns the locator's own contract.
             // This fixture's body is a single `Paths:` line, so its subject is EMPTY and the marker
             // carries no locators — the degenerate shape, pinned here on purpose.
-            let locatorMarker = "<!-- fsgg:delivery-route-subject-lines/v1  -->"
-            Assert.Equal<string list>([ DeliveryRouteMarker + "\n" + locatorMarker + "\n" + (sddRequiredReceipt "no-package-2298") ], thread.Bodies)
+            Assert.Equal<string list>([ StructuredRouteMarker + "\n" + (sddRequiredRecord "no-package-2298") ], thread.Bodies)
 
             let result = JsonDocument.Parse(out.Trim()).RootElement
             Assert.Equal("recorded", result.GetProperty("kind").GetString())
@@ -242,7 +262,7 @@ module DeliveryRouteCliTests =
             let thread = Thread []
             let transport = world thread
             let path = Path.Combine(root, "receipt.json")
-            File.WriteAllText(path, sddRequiredReceipt "not-ready-2298")
+            File.WriteAllText(path, sddRequiredRecord "not-ready-2298")
 
             let code, out = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
 
@@ -267,7 +287,7 @@ module DeliveryRouteCliTests =
             let thread = Thread []
             let transport = world thread
             let path = Path.Combine(root, "receipt.json")
-            File.WriteAllText(path, sddRequiredReceipt "substituted-2298")
+            File.WriteAllText(path, sddRequiredRecord "substituted-2298")
 
             let code, out = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
 
@@ -291,7 +311,7 @@ module DeliveryRouteCliTests =
             let thread = Thread []
             let transport = world thread
             let path = Path.Combine(root, "receipt.json")
-            File.WriteAllText(path, sddRequiredReceipt "ready-2298")
+            File.WriteAllText(path, sddRequiredRecord "ready-2298")
 
             let recordCode, recordOut = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
             Assert.Equal(0, recordCode)

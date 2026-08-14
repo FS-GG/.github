@@ -1,5 +1,10 @@
 # Independent review and material filing
 
+> **M4 structured-authority rule:** New review, confirmation, and acceptance evidence is written only
+> as digest-chained `<!-- fsgg:review-decision/v2 -->` JSON records described in
+> `docs/coordination/structured-decisions.md`. The v1 examples below are the temporary read-only
+> compatibility projection and must not be authored for new decisions. Narrative edits are not authority.
+
 <!-- BEGIN GENERATED: fsgg-protocol:review-policy -->
 *Generated review contract. The marker parser and receipt validator consume these exact values.*
 

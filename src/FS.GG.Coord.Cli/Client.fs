@@ -399,6 +399,9 @@ module Client =
     [<Literal>]
     let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
 
+    [<Literal>]
+    let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
+
     let private hashHex (text: string) =
         text |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -871,6 +874,41 @@ module Client =
                 |> Option.map (fun receipt -> receipt, locators)
             else None)
 
+    /// Read every v2 record in comment order. Once a v2 marker exists, malformed/tampered evidence is
+    /// an explicit refusal and can never fall through to the more permissive legacy reader. The v1
+    /// reader remains read-only until M6 after three stable cycles and zero unexplained dual-read drift.
+    let private structuredRouteLedger (subject: string) (comments: string list) =
+        let marked =
+            comments
+            |> List.choose (fun comment ->
+                if comment.StartsWith(StructuredRouteMarker + "\n", StringComparison.Ordinal) then
+                    Some(comment.Substring(StructuredRouteMarker.Length).Trim())
+                else None)
+
+        if List.isEmpty marked then Ok None
+        else
+            let decoded = marked |> List.map DeliveryRouteApplication.decodeStructured
+            let failures = decoded |> List.choose (function Error error -> Some error | Ok _ -> None)
+            if not (List.isEmpty failures) then Error failures
+            else
+                let records = decoded |> List.choose Result.toOption
+                StructuredDecision.validateRouteLedger subject records |> Result.map (fun latest -> Some(records, latest))
+
+    let private routeEvidence
+        (subject: string)
+        (body: string)
+        (comments: string list)
+        : DeliveryRoute.Verdict * SubjectMatch * StructuredDecision.RouteReadClassification =
+        let legacy = latestDeliveryRouteReceipt comments
+        match structuredRouteLedger subject comments with
+        | Error errors -> DeliveryRoute.Stale errors, NoSubjectMatch, StructuredDecision.Divergent
+        | Ok(Some(_, latest)) ->
+            let classification = StructuredDecision.classifyRoute (legacy |> Option.map fst) (Some latest)
+            DeliveryRoute.Current(StructuredDecision.toLegacyReceipt latest), CanonicalSubject, classification
+        | Ok None ->
+            let verdict, subjectMatch = decideDeliveryRouteMatch subject body legacy
+            verdict, subjectMatch, StructuredDecision.classifyRoute (legacy |> Option.map fst) None
+
     /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
     /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
     /// unreadable, rather than collapsing into a missing/lightweight decision.
@@ -879,7 +917,7 @@ module Client =
               Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
         | Error error, _
         | _, Error error -> DeliveryRoute.Unreadable [ Errors.explain error ]
-        | Ok body, Ok comments -> decideDeliveryRoute target.Canonical body (latestDeliveryRouteReceipt comments)
+        | Ok body, Ok comments -> routeEvidence target.Canonical body comments |> fun (verdict, _, _) -> verdict
 
     /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
     /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
@@ -895,15 +933,15 @@ module Client =
             // `show` reporting it is not enough if the boundary that ACTS on the row says nothing, so the
             // same note is emitted here, from the one shared spelling. The verdict is untouched: this
             // reports, it does not refuse.
-            match decideDeliveryRouteMatch target.Canonical body (latestDeliveryRouteReceipt comments) with
-            | DeliveryRoute.Current route, subjectMatch ->
+            match routeEvidence target.Canonical body comments with
+            | DeliveryRoute.Current route, subjectMatch, _ ->
                 match subjectMatch with
                 | AdditiveSubject added -> eprint (additiveSubjectNote route.Subject added)
                 | _ -> ()
 
                 Ok route
-            | DeliveryRoute.Stale reasons, _
-            | DeliveryRoute.Unreadable reasons, _ ->
+            | DeliveryRoute.Stale reasons, _, _
+            | DeliveryRoute.Unreadable reasons, _, _ ->
                 Error(Errors.Malformed(target.Canonical, "delivery route is not current: " + String.concat "; " reasons))
 
     let private offlineDeliveryRoute =
@@ -8253,7 +8291,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         match Reads.recentCommentBodies ctx.Transport issue.Owner issue.Repo issue.Number DeliveryRouteCommentWindow with
         | Error e -> nothingSubtracted (Errors.explain e)
         | Ok comments ->
-            match decideDeliveryRoute issue.Canonical body (latestDeliveryRouteReceipt comments) with
+            match routeEvidence issue.Canonical body comments |> fun (verdict, _, _) -> verdict with
             // A `lightweight` route reaches here too and answers the empty list from
             // `mandatorySddPaths` — correctly, and SILENTLY: it has no mandatory package, so there is
             // nothing we failed to read and nothing to warn about.
@@ -10287,10 +10325,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             // one: `Current` means it already equals whichever candidate (`deliveryRouteRevision` or, for
             // a pre-#2392 receipt, `legacyDeliveryRouteRevision`) `decideDeliveryRoute` matched it
             // against, so printing it back is exact either way and needs no second branch here.
-            match decideDeliveryRouteMatch target.Canonical body (latestDeliveryRouteReceipt comments) with
-            | DeliveryRoute.Current valid, subjectMatch -> Ok(valid, valid.SubjectRevision, subjectMatch)
-            | DeliveryRoute.Stale errors, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
-            | DeliveryRoute.Unreadable errors, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+            match routeEvidence target.Canonical body comments with
+            | DeliveryRoute.Current valid, subjectMatch, classification ->
+                let structuredCurrent =
+                    match structuredRouteLedger target.Canonical comments with
+                    | Ok(Some(_, current)) -> Some current
+                    | _ -> None
+                Ok(valid, valid.SubjectRevision, structuredCurrent, subjectMatch, classification)
+            | DeliveryRoute.Stale errors, _, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+            | DeliveryRoute.Unreadable errors, _, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
 
     /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
     /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
@@ -10303,7 +10346,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Ok ref ->
                 match deliveryRouteFact ctx ref with
                 | Error error -> fail error
-                | Ok(receipt, revision, subjectMatch) ->
+                | Ok(receipt, legacyRevision, structuredCurrent, subjectMatch, classification) ->
                     let route =
                         match receipt.Route with
                         | Some DeliveryRoute.Lightweight -> "lightweight"
@@ -10320,7 +10363,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | AdditiveSubject added -> eprint (additiveSubjectNote receipt.Subject added)
                     | _ -> ()
 
-                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; subjectMatch = subjectMatch.Name; addedSubjectLines = subjectMatch.AddedLines; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                    let revision = structuredCurrent |> Option.map _.Revision
+                    let digest = structuredCurrent |> Option.map _.Digest |> Option.defaultValue legacyRevision
+                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = "current"; subject = receipt.Subject; decisionRevision = legacyRevision; revision = revision; digest = digest; evidenceClassification = StructuredDecision.routeClassificationName classification; subjectMatch = subjectMatch.Name; addedSubjectLines = subjectMatch.AddedLines; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
                     ExitGreen
         | [ "record"; arg; path ] ->
             match target arg with
@@ -10328,17 +10373,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Ok ref ->
                 try
                     let raw = File.ReadAllText path
-                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number, DeliveryRouteApplication.decode raw with
+                    match Reads.recentCommentBodies ctx.Transport ref.Owner ref.Repo ref.Number DeliveryRouteCommentWindow,
+                          DeliveryRouteApplication.decodeStructured raw with
                     | Error error, _ -> fail error
-                    | _, Error reason -> eprint $"fsgg-coord-engine: delivery-route: %s{reason}"; ExitError
-                    | Ok body, Ok receipt ->
-                        let revision = deliveryRouteRevision body
-                        match DeliveryRoute.validate ref.Canonical revision receipt with
+                    | _, Error reason -> eprint $"fsgg-coord-engine: delivery-route: only structured v2 records may be written: %s{reason}"; ExitError
+                    | Ok comments, Ok candidate ->
+                        let existing =
+                            match structuredRouteLedger ref.Canonical comments with
+                            | Ok(Some(records, _)) -> Ok records
+                            | Ok None -> Ok []
+                            | Error errors -> Error errors
+                        match existing |> Result.bind (fun records -> StructuredDecision.validateRouteLedger ref.Canonical (records @ [ candidate ])) with
                         | Error errors ->
                             let detail = String.concat "; " errors
                             eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
                             ExitError
-                        | Ok valid ->
+                        | Ok validRecord ->
+                            let valid = StructuredDecision.toLegacyReceipt validRecord
                             // #2298: an `sdd-required` decision records on the strength of the AGENT'S
                             // explicit, structurally valid receipt alone.  The coordinator authoring it
                             // holds no worktree and cannot produce `work/<id>/spec.md` or the readiness
@@ -10353,15 +10404,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             if not (List.isEmpty sddNotes) then
                                 let detail = String.concat "; " sddNotes
                                 eprint $"fsgg-coord-engine: delivery-route: recording sdd-required ahead of its SDD package (%s{detail}) — the claimed worker owns producing it before touching Paths."
-                            // .github#2583 DEC-003/FR-006: the locator record is DERIVED from the very
-                            // `body` whose `deliveryRouteRevision` this receipt was just validated
-                            // against, so it inherits that proof exactly and asks the author for
-                            // nothing. `raw` stays byte-verbatim between the two markers.
-                            let marker = DeliveryRouteMarker + "\n" + renderSubjectLineLocators body + "\n" + raw.Trim()
+                            let marker = StructuredRouteMarker + "\n" + raw.Trim()
                             match Writes.postIssueComment ctx.Transport ref marker with
                             | Error error -> fail error
                             | Ok commentId ->
-                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "recorded"; subject = valid.Subject; subjectRevision = revision; commentId = commentId; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = "recorded"; subject = valid.Subject; decisionRevision = validRecord.Revision; digest = validRecord.Digest; commentId = commentId; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
                                 ExitGreen
                 with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
         | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError

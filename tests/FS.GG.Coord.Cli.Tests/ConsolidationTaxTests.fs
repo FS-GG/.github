@@ -320,25 +320,58 @@ module ConsolidationTaxTests =
     let private lightweightReceipt (subjectRevision: string) =
         $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"FS-GG/FS.GG.SDD#42","subjectRevision":"%s{subjectRevision}","route":"lightweight","agent":"fixture-2583","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture lightweight receipt for .github#2583","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
 
+    let private structuredLightweightRecord () =
+        let draft : StructuredDecision.RouteRecord =
+            { Schema = StructuredDecision.RouteSchema; Subject = "FS-GG/FS.GG.SDD#42"; Revision = 1
+              PreviousDigest = None; Scope = [ "consolidation contract" ]; Dependencies = [ "none" ]
+              TouchSet = [ "src/FS.GG.Coord.Cli/Client.fs" ]; PolicyVersion = StructuredDecision.PolicyVersion
+              Route = Some DeliveryRoute.Lightweight; Agent = "fixture-2583"; Timestamp = "2026-01-01T00:00:00Z"
+              ReasonCodes = [ "structured" ]; Rationale = "body is narrative"; SddWorkId = None
+              SpecHome = None; RequiredGates = []; Digest = "" }
+        let record = { draft with Digest = StructuredDecision.routeDigest draft }
+        record,
+        JsonSerializer.Serialize
+            {| schema = record.Schema; subject = record.Subject; revision = record.Revision
+               previousDigest = record.PreviousDigest; scope = record.Scope; dependencies = record.Dependencies
+               touchSet = record.TouchSet; policyVersion = record.PolicyVersion; route = "lightweight"
+               agent = record.Agent; timestamp = record.Timestamp; reasonCodes = record.ReasonCodes
+               rationale = record.Rationale; sddWorkId = record.SddWorkId; specHome = record.SpecHome
+               requiredGates = record.RequiredGates; digest = record.Digest |}
+
     /// RECORD FIRST, THEN EDIT, THEN SHOW — the real sequence, and the reason the locator marker under
     /// test is the one PRODUCTION wrote rather than one this file authored.
     let private recordThenEdit (originalBody: string) (editedBody: string) =
         let world = World originalBody
         let transport = transportFor world
-        let receiptPath = Path.Combine(Path.GetTempPath(), "fsgg-2583-receipt-" + Guid.NewGuid().ToString "n" + ".json")
-        File.WriteAllText(receiptPath, lightweightReceipt (revision originalBody))
-
-        try
-            let recordCode, recordOut, _ = runRoute transport [ "delivery-route"; "record"; "FS.GG.SDD#42"; receiptPath ]
-            Assert.Equal(0, recordCode)
-            Assert.Equal("recorded", JsonDocument.Parse(recordOut.Trim()).RootElement.GetProperty("kind").GetString())
-
-            world.Body <- editedBody
-            runRoute transport [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
-        finally
-            try File.Delete receiptPath with _ -> ()
+        // M4 retains this evidence as READ-ONLY compatibility. New writes are v2 structured records;
+        // seeding the exact historical bytes is the representative legacy replay.
+        world.Seed(DeliveryRouteMarker + "\n" + locatorLine originalBody + "\n" + lightweightReceipt (revision originalBody))
+        world.Body <- editedBody
+        runRoute transport [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
 
     let private shown (out: string) = JsonDocument.Parse(out.Trim()).RootElement
+
+    [<Fact>]
+    let ``M4 body-only edits neither revoke nor alter a structured route authorization`` () =
+        let world = World "Original narrative\nPaths: src/A.fs"
+        let transport = transportFor world
+        let record, json = structuredLightweightRecord ()
+        let path = Path.Combine(Path.GetTempPath(), "fsgg-m4-route-" + Guid.NewGuid().ToString "n" + ".json")
+        File.WriteAllText(path, json)
+        try
+            let recorded, _, _ = runRoute transport [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+            Assert.Equal(0, recorded)
+            world.Body <- "Completely rewritten human narrative\nPaths: docs/**\nBlocked on: human/decision"
+            let code, output, _ = runRoute transport [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+            Assert.Equal(0, code)
+            let result = shown output
+            Assert.Equal("structured-only", result.GetProperty("evidenceClassification").GetString())
+            Assert.Equal(record.Digest, result.GetProperty("decisionRevision").GetString())
+            Assert.Equal(record.Revision, result.GetProperty("revision").GetInt32())
+            Assert.Equal(record.Digest, result.GetProperty("digest").GetString())
+            Assert.Equal("lightweight", result.GetProperty("route").GetString())
+        finally
+            try File.Delete path with _ -> ()
 
     // ---- edits that ADD ONLY: route-neutral (FR-001 / AC-001) ------------------------------------------
 
@@ -498,7 +531,7 @@ module ConsolidationTaxTests =
     // ---- the locator record: derived, fail-closed (FR-006 / FR-007) ------------------------------------
 
     [<Fact>]
-    let ``#2583 record derives the locator marker and leaves the authored receipt JSON byte-verbatim`` () =
+    let ``M4 legacy route records are readable but the write path refuses to author another v1 record`` () =
         forEachBody (fun _ body ->
             let world = World body
             let transport = transportFor world
@@ -508,10 +541,8 @@ module ConsolidationTaxTests =
 
             try
                 let code, _, _ = runRoute transport [ "delivery-route"; "record"; "FS.GG.SDD#42"; receiptPath ]
-                Assert.Equal(0, code)
-
-                // Exactly three parts, in this order, and the third is the author's bytes unchanged.
-                Assert.Equal<string list>([ DeliveryRouteMarker + "\n" + locatorLine body + "\n" + receipt ], world.Bodies)
+                Assert.Equal(1, code)
+                Assert.Empty(world.Bodies)
             finally
                 try File.Delete receiptPath with _ -> ())
 
@@ -685,21 +716,14 @@ module ConsolidationTaxTests =
         forEachBody (fun _ body ->
             let world = World body
             let transport = transportFor world
-            let receiptPath = Path.Combine(Path.GetTempPath(), "fsgg-2583-claim-" + Guid.NewGuid().ToString "n" + ".json")
-            File.WriteAllText(receiptPath, lightweightReceipt (revision body))
+            world.Seed(DeliveryRouteMarker + "\n" + locatorLine body + "\n" + lightweightReceipt (revision body))
+            world.Body <- body + consolidationBlock
 
-            try
-                let recorded, _, _ = runRoute transport [ "delivery-route"; "record"; "FS.GG.SDD#42"; receiptPath ]
-                Assert.Equal(0, recorded)
-                world.Body <- body + consolidationBlock
-
-                // `Client.claim` runs the SAME route check (`requireCurrentDeliveryRoute`) and then goes
-                // on to a board bootstrap this fixture does not serve. The claim's own exit code is not
-                // the subject here — passing the route check is, and the notice is what proves it did.
-                let _, _, err = runClaim transport [ "claim"; "FS.GG.SDD#42" ]
-                Assert.Contains("3 subject line(s) added since this route was decided", err)
-            finally
-                try File.Delete receiptPath with _ -> ())
+            // `Client.claim` runs the SAME route check (`requireCurrentDeliveryRoute`) and then goes
+            // on to a board bootstrap this fixture does not serve. The claim's own exit code is not
+            // the subject here — passing the route check is, and the notice is what proves it did.
+            let _, _, err = runClaim transport [ "claim"; "FS.GG.SDD#42" ]
+            Assert.Contains("3 subject line(s) added since this route was decided", err))
 
     [<Fact>]
     let ``#2583 the claim boundary stays SILENT when the match is canonical`` () =
@@ -733,25 +757,13 @@ module ConsolidationTaxTests =
     [<Fact>]
     let ``#2583 the line-wise subject and the joined subject agree on every corpus body`` () =
         forEachBody (fun name body ->
-            // `deliveryRouteSubject` is `deliveryRouteSubjectLines` joined and nothing else. Measured
-            // here through the observable consequence: a receipt whose `subjectRevision` is the JOINED
-            // form is accepted by `record`, whose locator marker is built from the LINE-WISE form, and
-            // `show` then resolves it canonically with zero additions.
+            // The v1 record is seeded as migration evidence; only reads remain legal after M4.
             let world = World body
             let transport = transportFor world
-            let receiptPath = Path.Combine(Path.GetTempPath(), "fsgg-2583-agree-" + Guid.NewGuid().ToString "n" + ".json")
-            File.WriteAllText(receiptPath, lightweightReceipt (revision body))
-
-            try
-                let recorded, _, _ = runRoute transport [ "delivery-route"; "record"; "FS.GG.SDD#42"; receiptPath ]
-                Assert.Equal(0, recorded)
-
-                let code, out, _ = runRoute transport [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
-                Assert.Equal(0, code)
-
-                let result = shown out
-                Assert.Equal("canonical", result.GetProperty("subjectMatch").GetString())
-                Assert.Equal(revision body, result.GetProperty("subjectRevision").GetString())
-                Assert.True(List.length (subjectLines body) > 0, $"corpus body %s{name} has no subject lines at all")
-            finally
-                try File.Delete receiptPath with _ -> ())
+            world.Seed(DeliveryRouteMarker + "\n" + locatorLine body + "\n" + lightweightReceipt (revision body))
+            let code, out, _ = runRoute transport [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+            Assert.Equal(0, code)
+            let result = shown out
+            Assert.Equal("canonical", result.GetProperty("subjectMatch").GetString())
+            Assert.Equal(revision body, result.GetProperty("decisionRevision").GetString())
+            Assert.True(List.length (subjectLines body) > 0, $"corpus body %s{name} has no subject lines at all"))

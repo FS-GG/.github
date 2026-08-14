@@ -2,6 +2,8 @@ namespace FS.GG.Coord
 
 module Driver =
     open Batch
+    open System
+    open System.Text.Json
 
     type Housekeeping =
         { HasHostIdentity: bool
@@ -30,6 +32,96 @@ module Driver =
 
     type ReviewComment =
         { Id: int64; Url: string; Body: string }
+
+    [<Literal>]
+    let private StructuredReviewMarker = "<!-- fsgg:review-decision/v2 -->"
+
+    let private decodeStructuredReview (raw: string) : Result<StructuredDecision.ReviewRecord, string> =
+        let required (name: string) (root: JsonElement) =
+            match root.TryGetProperty name with
+            | true, value -> value
+            | _ -> invalidArg name "required field is missing"
+        let text (name: string) (root: JsonElement) =
+            let value = required name root
+            if value.ValueKind <> JsonValueKind.String then invalidArg name "must be a string"
+            value.GetString()
+        let optionalText (name: string) (root: JsonElement) =
+            match root.TryGetProperty name with
+            | false, _ -> None
+            | true, value when value.ValueKind = JsonValueKind.Null -> None
+            | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+            | _ -> invalidArg name "must be a string or null"
+        let texts (name: string) (root: JsonElement) =
+            let value = required name root
+            if value.ValueKind <> JsonValueKind.Array then invalidArg name "must be an array"
+            value.EnumerateArray()
+            |> Seq.map (fun entry ->
+                if entry.ValueKind <> JsonValueKind.String then invalidArg name "must contain strings"
+                entry.GetString())
+            |> List.ofSeq
+        let number (name: string) (root: JsonElement) =
+            match (required name root).TryGetInt32() with
+            | true, value -> value
+            | _ -> invalidArg name "must be a 32-bit integer"
+        try
+            use document = JsonDocument.Parse raw
+            let root = document.RootElement
+            if root.ValueKind <> JsonValueKind.Object then invalidArg "record" "must be an object"
+            let kind =
+                match text "kind" root with
+                | "initial" -> StructuredDecision.Initial
+                | "confirmation" -> StructuredDecision.Confirmation
+                | "acceptance" -> StructuredDecision.Acceptance
+                | _ -> invalidArg "kind" "must be initial, confirmation, or acceptance"
+            let verdict =
+                match text "verdict" root with
+                | "pass" -> StructuredDecision.Pass
+                | "changes-required" -> StructuredDecision.ChangesRequired
+                | "accepted" -> StructuredDecision.Accepted
+                | _ -> invalidArg "verdict" "must be pass, changes-required, or accepted"
+            Ok
+                { Schema = text "schema" root
+                  Subject = text "subject" root
+                  Revision = number "revision" root
+                  PreviousDigest = optionalText "previousDigest" root
+                  HeadSha = text "headSha" root
+                  Critic = text "critic" root
+                  Verdict = verdict
+                  AcceptedExceptions = texts "acceptedExceptions" root
+                  RouteApplicability = text "routeApplicability" root
+                  RouteEvidence = texts "routeEvidence" root
+                  PolicyVersion = text "policyVersion" root
+                  Kind = kind
+                  Round = number "round" root
+                  InitialReview = optionalText "initialReview" root
+                  PrecedingReview = optionalText "precedingReview" root
+                  Timestamp = text "timestamp" root
+                  Digest = text "digest" root }
+        with error -> Error error.Message
+
+    let private projectStructuredReview (comment: ReviewComment) (record: StructuredDecision.ReviewRecord) =
+        let verdict =
+            match record.Verdict with
+            | StructuredDecision.Pass -> "pass"
+            | _ -> "changes-required"
+        let initialReview = record.InitialReview |> Option.defaultValue ""
+        let precedingReview = record.PrecedingReview |> Option.defaultValue ""
+        let routeEvidence =
+            match record.RouteApplicability, record.RouteEvidence with
+            | "meaningful", [ built; command; compared; observed ] ->
+                $"route-applicability: meaningful\nbuilt-artifact: %s{built}\nexecuted-command: %s{command}\ncompared-routes: %s{compared}\nobserved-result: %s{observed}"
+            | "not-meaningful", [ reason ] ->
+                $"route-applicability: not-meaningful\nroute-not-meaningful-reason: %s{reason}"
+            | _ -> "route-applicability: unreadable"
+        let body =
+            match record.Kind with
+            | StructuredDecision.Initial ->
+                $"<!-- fsgg:independent-review:v1 -->\ncritic: %s{record.Critic}\nreviewed-head: %s{record.HeadSha}\nverdict: %s{verdict}\n%s{routeEvidence}"
+            | StructuredDecision.Confirmation ->
+                $"<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: %s{initialReview}\ncritic: %s{record.Critic}\nround: %d{record.Round}\npreceding-review: %s{precedingReview}\nreviewed-head: %s{record.HeadSha}\nverdict: %s{verdict}\n%s{routeEvidence}"
+            | StructuredDecision.Acceptance ->
+                $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{record.HeadSha}\ninitial-review: %s{initialReview}\nlatest-confirmation: %s{precedingReview}"
+        { comment with Body = body }
 
     // ---- HOISTED MARKER PRIMITIVES (.github#2175) ----------------------------------------------------
     //
@@ -170,12 +262,70 @@ module Driver =
           RepairPhases = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.RepairPhaseMarker c.Body)
           Acceptances = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.AcceptanceMarker c.Body) }
 
+    /// Compare only fields that confer an effective review decision. Chain-link URLs are deliberately
+    /// excluded because a migrated v2 chain is posted in new comments and therefore has different URLs;
+    /// exact head, critic, verdict, round, and runtime-route evidence remain compared.
+    let private effectiveReviewSignature kind (comment: ReviewComment) =
+        let routeFields =
+            [ "route-applicability"; "built-artifact"; "executed-command"; "compared-routes"
+              "observed-result"; "route-not-meaningful-reason" ]
+        let keys =
+            match kind with
+            | "initial" -> [ "critic"; "reviewed-head"; "verdict" ] @ routeFields
+            | "confirmation" -> [ "critic"; "round"; "reviewed-head"; "verdict" ] @ routeFields
+            | _ -> [ "accepted-head" ]
+        keys |> List.map (fun key -> key, fieldValues key comment.Body)
+
+    let private equivalentReviewDecisions (legacy: MarkerGroups) (structured: MarkerGroups) =
+        let signatures kind comments = comments |> List.map (effectiveReviewSignature kind)
+        signatures "initial" legacy.Initial = signatures "initial" structured.Initial
+        && signatures "confirmation" legacy.Confirmations = signatures "confirmation" structured.Confirmations
+        && signatures "acceptance" legacy.Acceptances = signatures "acceptance" structured.Acceptances
+
+    /// Dual-read boundary. Legacy comments remain readable, but the presence of any v2 record makes the
+    /// validated v2 ledger authoritative. Invalid v2 never falls back to legacy. When both forms are
+    /// present, their effective decision fields are classified as equivalent or divergent; either way,
+    /// only v2 is authoritative. M6 may remove the legacy arm only after three stable cycles report no
+    /// unexplained classified difference.
+    let private normalizeStructuredReviews (comments: ReviewComment list) =
+        let marked =
+            comments
+            |> List.choose (fun comment ->
+                if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
+                    Some(comment, comment.Body.Substring(StructuredReviewMarker.Length).Trim())
+                else None)
+        if List.isEmpty marked then Ok(comments, "legacy-only", None)
+        else
+            let decoded = marked |> List.map (fun (comment, raw) -> comment, decodeStructuredReview raw)
+            let errors = decoded |> List.choose (fun (_, result) -> match result with Error e -> Some e | Ok _ -> None)
+            if not (List.isEmpty errors) then Error errors
+            else
+                let pairs = decoded |> List.choose (fun (comment, result) -> result |> Result.toOption |> Option.map (fun record -> comment, record))
+                let records = pairs |> List.map snd
+                let subject = records.Head.Subject
+                match StructuredDecision.validateReviewLedger subject records with
+                | Error validation -> Error validation
+                | Ok _ ->
+                    let structured = pairs |> List.map (fun (comment, record) -> projectStructuredReview comment record)
+                    let legacy = classifyMarkers comments
+                    let legacyPresent =
+                        not (List.isEmpty legacy.Initial)
+                        || not (List.isEmpty legacy.Confirmations)
+                        || not (List.isEmpty legacy.Acceptances)
+                    let classification =
+                        if not legacyPresent then "structured-only"
+                        elif records |> List.exists (fun record -> not (List.isEmpty record.AcceptedExceptions)) then "divergent"
+                        elif equivalentReviewDecisions legacy (classifyMarkers structured) then "equivalent"
+                        else "divergent"
+                    Ok(structured, classification, Some subject)
+
     /// The structural facts `Review.fs` classifies its typed protocol states from — reused, not
     /// re-derived: every field here is read off `classifyMarkers`' groups and the same `field`/
     /// `fieldValues` readers `parseReviewCommentsCore` uses, so this is additive to the public surface
     /// rather than a second parser (#2175 acceptance 11).
     type ReviewPhaseFacts =
-        { InitialCount: int
+        { StructuredErrors: string list
+          InitialCount: int
           InitialPresent: bool
           InitialHeadSha: string option
           InitialVerdict: string option
@@ -223,7 +373,11 @@ module Driver =
         && identity.Trim().StartsWith("fsgg-critic-", System.StringComparison.OrdinalIgnoreCase)
 
     let reviewPhaseFacts (comments: ReviewComment list) : ReviewPhaseFacts =
-        let groups = classifyMarkers comments
+        let normalized, structuredErrors =
+            match normalizeStructuredReviews comments with
+            | Ok(projected, _, _) -> projected, []
+            | Error errors -> comments, errors
+        let groups = classifyMarkers normalized
 
         // `List.tryHead` reads the FIRST initial-marker comment when there is exactly one — the only
         // shape a caller should trust. Two or more is a distinct, duplicate-marker fact
@@ -261,7 +415,8 @@ module Driver =
                     |> Option.map (fun c -> nearMissFieldHints (requiredFieldsFor Protocol.reviewPolicy.InitialMarker) c.Body)
                     |> Option.defaultValue []
 
-        { InitialCount = List.length groups.Initial
+        { StructuredErrors = structuredErrors
+          InitialCount = List.length groups.Initial
           InitialPresent = not (List.isEmpty groups.Initial)
           InitialHeadSha = initialHeadSha
           InitialVerdict = initialVerdict
@@ -308,7 +463,10 @@ module Driver =
     type LiveReviewComments =
         { Live: ReviewComment list
           Retired: ChainRetirement list
-          Diagnostics: string list }
+          Diagnostics: string list
+          StructuredSubject: string option
+          EvidenceClassification: string
+          StructuredErrors: string list }
 
     /// Partition a PR's review comments into the chain that BINDS the current head and the chains that a
     /// host acceptance already settled at a head the PR has moved off (.github#2527).
@@ -347,8 +505,14 @@ module Driver =
     /// invalidates the prior accepted evidence`) — so this change cannot alter any verdict on a PR that
     /// carries one chain, which is every PR the protocol was already able to describe.
     let liveReviewComments (currentHead: string) (comments: ReviewComment list) : LiveReviewComments =
-        let groups = classifyMarkers comments
-        let unchanged = { Live = groups.Ordered; Retired = []; Diagnostics = [] }
+        let normalized, classification, structuredSubject, structuredErrors =
+            match normalizeStructuredReviews comments with
+            | Ok(projected, classification, subject) -> projected, classification, subject, []
+            | Error errors -> comments, "divergent", None, errors
+        let groups = classifyMarkers normalized
+        let unchanged =
+            { Live = groups.Ordered; Retired = []; Diagnostics = []; StructuredSubject = structuredSubject
+              EvidenceClassification = classification; StructuredErrors = structuredErrors }
 
         if List.length groups.Initial <= 1 then
             unchanged
@@ -424,9 +588,10 @@ module Driver =
                             | Ok url -> Set.contains url retiredUrls
                             | Error _ -> false))
 
-                { Live = groups.Ordered |> List.filter (belongsToRetiredChain >> not)
-                  Retired = retired
-                  Diagnostics = diagnostics }
+                { unchanged with
+                    Live = groups.Ordered |> List.filter (belongsToRetiredChain >> not)
+                    Retired = retired
+                    Diagnostics = diagnostics }
 
     let private parseReviewCommentsCore
         (trustedFacts: (bool * SemanticDiff.TrustedAudit option) option)
@@ -879,17 +1044,22 @@ module Driver =
                 |> Error
         | _ -> Error(List.ofSeq errors)
 
-    let parseReviewComments comments = parseReviewCommentsCore None comments
+    let private parseNormalized trusted comments =
+        match normalizeStructuredReviews comments with
+        | Ok(normalized, _, _) -> parseReviewCommentsCore trusted normalized
+        | Error errors -> Error errors
+
+    let parseReviewComments comments = parseNormalized None comments
 
     let parseReviewCommentsWithAudit (trustedAudit: SemanticDiff.Receipt) comments =
         // The single-receipt spelling stays available: one receipt whose own recomputation IS the whole
         // discovered population, which is the shape every pre-round-2 caller meant.
-        parseReviewCommentsCore
+        parseNormalized
             (Some(true, Some { Expected = [ trustedAudit ]; Discovered = trustedAudit.Occurrences }))
             comments
 
     let parseReviewCommentsWithFacts mechanicallyRequired trustedAudit comments =
-        parseReviewCommentsCore (Some(mechanicallyRequired, trustedAudit)) comments
+        parseNormalized (Some(mechanicallyRequired, trustedAudit)) comments
 
     type Receipt =
         { ObservedAt: int64

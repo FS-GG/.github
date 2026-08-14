@@ -90,18 +90,50 @@ run() { "$ENGINE" "$@" --worker vole-418; }
 # package exists, because the CLAIMED WORKER is the actor who produces that package, and could never be
 # claimed to do so if recording it required the package first. Each case below asserts the receipt
 # posts and reports `sddPackageReady` truthfully, never that it refuses.
-route_body='A schedulable item.
-
-Paths: src/Thing/**'
-# .github#2392: `subjectRevision` is now a hash of the route-relevant SUBJECT, not the raw body —
-# `Client.deliveryRouteSubject` drops a `Paths:`/`Class:`/`Blocked on:`/`Blocked by:` declaration line
-# (outside a fence) AND every blank line before hashing. Mirrored here the same way
-# `DeliveryRouteCliTests.fs`'s `canonicalSubject` mirrors it: `route_body` has no fences, so a `grep -Ev`
-# drop of both line families reproduces it exactly (command substitution already strips the one trailing
-# newline `grep` would otherwise add, matching `String.concat "\n"` on a body with no trailing blank line).
-route_subject="$(printf '%s' "$route_body" | grep -Ev '^ {0,3}([Pp]aths|[Cc]lass|[Bb]locked [Oo]n|[Bb]locked [Bb]y):|^[[:space:]]*$')"
-route_revision="$(printf '%s' "$route_subject" | sha256sum | awk '{print $1}')"
-printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"lightweight\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful source-bound route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}" >"$ROUTE_RECEIPT"
+# v2 binds authorization directly to its structured scope/dependencies/touch-set and no longer needs
+# this writer harness to derive a subject revision from a duplicate copy of the narrative issue body.
+route_revision=0
+route_digest=""
+write_route_record() {
+  local path="$1" selected="$2" work_id="$3" rationale="$4" next_revision previous
+  next_revision=$((route_revision + 1))
+  previous="$route_digest"
+  route_digest="$(python3 - "$path" "$selected" "$work_id" "$rationale" "$next_revision" "$previous" <<'PY'
+import hashlib, json, sys
+path, selected, work_id, rationale, revision, previous = sys.argv[1:]
+revision = int(revision)
+previous = previous or None
+work_id = work_id or None
+spec_home = f"work/{work_id}/spec.md" if work_id else None
+gates = ["implementationReady", "analyze", "verify", "ship"] if work_id else []
+record = {
+    "schema": "fsgg.coord.route-decision/v2", "subject": "FS-GG/FS.GG.SDD#42",
+    "revision": revision, "previousDigest": previous, "scope": ["fixture-route"],
+    "dependencies": ["none"], "touchSet": ["src/Thing/**"],
+    "policyVersion": "structured-decisions/1", "route": selected,
+    "agent": "fixture-route-record", "timestamp": "2026-01-01T00:00:00Z",
+    "reasonCodes": ["fixture"], "rationale": rationale, "sddWorkId": work_id,
+    "specHome": spec_home, "requiredGates": gates,
+}
+def frame(value):
+    raw = value.encode()
+    return f"{len(raw)}:{value}"
+def scalar(value): return frame(value or "")
+def strings(values): return "".join(frame(value) for value in values)
+fields = [frame(record["schema"]), frame(record["subject"]), str(revision), scalar(previous),
+          strings(record["scope"]), strings(record["dependencies"]), strings(record["touchSet"]),
+          frame(record["policyVersion"]), frame(selected), frame(record["agent"]),
+          frame(record["timestamp"]), strings(record["reasonCodes"]), frame(rationale),
+          scalar(work_id), scalar(spec_home), strings(gates)]
+record["digest"] = hashlib.sha256("|".join(fields).encode()).hexdigest()
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(record, stream, separators=(",", ":"))
+print(record["digest"])
+PY
+)"
+  route_revision="$next_revision"
+}
+write_route_record "$ROUTE_RECEIPT" lightweight "" "Stateful structured route record."
 route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 route_out="$("$ENGINE" delivery-route record FS.GG.SDD#42 "$ROUTE_RECEIPT" 2>&1)"; route_rc=$?
 route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
@@ -124,7 +156,7 @@ rm -f "$route_stale"
   || bad "#2137: stale delivery-route receipt must not post" "rc=$route_rc comments=$route_before->$route_after"
 
 route_missing_sdd="$(mktemp)"
-printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"No SDD package yet.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"does-not-exist\",\"specHome\":\"work/does-not-exist/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_missing_sdd"
+write_route_record "$route_missing_sdd" sdd-required does-not-exist "No SDD package yet."
 route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 route_out="$("$ENGINE" delivery-route record FS.GG.SDD#42 "$route_missing_sdd" 2>/dev/null)"; route_rc=$?
 route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
@@ -143,10 +175,10 @@ fi
 mkdir -p "$SDD_ROOT/work/fixture-sdd" "$SDD_ROOT/readiness/fixture-sdd"
 printf '%s\n' '# fixture' >"$SDD_ROOT/work/fixture-sdd/spec.md"
 route_sdd="$(mktemp)"
-printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"SDD readiness receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"fixture-sdd\",\"specHome\":\"work/fixture-sdd/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_sdd"
 route_sdd_case() {
   local label="$1" analysis="$2" expected_ready="$3" route_before route_after route_rc route_out
   printf '%s' "$analysis" >"$SDD_ROOT/readiness/fixture-sdd/analysis.json"
+  write_route_record "$route_sdd" sdd-required fixture-sdd "SDD readiness record: $label."
   route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
   route_out="$(FSGG_COORD_SDD_ROOT="$SDD_ROOT" "$ENGINE" delivery-route record FS.GG.SDD#42 "$route_sdd" 2>/dev/null)"; route_rc=$?
   route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
@@ -164,6 +196,7 @@ route_sdd_case "current implementationReady" '{"workId":"fixture-sdd","status":"
 # The later lock-contract legs intentionally run in the fixture's ordinary lightweight world.  Restore
 # that route through the same command rather than reaching into server state, so their precondition is
 # explicit and the SDD success probe cannot leak a checkout-local evidence dependency into another test.
+write_route_record "$ROUTE_RECEIPT" lightweight "" "Restore the ordinary structured route."
 "$ENGINE" delivery-route record FS.GG.SDD#42 "$ROUTE_RECEIPT" >/dev/null 2>&1 \
   || bad "#2137: restore the fixture's ordinary current route after SDD driver"
 rm -f "$route_sdd"

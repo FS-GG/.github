@@ -1,0 +1,188 @@
+namespace FS.GG.Coord
+
+module StructuredDecision =
+    open System
+    open System.Globalization
+    open System.Security.Cryptography
+    open System.Text
+
+    [<Literal>]
+    let RouteSchema = "fsgg.coord.route-decision/v2"
+
+    [<Literal>]
+    let ReviewSchema = "fsgg.coord.review-decision/v2"
+
+    [<Literal>]
+    let PolicyVersion = "structured-decisions/1"
+
+    type RouteRecord =
+        { Schema: string; Subject: string; Revision: int; PreviousDigest: string option
+          Scope: string list; Dependencies: string list; TouchSet: string list; PolicyVersion: string
+          Route: DeliveryRoute.Route option; Agent: string; Timestamp: string; ReasonCodes: string list
+          Rationale: string; SddWorkId: string option; SpecHome: string option; RequiredGates: string list
+          Digest: string }
+
+    type ReviewKind = Initial | Confirmation | Acceptance
+    type ReviewVerdict = Pass | ChangesRequired | Accepted
+
+    type ReviewRecord =
+        { Schema: string; Subject: string; Revision: int; PreviousDigest: string option
+          HeadSha: string; Critic: string; Verdict: ReviewVerdict; AcceptedExceptions: string list
+          RouteApplicability: string; RouteEvidence: string list; PolicyVersion: string
+          Kind: ReviewKind; Round: int; InitialReview: string option
+          PrecedingReview: string option; Timestamp: string; Digest: string }
+
+    type RouteReadClassification = StructuredOnly | LegacyOnly | Equivalent | Divergent
+
+    let private frame (value: string) = $"%d{Encoding.UTF8.GetByteCount value}:%s{value}"
+    let private scalar value = value |> Option.defaultValue "" |> frame
+    let private strings values = values |> List.map frame |> String.concat ""
+    let private digest fields =
+        fields
+        |> String.concat "|"
+        |> Encoding.UTF8.GetBytes
+        |> SHA256.HashData
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+
+    let private routeName = function
+        | Some DeliveryRoute.Lightweight -> "lightweight"
+        | Some DeliveryRoute.SddRequired -> "sdd-required"
+        | None -> ""
+
+    let routeDigest (record: RouteRecord) =
+        digest
+            [ frame record.Schema; frame record.Subject; string record.Revision; scalar record.PreviousDigest
+              strings record.Scope; strings record.Dependencies; strings record.TouchSet; frame record.PolicyVersion
+              frame (routeName record.Route); frame record.Agent; frame record.Timestamp; strings record.ReasonCodes
+              frame record.Rationale; scalar record.SddWorkId; scalar record.SpecHome; strings record.RequiredGates ]
+
+    let private kindName = function Initial -> "initial" | Confirmation -> "confirmation" | Acceptance -> "acceptance"
+    let private verdictName = function Pass -> "pass" | ChangesRequired -> "changes-required" | Accepted -> "accepted"
+
+    let reviewDigest (record: ReviewRecord) =
+        digest
+            [ frame record.Schema; frame record.Subject; string record.Revision; scalar record.PreviousDigest
+              frame record.HeadSha; frame record.Critic; frame (verdictName record.Verdict)
+              strings record.AcceptedExceptions; frame record.RouteApplicability; strings record.RouteEvidence
+              frame record.PolicyVersion; frame (kindName record.Kind)
+              string record.Round; scalar record.InitialReview; scalar record.PrecedingReview; frame record.Timestamp ]
+
+    let private blank field value = if String.IsNullOrWhiteSpace value then [ $"%s{field} is required" ] else []
+    let private values field items =
+        if List.isEmpty items || items |> List.exists String.IsNullOrWhiteSpace then
+            [ $"%s{field} must contain one or more non-empty values" ]
+        else []
+    let private timestamp (value: string) =
+        match DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind) with
+        | true, _ -> []
+        | _ -> [ "timestamp must be an ISO-8601 instant" ]
+    let private sha (value: string) =
+        value.Length = 40 && value |> Seq.forall Uri.IsHexDigit
+
+    let private chainErrors getRevision getPrevious getDigest calculate records =
+        records
+        |> List.mapi (fun index record ->
+            let expectedRevision = index + 1
+            let expectedPrevious = if index = 0 then None else Some(getDigest records[index - 1])
+            [ if getRevision record <> expectedRevision then
+                  yield $"revision must be contiguous and append-only: expected %d{expectedRevision}"
+              if getPrevious record <> expectedPrevious then
+                  yield $"revision %d{expectedRevision} previousDigest does not bind the preceding record"
+              if getDigest record <> calculate record then
+                  yield $"revision %d{expectedRevision} digest does not match its structured inputs" ])
+        |> List.concat
+
+    let validateRouteLedger (expectedSubject: string) (records: RouteRecord list) =
+        let errors =
+            [ if List.isEmpty records then yield "structured route ledger is empty"
+              for record in records do
+                  if record.Schema <> RouteSchema then yield $"schema must be '%s{RouteSchema}'"
+                  if record.Subject <> expectedSubject then yield "subject does not match the routed item"
+                  if record.PolicyVersion <> PolicyVersion then yield $"policyVersion must be '%s{PolicyVersion}'"
+                  yield! blank "agent" record.Agent
+                  yield! blank "timestamp" record.Timestamp
+                  yield! timestamp record.Timestamp
+                  yield! values "scope" record.Scope
+                  yield! values "touchSet" record.TouchSet
+                  yield! values "reasonCodes" record.ReasonCodes
+                  yield! blank "rationale" record.Rationale
+                  let receipt : DeliveryRoute.Receipt =
+                      { Schema = DeliveryRoute.Schema; Subject = record.Subject; SubjectRevision = record.Digest
+                        Route = record.Route; Agent = record.Agent; Timestamp = record.Timestamp
+                        ReasonCodes = record.ReasonCodes; Rationale = record.Rationale
+                        DeclaredImpacts = [ "structured-scope" ]; ObservedFacts = [ "structured-dependencies" ]
+                        SddWorkId = record.SddWorkId; SpecHome = record.SpecHome; RequiredGates = record.RequiredGates }
+                  match DeliveryRoute.validate record.Subject record.Digest receipt with
+                  | Ok _ -> ()
+                  | Error routeErrors -> yield! routeErrors
+              yield! chainErrors (fun (record: RouteRecord) -> record.Revision) _.PreviousDigest _.Digest routeDigest records ]
+        if List.isEmpty errors then Ok(List.last records) else Error errors
+
+    let validateReviewLedger (expectedSubject: string) (records: ReviewRecord list) =
+        let firstCritic = records |> List.tryHead |> Option.map _.Critic
+        let errors =
+            [ if List.isEmpty records then yield "structured review ledger is empty"
+              match records with
+              | first :: _ when first.Kind <> Initial -> yield "structured review ledger must begin with an initial record"
+              | _ -> ()
+              for record in records do
+                  if record.Schema <> ReviewSchema then yield $"schema must be '%s{ReviewSchema}'"
+                  if record.Subject <> expectedSubject then yield "subject does not match the pull request"
+                  if record.PolicyVersion <> PolicyVersion then yield $"policyVersion must be '%s{PolicyVersion}'"
+                  yield! blank "headSha" record.HeadSha
+                  if not (sha record.HeadSha) then yield "headSha must be an exact 40-hex commit SHA"
+                  yield! blank "critic" record.Critic
+                  if record.RouteApplicability <> "meaningful" && record.RouteApplicability <> "not-meaningful" then
+                      yield "routeApplicability must be meaningful or not-meaningful"
+                  if record.RouteApplicability = "meaningful" && List.length record.RouteEvidence <> 4 then
+                      yield "meaningful route evidence must contain built artifact, command, comparison, and result"
+                  if record.RouteApplicability = "not-meaningful" && List.length record.RouteEvidence <> 1 then
+                      yield "not-meaningful route evidence must contain exactly one reason"
+                  yield! blank "timestamp" record.Timestamp
+                  yield! timestamp record.Timestamp
+                  if record.Revision < 1 then yield "revision must be positive"
+                  match record.Kind, record.Verdict with
+                  | Acceptance, Accepted -> ()
+                  | Acceptance, _ -> yield "acceptance records must carry verdict accepted"
+                  | (Initial | Confirmation), (Pass | ChangesRequired) -> ()
+                  | _ -> yield "review records must carry pass or changes-required"
+                  if record.Kind = Initial && record.Round <> 0 then yield "initial review round must be zero"
+                  if record.Kind = Confirmation && record.Round < 1 then yield "confirmation round must be positive"
+                  if record.Kind <> Initial && record.InitialReview |> Option.exists String.IsNullOrWhiteSpace then
+                      yield "initialReview must be non-empty when present"
+                  if record.Kind <> Initial && record.InitialReview.IsNone then
+                      yield "confirmation and acceptance records must bind the initial review"
+                  if record.Kind <> Initial && record.PrecedingReview.IsNone then
+                      yield "confirmation and acceptance records must bind the preceding review"
+                  if firstCritic <> Some record.Critic then yield "every record in one review ledger must bind the same critic"
+                  if record.Kind = Acceptance && not (List.isEmpty record.AcceptedExceptions) then
+                      yield "accepted exceptions belong to critic review records, not host acceptance"
+                  if record.AcceptedExceptions |> List.exists String.IsNullOrWhiteSpace then
+                      yield "acceptedExceptions must contain only non-empty identifiers"
+              yield! chainErrors (fun (record: ReviewRecord) -> record.Revision) _.PreviousDigest _.Digest reviewDigest records ]
+        if List.isEmpty errors then Ok records else Error errors
+
+    let classifyRoute (legacy: DeliveryRoute.Receipt option) (structured: RouteRecord option) =
+        match legacy, structured with
+        | None, Some _ -> StructuredOnly
+        | Some _, None -> LegacyOnly
+        | Some old, Some fresh ->
+            if old.Route = fresh.Route
+               && old.SddWorkId = fresh.SddWorkId
+               && old.SpecHome = fresh.SpecHome
+               && old.RequiredGates = fresh.RequiredGates then Equivalent else Divergent
+        | None, None -> Divergent
+
+    let routeClassificationName = function
+        | StructuredOnly -> "structured-only"
+        | LegacyOnly -> "legacy-only"
+        | Equivalent -> "equivalent"
+        | Divergent -> "divergent"
+
+    let toLegacyReceipt (record: RouteRecord) : DeliveryRoute.Receipt =
+        { Schema = DeliveryRoute.Schema; Subject = record.Subject; SubjectRevision = record.Digest
+          Route = record.Route; Agent = record.Agent; Timestamp = record.Timestamp
+          ReasonCodes = record.ReasonCodes; Rationale = record.Rationale
+          DeclaredImpacts = [ "structured-scope" ]; ObservedFacts = [ "structured-dependencies" ]
+          SddWorkId = record.SddWorkId; SpecHome = record.SpecHome; RequiredGates = record.RequiredGates }

@@ -41,6 +41,8 @@
     <Compile Include="IntakeReceipt.fs" />
     <Compile Include="DeliveryRoute.fsi" />
     <Compile Include="DeliveryRoute.fs" />
+    <Compile Include="StructuredDecision.fsi" />
+    <Compile Include="StructuredDecision.fs" />
     <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
     <Compile Include="Markdown.fsi" />

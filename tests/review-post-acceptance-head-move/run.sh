@@ -230,7 +230,7 @@ anchor = "    let liveReviewComments (currentHead: string) (comments: ReviewComm
 end = "    let private parseReviewCommentsCore"
 start = src.index(anchor)
 stop = src.index(end)
-mutant = anchor + "        { Live = comments; Retired = []; Diagnostics = [] }\n\n"
+mutant = anchor + "        { Live = comments; Retired = []; Diagnostics = []; StructuredSubject = None; EvidenceClassification = \"legacy-only\"; StructuredErrors = [] }\n\n"
 open(path, "w").write(src[:start] + mutant + src[stop:])
 print("mutated: liveReviewComments reduced to the identity function")
 PY

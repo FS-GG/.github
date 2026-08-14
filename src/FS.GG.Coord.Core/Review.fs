@@ -476,7 +476,9 @@ module Review =
         : State * NextAction =
         let phaseFacts = Driver.reviewPhaseFacts live
 
-        if phaseFacts.CriticIdentity = Some binding.ImplementerIdentity then
+        if not (List.isEmpty phaseFacts.StructuredErrors) then
+            MalformedEvidence phaseFacts.StructuredErrors, Park(String.concat "; " phaseFacts.StructuredErrors)
+        elif phaseFacts.CriticIdentity = Some binding.ImplementerIdentity then
             let reason = "the critic identity equals the implementer identity; an implementer cannot act as its own critic"
             GuardViolation reason, Park reason
         elif phaseFacts.InitialCount > 1 then
@@ -602,9 +604,17 @@ module Review =
             // and the verdict read the same answer — so what the state was decided from and what the
             // verdict reports as retired can never disagree.
             let partition = Driver.liveReviewComments binding.HeadSha facts.Comments
-            let state, action =
-                classify binding facts partition.Live partition.Diagnostics successionGranted repairAssertionGranted
-            Ok(makeVerdict binding partition.Retired state action)
+            let expectedSubject = $"%s{binding.ItemRef}/pr/%d{binding.Pr}"
+            if not (List.isEmpty partition.StructuredErrors) then
+                let state = MalformedEvidence partition.StructuredErrors
+                Ok(makeVerdict binding partition.Retired state (Park(String.concat "; " partition.StructuredErrors)))
+            elif partition.StructuredSubject |> Option.exists ((<>) expectedSubject) then
+                let reason = $"structured review subject does not match '%s{expectedSubject}'"
+                Ok(makeVerdict binding partition.Retired (MalformedEvidence [ reason ]) (Park reason))
+            else
+                let state, action =
+                    classify binding facts partition.Live partition.Diagnostics successionGranted repairAssertionGranted
+                Ok(makeVerdict binding partition.Retired state action)
 
     let advance freshnessToken actionKey binding facts successionGranted repairAssertionGranted =
         match inspect binding facts successionGranted repairAssertionGranted with

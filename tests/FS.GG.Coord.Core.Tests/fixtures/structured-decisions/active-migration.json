@@ -1,0 +1,17 @@
+{
+  "schema": "fsgg.coord.structured-decision-migration-fixture/1",
+  "subject": "FS-GG/.github#2583",
+  "legacy": { "route": "lightweight", "subjectBinding": "body-derived-v1" },
+  "structured": {
+    "revision": 1,
+    "route": "lightweight",
+    "scope": ["coordination route authorization"],
+    "dependencies": ["FS-GG/.github#2583"],
+    "touchSet": ["src/FS.GG.Coord.Cli/Client.fs"],
+    "policyVersion": "structured-decisions/1"
+  },
+  "bodyBefore": "Consolidate duplicate coordination work.\nPaths: src/FS.GG.Coord.Cli/Client.fs",
+  "bodyAfter": "Consolidate duplicate coordination work.\nPaths: src/FS.GG.Coord.Cli/Client.fs\n\nEditorial note added after authorization.",
+  "expectedClassification": "equivalent",
+  "expectedBodyEditEffect": "none"
+}
