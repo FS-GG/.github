@@ -233,10 +233,17 @@ jobs:
       # The producer bodies whose digests the registry declares, at `main`. Public, so the default
       # token suffices. `.repos` holds ONLY these — the clean root the check requires (see header).
       #
-      # The producer set is DERIVED from the registry's own `source:` prefixes, not hardcoded: a new
-      # skill-producing repo starts being fetched the moment its first row lands, with nothing to keep
-      # in sync by hand. (Detection hardcodes the list; here the reconcile must not silently skip a
-      # producer the registry already names.)
+      # The producer set is DERIVED, from `fsgg-skill-registry-check --producers` — the FS-GG
+      # repositories `registry/repos.yml` rosters — and the reconcile's own `roster_reachable` arm
+      # reds if any of them is absent from `--repos-root`, so this loop and the gate cannot drift.
+      #
+      # IT USED TO DERIVE FROM THE REGISTRY'S OWN `source:` PREFIXES, WHICH IS SELF-REFERENTIAL IN
+      # THE ONE DIRECTION THAT MATTERS (.github#2547). That read fetched a producer "the moment its
+      # first row lands" — but the whole job of this workflow is to LAND a producer's first row, and
+      # a producer with no rows yet was never cloned, so `--write` could never append them. It is not
+      # a weaker version of detection's old hardcoded list; it is the same blind spot reached from the
+      # other side, and FS.GG.Templates sat in it for its entire life as a skill producer, invisible
+      # to both. One derivation now feeds both loops.
       #
       # Blobless but NOT `--depth 1` (unlike detection, which only runs the check): the PR body names
       # the producer commit/PR that MOVED each body, which needs real history — on a depth-1 clone
@@ -247,8 +254,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .repos
-          producers="$(python -c "import yaml; print('\n'.join(sorted({r['source'].split('/')[0] for r in yaml.safe_load(open('registry/skills.yml'))['skills']})))")"
-          echo "producers named by registry/skills.yml:"; echo "$producers"
+          # An unreadable roster exits 2 here rather than yielding an empty list: a reconcile that
+          # cloned nothing would see no producer manifests at all and could "reconcile" the registry
+          # against an empty world.
+          producers="$(python scripts/fsgg-skill-registry-check --producers)"
+          echo "rostered producers (registry/repos.yml):"; echo "$producers"
           while IFS= read -r repo; do
             [ -n "$repo" ] || continue
             # `.github` is a producer of its own driver skills (ADR-0054), but it is THIS checkout —

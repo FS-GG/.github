@@ -12,6 +12,18 @@
 # scaffold's `scaffold-provenance.json` effectiveParameters. Absent ⇒ `always`.
 #
 # SOURCES OF THIS SNAPSHOT (.github#168, epic #163):
+#   * PRODUCT skills, TEMPLATE FAMILY (6) — RECONCILED from FS.GG.Templates' producer manifest
+#     `template/skill-manifest/skill-manifest.json`. `FS.GG.Templates` is a rostered skill producer
+#     for this catalog; that was DECIDED, on the record, at .github#2547, and the alternative —
+#     governing those six somewhere else — was refused because this file's own first line claims to
+#     be "the single authoritative catalog of process + product skills" and they are `scope: product`.
+#     They were absent for the producer's whole life, and not because any arm below was wrong: the
+#     producer set those arms run over was whatever `skill-registry-coherence.yml` happened to clone,
+#     which was a hardcoded `FS.GG.SDD FS.GG.Rendering FS.GG.Game`. Both clone loops now derive that
+#     set from `fsgg-skill-registry-check --producers` (registry/repos.yml's roster), and an
+#     unreachable rostered repository is a `declared-completeness` finding rather than silence. See
+#     the TEMPLATE-FAMILY block below for why these six predicates are declared-but-not-yet-answerable
+#     and why that must not be "repaired" here (FS-GG/.github#2576).
 #   * PRODUCT skills (28) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
 #     (2026-07-06, epic #213/#218): 18 rows owned by `fs-gg-rendering` (reconciled from
 #     FS.GG.Rendering's `template/skill-manifest/skill-manifest.json`) + 10 rows owned by
@@ -89,11 +101,28 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-08-13"
+updated: "2026-08-14"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
-# scaffold-provenance.json → effectiveParameters.
-parameters: [profile, lifecycle, feedback, designSystem]
+# scaffold-provenance.json → effectiveParameters. ENFORCED since .github#2547 by the
+# `parameter-vocabulary` arm of scripts/fsgg-skill-registry-check: a predicate naming a parameter
+# absent from this list is a finding. It was decoration before that — the catalog asserted these
+# four org-wide while a second producer's rows evaluated a fifth, and no gate could say so.
+#
+# `template` (.github#2547) IS DECLARED HERE AND IS NOT YET ANSWERABLE, WHICH IS NOT THE SAME THING.
+# The six `fs-gg-templates` rows below carry `template in [...]` verbatim from FS.GG.Templates'
+# producer manifest, and that axis is real: the producer's OWN gate resolves it, from a `--template
+# <templateId>` argument mapped to the template's short name
+# (FS.GG.Templates scripts/generate-skill-manifest.fsx, `--assert-product`). What no scaffold
+# carries is a `template` KEY IN PROVENANCE. `fsgg-sdd scaffold` derives effectiveParameters from
+# the provider descriptor's declared parameters plus the author's `--param`
+# (FS.GG.SDD src/FS.GG.SDD.Commands/CommandWorkflow/HandlersScaffold.fs, `effectiveParameters`),
+# and FS.GG.Templates' providers/fable-game.providers.yml declares only `productName` and
+# `rootNamespace`. So `skill-union-assert.sh --params` answers `false` for all six against every
+# product that producer builds. Declaring the parameter here makes this catalog honest about the
+# axes its rows evaluate; it does NOT make those six predicates answerable, and it must not be read
+# as having done so. The producer-side half is FS-GG/.github#2576.
+parameters: [profile, lifecycle, feedback, designSystem, template]
 
 skills:
   # ------------------------------------------------------------------------------------------------
@@ -225,6 +254,42 @@ skills:
   # exclusion is moot for the orientation-skill gap. sha256 + source (manifest supplied-by path)
   # unchanged; registry = manifest = bytes preserved.
   - { id: fs-gg-project,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/base/.agents/skills/fs-gg-project/SKILL.md, sha256: c9fac83fb4ebb1f29f666cd206e4f47a88c0686a0245f21f5fa48dc2209a54a0, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+
+  # ------------------------------------------------------------------------------------------------
+  # TEMPLATE-FAMILY product skills — FS.GG.Templates' generic Fable skills. owner: fs-gg-templates.
+  # Reconciled from FS.GG.Templates' producer manifest (template/skill-manifest/skill-manifest.json)
+  # by `--write`, then re-homed here from the appended tail as `--write`'s own emitted comment
+  # instructs. The rows' bytes are the tool's; only their position and this annotation are ours.
+  #
+  # THE THIRD PRODUCT PRODUCER, AND IT WAS INVISIBLE HERE FOR ITS WHOLE LIFE (.github#2547). This
+  # catalog calls itself "the single authoritative catalog of process + product skills" while these
+  # six `scope: product` rows were absent and `FS.GG.Templates` appeared nowhere as an `owner:`. The
+  # cause was one level above the rows: `skill-registry-coherence.yml` cloned a hardcoded
+  # `FS.GG.SDD FS.GG.Rendering FS.GG.Game`, so `declared-completeness` — the arm that caught
+  # `fs-gg-feedback-report` twelve minutes after it shipped — ran green over a producer set that
+  # excluded this manifest entirely. Both clone loops now read
+  # `fsgg-skill-registry-check --producers` (the roster in registry/repos.yml), and the same arm reds
+  # when a rostered repository is not reachable under `--repos-root`.
+  #
+  # THESE SIX PREDICATES ARE NOT ANSWERABLE TODAY, AND THE ROWS SAY SO RATHER THAN HIDING IT. Their
+  # `template` axis is declared in `parameters:` above and IS evaluated correctly by the PRODUCER's
+  # own gate (generate-skill-manifest.fsx --assert-product --template <id>), which resolves it from a
+  # CLI argument. ADR-0017's evaluator resolves it from `scaffold-provenance.json ->
+  # effectiveParameters`, which `fsgg-sdd scaffold` derives from the provider descriptor's declared
+  # parameters plus the author's `--param` — and providers/fable-game.providers.yml declares only
+  # `productName` and `rootNamespace`. So `skill-union-assert.sh --params` answers `false` for all
+  # six against every product this producer builds. Recording the rows does not create that defect
+  # and does not repair it: it makes it visible, and puts `predicate-matches` on guard over these
+  # predicates from now on. The producer-side half is FS-GG/.github#2576. DO NOT "fix" these rows by
+  # editing their `materializes-when` here — the producer's manifest is authoritative and check 6
+  # would red on the divergence.
+  # ------------------------------------------------------------------------------------------------
+  - { id: fable-bindings,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-bindings/SKILL.md, sha256: 2ed5427570d0ce51c5d0a5e4323cc0cd5fcd764759b152468f7b269a916fac4a, materializes-when: "template in [fable-bindings]" }
+  - { id: fable-interop,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-interop/SKILL.md, sha256: f24a1daa9fd9828f9299062413a1fcd9598527165b13b6a608ddd9d15dce55b0, materializes-when: "template in [fable-game, fable-bindings]" }
+  - { id: fable-project,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-project/SKILL.md, sha256: 3513c6c6b9c754b8ff5063204d0d254a98533dba76439ff42b945e2c3bf67b91, materializes-when: "template in [fable-game, fable-bindings]" }
+  - { id: fable-remoting,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-remoting/SKILL.md, sha256: 9b03e2cce0a9c3756d74100690aad5dcfe38cad65f77a31d2210a5f9cb0290e8, materializes-when: "template in [fable-game]" }
+  - { id: fable-signalr,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-signalr/SKILL.md, sha256: d02815368cdf32296d061d4755a683e1c30bbed5186fe7d9d1cf78d747eee3c8, materializes-when: "template in [fable-game]" }
+  - { id: fable-testing,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-testing/SKILL.md, sha256: 5d170adb4637b65b05e0574c5d69dc7e2aa7807729e8c3498c40f6051c14a16c, materializes-when: "template in [fable-game, fable-bindings]" }
 
   # ------------------------------------------------------------------------------------------------
   # DRIVER skills — `.github`-AUTHORED, product-materialized (ADR-0054, resolves #1224; ADR-0053).

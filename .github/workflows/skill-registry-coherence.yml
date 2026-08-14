@@ -112,7 +112,23 @@ jobs:
       - uses: ./.github/actions/setup-policy-python
 
       # The producer repos, at `main` — the bodies whose digests the registry declares. Public, so
-      # the default GITHUB_TOKEN suffices. Paths mirror the `source:` prefixes in skills.yml.
+      # the default GITHUB_TOKEN suffices.
+      #
+      # THE LIST IS DERIVED, NOT TYPED HERE (.github#2547). It used to be a literal
+      # `for repo in FS.GG.SDD FS.GG.Rendering FS.GG.Game`, and FS.GG.Templates — a rostered repo
+      # shipping a producer manifest that declares six `scope: product` skills — was simply not in
+      # it. Every arm of the reconcile then ran GREEN over a producer set that excluded it: its
+      # manifest was reconciled against nothing, and `declared-completeness`, the arm that caught
+      # `fs-gg-feedback-report` twelve minutes after it shipped, had no way to report six rows that
+      # were missing from a producer it could not see. A hardcoded clone loop is not a detail of
+      # this workflow; it is the population every check below quantifies over.
+      #
+      # `--producers` prints the FS-GG repositories `registry/repos.yml` rosters, and the reconcile's
+      # own `roster_reachable` arm reds if any of them is absent from `--repos-root`. So the loop and
+      # the gate cannot drift: the gate fails on exactly the set this step failed to produce, rather
+      # than silently agreeing with it. Rostered repos that carry no manifest (FS.GG.Governance,
+      # FS.GG.Audio, FS.GG.Net today) are cloned and skipped — cheap, and the alternative is asking
+      # the question by not asking it.
       #
       # `.github` is ALSO a producer now (ADR-0054): it authors its own `scope: driver` skills and
       # emits registry/driver-skill-manifest.json. But it is not a REMOTE to clone — it is THIS
@@ -125,13 +141,24 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .repos
-          for repo in FS.GG.SDD FS.GG.Rendering FS.GG.Game; do
+          # An unreadable roster exits 2 here rather than yielding an empty list, so this loop can
+          # never clone nothing and leave every check below green over an empty world.
+          producers="$(python scripts/fsgg-skill-registry-check --producers)"
+          echo "rostered producers (registry/repos.yml):"; echo "$producers"
+          while IFS= read -r repo; do
+            [ -n "$repo" ] || continue
+            # `.github` is a producer of its own driver/operator skills (ADR-0054), but it is THIS
+            # checkout — link it rather than cloning a second copy of main, which would reconcile
+            # the workspace's skills.yml against main's driver manifest instead of this tree's.
+            if [ "$repo" = ".github" ]; then
+              ln -s "$GITHUB_WORKSPACE" .repos/.github
+              echo "linked .github (this checkout) @ $(git rev-parse --short HEAD)"
+              continue
+            fi
             git clone --depth 1 --filter=blob:none \
               "https://github.com/FS-GG/$repo.git" ".repos/$repo"
             echo "cloned $repo @ $(git -C ".repos/$repo" rev-parse --short HEAD)"
-          done
-          ln -s "$GITHUB_WORKSPACE" .repos/.github
-          echo "linked .github (this checkout) @ $(git rev-parse --short HEAD)"
+          done <<< "$producers"
 
       # THE MERGE BASE'S registry — and ONLY on a pull request (#422).
       #
