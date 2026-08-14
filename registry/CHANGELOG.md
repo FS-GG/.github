@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **auto-publish evidence: FS.GG.Kit 0.55.0** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/actions/runs/31821912638) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.55.0/FS.GG.Kit.0.55.0.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.55.0/fs.gg.kit.0.55.0.nupkg). Both served nuspecs record repository commit 69b59c2ec718ade12d8c7c2deec298e8ada65c51.
+
 - **2026-08-14** — **coord-engine coherent set `0.55.0` published and adopted**
   (owner `github`; [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.55.0);
   [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
