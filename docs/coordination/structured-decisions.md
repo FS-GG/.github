@@ -27,6 +27,47 @@ acceptance bind the initial and immediately preceding review. All records bind t
 The adapter projects a validated v2 ledger into the existing pure review state machine. Any malformed or
 tampered v2 record blocks; it is never ignored in favor of a passing v1 marker.
 
+### Authoring review records
+
+Create a JSON draft with all semantic fields shown below. Set `revision` to `0`, `previousDigest` to
+`null`, and `digest` to the empty string; the live writer reads the complete paginated PR comment
+ledger, refuses malformed or stale history, assigns the next revision and exact predecessor, computes
+the digest, validates the resulting chain, and posts the canonical v2 JSON comment:
+
+```bash
+scripts/fsgg-coord review record FS.GG.Repo#42 review-draft.json --pr 77 --json
+```
+
+```json
+{
+  "schema": "fsgg.coord.review-decision/v2",
+  "subject": "FS-GG/FS.GG.Repo#42/pr/77",
+  "revision": 0,
+  "previousDigest": null,
+  "headSha": "0123456789abcdef0123456789abcdef01234567",
+  "critic": "minted-critic-identity",
+  "verdict": "pass",
+  "acceptedExceptions": [],
+  "routeApplicability": "not-meaningful",
+  "routeEvidence": ["bounded reason this review has no meaningful runtime route comparison"],
+  "policyVersion": "structured-decisions/1",
+  "kind": "initial",
+  "round": 0,
+  "initialReview": null,
+  "precedingReview": null,
+  "timestamp": "2026-08-14T12:00:00Z",
+  "digest": ""
+}
+```
+
+For `confirmation`, use a positive `round`, `pass` or `changes-required`, and bind both
+`initialReview` and `precedingReview` to the relevant comment URLs. For `acceptance`, use verdict
+`accepted`, bind both URLs, and keep `acceptedExceptions` empty; exceptions accepted by the critic
+belong on the initial or confirmation record. The command rejects legacy v1 input before any write.
+
+`review --json` emits `evidenceClassification` on every verdict so dual-read `equivalent` and
+`divergent` states are observable during M4–M5.
+
 ## Migration and removal
 
 Reads are dual during M4–M5: `legacy-only`, `structured-only`, `equivalent`, and `divergent` are explicit

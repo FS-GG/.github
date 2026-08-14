@@ -167,12 +167,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.54.0 — scheduling intent, complete GitHub reads, and coherent-set publication now cross typed, resumable boundaries.
+    <PackageReleaseNotes>0.55.0 — route and review authority now uses revisioned, digest-chained structured records.
 
-WHAT MOVED, AND WHY IT IS A MINOR. Scheduling intent is now explicit and the lifecycle projection is
-a pure reducer, so deliberate Backlog and human-park choices survive reconciliation without another
-status exception. Production GitHub readers now consume complete typed results through one adapter;
-raw GraphQL envelopes and partial connections no longer escape as successful domain reads.
+WHAT MOVED, AND WHY IT IS A MINOR. Route decisions bind scope, dependencies, touch-set, policy, and
+revision outside narrative bodies. Review decisions bind the exact head, critic, verdict, accepted
+exceptions, and revision. Legacy evidence remains read-only with classified differences; new writes
+use only v2 records and fail closed on tamper, gaps, stale predecessors, or incomplete ledgers.
 
 RELEASE SAGA. The coherent set is packed once at one source SHA into a content-addressed manifest.
 The package-owning workflows retain their trusted-publishing identities but consume those exact

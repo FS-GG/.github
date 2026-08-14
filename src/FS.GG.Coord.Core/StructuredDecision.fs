@@ -104,6 +104,7 @@ module StructuredDecision =
                   yield! blank "timestamp" record.Timestamp
                   yield! timestamp record.Timestamp
                   yield! values "scope" record.Scope
+                  yield! values "dependencies" record.Dependencies
                   yield! values "touchSet" record.TouchSet
                   yield! values "reasonCodes" record.ReasonCodes
                   yield! blank "rationale" record.Rationale
@@ -126,6 +127,13 @@ module StructuredDecision =
               match records with
               | first :: _ when first.Kind <> Initial -> yield "structured review ledger must begin with an initial record"
               | _ -> ()
+              for index, record in records |> List.indexed do
+                  if index > 0 && record.Kind = Initial then
+                      yield "only revision 1 may be an initial review record"
+                  if index > 0 && records[index - 1].Kind = Acceptance then
+                      yield "no review record may follow host acceptance"
+                  if record.Kind = Acceptance && index <> records.Length - 1 then
+                      yield "host acceptance must be the final review record"
               for record in records do
                   if record.Schema <> ReviewSchema then yield $"schema must be '%s{ReviewSchema}'"
                   if record.Subject <> expectedSubject then yield "subject does not match the pull request"

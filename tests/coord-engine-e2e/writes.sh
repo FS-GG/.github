@@ -201,6 +201,64 @@ write_route_record "$ROUTE_RECEIPT" lightweight "" "Restore the ordinary structu
   || bad "#2137: restore the fixture's ordinary current route after SDD driver"
 rm -f "$route_sdd"
 
+# ---- M4: structured review authoring seals and appends initial/confirmation/acceptance ------------
+review_draft="$(mktemp)"
+write_review_draft() {
+  local kind="$1" verdict="$2" round="$3" initial="$4" preceding="$5"
+  python3 - "$review_draft" "$kind" "$verdict" "$round" "$initial" "$preceding" <<'PY'
+import json, sys
+path, kind, verdict, round_number, initial, preceding = sys.argv[1:]
+record = {
+    "schema": "fsgg.coord.review-decision/v2",
+    "subject": "FS-GG/FS.GG.SDD#42/pr/42",
+    "revision": 0,
+    "previousDigest": None,
+    "headSha": "a" * 40,
+    "critic": "critic-heron-42",
+    "verdict": verdict,
+    "acceptedExceptions": [],
+    "routeApplicability": "not-meaningful",
+    "routeEvidence": ["hermetic writer fixture"],
+    "policyVersion": "structured-decisions/1",
+    "kind": kind,
+    "round": int(round_number),
+    "initialReview": initial or None,
+    "precedingReview": preceding or None,
+    "timestamp": "2026-08-14T12:00:00Z",
+    "digest": ""
+}
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(record, stream, separators=(",", ":"))
+PY
+}
+
+review_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+write_review_draft initial changes-required 0 "" ""
+review_initial_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_initial_rc=$?
+write_review_draft confirmation pass 1 https://fixture/review/initial https://fixture/review/initial
+review_confirmation_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_confirmation_rc=$?
+write_review_draft acceptance accepted 0 https://fixture/review/initial https://fixture/review/confirmation
+review_acceptance_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_acceptance_rc=$?
+review_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+if [ "$review_initial_rc" -eq 0 ] && [ "$review_confirmation_rc" -eq 0 ] && [ "$review_acceptance_rc" -eq 0 ] \
+   && printf '%s' "$review_initial_out" | jq -e '.revision == 1 and (.digest | length) == 64' >/dev/null \
+   && printf '%s' "$review_confirmation_out" | jq -e '.revision == 2 and (.digest | length) == 64' >/dev/null \
+   && printf '%s' "$review_acceptance_out" | jq -e '.revision == 3 and (.digest | length) == 64' >/dev/null \
+   && [ "$review_after" -eq $((review_before + 3)) ]; then
+  ok "M4 review record seals and appends initial, confirmation, and acceptance v2 decisions"
+else
+  bad "M4 review record must append the complete v2 chain" "comments=$review_before->$review_after initial=$review_initial_rc:$review_initial_out confirmation=$review_confirmation_rc:$review_confirmation_out acceptance=$review_acceptance_rc:$review_acceptance_out"
+fi
+
+printf '%s' '<!-- fsgg:independent-review:v1 -->' >"$review_draft"
+review_before="$review_after"
+"$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json >/dev/null 2>&1; review_legacy_rc=$?
+review_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+[ "$review_legacy_rc" -ne 0 ] && [ "$review_before" = "$review_after" ] \
+  && ok "M4 review record refuses legacy v1 authoring with zero writes" \
+  || bad "M4 legacy review authoring must fail before POST" "rc=$review_legacy_rc comments=$review_before->$review_after"
+rm -f "$review_draft"
+
 # ---- the claim CAS: post, re-read, WIN -------------------------------------------------------------
 out="$(run claim FS.GG.SDD#42 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'claimed FS.GG.SDD#42 by worker vole-418'; then

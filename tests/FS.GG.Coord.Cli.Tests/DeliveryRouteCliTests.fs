@@ -98,6 +98,25 @@ module DeliveryRouteCliTests =
                rationale = record.Rationale; sddWorkId = record.SddWorkId; specHome = record.SpecHome
                requiredGates = record.RequiredGates; digest = record.Digest |}
 
+    let private lightweightRecord revision previous =
+        let draft : StructuredDecision.RouteRecord =
+            { Schema = StructuredDecision.RouteSchema; Subject = "FS-GG/FS.GG.SDD#42"; Revision = revision
+              PreviousDigest = previous; Scope = [ "fixture route scope" ]; Dependencies = [ "none" ]
+              TouchSet = [ "src/Thing.fs" ]; PolicyVersion = StructuredDecision.PolicyVersion
+              Route = Some DeliveryRoute.Lightweight; Agent = "fixture-2298"; Timestamp = "2026-01-01T00:00:00Z"
+              ReasonCodes = [ "fixture" ]; Rationale = "fixture structured route"
+              SddWorkId = None; SpecHome = None; RequiredGates = []; Digest = "" }
+        let record = { draft with Digest = StructuredDecision.routeDigest draft }
+        let json =
+            JsonSerializer.Serialize
+                {| schema = record.Schema; subject = record.Subject; revision = record.Revision
+                   previousDigest = record.PreviousDigest; scope = record.Scope; dependencies = record.Dependencies
+                   touchSet = record.TouchSet; policyVersion = record.PolicyVersion; route = "lightweight"
+                   agent = record.Agent; timestamp = record.Timestamp; reasonCodes = record.ReasonCodes
+                   rationale = record.Rationale; sddWorkId = record.SddWorkId; specHome = record.SpecHome
+                   requiredGates = record.RequiredGates; digest = record.Digest |}
+        record, json
+
     /// A `lightweight` receipt bound to the given `subjectRevision` — the field `claim`'s refusal turns
     /// on when it disagrees with the live issue body's own hash.
     let private lightweightReceipt (subjectRevision: string) =
@@ -114,6 +133,7 @@ module DeliveryRouteCliTests =
             comments
             |> Seq.map (fun (id, body) ->
                 {| id = id
+                   html_url = $"https://example.invalid/comments/%d{id}"
                    body = body
                    user = {| login = "EHotwagner" |}
                    created_at = "2026-01-01T00:00:00Z"
@@ -461,19 +481,15 @@ module DeliveryRouteCliTests =
     /// `heldElsewhere`'s `Board.bootstrapCached`, the first GraphQL call on the success path, rather than
     /// merely "somewhere before the write".
     ///
-    /// Repair 2 makes the ROUTE READ ITSELF a GraphQL call, so `GraphQlCalls = 0` can no longer hold on
-    /// ANY outcome — refusal included. Relaxing it to `= 1` (my first attempt) would have made the
-    /// assertion true under the M6 mutation too, the instant `Board.bootstrapCached` added its own
-    /// GraphQL call on top: 1 (route) + board calls > 1, so `>= 1` or an unexamined `= 1` are both too
-    /// weak the moment the mutant's OWN GraphQl usage is anything other than exactly zero extra calls,
-    /// and neither actually checks WHICH call happened. What the property needs is the ORDERING fact
-    /// itself, stated directly: the EXACT call sequence a refusal makes is `issueBody` (REST) then the
-    /// bounded route GraphQL call, and NOTHING ELSE — no bootstrap, no comment-post, no third call of any
+    /// M4 makes the ROUTE READ a complete REST ledger read because a digest chain cannot safely be
+    /// decided from a bounded tail. What the property needs is still the ORDERING fact itself, stated
+    /// directly: the EXACT call sequence a refusal makes is `issueBody` then `comment-list`, and NOTHING
+    /// ELSE — no board bootstrap, no comment-post, no third call of any
     /// kind. `transport.Log` is ordered and complete, so asserting it against the exact expected sequence
     /// is a stronger, more literal restatement of "refusal happens before the board bootstrap" than a
     /// bare count ever was: it catches a bootstrap call appearing ANYWHERE, in ANY position, of ANY kind.
     let private refusedBeforeBootstrap: string list =
-        [ "issue-get FS-GG/FS.GG.SDD 42"; "graphql FS-GG/FS.GG.SDD#42 recent comments (last 100)" ]
+        [ "issue-get FS-GG/FS.GG.SDD 42"; "comment-list FS-GG/FS.GG.SDD 42" ]
 
     [<Fact>]
     let ``#2298 claim refuses with zero writes when NO delivery-route receipt exists`` () =
@@ -744,5 +760,47 @@ module DeliveryRouteCliTests =
 
             Assert.NotEqual(0, code)
             Assert.Empty(thread.Bodies)
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``M4 v2 route ledger reads revision one beyond the recent-comment window`` () =
+        let root = tempSddRoot ()
+        try
+            let first, firstJson = lightweightRecord 1 None
+            let _, secondJson = lightweightRecord 2 (Some first.Digest)
+            let comments =
+                [ yield StructuredRouteMarker + "\n" + firstJson
+                  for index in 1..100 do yield $"narrative comment %d{index}"
+                  yield StructuredRouteMarker + "\n" + secondJson ]
+            let thread = Thread comments
+            let transport = world thread
+            let code, output = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+            Assert.Equal(0, code)
+            Assert.Equal(2, JsonDocument.Parse(output.Trim()).RootElement.GetProperty("revision").GetInt32())
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``M4 a wholly buried v2 route ledger remains authoritative and appends safely`` () =
+        let root = tempSddRoot ()
+        try
+            let first, firstJson = lightweightRecord 1 None
+            let _, secondJson = lightweightRecord 2 (Some first.Digest)
+            let comments =
+                [ yield StructuredRouteMarker + "\n" + firstJson
+                  for index in 1..100 do yield $"narrative comment %d{index}" ]
+            let thread = Thread comments
+            let transport = world thread
+            let path = Path.Combine(root, "revision-2.json")
+            File.WriteAllText(path, secondJson)
+            let beforeCode, beforeOutput = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+            Assert.Equal(0, beforeCode)
+            Assert.Equal(1, JsonDocument.Parse(beforeOutput.Trim()).RootElement.GetProperty("revision").GetInt32())
+            let recordCode, _ = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+            Assert.Equal(0, recordCode)
+            let showCode, output = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+            Assert.Equal(0, showCode)
+            Assert.Equal(2, JsonDocument.Parse(output.Trim()).RootElement.GetProperty("revision").GetInt32())
         finally
             Directory.Delete(root, true)

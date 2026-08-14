@@ -178,6 +178,7 @@ module ConsolidationTaxTests =
             comments
             |> Seq.map (fun (id, text) ->
                 {| id = id
+                   html_url = $"https://example.invalid/comments/%d{id}"
                    body = text
                    user = {| login = "EHotwagner" |}
                    created_at = "2026-01-01T00:00:00Z"

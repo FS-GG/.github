@@ -36,7 +36,7 @@ module Driver =
     [<Literal>]
     let private StructuredReviewMarker = "<!-- fsgg:review-decision/v2 -->"
 
-    let private decodeStructuredReview (raw: string) : Result<StructuredDecision.ReviewRecord, string> =
+    let decodeStructuredReview (raw: string) : Result<StructuredDecision.ReviewRecord, string> =
         let required (name: string) (root: JsonElement) =
             match root.TryGetProperty name with
             | true, value -> value
@@ -98,6 +98,26 @@ module Driver =
                   Timestamp = text "timestamp" root
                   Digest = text "digest" root }
         with error -> Error error.Message
+
+    let encodeStructuredReview (record: StructuredDecision.ReviewRecord) =
+        let kind =
+            match record.Kind with
+            | StructuredDecision.Initial -> "initial"
+            | StructuredDecision.Confirmation -> "confirmation"
+            | StructuredDecision.Acceptance -> "acceptance"
+        let verdict =
+            match record.Verdict with
+            | StructuredDecision.Pass -> "pass"
+            | StructuredDecision.ChangesRequired -> "changes-required"
+            | StructuredDecision.Accepted -> "accepted"
+        JsonSerializer.Serialize
+            {| schema = record.Schema; subject = record.Subject; revision = record.Revision
+               previousDigest = record.PreviousDigest; headSha = record.HeadSha; critic = record.Critic
+               verdict = verdict; acceptedExceptions = record.AcceptedExceptions
+               routeApplicability = record.RouteApplicability; routeEvidence = record.RouteEvidence
+               policyVersion = record.PolicyVersion; kind = kind; round = record.Round
+               initialReview = record.InitialReview; precedingReview = record.PrecedingReview
+               timestamp = record.Timestamp; digest = record.Digest |}
 
     let private projectStructuredReview (comment: ReviewComment) (record: StructuredDecision.ReviewRecord) =
         let verdict =

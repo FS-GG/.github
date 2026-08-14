@@ -109,6 +109,7 @@ def route_receipt_comment(n):
     }
     return {
         "id": 700000 + n,
+        "html_url": f"https://fixture.invalid/issues/{n}#issuecomment-{700000 + n}",
         "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
         "user": {"login": "fixture"},
         "created_at": "2026-01-01T00:00:00Z",
@@ -118,9 +119,10 @@ def route_receipt_comment(n):
 
 def comments_for(n):
     # Chore locks deliberately have no issue/source body and therefore no delivery route receipt.
-    if n not in ISSUES:
-        return list(COMMENTS.get(n, []))
-    return [route_receipt_comment(n)] + list(COMMENTS.get(n, []))
+    raw = list(COMMENTS.get(n, []))
+    if n in ISSUES:
+        raw = [route_receipt_comment(n)] + raw
+    return [dict(comment, html_url=comment.get("html_url", f"https://fixture.invalid/issues/{n}#issuecomment-{comment['id']}")) for comment in raw]
 
 # 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.

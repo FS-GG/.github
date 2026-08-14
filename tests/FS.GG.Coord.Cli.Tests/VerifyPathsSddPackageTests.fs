@@ -58,27 +58,24 @@ module VerifyPathsSddPackageTests =
         |> Convert.ToHexString
         |> _.ToLowerInvariant()
 
-    let private graphQlComments (bodies: string list) =
-        let nodes =
-            bodies
-            |> List.map (fun b -> $"""{{"body":%s{JsonSerializer.Serialize b}}}""")
-            |> String.concat ","
-
-        $"""{{"data":{{"repository":{{"issue":{{"comments":{{"nodes":[%s{nodes}]}}}}}}}},"data2":null}}"""
+    let private restComments (bodies: string list) =
+        bodies
+        |> List.map (fun b -> $"""{{"body":%s{JsonSerializer.Serialize b}}}""")
+        |> String.concat ","
+        |> sprintf "[%s]"
 
     /// Routes on path suffix, and REFUSES anything else so an unexpected read fails loud rather than
-    /// being served a body it was never given. `graphql` is the receipt window
-    /// (`Reads.recentCommentBodies`); a `commentBodies` argument of `None` serves an ERROR there, which
-    /// is how the fail-closed leg is driven.
+    /// being served a body it was never given. The comments endpoint is the complete receipt ledger; a
+    /// `comments` argument of `None` serves an ERROR there, which drives the fail-closed leg.
     let private serving (issueBody: string) (files: string) (comments: string list option) =
         let prBody =
             """{"number":900,"body":"Closes #42","head":{"ref":"item/42-x"},"base":{"ref":"main"}}"""
 
         Fake.Recorder(fun (req: Request) ->
-            if req.Path.EndsWith "graphql" then
+            if req.Path.EndsWith "issues/42/comments" then
                 match comments with
-                | Some bodies -> Ok { Status = 200; Body = graphQlComments bodies; ETag = None; NextLink = None; Headers = Map.empty }
-                | None -> Error(Errors.Malformed("receipt window", "the fixture refuses this read"))
+                | Some bodies -> Ok { Status = 200; Body = restComments bodies; ETag = None; NextLink = None; Headers = Map.empty }
+                | None -> Error(Errors.Malformed("receipt ledger", "the fixture refuses this read"))
             elif req.Path.EndsWith "pulls/900/files" then
                 Ok { Status = 200; Body = files; ETag = None; NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "pulls/900" then
@@ -277,13 +274,12 @@ module VerifyPathsSddPackageTests =
         Assert.DoesNotContain("sdd package (expected)", out)
         // THE COST ASSERTION, not merely the output one: `List.isEmpty drift` must gate the network call,
         // or every green PR in the org pays a GraphQL round-trip for a subtraction it does not need. The
-        // receipt window is this command's ONLY GraphQL-billed read, so the meter is an exact witness.
-        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Equal(0, transport.Count("comment-list FS-GG/.github 42"))
 
     [<Fact>]
-    let ``#2324 the receipt window is read exactly once when there IS drift to subtract from`` () =
+    let ``#2324 the receipt ledger is read exactly once when there IS drift to subtract from`` () =
         let transport = serving issue (files packageFiles) (Some [ sddReceipt ])
         let code, _, _ = runVerifyPaths transport
 
         Assert.Equal(Client.ExitGreen, code)
-        Assert.Equal(1, transport.GraphQlCalls)
+        Assert.Equal(1, transport.Count("comment-list FS-GG/.github 42"))

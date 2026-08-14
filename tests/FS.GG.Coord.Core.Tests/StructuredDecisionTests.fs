@@ -55,6 +55,9 @@ module StructuredDecisionTests =
         let changed = { record with Scope = [ "silently broader scope" ] }
         Assert.False(record.Digest = StructuredDecision.routeDigest changed)
         Assert.Equal(Ok record, StructuredDecision.validateRouteLedger record.Subject [ record ])
+        let missingDependencies = { record with Dependencies = []; Digest = "" }
+        let missingDependencies = { missingDependencies with Digest = StructuredDecision.routeDigest missingDependencies }
+        Assert.True(StructuredDecision.validateRouteLedger record.Subject [ missingDependencies ] |> Result.isError)
 
     [<Fact>]
     let ``M4 tampering with a persisted route record fails closed`` () =

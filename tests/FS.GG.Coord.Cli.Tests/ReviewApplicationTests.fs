@@ -2,6 +2,7 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System
 open System.IO
+open System.Text.Json
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Cli
@@ -63,6 +64,30 @@ module ReviewApplicationTests =
         finally
             File.Delete path
 
+    let private structuredReviewSnapshot legacyVerdict =
+        let head = String.replicate 40 "a"
+        let draft : StructuredDecision.ReviewRecord =
+            { Schema = StructuredDecision.ReviewSchema; Subject = "FS-GG/.github#2175/pr/42"
+              Revision = 1; PreviousDigest = None; HeadSha = head; Critic = "heron-d4fb"
+              Verdict = StructuredDecision.Pass; AcceptedExceptions = []
+              RouteApplicability = "not-meaningful"; RouteEvidence = [ "fixture" ]
+              PolicyVersion = StructuredDecision.PolicyVersion; Kind = StructuredDecision.Initial
+              Round = 0; InitialReview = None; PrecedingReview = None
+              Timestamp = "2026-08-14T12:00:00Z"; Digest = "" }
+        let record = { draft with Digest = StructuredDecision.reviewDigest draft }
+        let legacy =
+            $"<!-- fsgg:independent-review:v1 -->\ncritic: heron-d4fb\nreviewed-head: %s{head}\nverdict: %s{legacyVerdict}\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: fixture"
+        let structured = "<!-- fsgg:review-decision/v2 -->\n" + Driver.encodeStructuredReview record
+        let comments =
+            JsonSerializer.Serialize
+                [| {| id = 1L; url = "https://reviews/legacy"; body = legacy |}
+                   {| id = 2L; url = "https://reviews/v2"; body = structured |} |]
+        let binding =
+            $"\"itemRef\":\"FS-GG/.github#2175\",\"pr\":42,\"headSha\":\"%s{head}\",\"claimGeneration\":\"fixture-claim\",\"implementerIdentity\":\"worker-1\",\"phase\":\"ordinary\",\"round\":1"
+        let facts =
+            $"{{\"comments\":%s{comments},\"checks\":\"pending\",\"repairPhaseGranted\":null,\"repairRouteAvailable\":true}}"
+        snapshotJson binding facts
+
     [<Fact>]
     let ``#2175 an empty snapshot file refuses rather than inferring absent review`` () =
         let path = Path.GetTempFileName()
@@ -95,14 +120,23 @@ module ReviewApplicationTests =
         Assert.Contains("\"verdict\":\"next\"", out)
         Assert.Contains("\"state\":\"awaitingInitialReview\"", out)
         Assert.Contains("\"action\":\"dispatchCritic\"", out)
+        Assert.Contains("\"evidenceClassification\":\"legacy-only\"", out)
         Assert.Contains("\"freshnessToken\"", out)
         Assert.Contains("\"actionKey\"", out)
+
+    [<Theory>]
+    [<InlineData("pass", "equivalent")>]
+    [<InlineData("changes-required", "divergent")>]
+    let ``M4 review CLI emits classified legacy and structured differences`` legacyVerdict expected =
+        let exitCode, out, _ = runSnapshot (structuredReviewSnapshot legacyVerdict)
+        Assert.Equal(0, exitCode)
+        Assert.Contains($"\"evidenceClassification\":\"%s{expected}\"", out)
 
     [<Fact>]
     let ``#2175 the text projection renders one state — action line`` () =
         let exitCode, out, _err = runText (snapshotJson ordinaryBinding (emptyFacts "pending"))
         Assert.Equal(0, exitCode)
-        Assert.Equal("awaitingInitialReview — dispatchCritic", out.Trim())
+        Assert.Equal("awaitingInitialReview — dispatchCritic — evidence legacy-only", out.Trim())
 
     [<Fact>]
     let ``#2175 a clean accepted chain reaches Accept with the accepted-current-head receipt fields`` () =

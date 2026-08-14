@@ -33,6 +33,9 @@ module Driver =
     type ReviewComment =
         { Id: int64; Url: string; Body: string }
 
+    val decodeStructuredReview: raw: string -> Result<StructuredDecision.ReviewRecord, string>
+    val encodeStructuredReview: record: StructuredDecision.ReviewRecord -> string
+
     /// Structural facts a caller reads off the SAME marker classification `parseReviewComments` already
     /// computes, without waiting for the whole chain to validate — additive to the public surface, not a
     /// second marker parser (.github#2175 acceptance 11; `FS.GG.Coord.Core.Review` is the consumer).
