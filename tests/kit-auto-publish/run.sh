@@ -234,6 +234,27 @@ checks=$((checks + 1))
 
 facts='{ "version":"0.27.1", "provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"}, "orgFeed":"unknown", "nugetFeed":"absent", "orgLatest":"0.27.0", "nugetLatest":"0.27.0", "tagExists":false }'
 case_run released-after-later-merge openEvidencePr '{"version":"0.27.1","sourceSha":"later","provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass","mergeCommit":"authoring"},"orgFeed":"present","nugetFeed":"present","orgLatest":"0.27.1","nugetLatest":"0.27.1","tagExists":true,"releaseRun":{"id":"42","url":"https://example.test/run/42","nuspecCommit":"later"}}'
+
+# M3 recovery workflows check out current main, so their run head can differ from the immutable
+# prepared/nuspec source. The workflow must accept that topology only through the published stable
+# saga's content-addressed receipt and full dual-feed verified manifest. These assertions pin every
+# load-bearing arm: removing any one must make a future review revisit the fallback rather than
+# silently restoring the legacy headSha-only false negative.
+auto_workflow="$root/.github/workflows/kit-auto-publish.yml"
+for required in \
+  'coherent-set/v${version}' \
+  '--pattern release-manifest.json --pattern stable-channel.json' \
+  '.descriptor.sourceSha == $source' \
+  '.descriptor.policyVersion == "release-saga/1"' \
+  '(.state.phase == "feeds-complete" or .state.phase == "promoted")' \
+  '.state.feeds.github.state == "verified"' \
+  '.state.feeds.nuget.state == "verified"' \
+  '.version == $version and .sourceSha == $source and .contentId == $content'; do
+  grep -qF -- "$required" "$auto_workflow" \
+    || { echo "saga release evidence fallback lost required assertion: $required" >&2; exit 1; }
+  checks=$((checks + 1))
+done
+
 printf '%s' "$facts" > "$work/escalate.json"
 printf '%s' '{"valid":true,"streak":2,"action":"refuse","reason":"feed-observation-unknown","version":"0.27.1","lastRun":"1"}' > "$work/previous.json"
 state="$(python3 "$root/scripts/kit-auto-publish.py" --facts "$work/escalate.json" --previous-escalation "$work/previous.json" --run 1 | jq -c .escalation)"

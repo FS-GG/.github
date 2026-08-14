@@ -296,6 +296,41 @@ jobs:
             nuget_commit="$(unzip -p nuget.nupkg '*.nuspec' 2>/dev/null | sed -n 's/.*repository[^>]*commit="\([^"]*\)".*/\1/p' | head -1)"
             if [ -n "$org_commit" ] && [ "$org_commit" = "$nuget_commit" ]; then
               run="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow release-kit.yml --status success --limit 100 --json databaseId,url,headSha | jq -c --arg sha "$org_commit" '.[] | select(.headSha == $sha) | {id:(.databaseId|tostring),url:.url}' | head -1 || true)"
+              # M3's coherent-set saga intentionally runs recovery workflows from current main while
+              # every immutable package remains bound to the older prepared source. Therefore a
+              # successful release-kit run's headSha is no longer necessarily the served nuspec
+              # commit. Fall back only to the published stable saga receipt, and verify its complete
+              # manifest rather than treating "both package URLs returned 200" as release evidence.
+              # The contentId binds the immutable descriptor/package bytes; the mutable state must
+              # independently say both complete feeds were verified before stable promotion.
+              if [ -z "$run" ]; then
+                saga_dir="$(mktemp -d)"
+                saga_tag="coherent-set/v${version}"
+                saga_meta="$(gh release view "$saga_tag" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url 2>/dev/null || true)"
+                if jq -e '.isDraft == false and .isPrerelease == false and (.url | type == "string" and length > 0)' <<<"$saga_meta" >/dev/null 2>&1 \
+                  && gh release download "$saga_tag" --repo "$GITHUB_REPOSITORY" --dir "$saga_dir" --pattern release-manifest.json --pattern stable-channel.json >/dev/null 2>&1; then
+                  saga_content="$(jq -r '.contentId // empty' "$saga_dir/release-manifest.json")"
+                  if jq -e --arg version "$version" --arg source "$org_commit" '
+                      .descriptor.version == $version
+                      and .descriptor.sourceSha == $source
+                      and .descriptor.releaseId == ("github:" + $version)
+                      and .descriptor.policyVersion == "release-saga/1"
+                      and ([.descriptor.packages[].id] | sort == ["FS.GG.Coord.Cli", "FS.GG.Drivers", "FS.GG.Kit"])
+                      and (.state.phase == "feeds-complete" or .state.phase == "promoted")
+                      and .state.channelPromotion.state == "promoted"
+                      and .state.feeds.github.state == "verified"
+                      and .state.feeds.nuget.state == "verified"
+                      and ([.state.feeds.github.packages[], .state.feeds.nuget.packages[]] | all(.state == "verified"))
+                    ' "$saga_dir/release-manifest.json" >/dev/null \
+                    && jq -e --arg version "$version" --arg source "$org_commit" --arg content "$saga_content" '
+                      .version == $version and .sourceSha == $source and .contentId == $content
+                    ' "$saga_dir/stable-channel.json" >/dev/null; then
+                    saga_url="$(jq -r .url <<<"$saga_meta")"
+                    run="$(jq -n -c --arg id "saga:${saga_content}" --arg url "$saga_url" '{id:$id,url:$url}')"
+                  fi
+                fi
+                rm -r -- "$saga_dir"
+              fi
               [ -n "$run" ] && release="$(jq -c --arg commit "$org_commit" '. + {nuspecCommit:$commit}' <<<"$run")"
             fi
           fi
