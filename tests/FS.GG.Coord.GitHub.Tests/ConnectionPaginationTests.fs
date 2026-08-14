@@ -421,7 +421,7 @@ module private Sources =
 
     /// Every `<connection>(first: N) { totalCount` in one file, as the N it asked for.
     let windowsOf (text: string) (connection: string) =
-        Regex.Matches(text, Regex.Escape connection + @"\(first: (\d+)\)\s*\{\s*totalCount\b")
+        Regex.Matches(text, Regex.Escape connection + @"\(first: (\d+)[^)]*\)\s*\{\s*totalCount\b")
         |> Seq.map (fun m -> int m.Groups[1].Value)
         |> List.ofSeq
 
@@ -440,6 +440,7 @@ let ``.github#2535 the connection windows in the documents agree with the guards
     // because they supply both halves themselves.
     let boardText = Sources.read "Board.fs"
     let readsText = Sources.read "Reads.fs"
+    let doneText = Sources.read "Done.fs"
 
     let projectItemWindows = Sources.windowsOf boardText "projectItems"
 
@@ -454,6 +455,22 @@ let ``.github#2535 the connection windows in the documents agree with the guards
     let closingRefWindows = Sources.windowsOf readsText "closingIssuesReferences"
     Assert.Equal<int list>([ 5 ], closingRefWindows)
     Assert.Equal(Sources.literal readsText "ClosingRefWindow", List.head closingRefWindows)
+
+    // .github#2561 extends the same agreement gate to Done.facts's four whole-set reads. Keep each
+    // separately named: their deliberately different windows are part of the decision, not coincidence.
+    Assert.Equal<int list>([ 10 ], Sources.windowsOf doneText "closedByPullRequestsReferences")
+    Assert.Equal(Sources.literal doneText "ClosedByPullRequestsWindow", List.head (Sources.windowsOf doneText "closedByPullRequestsReferences"))
+    Assert.Equal<int list>([ 10 ], Sources.windowsOf doneText "closingIssuesReferences")
+    Assert.Equal(Sources.literal doneText "ClosingIssuesWindow", List.head (Sources.windowsOf doneText "closingIssuesReferences"))
+    Assert.Equal<int list>([ 5 ], Sources.windowsOf doneText "associatedPullRequests")
+    Assert.Equal(Sources.literal doneText "AssociatedPullRequestsWindow", List.head (Sources.windowsOf doneText "associatedPullRequests"))
+    Assert.Equal<int list>([ 20 ], Sources.windowsOf doneText "projectItems")
+    Assert.Equal(Sources.literal doneText "ProjectItemsWindow", List.head (Sources.windowsOf doneText "projectItems"))
+
+    // `timelineItems(last: 10)` is intentionally a recent-event window. It must not be silently converted
+    // into a whole-set read while repairing the four `first:N` connections.
+    Assert.Matches(@"timelineItems\(last: 10, itemTypes: \[CLOSED_EVENT\]\)", doneText)
+    Assert.Empty(Sources.windowsOf doneText "timelineItems")
 
     // The project list took the OTHER remedy, so it carries a cursor and a `pageInfo` instead of a window.
     Assert.Matches(@"projectsV2\(first: \d+, after: \$cursor\)\s*\{\s*pageInfo\b", boardText)

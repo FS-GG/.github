@@ -167,12 +167,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.55.0 — route and review authority now uses revisioned, digest-chained structured records.
+    <PackageReleaseNotes>0.57.0 — body-level path, count, and suite claims now require verifiable provenance.
 
-WHAT MOVED, AND WHY IT IS A MINOR. Route decisions bind scope, dependencies, touch-set, policy, and
-revision outside narrative bodies. Review decisions bind the exact head, critic, verdict, accepted
-exceptions, and revision. Legacy evidence remains read-only with classified differences; new writes
-use only v2 records and fail closed on tamper, gaps, stale predecessors, or incomplete ledgers.
+WHAT MOVED, AND WHY IT IS A MINOR. The packed pnext-item independent-review guidance now requires
+issue and pull-request body path/count/suite claims to identify repository and revision (or use a
+stable URL), and count or suite-verdict claims to cite the reproducing command or check URL. Claims
+without that provenance cannot serve as acceptance evidence. This is a new receiver-visible review
+protocol boundary, so a patch would understate the behavioural change.
 
 RELEASE SAGA. The coherent set is packed once at one source SHA into a content-addressed manifest.
 The package-owning workflows retain their trusted-publishing identities but consume those exact
@@ -182,8 +183,8 @@ and promotes the stable release only after both feeds serve all three members. A
 the first irreversible push proves restart from the same manifest and rejects byte drift.
 
 WHY THIS PACKAGE MOVES WITH THE KIT. The three packages resolve one scalar (`FsggCoherentSetVersion`,
-`Directory.Build.props`) by construction (.github#2402), so the coordination kit and drivers ship at
-this same version even where their own payload did not change.
+`Directory.Build.props`) by construction (.github#2402), so the coordination engine and drivers ship
+at this same version even though their own payload did not change.
 
 $(FsggStandingAdvisories)
 

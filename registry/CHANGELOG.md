@@ -19,6 +19,28 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **coord-engine coherent set `0.56.0` published, adopted, and pinned**
+  (owner `github`; [.github#2561](https://github.com/FS-GG/.github/issues/2561);
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.56.0)).
+  `package-version` catches up with source `0.56.0`, and the distributed dotnet-tool manifest moves
+  from `0.55.0` to `0.56.0`, only after stable promotion. Prepare run `31836474142` packed the set
+  once from merged source `ed6b0c01536c6c859089e4df7e189062811adc39`; the initial publishers
+  reached both feeds but timed out awaiting nuget.org indexing, so manifest-bound observation-only
+  resumptions `31837168712`, `31837170612`, and `31837172964` completed without repacking. Promotion
+  observer `31837348014` passed. Content ID is
+  `sha256:4927cfe4b3a7cf0c62db287a4c7bcbb098a6cce4ca86856ecb3725577a311b42`; final manifest and
+  stable-channel SHA-256 values are `4b9114e51422be2aa7dfd5cb022a769c97aa3e19007a26ca047b0d9945b33adc`
+  and `8fccd1a32028ed8c2f40f9308e4e06f377972cfc64c8844213bfebdaf5770cc1`.
+  Both feeds serve all three packages at `0.56.0`; their normalized payload hashes match the prepared
+  artifacts (`Coord.Cli` `36c08649…`, Drivers `db127c3e…`, Kit `43b73300…`).
+
+- **2026-08-14** — **coord-engine source `0.56.0`: complete done-stamp evidence reads**
+  (owner `github`; [.github#2561](https://github.com/FS-GG/.github/issues/2561)).
+  The source scalar moves from `0.55.0` to stable MINOR `0.56.0`; `package-version` remains
+  `0.55.0` until the coherent set is published and externally verified. Four whole-set GraphQL
+  connections used by `Done.facts` now refuse hidden tails rather than silently deriving a red or
+  green stamp, or a measured `NoStatus`, from incomplete closure and project-item evidence.
+
 - **2026-08-14** — **coord-engine coherent set `0.55.0` published and adopted**
   (owner `github`; [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.55.0);
   [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
