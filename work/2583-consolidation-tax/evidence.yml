@@ -11,27 +11,27 @@ sourceAnalysis: readiness/2583-consolidation-tax/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2583-consolidation-tax/analysis.json
-    digest: 525110cc364dc45c6d0625528eccd9ba7248331d66a6e31eb3d360949735e6cc
+    digest: 88dc4f8d7ba56de626823fb6cbe17a21839bfa297b469cdfe55fbde8e288d107
     schemaVersion: 1
   - label: checklist
     path: work/2583-consolidation-tax/checklist.md
-    digest: b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40
+    digest: 4d579461c2e2535fc178e7a261d2745c6cd239a48db404d7ff7901e91849b15f
     schemaVersion: 1
   - label: clarifications
     path: work/2583-consolidation-tax/clarifications.md
-    digest: e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5
+    digest: fb17e82429e2f3c0f8fa21ba8b13ad83946304486be8aec65edcafeba3ed6053
     schemaVersion: 1
   - label: plan
     path: work/2583-consolidation-tax/plan.md
-    digest: 6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c
+    digest: 131acc3572b6107ca0704f2e48a0e8c3a1ea00ebfedd773b924102b1fe578d1d
     schemaVersion: 1
   - label: spec
     path: work/2583-consolidation-tax/spec.md
-    digest: b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0
+    digest: 539d885e05352d6df6f360fe2073711b394fdc92b75381ba197c9bffbf3b9fc3
     schemaVersion: 1
   - label: tasks
     path: work/2583-consolidation-tax/tasks.yml
-    digest: 2bb20b7c7b24ccf78770f09fa30aa1c324aa9e127f7722fce676e8b25c02cbf8
+    digest: 963a05e33c1c095fa3657d17ecf4c7fb24d0e998c8ee06402cf8e94e00423cf3
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -52,10 +52,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["deliveryRouteSubjectLines is the ONE filter; deliveryRouteSubject is that list joined and nothing else (#485). Measured at the command boundary by 'the line-wise subject and the joined subject agree on every corpus body': a receipt whose subjectRevision is the JOINED form is accepted against a locator marker production built from the LINE-WISE form, resolving canonically, on all 4 real bodies."]
@@ -77,10 +77,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["Insertion is route-neutral at ANY position; append is not privileged. APPENDED (3 added), MID-BODY before the last judged line (2), PREPENDED (2), each asserting kind=current, subjectMatch=additive and the exact count, on all 4 corpus bodies."]
@@ -102,10 +102,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["Modification, deletion and reordering each still stale, on all 4 corpus bodies, asserting non-zero exit, empty stdout and 'subjectRevision is stale' on stderr. Reordering asserts first and last judged lines are distinct first, so the leg cannot be a no-op."]
@@ -127,10 +127,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["Nothing Current became Stale: the additive candidate is the THIRD arm, reached only after canonical and legacy decline on byte-identical inputs. Measured anyway - Paths-widen and unedited both assert subjectMatch=canonical, and a pre-.github#2392 whole-body receipt asserts subjectMatch=legacy. Cli 836, Core 852, GitHub 602 green; e2e 14, writes 149, parity 648, replay 17 green with fixtures that all still write the pre-.github#2583 comment shape."]
@@ -152,10 +152,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["The additive notice reaches BOTH boundaries that inspect or act on the row, from one shared spelling (additiveSubjectNote): delivery-route show emits subjectMatch, addedSubjectLines and the stderr note; the claim/take mutation boundary emits the same note. Asserted present on the additive legs and ABSENT on the canonical legs at both boundaries, so it cannot be unconditional. The per-candidate scheduling read stays silent by stated choice, recorded on decideDeliveryRoute itself."]
@@ -177,13 +177,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
-    notes: ["Gate inversion (.github#2551), FOUR mutations, one per guard this work adds, each red on exactly its own legs and each reverted and re-verified. A: delete the third candidate arm -> Failed 4, Passed 17. B: delete the full-width hashHex guard -> Failed 1, Passed 20. C: delete the empty-judged-subject refusal -> Failed 2, Passed 19. D: delete the claim-boundary notice -> Failed 1, Passed 20. Restored suite 21/21. Non-vacuity: CorpusBodyCount = 4 STATED not counted, MinimumSubjectLinesPerBody = 30 asserted per body inside forEachBody before any verdict."]
+    notes: ["Gate inversion (.github#2551), FIVE mutations, one per guard this work adds, each red on exactly its own legs and each reverted and re-verified. A: delete the third candidate arm -> Failed 4, Passed 18. B: delete the full-width hashHex guard -> Failed 1, Passed 21. C: delete the empty-judged-subject refusal -> Failed 2, Passed 20. D: delete the claim-boundary notice -> Failed 1, Passed 21. E: delete the vacuous-subject DIAGNOSIS while leaving the refusal intact -> Failed 1, Passed 21, separating the naming from the refusal. Restored suite 22/22. Non-vacuity: CorpusBodyCount = 4 STATED not counted, MinimumSubjectLinesPerBody = 30 asserted per body inside forEachBody before any verdict."]
   - id: EV007
     kind: verification
     subject:
@@ -202,10 +202,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["Fail-closed on a missing or malformed locator record: no marker at all (the pre-.github#2583 shape every e2e/parity/replay fixture still writes - an additive edit against it is STILL stale), a wrong locator (stale), and a truncated envelope (the line stays in the JSON payload so the receipt reads as MISSING). Absence is never permission (#266)."]
@@ -227,10 +227,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["DEC-001, upheld by independent review round 1 which built the adversarial insertion itself and confirmed the behaviour. The structural rule is adopted knowing a pure insertion CAN redefine scope; the residual is discharged by reporting at the boundaries that act on the row, and both presence and absence of the notice are asserted."]
@@ -252,10 +252,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["DEC-002. The locator is 16 hex and is NOT the safety boundary; acceptance is the full-width hashHex of the reconstruction against the receipt's own subjectRevision. Exercised deterministically by the 'aligns but does not reconstruct' leg. The claim is now stated WITH its condition: it holds for a non-empty judged subject only - see EV024."]
@@ -277,10 +277,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["DEC-003. record derives the locator marker from the same body it computed revision from. The byte-verbatim leg asserts the posted comment equals marker + locator + the author's receipt bytes unchanged, on all 4 corpus bodies."]
@@ -302,10 +302,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["DEC-004. The locator record is a SIBLING marker line, not a field inside the JSON, so src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs is untouched - confirmed by git diff --name-only, which does not list it."]
@@ -348,10 +348,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: [PC-001. No SDD lifecycle surface is added. analyze reports implementationReady with 0 blocking findings against the repaired package.]
@@ -373,10 +373,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["PC-002. delivery-route show --json gains subjectMatch and addedSubjectLines, both ADDITIVE on the existing fsgg.coord.delivery-route-result/v1 envelope - no field removed or retyped - so the envelope version does not move."]
@@ -398,10 +398,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["PC-003. The receipt comment gains an optional sibling marker line. Backward compatibility is measured, not argued: every e2e, parity and replay fixture still writes the pre-change shape and all stay green (e2e 14, writes 149, parity 648, replay 17)."]
@@ -423,10 +423,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["VO-001. Focused command-boundary tests through Client.deliveryRouteCmd and Client.claim against a scripted transport, as DeliveryRouteCliTests and ForceStealTests already drive them. 21 legs in ConsolidationTaxTests."]
@@ -448,10 +448,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["VO-002. See EV006: four mutations, each red on exactly its own legs, all reverted and re-verified green."]
@@ -473,10 +473,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["VO-003. .github#2392's regression floor: a Paths: widen still resolves CANONICALLY (not merely current) and a pre-#2392 whole-body receipt still resolves through the LEGACY arm. Both legs assert the arm by name, so a case silently migrating between candidates would red."]
@@ -498,10 +498,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["VO-004. Non-vacuity, and its limit. CorpusBodyCount = 4 is STATED not counted, and MinimumSubjectLinesPerBody = 30 is asserted per body before any verdict. Review round 1 established that this floor also EXCLUDED the degenerate empty-subject shape that carried a permanent false positive, so the degenerate legs are deliberately held outside it (EV024). A non-vacuity floor on a corpus is not a non-vacuity guarantee for a code path."]
@@ -523,10 +523,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["VO-005. The trigger reaches the gate. coord-engine.yml lists src/FS.GG.Coord.Cli/** and tests/FS.GG.Coord.Cli.Tests/** in BOTH pull_request and push paths: filters, and the corpus sits under tests/FS.GG.Coord.Cli.Tests/ so an edit to it starts the workflow that grades it. Confirmed live: the engine job PASSED in 12m34s on head f090fb48."]
@@ -548,10 +548,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["PM-001. No data migration. A post-change reader parses a pre-change comment (no locator line, third arm not consulted). A pre-change reader would fail to decode a post-change comment, which the existing engine-freshness guard (.github#1549) already prevents by refusing board writes from a stale engine."]
@@ -573,10 +573,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["GV-001. readiness/2583-consolidation-tax/work-model.json is regenerated from the current plan sources. No other generated view moves: both new output fields are additive on an unchanged envelope version, so no registry, projection or emitted-contract version changes."]
@@ -619,13 +619,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
-    notes: ["FR-008 / PD-010, from independent review round 1. An EMPTY judged subject made the full-width check hold BY CONSTRUCTION - hashHex \\\"\\\" against a recorded revision that IS hashHex \\\"\\\" - so an empty-subject receipt matched any body forever, with no collision, and reached the claim boundary as readily as show. additiveSubjectMatch now refuses an empty recorded locator record before alignment. Three legs, held OUTSIDE the corpus floor that excluded the shape: wholesale replacement by the unrelated 2392 body is STALE; a strictly additive edit is STALE; an unchanged empty-subject body is still CURRENT through the canonical arm."]
+    notes: ["FR-008 / PD-010, from independent review round 1. An EMPTY judged subject made the full-width check hold BY CONSTRUCTION - hashHex \\\"\\\" against a recorded revision that IS hashHex \\\"\\\" - so an empty-subject receipt matched any body forever, with no collision, and reached the claim boundary as readily as show. additiveSubjectMatch now returns a three-case AdditiveOutcome and decides the empty record as JudgedNothing BEFORE alignment, appending its own diagnosis to the refusal. The SHAPE is ported from scripts/check-gate-finding-history.py - this repository''s only other anti-vacuity floor - whose zero-runs arm is decided before the floor is consulted and carries its own detail string. The mapping was verified arm by arm first: that gate''s LOW-SAMPLE arm deliberately does NOT port, because a judged subject has no sample-size gradient. A discriminator leg asserts an ordinary stale receipt does NOT carry the diagnosis. Three legs, held OUTSIDE the corpus floor that excluded the shape: wholesale replacement by the unrelated 2392 body is STALE; a strictly additive edit is STALE; an unchanged empty-subject body is still CURRENT through the canonical arm."]
   - id: EV025
     kind: verification
     subject:
@@ -644,10 +644,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["DEC-006. #266 applied to its second shape. A MISSING locator record was already fail-closed; a PRESENT BUT EMPTY one was not. The two are refused for different stated reasons and kept distinct in the source. The safety claim on subjectLineLocator now carries its condition instead of asserting the unconditional form that shipped in round 1."]
@@ -669,10 +669,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["DEC-007. One shared additiveSubjectNote emitted at delivery-route show AND at requireCurrentDeliveryRoute (the claim/take mutation boundary); the per-candidate scheduling reads keep the fst form and stay silent, with the reason stated on decideDeliveryRoute. The universal claim in the source is narrowed to the boundaries on which it holds."]
@@ -694,10 +694,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["PD-009. The checklist mirror needs no separate task; one deferral observed at two stages is not two obligations."]
@@ -740,10 +740,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["PD-011. The second checklist-stage mirror of DEC-005, regenerated alongside FR-008; same disposition again."]
@@ -765,13 +765,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
-    notes: ["VO-006. Degenerate-body legs outside the corpus floor. Inverting the empty-judged-subject guard reds exactly the two refusal legs (Failed 2, Passed 19) and leaves the canonical degenerate leg green, so the guard is shown necessary rather than asserted."]
+    notes: ["VO-006. Degenerate-body legs outside the corpus floor. Inverting the empty-judged-subject guard reds exactly the two refusal legs (Failed 2, Passed 20) and leaves the canonical degenerate leg green. A FIFTH mutation deletes only the diagnosis, leaving the refusal correct, and reds only the leg that reads it (Failed 1, Passed 21), so the naming is load-bearing independently of the refusal. Both corpus floors are additionally asserted greater than zero at their consumed site, porting the reasoning behind that gate''s refusal of --min-runs 0."]
   - id: EV031
     kind: verification
     subject:
@@ -790,10 +790,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2583-consolidation-tax/test-results/cli.trx
-      digest: "sha256:69d03c582a1494f26696195027f17bd1af9f203980ec4cce6adcbee6305ac9f5"
+      digest: "sha256:5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 836
+      passed: 837
       failed: 0
       skipped: 0
     notes: ["VO-007. The claim/take boundary emits the additive notice, stays SILENT on a canonical match, and still REFUSES a modified judged line - the third leg being the discriminator that stops the first two being explained by 'the route check never runs'. Inverting the notice reds exactly the first leg (Failed 1, Passed 20)."]

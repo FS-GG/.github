@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2583-consolidation-tax/clarifications.md
 
 ## Source Snapshot
-- spec: work/2583-consolidation-tax/spec.md sha256:b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0 schemaVersion:1
-- clarifications: work/2583-consolidation-tax/clarifications.md sha256:e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5 schemaVersion:1
+- spec: work/2583-consolidation-tax/spec.md sha256:539d885e05352d6df6f360fe2073711b394fdc92b75381ba197c9bffbf3b9fc3 schemaVersion:1
+- clarifications: work/2583-consolidation-tax/clarifications.md sha256:fb17e82429e2f3c0f8fa21ba8b13ad83946304486be8aec65edcafeba3ed6053 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.
