@@ -107,10 +107,8 @@ jobs:
 
           source_sha="$GITHUB_SHA"
           if [ "$EVENT" = workflow_dispatch ] && [ "$DISPATCH_PUBLISH" = true ]; then
-            case "$DISPATCH_SOURCE_SHA" in
-              [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) source_sha="$DISPATCH_SOURCE_SHA" ;;
-              *) echo "::error::manual publish recovery requires an exact 40-character lowercase source_sha."; exit 1 ;;
-            esac
+            [[ "$DISPATCH_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::manual publish recovery requires an exact 40-character lowercase source_sha."; exit 1; }
+            source_sha="$DISPATCH_SOURCE_SHA"
           fi
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
