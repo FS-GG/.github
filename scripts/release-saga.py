@@ -327,10 +327,21 @@ def command_promote(args: argparse.Namespace) -> None:
     incomplete = [feed for feed in FEEDS if data["state"]["feeds"][feed]["state"] != "verified"]
     if incomplete:
         raise ValueError("stable promotion refused; incomplete feeds: " + ", ".join(incomplete))
+    def stable_parts(value: str) -> tuple[int, ...]:
+        if "-" in value:
+            raise ValueError(f"stable channel version is prerelease: {value}")
+        try:
+            return tuple(int(part) for part in value.split("."))
+        except ValueError as error:
+            raise ValueError(f"stable channel version is malformed: {value}") from error
     existing = data["state"]["channelPromotion"]
     if existing["state"] == "promoted":
         if existing["receipt"]["contentId"] != data["contentId"]:
             raise ValueError("stable channel already promoted to different bytes")
+        if args.previous_channel:
+            live = json.loads(pathlib.Path(args.previous_channel).read_text(encoding="utf-8"))
+            if live.get("contentId") != data["contentId"]:
+                raise ValueError("live stable channel names different content; refusing older replay")
         if args.channel_output:
             write_atomic(pathlib.Path(args.channel_output).resolve(), existing["receipt"])
         print("stable channel already promoted to these bytes")
@@ -340,13 +351,6 @@ def command_promote(args: argparse.Namespace) -> None:
         previous = json.loads(pathlib.Path(args.previous_channel).read_text(encoding="utf-8"))
         if previous.get("contentId") == data["contentId"]:
             raise ValueError("previous stable channel already names this content")
-        def stable_parts(value: str) -> tuple[int, ...]:
-            if "-" in value:
-                raise ValueError(f"stable channel version is prerelease: {value}")
-            try:
-                return tuple(int(part) for part in value.split("."))
-            except ValueError as error:
-                raise ValueError(f"stable channel version is malformed: {value}") from error
         if previous.get("version") != previous_version:
             raise ValueError("previous channel receipt does not match manifest baseline")
     if not previous_version:
