@@ -40,8 +40,12 @@ on:
       - "docs/coordination/**"
       - "scripts/check-graphql-monopoly.py"
       - "scripts/check-graphql-boundary.py"
+      - "scripts/graphql_complete_read.py"
+      - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
+      - "tests/graphql-boundary/**"
       - "tests/graphql-monopoly/**"
+      - "tests/test_graphql_complete_read.py"
       - ".github/workflows/graphql-monopoly.yml"
   push:
     branches: [main]
@@ -51,8 +55,12 @@ on:
       - "docs/coordination/**"
       - "scripts/check-graphql-monopoly.py"
       - "scripts/check-graphql-boundary.py"
+      - "scripts/graphql_complete_read.py"
+      - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
+      - "tests/graphql-boundary/**"
       - "tests/graphql-monopoly/**"
+      - "tests/test_graphql_complete_read.py"
       - ".github/workflows/graphql-monopoly.yml"
   workflow_dispatch:
 
