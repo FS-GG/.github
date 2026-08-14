@@ -76,6 +76,11 @@ python3 "$TOOL" record-observed --manifest "$WORK/manifest.json" --feed nuget \
   --observed "FS.GG.Drivers=$WORK/nuget/FS.GG.Drivers.9.8.7.nupkg" --detail "fixture public-feed observation"
 printf '%s\n' '{"contentId":"sha256:previous","version":"9.8.6","sourceSha":"previous","promotedAt":"2026-08-13T00:00:00Z"}' > "$WORK/previous-stable.json"
 python3 "$TOOL" promote --manifest "$WORK/manifest.json" --previous-channel "$WORK/previous-stable.json" --channel-output "$WORK/stable.json"
+# A queued observer after the first successful publication sees the current release as latest. The
+# already-promoted manifest makes this an exact idempotent replay, not a baseline regression.
+cp "$WORK/stable.json" "$WORK/current-stable.json"
+python3 "$TOOL" promote --manifest "$WORK/manifest.json" --previous-channel "$WORK/current-stable.json" --channel-output "$WORK/stable-replay.json"
+cmp "$WORK/stable.json" "$WORK/stable-replay.json"
 python3 "$TOOL" merge-journals --manifest "$WORK/merge-base.json" --journal "$WORK/manifest.json"
 jq -e '.state.feeds.github.state == "verified" and .state.feeds.nuget.state == "verified"' "$WORK/merge-base.json" >/dev/null
 printf '%s\n' '{"contentId":"sha256:newer","version":"9.9.0","sourceSha":"newer","promotedAt":"2026-08-13T00:00:00Z"}' > "$WORK/newer-stable.json"

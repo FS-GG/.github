@@ -12,9 +12,10 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 0,
+  "repair_rounds": 1,
   "reviewed_commits": [
-    "e163d9cdee2a95ca0f3ad951dabbfce5affde146"
+    "e163d9cdee2a95ca0f3ad951dabbfce5affde146",
+    "ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660"
   ],
   "findings": [
     {
@@ -28,9 +29,12 @@
         "Verification: scripts/release-saga.py:227-230 enforces complete-org-first only while recording a later observation, after the package workflows have already crossed the public-feed boundary; no package-owning workflow invokes record-observed before its nuget.org push.",
         "Verification: bash tests/release-saga/run.sh passed on e163d9cdee2a95ca0f3ad951dabbfce5affde146, but tests/release-saga/run.sh:35-69 manually copies and records the complete GitHub set before it records any nuget.org observation, so it does not exercise the production workflow topology that permits interleaving."
       ],
-      "disposition": "follow-up",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Verification: unverified; repair must make the production irreversible phase set-level and prove no nuget.org push is reachable until all three manifest-bound packages are externally verified on GitHub Packages."
+        "Verification: repair commit ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660 routes all three package workflows through scripts/release-saga-ci.sh in the ordered init, github-barrier, nuget-probe, NuGet/login, push, and nuget-record sequence; the workflows no longer contain --skip-duplicate.",
+        "Verification: scripts/release-saga-ci.sh:56-94 publishes or observes the package-specific org artifact, then downloads and payload-verifies FS.GG.Coord.Cli, FS.GG.Kit, and FS.GG.Drivers together and persists that complete GitHub state before returning success.",
+        "Verification: in all three package workflows the GitHub barrier step precedes the public-feed probe and NuGet/login; .github/workflows/release-coord-engine.yml:240-288, .github/workflows/release-kit.yml:329-357, and .github/workflows/release-drivers.yml:213-241 make the public push unreachable until the complete-set barrier returns success.",
+        "Verification: tests/release-saga/run.sh's topology check finds the required ordered production tokens in each package workflow and rejects --skip-duplicate; `bash tests/release-saga/run.sh` passed on exact repair head ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660."
       ]
     },
     {
@@ -43,9 +47,13 @@
         "Verification: each package workflow downloads the original draft manifest, asserts only its local package, and then uses dotnet nuget push --skip-duplicate; .github/workflows/release-coord-engine.yml:181-191,240-284, .github/workflows/release-kit.yml:274-284,329-353, and .github/workflows/release-drivers.yml:149-159,213-237 neither read durable per-feed state nor observe an existing remote package before retrying the push.",
         "Verification: tests/release-saga/run.sh:33-54 calls record-observed and record-failure directly on one local manifest before resuming, but no workflow follows that sequence; the green fixture therefore establishes the library's possible state transitions, not production crash recovery or durable resumption."
       ],
-      "disposition": "follow-up",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Verification: unverified; repair must persist partial/failure observations at the operational durable boundary, make preparation idempotent by immutable content identity rather than volatile state bytes, and make retry inspect/resume manifest-bound remote state before any push."
+        "Verification: scripts/release-saga-ci.sh:40-54 resumes the package-specific journal asset when present and otherwise seeds it from the immutable prepared manifest; lines 56-117 observe each target before deciding whether to push, verify the externally served payload afterward, and upload the updated non-racing journal after each monotonic step.",
+        "Verification: scripts/release-saga-ci.sh:119-125 records and uploads the current feed/package failure, and each package workflow has an `if: failure()` persistence step immediately after the irreversible feed sequence: engine lines 296-300, Kit lines 365-369, and Drivers lines 249-253.",
+        "Verification: .github/workflows/release-saga-promote.yml:39-48 requires exactly three journal assets and merges them before external observation; scripts/release-saga.py:223-271 rejects a different contentId/descriptor or conflicting verified observation while monotonically unioning verified package state and attempts.",
+        "Verification: .github/workflows/release-saga-prepare.yml:58-65 now compares an existing release's immutable contentId plus every package byte instead of comparing volatile manifest state bytes, so repeated preparation accepts identical descriptor/artifacts without depending on createdAt or updatedAt.",
+        "Verification: `bash tests/release-saga/run.sh`, `bash -n scripts/release-saga-ci.sh tests/release-saga/run.sh`, and `git diff --check e163d9cdee2a95ca0f3ad951dabbfce5affde146..ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660` all exited 0 on exact repair head ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660; shellcheck and actionlint were unavailable."
       ]
     },
     {
@@ -60,7 +68,11 @@
       ],
       "disposition": "follow-up",
       "resolution_evidence": [
-        "Verification: unverified; repair must bind all operational commands to explicit expected release/version/source/policy values and compare promotion against a durable repository-wide channel state with an idempotent, monotonic transition rule."
+        "Verification: repair ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660 resolves the identity half: scripts/release-saga.py:206-224 adds assert-identity for releaseId/version/sourceSha/policyVersion/stable channel, scripts/release-saga-ci.sh:40-54 applies it to both the prepared manifest and resumed journal, and .github/workflows/release-saga-promote.yml:40-43 binds promotion to github.event.workflow_run.head_sha.",
+        "Verification: repair ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660 adds previousStableVersion to the content-addressed descriptor, reads the preceding published coherent-set stable-channel receipt in .github/workflows/release-saga-promote.yml:74-84, and scripts/release-saga.py:330-347 rejects a mismatched baseline or non-advancing stable version.",
+        "Verification: the channel repair is not yet idempotent under the actual three-trigger topology. After the first observer publishes the draft, a later queued workflow_run sees the just-published current coherent-set release as previous_tag at .github/workflows/release-saga-promote.yml:74-81; scripts/release-saga.py:331-334 then rejects its same contentId before reaching the existing-manifest idempotence arm at lines 348-355.",
+        "Verification: tests/release-saga/run.sh:74-81 tests first promotion and a newer-version refusal, but does not rerun promotion with the emitted current stable-channel receipt; its green result therefore does not cover the deterministic second/third observer failure.",
+        "Verification: unverified; repair must make a same-content current stable receipt an idempotent success while retaining refusal of a different non-advancing or baseline-mismatched release, then add the repeated-promotion regression."
       ]
     },
     {
@@ -75,16 +87,16 @@
       ],
       "disposition": "follow-up",
       "resolution_evidence": [
-        "Verification: unverified; after the architecture defects are repaired, the milestone must land and perform the real 0.54.0 coherent-set release, externally verify identical manifest payloads on both feeds, persist its recovery/promotion evidence, and only then update package-version and roadmap evidence."
+        "Verification: registry/dependencies.yml:900-902 remains truthfully staged at source version 0.54.0 and package-version 0.53.0 on repair head ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660, and the roadmap remains unchecked; no release completion is claimed.",
+        "Verification: the non-circular route is a preparatory implementation merge only, not milestone acceptance: .github/workflows/release-saga-prepare.yml is workflow_dispatch and the package workflows consume a draft bound to the exact merged GITHUB_SHA, so the new trusted workflow must first exist on default branch before it can prepare and publish that exact source.",
+        "Verification: under the work-roadmap contract this finding remains a major completion gate: after the preparatory workflow repair lands, run the real 0.54.0 prepare/publish/promote sequence, externally verify the persisted hashes and runs, then return a new exact repository head carrying the package-version/roadmap evidence for this same critic's confirmation; do not mark M3 complete or accept the critique before that head."
       ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "e163d9cdee2a95ca0f3ad951dabbfce5affde146",
+    "reviewed_commit": "ab1ef446f2fb1a82bfbba2f37dc2db12a9f4d660",
     "verdict": "changes-required",
     "unresolved_blocker_major": [
-      "M3-RELEASE-SAGA-CRIT-001",
-      "M3-RELEASE-SAGA-CRIT-002",
       "M3-RELEASE-SAGA-CRIT-003",
       "M3-RELEASE-SAGA-CRIT-004"
     ]

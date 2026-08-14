@@ -327,6 +327,14 @@ def command_promote(args: argparse.Namespace) -> None:
     incomplete = [feed for feed in FEEDS if data["state"]["feeds"][feed]["state"] != "verified"]
     if incomplete:
         raise ValueError("stable promotion refused; incomplete feeds: " + ", ".join(incomplete))
+    existing = data["state"]["channelPromotion"]
+    if existing["state"] == "promoted":
+        if existing["receipt"]["contentId"] != data["contentId"]:
+            raise ValueError("stable channel already promoted to different bytes")
+        if args.channel_output:
+            write_atomic(pathlib.Path(args.channel_output).resolve(), existing["receipt"])
+        print("stable channel already promoted to these bytes")
+        return
     previous_version = data["descriptor"].get("previousStableVersion")
     if args.previous_channel:
         previous = json.loads(pathlib.Path(args.previous_channel).read_text(encoding="utf-8"))
@@ -345,14 +353,6 @@ def command_promote(args: argparse.Namespace) -> None:
         raise ValueError("manifest has no previous stable channel baseline")
     if stable_parts(data["descriptor"]["version"]) <= stable_parts(str(previous_version)):
         raise ValueError("stable channel version must advance monotonically")
-    existing = data["state"]["channelPromotion"]
-    if existing["state"] == "promoted":
-        if existing["receipt"]["contentId"] != data["contentId"]:
-            raise ValueError("stable channel already promoted to different bytes")
-        if args.channel_output:
-            write_atomic(pathlib.Path(args.channel_output).resolve(), existing["receipt"])
-        print("stable channel already promoted to these bytes")
-        return
     stamp = now()
     receipt = {"contentId": data["contentId"], "version": data["descriptor"]["version"], "sourceSha": data["descriptor"]["sourceSha"], "promotedAt": stamp}
     data["state"]["channelPromotion"] = {"state": "promoted", "promotedAt": stamp, "receipt": receipt}
