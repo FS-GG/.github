@@ -1775,6 +1775,7 @@ done
 checks=$((checks + 1))
 
 # Idempotence: a THIRD run at an already-recorded version must not stack a duplicate entry.
+ev_calls_before_idempotence="$(wc -l < "$ev1/calls.log")"
 rc=0; run_evidence "$ev1" "7.7.2" "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "$ev_script" || rc=$?
 [ "$rc" -eq 0 ] \
   || { echo "evidence step (idempotence): expected exit 0, got $rc" >&2; cat "$ev1/stderr.log" >&2; exit 1; }
@@ -1782,6 +1783,12 @@ checks=$((checks + 1))
 ev_dupes="$(grep -cF 'auto-publish evidence: FS.GG.Kit 7.7.2' "$ev1_log")"
 [ "$ev_dupes" -eq 1 ] \
   || { echo "evidence step (idempotence): $ev_dupes copies of the 7.7.2 entry, expected 1" >&2; exit 1; }
+checks=$((checks + 1))
+[ "$(wc -l < "$ev1/calls.log")" -eq "$ev_calls_before_idempotence" ] \
+  || { echo "evidence step (idempotence): a zero-diff rerun still called gh PR mutation" >&2; cat "$ev1/calls.log" >&2; exit 1; }
+checks=$((checks + 1))
+git -C "$ev1_remote" show-ref --verify --quiet "refs/heads/$ev_branch" \
+  && { echo "evidence step (idempotence): stale zero-diff branch $ev_branch remains on the remote" >&2; exit 1; }
 checks=$((checks + 1))
 
 # ---- GATE-INVERSION 1 (pnext-item §3, .github#2551): reintroduce the EXACT pre-fix `sed -i "2i..."`

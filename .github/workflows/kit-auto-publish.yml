@@ -488,7 +488,19 @@ jobs:
             --marker "auto-publish evidence: FS.GG.Kit ${VERSION}" \
             --entry "**auto-publish evidence: FS.GG.Kit ${VERSION}** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](${run}) published the structurally single-packed artifact to [GitHub Packages](${org}) and [nuget.org](${nuget}). Both served nuspecs record repository commit ${SOURCE_SHA}."
           git add registry/CHANGELOG.md registry/dependencies.yml
-          git diff --cached --quiet || git commit -m "docs: record FS.GG.Kit ${VERSION} auto-publish evidence"
+          # Once the evidence PR has merged, the writer is intentionally idempotent. Do not push a
+          # main-equivalent bot branch and ask GitHub to create a zero-diff PR: that API call fails
+          # (`No commits between main and bot/kit-auto-publish-evidence`) and made every later main
+          # push red after a successful release. Remove only this workflow-owned stale branch (if a
+          # prior failed run left it behind) and finish without a PR mutation.
+          if git diff --cached --quiet; then
+            echo "FS.GG.Kit ${VERSION} publish evidence is already on main; no evidence PR is owed"
+            if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+              git push origin --delete "$BRANCH"
+            fi
+            exit 0
+          fi
+          git commit -m "docs: record FS.GG.Kit ${VERSION} auto-publish evidence"
           git push --force-with-lease origin "$BRANCH"
           # `printf` with a SINGLE-QUOTED format, and every variable passed as a `%s` DATA argument —
           # the same construction, for the same reason, as the escalation step above (.github#2346).
