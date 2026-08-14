@@ -12,13 +12,14 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 4,
+  "repair_rounds": 5,
   "reviewed_commits": [
     "73f4cb9e12cebb5810e081a031e46ccfb50f04d5",
     "cf05e79a726d91f72d79aa4b9c9f3a32f428b933",
     "5f84ad851733730b9181dca9a28489ac0a3eb1db",
     "97ed4e269c46621bed1e71849261a4ca6a00f9d1",
-    "ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c"
+    "ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c",
+    "2d932bfb96c0bd5de04543567f47fa076c221e87"
   ],
   "findings": [
     {
@@ -65,12 +66,14 @@
         "Verification: an independent focused probe at 97ed4e269c46621bed1e71849261a4ca6a00f9d1 observed GraphQlReadError with NOT_RETRYABLE metadata for the malformed individual node and separately proved an existing retryable PRIMARY GraphQlReadError survives execute unchanged.",
         "Verification: `python scripts/check-graphql-boundary.py --root .`, `bash tests/graphql-boundary/run.sh`, and `git diff --check` all passed at 97ed4e269c46621bed1e71849261a4ca6a00f9d1.",
         "Verification: round-4 head ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c adds identical pull_request/push filters for scripts/graphql_complete_read.py, src/FS.GG.Coord.Core/**, tests/graphql-boundary/**, and tests/test_graphql_complete_read.py in .github/workflows/graphql-monopoly.yml, closing the CI trigger dependency set without changing boundary behavior.",
-        "Verification: `bash tests/paths-coherence/run.sh` passed 72/72, `python scripts/check-graphql-boundary.py --root .` returned VALID, `bash tests/graphql-boundary/run.sh` passed, `PYTHONDONTWRITEBYTECODE=1 python -m unittest tests/test_graphql_complete_read.py` passed 10/10, and `git diff --check` was clean at ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c."
+        "Verification: `bash tests/paths-coherence/run.sh` passed 72/72, `python scripts/check-graphql-boundary.py --root .` returned VALID, `bash tests/graphql-boundary/run.sh` passed, `PYTHONDONTWRITEBYTECODE=1 python -m unittest tests/test_graphql_complete_read.py` passed 10/10, and `git diff --check` was clean at ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c.",
+        "Verification: round-5 head 2d932bfb96c0bd5de04543567f47fa076c221e87 adds exactly one fixture-dependency copy, staging scripts/graphql_complete_read.py beside the copied repos-audit.sh in tests/repos-audit/run.sh's isolated SPARSEBOX; production sources are unchanged by this repair.",
+        "Verification: `bash -n tests/repos-audit/run.sh`, the full offline `bash tests/repos-audit/run.sh`, and `git diff --check` passed at 2d932bfb96c0bd5de04543567f47fa076c221e87, so the borrowed-interface mutation legs now reach their intended assertions with the compatibility dependency present."
       ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c",
+    "reviewed_commit": "2d932bfb96c0bd5de04543567f47fa076c221e87",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
