@@ -39,7 +39,13 @@ on:
       - ".agents/skills/**"
       - "docs/coordination/**"
       - "scripts/check-graphql-monopoly.py"
+      - "scripts/check-graphql-boundary.py"
+      - "scripts/graphql_complete_read.py"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "tests/graphql-boundary/**"
       - "tests/graphql-monopoly/**"
+      - "tests/test_graphql_complete_read.py"
       - ".github/workflows/graphql-monopoly.yml"
   push:
     branches: [main]
@@ -48,7 +54,13 @@ on:
       - ".agents/skills/**"
       - "docs/coordination/**"
       - "scripts/check-graphql-monopoly.py"
+      - "scripts/check-graphql-boundary.py"
+      - "scripts/graphql_complete_read.py"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "tests/graphql-boundary/**"
       - "tests/graphql-monopoly/**"
+      - "tests/test_graphql_complete_read.py"
       - ".github/workflows/graphql-monopoly.yml"
   workflow_dispatch:
 
@@ -77,6 +89,11 @@ jobs:
       # should not need a dependency, which is one more thing that can fail open on a runner.
       - name: Run the graphql-monopoly fixture (no network)
         run: bash tests/graphql-monopoly/run.sh
+
+      - name: Enforce the typed GraphQL boundary
+        run: |
+          python scripts/check-graphql-boundary.py --root .
+          bash tests/graphql-boundary/run.sh
 
   monopoly:
     runs-on: ubuntu-latest

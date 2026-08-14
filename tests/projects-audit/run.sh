@@ -8,13 +8,13 @@ cat >"$work/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 case "${PROJECTS_AUDIT_FIXTURE:-correct}" in
   correct)
-    printf '%s\n' '{"data":{"organization":{"projectsV2":{"nodes":[{"id":"PVT_x","title":"Roadmap","public":true}]}}}}'
+    printf '%s\n' '{"data":{"organization":{"projectsV2":{"totalCount":1,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVT_x","title":"Roadmap","public":true}]}},"rateLimit":{"cost":1,"remaining":4999}}}'
     ;;
   wrong-visibility)
-    printf '%s\n' '{"data":{"organization":{"projectsV2":{"nodes":[{"id":"PVT_x","title":"Roadmap","public":false}]}}}}'
+    printf '%s\n' '{"data":{"organization":{"projectsV2":{"totalCount":1,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVT_x","title":"Roadmap","public":false}]}},"rateLimit":{"cost":1,"remaining":4999}}}'
     ;;
   missing)
-    printf '%s\n' '{"data":{"organization":{"projectsV2":{"nodes":[]}}}}'
+    printf '%s\n' '{"data":{"organization":{"projectsV2":{"totalCount":0,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}},"rateLimit":{"cost":1,"remaining":4999}}}'
     ;;
   unreadable)
     exit 1

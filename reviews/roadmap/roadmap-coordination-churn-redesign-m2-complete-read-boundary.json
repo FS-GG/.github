@@ -1,0 +1,83 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m2-complete-read-boundary",
+  "milestone": "M2 — complete-read boundary",
+  "critic": "/root/m2_complete_read/m2_critic",
+  "initial_reviewed_commit": "73f4cb9e12cebb5810e081a031e46ccfb50f04d5",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 4,
+  "reviewed_commits": [
+    "73f4cb9e12cebb5810e081a031e46ccfb50f04d5",
+    "cf05e79a726d91f72d79aa4b9c9f3a32f428b933",
+    "5f84ad851733730b9181dca9a28489ac0a3eb1db",
+    "97ed4e269c46621bed1e71849261a4ca6a00f9d1",
+    "ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c"
+  ],
+  "findings": [
+    {
+      "id": "M2-CRIT-001",
+      "severity": "major",
+      "summary": "The F# architectural monopoly exempts a production component that still opens raw GraphQL envelopes.",
+      "evidence": [
+        "Verification: scripts/check-graphql-boundary.py:23-25 explicitly skips Budget.fs, although the checker announces that envelope and pagination selectors are monopolised.",
+        "Verification: src/FS.GG.Coord.GitHub/Budget.fs:234-270 parses the response body independently and reads root.data to extract rateLimit, so GraphQl.fs is not the single production owner of the envelope.",
+        "Verification: `python scripts/check-graphql-boundary.py --root .` at 73f4cb9e12cebb5810e081a031e46ccfb50f04d5 returned VALID despite that known raw-envelope handler, demonstrating the architectural check passes the prohibited state."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair cf05e79a726d91f72d79aa4b9c9f3a32f428b933 changes Budget.readMeter to delegate to internal GraphQlEnvelope.tryMeter, and scripts/check-graphql-boundary.py:24-30 no longer exempts Budget.fs.",
+        "Verification: tests/graphql-boundary/run.sh:13-16 injects the prior Budget raw-data selector and requires the checker to reject it; `bash tests/graphql-boundary/run.sh` passed at cf05e79a726d91f72d79aa4b9c9f3a32f428b933.",
+        "Verification: `python scripts/check-graphql-boundary.py --root .` returned VALID at cf05e79a726d91f72d79aa4b9c9f3a32f428b933 after the exemption was removed."
+      ]
+    },
+    {
+      "id": "M2-CRIT-002",
+      "severity": "major",
+      "summary": "The compatibility frontend still lets malformed per-node decoder failures escape the typed GraphQL failure boundary.",
+      "evidence": [
+        "Verification: `git diff --name-status f9267f14648308b8a016339c0998d2fa29ca569f..73f4cb9e12cebb5810e081a031e46ccfb50f04d5` contains no migration of scripts/projects-audit.sh, scripts/repos-audit.sh, scripts/check-roster-closure.py, scripts/coord-board-archive.py, or .github/workflows/coord-board-archive.yml.",
+        "Verification: scripts/projects-audit.sh:92-100 directly calls `gh api graphql`, reads `.data.organization.projectsV2.nodes`, requests only the first 100 projects, and carries no pageInfo/totalCount proof before issuing a definite missing-project finding.",
+        "Verification: scripts/coord-board-archive.py:236-267 returns a raw JSON envelope from `_gql`, opens `data` and `pageInfo` in `scan`, and has neither explicit page/item limits nor repeated-cursor/identity/total-count mutation checks.",
+        "Verification: scripts/check-roster-closure.py:300-332 implements a second envelope adapter and scripts/check-roster-closure.py:352-409 implements independent connection draining; scripts/repos-audit.sh:2937-2966 and .github/workflows/coord-board-archive.yml:82-89 also consume direct GraphQL results.",
+        "Verification: scripts/check-graphql-boundary.py:21-31 scans only top-level `*.fs` files under src/FS.GG.Coord.GitHub, so none of these production Python, shell, or workflow readers can fail the monopoly gate."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair cf05e79a726d91f72d79aa4b9c9f3a32f428b933 migrates the five named production surfaces and extends scripts/check-graphql-boundary.py:32-43 plus tests/graphql-boundary/run.sh:18-20 to cover them, so the original direct-reader and checker-scope defects are repaired.",
+        "Verification: scripts/check-graphql-boundary.py:1-2 and :47-48 now explicitly permit either typed boundary, while scripts/graphql_complete_read.py:23-53 independently owns transport, envelopes, mixed errors, and classification beside the F# GraphQl adapter; this leaves two authorities where M2 requires one.",
+        "Verification: scripts/graphql_complete_read.py:12-13 defines only one undifferentiated GraphQlReadError and :41-46 encodes retryability into exception prose, so consumers do not receive a typed retry/rate-limit classification.",
+        "Verification: `rg -n 'rollback|remov|M6|compatib|temporary|retire' scripts/graphql_complete_read.py scripts/projects-audit.sh scripts/repos-audit.sh scripts/check-roster-closure.py scripts/coord-board-archive.py .github/workflows/coord-board-archive.yml` at cf05e79a726d91f72d79aa4b9c9f3a32f428b933 found no removal/rollback condition for the second adapter.",
+        "Open after repair 1: route these scripts through the singular typed boundary (for example a typed CLI surface), or explicitly bound the Python compatibility path with a rollback/removal condition and typed failure/retry metadata consistent with the authoritative adapter.",
+        "Verification: repair 2 at 5f84ad851733730b9181dca9a28489ac0a3eb1db adds RetryClassification, RateLimitKind and FailureMetadata, declares the six-operation M6/three-stable-cycle removal trigger, and makes the checker require that trigger while its inversion rejects a second production page parser.",
+        "Verification: `python -m unittest tests/test_graphql_complete_read.py`, `python scripts/check-graphql-boundary.py --root .`, and `bash tests/graphql-boundary/run.sh` all passed at 5f84ad851733730b9181dca9a28489ac0a3eb1db.",
+        "Verification: scripts/graphql_complete_read.py:88-95 calls decode_node(raw) and key(item) outside any exception translation. A focused probe using nodes=[{}], totalCount=1 and hasNextPage=false raised raw KeyError (`isinstance(error, GraphQlReadError) == false`) at 5f84ad851733730b9181dca9a28489ac0a3eb1db.",
+        "Verification: tests/test_graphql_complete_read.py:57-60 labels its case malformed-nodes but supplies nodes={}, exercising only the connection container guard at scripts/graphql_complete_read.py:79-80; it does not exercise a malformed element or decoder/key failure.",
+        "Open after repair 2: translate decoder/key shape exceptions into GraphQlReadError and add an element-level malformed-node fault test that asserts the typed failure metadata.",
+        "Verification: repair 3 at 97ed4e269c46621bed1e71849261a4ca6a00f9d1 wraps decode_node and stable-key extraction in scripts/graphql_complete_read.py:91-98, preserves an existing GraphQlReadError, and translates every other callback exception into a non-retryable typed GraphQlReadError.",
+        "Verification: tests/test_graphql_complete_read.py adds the exact nodes=[{}], totalCount=1, hasNextPage=false regression and `PYTHONDONTWRITEBYTECODE=1 python -m unittest tests/test_graphql_complete_read.py` passed all 10 cases at 97ed4e269c46621bed1e71849261a4ca6a00f9d1.",
+        "Verification: an independent focused probe at 97ed4e269c46621bed1e71849261a4ca6a00f9d1 observed GraphQlReadError with NOT_RETRYABLE metadata for the malformed individual node and separately proved an existing retryable PRIMARY GraphQlReadError survives execute unchanged.",
+        "Verification: `python scripts/check-graphql-boundary.py --root .`, `bash tests/graphql-boundary/run.sh`, and `git diff --check` all passed at 97ed4e269c46621bed1e71849261a4ca6a00f9d1.",
+        "Verification: round-4 head ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c adds identical pull_request/push filters for scripts/graphql_complete_read.py, src/FS.GG.Coord.Core/**, tests/graphql-boundary/**, and tests/test_graphql_complete_read.py in .github/workflows/graphql-monopoly.yml, closing the CI trigger dependency set without changing boundary behavior.",
+        "Verification: `bash tests/paths-coherence/run.sh` passed 72/72, `python scripts/check-graphql-boundary.py --root .` returned VALID, `bash tests/graphql-boundary/run.sh` passed, `PYTHONDONTWRITEBYTECODE=1 python -m unittest tests/test_graphql_complete_read.py` passed 10/10, and `git diff --check` was clean at ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "ebbaf9cfa3a67965d7034eb4decca68f36c1ca3c",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

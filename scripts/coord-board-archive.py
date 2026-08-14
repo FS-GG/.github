@@ -67,6 +67,9 @@ import json
 import re
 import subprocess
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from graphql_complete_read import GraphQlReadError, drain, execute
 
 PROJECT_ENV = "FSGG_COORD_PROJECT_ID"
 BATCH = 50
@@ -216,6 +219,7 @@ SCAN = """
 query($project: ID!, $cursor: String) {
   node(id: $project) { ... on ProjectV2 {
     items(first: 100, after: $cursor) {
+      totalCount
       pageInfo { hasNextPage endCursor }
       nodes {
         id
@@ -233,26 +237,10 @@ query($project: ID!, $cursor: String) {
 }"""
 
 
-def _gql(query: str, **variables) -> dict:
-    cmd = ["gh", "api", "graphql", "-f", f"query={query}"]
-    for key, value in variables.items():
-        cmd += ["-F", f"{key}={value}"]
-    done = subprocess.run(cmd, capture_output=True, text=True)
-    if done.returncode != 0:
-        raise RuntimeError(f"GraphQL call failed: {done.stderr.strip()[:500]}")
-    return json.loads(done.stdout)
-
-
 def scan(project: str) -> tuple[list[dict], int, int]:
-    rows, cursor, pages, spent = [], None, 0, 0
-    while True:
-        data = _gql(SCAN, project=project, **({"cursor": cursor} if cursor else {}))
-        conn = data["data"]["node"]["items"]
-        spent += data["data"]["rateLimit"]["cost"]
-        pages += 1
-        for node in conn["nodes"]:
-            content = node.get("content") or {}
-            rows.append({
+    def decode(node: dict) -> dict:
+        content = node.get("content") or {}
+        return {
                 "itemId": node["id"],
                 "status": (node.get("status") or {}).get("name"),
                 "blockedBy": (node.get("blockedBy") or {}).get("text"),
@@ -260,11 +248,10 @@ def scan(project: str) -> tuple[list[dict], int, int]:
                 "state": content.get("state"),
                 "closedAt": content.get("closedAt"),
                 "repo": (content.get("repository") or {}).get("nameWithOwner"),
-            })
-        if not conn["pageInfo"]["hasNextPage"]:
-            break
-        cursor = conn["pageInfo"]["endCursor"]
-    return rows, pages, spent
+            }
+    result = drain(SCAN, {"project": project}, lambda d: d["node"]["items"], decode,
+                   lambda row: row["itemId"], max_pages=100, max_items=10000)
+    return result.items, result.pages, result.spent
 
 
 def archive_batch(project: str, chunk: list[dict]) -> None:
@@ -281,7 +268,7 @@ def archive_batch(project: str, chunk: list[dict]) -> None:
     variables = {"p": project}
     for j, row in enumerate(chunk):
         variables[f"i{j}"] = row["itemId"]
-    _gql(f"mutation({decls}) {{\n{body}\n}}", **variables)
+    execute(f"mutation({decls}) {{\n{body}\n}}", variables, lambda data: data)
 
 
 def main() -> int:
@@ -304,8 +291,8 @@ def main() -> int:
     # records what landed — but starting one on a budget that cannot finish it spends points to
     # accomplish nothing, and this job is never the urgent work on the board.
     try:
-        remaining = int(_gql("query { rateLimit { remaining cost } }")["data"]["rateLimit"]["remaining"])
-    except (RuntimeError, KeyError, ValueError) as exc:
+        remaining = execute("query { rateLimit { remaining cost } }", {}, lambda data: int(data["rateLimit"]["remaining"]))
+    except (GraphQlReadError, KeyError, ValueError) as exc:
         print(f"coord-board-archive: could not read the GraphQL meter ({exc}); deferring rather than "
               f"scanning blind", file=sys.stderr)
         return 0

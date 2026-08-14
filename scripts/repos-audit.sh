@@ -2934,13 +2934,12 @@ issue_policy_findings=0; issue_policy_undetermined=0; issue_policy_graded=0
 while IFS= read -r policy_repo; do
   [ -n "$policy_repo" ] || continue
   policy_owner=${policy_repo%%/*}; policy_name=${policy_repo#*/}
-  policy_query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){issueCreationPolicy hasIssuesEnabled}}'
-  policy_json="$(gh api graphql -f "query=$policy_query" -F "owner=$policy_owner" -F "name=$policy_name" 2>"$GH_ERR_FILE")" || {
+  policy_json="$(python3 "$(dirname "$0")/graphql_complete_read.py" repository-policy --owner "$policy_owner" --name "$policy_name" 2>"$GH_ERR_FILE")" || {
     echo "::error::repos-audit: $policy_repo — issue-creation policy no-verdict: $(gh_last_err)" >&2
     issue_policy_undetermined=$((issue_policy_undetermined + 1)); continue
   }
-  issues_enabled="$(jq -r '.data.repository.hasIssuesEnabled | if type == "boolean" then tostring else empty end' <<<"$policy_json")"
-  policy_value="$(jq -r '.data.repository.issueCreationPolicy // empty' <<<"$policy_json")"
+  issues_enabled="$(jq -r '.hasIssuesEnabled | if type == "boolean" then tostring else empty end' <<<"$policy_json")"
+  policy_value="$(jq -r '.issueCreationPolicy // empty' <<<"$policy_json")"
   if [ -z "$issues_enabled" ]; then
     echo "::error::repos-audit: $policy_repo — issue-creation policy no-verdict: hasIssuesEnabled was unreadable." >&2
     issue_policy_undetermined=$((issue_policy_undetermined + 1))

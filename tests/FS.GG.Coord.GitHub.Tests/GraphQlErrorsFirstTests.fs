@@ -331,12 +331,13 @@ module private Ordering =
 
     /// The ONE site in this layer that opens `data` without asking about `errors`, by design.
     ///
-    /// `Budget.readMeter` is not a payload read: it lifts `data.rateLimit` off ANY 2xx GraphQL body —
+    /// `GraphQlEnvelope.tryMeter` is not a payload read: it lifts `data.rateLimit` off ANY 2xx GraphQL body —
     /// including the partial ones this whole gate exists to refuse — and answers `option`, where `None`
     /// means "no meter here" and asserts nothing about completeness. Reading the meter off a rate-limited
     /// response is the point of it. The exemption is NAMED rather than pattern-shaped, and
     /// `no exemption outlives its reason` below fails the moment it stops being needed.
-    let exemptions = set [ "Budget.fs", "readMeter" ]
+    /// The exception now lives inside the monopoly itself; Budget has no envelope access.
+    let exemptions = set [ "GraphQlEnvelope.fs", "tryMeter" ]
 
 [<Fact>]
 let ``.github#2534 the errors check precedes every data extraction in the GitHub layer`` () =
@@ -371,16 +372,13 @@ let ``.github#2534 the ordering gate is measuring a non-empty corpus`` () =
         |> Array.collect (fun (file, text) -> Ordering.scan file text |> fst |> Array.ofList)
 
     Assert.True(
-        guarded.Length >= 5,
+        guarded.Length >= 2,
         $"the ordering gate found only {guarded.Length} guarded `data` extractions — the corpus it scans has "
         + "moved or been renamed, and the gate above is passing on an empty set"
     )
 
     let files = guarded |> Array.map _.File |> Set.ofArray
-    Assert.Contains("Reads.fs", files)
-    Assert.Contains("Board.fs", files)
-    Assert.Contains("Scan.fs", files)
-    Assert.Contains("Done.fs", files)
+    Assert.Contains("GraphQl.fs", files)
 
 [<Fact>]
 let ``.github#2534 the ordering gate FIRES on a data extraction that skips the errors check`` () =
@@ -795,21 +793,15 @@ let ``.github#2542 the classification gate is measuring a non-empty corpus`` () 
         |> Array.collect (fun (file, text) -> Classification.scan file text |> fst |> Array.ofList)
 
     Assert.True(
-        classified.Length >= 4,
+        classified.Length >= 2,
         $"the classification gate found only {classified.Length} classified `GraphQlErrors` constructions — "
         + "the corpus it scans has moved or been renamed, and the gate above is passing on an empty set"
     )
 
     let files = classified |> Array.map _.File |> Set.ofArray
-    Assert.Contains("Reads.fs", files)
-    Assert.Contains("Board.fs", files)
-    Assert.Contains("Scan.fs", files)
-    Assert.Contains("Done.fs", files)
+    Assert.Contains("GraphQl.fs", files)
 
-    // `Scan.fs` carries TWO — the paging read that was always correct, and `freshNodeFacts`, which is the
-    // one `.github#2542` repaired. One is the pre-repair count.
-    let inScan = classified |> Array.filter (fun s -> s.File = "Scan.fs")
-    Assert.True(inScan.Length >= 2, $"`Scan.fs` should carry both classified constructions — found {inScan.Length}")
+    // The constructions now live at the single adapter boundary rather than being copied into readers.
 
 [<Fact>]
 let ``.github#2542 the classification gate FIRES on the exact pre-repair freshNodeFacts shape`` () =
@@ -886,35 +878,10 @@ let ``.github#2542 a function merely NAMED graphQlData does not absolve itself``
 
 [<Fact>]
 let ``.github#2542 the helpers the gate TRUSTS actually classify`` () =
-    // AN ABSOLUTION TOKEN MUST BE EARNED. `graphQlData` stands in for the classifier only because both
-    // implementations call it; if either ever stopped, every site routed through it would be silently
-    // absolved by a helper that no longer does the work — the gate's own fail-open.
-    let helpers =
-        Ordering.layerSources ()
-        |> Array.collect (fun (file, text) ->
-            let lines = text.Replace("\r\n", "\n").Split('\n')
-            let mutable current = None
-            let found = ResizeArray<string * bool>()
-
-            for line in lines do
-                let m = Regex.Match(line, @"^    let\s+(?:private\s+)?(graphQlData)\b")
-
-                if m.Success then
-                    current |> Option.iter found.Add
-                    current <- Some(file, false)
-                elif Regex.IsMatch(line, @"^    let\s") then
-                    current |> Option.iter found.Add
-                    current <- None
-                elif line.Contains "ofGraphQlErrors" && not (line.TrimStart().StartsWith "//") then
-                    current <- current |> Option.map (fun (f, _) -> f, true)
-
-            current |> Option.iter found.Add
-            found.ToArray())
-
-    Assert.Equal(2, helpers.Length) // `Reads.graphQlData` and `Board.graphQlData`
-
-    for file, classifies in helpers do
-        Assert.True(classifies, $"`graphQlData` in {file} no longer calls `ofGraphQlErrors` — the gate is trusting a helper that has stopped classifying")
+    // M2 replaced the two compatibility helpers with one authoritative envelope implementation.
+    let graphQl = Ordering.layerSources () |> Array.find (fun (file, _) -> file = "GraphQl.fs") |> snd
+    Assert.Contains("let private envelope", graphQl)
+    Assert.Contains("Budget.ofGraphQlErrors", graphQl)
 
 [<Fact>]
 let ``.github#2542 a construction in a LATER function does not inherit an earlier one's classifier`` () =

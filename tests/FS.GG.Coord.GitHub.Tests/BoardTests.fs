@@ -1104,7 +1104,7 @@ let ``a landed write folds into the cached scan for THIS board, not a hardcoded 
 let ``bootstrap resolves the field and option ids in TWO GraphQL calls`` () =
     let transport =
         scripted
-            [ ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+            [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
               ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
                      {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},
                      {"id":"PVTF_est","name":"Estimate","dataType":"NUMBER"}]}}}}}""" ]
@@ -1133,7 +1133,7 @@ let ``a board that reports NO fields is a failed read, and is never cached`` () 
     // Status".
     let transport =
         scripted
-            [ ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+            [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
               ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[]}}}}}""" ]
 
     match bootstrap transport "FS-GG" "Coordination" with
@@ -1186,7 +1186,7 @@ let ``bootstrap resolves a USER-owned board through user(login:) (#1344)`` () =
         let transport =
             capturing
                 docs
-                [ ok """{"data":{"user":{"projectsV2":{"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_user"}]}}}}"""
+                [ ok """{"data":{"user":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_user"}]}}}}"""
                   ok """{"data":{"user":{"projectV2":{"fields":{"nodes":[
                          {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
 
@@ -1227,7 +1227,7 @@ let ``bootstrap resolves a VIEWER-owned board through viewer, with no login in c
         let transport =
             capturing
                 docs
-                [ ok """{"data":{"viewer":{"projectsV2":{"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_viewer"}]}}}}"""
+                [ ok """{"data":{"viewer":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_viewer"}]}}}}"""
                   ok """{"data":{"viewer":{"projectV2":{"fields":{"nodes":[
                          {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
 
@@ -1265,7 +1265,7 @@ let ``bootstrap still queries organization(login:) by default - org behaviour is
     let transport =
         capturing
             docs
-            [ ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+            [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
               ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
                      {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
 
@@ -1335,7 +1335,7 @@ let ``bootstrapCached serves the day-cache on the second call - zero GraphQL (#4
 
     let cold =
         scripted
-            [ ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+            [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
               ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
                      {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},
                      {"id":"PVTF_est","name":"Estimate","dataType":"NUMBER"}]}}}}}""" ]

@@ -41,7 +41,7 @@ This script asserts the roster is closed, from three directions:
      Direction B therefore compares only the org-owned rows, and every row it does not grade is
      PRINTED with the reason — never dropped, and never counted as verified.
 
-  C. BOARD closure (one `gh api graphql` call).  Every repository naming a non-`Done` row on the
+  C. BOARD closure (through the complete-read adapter). Every repository naming a non-`Done` row on the
      FS-GG Coordination Projects v2 board has a row in `repos.yml`, or an explicit `outside-fabric:`
      entry (`.github#2206`). This is the direction that actually found the defect this script was
      extended for: two user-owned repos (`EHotwagner/rogue3`, `EHotwagner/S.I.R.`) held live board
@@ -111,6 +111,9 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from graphql_complete_read import drain
 
 import yaml
 
@@ -143,12 +146,14 @@ query RosterClosureBoardItems($owner:String!,$number:Int!,$after:String){
       }
     }
   }}
+  rateLimit{cost remaining}
 }
 """
 
 _BOARD_PROJECT_LOOKUP_QUERY = r"""
-query RosterClosureBoardProject($owner:String!){
-  organization(login:$owner){projectsV2(first:50){nodes{number title}}}
+query RosterClosureBoardProject($owner:String!,$cursor:String){
+  organization(login:$owner){projectsV2(first:50,after:$cursor){totalCount pageInfo{hasNextPage endCursor} nodes{id number title}}}
+  rateLimit{cost remaining}
 }
 """
 
@@ -297,50 +302,17 @@ def _fetch_org_meta(org: str) -> tuple[int, int | None]:
     return public, (int(private) if private is not None else None)
 
 
-def _gh_graphql(query: str, variables: dict) -> dict:
-    """Run one GraphQL query through the `gh` CLI and return its `data`. Raises on any failure.
-
-    Mirrors `scripts/project-field-options`'s `graphql()` helper exactly (same subprocess shape,
-    same error taxonomy) rather than importing it: that script is a standalone tool with no public
-    module surface, and duplicating four lines here is cheaper than inventing one. `gh` is already a
-    load-bearing dependency of this repo's Projects v2 tooling.
-    """
-    payload = json.dumps({"query": query, "variables": variables}, sort_keys=True)
-    try:
-        proc = subprocess.run(
-            ["gh", "api", "graphql", "--input", "-"],
-            input=payload.encode("utf-8"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=60,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise RuntimeError(f"could not run `gh api graphql`: {exc}") from exc
-    if proc.returncode:
-        raise RuntimeError(f"`gh api graphql` failed ({proc.returncode}): {proc.stderr.decode(errors='replace').strip()}")
-    try:
-        reply = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"`gh api graphql` returned invalid JSON: {exc}") from exc
-    if not isinstance(reply, dict):
-        raise RuntimeError(f"`gh api graphql` returned a {type(reply).__name__}, expected an object")
-    if reply.get("errors"):
-        raise RuntimeError("GraphQL refused the query: " + json.dumps(reply["errors"], sort_keys=True))
-    if "data" not in reply or not isinstance(reply["data"], dict):
-        raise RuntimeError("GraphQL reply carried neither `data` nor `errors`")
-    return reply["data"]
-
-
 def _resolve_board_project_number(owner: str, title: str) -> int:
     """The Projects v2 `number` for `owner`'s project named `title`. Raises if 0 or >1 match.
 
     Read by TITLE, not hardcoded, so a project renumbering does not silently point this gate at the
     wrong board — the same title-verification discipline `project-field-options.project_field` uses.
     """
-    data = _gh_graphql(_BOARD_PROJECT_LOOKUP_QUERY, {"owner": owner})
-    org = data.get("organization") or {}
-    nodes = ((org.get("projectsV2") or {}).get("nodes")) or []
+    result = drain(_BOARD_PROJECT_LOOKUP_QUERY, {"owner": owner},
+                   lambda d: d["organization"]["projectsV2"], lambda n: n,
+                   lambda n: str(n.get("id") or n["number"]), max_pages=20, max_items=1000,
+                   underfull_window=50)
+    nodes = result.items
     matches = [n for n in nodes if isinstance(n, dict) and n.get("title") == title]
     if len(matches) != 1:
         raise RuntimeError(
@@ -358,23 +330,7 @@ def _fetch_board_items(owner: str, title: str) -> list[dict]:
     rather than treated as unreadable; it names no repository to close over.
     """
     number = _resolve_board_project_number(owner, title)
-    out: list[dict] = []
-    after: str | None = None
-    total: int | None = None
-    while True:
-        data = _gh_graphql(_BOARD_ITEMS_QUERY, {"owner": owner, "number": number, "after": after})
-        project = (data.get("organization") or {}).get("projectV2")
-        if not project:
-            raise RuntimeError(f"board {owner}/{number} was not readable while paging items")
-        page = project.get("items") or {}
-        page_total = int(page.get("totalCount", -1))
-        if total is None:
-            total = page_total
-        elif total != page_total:
-            raise RuntimeError(
-                f"board item count changed while paging ({total} -> {page_total}); the board "
-                f"mutated mid-read, so this pass cannot be trusted as a complete snapshot")
-        for raw in page.get("nodes") or []:
+    def decode(raw: dict) -> dict | None:
             content = (raw or {}).get("content") or {}
             repo = content.get("repository")
             if not repo:
@@ -394,21 +350,25 @@ def _fetch_board_items(owner: str, title: str) -> list[dict]:
                         f"{content.get('__typename')} with no `repository` in the reply — a partially "
                         f"resolved node, not a legitimate no-repository row. Cannot trust this page as "
                         f"complete.")
-                continue
+                return {"itemId": str(raw["id"]), "_skip": True}
             status = ((raw.get("status") or {}).get("name")) or ""
-            out.append({
+            return {
+                "itemId": str(raw["id"]),
                 "owner": str(((repo.get("owner") or {}).get("login")) or ""),
                 "repo": str(repo.get("name") or ""),
                 "number": content.get("number"),
                 "status": str(status),
-            })
-        info = page.get("pageInfo") or {}
-        if not info.get("hasNextPage"):
-            break
-        after = info.get("endCursor")
-        if not after:
-            raise RuntimeError("board reported hasNextPage=true but no endCursor to page with")
-    return out
+            }
+    def connection(data: dict) -> dict:
+        project = (data.get("organization") or {}).get("projectV2")
+        if not project:
+            raise RuntimeError(f"board {owner}/{number} was not readable while paging items")
+        return project["items"]
+    result = drain(_BOARD_ITEMS_QUERY, {"owner": owner, "number": number},
+                   connection, decode,
+                   lambda row: row["itemId"],
+                   max_pages=100, max_items=10000, cursor_name="after")
+    return [{k: v for k, v in row.items() if k != "itemId"} for row in result.items if not row.get("_skip")]
 
 
 def _validate_board_items(raw: object) -> list[dict]:
@@ -641,7 +601,7 @@ def main(argv: list[str]) -> int:
                     help="The Projects v2 board's title, used to resolve its number (default: "
                          f"{DEFAULT_BOARD_TITLE!r}).")
     ap.add_argument("--board-json", default=None,
-                    help="Read board items from a JSON file instead of `gh api graphql` — either a "
+                    help="Read board items from a JSON file instead of the live GraphQL adapter — either a "
                          "bare array of {owner, repo, number, status} objects, or an object with an "
                          "`items` key holding that array. For fixtures.")
     ap.add_argument("--skip-board", action="store_true",

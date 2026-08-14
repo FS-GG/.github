@@ -44,79 +44,10 @@ module Board =
     /// `errors`, exactly like a failed alias. Test the partial arm first and an exhausted budget is
     /// misreported as *"the board is half-written"*: the caller would then refuse to queue it (a partial is
     /// never queued), and the write would be silently lost on a condition that was only ever temporary.
+    // M6 removal condition: delete this compatibility shim when Board's legacy JsonElement domain
+    // decoders have become typed DTO decoders. The envelope is already monopolised by GraphQl.
     let private graphQlData (subject: string) (body: string) : IoResult<JsonElement> =
-        if String.IsNullOrWhiteSpace body then
-            Error(Malformed(subject, "the GraphQL response body was empty"))
-        else
-
-        try
-            let doc = JsonDocument.Parse body
-            let root = doc.RootElement
-
-            let errors =
-                match root.TryGetProperty "errors" with
-                | true, e when e.ValueKind = JsonValueKind.Array && e.GetArrayLength() > 0 -> Some e
-                | _ -> None
-
-            match errors with
-            | None ->
-                match root.TryGetProperty "data" with
-                | true, data when data.ValueKind <> JsonValueKind.Null -> Ok data
-                | _ -> Error(Malformed(subject, "the GraphQL response carried neither `data` nor `errors`"))
-
-            | Some e ->
-                let messages =
-                    e.EnumerateArray()
-                    |> Seq.map (fun err ->
-                        match err.TryGetProperty "message" with
-                        | true, m when m.ValueKind = JsonValueKind.String -> m.GetString()
-                        | _ -> "(no message)")
-                    |> List.ofSeq
-
-                // RATE LIMIT FIRST. See above — this ordering is load-bearing. `ofGraphQlErrors` also
-                // tells a SECONDARY limit from the primary budget (#1666); this site used to call
-                // `isRateLimited`, which matches both, and reported either as the GraphQL budget.
-                match Budget.ofGraphQlErrors messages with
-                | Some limited -> Error limited
-                | None -> Error(GraphQlErrors messages)
-
-        with :? JsonException as e ->
-            Error(Malformed(subject, $"the GraphQL response is not JSON: %s{e.Message}"))
-
-    /// **"IS THERE ANOTHER PAGE, AND WHERE DOES IT START?"** — the one place `pageInfo` becomes an answer.
-    ///
-    /// COMPLETENESS IS A REQUIRED BOOLEAN, NOT AN OPTIONAL HINT. A missing, null, or non-Boolean
-    /// `hasNextPage` used to fall through as `false` in the external-owner walk and turn an incomplete read
-    /// into the definite absence `Ok None` — and `Ok None` is what licenses `item-add` (#2166). Every arm
-    /// that cannot establish "that was all" is therefore a refusal.
-    ///
-    /// Hoisted out of `externalItemId` by `.github#2535`, which needed the identical walk for the project
-    /// list, with the messages preserved byte-for-byte via `what`. Two copies of a completeness guard is
-    /// the drift that item is about, so the paginating remedy has exactly one implementation, as the
-    /// `totalCount` remedy (`Reads.connectionComplete`) does.
-    let private nextPage (subject: string) (what: string) (connection: JsonElement) : IoResult<string option> =
-        // `TryGetProperty` THROWS on a non-object rather than answering `false` (`.github#2418`), and both
-        // call sites sit inside a `try/with :? KeyNotFoundException` that would not catch it.
-        if connection.ValueKind <> JsonValueKind.Object then
-            Error(Malformed(subject, $"%s{what} is not a JSON object (%A{connection.ValueKind}) — this is a FAILED READ"))
-        else
-
-        match connection.TryGetProperty "pageInfo" with
-        | true, pageInfo when pageInfo.ValueKind = JsonValueKind.Object ->
-            match pageInfo.TryGetProperty "hasNextPage" with
-            | true, hasNext when hasNext.ValueKind = JsonValueKind.False -> Ok None
-            | true, hasNext when hasNext.ValueKind = JsonValueKind.True ->
-                match pageInfo.TryGetProperty "endCursor" with
-                | true, value when
-                    value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString()))
-                    ->
-                    Ok(Some(value.GetString()))
-                | _ -> Error(Malformed(subject, $"%s{what} has another page but no usable cursor"))
-            | _ ->
-                // COMPLETENESS IS A REQUIRED BOOLEAN, not an optional hint. Missing/null/string used to
-                // fall through as `false` and turn an incomplete read into the definite absence `Ok None`.
-                Error(Malformed(subject, $"%s{what}'s `pageInfo.hasNextPage` is missing or is not a Boolean"))
-        | _ -> Error(Malformed(subject, $"%s{what}'s `pageInfo` is missing or is not an object"))
+        GraphQl.decode subject body Ok
 
     let private query (document: string) (variables: (string * Var) list) (subject: string) =
         { Method = "POST"
@@ -131,7 +62,7 @@ module Board =
 
     [<Literal>]
     let private ProjectsDoc =
-        "query($owner: String!, $cursor: String) { organization(login: $owner) { projectsV2(first: 50, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { number title id } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $cursor: String) { organization(login: $owner) { projectsV2(first: 50, after: $cursor) { pageInfo { hasNextPage endCursor } totalCount nodes { number title id } } } rateLimit { cost remaining } }"
 
     [<Literal>]
     let private FieldsDoc =
@@ -189,83 +120,43 @@ module Board =
         // and one whose remedy ("check `FSGG_COORD_PROJECT`") is wrong for the actual condition. This is
         // `externalItemId`'s walk, sharing its `nextPage` guard and its 100-page ceiling: a missing or
         // non-Boolean `hasNextPage` is a refusal, never "that was all".
-        let rec findProject (cursor: string option) (guard: int) : IoResult<(int * string) option> =
-            if guard <= 0 then
-                Error(Malformed(subject, "the board lookup did not terminate within 100 pages of projects"))
-            else
-
+        let fetchProjects (cursor: string option) =
             let variables =
                 ownerVars
                 @ (match cursor with
                    | Some value -> [ "cursor", VString value ]
                    | None -> [])
 
-            match transport.Send(query (OwnerKind.forOwner kind ProjectsDoc) variables subject) with
-            | Error e -> Error e
-            | Ok projectsResponse ->
-
-            match graphQlData subject projectsResponse.Body with
-            | Error e -> Error e
-            | Ok data ->
-
-            let connection =
-                try
+            GraphQl.read transport (query (OwnerKind.forOwner kind ProjectsDoc) variables subject) (fun data ->
                     let root = data.GetProperty ownerField
-
                     if root.ValueKind = JsonValueKind.Null then
-                        None
+                        Error(Malformed(subject, $"the project-list response is missing `%s{ownerField}.projectsV2`"))
                     else
-                        Some(root.GetProperty "projectsV2")
-                with :? KeyNotFoundException ->
-                    None
+                        let connection = root.GetProperty "projectsV2"
+                        GraphQl.pageWithin subject "the board lookup" 50 (fun (id, _, _) -> id)
+                            (fun node ->
+                                match node.TryGetProperty "id", node.TryGetProperty "title", node.TryGetProperty "number" with
+                                | (true, id), (true, projectTitle), (true, number)
+                                    when id.ValueKind = JsonValueKind.String
+                                         && projectTitle.ValueKind = JsonValueKind.String
+                                         && number.ValueKind = JsonValueKind.Number ->
+                                    match number.TryGetInt32() with
+                                    | true, value -> Ok(id.GetString(), projectTitle.GetString(), value)
+                                    | _ -> Error(Malformed(subject, "a board's `number` is not a 32-bit integer"))
+                                | _ -> Error(Malformed(subject, "the project list returned a board with no readable `number`/`title`/`id`")))
+                            connection)
 
-            match connection with
-            | None -> Error(Malformed(subject, $"the project-list response is missing `%s{ownerField}.projectsV2`"))
-            | Some connection ->
-
-            let matched =
-                try
-                    connection.GetProperty("nodes").EnumerateArray()
-                    |> Seq.tryFind (fun n ->
-                        match n.TryGetProperty "title" with
-                        | true, t when t.ValueKind = JsonValueKind.String -> t.GetString() = title
-                        | _ -> false)
-                    |> Ok
-                with :? KeyNotFoundException ->
-                    Error(Malformed(subject, $"the project-list response is missing `%s{ownerField}.projectsV2.nodes`"))
-
-            match matched with
-            | Error e -> Error e
-            | Ok(Some p) ->
-                // A BOARD WE FOUND AND CANNOT NAME IS A FAILED READ, not an absence and not a crash. The
-                // pre-`.github#2535` code read `number`/`id` unguarded, outside every `try`.
-                match p.TryGetProperty "number", p.TryGetProperty "id" with
-                | (true, number), (true, id) when
-                    number.ValueKind = JsonValueKind.Number && id.ValueKind = JsonValueKind.String
-                    ->
-                    match number.TryGetInt32() with
-                    | true, value -> Ok(Some(value, id.GetString()))
-                    | _ -> Error(Malformed(subject, "the board's `number` is not a 32-bit integer"))
-                | _ ->
-                    Error(Malformed(subject, $"the board titled '%s{title}' was found but carries no readable `number`/`id`"))
-
-            // NOT ON THIS PAGE IS NOT NOT-ANYWHERE. Ask `pageInfo` before turning it into an absence.
-            | Ok None ->
-                match nextPage subject "the board lookup" connection with
-                | Error e -> Error e
-                | Ok None -> Ok None
-                | Ok(Some next) -> findProject (Some next) (guard - 1)
-
-        match findProject None 100 with
+        match GraphQl.drain subject "the board lookup" { MaxPages = 100; MaxItems = 5000 } fetchProjects with
         | Error e -> Error e
-        | Ok None ->
+        | Ok projects when projects |> List.exists (fun (_, projectTitle, _) -> projectTitle = title) |> not ->
             // A BOARD WE READ AND DID NOT FIND IS A REAL ANSWER, and it is a configuration error, not a
             // transient. Naming the title back is what makes it fixable — the usual cause is
             // `FSGG_COORD_PROJECT` pointing at a board that was renamed. Since `.github#2535` this sentence
             // is entitled to be said: it is now measured over EVERY project, not the first page of them.
             Error(NotFound $"no Projects v2 board titled '%s{title}' in %s{owner}")
 
-        | Ok(Some(number, id)) ->
+        | Ok projects ->
+        let id, _, number = projects |> List.find (fun (_, projectTitle, _) -> projectTitle = title)
 
         match transport.Send(query (OwnerKind.forOwner kind FieldsDoc) (ownerVars @ [ "number", VNumber(double number) ]) subject) with
         | Error e -> Error e
@@ -557,7 +448,7 @@ module Board =
 
     [<Literal>]
     let private ExternalItemIdDoc =
-        "query($projectId: ID!, $cursor: String) { node(id: $projectId) { ... on ProjectV2 { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { id content { ... on Issue { number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
+        "query($projectId: ID!, $cursor: String) { node(id: $projectId) { ... on ProjectV2 { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } totalCount nodes { id content { ... on Issue { number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
 
     /// Resolve an issue owned outside the board owner from the board side of the relationship.
     ///
@@ -580,72 +471,47 @@ module Board =
         let same (left: string) (right: string) =
             String.Equals(left, right, StringComparison.OrdinalIgnoreCase)
 
-        let rec page (cursor: string option) (guard: int) : IoResult<string option> =
-            if guard <= 0 then
-                Error(Malformed(subject, "the external-owner board item lookup did not terminate within 100 pages"))
-            else
-                let variables =
+        let fetchItems (cursor: string option) =
+            let variables =
                     [ "projectId", VId board.Id ]
                     @ (match cursor with
                        | Some value -> [ "cursor", VString value ]
                        | None -> [])
 
-                match transport.Send(query ExternalItemIdDoc variables subject) with
-                | Error e -> Error e
-                | Ok response ->
-                    match graphQlData subject response.Body with
-                    | Error e -> Error e
-                    | Ok data ->
-                        try
-                            let project = data.GetProperty "node"
+            GraphQl.read transport (query ExternalItemIdDoc variables subject) (fun data ->
+                let project = data.GetProperty "node"
+                if project.ValueKind = JsonValueKind.Null then Error(NotFound $"board node %s{board.Id}") else
+                let items = project.GetProperty "items"
+                GraphQl.page subject "the external-owner board item lookup" (fun (id, _, _) -> id)
+                    (fun node ->
+                        match node.TryGetProperty "id" with
+                        | true, id when id.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(id.GetString())) ->
+                            match node.TryGetProperty "content" with
+                            | true, content when content.ValueKind = JsonValueKind.Object ->
+                                let issueNumber =
+                                    match content.TryGetProperty "number" with
+                                    | true, value when value.ValueKind = JsonValueKind.Number ->
+                                        match value.TryGetInt32() with true, parsed -> Some parsed | _ -> None
+                                    | _ -> None
+                                let nameWithOwner =
+                                    match content.TryGetProperty "repository" with
+                                    | true, repository when repository.ValueKind = JsonValueKind.Object ->
+                                        match repository.TryGetProperty "nameWithOwner" with
+                                        | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                                        | _ -> None
+                                    | _ -> None
+                                Ok(id.GetString(), nameWithOwner, issueNumber)
+                            | _ -> Ok(id.GetString(), None, None)
+                        | _ -> Error(Malformed(subject, "the external-owner board item lookup returned an item with no readable id")))
+                    items)
 
-                            if project.ValueKind = JsonValueKind.Null then
-                                Error(NotFound $"board node %s{board.Id}")
-                            else
-                                let items = project.GetProperty "items"
-
-                                let found =
-                                    items.GetProperty("nodes").EnumerateArray()
-                                    |> Seq.tryPick (fun node ->
-                                        match node.TryGetProperty "id", node.TryGetProperty "content" with
-                                        | (true, id), (true, content)
-                                            when id.ValueKind = JsonValueKind.String
-                                                 && content.ValueKind = JsonValueKind.Object ->
-                                            match content.TryGetProperty "number", content.TryGetProperty "repository" with
-                                            | (true, issueNumber), (true, repository)
-                                                when issueNumber.ValueKind = JsonValueKind.Number
-                                                     && repository.ValueKind = JsonValueKind.Object ->
-                                                match repository.TryGetProperty "nameWithOwner" with
-                                                | true, nwo when nwo.ValueKind = JsonValueKind.String ->
-                                                    let parts = nwo.GetString().Split('/', 2)
-
-                                                    if
-                                                        parts.Length = 2
-                                                        && same parts.[0] owner
-                                                        && same parts.[1] repo
-                                                        && issueNumber.GetInt32() = number
-                                                    then
-                                                        Some(id.GetString())
-                                                    else
-                                                        None
-                                                | _ -> None
-                                            | _ -> None
-                                        | _ -> None)
-
-                                match found with
-                                | Some id -> Ok(Some id)
-                                | None ->
-                                    // `.github#2535` hoisted this walk's `pageInfo` guard into `nextPage`
-                                    // so `bootstrap`'s project list could share it. The refusal strings are
-                                    // preserved byte-for-byte through `what`; the behaviour is unchanged.
-                                    match nextPage subject "the external-owner board item lookup" items with
-                                    | Error e -> Error e
-                                    | Ok None -> Ok None
-                                    | Ok(Some next) -> page (Some next) (guard - 1)
-                        with :? KeyNotFoundException ->
-                            Error(Malformed(subject, "the external-owner board item lookup response is missing `data.node.items`"))
-
-        page None 100
+        GraphQl.drain subject "the external-owner board item lookup" { MaxPages = 100; MaxItems = 10000 } fetchItems
+        |> Result.map (List.tryPick (fun (id, nameWithOwner, issueNumber) ->
+            match nameWithOwner, issueNumber with
+            | Some nwo, Some actualNumber ->
+                let parts = nwo.Split('/', 2)
+                if parts.Length = 2 && same parts.[0] owner && same parts.[1] repo && actualNumber = number then Some id else None
+            | _ -> None))
 
     let itemId
         (transport: IGitHubTransport)
@@ -1329,40 +1195,9 @@ module Board =
         | Error(RateLimited _ as e) -> Error e
 
         | Error(GraphQlErrors _) ->
-            try
-                use doc = JsonDocument.Parse response.Body
-                let root = doc.RootElement
-
-                let failedAliases =
-                    match root.TryGetProperty "errors" with
-                    | true, errs when errs.ValueKind = JsonValueKind.Array ->
-                        errs.EnumerateArray()
-                        |> Seq.choose (fun e ->
-                            let alias =
-                                match e.TryGetProperty "path" with
-                                | true, p when p.ValueKind = JsonValueKind.Array && p.GetArrayLength() > 0 ->
-                                    let first = p.EnumerateArray() |> Seq.head
-                                    if first.ValueKind = JsonValueKind.String then Some(first.GetString()) else None
-                                | _ -> None
-
-                            let message =
-                                match e.TryGetProperty "message" with
-                                | true, m when m.ValueKind = JsonValueKind.String -> m.GetString()
-                                | _ -> "(no message)"
-
-                            alias |> Option.map (fun a -> a, message))
-                        |> List.ofSeq
-                    | _ -> []
-
-                let applied =
-                    match root.TryGetProperty "data" with
-                    | true, data when data.ValueKind = JsonValueKind.Object ->
-                        data.EnumerateObject()
-                        |> Seq.filter (fun p -> p.Value.ValueKind <> JsonValueKind.Null)
-                        |> Seq.map (fun p -> p.Name)
-                        |> List.ofSeq
-                    | _ -> []
-
+            match GraphQl.partialMutation subject response.Body with
+            | Error error -> Error error
+            | Ok(applied, failedAliases) ->
                 if List.isEmpty applied then
                     // NOTHING LANDED. This is a clean failure, and it is safe to queue or retry: the board
                     // is exactly as it was.
@@ -1371,9 +1206,6 @@ module Board =
                     // SOME OF IT LANDED. `EX_PARTIAL`, and it is NEVER queued — replaying the document would
                     // rewrite the half that already took effect.
                     Error(Partial(applied, failedAliases))
-
-            with :? JsonException ->
-                Error(Malformed(subject, "the batch response carried errors we could not read"))
 
         | Error e -> Error e
 

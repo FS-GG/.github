@@ -58,7 +58,8 @@ module Reads =
                 // why this is an error and not an empty list.
                 Error(Malformed(subject, $"the response is not JSON: %s{e.Message}"))
 
-    /// The `data` of a GraphQL response — reachable ONLY after the response has been asked whether it
+    /// Compatibility decoder retained until M6 removes the legacy JsonElement domain decoders. The
+    /// envelope itself is owned by `GraphQl`; this function never sees raw `data`/`errors`.
     /// announced its own incompleteness.
     ///
     /// **THE ORDER IS THE CONTRACT, AND THIS FUNCTION IS WHAT MAKES IT STRUCTURAL** (`.github#2534`).
@@ -75,48 +76,8 @@ module Reads =
     /// RATE LIMIT FIRST, for the reason `Board.graphQlData` states: test the generic partial arm first and
     /// an exhausted budget is misreported as a malformed response, destroying the one fact — that this
     /// condition is temporary — the caller needs in order to back off rather than refuse the subject.
-    let private graphQlData (subject: string) (root: JsonElement) : IoResult<JsonElement> =
-        // A 2xx BODY THAT IS SYNTACTICALLY VALID JSON BUT NOT AN OBJECT — `[]`, `"text"`, `7`, `true`,
-        // `null` — is not a GraphQL response of any shape, and `TryGetProperty` on anything but an object
-        // THROWS `InvalidOperationException` rather than answering `false`. This guard must run BEFORE the
-        // `errors` read below, which sits outside every caller's `try/with`: an unhandled crash on exactly
-        // the input this function exists to fail closed on. `Budget.readMeter` guards this identical case
-        // for the identical reason (`.github#2418`/PR #2419); `contentEditProvenance` carried this guard
-        // inline before `.github#2534` hoisted it here, where every read gets it.
-        if root.ValueKind <> JsonValueKind.Object then
-            Error(
-                Malformed(
-                    subject,
-                    $"the GraphQL response is not a JSON object (%A{root.ValueKind}) — a GraphQL response is always `{{...}}`, so this is a FAILED READ, never an empty answer"
-                )
-            )
-        else
-
-        let errors =
-            match root.TryGetProperty "errors" with
-            | true, e when e.ValueKind = JsonValueKind.Array && e.GetArrayLength() > 0 -> Some e
-            | _ -> None
-
-        match errors with
-        | Some e ->
-            let messages =
-                e.EnumerateArray()
-                |> Seq.map (fun err ->
-                    match err.TryGetProperty "message" with
-                    | true, m when m.ValueKind = JsonValueKind.String -> m.GetString()
-                    | _ -> "(no message)")
-                |> List.ofSeq
-
-            // RATE LIMIT FIRST. `ofGraphQlErrors` also tells a SECONDARY limit from the primary budget
-            // (#1666), which `isRateLimited` cannot.
-            match Budget.ofGraphQlErrors messages with
-            | Some limited -> Error limited
-            | None -> Error(GraphQlErrors messages)
-
-        | None ->
-            match root.TryGetProperty "data" with
-            | true, data when data.ValueKind <> JsonValueKind.Null -> Ok data
-            | _ -> Error(Malformed(subject, "the GraphQL response carried neither `data` nor `errors`"))
+    let private graphQlData (subject: string) (body: string) : IoResult<JsonElement> =
+        GraphQl.decode subject body Ok
 
     let private str (e: JsonElement) (name: string) =
         match e.TryGetProperty name with
@@ -881,7 +842,7 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
-                match graphQlData subject doc.RootElement with
+                match graphQlData subject response.Body with
                 | Error e -> Error e
                 | Ok data ->
 
@@ -1269,7 +1230,7 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
-                match graphQlData subject doc.RootElement with
+                match graphQlData subject response.Body with
                 | Error e -> Error e
                 | Ok data ->
 
@@ -1452,7 +1413,7 @@ module Reads =
                 // The non-object guard, the `errors`-before-`data` ordering and the rate-limit-first
                 // dispatch all moved into that one function (`.github#2534`), so this read cannot reach
                 // `data` around them and neither can any read added after it.
-                match graphQlData subject doc.RootElement with
+                match graphQlData subject response.Body with
                 | Error e -> Error e
                 | Ok data ->
 
@@ -2694,7 +2655,7 @@ module Reads =
                 // on a PR nobody checked. `Reads.fsi` has always documented the correct contract —
                 // *"distinct from a failed read, which is an `Error`"* — and the implementation did not
                 // hold it.
-                match graphQlData subject doc.RootElement with
+                match graphQlData subject response.Body with
                 | Error e -> Error e
                 | Ok data ->
 

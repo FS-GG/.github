@@ -356,29 +356,11 @@ module Done =
         | Error e -> Error e
         | Ok response ->
 
-        try
-            use doc = JsonDocument.Parse response.Body
-
-            match doc.RootElement.TryGetProperty "errors" with
-            | true, errs when errs.ValueKind = JsonValueKind.Array && errs.GetArrayLength() > 0 ->
-                let messages =
-                    errs.EnumerateArray()
-                    |> Seq.map (fun e ->
-                        match e.TryGetProperty "message" with
-                        | true, m when m.ValueKind = JsonValueKind.String -> m.GetString()
-                        | _ -> "(no message)")
-                    |> List.ofSeq
-
-                // Tells a SECONDARY limit from the primary budget (#1666); `isRateLimited`, which this
-                // site used to call, matches both and named the GraphQL budget for either.
-                match Budget.ofGraphQlErrors messages with
-                | Some limited -> Error limited
-                | None -> Error(GraphQlErrors messages)
-
-            | _ ->
-
-            let issue =
-                doc.RootElement.GetProperty("data").GetProperty("repository").GetProperty("issue")
+        match GraphQl.decode subject response.Body Ok with
+        | Error error -> Error error
+        | Ok data ->
+          try
+            let issue = data.GetProperty("repository").GetProperty("issue")
 
             if issue.ValueKind = JsonValueKind.Null then
                 Error(NotFound subject)
@@ -613,7 +595,7 @@ module Done =
                   BoardStatus = boardStatus
                   Parent = parent }
 
-        with :? JsonException as e ->
+          with :? JsonException as e ->
             Error(Malformed(subject, $"the done-stamp query's response is not JSON: %s{e.Message}"))
 
     // ---- closing an issue ---------------------------------------------------------------------------
