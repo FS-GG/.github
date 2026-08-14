@@ -17,6 +17,10 @@
     {
       "id": "evidence-manifest-fixture",
       "command": ["bash", "tests/evidence-manifest/run.sh"]
+    },
+    {
+      "id": "coordination-retirement-readiness-fixture",
+      "command": ["bash", "tests/coordination-retirement-readiness/run.sh"]
     }
   ]
 }

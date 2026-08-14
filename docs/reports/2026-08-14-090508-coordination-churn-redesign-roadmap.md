@@ -263,6 +263,30 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   exact base `7a9b8742f259af4d82b9562bfbe8e40d963b0be7`; the implementation critique remains bound to
   `c909b8ed580f7b6de6b3d9c9115bdcbe96aa6896`, before the roadmap-only evidence commits.
 
+### M6 retirement-readiness evidence (blocked; M6 remains unchecked)
+
+- **The three-cycle prerequisite is not met:** M3, M4, and M5 completed in three short windows on
+  2026-08-14, not three weekly operating measurement periods. GitHub's complete day census has zero
+  issue creations and zero closures inside each exact window, so the strict `creation < closure`
+  measure is false (`0 < 0`) before the other measures are considered. The content-addressed-source
+  census and exact boundaries are recorded in
+  `docs/reports/evidence/2026-08-14-m6-retirement-readiness.json`; missing measures remain null rather
+  than being inferred as passing.
+- **Fail-closed continuation gate:** `scripts/coordination-retirement-readiness.py` requires three
+  consecutive seven-day periods to satisfy every health measure and requires an empty same-class
+  issue census. Its fixture exercises the current blocked state, a complete pass, issue-count equality,
+  period gaps, partial-success reads, evidence-growth inversion, non-weekly windows, successor issues,
+  and deterministic repeat output. The earliest possible new three-week run ends
+  `2026-09-07T00:00:00Z`; that date grants nothing unless fresh evidence passes the validator.
+- **Live issue recensus:** `.github#2580` and `.github#2586` were objectively resolved by landed M0/M1
+  behavior and closed only after focused regressions and live-feed verification. `.github#2561`,
+  `.github#2569`, `.github#2587`, and the adjacent evidence/pre-saga release rows enumerated in the
+  census remain open. Therefore no reducer switch, GraphQL shim, v1 decision reader, pre-saga release
+  path, or historical TRX byte has been removed, and M6 remains unchecked.
+- **Lifecycle exception:** The user-authorized Chainsaw path still bypasses only unavailable kit-source
+  SDD, feedback, and cycle machinery. This readiness audit fabricates none of those artifacts and does
+  not weaken review, release security, evidence recovery, or the roadmap's time-based gate.
+
 ### M0 stabilization evidence
 
 - **Temporary feature freeze:** From the start of M0 until its exit criteria are

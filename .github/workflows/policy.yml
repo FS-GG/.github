@@ -10,11 +10,13 @@ on:
       - "scripts/policy-*"
       - "scripts/policy-runner.py"
       - "scripts/evidence-manifest.py"
+      - "scripts/coordination-retirement-readiness.py"
       - "registry/dependencies.yml"
       - "docs/registry/compatibility.md"
       - "tests/projection/**"
       - "tests/policy-runner/**"
       - "tests/evidence-manifest/**"
+      - "tests/coordination-retirement-readiness/**"
   push:
     branches: [main]
     paths:
@@ -25,11 +27,13 @@ on:
       - "scripts/policy-*"
       - "scripts/policy-runner.py"
       - "scripts/evidence-manifest.py"
+      - "scripts/coordination-retirement-readiness.py"
       - "registry/dependencies.yml"
       - "docs/registry/compatibility.md"
       - "tests/projection/**"
       - "tests/policy-runner/**"
       - "tests/evidence-manifest/**"
+      - "tests/coordination-retirement-readiness/**"
   workflow_dispatch:
 
 permissions:
