@@ -250,6 +250,59 @@ module ConsolidationTaxTests =
             Environment.SetEnvironmentVariable("FSGG_COORD_SDD_ROOT", previousRoot)
             try Directory.Delete(sddRoot, true) with _ -> ()
 
+    /// Drive `Client.claim` — the MUTATION boundary — against a throwaway cache, on the same licence
+    /// `ForceStealTests.runClaim` states: `AssemblyInfo.fs` disables cross-class parallelism, so the
+    /// process-global `FSGG_COORD_CACHE` is safe to point somewhere private per call, and a fresh
+    /// directory stops a board map leaking between legs. The identity ladder is pinned in BOTH halves
+    /// (#1646) for the same reason it is there: an unpinned `$FSGG_WORKER` makes every leg an
+    /// impersonation and `claim` refuses before it reads anything at all — which would make these legs
+    /// pass for the wrong reason.
+    ///
+    /// The claim's own EXIT CODE is not what any leg below asserts. This fixture serves no board
+    /// bootstrap, so `claim` fails after the route check; what is under test is whether the route check
+    /// reported, and stderr is where that lives.
+    let private runClaim (transport: Fake.Recorder) (args: string list) : int * string * string =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2583-claim-" + Guid.NewGuid().ToString "n")
+        let sessionVars = [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+        let stdout = Console.Out
+        let stderr = Console.Error
+        use capturedOut = new StringWriter()
+        use capturedErr = new StringWriter()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
+            Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
+            Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", "ed60050b")
+            Environment.SetEnvironmentVariable("FSGG_WORKER", "vole-418")
+            Console.SetOut capturedOut
+            Console.SetError capturedErr
+
+            let opts =
+                match Options.parse args with
+                | Ok o -> o
+                | Error e -> failwithf "the fixture's own argv did not parse: %s" e
+
+            let code = Client.claim (context transport) opts
+            Console.Out.Flush()
+            Console.Error.Flush()
+            code, capturedOut.ToString(), capturedErr.ToString()
+        finally
+            Console.SetOut stdout
+            Console.SetError stderr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+            for name, value in previousSessions do
+                Environment.SetEnvironmentVariable(name, value)
+
+            try Directory.Delete(dir, true) with _ -> ()
+
     let private lightweightReceipt (subjectRevision: string) =
         $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"FS-GG/FS.GG.SDD#42","subjectRevision":"%s{subjectRevision}","route":"lightweight","agent":"fixture-2583","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture lightweight receipt for .github#2583","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
 
@@ -536,6 +589,112 @@ module ConsolidationTaxTests =
             world.Body <- body + consolidationBlock
             let code, out, err = runRoute transport [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
             assertStale code out err)
+
+    // ---- the DEGENERATE body: a judged subject that constrains nothing (review round 1, finding 1) ------
+
+    /// A body whose EVERY line is a volatile declaration or blank, so its subject is EMPTY. This is not a
+    /// contrived shape — it is what a freshly filed row looks like before anyone writes prose into it.
+    ///
+    /// IT CANNOT LIVE IN THE CORPUS, AND THAT IS THE LESSON. `forEachBody` asserts
+    /// `MinimumSubjectLinesPerBody = 30` before any verdict, which is a good non-vacuity floor for the
+    /// real-body corpus AND excludes this shape by construction. Round 1 of this PR's review found a
+    /// permanent false positive living exactly there, invisible to every corpus leg: a non-vacuity floor
+    /// on a CORPUS is not a non-vacuity guarantee for the CODE, and a floor that keeps fixtures honest can
+    /// simultaneously hide the degenerate case. So the degenerate case gets its own legs, outside the
+    /// floor, named for what they are.
+    let private emptySubjectBody = "Paths: src/FS.GG.Coord.Cli/Client.fs\n\nClass: defect\n\nBlocked on: \n"
+
+    [<Fact>]
+    let ``#2583 an empty judged subject never authorises an additive match against a DIFFERENT body`` () =
+        // Without the empty-`recorded` guard this is `current`/`additive`: `record` writes a zero-locator
+        // marker and a `subjectRevision` of `hashHex ""`, alignment consumes the empty want-list
+        // vacuously, and the full-width guard compares `hashHex ""` to a recorded revision that IS
+        // `hashHex ""`. It holds for EVERY body — the receipt would match a wholesale replacement of the
+        // issue, permanently, with no hash collision anywhere. Measured in review round 1 as
+        // `addedSubjectLines: 60` against the unrelated `2392` body.
+        Assert.Empty(subjectLines emptySubjectBody)
+        Assert.Equal(hashHex "", revision emptySubjectBody)
+
+        let _, replacement = corpus |> List.find (fun (name, _) -> name = "2392")
+        let code, out, err = recordThenEdit emptySubjectBody replacement
+
+        assertStale code out err
+
+    [<Fact>]
+    let ``#2583 an empty judged subject is still CANONICALLY current while the body's subject stays empty`` () =
+        // The guard must refuse the vacuous ACCEPTANCE without breaking the legitimate degenerate case:
+        // an unchanged empty-subject body is `current` through the canonical arm, exactly as before this
+        // PR. Nothing is lost by refusing the additive arm here, because the canonical arm answers first.
+        let code, out, _ = recordThenEdit emptySubjectBody (emptySubjectBody + "\nClass: chore\n")
+
+        Assert.Equal(0, code)
+        let result = shown out
+        Assert.Equal("current", result.GetProperty("kind").GetString())
+        Assert.Equal("canonical", result.GetProperty("subjectMatch").GetString())
+
+    [<Fact>]
+    let ``#2583 an empty judged subject is refused even when the new body only ADDS lines`` () =
+        // The narrowest form: the edit really is purely additive by the diff, and the answer is still
+        // `Stale`, because the route decision judged nothing that could survive. "Nothing was judged" is
+        // never "everything was judged and all of it survived" (#266).
+        let code, out, err = recordThenEdit emptySubjectBody (emptySubjectBody + "\n## Newly written scope\n\nEverything about this row is now different.\n")
+
+        assertStale code out err
+
+    // ---- the DEC-001 payment reaches the boundary that acts on the row (review round 1, finding 2) -----
+
+    /// DEC-001 accepts that a pure insertion can redefine scope BECAUSE the residual is paid for by
+    /// reporting rather than silence. Round 1 established that the payment was made only at
+    /// `delivery-route show`, while the claim/take mutation boundary — the moment a worker commits to the
+    /// route — accepted an additive match and said nothing at all. A trade whose consideration is not
+    /// delivered where it is spent is not the trade that was agreed.
+    [<Fact>]
+    let ``#2583 the claim boundary emits the additive notice, not only delivery-route show`` () =
+        forEachBody (fun _ body ->
+            let world = World body
+            let transport = transportFor world
+            let receiptPath = Path.Combine(Path.GetTempPath(), "fsgg-2583-claim-" + Guid.NewGuid().ToString "n" + ".json")
+            File.WriteAllText(receiptPath, lightweightReceipt (revision body))
+
+            try
+                let recorded, _, _ = runRoute transport [ "delivery-route"; "record"; "FS.GG.SDD#42"; receiptPath ]
+                Assert.Equal(0, recorded)
+                world.Body <- body + consolidationBlock
+
+                // `Client.claim` runs the SAME route check (`requireCurrentDeliveryRoute`) and then goes
+                // on to a board bootstrap this fixture does not serve. The claim's own exit code is not
+                // the subject here — passing the route check is, and the notice is what proves it did.
+                let _, _, err = runClaim transport [ "claim"; "FS.GG.SDD#42" ]
+                Assert.Contains("3 subject line(s) added since this route was decided", err)
+            finally
+                try File.Delete receiptPath with _ -> ())
+
+    [<Fact>]
+    let ``#2583 the claim boundary stays SILENT when the match is canonical`` () =
+        // The notice must be conditional, or it is not information. An unedited body reaches the claim
+        // boundary through the canonical arm and says nothing.
+        forEachBody (fun _ body ->
+            let world = World body
+            let transport = transportFor world
+            world.Seed(DeliveryRouteMarker + "\n" + locatorLine body + "\n" + lightweightReceipt (revision body))
+
+            let _, _, err = runClaim transport [ "claim"; "FS.GG.SDD#42" ]
+            Assert.DoesNotContain("subject line(s) added", err))
+
+    [<Fact>]
+    let ``#2583 the claim boundary still REFUSES a modified judged line`` () =
+        // The discriminator, so the two legs above are not both explained by "the route check never runs".
+        forEachBody (fun _ body ->
+            let world = World body
+            let transport = transportFor world
+            world.Seed(DeliveryRouteMarker + "\n" + locatorLine body + "\n" + lightweightReceipt (revision body))
+
+            let target = subjectLines body |> List.last
+            world.Body <- body.Replace(target, target + " AND ALSO EVERY DOWNSTREAM REPOSITORY")
+
+            let _, _, err = runClaim transport [ "claim"; "FS.GG.SDD#42" ]
+            Assert.Contains("delivery route is not current", err)
+            Assert.DoesNotContain("subject line(s) added", err))
 
     // ---- the subject filter has exactly one statement in production ------------------------------------
 

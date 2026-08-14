@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "e5d26481afb97389b3f028495667b4179231b89cfd6bc26119caf892a4fd3900"
+        "value": "525110cc364dc45c6d0625528eccd9ba7248331d66a6e31eb3d360949735e6cc"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "a48e6e978339e2148d6369f843775c3d9c45fb298ba723d836031a31ff42d78d"
+        "value": "9560658eae403778e327dae683f44b7ea5d3c69d6556c23d8f7e5cfd7ffbe6c9"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "6fe40acf77cdf8ef2dc9aeae8c8f8c5eaea8972a420bdaf64324d676dd3ce1f4"
+        "value": "b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493"
+        "value": "e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "43bc848b70963d78ac69d6619bbfef32296a3b2b5167ee43419d0a71f247bdc5"
+        "value": "3078048de41e1e4eb6891be2d6395be4f95c3c8d028ff4f22a71012f8ee23f89"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "c26d6c8da8a3b6766332b4381c846d6f9e2f21dde7d22d1f1d8f8ecbeff346d8"
+        "value": "6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b"
+        "value": "b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "90d7e850684fb864a29c4cb2358c7ef9064ab19ea811e7110ceff3d33a2f4f33"
+        "value": "2bb20b7c7b24ccf78770f09fa30aa1c324aa9e127f7722fce676e8b25c02cbf8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -151,8 +151,8 @@
     ]
   },
   "taskGraph": {
-    "taskCount": 23,
-    "dependencyCount": 16,
+    "taskCount": 31,
+    "dependencyCount": 23,
     "dependenciesValid": true,
     "statusesValid": true,
     "findingIds": []
@@ -601,6 +601,7 @@
       ],
       "affectedSourceIds": [
         "PC-001",
+        "PC-003",
         "PM-001"
       ],
       "severity": "ready",
@@ -622,7 +623,8 @@
       ],
       "affectedSourceIds": [
         "GV-001",
-        "PD-001"
+        "PD-001",
+        "PD-004"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -643,12 +645,182 @@
       ],
       "affectedSourceIds": [
         "CR-008",
+        "CR-009",
         "DEC-005",
-        "PD-009"
+        "PD-009",
+        "PD-011"
       ],
       "severity": "advisory",
       "diagnosticIds": [],
       "correction": "Resolve evidence obligation EV023."
+    },
+    {
+      "id": "ED-EV024",
+      "obligationId": "EV024",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV024"
+      ],
+      "affectedTaskIds": [
+        "T024"
+      ],
+      "affectedSourceIds": [
+        "AC-008",
+        "FR-008",
+        "PD-010"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV025",
+      "obligationId": "EV025",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV025"
+      ],
+      "affectedTaskIds": [
+        "T025"
+      ],
+      "affectedSourceIds": [
+        "DEC-006"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV026",
+      "obligationId": "EV026",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV026"
+      ],
+      "affectedTaskIds": [
+        "T026"
+      ],
+      "affectedSourceIds": [
+        "DEC-007"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV027",
+      "obligationId": "EV027",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV027"
+      ],
+      "affectedTaskIds": [
+        "T027"
+      ],
+      "affectedSourceIds": [
+        "CR-008",
+        "PD-009"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV028",
+      "obligationId": "EV028",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV028"
+      ],
+      "affectedTaskIds": [
+        "T028"
+      ],
+      "affectedSourceIds": [
+        "CR-008"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV028."
+    },
+    {
+      "id": "ED-EV029",
+      "obligationId": "EV029",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV029"
+      ],
+      "affectedTaskIds": [
+        "T029"
+      ],
+      "affectedSourceIds": [
+        "CR-009",
+        "PD-011"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV030",
+      "obligationId": "EV030",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV030"
+      ],
+      "affectedTaskIds": [
+        "T030"
+      ],
+      "affectedSourceIds": [
+        "PC-002",
+        "PD-010",
+        "VO-006"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV031",
+      "obligationId": "EV031",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV031"
+      ],
+      "affectedTaskIds": [
+        "T031"
+      ],
+      "affectedSourceIds": [
+        "PC-002",
+        "PD-004",
+        "VO-007"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
     }
   ],
   "testDispositions": [
@@ -1033,6 +1205,136 @@
       "severity": "advisory",
       "diagnosticIds": [],
       "correction": "Record a verifying test for EV023."
+    },
+    {
+      "id": "TD-EV024",
+      "obligationId": "EV024",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV024"
+      ],
+      "affectedTaskIds": [
+        "T024"
+      ],
+      "affectedRequirementIds": [
+        "FR-008"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV025",
+      "obligationId": "EV025",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV025"
+      ],
+      "affectedTaskIds": [
+        "T025"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV026",
+      "obligationId": "EV026",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV026"
+      ],
+      "affectedTaskIds": [
+        "T026"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV027",
+      "obligationId": "EV027",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV027"
+      ],
+      "affectedTaskIds": [
+        "T027"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV028",
+      "obligationId": "EV028",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV028"
+      ],
+      "affectedTaskIds": [
+        "T028"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV028."
+    },
+    {
+      "id": "TD-EV029",
+      "obligationId": "EV029",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV029"
+      ],
+      "affectedTaskIds": [
+        "T029"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV030",
+      "obligationId": "EV030",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV030"
+      ],
+      "affectedTaskIds": [
+        "T030"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV031",
+      "obligationId": "EV031",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV031"
+      ],
+      "affectedTaskIds": [
+        "T031"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
     }
   ],
   "skillVisibility": [
@@ -1043,7 +1345,9 @@
         "T017",
         "T018",
         "T019",
-        "T020"
+        "T020",
+        "T030",
+        "T031"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2583-consolidation-tax/tasks.yml",
@@ -1079,7 +1383,12 @@
         "T012",
         "T013",
         "T014",
-        "T015"
+        "T015",
+        "T024",
+        "T025",
+        "T026",
+        "T027",
+        "T029"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2583-consolidation-tax/tasks.yml",
@@ -1101,7 +1410,12 @@
         "T009",
         "T010",
         "T011",
-        "T012"
+        "T012",
+        "T024",
+        "T025",
+        "T026",
+        "T027",
+        "T029"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2583-consolidation-tax/tasks.yml",
@@ -1116,7 +1430,9 @@
         "T017",
         "T018",
         "T019",
-        "T020"
+        "T020",
+        "T030",
+        "T031"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2583-consolidation-tax/tasks.yml",
@@ -1138,7 +1454,8 @@
     {
       "skill": "traceability",
       "requiringTaskIds": [
-        "T023"
+        "T023",
+        "T028"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2583-consolidation-tax/tasks.yml",

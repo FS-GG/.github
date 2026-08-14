@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2583-consolidation-tax/spec.md
-    digest: dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b
+    digest: b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0
     schemaVersion: 1
   - label: clarifications
     path: work/2583-consolidation-tax/clarifications.md
-    digest: 9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493
+    digest: e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5
     schemaVersion: 1
   - label: checklist
     path: work/2583-consolidation-tax/checklist.md
-    digest: 6fe40acf77cdf8ef2dc9aeae8c8f8c5eaea8972a420bdaf64324d676dd3ce1f4
+    digest: b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40
     schemaVersion: 1
   - label: plan
     path: work/2583-consolidation-tax/plan.md
-    digest: 8776ada6b45bcbf10afd9f110f8466c7c52120c63468eefddcc35cf2ee02c500
+    digest: 6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c
     schemaVersion: 1
 tasks:
   - id: T001
@@ -235,7 +235,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PC-001, PM-001]
+    sourceIds: [PC-001, PC-003, PM-001]
     requiredSkills: [schema-versioning]
     requiredEvidence: [EV021]
   - id: T022
@@ -245,7 +245,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [GV-001, PD-001]
+    sourceIds: [GV-001, PD-001, PD-004]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV022]
   - id: T023
@@ -255,11 +255,92 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [CR-008, DEC-005, PD-009]
+    sourceIds: [CR-008, CR-009, DEC-005, PD-009, PD-011]
     requiredSkills: [traceability]
     requiredEvidence: [EV023]
+  - id: T024
+    title: Implement requirement FR-008
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-008]
+    decisions: []
+    sourceIds: [AC-008, FR-008, PD-010]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV024]
+  - id: T025
+    title: Implement clarification decision DEC-006
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-006]
+    sourceIds: [DEC-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV025]
+  - id: T026
+    title: Implement clarification decision DEC-007
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-007]
+    sourceIds: [DEC-007]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV026]
+  - id: T027
+    title: Implement plan decision PD-009
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [CR-008, PD-009]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV027]
+  - id: T028
+    title: Keep accepted deferral CR-008 visible
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [CR-008]
+    requiredSkills: [traceability]
+    requiredEvidence: [EV028]
+  - id: T029
+    title: Implement plan decision PD-011
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [CR-009, PD-011]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV029]
+  - id: T030
+    title: Record verification evidence VO-006
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-010, VO-006]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV030]
+  - id: T031
+    title: Record verification evidence VO-007
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-004, VO-007]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV031]
 acceptedDeferrals:
   - "CR-008"
+  - "CR-009"
   - "DEC-005"
 findings: []
 advisoryNotes:

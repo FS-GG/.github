@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "6fe40acf77cdf8ef2dc9aeae8c8f8c5eaea8972a420bdaf64324d676dd3ce1f4"
+        "value": "b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493"
+        "value": "e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "43bc848b70963d78ac69d6619bbfef32296a3b2b5167ee43419d0a71f247bdc5"
+        "value": "3078048de41e1e4eb6891be2d6395be4f95c3c8d028ff4f22a71012f8ee23f89"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c26d6c8da8a3b6766332b4381c846d6f9e2f21dde7d22d1f1d8f8ecbeff346d8"
+        "value": "6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b"
+        "value": "b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "90d7e850684fb864a29c4cb2358c7ef9064ab19ea811e7110ceff3d33a2f4f33"
+        "value": "2bb20b7c7b24ccf78770f09fa30aa1c324aa9e127f7722fce676e8b25c02cbf8"
       }
     }
   ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 103,
+        "line": 109,
         "column": 1
       },
       "linkedTaskIds": [
@@ -158,7 +158,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 104,
+        "line": 110,
         "column": 1
       },
       "linkedTaskIds": [
@@ -179,7 +179,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 105,
+        "line": 111,
         "column": 1
       },
       "linkedTaskIds": [
@@ -191,8 +191,8 @@
     },
     {
       "id": "FR-004",
-      "title": "A read that resolves through the additive candidate reports that fact and the number of inserted subject lines, rather than being indistinguishable from a byte-identical body. (Stories: US-003; Acceptance: AC-004)",
-      "text": "A read that resolves through the additive candidate reports that fact and the number of inserted subject lines, rather than being indistinguishable from a byte-identical body. (Stories: US-003; Acceptance: AC-004)",
+      "title": "A read that resolves through the additive candidate reports that fact and the number of inserted subject lines at every boundary that inspects or acts on the row \u2014 \u0060delivery-route show\u0060 and the claim/take mutation boundary \u2014 and stays silent on the per-candidate scheduling read by stated choice. (Stories: US-003; Acceptance: AC-004)",
+      "text": "A read that resolves through the additive candidate reports that fact and the number of inserted subject lines at every boundary that inspects or acts on the row \u2014 \u0060delivery-route show\u0060 and the claim/take mutation boundary \u2014 and stays silent on the per-candidate scheduling read by stated choice. (Stories: US-003; Acceptance: AC-004)",
       "acceptanceCriteria": [
         "AC-004"
       ],
@@ -200,7 +200,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 106,
+        "line": 112,
         "column": 1
       },
       "linkedTaskIds": [
@@ -221,7 +221,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 107,
+        "line": 113,
         "column": 1
       },
       "linkedTaskIds": [
@@ -242,7 +242,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 108,
+        "line": 114,
         "column": 1
       },
       "linkedTaskIds": [
@@ -263,7 +263,7 @@
       "classification": [],
       "source": "work/2583-consolidation-tax/spec.md",
       "sourceLocation": {
-        "line": 109,
+        "line": 115,
         "column": 1
       },
       "linkedTaskIds": [
@@ -271,6 +271,27 @@
       ],
       "linkedEvidenceIds": [
         "EV007"
+      ]
+    },
+    {
+      "id": "FR-008",
+      "title": "An empty judged subject never authorises an additive match against any body, because it constrains nothing. (Stories: US-002; Acceptance: AC-008)",
+      "text": "An empty judged subject never authorises an additive match against any body, because it constrains nothing. (Stories: US-002; Acceptance: AC-008)",
+      "acceptanceCriteria": [
+        "AC-008"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2583-consolidation-tax/spec.md",
+      "sourceLocation": {
+        "line": 116,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T024"
+      ],
+      "linkedEvidenceIds": [
+        "EV024"
       ]
     }
   ],
@@ -286,7 +307,7 @@
       "acceptanceRefs": [],
       "source": "work/2583-consolidation-tax/clarifications.md",
       "sourceLocation": {
-        "line": 69,
+        "line": 104,
         "column": 1
       },
       "linkedTaskIds": [
@@ -302,7 +323,7 @@
       "acceptanceRefs": [],
       "source": "work/2583-consolidation-tax/clarifications.md",
       "sourceLocation": {
-        "line": 70,
+        "line": 105,
         "column": 1
       },
       "linkedTaskIds": [
@@ -318,7 +339,7 @@
       "acceptanceRefs": [],
       "source": "work/2583-consolidation-tax/clarifications.md",
       "sourceLocation": {
-        "line": 71,
+        "line": 106,
         "column": 1
       },
       "linkedTaskIds": [
@@ -334,7 +355,7 @@
       "acceptanceRefs": [],
       "source": "work/2583-consolidation-tax/clarifications.md",
       "sourceLocation": {
-        "line": 72,
+        "line": 107,
         "column": 1
       },
       "linkedTaskIds": [
@@ -350,10 +371,42 @@
       "acceptanceRefs": [],
       "source": "work/2583-consolidation-tax/clarifications.md",
       "sourceLocation": {
-        "line": 75,
+        "line": 112,
         "column": 1
       },
       "linkedTaskIds": []
+    },
+    {
+      "id": "DEC-006",
+      "title": "Refuse the additive candidate when the recorded locator record is empty \u2014 \u0022nothing was judged\u0022 is never permission (#266) \u2014 and record that the full-width safety claim is conditional on a non-empty judged subject, in the source and in the pull request. Cover it with a degenerate-body leg held OUTSIDE the corpus floor that excluded the shape.",
+      "decision": "Refuse the additive candidate when the recorded locator record is empty \u2014 \u0022nothing was judged\u0022 is never permission (#266) \u2014 and record that the full-width safety claim is conditional on a non-empty judged subject, in the source and in the pull request. Cover it with a degenerate-body leg held OUTSIDE the corpus floor that excluded the shape.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2583-consolidation-tax/clarifications.md",
+      "sourceLocation": {
+        "line": 108,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T025"
+      ]
+    },
+    {
+      "id": "DEC-007",
+      "title": "Emit the additive notice from one shared spelling at \u0060delivery-route show\u0060 AND at the claim/take mutation boundary; keep the per-candidate scheduling read silent, and narrow the source\u0027s universal claim to the boundaries on which it actually holds.",
+      "decision": "Emit the additive notice from one shared spelling at \u0060delivery-route show\u0060 AND at the claim/take mutation boundary; keep the per-candidate scheduling read silent, and narrow the source\u0027s universal claim to the boundaries on which it actually holds.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2583-consolidation-tax/clarifications.md",
+      "sourceLocation": {
+        "line": 109,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T026"
+      ]
     }
   ],
   "tasks": [
@@ -922,6 +975,7 @@
       "decisions": [],
       "sourceIds": [
         "PC-001",
+        "PC-003",
         "PM-001"
       ],
       "requiredSkills": [
@@ -948,7 +1002,8 @@
       "decisions": [],
       "sourceIds": [
         "GV-001",
-        "PD-001"
+        "PD-001",
+        "PD-004"
       ],
       "requiredSkills": [
         "deterministic-json"
@@ -974,8 +1029,10 @@
       "decisions": [],
       "sourceIds": [
         "CR-008",
+        "CR-009",
         "DEC-005",
-        "PD-009"
+        "PD-009",
+        "PD-011"
       ],
       "requiredSkills": [
         "traceability"
@@ -986,6 +1043,225 @@
       "source": "work/2583-consolidation-tax/tasks.yml",
       "sourceLocation": {
         "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "id": "T024",
+      "title": "Implement requirement FR-008",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-008"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-008",
+        "FR-008",
+        "PD-010"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV024"
+      ],
+      "source": "work/2583-consolidation-tax/tasks.yml",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "T025",
+      "title": "Implement clarification decision DEC-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-006"
+      ],
+      "sourceIds": [
+        "DEC-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV025"
+      ],
+      "source": "work/2583-consolidation-tax/tasks.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "T026",
+      "title": "Implement clarification decision DEC-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-007"
+      ],
+      "sourceIds": [
+        "DEC-007"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV026"
+      ],
+      "source": "work/2583-consolidation-tax/tasks.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "T027",
+      "title": "Implement plan decision PD-009",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "CR-008",
+        "PD-009"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV027"
+      ],
+      "source": "work/2583-consolidation-tax/tasks.yml",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      }
+    },
+    {
+      "id": "T028",
+      "title": "Keep accepted deferral CR-008 visible",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "CR-008"
+      ],
+      "requiredSkills": [
+        "traceability"
+      ],
+      "requiredEvidence": [
+        "EV028"
+      ],
+      "source": "work/2583-consolidation-tax/tasks.yml",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "id": "T029",
+      "title": "Implement plan decision PD-011",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "CR-009",
+        "PD-011"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV029"
+      ],
+      "source": "work/2583-consolidation-tax/tasks.yml",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      }
+    },
+    {
+      "id": "T030",
+      "title": "Record verification evidence VO-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-010",
+        "VO-006"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV030"
+      ],
+      "source": "work/2583-consolidation-tax/tasks.yml",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      }
+    },
+    {
+      "id": "T031",
+      "title": "Record verification evidence VO-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-004",
+        "VO-007"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV031"
+      ],
+      "source": "work/2583-consolidation-tax/tasks.yml",
+      "sourceLocation": {
+        "line": 31,
         "column": 1
       }
     }
@@ -1301,7 +1577,7 @@
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today\u0027s behaviour until the receipt is next recorded is the same posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged.",
+      "rationale": "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today\u0027s behaviour until the receipt is next recorded is the posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged.",
       "source": "work/2583-consolidation-tax/evidence.yml",
       "sourceLocation": {
         "line": 12,
@@ -1537,7 +1813,7 @@
     },
     {
       "id": "EV022",
-      "kind": "generated-view",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T022",
       "taskRefs": [
@@ -1578,10 +1854,212 @@
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "The checklist-stage mirror of DEC-005. One deferral observed at two lifecycle stages is not two obligations, and discharging it twice would assert two independent decisions where one was made.",
+      "rationale": "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today\u0027s behaviour until the receipt is next recorded is the posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged.",
       "source": "work/2583-consolidation-tax/evidence.yml",
       "sourceLocation": {
         "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV024",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T024",
+      "taskRefs": [
+        "T024"
+      ],
+      "requirementRefs": [
+        "FR-008"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2583-consolidation-tax/evidence.yml",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV025",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T025",
+      "taskRefs": [
+        "T025"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2583-consolidation-tax/evidence.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV026",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T026",
+      "taskRefs": [
+        "T026"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2583-consolidation-tax/evidence.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV027",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T027",
+      "taskRefs": [
+        "T027"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2583-consolidation-tax/evidence.yml",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV028",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T028",
+      "taskRefs": [
+        "T028"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today\u0027s behaviour until the receipt is next recorded is the posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged.",
+      "source": "work/2583-consolidation-tax/evidence.yml",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV029",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T029",
+      "taskRefs": [
+        "T029"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2583-consolidation-tax/evidence.yml",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV030",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T030",
+      "taskRefs": [
+        "T030"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs",
+        "tests/FS.GG.Coord.Cli.Tests/consolidation-corpus/2583.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2583-consolidation-tax/evidence.yml",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV031",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T031",
+      "taskRefs": [
+        "T031"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2583-consolidation-tax/evidence.yml",
+      "sourceLocation": {
+        "line": 31,
         "column": 1
       }
     }
@@ -1624,7 +2102,7 @@
           "path": "work/2583-consolidation-tax/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "6fe40acf77cdf8ef2dc9aeae8c8f8c5eaea8972a420bdaf64324d676dd3ce1f4"
+            "value": "b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40"
           },
           "schemaVersion": 1
         },
@@ -1632,7 +2110,7 @@
           "path": "work/2583-consolidation-tax/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493"
+            "value": "e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5"
           },
           "schemaVersion": 1
         },
@@ -1640,7 +2118,7 @@
           "path": "work/2583-consolidation-tax/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "43bc848b70963d78ac69d6619bbfef32296a3b2b5167ee43419d0a71f247bdc5"
+            "value": "3078048de41e1e4eb6891be2d6395be4f95c3c8d028ff4f22a71012f8ee23f89"
           },
           "schemaVersion": 1
         },
@@ -1648,7 +2126,7 @@
           "path": "work/2583-consolidation-tax/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "c26d6c8da8a3b6766332b4381c846d6f9e2f21dde7d22d1f1d8f8ecbeff346d8"
+            "value": "6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c"
           },
           "schemaVersion": 1
         },
@@ -1656,7 +2134,7 @@
           "path": "work/2583-consolidation-tax/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b"
+            "value": "b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0"
           },
           "schemaVersion": 1
         },
@@ -1664,14 +2142,14 @@
           "path": "work/2583-consolidation-tax/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "90d7e850684fb864a29c4cb2358c7ef9064ab19ea811e7110ceff3d33a2f4f33"
+            "value": "2bb20b7c7b24ccf78770f09fa30aa1c324aa9e127f7722fce676e8b25c02cbf8"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "05212995fb8b436cb188c372734334ebda57c24cc9d96b27e464c017aa751e44"
+        "value": "559f02b38f79d4875fd24d1ae0b541c0e502f83d2a9d643ebc2085df2f6e5fba"
       },
       "currency": "current"
     }

@@ -37,21 +37,11 @@
       "schemaStatus": "current"
     },
     {
-      "path": "readiness/2583-consolidation-tax/work-model.json",
-      "kind": "workModel",
-      "digest": {
-        "algorithm": "sha256",
-        "value": "390efaf2742789ca8d5cedc72f61d82f23d418acecaf9edab5316146613f5932"
-      },
-      "schemaVersion": 1,
-      "schemaStatus": "current"
-    },
-    {
       "path": "work/2583-consolidation-tax/checklist.md",
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "6fe40acf77cdf8ef2dc9aeae8c8f8c5eaea8972a420bdaf64324d676dd3ce1f4"
+        "value": "b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +51,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493"
+        "value": "e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +61,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "c26d6c8da8a3b6766332b4381c846d6f9e2f21dde7d22d1f1d8f8ecbeff346d8"
+        "value": "6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +71,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b"
+        "value": "b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +81,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "90d7e850684fb864a29c4cb2358c7ef9064ab19ea811e7110ceff3d33a2f4f33"
+        "value": "2bb20b7c7b24ccf78770f09fa30aa1c324aa9e127f7722fce676e8b25c02cbf8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -102,7 +92,7 @@
       "id": "AR001",
       "sourcePath": "work/2583-consolidation-tax/checklist.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
-      "sourceId": "CR-008",
+      "sourceId": "CR-009",
       "targetId": null,
       "relationship": "checklistDeferralDisposition",
       "state": "current",
@@ -181,6 +171,26 @@
     {
       "id": "AR009",
       "sourcePath": "work/2583-consolidation-tax/clarifications.md",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "DEC-006",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/2583-consolidation-tax/clarifications.md",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "DEC-007",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/2583-consolidation-tax/clarifications.md",
       "targetPath": "work/2583-consolidation-tax/plan.md",
       "sourceId": null,
       "targetId": null,
@@ -189,7 +199,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR010",
+      "id": "AR012",
       "sourcePath": "work/2583-consolidation-tax/clarifications.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": null,
@@ -199,7 +209,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR013",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PC-001",
@@ -209,7 +219,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR014",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PC-002",
@@ -219,7 +229,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR015",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PC-003",
@@ -229,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR016",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "GV-001",
@@ -239,7 +249,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR017",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PM-001",
@@ -249,7 +259,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR018",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-001",
@@ -259,7 +269,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR019",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-002",
@@ -269,7 +279,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR020",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-003",
@@ -279,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR021",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-004",
@@ -289,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR022",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-005",
@@ -299,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR023",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-006",
@@ -309,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR024",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-007",
@@ -319,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR025",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-008",
@@ -329,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR026",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "PD-009",
@@ -339,7 +349,27 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR027",
+      "sourcePath": "work/2583-consolidation-tax/plan.md",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "PD-010",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR028",
+      "sourcePath": "work/2583-consolidation-tax/plan.md",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "PD-011",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": null,
@@ -349,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR030",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "VO-001",
@@ -359,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR031",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "VO-002",
@@ -369,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR032",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "VO-003",
@@ -379,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR033",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "VO-004",
@@ -389,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR034",
       "sourcePath": "work/2583-consolidation-tax/plan.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "VO-005",
@@ -399,7 +429,27 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR035",
+      "sourcePath": "work/2583-consolidation-tax/plan.md",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "VO-006",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR036",
+      "sourcePath": "work/2583-consolidation-tax/plan.md",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "VO-007",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR037",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "AC-001",
@@ -409,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR038",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "AC-002",
@@ -419,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR039",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "AC-003",
@@ -429,7 +479,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR040",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "AC-004",
@@ -439,7 +489,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR041",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "AC-005",
@@ -449,7 +499,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR042",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "AC-006",
@@ -459,7 +509,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR043",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "AC-007",
@@ -469,7 +519,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR044",
+      "sourcePath": "work/2583-consolidation-tax/spec.md",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "AC-008",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR045",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/checklist.md",
       "sourceId": null,
@@ -479,7 +539,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR039",
+      "id": "AR046",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/plan.md",
       "sourceId": null,
@@ -489,7 +549,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR040",
+      "id": "AR047",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "FR-001",
@@ -499,7 +559,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR041",
+      "id": "AR048",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "FR-002",
@@ -509,7 +569,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR042",
+      "id": "AR049",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "FR-003",
@@ -519,7 +579,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR043",
+      "id": "AR050",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "FR-004",
@@ -529,7 +589,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR044",
+      "id": "AR051",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "FR-005",
@@ -539,7 +599,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR045",
+      "id": "AR052",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "FR-006",
@@ -549,7 +609,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR046",
+      "id": "AR053",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "FR-007",
@@ -559,7 +619,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR047",
+      "id": "AR054",
+      "sourcePath": "work/2583-consolidation-tax/spec.md",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "FR-008",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR055",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/clarifications.md",
       "sourceId": null,
@@ -569,7 +639,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR048",
+      "id": "AR056",
       "sourcePath": "work/2583-consolidation-tax/spec.md",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": null,
@@ -579,7 +649,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR049",
+      "id": "AR057",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T008",
@@ -589,7 +659,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR050",
+      "id": "AR058",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T009",
@@ -599,7 +669,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR051",
+      "id": "AR059",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T010",
@@ -609,7 +679,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR052",
+      "id": "AR060",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T011",
@@ -619,7 +689,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR053",
+      "id": "AR061",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T012",
@@ -629,7 +699,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR054",
+      "id": "AR062",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T013",
@@ -639,7 +709,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR055",
+      "id": "AR063",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T014",
@@ -649,7 +719,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR056",
+      "id": "AR064",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T015",
@@ -659,7 +729,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR057",
+      "id": "AR065",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T016",
@@ -669,7 +739,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR058",
+      "id": "AR066",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T017",
@@ -679,7 +749,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR059",
+      "id": "AR067",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T018",
@@ -689,7 +759,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR060",
+      "id": "AR068",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T019",
@@ -699,7 +769,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR061",
+      "id": "AR069",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T020",
@@ -709,7 +779,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR062",
+      "id": "AR070",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T021",
@@ -719,7 +789,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR063",
+      "id": "AR071",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T022",
@@ -729,10 +799,80 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR064",
+      "id": "AR072",
       "sourcePath": "work/2583-consolidation-tax/tasks.yml",
       "targetPath": "work/2583-consolidation-tax/tasks.yml",
       "sourceId": "T023",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR073",
+      "sourcePath": "work/2583-consolidation-tax/tasks.yml",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "T025",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR074",
+      "sourcePath": "work/2583-consolidation-tax/tasks.yml",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "T026",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR075",
+      "sourcePath": "work/2583-consolidation-tax/tasks.yml",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "T027",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR076",
+      "sourcePath": "work/2583-consolidation-tax/tasks.yml",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "T028",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR077",
+      "sourcePath": "work/2583-consolidation-tax/tasks.yml",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "T029",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR078",
+      "sourcePath": "work/2583-consolidation-tax/tasks.yml",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "T030",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR079",
+      "sourcePath": "work/2583-consolidation-tax/tasks.yml",
+      "targetPath": "work/2583-consolidation-tax/tasks.yml",
+      "sourceId": "T031",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -741,7 +881,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 64,
+    "readyCount": 79,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,
@@ -756,7 +896,7 @@
     {
       "path": "readiness/2583-consolidation-tax/work-model.json",
       "kind": "workModel",
-      "currency": "current",
+      "currency": "missing",
       "diagnosticIds": []
     }
   ],

@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2583-consolidation-tax/clarifications.md
 
 ## Source Snapshot
-- spec: work/2583-consolidation-tax/spec.md sha256:dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b schemaVersion:1
-- clarifications: work/2583-consolidation-tax/clarifications.md sha256:9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493 schemaVersion:1
+- spec: work/2583-consolidation-tax/spec.md sha256:b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0 schemaVersion:1
+- clarifications: work/2583-consolidation-tax/clarifications.md sha256:e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.
@@ -32,7 +32,8 @@ Prose status: checklistReady
 - CHK-005 [FR-005] [AC-005] blocking: Requirement FR-005 is testable and linked to acceptance coverage.
 - CHK-006 [FR-006] [AC-006] blocking: Requirement FR-006 is testable and linked to acceptance coverage.
 - CHK-007 [FR-007] [AC-007] blocking: Requirement FR-007 is testable and linked to acceptance coverage.
-- CHK-008 [DEC-005] advisory: Accepted deferral DEC-005 remains visible to planning.
+- CHK-008 [FR-008] [AC-008] blocking: Requirement FR-008 is testable and linked to acceptance coverage.
+- CHK-009 [DEC-005] advisory: Accepted deferral DEC-005 remains visible to planning.
 
 ## Review Results
 - CR-001 [CHK:CHK-001] [FR-001] [AC-001] pass: Requirement FR-001 is testable and linked to acceptance coverage.
@@ -42,9 +43,10 @@ Prose status: checklistReady
 - CR-005 [CHK:CHK-005] [FR-005] [AC-005] pass: Requirement FR-005 is testable and linked to acceptance coverage.
 - CR-006 [CHK:CHK-006] [FR-006] [AC-006] pass: Requirement FR-006 is testable and linked to acceptance coverage.
 - CR-007 [CHK:CHK-007] [FR-007] [AC-007] pass: Requirement FR-007 is testable and linked to acceptance coverage.
+- CR-008 [CHK:CHK-008] [FR-008] [AC-008] pass: Requirement FR-008 is testable and linked to acceptance coverage.
 
 ## Accepted Deferrals
-- CR-008 [CHK:CHK-008] [DEC-005] acceptedDeferral: Accepted deferral DEC-005 remains visible to planning.
+- CR-009 [CHK:CHK-009] [DEC-005] acceptedDeferral: Accepted deferral DEC-005 remains visible to planning.
 
 ## Blocking Findings
 No blocking findings recorded.

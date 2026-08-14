@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2583-consolidation-tax/ship.json",
-      "digest": "sha256:cbee9e6d21d79376b8b062c28a7430b171c4e26d3b4c3b0bb577dc9802f70e73",
+      "digest": "sha256:f6dea6ee5f4761077ed5927a613c906770a244a722a4424b95e741ca202ae1ba",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2583-consolidation-tax/verify.json",
-      "digest": "sha256:2aa26249e2cc6394ba63dcb2e5f377ed5b4381b8bf0583976087620afdf3924c",
+      "digest": "sha256:58513297a80781e6c02c733169ab975f7c94fec7868f4a543058c0dcc9455756",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2583-consolidation-tax/work-model.json",
-      "digest": "sha256:a48e6e978339e2148d6369f843775c3d9c45fb298ba723d836031a31ff42d78d",
+      "digest": "sha256:9560658eae403778e327dae683f44b7ea5d3c69d6556c23d8f7e5cfd7ffbe6c9",
       "schemaVersion": 1
     }
   ],
@@ -80,7 +80,7 @@
       {
         "id": "evidence:EV012",
         "state": "skipped",
-        "rationale": "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today\u0027s behaviour until the receipt is next recorded is the same posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged."
+        "rationale": "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today\u0027s behaviour until the receipt is next recorded is the posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged."
       },
       {
         "id": "evidence:EV013",
@@ -135,7 +135,47 @@
       {
         "id": "evidence:EV023",
         "state": "skipped",
-        "rationale": "The checklist-stage mirror of DEC-005. One deferral observed at two lifecycle stages is not two obligations, and discharging it twice would assert two independent decisions where one was made."
+        "rationale": "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today\u0027s behaviour until the receipt is next recorded is the posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged."
+      },
+      {
+        "id": "evidence:EV024",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV025",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV026",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV027",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV028",
+        "state": "skipped",
+        "rationale": "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today\u0027s behaviour until the receipt is next recorded is the posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged."
+      },
+      {
+        "id": "evidence:EV029",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV030",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV031",
+        "state": "real",
+        "rationale": null
       },
       {
         "id": "task:T001",
@@ -251,6 +291,46 @@
         "id": "task:T023",
         "state": "pending",
         "rationale": null
+      },
+      {
+        "id": "task:T024",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T025",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T026",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T027",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T028",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T029",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T030",
+        "state": "pending",
+        "rationale": null
+      },
+      {
+        "id": "task:T031",
+        "state": "pending",
+        "rationale": null
       }
     ],
     "dependencies": [
@@ -345,6 +425,38 @@
       {
         "dependent": "evidence:EV023",
         "dependency": "task:T023"
+      },
+      {
+        "dependent": "evidence:EV024",
+        "dependency": "task:T024"
+      },
+      {
+        "dependent": "evidence:EV025",
+        "dependency": "task:T025"
+      },
+      {
+        "dependent": "evidence:EV026",
+        "dependency": "task:T026"
+      },
+      {
+        "dependent": "evidence:EV027",
+        "dependency": "task:T027"
+      },
+      {
+        "dependent": "evidence:EV028",
+        "dependency": "task:T028"
+      },
+      {
+        "dependent": "evidence:EV029",
+        "dependency": "task:T029"
+      },
+      {
+        "dependent": "evidence:EV030",
+        "dependency": "task:T030"
+      },
+      {
+        "dependent": "evidence:EV031",
+        "dependency": "task:T031"
       },
       {
         "dependent": "task:T001",
@@ -500,6 +612,66 @@
       },
       {
         "dependent": "task:T023",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T024",
+        "dependency": "evidence:EV024"
+      },
+      {
+        "dependent": "task:T025",
+        "dependency": "evidence:EV025"
+      },
+      {
+        "dependent": "task:T025",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T026",
+        "dependency": "evidence:EV026"
+      },
+      {
+        "dependent": "task:T026",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T027",
+        "dependency": "evidence:EV027"
+      },
+      {
+        "dependent": "task:T027",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T028",
+        "dependency": "evidence:EV028"
+      },
+      {
+        "dependent": "task:T028",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T029",
+        "dependency": "evidence:EV029"
+      },
+      {
+        "dependent": "task:T029",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T030",
+        "dependency": "evidence:EV030"
+      },
+      {
+        "dependent": "task:T030",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T031",
+        "dependency": "evidence:EV031"
+      },
+      {
+        "dependent": "task:T031",
         "dependency": "task:T001"
       }
     ]
