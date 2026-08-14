@@ -110,3 +110,94 @@ module LifecycleProjectionTests =
     let ``#2264 expired orphan claim no longer projects active work`` () =
         let value = { observation with Claim = fact (Some(claim, LeaseExpiredNoPr)) }
         Assert.Equal(LifecycleProjection.Project(Ready, 1L), LifecycleProjection.project value)
+
+    [<Fact>]
+    let ``M1 explicit Backlog intent survives an otherwise-ready reconciliation`` () =
+        let value = { observation with Claim = fact None }
+        let intent =
+            LifecycleProjection.Backlog
+                { Revision = 7L
+                  Reason = "operator parked for later" }
+        Assert.Equal(
+            LifecycleProjection.Project(Backlog, 1L),
+            LifecycleProjection.reduce LifecycleProjection.IntentStatusV1 intent value
+        )
+
+    [<Theory>]
+    [<InlineData(true)>]
+    [<InlineData(false)>]
+    let ``M1 both human park variants survive claim and review observations`` decision =
+        let human = if decision then AwaitingHumanDecision else AwaitingHumanAction
+        let pr : LifecycleProjection.PullRequest = { Number = 12; Open = true; ReviewOrCiActive = true }
+        let value = { observation with PullRequest = fact (Some pr) }
+        let intent =
+            LifecycleProjection.HumanPark(
+                human,
+                { Revision = 8L
+                  Reason = "explicit human park" }
+            )
+        Assert.Equal(
+            LifecycleProjection.Project(Blocked, 1L),
+            LifecycleProjection.reduce LifecycleProjection.IntentStatusV1 intent value
+        )
+
+    [<Fact>]
+    let ``M1 active lifecycle facts dominate Backlog intent`` () =
+        let intent =
+            LifecycleProjection.Backlog
+                { Revision = 9L
+                  Reason = "not yet scheduled" }
+        Assert.Equal(
+            LifecycleProjection.Project(InProgress, 1L),
+            LifecycleProjection.reduce LifecycleProjection.IntentStatusV1 intent observation
+        )
+
+    [<Fact>]
+    let ``M1 migration turns only deliberate legacy parks into first-class intent`` () =
+        match LifecycleProjection.migrateIntent 10L Backlog None with
+        | LifecycleProjection.Backlog record -> Assert.Equal(10L, record.Revision)
+        | other -> failwithf "expected Backlog migration, got %A" other
+        match LifecycleProjection.migrateIntent 11L Blocked (Some AwaitingHumanAction) with
+        | LifecycleProjection.HumanPark(AwaitingHumanAction, record) -> Assert.Equal(11L, record.Revision)
+        | other -> failwithf "expected HumanPark migration, got %A" other
+        Assert.Equal(LifecycleProjection.Auto, LifecycleProjection.migrateIntent 12L Ready None)
+
+    [<Fact>]
+    let ``M1 shadow classifies explained park differences and rollback is a projection switch`` () =
+        let value = { observation with Claim = fact None }
+        let intent = LifecycleProjection.migrateIntent 13L Backlog None
+        let shadow = LifecycleProjection.shadow LifecycleProjection.IntentStatusV1 intent value
+        Assert.Equal(
+            LifecycleProjection.DeliberateParkPreserved(Ready, Backlog),
+            shadow.Difference
+        )
+        Assert.Equal(
+            LifecycleProjection.Project(Backlog, 1L),
+            LifecycleProjection.select LifecycleProjection.Intent shadow
+        )
+        Assert.Equal(
+            LifecycleProjection.Project(Ready, 1L),
+            LifecycleProjection.select LifecycleProjection.Legacy shadow
+        )
+
+    [<Fact>]
+    let ``M1 consecutive reconciliation is idempotent once intended status is projected`` () =
+        let value = { observation with Claim = fact None }
+        let intent = LifecycleProjection.migrateIntent 14L Backlog None
+        let first = LifecycleProjection.shadowAdvance LifecycleProjection.IntentStatusV1 intent None value
+        let projected = LifecycleProjection.select LifecycleProjection.Intent first
+        let receipt =
+            match projected with
+            | LifecycleProjection.Project(status, observedAt) ->
+                Some({ ObservedAt = observedAt; Status = status }: LifecycleProjection.Watermark)
+            | other -> failwithf "expected projection, got %A" other
+        let second = LifecycleProjection.shadowAdvance LifecycleProjection.IntentStatusV1 intent receipt value
+        Assert.Equal(projected, LifecycleProjection.select LifecycleProjection.Intent second)
+
+    [<Fact>]
+    let ``M1 projection switch fails closed on misspelling`` () =
+        Assert.Equal(Ok LifecycleProjection.Intent, LifecycleProjection.projectionMode None)
+        Assert.Equal(Ok LifecycleProjection.Legacy, LifecycleProjection.projectionMode (Some "legacy"))
+        match LifecycleProjection.projectionMode (Some "newest") with
+        | Error reason -> Assert.Contains("unknown lifecycle projection mode", reason)
+        | result -> failwithf "expected invalid switch to fail, got %A" result

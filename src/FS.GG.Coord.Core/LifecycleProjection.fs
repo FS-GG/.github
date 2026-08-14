@@ -16,9 +16,36 @@ module LifecycleProjection =
           Delivery: Fact<Delivery>
           Issue: Fact<IssueState> }
 
+    type IntentRecord =
+        { Revision: int64
+          Reason: string }
+
+    type SchedulingIntent =
+        | Auto
+        | Backlog of IntentRecord
+        | HumanPark of HumanBlock * IntentRecord
+        | Deferred of reason: string * until: int64 option * revision: int64
+
+    type PolicyVersion =
+        | IntentStatusV1
+
+    type ProjectionMode =
+        | Legacy
+        | Intent
+
     type Result =
         | Project of status: BoardStatus * observedAt: int64
         | Withheld of reason: string
+
+    type Difference =
+        | Same
+        | DeliberateParkPreserved of legacy: BoardStatus * intended: BoardStatus
+        | Unexpected of legacy: Result * intended: Result
+
+    type Shadow =
+        { Legacy: Result
+          Intended: Result
+          Difference: Difference }
 
     /// The durable portion of a projection receipt.  Callers persist this beside the status write and
     /// feed it back on the next event.  Keeping the water-mark in the typed boundary makes an event that
@@ -53,12 +80,12 @@ module LifecycleProjection =
 
     let tryWatermark (comments: string list) =
         let status = function
-            | "Backlog" -> Some Backlog
-            | "Ready" -> Some Ready
-            | "In progress" -> Some InProgress
-            | "Blocked" -> Some Blocked
-            | "In review" -> Some InReview
-            | "Done" -> Some Done
+            | "Backlog" -> Some BoardStatus.Backlog
+            | "Ready" -> Some BoardStatus.Ready
+            | "In progress" -> Some BoardStatus.InProgress
+            | "Blocked" -> Some BoardStatus.Blocked
+            | "In review" -> Some BoardStatus.InReview
+            | "Done" -> Some BoardStatus.Done
             | _ -> None
 
         comments
@@ -82,29 +109,91 @@ module LifecycleProjection =
           observation.Delivery.ObservedAt; observation.Issue.ObservedAt ]
         |> List.forall ((=) timestamp)
 
-    let project observation =
+    let private projectWithIntent intent observation =
         let observedAt = latest observation
         if not (coherent observation observedAt) then
             Withheld "lifecycle facts have different observation timestamps"
-        elif observation.Blockers.Value |> List.exists (fun blocker -> blocker.State <> BlockerClosed && blocker.State <> BlockerMerged) then
-            Project(Blocked, observedAt)
         elif observation.Delivery.Value.DoneStamped && observation.Issue.Value = Closed then
-            Project(Done, observedAt)
+            Project(BoardStatus.Done, observedAt)
         // Closure alone is not an instruction to erase the board's lifecycle state.  `Done` is earned
         // only by its immutable receipt; without it a scheduled pass must leave the terminal row for the
         // normal delivery path rather than projecting it back to Ready.
         elif observation.Issue.Value = Closed then
             Withheld "closed issue has no verified done receipt"
+        // HumanPark is scheduling intent, not a blocker inferred from mutable observations.  It survives
+        // active-looking facts until its own revision is changed: a worker/PR cannot silently answer the
+        // human question which parked the item.  A real blocker naturally projects the same column.
+        elif (match intent with HumanPark _ -> true | _ -> false) then
+            Project(BoardStatus.Blocked, observedAt)
+        elif observation.Blockers.Value |> List.exists (fun blocker -> blocker.State <> BlockerClosed && blocker.State <> BlockerMerged) then
+            Project(BoardStatus.Blocked, observedAt)
         elif observation.Delivery.Value.Outstanding then
-            Project(InReview, observedAt)
+            Project(BoardStatus.InReview, observedAt)
         elif observation.PullRequest.Value |> Option.exists (fun pr -> pr.Open || pr.ReviewOrCiActive) then
-            Project(InReview, observedAt)
+            Project(BoardStatus.InReview, observedAt)
         elif observation.Claim.Value |> Option.exists (fun (_, liveness) -> match liveness with LeaseHeld | LeaseExpiredPrOpen _ | LeaseExpiredBranchPushed -> true | _ -> false) then
-            Project(InProgress, observedAt)
+            Project(BoardStatus.InProgress, observedAt)
         elif observation.Claim.Value |> Option.exists (fun (_, liveness) -> match liveness with LivenessUnknown -> true | _ -> false) then
             Withheld "claim liveness could not be observed"
         else
-            Project(Ready, observedAt)
+            match intent with
+            | Auto -> Project(BoardStatus.Ready, observedAt)
+            | Backlog _
+            | Deferred _ -> Project(BoardStatus.Backlog, observedAt)
+            | HumanPark _ -> Project(BoardStatus.Blocked, observedAt) // handled above; exhaustive and stable
+
+    let project observation = projectWithIntent Auto observation
+
+    let reduce policy intent observation =
+        match policy with
+        | IntentStatusV1 -> projectWithIntent intent observation
+
+    let migrateIntent revision status humanBlock =
+        match humanBlock with
+        | Some human ->
+            HumanPark(
+                human,
+                { Revision = revision
+                  Reason = "migrated from the explicit human-park sentinel" }
+            )
+        | None when status = BoardStatus.Backlog ->
+            Backlog
+                { Revision = revision
+                  Reason = "migrated from the deliberate Backlog projection" }
+        | None -> Auto
+
+    let private classify intent legacy intended =
+        if legacy = intended then Same
+        else
+            match intent, legacy, intended with
+            | Backlog _, Project(BoardStatus.Ready, _), Project(BoardStatus.Backlog, _) ->
+                DeliberateParkPreserved(BoardStatus.Ready, BoardStatus.Backlog)
+            | Deferred _, Project(BoardStatus.Ready, _), Project(BoardStatus.Backlog, _) ->
+                DeliberateParkPreserved(BoardStatus.Ready, BoardStatus.Backlog)
+            | HumanPark _, Project(oldStatus, _), Project(BoardStatus.Blocked, _) ->
+                DeliberateParkPreserved(oldStatus, BoardStatus.Blocked)
+            | _ -> Unexpected(legacy, intended)
+
+    let shadow policy intent observation =
+        let legacy = project observation
+        let intended = reduce policy intent observation
+        { Legacy = legacy
+          Intended = intended
+          Difference = classify intent legacy intended }
+
+    let projectionMode raw =
+        match raw |> Option.map (fun (value: string) -> value.Trim().ToLowerInvariant()) with
+        | None
+        | Some ""
+        | Some "intent"
+        | Some "intent-v1" -> Ok Intent
+        | Some "legacy" -> Ok Legacy
+        | Some value -> Error $"unknown lifecycle projection mode '%s{value}' (expected intent-v1 or legacy)"
+
+    let select mode shadow =
+        match mode with
+        | Legacy -> shadow.Legacy
+        | Intent -> shadow.Intended
 
     /// Accept a newly projected lifecycle result only when it is newer than the last applied receipt.
     /// Equal timestamps are idempotent only when they agree; different values at the same timestamp are
@@ -119,3 +208,22 @@ module LifecycleProjection =
             | Some previous when observedAt = previous.ObservedAt && status <> previous.Status ->
                 Withheld "lifecycle observation conflicts with the persisted projection watermark"
             | _ -> Project(status, observedAt)
+
+    let private advanceResult watermark result =
+        match result with
+        | Withheld reason -> Withheld reason
+        | Project(status, observedAt) ->
+            match watermark with
+            | Some previous when observedAt < previous.ObservedAt ->
+                Withheld "lifecycle observation predates the persisted projection watermark"
+            | Some previous when observedAt = previous.ObservedAt && status <> previous.Status ->
+                Withheld "lifecycle observation conflicts with the persisted projection watermark"
+            | _ -> result
+
+    let shadowAdvance policy intent watermark observation =
+        let projections = shadow policy intent observation
+        let legacy = advanceResult watermark projections.Legacy
+        let intended = advanceResult watermark projections.Intended
+        { Legacy = legacy
+          Intended = intended
+          Difference = classify intent legacy intended }

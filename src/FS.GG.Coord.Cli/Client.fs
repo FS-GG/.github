@@ -3160,6 +3160,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // actually posted to, so `Outstanding` measured an always-empty set and stayed `false`
                 // regardless of what was truly owed: silently reproducing the exact `.github#2135`/
                 // `.github#2333` failure this projector exists to prevent, parsing precision aside.
+                let projectionMode =
+                    match
+                        LifecycleProjection.projectionMode
+                            (Environment.GetEnvironmentVariable "FSGG_COORD_LIFECYCLE_PROJECTION" |> Option.ofObj)
+                    with
+                    | Ok mode -> mode
+                    | Error reason -> invalidArg "FSGG_COORD_LIFECYCLE_PROJECTION" reason
+
                 let lifecycleChores, lifecycleWatermarks =
                     lifecycleItems
                     |> List.fold (fun (chores, watermarks) item ->
@@ -3238,7 +3246,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                   Blockers = { ObservedAt = observedAt; Value = item.Blockers }
                                   Delivery = { ObservedAt = observedAt; Value = delivery }
                                   Issue = { ObservedAt = observedAt; Value = item.State } }
-                            match LifecycleProjection.advance watermark observation with
+                            // M1: migrate the deliberate board/body parks into typed intent, then ALWAYS
+                            // compute the old/new pair. The switch selects from that pair; it never skips
+                            // shadow evaluation, so rollback remains observable and bounded.
+                            let intent =
+                                LifecycleProjection.migrateIntent observedAt item.Status item.HumanBlock
+                            let shadow =
+                                LifecycleProjection.shadowAdvance
+                                    LifecycleProjection.IntentStatusV1 intent watermark observation
+                            match LifecycleProjection.select projectionMode shadow with
                             | LifecycleProjection.Project(destination, timestamp) ->
                                 match Chore.lifecycleProjection item destination with
                                 | Some chore ->
