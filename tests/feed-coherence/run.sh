@@ -238,6 +238,140 @@ PY
 must_fail "a CONTRACT_PACKAGES entry with no registry contract fails" \
   "$ORPHAN" "$FEED" "stale mapping"
 
+# ...and the state BETWEEN those two, which had no check at all until .github#2567. The row is STILL
+# PRESENT, so its id is `known` and `stale_mappings` does not see it; its `package-version` is gone,
+# so `subjects` does not see it either. It left BOTH halves' scope in one edit. Measured on the
+# pre-fix gate (3fd4951, this fixture's own BASE with coord-engine's key deleted): exit 0, "comparing
+# 10 package-bearing contract(s)" instead of 11, the closing `ok:` line printed, and the string
+# `coord-engine` absent from the output entirely — the gate reported success while checking less.
+#
+# The pattern requires the ROW'S ID and the reason together: a non-zero exit that did not name the
+# row would not tell an operator which row stopped being checked, which is criterion 1.
+KEYLESS="$WORK/keyless.yml"
+python3 - "$BASE" "$KEYLESS" <<'PY'
+import sys, yaml
+doc = yaml.safe_load(open(sys.argv[1]))
+row = next(c for c in doc["contracts"] if c.get("id") == "coord-engine")
+if "package-version" not in row:
+    sys.exit("vacuous fixture: coord-engine already carries no `package-version` in BASE")
+del row["package-version"]
+yaml.safe_dump(doc, open(sys.argv[2], "w"))
+PY
+must_fail "a MAPPED row still present but stripped of `package-version` fails" \
+  "$KEYLESS" "$FEED" "coord-engine.*leaves BOTH scopes at once"
+
+echo
+echo "--- the subject COUNT is not evidence: assert the SET's IDENTITY (.github#2567 criterion 5) ---"
+# Construct the world a count cannot see: one MAPPED row loses its `package-version` and a different
+# row GAINS one. Eleven subjects before, eleven after. A fixture asserting "the gate compares 11
+# package-bearing contracts" ratifies it, and both the dropped row (never compared again) and the
+# arrived row (compared against a package nobody mapped) are exactly the epic #266 unchecked subject.
+#
+# This is the item's own failure mode in miniature, which is why it gets a leg rather than a comment:
+# the original defect was two checks agreeing on a NUMBER of rows while disagreeing about WHICH.
+SWAP="$WORK/swap.yml"
+python3 - "$BASE" "$SWAP" <<'PY'
+import sys, yaml
+doc = yaml.safe_load(open(sys.argv[1]))
+gone = next(c for c in doc["contracts"] if c.get("id") == "coord-engine")
+arrived = next(c for c in doc["contracts"] if c.get("id") == "shared-build-config")
+if "package-version" not in gone or "package-version" in arrived:
+    sys.exit("vacuous fixture: BASE is not the shape this swap assumes")
+del gone["package-version"]
+arrived["package-version"] = "1.0.0"
+yaml.safe_dump(doc, open(sys.argv[2], "w"))
+PY
+
+# First prove the premise rather than asserting it: the counts really are equal and the sets really
+# do differ. A leg that skipped this could be testing a swap that silently changed the count, and
+# would then prove nothing about counting.
+if python3 - "$BASE" "$SWAP" "$GATE" <<'PY'
+import importlib.util, sys, yaml
+spec = importlib.util.spec_from_file_location("gate", sys.argv[3])
+gate = importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
+ids = lambda p: sorted(str(c.get("id", "")).strip()
+                       for c in gate.subjects(yaml.safe_load(open(p))["contracts"]))
+base, swap = ids(sys.argv[1]), ids(sys.argv[2])
+if len(base) != len(swap):
+    sys.exit(f"vacuous fixture: the swap changed the COUNT ({len(base)} -> {len(swap)}); this leg "
+             f"only means something while the count is blind to it")
+if base == swap:
+    sys.exit("vacuous fixture: the swap did not change the subject SET either")
+if "coord-engine" not in base or "coord-engine" in swap:
+    sys.exit(f"vacuous fixture: coord-engine did not leave the subject set: {base} -> {swap}")
+if "shared-build-config" in base or "shared-build-config" not in swap:
+    sys.exit(f"vacuous fixture: shared-build-config did not enter the subject set: {base} -> {swap}")
+PY
+then ok "the swap keeps the subject COUNT identical while changing the subject SET"
+else bad "the swap keeps the subject COUNT identical while changing the subject SET"
+fi
+
+# And now the gate on that same registry. It must red for the DEPARTED row specifically — the
+# arrived row raises its own (pre-existing) unmapped-subject error, and accepting that one as the
+# verdict would let this leg pass on a gate that still cannot see a row leave.
+must_fail "a count-preserving subject swap fails, naming the row that LEFT" \
+  "$SWAP" "$FEED" "coord-engine.*leaves BOTH scopes at once"
+
+echo
+echo "--- why a row can no longer fall between the two checks: the partition is exhaustive ---"
+# The claim in classify_mappings' docstring, asserted rather than trusted: every id in
+# CONTRACT_PACKAGES lands in exactly one of checked/unkeyed/stale — none in two, none in none — so
+# the three buckets are a permutation of the map's keys under every registry shape, including the two
+# damaged ones and both damages at once. That is the structural reason the .github#2567 gap cannot
+# reopen: it existed because two checks asked different questions and neither owned the leftovers.
+if python3 - "$BASE" "$KEYLESS" "$ORPHAN" "$GATE" <<'PY'
+import os, sys, yaml
+sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[4])))
+import registry_packages as rp
+
+def rows(path):
+    return yaml.safe_load(open(path))["contracts"]
+
+both = [c for c in rows(sys.argv[2]) if c.get("id") != "fs-gg-audio"]   # key removed AND row removed
+shapes = {"healthy": rows(sys.argv[1]), "key-removed": rows(sys.argv[2]),
+          "row-removed": rows(sys.argv[3]), "both": both}
+keys = set(rp.CONTRACT_PACKAGES)
+for name, contracts in shapes.items():
+    checked, unkeyed, stale = rp.classify_mappings(contracts)
+    buckets = checked + unkeyed + stale
+    if sorted(buckets) != sorted(keys):
+        sys.exit(f"{name}: buckets are not a permutation of CONTRACT_PACKAGES: {sorted(buckets)}")
+    if len(buckets) != len(set(buckets)):
+        sys.exit(f"{name}: an id landed in more than one bucket: {buckets}")
+    # `checked` must agree with subjects() exactly — the two must not be able to disagree again.
+    subject_ids = {str(c.get("id", "")).strip() for c in rp.subjects(contracts)}
+    if set(checked) != subject_ids & keys:
+        sys.exit(f"{name}: classify_mappings' `checked` disagrees with subjects(): "
+                 f"{sorted(checked)} vs {sorted(subject_ids & keys)}")
+    # The two named accessors are thin views onto this classifier, and a view that drifted from what
+    # it views would put the module right back to two checks answering differently.
+    if rp.unkeyed_subjects(contracts) != unkeyed:
+        sys.exit(f"{name}: unkeyed_subjects() disagrees with classify_mappings' unkeyed bucket")
+    if rp.stale_mappings(contracts) != stale:
+        sys.exit(f"{name}: stale_mappings() disagrees with classify_mappings' stale bucket")
+    # ...and the message builders must name exactly those ids, since the messages are what an
+    # operator acts on. A refusal that named the wrong row would be worse than the silence.
+    if len(rp.unkeyed_problems(contracts)) != len(unkeyed) or \
+       any(cid not in msg for cid, msg in zip(unkeyed, rp.unkeyed_problems(contracts))):
+        sys.exit(f"{name}: unkeyed_problems() does not name exactly {unkeyed}")
+    if rp.mapping_problems(contracts) != rp.unkeyed_problems(contracts) + rp.stale_problems(contracts):
+        sys.exit(f"{name}: mapping_problems() is not the concatenation of its two halves")
+# And the damaged shapes must actually populate the error buckets, or the loop above proved nothing.
+if rp.classify_mappings(shapes["key-removed"])[1] != ["coord-engine"]:
+    sys.exit("the key-removed shape did not produce exactly the coord-engine unkeyed bucket")
+if rp.classify_mappings(shapes["row-removed"])[2] != ["fs-gg-audio"]:
+    sys.exit("the row-removed shape did not produce exactly the fs-gg-audio stale bucket")
+if rp.classify_mappings(shapes["both"])[1:] != (["coord-engine"], ["fs-gg-audio"]):
+    sys.exit("the doubly-damaged shape did not report BOTH kinds at once")
+# The healthy shape must produce NO messages at all — otherwise every leg above could be satisfied
+# by a classifier that reports everything, and the gate would red on a clean registry.
+if rp.mapping_problems(shapes["healthy"]):
+    sys.exit(f"the healthy shape produced messages: {rp.mapping_problems(shapes['healthy'])}")
+PY
+then ok "every mapped id lands in exactly one of checked/unkeyed/stale, under all four shapes"
+else bad "every mapped id lands in exactly one of checked/unkeyed/stale, under all four shapes"
+fi
+
 # An unparsable literal must never be silently treated as "no opinion".
 must_fail "an unparsable registry version literal fails" \
   "$(mutate junk game-sim-core 'not-a-version')" "$FEED" "cannot parse version"
@@ -307,27 +441,45 @@ echo "--- CI guard on the real registry (no network: mapping completeness only) 
 # The live comparison runs in feed-coherence.yml. Here we assert only what is checkable offline:
 # every package-bearing contract in the CHECKED-IN registry has a package id mapped. This is the
 # leg that catches "someone added a contract and the gate silently stopped covering it".
+#
+# .github#2567 ALSO closed this leg's own copy of the defect. It compared `subjects - map` (nothing
+# unmapped) and `map - PRESENT ids` (nothing orphaned) — two conditions that a mapped row present
+# WITHOUT a `package-version` satisfies BOTH of, because it is in `present` and absent from
+# `subjects`. So the guard on the real registry had exactly the hole the gate had, and could not have
+# caught the key going missing from the file it is pointed at. The assertion is now the SET EQUALITY
+# `subject ids == CONTRACT_PACKAGES keys` — identity, not size, so swapping one row for another is
+# caught too — with the three directions still reported separately so a failure says which happened.
 if python3 - "$REPO_ROOT/registry/dependencies.yml" "$GATE" <<'PY'
-import importlib.util, sys, yaml
+import importlib.util, os, sys, yaml
 spec = importlib.util.spec_from_file_location("gate", sys.argv[2])
 gate = importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
+sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[2])))
+import registry_packages as rp
+
 doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
 contracts = doc.get("contracts") or []
 subjects = {str(c["id"]).strip() for c in contracts if c.get("package-version") is not None}
 if not subjects:
     sys.exit("the checked-in registry has no package-bearing contracts")
+checked, unkeyed, stale = rp.classify_mappings(contracts)
 missing = sorted(subjects - set(gate.CONTRACT_PACKAGES))
-orphan = sorted(set(gate.CONTRACT_PACKAGES) - {str(c.get("id", "")).strip() for c in contracts})
 if missing:
     sys.exit(f"unmapped package-bearing contract(s): {missing}")
-if orphan:
-    sys.exit(f"stale CONTRACT_PACKAGES entr(ies): {orphan}")
+if unkeyed:
+    sys.exit(f"mapped contract(s) present in the registry but carrying no `package-version` — "
+             f"neither a subject nor a stale mapping, the .github#2567 state: {unkeyed}")
+if stale:
+    sys.exit(f"stale CONTRACT_PACKAGES entr(ies): {stale}")
+if subjects != set(gate.CONTRACT_PACKAGES):
+    sys.exit(f"the subject set and the mapping's key set are not IDENTICAL: "
+             f"only-subject={sorted(subjects - set(gate.CONTRACT_PACKAGES))} "
+             f"only-mapped={sorted(set(gate.CONTRACT_PACKAGES) - subjects)}")
 for c in contracts:
     if c.get("package-version") is not None:
         gate.parse_version(str(c["package-version"]))   # every declared literal must parse
 PY
-then ok "registry/dependencies.yml: every package-bearing contract is mapped and parses"
-else bad "registry/dependencies.yml: every package-bearing contract is mapped and parses"
+then ok "registry/dependencies.yml: the subject set is IDENTICAL to CONTRACT_PACKAGES, and parses"
+else bad "registry/dependencies.yml: the subject set is IDENTICAL to CONTRACT_PACKAGES, and parses"
 fi
 
 echo

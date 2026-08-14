@@ -108,6 +108,7 @@ from registry_packages import (  # noqa: E402  (path shim above must run first)
     BESPOKE_CONTRACT,
     packages_for,
     subjects,
+    unkeyed_problems,
 )
 
 # The repo that owns the fs-gg-ui coherent set and cuts its tags. Used ONLY by the bespoke template
@@ -714,11 +715,26 @@ def reconcile(path: str, resolve_feed, resolve_nuspec, resolve_tag) -> dict:
             f"{path}: no contract carries a `package-version`. Either the registry is malformed or "
             f"the bot is pointed at the wrong file; either way there is nothing to reconcile."
         )
-    # NB: the REVERSE hygiene check (a CONTRACT_PACKAGES entry with no contract in the registry — a
-    # stale map) is deliberately NOT done here. It belongs to check-feed-coherence.py, which reads the
-    # FULL registry; the bot iterates the rows it is GIVEN, so a stale map entry names a row it never
-    # visits. The direction that DOES matter to the bot — a subject row with no mapping — is caught
-    # per row by packages_for (an unmapped package-bearing contract is the epic #266 unchecked subject).
+    # A mapped row that is STILL PRESENT but has LOST its `package-version` (.github#2567) silently
+    # leaves this half's scope too, and that one the bot MUST refuse on. `subjects()` is shared with
+    # check-feed-coherence.py, so the row stops being detected AND stops being flipped in the same
+    # instant — the two halves agree, which is exactly what makes the loss undetectable by comparing
+    # them. A repair that taught only the gate would leave the bot narrowed by the identical row.
+    #
+    # This is NOT the stale-map check, and the reasoning below is why only one of the two belongs
+    # here. A stale map entry names a row that is GONE, so the bot never visits it and nothing it
+    # could write is affected — that check reads the FULL registry and belongs to the gate. An
+    # unkeyed row is the opposite: the row EXISTS, is one this bot is supposed to be flipping, and is
+    # in `contracts` right here — `load_contracts` handed the bot every row, not just the subjects.
+    # So the bot can see it, and a bot that cannot trust its own subject set writes nothing.
+    # `unkeyed_problems` is shared rather than reimplemented so the two halves cannot drift into
+    # disagreeing about which rows have gone missing, the way they drifted about what a subject is.
+    #
+    # The other direction — a subject row with no mapping — stays with packages_for, per row (an
+    # unmapped package-bearing contract is the epic #266 unchecked subject).
+    unkeyed = unkeyed_problems(contracts)
+    if unkeyed:
+        raise GateError(f"{path}: " + " ".join(unkeyed))
 
     with open(path, encoding="utf-8") as fh:
         text = original = fh.read()

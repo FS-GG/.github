@@ -18,7 +18,8 @@ change to the registry SCHEMA — a versioned cross-repo contract owned by FS.GG
 (`Fsgg.Registry`) — which is a `contract-change` in its own right and not worth coupling to these
 gates (that is ADR-0060's Option C, deferred to P2 / .github#1261). The cost is that a NEW
 package-bearing contract must be added below — and forgetting to is an ERROR, not a silent skip
-(see `packages_for` / `stale_mappings`).
+(see `packages_for` / `stale_mappings` / `unkeyed_subjects`, and `classify_mappings` for why those
+three states are the whole of it).
 """
 from __future__ import annotations
 
@@ -108,15 +109,122 @@ def packages_for(contract_id: str) -> list[str]:
     return pkgs
 
 
+def _is_subject(contract: dict) -> bool:
+    """The ONE definition of "this row is package-bearing", used by `subjects()` AND by
+    `classify_mappings()` below. It is a private helper rather than an inlined comprehension because
+    the .github#2567 defect was precisely two functions asking DIFFERENT questions about the same
+    row: one tested the key, the other tested the id, and nothing tested both. Routing every "is this
+    a subject?" decision through one predicate is what makes them structurally unable to disagree."""
+    return contract.get("package-version") is not None
+
+
 def subjects(contracts: list[dict]) -> list[dict]:
     """The package-bearing rows: every contract carrying a `package-version`. This is the subject set
     BOTH gates act on — detection compares each against the feed, response flips each that is behind.
     Defining it once is what keeps the two from disagreeing about what a subject is."""
-    return [c for c in contracts if c.get("package-version") is not None]
+    return [c for c in contracts if _is_subject(c)]
+
+
+def classify_mappings(contracts: list[dict]) -> tuple[list[str], list[str], list[str]]:
+    """Reconcile CONTRACT_PACKAGES against the registry rows, and return
+    `(checked, unkeyed, stale)` — the ids that are compared, the ids that silently stopped being
+    compared, and the ids whose row is gone.
+
+    WHY THIS EXISTS, AND WHY IT IS ONE FUNCTION (.github#2567). `subjects()` and `stale_mappings()`
+    looked like a partition of the world and were not. `subjects()` selected on the KEY's presence;
+    `stale_mappings()` subtracted on the ROW's `id`. So a row that still EXISTS but has LOST its
+    `package-version` was in `known` — hence not a stale mapping — and was not a subject either. It
+    left both halves' scope simultaneously, the gate compared one fewer subject, and it still exited
+    0. Neither function was wrong on its own; the gap was BETWEEN them, and invisible from either
+    side. That is the exact shape `stale_mappings()`' own comment warns about ("a stale mapping is
+    how the next unchecked subject hides") — it just hid through a door that check was not watching.
+
+    WHY A ROW CAN NO LONGER FALL BETWEEN THEM. This asks both questions, of the same id, in one
+    place. It iterates `CONTRACT_PACKAGES` — the org's record of which contracts are package-bearing
+    — and every mapped id lands in exactly one of three buckets, because the two questions form a
+    complete truth table (the fourth cell, "absent row with a key", is unreachable: a row that is not
+    there carries nothing):
+
+        row present + `package-version` present  -> checked   (the only healthy state)
+        row present + `package-version` MISSING  -> unkeyed   (the .github#2567 gap; an ERROR)
+        row absent                               -> stale     (the pre-existing ERROR)
+
+    So `checked + unkeyed + stale` is always a permutation of `CONTRACT_PACKAGES`'s keys — an
+    invariant tests/feed-coherence/run.sh asserts directly, rather than trusting this prose.
+
+    The converse direction — a package-bearing row that CONTRACT_PACKAGES does not map — stays with
+    `packages_for()`, which raises per row. Between the two, the subject-id set and the mapping's key
+    set are forced into exact EQUALITY on a healthy registry: every way for one to drift from the
+    other is now an error with its own message. Note that equality is on IDENTITY, not size; a
+    registry that dropped one mapped row and added another package-bearing row keeps the same subject
+    COUNT and is caught here regardless, which is why nothing downstream should assert a count.
+
+    DUPLICATE IDS, STATED RATHER THAN ASSUMED AWAY. Two rows sharing an id is itself a registry
+    defect and is gated elsewhere (contract-coherence validates the schema). Here the FIRST such row
+    decides the bucket, so a duplicated id whose first row lost its key is reported as `unkeyed` even
+    though the second row would still be compared. That is the fail-CLOSED direction — it reports a
+    registry nobody should have — and it is deliberate rather than incidental.
+    """
+    rows: dict[str, dict] = {}
+    for c in contracts:
+        rows.setdefault(str(c.get("id", "")).strip(), c)
+
+    checked: list[str] = []
+    unkeyed: list[str] = []
+    stale: list[str] = []
+    for cid in sorted(CONTRACT_PACKAGES):
+        row = rows.get(cid)
+        if row is None:
+            stale.append(cid)
+        elif _is_subject(row):
+            checked.append(cid)
+        else:
+            unkeyed.append(cid)
+    return checked, unkeyed, stale
+
+
+def unkeyed_subjects(contracts: list[dict]) -> list[str]:
+    """Mapped contracts whose row is STILL IN the registry but has lost its `package-version`
+    (.github#2567). The row is not a subject, so nothing compares it against the feed and nothing
+    flips it; and its id is still `known`, so `stale_mappings()` does not see it either. It is an
+    ERROR to report, not a skip — "nothing to check" and "checked, and it's fine" must not share an
+    exit code (epic #266). Returns the offending ids."""
+    return classify_mappings(contracts)[1]
 
 
 def stale_mappings(contracts: list[dict]) -> list[str]:
     """Mapping entries whose contract has vanished from the registry. A stale mapping is how the next
     unchecked subject hides, so it is an ERROR to report, not a skip. Returns the offending ids."""
-    known = {str(c.get("id", "")).strip() for c in contracts}
-    return sorted(set(CONTRACT_PACKAGES) - known)
+    return classify_mappings(contracts)[2]
+
+
+def unkeyed_problems(contracts: list[dict]) -> list[str]:
+    """One ready-to-print message per row that is present, mapped, and has lost its
+    `package-version`. Written once and SHARED by both halves (.github#2567 criterion 3): `subjects()`
+    is shared, so the row stops being detected AND stops being flipped in the same instant, and a
+    repair that taught only the gate would leave the bot narrowed by the identical row."""
+    return [
+        f"contract {cid!r} is in the registry but carries no `package-version`, while "
+        f"CONTRACT_PACKAGES (scripts/registry_packages.py) maps it to {CONTRACT_PACKAGES[cid]}. A "
+        f"mapped row that has lost its key leaves BOTH scopes at once — it is not a subject, so "
+        f"nothing compares it against the feed or flips it, and its id is still known, so it is not "
+        f"reported as a stale mapping either. Restore the row's `package-version`, or drop the "
+        f"CONTRACT_PACKAGES mapping if the contract genuinely stopped shipping a package."
+        for cid in classify_mappings(contracts)[1]
+    ]
+
+
+def stale_problems(contracts: list[dict]) -> list[str]:
+    """One ready-to-print message per mapping whose contract has vanished from the registry."""
+    return [
+        f"CONTRACT_PACKAGES maps {cid!r}, which is not a contract in the registry. Remove the stale "
+        f"mapping."
+        for cid in classify_mappings(contracts)[2]
+    ]
+
+
+def mapping_problems(contracts: list[dict]) -> list[str]:
+    """Every way the mapping and the registry can have drifted apart, as ready-to-print messages, in
+    a fixed order — the whole of `classify_mappings`' two error buckets. This is what the DETECTION
+    half reports; the bot reports only `unkeyed_problems`, for the reason stated at its call site."""
+    return unkeyed_problems(contracts) + stale_problems(contracts)

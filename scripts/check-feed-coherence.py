@@ -21,6 +21,9 @@ FAILS CLOSED, which is the whole point of epic #266. "Nothing to check" and "che
 fine" must not share an exit code. Every one of these is an ERROR, not a skip:
 
   * a contract carries `package-version` but no package id is mapped below;
+  * a MAPPED contract's row is still in the registry but has LOST its `package-version` — it is
+    neither a subject nor a stale mapping, so before .github#2567 it left both scopes at once and
+    this gate compared one fewer row and still exited 0;
   * a mapped package 404s on the feed;
   * the token is missing, or lacks `read:packages` (401/403);
   * the feed is unreachable, returns unparsable JSON, or an unrecognised shape;
@@ -76,8 +79,8 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
 # lives outside the registry.
 from registry_packages import (  # noqa: E402  (path shim above must run first)
     CONTRACT_PACKAGES,
+    mapping_problems,
     packages_for,
-    stale_mappings,
     subjects,
 )
 
@@ -193,14 +196,20 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    # A mapping entry whose contract has vanished from the registry is stale, and a stale mapping
-    # is how the next unchecked subject hides. Report it.
-    for orphan in stale_mappings(contracts):
-        print(
-            f"::error::check-feed-coherence: CONTRACT_PACKAGES maps {orphan!r}, which is not a "
-            f"contract in the registry. Remove the stale mapping.",
-            file=sys.stderr,
-        )
+    # Reconcile CONTRACT_PACKAGES against the registry rows, in BOTH directions that can silently
+    # shrink the subject set:
+    #   * a mapping whose contract vanished is stale, and a stale mapping is how the next unchecked
+    #     subject hides;
+    #   * a mapped row that is STILL PRESENT but has lost its `package-version` is the .github#2567
+    #     gap — not a subject (nothing compares it) and not a stale mapping (its id is still known),
+    #     so it left both scopes at once and this gate printed "comparing 10" instead of 11 and still
+    #     exited 0. "Nothing to check" and "checked, and it's fine" must not share an exit code.
+    # Every problem is printed, not just the first: two rows can drift in one edit, and reporting one
+    # of them would send the reader back for a second run to discover the other.
+    drift = mapping_problems(contracts)
+    if drift:
+        for problem in drift:
+            print(f"::error::check-feed-coherence: {problem}", file=sys.stderr)
         return 1
 
     print(f"comparing {len(subject_rows)} package-bearing contract(s) against the org feed:")
