@@ -1,0 +1,605 @@
+schemaVersion: 1
+workId: 2583-consolidation-tax
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2583-consolidation-tax/spec.md
+sourceClarifications: work/2583-consolidation-tax/clarifications.md
+sourceChecklist: work/2583-consolidation-tax/checklist.md
+sourcePlan: work/2583-consolidation-tax/plan.md
+sourceTasks: work/2583-consolidation-tax/tasks.yml
+sourceAnalysis: readiness/2583-consolidation-tax/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2583-consolidation-tax/analysis.json
+    digest: e5d26481afb97389b3f028495667b4179231b89cfd6bc26119caf892a4fd3900
+    schemaVersion: 1
+  - label: checklist
+    path: work/2583-consolidation-tax/checklist.md
+    digest: 6fe40acf77cdf8ef2dc9aeae8c8f8c5eaea8972a420bdaf64324d676dd3ce1f4
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2583-consolidation-tax/clarifications.md
+    digest: 9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493
+    schemaVersion: 1
+  - label: plan
+    path: work/2583-consolidation-tax/plan.md
+    digest: c26d6c8da8a3b6766332b4381c846d6f9e2f21dde7d22d1f1d8f8ecbeff346d8
+    schemaVersion: 1
+  - label: spec
+    path: work/2583-consolidation-tax/spec.md
+    digest: dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b
+    schemaVersion: 1
+  - label: tasks
+    path: work/2583-consolidation-tax/tasks.yml
+    digest: 90d7e850684fb864a29c4cb2358c7ef9064ab19ea811e7110ceff3d33a2f4f33
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["deliveryRouteSubjectLines is the ONE filter and deliveryRouteSubject is that list joined and nothing else, so the hashed subject and the line-wise subject cannot disagree (#485). Measured through the command boundary by the leg 'the line-wise subject and the joined subject agree on every corpus body': it records a receipt whose subjectRevision is the JOINED form against a locator marker production built from the LINE-WISE form, and shows it resolving canonically, on all 4 real bodies."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["Insertion is route-neutral at ANY position, so append is not special-cased. Three legs on all 4 corpus bodies: APPENDED (3 added lines), MID-BODY inserted immediately before the last judged line (2), and PREPENDED (2). Each asserts kind=current and subjectMatch=additive and the exact added-line count."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["Modification, deletion and reordering each still stale the receipt, on all 4 corpus bodies. Modification appends ' AND ALSO EVERY DOWNSTREAM REPOSITORY' to a judged line; deletion removes it; reordering swaps the first and last judged lines (asserted distinct first). Each asserts a non-zero exit, empty stdout, and 'subjectRevision is stale' on stderr."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs, tests/FS.GG.Coord.Cli.Tests/DeliveryRouteCliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["Nothing current became stale. The additive candidate is the THIRD arm, reached only after canonical and legacy have both declined on byte-identical inputs, so .github#2392 AC5 holds by construction. Measured anyway: the Paths-widen leg and the unedited leg both assert subjectMatch=canonical, and a pre-.github#2392 whole-body receipt asserts subjectMatch=legacy. All 830 Cli, 852 Core and 602 GitHub assertions green."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["delivery-route show reports subjectMatch and addedSubjectLines on the unchanged fsgg.coord.delivery-route-result/v1 envelope and writes a stderr note naming the count. Asserted on stdout AND stderr for the append leg, and asserted ABSENT on the unedited leg so the note cannot be unconditional."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs, tests/FS.GG.Coord.Cli.Tests/consolidation-corpus/2583.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["Gate inversion (.github#2551), both halves. MUTATION 1 deleted the third (additive) candidate arm from decideDeliveryRouteMatch: Failed 3, Passed 11 - red on exactly the three additive legs. MUTATION 2 deleted the full-width 'hashHex ... = recordedRevision' guard from additiveSubjectMatch: Failed 1, Passed 14 - red on exactly the 'aligns but does not reconstruct' leg. Both reverted; suite re-run green at 15/15."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["Fail-closed on a missing or malformed locator record. Three legs: no locator marker at all (the pre-.github#2583 shape every e2e, parity and replay fixture still writes - an additive edit against it is STILL stale), a wrong locator (stale), and a truncated envelope with no closing marker (the line stays in the JSON payload, so the receipt reads as MISSING rather than as a well-formed receipt with no record). Absence is never permission (#266)."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001. The structural rule is adopted knowing a pure insertion CAN redefine scope; the residual is discharged by reporting, not by silence. The stderr note names the added-line count and says 'Re-record it if the addition changed the work's scope.', and its presence and absence are both asserted."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002. The locator is 16 hex characters and is NOT the safety boundary: acceptance is the full-width hashHex of the reconstructed subsequence against the receipt's own subjectRevision. The 'aligns but does not reconstruct' leg reproduces a collision's exact consequence deterministically by dropping the middle locator - alignment succeeds, reconstruction is one line short, and the verdict is stale."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs, tests/FS.GG.Coord.Cli.Tests/DeliveryRouteCliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["DEC-003. record derives the locator marker from the same body it computed revision from and asks the receipt's author for nothing. The byte-verbatim leg asserts the posted comment equals marker + locator + the author's receipt bytes unchanged, on all 4 corpus bodies."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs, tests/FS.GG.Coord.Cli.Tests/DeliveryRouteCliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["DEC-004. The locator record is a SIBLING marker line inside the receipt comment, not a field inside the JSON object, so the agent-authored receipt stays byte-verbatim and src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs is not touched at all - confirmed by git diff --stat, which lists no change to that file."]
+  - id: EV012
+    kind: deferral
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV012]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "No locator record exists for a receipt written before this change and none can be recovered from the issue, so there is nothing to migrate FROM. Keeping today's behaviour until the receipt is next recorded is the same posture .github#2392 AC5 took for its own legacy bridge, and re-recording is itself a route re-affirmation - the correct act for a subject an agent wants re-judged."
+    owner: curlew-9aaa
+    scope: "Delivery-route receipts recorded before this change; no code path and no stored data is altered for them."
+    laterLifecycleVisibility: "Carried into verify and ship as an accepted deferral, and stated in spec.md SB-007 and plan.md PD-008 so a later reader meets it before the code."
+    notes: ["DEC-005 / PD-008. Retroactive upgrade of receipts recorded before this change is deferred: no locator record exists for them and none can be recovered, so they keep exactly today's behaviour until re-recorded. No migration writes to any existing receipt comment. Re-recording is itself a route re-affirmation and is the correct act for a subject an agent wants re-judged."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [readiness/2583-consolidation-tax/analysis.json, work/2583-consolidation-tax/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["PC-001. The fsgg-sdd plan artifact and command-report contract are unchanged in shape; this work adds no SDD lifecycle surface. work/2583-consolidation-tax/plan.md and readiness/2583-consolidation-tax/work-model.json are the artifacts, and analyze reports readiness implementationReady with 0 blocking findings."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV014]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: [PC-002. delivery-route show --json gains subjectMatch and addedSubjectLines. Both are ADDITIVE on the existing fsgg.coord.delivery-route-result/v1 envelope - no field is removed or retyped - so the envelope version does not move and no consumer that ignores unknown fields is affected.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV015]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs, tests/FS.GG.Coord.Cli.Tests/DeliveryRouteCliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["PC-003. The receipt comment gains an optional sibling marker line. Backward compatibility is measured rather than argued: every e2e, parity and replay fixture in this repository still writes the pre-change shape, and all of them stay green (e2e 14, writes 149, parity 648, replay 17)."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["VO-001. Focused command tests through Client.deliveryRouteCmd against a scripted transport, exactly as DeliveryRouteCliTests and ForceStealTests already drive it. 15 legs in ConsolidationTaxTests, each looping over all 4 corpus bodies."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV017]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs, tests/FS.GG.Coord.Cli.Tests/consolidation-corpus/2583.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["VO-002. See EV006: two mutations, each red on exactly its own leg, both reverted and re-verified green."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV018]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs, tests/FS.GG.Coord.Cli.Tests/DeliveryRouteCliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["VO-003. .github#2392's regression floor: a Paths: widen still resolves CANONICALLY (not merely current), and a pre-#2392 whole-body receipt still resolves through the LEGACY arm. Both legs assert the arm by name, so a case silently migrating between candidates would red."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV019]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs, tests/FS.GG.Coord.Cli.Tests/consolidation-corpus/2583.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["VO-004. Non-vacuity. CorpusBodyCount = 4 is STATED, not counted out of the directory it guards, and MinimumSubjectLinesPerBody = 30 is asserted per body inside forEachBody BEFORE any verdict is compared - so four empty files satisfy neither floor. The corpus is real .github issue bodies (2392, 2551, 2555, 2583) carrying fenced code and volatile declarations."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV020]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["VO-005. The trigger reaches the gate. .github/workflows/coord-engine.yml lists src/FS.GG.Coord.Cli/** and tests/FS.GG.Coord.Cli.Tests/** in BOTH its pull_request and push paths: filters, and the corpus was deliberately placed under tests/FS.GG.Coord.Cli.Tests/ so that an edit to it starts the workflow that grades it. A new top-level tests/<name>/ directory would have needed its own paths: entry and been selectively silent without one. Confirmed on the live pull request with gh pr checks."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV021]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["PM-001. There is no data migration. A post-change reader parses a pre-change comment (no locator line, third arm simply not consulted). A pre-change reader would fail to JSON-decode a post-change comment - which is already prevented by the engine-freshness guard that refuses board writes from a stale engine (.github#1549), not by anything new here."]
+  - id: EV022
+    kind: generated-view
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV022]
+    artifacts: [readiness/2583-consolidation-tax/analysis.json, work/2583-consolidation-tax/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2583-consolidation-tax/test-results/cli.trx
+      digest: "sha256:e2cb09a808701cfdfca23d1e93461ee4444c6861cd627221b4eaecb10817bab0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 830
+      failed: 0
+      skipped: 0
+    notes: ["GV-001. readiness/2583-consolidation-tax/work-model.json is regenerated from the current plan sources. No other generated view moves: the two new output fields are additive on an unchanged envelope version, so no registry, projection or emitted-contract version changes with this work."]
+  - id: EV023
+    kind: deferral
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV023]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ConsolidationTaxTests.fs]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The checklist-stage mirror of DEC-005. One deferral observed at two lifecycle stages is not two obligations, and discharging it twice would assert two independent decisions where one was made."
+    owner: curlew-9aaa
+    scope: Same as EV012.
+    laterLifecycleVisibility: "Carried into verify and ship as an accepted deferral, and stated in spec.md SB-007 and plan.md PD-008 so a later reader meets it before the code."
+    notes: ["CR-008. The checklist-stage mirror of DEC-005; same disposition as EV012, one deferral observed at two stages rather than two obligations."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
