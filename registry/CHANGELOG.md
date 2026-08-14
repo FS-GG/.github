@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **coord-engine source `0.55.0`: revision-bound structured decisions**
+  (owner `github`; [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
+  The source scalar moves from `0.54.0` to stable MINOR `0.55.0`; `package-version` remains
+  `0.54.0` until the coherent set is published and externally verified. M4 replaces narrative
+  route and review authority with append-only, digest-linked structured records while retaining
+  read-only legacy compatibility until the explicit M6 removal trigger.
+
 - **2026-08-14** — **auto-publish evidence: FS.GG.Kit 0.54.0** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.54.0) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.54.0/FS.GG.Kit.0.54.0.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.54.0/fs.gg.kit.0.54.0.nupkg). Both served nuspecs record repository commit 9c5f8c077e59c84301333b362596f2b185231d5a.
 
 - **2026-08-14** — **coord-engine coherent set `0.54.0` published and adopted**
