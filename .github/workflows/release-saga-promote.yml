@@ -22,9 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Promotion uses the current default-branch observer. A recovery dispatch can run newer
+      # orchestration code while every package and tag remains bound to the older prepared source.
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -38,9 +38,21 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           mkdir -p artifacts/packages
           gh release download "coherent-set/v$version" --repo "$GITHUB_REPOSITORY" --dir artifacts/packages
+          source_sha="$(jq -r '.descriptor.sourceSha' artifacts/packages/release-manifest.json)"
+          case "$source_sha" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo "::error::prepared manifest has an invalid sourceSha"; exit 1 ;;
+          esac
+          for tag in "coord-engine/v$version" "kit/v$version" "drivers/v$version"; do
+            tagged="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
+              "refs/tags/$tag" "refs/tags/$tag^{}" \
+              | awk -v p="refs/tags/$tag^{}" -v b="refs/tags/$tag" \
+                  '$2==p {peeled=$1} $2==b {plain=$1} END {print (length(peeled) ? peeled : plain)}')"
+            [ "$tagged" = "$source_sha" ] || { echo "::error::$tag is not bound to prepared source $source_sha"; exit 1; }
+          done
           python3 scripts/release-saga.py assert-identity --manifest artifacts/packages/release-manifest.json \
             --release-id "github:$version" --version "$version" \
-            --source-sha "${{ github.event.workflow_run.head_sha }}" --policy-version release-saga/1
+            --source-sha "$source_sha" --policy-version release-saga/1
           python3 scripts/release-saga.py assert-artifacts --manifest artifacts/packages/release-manifest.json
           journals=()
           for journal in artifacts/packages/journal-*.json; do [ -f "$journal" ] && journals+=(--journal "$journal"); done
@@ -53,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/observed/github artifacts/observed/nuget
-          github_base="$(curl -fsSL -u "$GITHUB_ACTOR:$GH_TOKEN" https://nuget.pkg.github.com/FS-GG/index.json | jq -r '.resources[] | select(."@type" == "PackageBaseAddress/3.0.0") | ."@id"' | head -1)"
+          github_base="$(curl -fsSL -u "$GITHUB_ACTOR:$GH_TOKEN" https://nuget.pkg.github.com/FS-GG/index.json | jq -r '.resources[] | select(."@type" == "PackageBaseAddress/3.0.0") | ."@id"' | head -1 | sed 's:/*$::')"
           [ -n "$github_base" ]
           observations_github=(); observations_nuget=()
           for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
@@ -61,7 +73,7 @@ jobs:
             github_path="artifacts/observed/github/$package.$VERSION.nupkg"
             nuget_path="artifacts/observed/nuget/$package.$VERSION.nupkg"
             curl --retry 12 --retry-delay 10 --retry-all-errors -fsSL -u "$GITHUB_ACTOR:$GH_TOKEN" \
-              "${github_base}${lower}/${VERSION}/${lower}.${VERSION}.nupkg" -o "$github_path"
+              "${github_base}/${lower}/${VERSION}/${lower}.${VERSION}.nupkg" -o "$github_path"
             curl --retry 12 --retry-delay 10 --retry-all-errors -fsSL \
               "https://api.nuget.org/v3-flatcontainer/${lower}/${VERSION}/${lower}.${VERSION}.nupkg" -o "$nuget_path"
             observations_github+=(--observed "$package=$github_path")

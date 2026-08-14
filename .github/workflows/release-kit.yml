@@ -136,6 +136,10 @@ on:
         description: "Push to the feeds (false = pack-only dry run)"
         type: boolean
         default: false
+      source_sha:
+        description: "Immutable prepared source SHA (required when resuming a publish from main)"
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -171,6 +175,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref_name }}
           DISPATCH_PUBLISH: ${{ inputs.publish }}
+          DISPATCH_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
           proj=src/FS.GG.Kit/FS.GG.Kit.csproj
@@ -180,6 +185,15 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          source_sha="$GITHUB_SHA"
+          if [ "$EVENT" = workflow_dispatch ] && [ "$DISPATCH_PUBLISH" = true ]; then
+            case "$DISPATCH_SOURCE_SHA" in
+              [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) source_sha="$DISPATCH_SOURCE_SHA" ;;
+              *) echo "::error::manual publish recovery requires an exact 40-character lowercase source_sha."; exit 1 ;;
+            esac
+          fi
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
           # A `-preview` kit would be INVISIBLE to the shared Renovate preset (ignoreUnstable: true), so
           # receivers would never be bumped — defeating the point of shipping it as a package. Refuse.
@@ -209,8 +223,8 @@ jobs:
               echo "::error::refusing to publish FS.GG.Kit $version: sibling tag $sibling_tag does not exist yet. FS.GG.Kit, FS.GG.Drivers and coord-engine are a coherent set (.github#2402) and release together (.github#2409) — push all three tags (kit/v$version, drivers/v$version, coord-engine/v$version) at the same commit."
               exit 1
             fi
-            if [ "$tagged" != "$GITHUB_SHA" ]; then
-              echo "::error::refusing to publish FS.GG.Kit $version: sibling tag $sibling_tag points at $tagged, not the commit being packed ($GITHUB_SHA). All three coherent-set tags must name the same commit."
+            if [ "$tagged" != "$source_sha" ]; then
+              echo "::error::refusing to publish FS.GG.Kit $version: sibling tag $sibling_tag points at $tagged, not the immutable prepared source ($source_sha). All three coherent-set tags must name the same commit."
               exit 1
             fi
           }
@@ -252,8 +266,8 @@ jobs:
               echo "::error::refusing to publish FS.GG.Kit $version: no tag $tag exists. Every published version must name an immutable hub commit (.github#1772) — the kit-bump-shape reporter resolves its rule from kit/v<pin>. Push the tag instead: \`git tag $tag $GITHUB_SHA && git push origin $tag\` (which also releases)."
               exit 1
             fi
-            if [ "$tagged" != "$GITHUB_SHA" ]; then
-              echo "::error::refusing to publish FS.GG.Kit $version: $tag points at $tagged, not the commit being packed ($GITHUB_SHA). The tag is what the fleet resolves the kit-bump-shape rule from, so it must be this tree."
+            if [ "$tagged" != "$source_sha" ]; then
+              echo "::error::refusing to publish FS.GG.Kit $version: $tag points at $tagged, not the immutable prepared source ($source_sha). The tag is what the fleet resolves the kit-bump-shape rule from, so it must name the manifest-bound tree."
               exit 1
             fi
             echo "push=true" >> "$GITHUB_OUTPUT"
@@ -281,7 +295,7 @@ jobs:
           if [ "${{ steps.v.outputs.push }}" = true ]; then
             gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
               --pattern "*.nupkg" --pattern release-manifest.json --dir artifacts/packages
-            bash scripts/release-saga-ci.sh init FS.GG.Kit "$VERSION" "$GITHUB_SHA"
+            bash scripts/release-saga-ci.sh init FS.GG.Kit "$VERSION" "${{ steps.v.outputs.source_sha }}"
           else
             dotnet pack src/FS.GG.Kit/FS.GG.Kit.csproj -c Release -o artifacts/packages
           fi
@@ -330,7 +344,7 @@ jobs:
         if: steps.v.outputs.push == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release-saga-ci.sh github FS.GG.Kit "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+        run: bash scripts/release-saga-ci.sh github FS.GG.Kit "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       # nuget.org dual-publish (ADR-0012/0013). Gated on vars.NUGET_ORG_PUBLISH so org-feed releases keep
       # working until an org-owner creates the Trusted Publishing policy for THIS workflow + FS.GG.Kit (see
@@ -340,7 +354,7 @@ jobs:
         id: public
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release-saga-ci.sh nuget-probe FS.GG.Kit "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+        run: bash scripts/release-saga-ci.sh nuget-probe FS.GG.Kit "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       - name: NuGet login (OIDC → short-lived key)
         if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true' && steps.public.outputs.push == 'true'
@@ -360,13 +374,13 @@ jobs:
         if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release-saga-ci.sh nuget-record FS.GG.Kit "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+        run: bash scripts/release-saga-ci.sh nuget-record FS.GG.Kit "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       - name: Persist failed release step for exact resume
         if: failure() && steps.v.outputs.push == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release-saga-ci.sh failure FS.GG.Kit "${{ steps.v.outputs.version }}" "$GITHUB_SHA"
+        run: bash scripts/release-saga-ci.sh failure FS.GG.Kit "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       # ─────────────────────────────────────────────────────────────────────────────────────────
       # THE PUSH HALF (.github#1923). Read the header block above first: this is NOT a

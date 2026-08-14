@@ -142,11 +142,20 @@ for name, package in subjects.items():
     assert all(position >= 0 for position in positions), (name, ordered, positions)
     assert positions == sorted(positions), (name, positions)
     assert "--skip-duplicate" not in text, name
+    assert "source_sha:" in text, name
+    assert 'echo "source_sha=$source_sha"' in text, name
+    assert 'steps.v.outputs.source_sha' in text, name
+    assert 'tagged" != "$GITHUB_SHA' not in text, name
+adapter = (root / "scripts/release-saga-ci.sh").read_text()
+assert "github_base | sed 's:/*$::'" in adapter
+assert "printf '%s/%s/%s/%s.%s.nupkg'" in adapter
 prepare = (root / ".github/workflows/release-saga-prepare.yml").read_text()
 for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
     assert prepare.count(f"dotnet pack src/{project}/") == 1, project
 promote = (root / ".github/workflows/release-saga-promote.yml").read_text()
 for token in ("assert-identity", "merge-journals", "record-observed", "stable-channel.json", "--draft=false"):
+    assert token in promote, token
+for token in ("source_sha=", 'refs/tags/$tag^{}', "head -1 | sed 's:/*$::'", '"${github_base}/${lower}'):
     assert token in promote, token
 print("production saga topology: pack-once, durable journals, org barrier, resume probes, identity, and promotion wired")
 PY

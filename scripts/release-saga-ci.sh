@@ -18,7 +18,7 @@ github_base() {
 package_url() {
   local feed="$1" id="$2" lower
   lower="$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')"
-  if [ "$feed" = github ]; then printf '%s%s/%s/%s.%s.nupkg' "$(github_base)" "$lower" "$version" "$lower" "$version"
+  if [ "$feed" = github ]; then printf '%s/%s/%s/%s.%s.nupkg' "$(github_base | sed 's:/*$::')" "$lower" "$version" "$lower" "$version"
   else printf 'https://api.nuget.org/v3-flatcontainer/%s/%s/%s.%s.nupkg' "$lower" "$version" "$lower" "$version"; fi
 }
 
