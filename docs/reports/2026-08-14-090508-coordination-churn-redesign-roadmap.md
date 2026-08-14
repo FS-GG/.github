@@ -447,10 +447,16 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   complete comment connection; records buried beyond the former 100-comment window still validate,
   while a missing or tampered predecessor fails closed. Legacy v1 evidence remains read-only and
   the live JSON/text boundaries emit `legacy-only`, `structured-only`, `equivalent`, or `divergent`;
-  any malformed v2 evidence prevents fallback to v1. Verification: the active-item migration scan
-  drained 123 open FS-GG issue/PR comment collections and found zero active v1 route/review markers,
-  so the live migration write set was empty; the production-derived representative replay is fixed
-  at `tests/FS.GG.Coord.Core.Tests/fixtures/structured-decisions/active-migration.json`.
+  any malformed v2 evidence prevents fallback to v1. Verification: the corrected live migration
+  census at `docs/reports/evidence/2026-08-14-m4-structured-decision-migration.json` drained 125 open
+  FS-GG issue/PR collections and every comments connection. It found 30 historical v1 route markers
+  across 22 open issues and no review markers. Twenty-one currently effective `legacy-only` routes
+  were appended through the production v2-only writer; every immediate and final production reread
+  classified the pair `equivalent`, with zero divergence. The remaining v1 marker on `.github#1858`
+  is inactive: the production reader refuses it because its subject revision is stale. The final
+  effective recensus is therefore 21 equivalent, zero divergent, and zero active legacy-only
+  decisions. The production-derived representative replay remains fixed at
+  `tests/FS.GG.Coord.Core.Tests/fixtures/structured-decisions/active-migration.json`.
 - **Compatibility trigger:** V1 decoding is removed only in M6 after three consecutive healthy
   operating cycles have zero unexplained dual-read differences, zero active legacy-only decisions,
   and a successful rollback rehearsal. Verification: the owner, metrics, rollback, and removal

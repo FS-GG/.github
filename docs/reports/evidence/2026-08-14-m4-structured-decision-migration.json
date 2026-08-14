@@ -1,0 +1,818 @@
+{
+  "schema": "fsgg.coord.structured-decision-migration-evidence/1",
+  "asOf": "2026-08-14T17:23:27.438332Z",
+  "query": "org:FS-GG state:open",
+  "pagination": "REST search/issues and every issue comments connection drained with per_page=100",
+  "totalOpenCollections": 125,
+  "markerSummary": {
+    "collections": 22,
+    "routeV1": 30,
+    "routeV2": 21,
+    "reviewV1": 0,
+    "reviewV2": 0
+  },
+  "migrations": [
+    {
+      "number": 2587,
+      "commentId": 5296187892,
+      "revision": 1,
+      "digest": "7b4003858e37b1a0da3108caea37554d5b9bf0c912f36b4bf6e3b618b2c0f554",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2586,
+      "commentId": 5296190611,
+      "revision": 1,
+      "digest": "05046d008f29b1ab049ab6efe106560656490a6299a7f4f36470f12b841d115e",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2584,
+      "commentId": 5296191045,
+      "revision": 1,
+      "digest": "7bb8a3fd3b4dad5c075e62bda1af1299831eea30b902a3075921eccf68ffa067",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2581,
+      "commentId": 5296191544,
+      "revision": 1,
+      "digest": "e36d63922c34907e3a2f9c1727999b93cf199b06521648848cae8320fe0132ab",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2580,
+      "commentId": 5296192050,
+      "revision": 1,
+      "digest": "2671f776687af3d390483255de8db4205f87479372ee92e438265ed66332305b",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2576,
+      "commentId": 5296192567,
+      "revision": 1,
+      "digest": "50b94a253d39abb6e888e83f59d7ade6faca29a1a8c39db692f7f90daca78881",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2575,
+      "commentId": 5296193264,
+      "revision": 1,
+      "digest": "7b04703807c88df573163c9a10acc5dcff1b9cb0b866606f61aa93c279d4179b",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2571,
+      "commentId": 5296193876,
+      "revision": 1,
+      "digest": "01e7b0b541573e061682c9eb513b2cb328a53f15fb2a512ec281051ff079aad2",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2569,
+      "commentId": 5296194574,
+      "revision": 1,
+      "digest": "60c78c1647a7666ca2a85b04513f11535b36343ecb41f6d357eb72e700af8973",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2561,
+      "commentId": 5296195390,
+      "revision": 1,
+      "digest": "d61995a18fd172c70038056a783f51325b7f454280cbdd984e7389c86a8072e9",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2557,
+      "commentId": 5296196106,
+      "revision": 1,
+      "digest": "946e76965ec5133091be6201ccbe6e6d3ca7fbae496ea9cc5634221dc3f4b6d8",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2556,
+      "commentId": 5296196914,
+      "revision": 1,
+      "digest": "0fd614861e0e4e2fdccac05d9ab9b4b9b23c8cdf8ce921ae0f295b7d740cba47",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2555,
+      "commentId": 5296197558,
+      "revision": 1,
+      "digest": "388ced4e7f4a4721cb03a269ba7263081d115ac59065213d39e73727a982464c",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2551,
+      "commentId": 5296198133,
+      "revision": 1,
+      "digest": "ad20ce6cf35db8cdf8b775ee757264c5333903d4d736a71e49c1bc9e53a195e9",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2546,
+      "commentId": 5296199067,
+      "revision": 1,
+      "digest": "76635a78496ce73507d863ebee65c412c3b07ac5c9232e880ef0ec72fa6ec8a1",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2545,
+      "commentId": 5296199691,
+      "revision": 1,
+      "digest": "e795a8d085abb189f3065895767e9404c0754d893d3153932efeb000ed7d2d05",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2469,
+      "commentId": 5296200239,
+      "revision": 1,
+      "digest": "55f1c5fe7f38451192d69ff0b2e76dfbcc116a9d9ded6fb24b76abd595fb0f2d",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2409,
+      "commentId": 5296200977,
+      "revision": 1,
+      "digest": "33aedef171a1483b56d6b9764cdded1a91694fbd8852d59a194687d7db974df3",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2396,
+      "commentId": 5296201704,
+      "revision": 1,
+      "digest": "61b697b7e6b30a94d8824863f72100e6a35b8650c8fd1ac992f029f10a483a50",
+      "classification": "equivalent",
+      "route": "lightweight"
+    },
+    {
+      "number": 2249,
+      "commentId": 5296202415,
+      "revision": 1,
+      "digest": "06336f15deb9a09514b2569e1748ebdb4f23c8cf3753b50fd7ea38a2aba0b0ae",
+      "classification": "equivalent",
+      "route": "sdd-required"
+    },
+    {
+      "number": 2230,
+      "commentId": 5296203303,
+      "revision": 1,
+      "digest": "b1cf72e813d621aa4b24a9d4610bdd37ac430bafc1922f39d7492f30636930b7",
+      "classification": "equivalent",
+      "route": "lightweight"
+    }
+  ],
+  "effectiveRecensus": {
+    "equivalent": 21,
+    "divergent": 0,
+    "legacyOnly": 0,
+    "structuredOnly": 0,
+    "inactiveLegacy": [
+      {
+        "subject": "FS-GG/.github#1858",
+        "reason": "production delivery-route reader refused stale subjectRevision",
+        "exitCode": 1
+      }
+    ]
+  },
+  "collectionsWithDecisionMarkers": [
+    {
+      "repository": "FS-GG/.github",
+      "number": 2587,
+      "url": "https://github.com/FS-GG/.github/issues/2587",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5289828488,
+          "url": "https://github.com/FS-GG/.github/issues/2587#issuecomment-5289828488"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296187892,
+          "url": "https://github.com/FS-GG/.github/issues/2587#issuecomment-5296187892"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2586,
+      "url": "https://github.com/FS-GG/.github/issues/2586",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5289799453,
+          "url": "https://github.com/FS-GG/.github/issues/2586#issuecomment-5289799453"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296190611,
+          "url": "https://github.com/FS-GG/.github/issues/2586#issuecomment-5296190611"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2584,
+      "url": "https://github.com/FS-GG/.github/issues/2584",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5289772902,
+          "url": "https://github.com/FS-GG/.github/issues/2584#issuecomment-5289772902"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296191045,
+          "url": "https://github.com/FS-GG/.github/issues/2584#issuecomment-5296191045"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2581,
+      "url": "https://github.com/FS-GG/.github/issues/2581",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5288359185,
+          "url": "https://github.com/FS-GG/.github/issues/2581#issuecomment-5288359185"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296191544,
+          "url": "https://github.com/FS-GG/.github/issues/2581#issuecomment-5296191544"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2580,
+      "url": "https://github.com/FS-GG/.github/issues/2580",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5288111884,
+          "url": "https://github.com/FS-GG/.github/issues/2580#issuecomment-5288111884"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296192050,
+          "url": "https://github.com/FS-GG/.github/issues/2580#issuecomment-5296192050"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2576,
+      "url": "https://github.com/FS-GG/.github/issues/2576",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5287935787,
+          "url": "https://github.com/FS-GG/.github/issues/2576#issuecomment-5287935787"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296192567,
+          "url": "https://github.com/FS-GG/.github/issues/2576#issuecomment-5296192567"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2575,
+      "url": "https://github.com/FS-GG/.github/issues/2575",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5287638384,
+          "url": "https://github.com/FS-GG/.github/issues/2575#issuecomment-5287638384"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296193264,
+          "url": "https://github.com/FS-GG/.github/issues/2575#issuecomment-5296193264"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2571,
+      "url": "https://github.com/FS-GG/.github/issues/2571",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5287513955,
+          "url": "https://github.com/FS-GG/.github/issues/2571#issuecomment-5287513955"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296193876,
+          "url": "https://github.com/FS-GG/.github/issues/2571#issuecomment-5296193876"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2569,
+      "url": "https://github.com/FS-GG/.github/issues/2569",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5287531036,
+          "url": "https://github.com/FS-GG/.github/issues/2569#issuecomment-5287531036"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296194574,
+          "url": "https://github.com/FS-GG/.github/issues/2569#issuecomment-5296194574"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2561,
+      "url": "https://github.com/FS-GG/.github/issues/2561",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5286963280,
+          "url": "https://github.com/FS-GG/.github/issues/2561#issuecomment-5286963280"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296195390,
+          "url": "https://github.com/FS-GG/.github/issues/2561#issuecomment-5296195390"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2557,
+      "url": "https://github.com/FS-GG/.github/issues/2557",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5287076882,
+          "url": "https://github.com/FS-GG/.github/issues/2557#issuecomment-5287076882"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296196106,
+          "url": "https://github.com/FS-GG/.github/issues/2557#issuecomment-5296196106"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2556,
+      "url": "https://github.com/FS-GG/.github/issues/2556",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5287076722,
+          "url": "https://github.com/FS-GG/.github/issues/2556#issuecomment-5287076722"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296196914,
+          "url": "https://github.com/FS-GG/.github/issues/2556#issuecomment-5296196914"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2555,
+      "url": "https://github.com/FS-GG/.github/issues/2555",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5287076527,
+          "url": "https://github.com/FS-GG/.github/issues/2555#issuecomment-5287076527"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296197558,
+          "url": "https://github.com/FS-GG/.github/issues/2555#issuecomment-5296197558"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2551,
+      "url": "https://github.com/FS-GG/.github/issues/2551",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 2,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5286528105,
+          "url": "https://github.com/FS-GG/.github/issues/2551#issuecomment-5286528105"
+        },
+        {
+          "kind": "routeV1",
+          "id": 5287231276,
+          "url": "https://github.com/FS-GG/.github/issues/2551#issuecomment-5287231276"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296198133,
+          "url": "https://github.com/FS-GG/.github/issues/2551#issuecomment-5296198133"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2546,
+      "url": "https://github.com/FS-GG/.github/issues/2546",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5286568165,
+          "url": "https://github.com/FS-GG/.github/issues/2546#issuecomment-5286568165"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296199067,
+          "url": "https://github.com/FS-GG/.github/issues/2546#issuecomment-5296199067"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2545,
+      "url": "https://github.com/FS-GG/.github/issues/2545",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5286567934,
+          "url": "https://github.com/FS-GG/.github/issues/2545#issuecomment-5286567934"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296199691,
+          "url": "https://github.com/FS-GG/.github/issues/2545#issuecomment-5296199691"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2469,
+      "url": "https://github.com/FS-GG/.github/issues/2469",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5269765039,
+          "url": "https://github.com/FS-GG/.github/issues/2469#issuecomment-5269765039"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296200239,
+          "url": "https://github.com/FS-GG/.github/issues/2469#issuecomment-5296200239"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2409,
+      "url": "https://github.com/FS-GG/.github/issues/2409",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 2,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5263872411,
+          "url": "https://github.com/FS-GG/.github/issues/2409#issuecomment-5263872411"
+        },
+        {
+          "kind": "routeV1",
+          "id": 5268414486,
+          "url": "https://github.com/FS-GG/.github/issues/2409#issuecomment-5268414486"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296200977,
+          "url": "https://github.com/FS-GG/.github/issues/2409#issuecomment-5296200977"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2396,
+      "url": "https://github.com/FS-GG/.github/issues/2396",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 4,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5255790350,
+          "url": "https://github.com/FS-GG/.github/issues/2396#issuecomment-5255790350"
+        },
+        {
+          "kind": "routeV1",
+          "id": 5255830980,
+          "url": "https://github.com/FS-GG/.github/issues/2396#issuecomment-5255830980"
+        },
+        {
+          "kind": "routeV1",
+          "id": 5256466566,
+          "url": "https://github.com/FS-GG/.github/issues/2396#issuecomment-5256466566"
+        },
+        {
+          "kind": "routeV1",
+          "id": 5274305955,
+          "url": "https://github.com/FS-GG/.github/issues/2396#issuecomment-5274305955"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296201704,
+          "url": "https://github.com/FS-GG/.github/issues/2396#issuecomment-5296201704"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2249,
+      "url": "https://github.com/FS-GG/.github/issues/2249",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 4,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5250584782,
+          "url": "https://github.com/FS-GG/.github/issues/2249#issuecomment-5250584782"
+        },
+        {
+          "kind": "routeV1",
+          "id": 5254667388,
+          "url": "https://github.com/FS-GG/.github/issues/2249#issuecomment-5254667388"
+        },
+        {
+          "kind": "routeV1",
+          "id": 5255169870,
+          "url": "https://github.com/FS-GG/.github/issues/2249#issuecomment-5255169870"
+        },
+        {
+          "kind": "routeV1",
+          "id": 5274305818,
+          "url": "https://github.com/FS-GG/.github/issues/2249#issuecomment-5274305818"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296202415,
+          "url": "https://github.com/FS-GG/.github/issues/2249#issuecomment-5296202415"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 2230,
+      "url": "https://github.com/FS-GG/.github/issues/2230",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 1,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5286734776,
+          "url": "https://github.com/FS-GG/.github/issues/2230#issuecomment-5286734776"
+        },
+        {
+          "kind": "routeV2",
+          "id": 5296203303,
+          "url": "https://github.com/FS-GG/.github/issues/2230#issuecomment-5296203303"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "number": 1858,
+      "url": "https://github.com/FS-GG/.github/issues/1858",
+      "isPullRequest": false,
+      "counts": {
+        "routeV1": 1,
+        "routeV2": 0,
+        "reviewInitialV1": 0,
+        "reviewConfirmationV1": 0,
+        "reviewAcceptanceV1": 0,
+        "reviewV2": 0
+      },
+      "markers": [
+        {
+          "kind": "routeV1",
+          "id": 5232475926,
+          "url": "https://github.com/FS-GG/.github/issues/1858#issuecomment-5232475926"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "writer": "scripts/fsgg-coord delivery-route record <ref> <v2-record.json> --json",
+    "reader": "scripts/fsgg-coord delivery-route show <ref> --json",
+    "census": "REST search/issues and every issue comments connection drained with per_page=100"
+  },
+  "migrationMapping": {
+    "scope": "legacy declaredImpacts",
+    "dependencies": "legacy observedFacts",
+    "touchSet": "last canonical Paths: declaration on the current issue body",
+    "routeAndSddBindings": "copied from the currently effective v1 receipt",
+    "audit": "new migration agent/timestamp and legacy-v1-migration reason; rationale retains the effective v1 rationale"
+  }
+}
