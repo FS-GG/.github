@@ -12,11 +12,12 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 2,
+  "repair_rounds": 3,
   "reviewed_commits": [
     "e7d25700f83070780524e996932331d7970811ec",
     "657e81021c636cfb82dae241b4a7e71fdb29ddd8",
-    "3861b4d5e23165ba9e4dba6c4345d76a12d69ea5"
+    "3861b4d5e23165ba9e4dba6c4345d76a12d69ea5",
+    "5c720426993472921e5968b09cdbe46070446ccc"
   ],
   "findings": [
     {
@@ -52,10 +53,26 @@
         "Verification: `bash tests/skill-quality/run.sh` at 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5 completed successfully, including `skill-quality: OK`, current projections, and all 46 rejection cases.",
         "Verification: final-head live checks remain green: FS.GG.Coord.GitHub.Tests passed 613/613; coherent-set projects resolve to 0.56.0; release notes measure 4422/35000 characters; typed registry validation reports 0 diagnostics; registry compatibility projection passes; and both feeds still equal retained package-version 0.55.0."
       ]
+    },
+    {
+      "id": "M6-2561-CRIT-003",
+      "severity": "major",
+      "summary": "Regenerating the publishing skill's 0.56.0 release inventory left its canonical driver-skill manifest integrity fields bound to the previous bytes, failing registry coherence.",
+      "evidence": [
+        "Verification: at prior reviewed head 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5, registry/driver-skill-manifest.json recorded publishing-and-deployment SKILL.md/file SHA-256 `07a387522fb64300075273220c91c32c606873720972289efbd9ead20306900b` and tree SHA-256 `e5dc3b5caa52a303b7bf60e931fc9042d5107b6f776bbebe7cf3af1516fa5a02`, while the regenerated `.claude/skills/publishing-and-deployment/SKILL.md` bytes hash to `8ed210977728e60d50438bc5c6d9b9e9c92ce8c0c2c58131627de4cc9c757227`.",
+        "Verification: `git diff --unified=40 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5..5c720426993472921e5968b09cdbe46070446ccc -- registry/driver-skill-manifest.json` shows the stale content/file/tree integrity fields as the only manifest values requiring repair."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 5c720426993472921e5968b09cdbe46070446ccc updates only publishing-and-deployment's manifest content/file SHA-256 to `8ed210977728e60d50438bc5c6d9b9e9c92ce8c0c2c58131627de4cc9c757227` and tree SHA-256 to `596a9b9b1d5a98ac13dc28f098220e99b93710475404879ed04178ce2a4a5463`; scope, supplied-by, materialization policy, agent file hash, and every other manifest row remain unchanged.",
+        "Verification: independent SHA-256 computation over `.claude/skills/publishing-and-deployment/SKILL.md` equals the repaired manifest content/file hash `8ed210977728e60d50438bc5c6d9b9e9c92ce8c0c2c58131627de4cc9c757227`.",
+        "Verification: `python3 scripts/generate-driver-manifest --check` reports both driver and coordination-kit manifests current; `bash scripts/generate-projections --check` reports current; `bash tests/skill-quality/run.sh` passes semantic checks and all 46 rejection cases.",
+        "Verification: final-head regression gates remain green: FS.GG.Coord.GitHub.Tests passed 613/613; coherent-set projects resolve to 0.56.0; release notes measure 4422/35000 characters; typed registry validation reports 0 diagnostics; and registry compatibility projection passes."
+      ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "3861b4d5e23165ba9e4dba6c4345d76a12d69ea5",
+    "reviewed_commit": "5c720426993472921e5968b09cdbe46070446ccc",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
