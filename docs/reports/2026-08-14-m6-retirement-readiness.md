@@ -19,6 +19,10 @@ fewer than 10% statement-only repair commits, zero intent reversals, zero partia
 ambiguous release states, an explicit coherent/resumable/no-release-owed disposition, declining policy
 surface, slower generated-evidence growth, reproducible verification, and an empty same-class census.
 Missing and null values fail closed.
+Schema-valid positive evidence still cannot pass offline: the acceptance invocation adds
+`--live-github`, which resolves the source commit, re-derives each period's issue counts, and requires
+the union of the fixed successor searches to equal the fully classified candidate census. The test-only
+snapshot seam is environment-locked and cannot silently replace the live read.
 
 ## Live successor disposition
 
@@ -39,7 +43,7 @@ Because the roadmap says these measures are weekly, the first possible new three
 2026-08-17T00:00:00Z and ends 2026-09-07T00:00:00Z. That date is not a forecast or automatic approval.
 After the third full week, refresh the GitHub census and every raw measure, make the open successor list
 empty through real resolution or evidenced non-applicability, and rerun the validator. Only a pass
-authorizes removal of the reducer rollback switch, GraphQL shims, v1 decision readers, pre-saga release
+with `--live-github` authorizes removal of the reducer rollback switch, GraphQL shims, v1 decision readers, pre-saga release
 paths, or the recoverable TRX history.
 
 The user-authorized Chainsaw cut bypasses unavailable kit-source SDD/feedback/cycle machinery only.

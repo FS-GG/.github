@@ -24,7 +24,7 @@ workflow="$ROOT/.github/workflows/policy.yml"
 for required in 'policy/**' 'scripts/policy-runner.py' 'scripts/evidence-manifest.py' \
                 'scripts/coordination-retirement-readiness.py' 'tests/projection/**' \
                 'tests/policy-runner/**' 'tests/evidence-manifest/**' \
-                'tests/coordination-retirement-readiness/**'; do
+                'tests/coordination-retirement-readiness/**' 'docs/reports/evidence/**'; do
   [ "$(grep -cF -- "- \"$required\"" "$workflow")" -eq 2 ] || {
     echo "policy workflow does not cover subject dependency in both triggers: $required" >&2; exit 1
   }

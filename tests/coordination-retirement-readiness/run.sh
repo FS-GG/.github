@@ -27,13 +27,24 @@ for index, start in enumerate(("2026-08-17", "2026-08-24", "2026-08-31")):
         "workflows_start": 102-index, "workflows_end": 101-index,
         "generated_evidence_bytes_delta": 5, "core_and_test_bytes_delta": 10,
         "verification": ["fixture"]})
-json.dump({"schema_version": 1, "source_sha": "a"*40,
-           "candidate_periods": rows, "same_class_open": []}, open(sys.argv[1], "w"))
+json.dump({"schema_version": 1, "measured_at": "2026-09-07T00:00:00Z", "source_sha": "a"*40,
+           "candidate_periods": rows, "same_class_open": [],
+           "successor_queries": ["fixture-query"],
+           "successor_census": [{"url":"https://example.invalid/not-same", "disposition":"not-same-class", "reason":"fixture"}]},
+          open(sys.argv[1], "w"))
 PY
-python3 "$CHECK" "$WORK/pass.json" >"$WORK/pass.out"
+cat >"$WORK/live.json" <<'JSON'
+{"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","periods":[{"id":"week-1","issues_created":1,"issues_closed":2},{"id":"week-2","issues_created":1,"issues_closed":2},{"id":"week-3","issues_created":1,"issues_closed":2}],"successor_urls":["https://example.invalid/not-same"]}
+JSON
+if python3 "$CHECK" "$WORK/pass.json" >"$WORK/offline.out"; then
+  echo 'caller-authored positive evidence passed without live authentication' >&2; exit 1
+fi
+grep -q 'positive readiness requires --live-github' "$WORK/offline.out"
+FSGG_RETIREMENT_FIXTURE_OK=1 python3 "$CHECK" "$WORK/pass.json" \
+  --fixture-live-snapshot "$WORK/live.json" >"$WORK/pass.out"
 grep -q 'retirement readiness: PASS' "$WORK/pass.out"
 
-for mutation in equality gap partial successor evidence_growth nonweekly; do
+for mutation in equality gap partial successor evidence_growth nonweekly future inventory_reset live_mismatch; do
   jq --arg mutation "$mutation" '
     if $mutation == "equality" then .candidate_periods[1].issues_closed = 1
     elif $mutation == "gap" then .candidate_periods[1].start = "2026-08-25T00:00:00Z"
@@ -41,12 +52,17 @@ for mutation in equality gap partial successor evidence_growth nonweekly; do
     elif $mutation == "successor" then .same_class_open = [{url:"https://example.invalid/1",reason:"fixture"}]
     elif $mutation == "evidence_growth" then .candidate_periods[0].generated_evidence_bytes_delta = 10
     elif $mutation == "nonweekly" then .candidate_periods[0].end = "2026-08-18T00:00:00Z"
+    elif $mutation == "future" then .measured_at = "2026-08-30T00:00:00Z"
+    elif $mutation == "inventory_reset" then .candidate_periods[1].check_scripts_start = 100
+    elif $mutation == "live_mismatch" then .source_sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     else . end' "$WORK/pass.json" >"$WORK/$mutation.json"
-  if python3 "$CHECK" "$WORK/$mutation.json" >"$WORK/$mutation.out"; then
+  if FSGG_RETIREMENT_FIXTURE_OK=1 python3 "$CHECK" "$WORK/$mutation.json" \
+       --fixture-live-snapshot "$WORK/live.json" >"$WORK/$mutation.out"; then
     echo "$mutation mutation unexpectedly passed" >&2; exit 1
   fi
 done
 
-python3 "$CHECK" "$WORK/pass.json" >"$WORK/repeat.out"
+FSGG_RETIREMENT_FIXTURE_OK=1 python3 "$CHECK" "$WORK/pass.json" \
+  --fixture-live-snapshot "$WORK/live.json" >"$WORK/repeat.out"
 cmp "$WORK/pass.out" "$WORK/repeat.out"
-echo 'coordination retirement readiness: 9 passed, 0 failed'
+echo 'coordination retirement readiness: 13 passed, 0 failed'

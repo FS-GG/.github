@@ -3,9 +3,9 @@
 
 The coordination-churn roadmap measures health weekly and permits compatibility
 retirement only after three consecutive healthy periods with no open successor
-issue.  This validator deliberately does not collect or infer evidence: it checks
-that a caller-supplied census is complete, consecutive, non-vacuous where the
-roadmap requires an observation, and satisfies every stated health measure.
+issue. Schema checks alone can only block. A positive result additionally requires
+an authenticated live GitHub read that binds the source commit, period issue
+counts, and the complete fixed-query successor-candidate census.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 import json
 from pathlib import Path
 import re
+import os
+import subprocess
 import sys
 
 
@@ -57,6 +59,7 @@ def validate(document: object) -> list[str]:
         failures.append("schema_version must be 1")
     if not SHA.fullmatch(str(document.get("source_sha", ""))):
         failures.append("source_sha must be an exact lowercase 40-hex commit")
+    measured_at = timestamp(document.get("measured_at"), "measured_at", failures)
 
     rows = document.get("candidate_periods")
     if not isinstance(rows, list) or len(rows) < 3:
@@ -75,6 +78,8 @@ def validate(document: object) -> list[str]:
         parsed.append((start, end))
         if start is not None and end is not None and end - start != timedelta(days=7):
             failures.append(f"{where}: roadmap measurement period must be exactly seven days")
+        if end is not None and measured_at is not None and end > measured_at:
+            failures.append(f"{where}: period has not elapsed at measured_at")
 
         created = integer(row, "issues_created", where, failures)
         closed = integer(row, "issues_closed", where, failures)
@@ -136,6 +141,15 @@ def validate(document: object) -> list[str]:
         previous_end, current_start = parsed[index - 1][1], parsed[index][0]
         if previous_end is not None and current_start is not None and previous_end != current_start:
             failures.append(f"candidate_periods[{index}]: periods are not consecutive")
+        if isinstance(rows[index - 1], dict) and isinstance(rows[index], dict):
+            for prefix in ("policy_implementations", "check_scripts", "workflows"):
+                previous = rows[index - 1].get(f"{prefix}_end")
+                current = rows[index].get(f"{prefix}_start")
+                if isinstance(previous, int) and isinstance(current, int) and previous != current:
+                    failures.append(
+                        f"candidate_periods[{index}]: {prefix} snapshot is discontinuous "
+                        f"({previous} != {current})"
+                    )
 
     if rows and all(isinstance(row, dict) for row in rows):
         prefixes = ("policy_implementations", "check_scripts", "workflows")
@@ -153,12 +167,84 @@ def validate(document: object) -> list[str]:
                 failures.append("each same_class_open row must carry url and reason")
                 break
         failures.append(f"same-class successor census is not empty ({len(successors)} open)")
+    queries = document.get("successor_queries")
+    census = document.get("successor_census")
+    if not isinstance(queries, list) or not queries or not all(isinstance(value, str) and value for value in queries):
+        failures.append("successor_queries must be a non-empty string array")
+    if not isinstance(census, list) or not census:
+        failures.append("successor_census must be a non-empty classified candidate array")
+    else:
+        urls: list[str] = []
+        blocking: list[str] = []
+        for index, row in enumerate(census):
+            if not isinstance(row, dict) or not isinstance(row.get("url"), str) or row.get("disposition") not in ("blocking", "not-same-class") or not row.get("reason"):
+                failures.append(f"successor_census[{index}]: require url, blocking|not-same-class disposition, and reason")
+                continue
+            urls.append(row["url"])
+            if row["disposition"] == "blocking":
+                blocking.append(row["url"])
+        if len(set(urls)) != len(urls):
+            failures.append("successor_census contains duplicate URLs")
+        if isinstance(successors, list):
+            declared = sorted(row.get("url") for row in successors if isinstance(row, dict))
+            if declared != sorted(blocking):
+                failures.append("same_class_open does not equal the blocking successor census rows")
+    return failures
+
+
+def search(query: str) -> list[dict]:
+    command = ["gh", "api", "--method", "GET", "search/issues", "-f", f"q={query}",
+               "-f", "per_page=100", "--paginate", "--slurp"]
+    result = subprocess.run(command, check=True, text=True, capture_output=True)
+    pages = json.loads(result.stdout)
+    return [item for page in pages for item in page.get("items", [])]
+
+
+def collect_live(document: dict) -> dict:
+    source_sha = document["source_sha"]
+    subprocess.run(
+        ["gh", "api", f"repos/FS-GG/.github/commits/{source_sha}"],
+        check=True, text=True, capture_output=True,
+    )
+    periods = []
+    for row in document["candidate_periods"]:
+        start = datetime.fromisoformat(row["start"][:-1] + "+00:00")
+        end = datetime.fromisoformat(row["end"][:-1] + "+00:00")
+        date_range = f"{start.date()}..{end.date()}"
+        created = search(f"org:FS-GG created:{date_range} type:issue")
+        closed = search(f"org:FS-GG closed:{date_range} type:issue")
+        periods.append({
+            "id": row["id"],
+            "issues_created": sum(start <= datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")) < end for item in created),
+            "issues_closed": sum(item.get("closed_at") is not None and start <= datetime.fromisoformat(item["closed_at"].replace("Z", "+00:00")) < end for item in closed),
+        })
+    urls = sorted({item["html_url"] for query in document["successor_queries"] for item in search(query)})
+    return {"source_sha": source_sha, "periods": periods, "successor_urls": urls}
+
+
+def validate_live(document: dict, observed: object) -> list[str]:
+    if not isinstance(observed, dict):
+        return ["live observation must be an object"]
+    failures: list[str] = []
+    if observed.get("source_sha") != document.get("source_sha"):
+        failures.append("live source commit does not match source_sha")
+    expected_periods = [
+        {"id": row.get("id"), "issues_created": row.get("issues_created"), "issues_closed": row.get("issues_closed")}
+        for row in document.get("candidate_periods", []) if isinstance(row, dict)
+    ]
+    if observed.get("periods") != expected_periods:
+        failures.append("live GitHub period counts do not match candidate_periods")
+    expected_urls = sorted(row.get("url") for row in document.get("successor_census", []) if isinstance(row, dict))
+    if observed.get("successor_urls") != expected_urls:
+        failures.append("live fixed-query successor results do not match successor_census")
     return failures
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("evidence", type=Path)
+    parser.add_argument("--live-github", action="store_true")
+    parser.add_argument("--fixture-live-snapshot", type=Path)
     args = parser.parse_args()
     try:
         document = json.loads(args.evidence.read_text(encoding="utf-8"))
@@ -166,6 +252,20 @@ def main() -> int:
         print(f"retirement readiness: ERROR: cannot read {args.evidence}: {error}", file=sys.stderr)
         return 1
     failures = validate(document)
+    if not failures:
+        try:
+            if args.fixture_live_snapshot:
+                if os.environ.get("FSGG_RETIREMENT_FIXTURE_OK") != "1":
+                    failures.append("--fixture-live-snapshot is test-only and requires FSGG_RETIREMENT_FIXTURE_OK=1")
+                else:
+                    observed = json.loads(args.fixture_live_snapshot.read_text(encoding="utf-8"))
+                    failures.extend(validate_live(document, observed))
+            elif args.live_github:
+                failures.extend(validate_live(document, collect_live(document)))
+            else:
+                failures.append("positive readiness requires --live-github authenticated evidence")
+        except (OSError, json.JSONDecodeError, subprocess.CalledProcessError, KeyError, ValueError) as error:
+            failures.append(f"live GitHub evidence could not be established: {error}")
     if failures:
         for failure in failures:
             print(f"BLOCKED: {failure}")

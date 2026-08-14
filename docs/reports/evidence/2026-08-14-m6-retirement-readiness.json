@@ -108,6 +108,37 @@
       ]
     }
   ],
+  "successor_queries": [
+    "repo:FS-GG/.github is:open is:issue \"LIFECYCLE-PROJECTION-LAG\"",
+    "repo:FS-GG/.github is:open is:issue GraphQL pagination",
+    "repo:FS-GG/.github is:open is:issue \"partial read\"",
+    "repo:FS-GG/.github is:open is:issue \"feed coherence\"",
+    "repo:FS-GG/.github is:open is:issue \"partial publish\"",
+    "repo:FS-GG/.github is:open is:issue \"body hash\"",
+    "repo:FS-GG/.github is:open is:issue \"delivery-route receipt\"",
+    "repo:FS-GG/.github is:open is:issue \"legacy-only\"",
+    "repo:FS-GG/.github is:open is:issue \"statement\" \"projection\"",
+    "repo:FS-GG/.github is:open is:issue \"bulky evidence\""
+  ],
+  "successor_census": [
+    {"url":"https://github.com/FS-GG/.github/issues/54","disposition":"not-same-class","reason":"Dependency dashboard; returned only because its body aggregates unrelated terms."},
+    {"url":"https://github.com/FS-GG/.github/issues/1858","disposition":"not-same-class","reason":"Claim-lock executor identity defect, not an M1-M5 compatibility path."},
+    {"url":"https://github.com/FS-GG/.github/issues/2106","disposition":"blocking","reason":"Pre-saga Kit auto-publish path remains open work and cannot be silently treated as retired."},
+    {"url":"https://github.com/FS-GG/.github/issues/2130","disposition":"not-same-class","reason":"Broader deterministic-protocol epic; not one of the compatibility boundaries retired by M6."},
+    {"url":"https://github.com/FS-GG/.github/issues/2230","disposition":"not-same-class","reason":"Routes-plugin dispatch slice; not legacy structured-decision evidence."},
+    {"url":"https://github.com/FS-GG/.github/issues/2249","disposition":"not-same-class","reason":"Receiver engine-pin drift, not a compatibility reader/writer."},
+    {"url":"https://github.com/FS-GG/.github/issues/2381","disposition":"not-same-class","reason":"Standing release debt measurement, not a superseded publication implementation."},
+    {"url":"https://github.com/FS-GG/.github/issues/2409","disposition":"blocking","reason":"Superseded release-train issue needs explicit saga-era disposition when retirement is authorized."},
+    {"url":"https://github.com/FS-GG/.github/issues/2551","disposition":"not-same-class","reason":"Generic gate-inversion discipline, not a compatibility path."},
+    {"url":"https://github.com/FS-GG/.github/issues/2555","disposition":"not-same-class","reason":"Test-selector command vocabulary defect, outside M6 compatibility scope."},
+    {"url":"https://github.com/FS-GG/.github/issues/2556","disposition":"not-same-class","reason":"Unwired fixtures, outside M6 compatibility scope."},
+    {"url":"https://github.com/FS-GG/.github/issues/2557","disposition":"not-same-class","reason":"Review predicate mutation coverage, not the v1 review-reader compatibility arm."},
+    {"url":"https://github.com/FS-GG/.github/issues/2561","disposition":"blocking","reason":"Done.fs still uses four bare bounded GraphQL connections."},
+    {"url":"https://github.com/FS-GG/.github/issues/2569","disposition":"blocking","reason":"Board.fs and Reads.fs retain private graphQlData compatibility shims."},
+    {"url":"https://github.com/FS-GG/.github/issues/2582","disposition":"blocking","reason":"Duplicate host-reasoning/evidence-record decision remains open in the evidence-multiplier class."},
+    {"url":"https://github.com/FS-GG/.github/issues/2584","disposition":"not-same-class","reason":"Root-cause analyst operating-process proposal, not compatibility retirement."},
+    {"url":"https://github.com/FS-GG/.github/issues/2587","disposition":"blocking","reason":"Repeatable statement/projection repair measurement remains unimplemented."}
+  ],
   "same_class_open": [
     {
       "url": "https://github.com/FS-GG/.github/issues/2561",

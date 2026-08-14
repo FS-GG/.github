@@ -275,8 +275,10 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
 - **Fail-closed continuation gate:** `scripts/coordination-retirement-readiness.py` requires three
   consecutive seven-day periods to satisfy every health measure and requires an empty same-class
   issue census. Its fixture exercises the current blocked state, a complete pass, issue-count equality,
-  period gaps, partial-success reads, evidence-growth inversion, non-weekly windows, successor issues,
-  and deterministic repeat output. The earliest possible new three-week run ends
+  period gaps, unelapsed periods, discontinuous inventories, unauthenticated positive evidence,
+  partial-success reads, evidence-growth inversion, non-weekly windows, successor issues, live-binding
+  mismatch, and deterministic repeat output. Positive acceptance additionally requires `--live-github`
+  to resolve the source commit and rederive period counts and the fixed-query successor universe. The earliest possible new three-week run ends
   `2026-09-07T00:00:00Z`; that date grants nothing unless fresh evidence passes the validator.
 - **Live issue recensus:** `.github#2580` and `.github#2586` were objectively resolved by landed M0/M1
   behavior and closed only after focused regressions and live-feed verification. `.github#2561`,
