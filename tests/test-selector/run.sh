@@ -280,6 +280,30 @@ n="$(python3 "$TOOL" --root "$r" --list --base HEAD | grep -c 'bash tests/same/r
 [ "$n" -eq 1 ] && ok "a suite named by two workflows is listed once" \
                || bad "a suite named by two workflows is listed once (got $n)"
 
+# A consolidated policy runner is an indirection, not an excuse for the selector to lose its suites.
+# Expand the same neutral inventory, including the optional self_test the production runner executes.
+r="$(root policy-runner)"
+mkdir -p "$r/policy"
+cat > "$r/.github/workflows/policy.yml" <<'EOF'
+name: policy
+on: { pull_request: { paths: ["src/**"] } }
+jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: "python3 scripts/policy-runner.py run all" }] } }
+EOF
+cat > "$r/policy/subjects.json" <<'EOF'
+{"schema_version":1,"subjects":[{"id":"both","self_test":["bash","tests/policy-self/run.sh"],"command":["bash","tests/policy-command/run.sh"]}]}
+EOF
+suite "$r" tests/policy-self/run.sh; suite "$r" tests/policy-command/run.sh
+mkdir -p "$r/src"; echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
+selects "policy-runner expansion includes a subject command" "$r" yes "tests/policy-command/run.sh"
+selects "policy-runner expansion includes its optional self_test" "$r" yes "tests/policy-self/run.sh"
+
+printf '{broken' > "$r/policy/subjects.json"
+expect "an unreadable policy inventory is no verdict" 3 "unreadable" "$r" --list --all
+printf '{"schema_version":1,"subjects":[]}' > "$r/policy/subjects.json"
+expect "an empty policy inventory is no verdict" 3 "non-empty schema-v1" "$r" --list --all
+printf '{"schema_version":1,"subjects":[{"id":"bad","command":[]}]}' > "$r/policy/subjects.json"
+expect "a malformed policy subject is no verdict" 3 "invalid command" "$r" --list --all
+
 echo
 echo "── fails closed (#266): 'I could not tell' is never spelled like 'nothing to run'"
 
