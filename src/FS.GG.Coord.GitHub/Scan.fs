@@ -178,8 +178,9 @@ module Scan =
                    __typename \
                    ... on Issue { id number title state createdAt repository { nameWithOwner } } \
                    ... on PullRequest { id number title state createdAt repository { nameWithOwner } } \
-                 } \
+                 } id \
                } \
+               totalCount \
              } \
            } \
          } rateLimit { cost remaining } }"
@@ -206,8 +207,9 @@ module Scan =
                    __typename \
                    ... on Issue { id number title state createdAt body repository { nameWithOwner } } \
                    ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } \
-                 } \
+                 } id \
                } \
+               totalCount \
              } \
            } \
          } rateLimit { cost remaining } }"
@@ -515,11 +517,7 @@ module Scan =
         let boardDoc = OwnerKind.forOwner kind boardDocument
         let ownerVars = OwnerKind.ownerVars kind owner
 
-        let rec page (cursor: string option) (acc: Row list) (guard: int) : IoResult<Row list> =
-            if guard <= 0 then
-                Error(Malformed(subject, "the board scan did not terminate within 100 pages — refusing to spin"))
-            else
-
+        let fetchPage (cursor: string option) =
             let variables =
                 ownerVars
                 @ [ "number", VNumber(double projectNumber) ]
@@ -536,98 +534,45 @@ module Scan =
                   IfNoneMatch = None
                   Subject = subject }
 
-            match transport.Send request with
-            | Error e -> Error e
-            | Ok response ->
-
-            try
-                use doc = JsonDocument.Parse response.Body
-
-                match doc.RootElement.TryGetProperty "errors" with
-                | true, errs when errs.ValueKind = JsonValueKind.Array && errs.GetArrayLength() > 0 ->
-                    let messages =
-                        errs.EnumerateArray()
-                        |> Seq.map (fun e -> str e "message" |> Option.defaultValue "(no message)")
-                        |> List.ofSeq
-
-                    // Tells a SECONDARY limit from the primary budget (#1666). This site used to call
-                    // `isRateLimited`, which matches both wordings, and named the GraphQL budget for either.
-                    match Budget.ofGraphQlErrors messages with
-                    | Some limited -> Error limited
-                    | None -> Error(GraphQlErrors messages)
-
-                | _ ->
-
+            GraphQl.read transport request (fun data ->
                 let items =
-                    doc.RootElement
-                        .GetProperty("data")
+                    data
                         .GetProperty(ownerField)
                         .GetProperty("projectV2")
                         .GetProperty("items")
 
-                let parsed =
-                    items.GetProperty("nodes").EnumerateArray()
-                    |> Seq.map (fun node -> node, parseRow carrySweptBody node)
-                    |> List.ofSeq
+                GraphQl.page subject "the board scan" (fun (id, _, _) -> id)
+                    (fun node ->
+                        let stableId =
+                            match node.TryGetProperty "id" with
+                            | true, id when id.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(id.GetString())) -> Some(id.GetString())
+                            | _ ->
+                                match node.TryGetProperty "content" with
+                                | true, content when content.ValueKind = JsonValueKind.Object ->
+                                    match content.TryGetProperty "id" with
+                                    | true, id when id.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(id.GetString())) -> Some(id.GetString())
+                                    | _ -> None
+                                | _ -> None
 
-                let rows = parsed |> List.choose snd
+                        // Compatibility for replay fixtures and legacy cached projections that predate
+                        // selection of ProjectV2Item.id. M6 removes this raw-node fallback after three
+                        // stable cycles; production responses take one of the two typed ID arms above.
+                        let key = stableId |> Option.defaultWith node.GetRawText
+                        Ok(key, parseRow carrySweptBody node, isIssueRowNode node))
+                    items)
 
-                // ROW-LEVEL COMPLETENESS (.github#2525). `Seq.choose` used to drop every unparseable node
-                // here, which is right for a draft card and wrong for an issue row we simply could not
-                // read: the batch came back short and reported success, and both projections downstream
-                // render a short batch as a substantive answer.
-                let unreadableRows =
-                    parsed
-                    |> List.filter (fun (node, row) -> Option.isNone row && isIssueRowNode node)
-                    |> List.length
-
-                if unreadableRows > 0 then
-                    Error(
-                        Malformed(
-                            subject,
-                            $"the board scan returned %d{unreadableRows} item node(s) selected as an Issue or PullRequest whose `number`/`repository.nameWithOwner` could not be read — refusing to report a short board as a complete one"
-                        )
-                    )
-                else
-
-                // COMPLETENESS IS A REQUIRED BOOLEAN, not an optional hint (.github#2525).
-                //
-                // This is `Board.fs`'s external-owner walk, ported. That read had the identical defect and
-                // states the rule in its own comment; the port to THIS scan — the one behind `batch`,
-                // `take`, `next`, and `driver --events` — never happened, so the more load-bearing of the
-                // two reads carried the weaker guard. Both old arms returned `Ok` with a short list:
-                // a missing/null/ill-typed `hasNextPage` fell through as `false` and stopped the walk after
-                // page one, and `hasNextPage: true` with no cursor fell into a catch-all `| _ ->` that
-                // reported success while the server had just said there was more. Neither is distinguishable
-                // downstream from a genuinely small board — `Cache.putScan`'s invariant is "never EMPTY",
-                // not "never PARTIAL", so a truncated batch is also cached and re-served for its whole TTL.
-                //
-                // A scan that cannot PROVE it observed every page has one honest answer, and it is the one
-                // the 100-page guard above already gives: refuse.
-                match items.TryGetProperty "pageInfo" with
-                | true, pageInfo when pageInfo.ValueKind = JsonValueKind.Object ->
-                    match pageInfo.TryGetProperty "hasNextPage" with
-                    | true, hasNext when hasNext.ValueKind = JsonValueKind.False -> Ok(acc @ rows)
-                    | true, hasNext when hasNext.ValueKind = JsonValueKind.True ->
-                        match pageInfo.TryGetProperty "endCursor" with
-                        | true, value when
-                            value.ValueKind = JsonValueKind.String
-                            && not (String.IsNullOrWhiteSpace(value.GetString()))
-                            ->
-                            page (Some(value.GetString())) (acc @ rows) (guard - 1)
-                        | _ -> Error(Malformed(subject, "the board scan has another page but no usable cursor"))
-                    | _ ->
-                        Error(Malformed(subject, "the board scan's `pageInfo.hasNextPage` is missing or is not a Boolean"))
-                | _ -> Error(Malformed(subject, "the board scan's `pageInfo` is missing or is not an object"))
-
-            with
-            | :? JsonException as e -> Error(Malformed(subject, $"the board scan's response is not JSON: %s{e.Message}"))
-            | :? Collections.Generic.KeyNotFoundException ->
-                Error(Malformed(subject, $"the board scan's response is missing `data.%s{ownerField}.projectV2.items`"))
-
-        match page None [] 100 with
+        match GraphQl.drain subject "the board scan" { MaxPages = 100; MaxItems = 10000 } fetchPage with
         | Error e -> Error e
-        | Ok rows ->
+        | Ok parsed ->
+            let unreadableRows =
+                parsed
+                |> List.filter (fun (_, row, issueRow) -> Option.isNone row && issueRow)
+                |> List.length
+
+            if unreadableRows > 0 then
+                Error(Malformed(subject, $"the board scan returned %d{unreadableRows} item node(s) selected as an Issue or PullRequest whose `number`/`repository.nameWithOwner` could not be read — refusing to report a short board as a complete one"))
+            else
+            let rows = parsed |> List.choose (fun (_, row, _) -> row)
             // A server that accepted the reconciling document but omitted its selected `body` scalar is
             // malformed. Keep the old REST read as a narrow compatibility/fail-closed fallback for that
             // impossible-to-trust response shape; ordinary rows (including null bodies) never take it.
@@ -862,58 +807,7 @@ module Scan =
             match transport.Send request with
             | Error e -> Error e
             | Ok response ->
-                try
-                    use doc = JsonDocument.Parse response.Body
-
-                    // A 2xx BODY THAT IS VALID JSON BUT NOT AN OBJECT — `[]`, `"text"`, `7`, `true` — is
-                    // not a GraphQL response of any shape, and `TryGetProperty` on anything but an object
-                    // THROWS `InvalidOperationException` rather than answering `false` (`.github#2418`).
-                    // The `with` below catches `JsonException` and `KeyNotFoundException` and NEITHER of
-                    // those, so it escaped `snapshot` entirely and surfaced as `DEFECT —
-                    // InvalidOperationException` with a stack trace at exit 2, where a typed `Malformed`
-                    // refusal belongs. `.github#2534` hoisted this guard into `Reads.graphQlData` "where
-                    // every read gets it"; this site never routed through it, so it missed this clause for
-                    // the same reason it missed the classifier below — see `.github#2542`.
-                    if doc.RootElement.ValueKind <> JsonValueKind.Object then
-                        Error(
-                            Malformed(
-                                request.Subject,
-                                $"the GraphQL response is not a JSON object (%A{doc.RootElement.ValueKind}) — a GraphQL response is always `{{...}}`, so this is a FAILED READ, never an empty answer"
-                            )
-                        )
-                    else
-
-                    match doc.RootElement.TryGetProperty "errors" with
-                    | true, errors when errors.ValueKind = JsonValueKind.Array && errors.GetArrayLength() > 0 ->
-                        // ONE MESSAGE PER ERROR, NOT ONE GLUED STRING (.github#2542). This site used to
-                        // `String.concat "; "` the array into a SINGLE-element list, so every consumer that
-                        // inspects individual messages — `Budget.ofGraphQlErrors` itself, and `explain`'s
-                        // own `String.Join("; ", messages)` — saw one entry where every sibling site
-                        // carries the array. The classifier still matched (it tests each message as a
-                        // substring haystack), but the shape disagreed with the whole layer for no reason.
-                        let messages =
-                            errors.EnumerateArray()
-                            |> Seq.map (fun error -> str error "message" |> Option.defaultValue "(no message)")
-                            |> List.ofSeq
-
-                        // RATE LIMIT FIRST, and this arm had NO classifier at all (.github#2542). GitHub
-                        // reports an exhausted GraphQL budget as a 200 whose `errors` carry the wording, so
-                        // a generic `GraphQlErrors` here maps through `Errors.exitCode` to **1** — the code
-                        // whose documented meaning is "permanent" — instead of EX_RATE 75, the back-off
-                        // signal that stops the fleet. `freshNodeFacts` is the claim scan's fresh
-                        // body/comment-cardinality read, on the hot path of every `take`, and a board scan
-                        // is precisely the operation that exhausts this budget: the single most likely
-                        // `errors` payload this site ever sees was the one it misreported.
-                        //
-                        // `ofGraphQlErrors` also tells a SECONDARY limit from the primary budget (#1666),
-                        // which is a different remedy — reduce concurrency, and there is no reset to wait
-                        // out — and which `isRateLimited` cannot distinguish.
-                        match Budget.ofGraphQlErrors messages with
-                        | Some limited -> Error limited
-                        | None -> Error(GraphQlErrors messages)
-                    | _ ->
-                        let data = doc.RootElement.GetProperty "data"
-
+                GraphQl.decode request.Subject response.Body (fun data ->
                         chunk
                         |> List.mapi (fun i (expectedId, subject) ->
                             let alias = $"n%d{i}"
@@ -952,10 +846,7 @@ module Scan =
                                 | Ok values, Ok value -> Ok(value :: values))
                             (Ok [])
                         |> Result.map List.rev
-                with
-                | :? JsonException -> Error(Malformed(request.Subject, "fresh node facts response is not JSON"))
-                | :? Collections.Generic.KeyNotFoundException ->
-                    Error(Malformed(request.Subject, "fresh node facts response is missing data or an aliased node"))
+                )
 
         ids
         |> List.chunkBySize NodeFactsChunkSize

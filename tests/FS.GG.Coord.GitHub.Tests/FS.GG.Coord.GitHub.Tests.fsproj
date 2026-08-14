@@ -35,6 +35,7 @@
     <Compile Include="DoneFactsTests.fs" />
     <Compile Include="GraphQlErrorsFirstTests.fs" />
     <Compile Include="ConnectionPaginationTests.fs" />
+    <Compile Include="GraphQlBoundaryTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

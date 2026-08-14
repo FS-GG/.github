@@ -41,6 +41,8 @@
     <Compile Include="Cache.fs" />
     <Compile Include="Fake.fsi" />
     <Compile Include="Fake.fs" />
+    <Compile Include="GraphQl.fsi" />
+    <Compile Include="GraphQl.fs" />
     <Compile Include="Reads.fsi" />
     <Compile Include="Reads.fs" />
     <Compile Include="Writes.fsi" />

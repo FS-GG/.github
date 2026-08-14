@@ -152,21 +152,19 @@ let ``.github#2535 bootstrap FINDS a board that is not on the first page of proj
     | other -> failwith $"a board on the second page of projects is still the board — got %A{other}"
 
 [<Fact>]
-let ``.github#2535 bootstrap does not page when the board is on the first page`` () =
-    // THE COST CONTROL, AND THE CONTROLLED COUNTERPART TO THE LEG ABOVE. `bootstrap` is on the hot path of
-    // every command; a walk that kept paging after it had its answer would spend the GraphQL budget that
-    // dies first under fan-out (#418). The walk returns on the HIT, without consulting `pageInfo` — so a
-    // first page that claims `hasNextPage: true` is never followed once the board is in hand.
+let ``M2 bootstrap completes the connection even when the board is on the first page`` () =
+    // A found value is not permission to ignore an announced tail: page-boundary mutation can invalidate
+    // the apparent hit. The complete-read boundary therefore drains before returning the board.
     let transport =
         scripted
             [ projectPage [ coordinationProject ] (moreAt "Y3Vyc29yOjE")
+              projectPage [] lastPage
               fieldsPage [ fieldNode 1 ] (total 1) ]
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Ok resolved ->
         Assert.Equal(12, resolved.Number)
-        // Two GraphQL calls: ONE project page, ONE field map. Not three.
-        Assert.Equal(2, transport.GraphQlCalls)
+        Assert.Equal(3, transport.GraphQlCalls)
     | other -> failwith $"the board is on page one — got %A{other}"
 
 [<Fact>]
@@ -187,8 +185,9 @@ let ``.github#2535 a project list with NO pageInfo REFUSES rather than answering
     // COMPLETENESS IS A REQUIRED BOOLEAN, not an optional hint — `Board.nextPage`'s rule, which this walk
     // now shares byte-for-byte with the external-owner walk that #2166 wrote it for. A missing `pageInfo`
     // used to be unrepresentable here because nothing asked for one.
-    let transport =
-        serving """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Other","id":"PVT_x"}]}}}}"""
+    // A full `first: 50` window has no independent short-page proof, so pageInfo is mandatory here.
+    let nodes = String.concat "," fiftyOtherProjects
+    let transport = serving $"""{{"data":{{"organization":{{"projectsV2":{{"nodes":[%s{nodes}]}}}}}}}}"""
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Error(Malformed(_, detail)) -> Assert.Contains("`pageInfo` is missing", detail)
@@ -458,6 +457,7 @@ let ``.github#2535 the connection windows in the documents agree with the guards
 
     // The project list took the OTHER remedy, so it carries a cursor and a `pageInfo` instead of a window.
     Assert.Matches(@"projectsV2\(first: \d+, after: \$cursor\)\s*\{\s*pageInfo\b", boardText)
+    Assert.Matches(@"projectsV2\(first: \d+, after: \$cursor\).*?totalCount", boardText)
 
 [<Fact>]
 let ``.github#2535 the window-agreement gate FIRES on a document and guard that disagree`` () =
