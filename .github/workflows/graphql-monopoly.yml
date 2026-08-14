@@ -83,7 +83,9 @@ jobs:
         run: bash tests/graphql-monopoly/run.sh
 
       - name: Enforce the typed GraphQL boundary
-        run: python scripts/check-graphql-boundary.py --root .
+        run: |
+          python scripts/check-graphql-boundary.py --root .
+          bash tests/graphql-boundary/run.sh
 
   monopoly:
     runs-on: ubuntu-latest

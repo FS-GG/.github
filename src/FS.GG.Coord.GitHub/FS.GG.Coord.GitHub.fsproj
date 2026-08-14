@@ -33,6 +33,8 @@
   <ItemGroup>
     <Compile Include="Errors.fsi" />
     <Compile Include="Errors.fs" />
+    <Compile Include="GraphQlEnvelope.fsi" />
+    <Compile Include="GraphQlEnvelope.fs" />
     <Compile Include="Budget.fsi" />
     <Compile Include="Budget.fs" />
     <Compile Include="Transport.fsi" />

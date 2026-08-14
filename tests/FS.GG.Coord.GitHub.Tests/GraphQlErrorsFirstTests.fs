@@ -331,12 +331,13 @@ module private Ordering =
 
     /// The ONE site in this layer that opens `data` without asking about `errors`, by design.
     ///
-    /// `Budget.readMeter` is not a payload read: it lifts `data.rateLimit` off ANY 2xx GraphQL body —
+    /// `GraphQlEnvelope.tryMeter` is not a payload read: it lifts `data.rateLimit` off ANY 2xx GraphQL body —
     /// including the partial ones this whole gate exists to refuse — and answers `option`, where `None`
     /// means "no meter here" and asserts nothing about completeness. Reading the meter off a rate-limited
     /// response is the point of it. The exemption is NAMED rather than pattern-shaped, and
     /// `no exemption outlives its reason` below fails the moment it stops being needed.
-    let exemptions = set [ "Budget.fs", "readMeter" ]
+    /// The exception now lives inside the monopoly itself; Budget has no envelope access.
+    let exemptions = set [ "GraphQlEnvelope.fs", "tryMeter" ]
 
 [<Fact>]
 let ``.github#2534 the errors check precedes every data extraction in the GitHub layer`` () =

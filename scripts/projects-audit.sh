@@ -89,13 +89,10 @@ if [ -f "$attestation" ]; then
   fi
 fi
 
-query='query($owner:String!){organization(login:$owner){projectsV2(first:100){nodes{id title public}}}}'
-if ! result=$(gh api graphql -f "query=$query" -F "owner=$owner"); then
+if ! actual=$(python3 "$(dirname "$0")/graphql_complete_read.py" project-visibility --owner "$owner" --title "$title"); then
   echo "noverdict: $project — ProjectV2 visibility could not be read" >&2
   exit 4
 fi
-
-actual=$(jq -r --arg title "$title" '.data.organization.projectsV2.nodes[] | select(.title == $title) | .public' <<<"$result" | head -1)
 if [ -z "$actual" ] || [ "$actual" = null ]; then
   echo "finding: $project — configured Project is missing" >&2
   exit 3

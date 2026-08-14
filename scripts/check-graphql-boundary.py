@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when production code opens a GraphQL envelope or Relay page outside GraphQl.fs."""
+"""Fail when coordination production code bypasses either typed GraphQL boundary."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from pathlib import Path
 SELECTOR = re.compile(
     r'(?:TryGetProperty|GetProperty)\s*(?:\(\s*)?["\'](errors|data|pageInfo|hasNextPage|endCursor)["\']'
 )
+PY_SELECTOR = re.compile(r'(?:\[|\.get\()["\'](data|errors|pageInfo|hasNextPage|endCursor)["\']')
+TRANSPORT = re.compile(r'gh(?:["\'],\s*["\']|\s+)api(?:["\'],\s*["\']|\s+)graphql')
 
 
 def main() -> int:
@@ -20,17 +22,30 @@ def main() -> int:
     findings: list[tuple[Path, int, str]] = []
 
     for path in sorted(source.glob("*.fs")):
-        if path.name in {"GraphQl.fs", "Budget.fs"}:
+        if path.name in {"GraphQl.fs", "GraphQlEnvelope.fs"}:
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             match = SELECTOR.search(line)
             if match:
                 findings.append((path.relative_to(args.root), number, match.group(1)))
 
+    production = [
+        args.root / "scripts" / "projects-audit.sh",
+        args.root / "scripts" / "repos-audit.sh",
+        args.root / "scripts" / "coord-board-archive.py",
+        args.root / "scripts" / "check-roster-closure.py",
+        args.root / ".github" / "workflows" / "coord-board-archive.yml",
+    ]
+    for path in production:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            match = PY_SELECTOR.search(line) or TRANSPORT.search(line)
+            if match and not line.lstrip().startswith("#"):
+                findings.append((path.relative_to(args.root), number, match.group(1) if match.lastindex else "transport"))
+
     for path, number, field in findings:
         print(
             f"::error file={path},line={number}::raw GraphQL `{field}` handling must live in "
-            "src/FS.GG.Coord.GitHub/GraphQl.fs"
+            "the typed GraphQL boundary"
         )
 
     if findings:
