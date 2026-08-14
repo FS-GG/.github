@@ -61,6 +61,11 @@ class CompleteReadTests(unittest.TestCase):
         with patch.object(MODULE.subprocess, "run", return_value=Reply(body)):
             with self.assertRaises(MODULE.GraphQlReadError): MODULE.drain("q", {}, lambda d: d["c"], lambda n: n, lambda n: n["id"])
 
+    def test_malformed_individual_node_is_typed_failure(self):
+        body = {"data": {"c": {"totalCount": 1, "nodes": [{}], "pageInfo": {"hasNextPage": False}}}}
+        with patch.object(MODULE.subprocess, "run", return_value=Reply(body)):
+            with self.assertRaises(MODULE.GraphQlReadError): MODULE.drain("q", {}, lambda d: d["c"], lambda n: n, lambda n: n["id"])
+
     def test_empty_continuing_page_is_failure(self):
         body = {"data": {"c": {"totalCount": 1, "nodes": [], "pageInfo": {"hasNextPage": True, "endCursor": "x"}}}}
         with patch.object(MODULE.subprocess, "run", return_value=Reply(body)):

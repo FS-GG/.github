@@ -87,7 +87,9 @@ def execute(query: str, variables: dict[str, Any], decode: Callable[[dict[str, A
         raise GraphQlReadError("GraphQL envelope carried neither object data nor errors")
     try:
         return decode(data)
-    except (KeyError, TypeError, ValueError) as exc:
+    except GraphQlReadError:
+        raise
+    except Exception as exc:
         raise GraphQlReadError(f"GraphQL data had an invalid shape: {exc}") from exc
 
 
@@ -124,8 +126,13 @@ def drain(query: str, variables: dict[str, Any], connection: Callable[[dict[str,
         elif expected_total != total:
             raise GraphQlReadError(f"board item count changed while paging ({expected_total} -> {total})")
         for raw in nodes:
-            item = decode_node(raw)
-            identity = key(item)
+            try:
+                item = decode_node(raw)
+                identity = key(item)
+            except GraphQlReadError:
+                raise
+            except Exception as exc:
+                raise GraphQlReadError(f"connection node had an invalid shape: {exc}") from exc
             if not identity or identity in seen_keys:
                 raise GraphQlReadError(f"connection repeated or omitted stable identity {identity!r}")
             seen_keys.add(identity); out.append(item)
