@@ -490,10 +490,16 @@ module Client =
     /// decides acceptance: `additiveSubjectMatch` re-hashes the located lines with the full, unchanged
     /// `hashHex` and compares that against the receipt's own `subjectRevision`, which is the same 256-bit
     /// check .github#2392 already rests on. So a locator collision can only mis-SELECT an alignment,
-    /// which then fails that check — a false NEGATIVE (`Stale`), never a false positive. A false positive
-    /// would require a full SHA-256 collision, which is precisely today's assumption (.github#2583
-    /// DEC-002). 16 hex characters puts the false-negative probability at 2^-64 and keeps the marker near
-    /// 1.2 KB for a 70-line body such as .github#2583's own.
+    /// which then fails that check — a false NEGATIVE (`Stale`), never a false positive. 16 hex
+    /// characters puts the false-negative probability at 2^-64 and keeps the marker near 1.2 KB for a
+    /// 70-line body such as .github#2583's own.
+    ///
+    /// THE CLAIM ABOVE IS CONDITIONAL, AND THE CONDITION IS NOT DECORATIVE — read `additiveSubjectMatch`'s
+    /// empty-`recorded` arm before relying on it. "A false positive requires a full SHA-256 collision"
+    /// holds only for a NON-EMPTY judged subject. An empty one satisfies the 256-bit check by
+    /// construction (`hashHex ""` against a recorded revision that IS `hashHex ""`) and would match any
+    /// body whatsoever, with no collision required. That case is refused explicitly there, and this
+    /// sentence exists because the unconditional version of it shipped in review round 1 and was false.
     let private subjectLineLocator (line: string) = (hashHex line).Substring(0, 16)
 
     /// Render the locator marker for a body. `record` derives this from the body it has JUST validated the
@@ -554,8 +560,17 @@ module Client =
     /// reads intent from prose, and the only alternatives were a semantic rule this engine cannot
     /// implement or the status quo, which is the defect. What an insertion cannot do is CHANGE any
     /// statement the decision judged; every one of them is still there, byte-identical, in order. The
-    /// residual is paid for by REPORTING: `delivery-route show` names an additive match and counts the
-    /// inserted lines, so an additive resolution is never indistinguishable from a byte-identical body.
+    /// residual is paid for by REPORTING — and the payment is made at the boundaries that ACT on the row,
+    /// which is where it is spent. `delivery-route show` names an additive match in its JSON and on
+    /// stderr, and `requireCurrentDeliveryRoute` — the claim/take mutation boundary, the moment a worker
+    /// commits to this route — emits the same note. The SCHEDULING read
+    /// (`readDeliveryRouteVerdict`, and `sddPackageTokens`' path-drift read) stays deliberately SILENT:
+    /// those run per candidate item on every `batch`/`next`/`verify-paths`, and a control that fires on
+    /// everything is read as noise, which is how a control stops being one (#266). So the honest
+    /// statement is bounded, not universal: an additive resolution is never indistinguishable from a
+    /// byte-identical body TO AN AGENT INSPECTING OR CLAIMING THE ROW; a scheduler counting candidates is
+    /// not told, by choice. Round 1 of this PR's review carried the unqualified version of that sentence
+    /// while two of the three read paths reported nothing at all, which is the overclaimed-limit shape.
     ///
     /// COMMENTS ARE OUTSIDE ALL OF THIS, and always were (.github#2583 AC5, stated here so the next
     /// reader does not re-derive it from `deliveryRouteSubjectLines`' filter). Only the issue BODY is
@@ -573,13 +588,48 @@ module Client =
                 if wanted = subjectLineLocator line then align wantRest haveRest (line :: matched)
                 else align want haveRest matched
 
-        match align recorded current [] with
-        // The located lines are taken from the CURRENT body and re-hashed at FULL width. This, not the
-        // locator comparison above, is what accepts or refuses.
-        | Some matched when hashHex (String.concat "\n" matched) = recordedRevision ->
-            Some(List.length current - List.length matched)
-        | Some _
-        | None -> None
+        match recorded with
+        // "NOTHING WAS JUDGED" IS NEVER "EVERYTHING WAS JUDGED AND ALL OF IT SURVIVED" (#266), and this
+        // guard is load-bearing rather than defensive — WITHOUT IT THE FULL-WIDTH CHECK BELOW IS
+        // SATISFIED BY CONSTRUCTION, not defeated.
+        //
+        // A body whose every line is a volatile declaration or blank — `Paths:` + `Class:` and nothing
+        // else, which is a perfectly ordinary freshly-filed row — has an EMPTY subject. `record` then
+        // writes a zero-locator marker and a receipt whose `subjectRevision` is
+        // `e3b0c442…b855` = `hashHex ""`. On a later read, `align` consumes an empty want-list
+        // VACUOUSLY (its first arm), `matched` is `[]`, and the guard below compares `hashHex ""`
+        // against a recorded revision that IS `hashHex ""`. It holds for every possible body: that
+        // receipt would match a wholesale replacement of the issue with unrelated content, permanently,
+        // and it reaches the claim/take mutation boundary as readily as `show`.
+        //
+        // This is the ONE false positive that does not go THROUGH the 256-bit hash — it goes AROUND it,
+        // and no collision is required. The safety claim on `subjectLineLocator` above is therefore
+        // conditional on this arm, which is why the two are written as one story rather than two.
+        //
+        // NOTHING LEGITIMATE IS LOST. If the subject is still empty, the CANONICAL arm has already
+        // matched (`hashHex "" = hashHex ""`) and this candidate is never consulted; if the subject has
+        // since GAINED lines, the honest answer is that the route decision judged none of them.
+        //
+        // A present-but-empty locator record and an ABSENT one both disable this candidate, for
+        // different reasons worth keeping distinct: absent is "I could not read what this judged"
+        // (`splitSubjectLineLocators`), empty is "I read it, and it constrains nothing". Fail-closed
+        // either way, never conflated.
+        | [] -> None
+        | _ ->
+            match align recorded current [] with
+            // The located lines are taken from the CURRENT body and re-hashed at FULL width. This, not
+            // the locator comparison above, is what accepts or refuses — and, given a non-empty judged
+            // subject, satisfying it on text that is not the judged subject is a full SHA-256 collision.
+            | Some matched when hashHex (String.concat "\n" matched) = recordedRevision ->
+                Some(List.length current - List.length matched)
+            | Some _
+            | None -> None
+
+    /// ONE spelling of the additive notice, shared by every boundary that emits it (.github#2583 repair 2).
+    /// `delivery-route show` and the claim/take mutation boundary both say this, and a second copy is one
+    /// edit away from two boundaries telling an agent different things about the same fact (#485).
+    let private additiveSubjectNote (subject: string) (added: int) =
+        $"fsgg-coord-engine: delivery-route: %s{subject}'s body has %d{added} subject line(s) added since this route was decided; every judged line is unchanged and in order, so the receipt stands. Re-record it if the addition changed the work's scope."
 
     /// How a `Current` verdict was reached — reported, never inferred (.github#2583 FR-004).
     type private SubjectMatch =
@@ -642,6 +692,15 @@ module Client =
                     | None -> canonicalVerdict, NoSubjectMatch
                 | _ -> canonicalVerdict, NoSubjectMatch
 
+    /// The verdict alone, for the two callers that DELIBERATELY do not report the match:
+    /// `readDeliveryRouteVerdict` (scheduling) and `sddPackageTokens` (`verify-paths`' path-drift read).
+    /// Both run per candidate item, many times per command, and a notice there would fire on everything —
+    /// see `additiveSubjectMatch`'s note on why that is not a cheaper win but a lost control (#266). The
+    /// two boundaries an agent actually reads or acts on — `delivery-route show` and
+    /// `requireCurrentDeliveryRoute` — call `decideDeliveryRouteMatch` directly and report.
+    ///
+    /// Discarding `SubjectMatch` here is therefore a decision with a stated reason, not the accident it
+    /// was in review round 1, when this was the ONLY form and the source claimed reporting was universal.
     let private decideDeliveryRoute (subject: string) (body: string) (receipt: (DeliveryRoute.Receipt * string list option) option) : DeliveryRoute.Verdict =
         decideDeliveryRouteMatch subject body receipt |> fst
 
@@ -781,10 +840,20 @@ module Client =
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->
-            match decideDeliveryRoute target.Canonical body (latestDeliveryRouteReceipt comments) with
-            | DeliveryRoute.Current route -> Ok route
-            | DeliveryRoute.Stale reasons
-            | DeliveryRoute.Unreadable reasons ->
+            // .github#2583 repair 2: THIS is where the DEC-001 trade is spent — a worker claiming the row
+            // is committing to a route decision that may have had content added beside what it judged.
+            // `show` reporting it is not enough if the boundary that ACTS on the row says nothing, so the
+            // same note is emitted here, from the one shared spelling. The verdict is untouched: this
+            // reports, it does not refuse.
+            match decideDeliveryRouteMatch target.Canonical body (latestDeliveryRouteReceipt comments) with
+            | DeliveryRoute.Current route, subjectMatch ->
+                match subjectMatch with
+                | AdditiveSubject added -> eprint (additiveSubjectNote route.Subject added)
+                | _ -> ()
+
+                Ok route
+            | DeliveryRoute.Stale reasons, _
+            | DeliveryRoute.Unreadable reasons, _ ->
                 Error(Errors.Malformed(target.Canonical, "delivery route is not current: " + String.concat "; " reasons))
 
     let private offlineDeliveryRoute =
@@ -10099,9 +10168,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // indistinguishable from a byte-identical body. The structural rule cannot read
                     // intent, and an insertion can redefine scope; this line is what that costs.
                     match subjectMatch with
-                    | AdditiveSubject added ->
-                        eprint
-                            $"fsgg-coord-engine: delivery-route: %s{receipt.Subject}'s body has %d{added} subject line(s) added since this route was decided; every judged line is unchanged and in order, so the receipt stands. Re-record it if the addition changed the work's scope."
+                    | AdditiveSubject added -> eprint (additiveSubjectNote receipt.Subject added)
                     | _ -> ()
 
                     printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; subjectMatch = subjectMatch.Name; addedSubjectLines = subjectMatch.AddedLines; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})

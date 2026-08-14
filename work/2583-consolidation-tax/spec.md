@@ -85,9 +85,11 @@ The same tax is visible without any hypothetical: `delivery-route show .github#1
 - AC-003 [US-002] [FR-003]: Given any body/receipt pair that resolves `Current` before this change —
   including a `Paths:`/`Class:`/`Blocked on:`/`Blocked by:` edit and a pre-`.github#2392` whole-body
   receipt — then it still resolves `Current` after it.
-- AC-004 [US-003] [FR-004]: Given a read that resolved through the additive candidate, when
-  `delivery-route show --json` renders it, then the output names the additive match and the number of
-  inserted subject lines, and a note is written to stderr.
+- AC-004 [US-003] [FR-004]: Given a read that resolved through the additive candidate, then **both**
+  boundaries an agent inspects or acts on report it: `delivery-route show --json` names the additive
+  match and the inserted-line count and writes a note to stderr, and the claim/take mutation boundary
+  writes the same note. The per-candidate scheduling read stays silent by stated choice, and the source
+  says so rather than claiming reporting is universal.
 - AC-005 [US-001] [FR-005]: Given the additive candidate is removed from the candidate set, when the
   command-boundary suite runs over its corpus of real issue bodies, then the additive legs fail. The
   corpus is non-empty and its size is asserted, so the leg cannot pass vacuously.
@@ -97,16 +99,21 @@ The same tax is visible without any hypothetical: `delivery-route show .github#1
 - AC-007 [US-002] [FR-007]: Given a receipt comment with no judged-line record, or one whose record is
   malformed, then the verdict is exactly what it is today — the additive candidate is not consulted and
   nothing is inferred from its absence.
+- AC-008 [US-002] [FR-008]: Given a receipt recorded against a body whose subject is EMPTY — every line
+  a volatile declaration or blank — then no later body resolves `Current` through the additive
+  candidate, including a wholesale replacement by unrelated content and a strictly additive edit. A body
+  whose subject is still empty remains `Current` through the canonical candidate, unchanged.
 
 ## Functional Requirements
 
 - FR-001: A body edit whose only effect is to insert new subject lines leaves an otherwise-current receipt `Current`, for insertion at any position, not only at the end. (Stories: US-001; Acceptance: AC-001)
 - FR-002: A body edit that modifies, removes, or reorders any subject line the receipt judged still returns `Stale`. (Stories: US-002; Acceptance: AC-002)
 - FR-003: No body and receipt pair that resolves `Current` before this change resolves `Stale` after it. (Stories: US-002; Acceptance: AC-003)
-- FR-004: A read that resolves through the additive candidate reports that fact and the number of inserted subject lines, rather than being indistinguishable from a byte-identical body. (Stories: US-003; Acceptance: AC-004)
+- FR-004: A read that resolves through the additive candidate reports that fact and the number of inserted subject lines at every boundary that inspects or acts on the row — `delivery-route show` and the claim/take mutation boundary — and stays silent on the per-candidate scheduling read by stated choice. (Stories: US-003; Acceptance: AC-004)
 - FR-005: Removing the additive candidate makes the new command-boundary legs fail on a non-empty corpus of real issue bodies. (Stories: US-001; Acceptance: AC-005)
 - FR-006: `delivery-route record` derives the judged-line record from the body it validated the receipt's `subjectRevision` against, and posts it without altering the agent-authored receipt JSON. (Stories: US-001; Acceptance: AC-006)
 - FR-007: A receipt with a missing or malformed judged-line record decides exactly as it does today, fail-closed, with the additive candidate never consulted. (Stories: US-002; Acceptance: AC-007)
+- FR-008: An empty judged subject never authorises an additive match against any body, because it constrains nothing. (Stories: US-002; Acceptance: AC-008)
 
 ## Ambiguities
 
@@ -118,6 +125,20 @@ The same tax is visible without any hypothetical: `delivery-route show .github#1
 - AMB-003: Who authors the judged-line record: the agent, in the receipt JSON, or `record`, derived?
 - AMB-004: Where does the judged-line record live: inside the receipt JSON object, or beside it in the
   marker comment?
+- AMB-005: An EMPTY judged subject makes the full-width verification hold **by construction**
+  (`hashHex ""` compared against a recorded revision that *is* `hashHex ""`), so it would authorise an
+  additive match against any body at all, with no hash collision. Is that a special case bolted on, or
+  an instance of a rule this specification already states?
+- AMB-006: The additive notice is the entire consideration for AMB-001's trade. Which boundaries must
+  pay it? The per-candidate scheduling read runs many times per command, so "everywhere" is not free.
+
+## Review History
+
+Independent review round 1 (`merlin-0da3`, head `f090fb48`) upheld the AMB-001 ruling explicitly and
+returned two material findings against this specification's own new arm: the empty-subject false
+positive (AMB-005 / FR-008) and the notice never reaching the boundaries that act on the row
+(AMB-006 / FR-004). Both are repaired in this package rather than filed as new rows, because both causes
+are created by this work.
 
 ## Public Or Tool-Facing Impact
 

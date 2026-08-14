@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "e5d26481afb97389b3f028495667b4179231b89cfd6bc26119caf892a4fd3900"
+        "value": "525110cc364dc45c6d0625528eccd9ba7248331d66a6e31eb3d360949735e6cc"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "source",
       "digest": {
         "algorithm": "sha256",
-        "value": "2aa26249e2cc6394ba63dcb2e5f377ed5b4381b8bf0583976087620afdf3924c"
+        "value": "58513297a80781e6c02c733169ab975f7c94fec7868f4a543058c0dcc9455756"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "a48e6e978339e2148d6369f843775c3d9c45fb298ba723d836031a31ff42d78d"
+        "value": "9560658eae403778e327dae683f44b7ea5d3c69d6556c23d8f7e5cfd7ffbe6c9"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "6fe40acf77cdf8ef2dc9aeae8c8f8c5eaea8972a420bdaf64324d676dd3ce1f4"
+        "value": "b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493"
+        "value": "e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "43bc848b70963d78ac69d6619bbfef32296a3b2b5167ee43419d0a71f247bdc5"
+        "value": "3078048de41e1e4eb6891be2d6395be4f95c3c8d028ff4f22a71012f8ee23f89"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "c26d6c8da8a3b6766332b4381c846d6f9e2f21dde7d22d1f1d8f8ecbeff346d8"
+        "value": "6a0dc3d354d1806ec150556f827b2ea0357c3236ff82cc0195094b316244790c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b"
+        "value": "b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -121,7 +121,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "90d7e850684fb864a29c4cb2358c7ef9064ab19ea811e7110ceff3d33a2f4f33"
+        "value": "2bb20b7c7b24ccf78770f09fa30aa1c324aa9e127f7722fce676e8b25c02cbf8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -167,10 +167,10 @@
   "verificationReadiness": {
     "status": "verificationReady",
     "blockingFindingIds": [],
-    "evidenceSupportedCount": 21,
+    "evidenceSupportedCount": 28,
     "evidenceSelfAttestedCount": 0,
-    "evidenceObservedCount": 21,
-    "evidenceDeferredCount": 2,
+    "evidenceObservedCount": 28,
+    "evidenceDeferredCount": 3,
     "evidenceMissingCount": 0,
     "evidenceStaleCount": 0,
     "evidenceSyntheticCount": 0,
@@ -359,6 +359,70 @@
       "state": "deferred",
       "observed": false,
       "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV024",
+      "obligationId": "EV024",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV025",
+      "obligationId": "EV025",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV026",
+      "obligationId": "EV026",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV027",
+      "obligationId": "EV027",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV028",
+      "obligationId": "EV028",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV029",
+      "obligationId": "EV029",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV030",
+      "obligationId": "EV030",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV031",
+      "obligationId": "EV031",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
       "diagnosticIds": []
     }
   ],

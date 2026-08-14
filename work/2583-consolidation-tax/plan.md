@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2583-consolidation-tax/spec.md sha256:dcfff30fb1be2c048e4ff1b9811adf0a7139eec7b38e639df541bd9c78ab0c2b schemaVersion:1
-- clarifications: work/2583-consolidation-tax/clarifications.md sha256:9f129082008d2ef0e12df7a504284d048e45b6ed3642fb02b72bb4e2b02e3493 schemaVersion:1
-- checklist: work/2583-consolidation-tax/checklist.md sha256:6fe40acf77cdf8ef2dc9aeae8c8f8c5eaea8972a420bdaf64324d676dd3ce1f4 schemaVersion:1
+- spec: work/2583-consolidation-tax/spec.md sha256:b4e36265a60657fa044b7ac1b7a6e0c32316eeb6dec5ffc665c0843f06efe7d0 schemaVersion:1
+- clarifications: work/2583-consolidation-tax/clarifications.md sha256:e95e576d2791eb30f220dcfc3ff634b38e3a590d5312a3984866db08100807b5 schemaVersion:1
+- checklist: work/2583-consolidation-tax/checklist.md sha256:b03c57ac62f1826c587fed3288a98c5d07a96dfe10e585fa40f0f42c2d44da40 schemaVersion:1
 
 ## Plan Scope
 - Work item 2583-consolidation-tax is planned from the current specification, clarification, and checklist facts.
@@ -37,8 +37,8 @@ which is why FR-003 holds by construction rather than by care.
 " << deliveryRouteSubjectLines` so the two can never disagree — one filter, two shapes, never two copies of the rule (#485).
 - PD-002 [AC-002] [FR-002] complete: Add `additiveDeliveryRouteMatch : recorded: string list -> body: string -> receipt -> int option`. It locates the recorded locator digests as an ordered subsequence of the current subject's locator digests with one greedy leftmost scan, joins the **matched current lines**, hashes them with the unchanged `hashHex`, and accepts only when that equals `receipt.SubjectRevision`. Modification, deletion, and reordering all fail the scan or the hash. Returns the inserted-line count on acceptance.
 - PD-003 [AC-003] [FR-003] complete: Wire the candidate as the third arm of `decideDeliveryRoute`, reached only after both existing arms decline, and re-decide through `DeliveryRoute.decide` passing `receipt.SubjectRevision` as the expected revision — the same shape the legacy arm already uses — so every other `validate` rule (schema, subject, agent, timestamp, route, SDD binding) still runs and only the revision comparison is satisfied by the proof just established.
-- PD-004 [AC-004] [FR-004] complete: `decideDeliveryRoute` is split into `decideDeliveryRouteMatch` returning `Verdict * SubjectMatch`, with `decideDeliveryRoute` as its `fst`. Existing call sites are unchanged. `delivery-route show` consumes the pair and renders `subjectMatch` and `addedSubjectLines`, and writes a stderr note when the match was additive.
-- PD-005 [AC-005] [FR-005] complete: The gate-inversion mutation is the removal of PD-003's third arm. The corpus is real issue bodies checked in under `tests/FS.GG.Coord.Cli.Tests`, and its size is asserted so the leg cannot pass vacuously (#436's non-vacuity rule).
+- PD-004 [AC-004] [FR-004] complete: `decideDeliveryRoute` is split into `decideDeliveryRouteMatch` returning `Verdict * SubjectMatch`, with `decideDeliveryRoute` as its `fst`. `delivery-route show` consumes the pair and renders `subjectMatch` and `addedSubjectLines`, and — with `requireCurrentDeliveryRoute`, the claim/take mutation boundary — writes the note from ONE shared spelling, `additiveSubjectNote`. The per-candidate scheduling reads (`readDeliveryRouteVerdict`, `sddPackageTokens`) keep the `fst` form and stay silent, with the reason stated on `decideDeliveryRoute` itself rather than left as an accident. The AMB-001 trade is paid where it is spent: at the boundary a worker commits from, not only where an agent may choose to look.
+- PD-005 [AC-005] [FR-005] complete: FOUR gate-inversion mutations, one per guard this work adds: the third candidate arm, the full-width verification, the empty-judged-subject refusal, and the claim-boundary notice. The corpus is real issue bodies under `tests/FS.GG.Coord.Cli.Tests`, with a stated size floor (#436). The degenerate empty-subject legs are held OUTSIDE that floor deliberately — review round 1 established that `MinimumSubjectLinesPerBody` excluded the very shape that carried a permanent false positive, so a non-vacuity floor on a CORPUS is not a non-vacuity guarantee for the CODE.
 - PD-006 [AC-006] [FR-006] complete: `deliveryRouteCmd`'s `record` arm derives the locator line from the same `body` it computed `revision` from, and posts `marker + "
 " + locatorLine + "
 " + raw.Trim()`. The agent's `raw` stays byte-verbatim.
@@ -65,6 +65,8 @@ a search to find that greedy leftmost matching would miss.
 that `DeliveryRoute.fs` compiles **ahead of** `Markdown.fs` in `FS.GG.Coord.Core.fsproj`. A Core-side
 rule would have to reorder that compile graph or keep a second copy of the subject filter. The subject
 *scheme* has always been `Client.fs`'s; `DeliveryRoute.decide` owns receipt *policy* and is unchanged.
+- PD-010 [AC-008] [FR-008] complete: Guard `additiveSubjectMatch` with an explicit empty-`recorded` arm returning `None` BEFORE alignment. Without it `align` consumes an empty want-list vacuously and the full-width check compares `hashHex ""` against a recorded revision that IS `hashHex ""` — satisfied by construction, for every possible body, with no collision. The guard is load-bearing, not defensive, and the safety claim on `subjectLineLocator` is rewritten to carry its condition rather than assert the unconditional form that shipped in review round 1.
+- PD-011 [CR-009] acceptedDeferral: The checklist-stage mirror of DEC-005, arriving a second time with FR-008's regeneration; same disposition as PD-008/PD-009 and no separate obligation.
 
 ## Contract Impact
 - PC-001 [PD-001] command report: `fsgg-sdd plan`, `work/2583-consolidation-tax/plan.md`, and command-report JSON are tool-facing and compatibility-preserving.
@@ -76,6 +78,8 @@ rule would have to reorder that compile graph or keep a second copy of the subje
 - VO-002 [PD-005] [PC-002] semanticTest: Gate-inversion. Delete the third candidate arm from `decideDeliveryRoute`, run `tests/FS.GG.Coord.Cli.Tests`, and record the exact mutation and the observed failing legs. A surviving inversion is a material finding by definition (`.github#2551`).
 - VO-003 [PD-003] [PC-002] semanticTest: Regression floor for `.github#2392`. A `Paths:`/`Class:`/`Blocked on:`/`Blocked by:` edit and a pre-`.github#2392` whole-body receipt both still resolve `Current`, and the legacy arm is exercised on a receipt the canonical arm rejects.
 - VO-004 [PD-005] [PC-002] semanticTest: Non-vacuity. The corpus of real issue bodies is asserted non-empty and at a fixed floor, so a fixture that silently emptied cannot pass the additive legs.
+- VO-006 [PD-010] [PC-002] semanticTest: Degenerate-body legs, outside the corpus floor: an empty-subject receipt refuses a wholesale body replacement and refuses a strictly additive edit, while an unchanged empty-subject body stays `Current` through the CANONICAL arm. Inverting the empty guard reds the two refusal legs and only those.
+- VO-007 [PD-004] [PC-002] semanticTest: The claim/take mutation boundary emits the additive notice, stays silent on a canonical match, and still refuses a modified judged line — the third leg being the discriminator that stops the first two being explained by "the route check never runs". Inverting the notice reds the first leg and only it.
 - VO-005 [PD-004] [PC-002] semanticTest: The workflow that runs these legs is reached by the changed paths. `.github/workflows/coord-engine.yml` lists `src/FS.GG.Coord.Cli/**` and `tests/FS.GG.Coord.Cli.Tests/**` in both its `pull_request` and `push` `paths:` filters; confirm on the live pull request that `coord-engine` actually ran.
 
 ## Performance Intent
@@ -90,6 +94,7 @@ No performance intent is declared for this work item.
 ## Accepted Deferrals
 - DEC-005 acceptedDeferral: Retroactive upgrade of pre-change receipts is deferred, with no recoverable data to upgrade from; visible to tasks and evidence as a stated limitation, not an oversight.
 - CR-008 acceptedDeferral: The checklist-stage mirror of DEC-005; same disposition, no separate obligation.
+- CR-009 acceptedDeferral: The checklist-stage mirror of DEC-005 regenerated alongside FR-008; one deferral observed at two stages, discharged once by PD-008 and visible to tasks and evidence under the same disposition.
 
 ## Planning Findings
 No blocking planning findings recorded.
