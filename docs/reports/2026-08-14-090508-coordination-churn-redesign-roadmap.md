@@ -184,7 +184,7 @@ The goal is not less evidence. It is fewer independently mutable descriptions of
 
 Durations are sequencing estimates, not calendar commitments. Each milestone has an exit condition that prevents an incomplete migration from becoming another permanent compatibility layer.
 
-- [ ] **M0 — stabilize**
+- [x] **M0 — stabilize**
   - Target: 0–2 days
   - Deliverables: Land bounded release, feed-coherence, project-audit, engine-pin, and claim-auth repairs; triage lint; pause new process features; capture replay fixtures and baseline metrics
   - Exit criteria: Main has no standing red checks; open repair PRs are mergeable or explicitly superseded; baseline is reproducible
@@ -253,6 +253,23 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   feedback-report machinery. The user-authorized break-glass integration records
   no fabricated SDD, cycle, or feedback artifact; independent tests, critique,
   GitHub checks, and exact merged-head inspection are the acceptance evidence.
+- **Landed stabilization:** Superseding PR
+  [#2591](https://github.com/FS-GG/.github/pull/2591) merged as
+  `22eeec6ac0a2f6f050e64e1c6be2c2ed7201d558` after its required checks passed;
+  PRs [#2588](https://github.com/FS-GG/.github/pull/2588) and
+  [#2589](https://github.com/FS-GG/.github/pull/2589) are closed as superseded.
+  The independent critique and repaired-head confirmation are recorded in
+  `reviews/roadmap/roadmap-coordination-churn-redesign-m0-stabilize.json`.
+- **Coherent stable channel:** `coord-engine/v0.53.0`, `kit/v0.53.0`, and
+  `drivers/v0.53.0` all peel to the merged SHA above. Trusted-publishing runs
+  [engine 31782583439](https://github.com/FS-GG/.github/actions/runs/31782583439),
+  [Kit 31782583496](https://github.com/FS-GG/.github/actions/runs/31782583496), and
+  [Drivers 31782583720](https://github.com/FS-GG/.github/actions/runs/31782583720)
+  passed in org-feed-first/NuGet.org-second order. Both feeds serve the full
+  0.53.0 trio; 101 normalized package entries compare byte-identically, all
+  nuspecs bind the packages to the merged SHA, and a fresh NuGet.org-only tool
+  install reports `0.53.0.0`. The registry, generated compatibility projection,
+  and canonical tool pin now select 0.53.0; 0.52.0 remains explicitly rejected.
 
 ### Cross-cutting health measures
 

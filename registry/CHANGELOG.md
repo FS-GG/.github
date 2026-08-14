@@ -19,6 +19,32 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-14** — **registry: adopt the recovered coherent set `0.53.0` and move both `coord-engine` scalars**
+  (owner `github`; [PR #2591](https://github.com/FS-GG/.github/pull/2591); refs
+  [#2588](https://github.com/FS-GG/.github/pull/2588),
+  [#2589](https://github.com/FS-GG/.github/pull/2589), and
+  [roadmap](../docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md)).
+  `version` and `package-version` move from `0.51.1` to `0.53.0`. This is a MINOR:
+  M0 changed receiver-visible claim authorization and route/review behavior in addition to
+  bounding release notes. The permanently partial `0.52.0` is not adopted. All three sibling
+  tags peel to merged source SHA `22eeec6ac0a2f6f050e64e1c6be2c2ed7201d558`; trusted-publishing
+  runs [engine 31782583439](https://github.com/FS-GG/.github/actions/runs/31782583439),
+  [Kit 31782583496](https://github.com/FS-GG/.github/actions/runs/31782583496), and
+  [Drivers 31782583720](https://github.com/FS-GG/.github/actions/runs/31782583720)
+  each pushed the org feed before sending the same package bytes to NuGet.org.
+  Independent live reads show both feeds serving `FS.GG.Coord.Cli`, `FS.GG.Kit`, and
+  `FS.GG.Drivers` at `0.53.0`; `scripts/check-release-coherence.py` exits 0. After excluding
+  NuGet.org's appended signature and rewritten `.psmdcp`, 101 entries were compared by SHA-256
+  (Coord.Cli 32, Kit 40, Drivers 29): 0 differing and 0 one-sided. Whole-archive org/public
+  SHA-256 values are Coord.Cli `4e0e0905660316ea57b6f2e9dbff20e0572829492527846926843a939a2542ce` /
+  `2bd915445674c58e8013859d23c6f62cbb34b7fa8b67bb747502010cc92a2dc1`, Kit
+  `dccd71f21310bab28b63ed30a317fe4af71b6731ca8fd38d8a07c02616273075` /
+  `c766e4b5a155568178723629a4e50ed7c0188d3d87dbb73d81e1ca9c5f2a38f1`, and Drivers
+  `97e457323593e4de6b456c6e1cd442bf9cea232aaa39be03bdbb3e21c95017ec` /
+  `56d14f4bb76a29104b29a9a05f1e763b103e25add1e679c4b086a5f8088bf04d`.
+  Every served nuspec records `0.53.0` and the merged source SHA; a fresh isolated
+  NuGet.org-only install succeeds and `fsgg-coord-engine --version` reports `0.53.0.0`.
+
 - **2026-08-13** — **registry: flip the `coord-engine` row to the CURRENT coherent set `0.51.1` — this entry MOVES BOTH SCALARS**
   (owner `github`; [.github#2552](https://github.com/FS-GG/.github/issues/2552),
   [PR #2562](https://github.com/FS-GG/.github/pull/2562);
