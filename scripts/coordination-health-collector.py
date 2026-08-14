@@ -20,6 +20,7 @@ import tempfile
 
 
 REPOSITORY = "FS-GG/.github"
+CANONICAL_OUTPUT = "docs/reports/evidence/coordination-health"
 FIRST_PERIOD = datetime(2026, 8, 17, tzinfo=timezone.utc)
 PERIODS = 3
 BEHAVIOUR_PREFIXES = ("src/", "tests/", "scripts/", ".github/", "policy/")
@@ -417,7 +418,7 @@ def collect(root: Path, output: Path, now: datetime) -> Path:
         generated_start, generated_end = tree_bytes(root, start_sha, GENERATED_PREFIXES), tree_bytes(root, end_sha, GENERATED_PREFIXES)
         implementation_start, implementation_end = tree_bytes(root, start_sha, IMPLEMENTATION_PREFIXES), tree_bytes(root, end_sha, IMPLEMENTATION_PREFIXES)
         reproduce = ["python3", "scripts/coordination-health-collector.py", "--root", ".",
-                     "--output-dir", str(output_relative)]
+                     "--output-dir", CANONICAL_OUTPUT]
         observation = {
             "schema_version": 1, "source_sha": source_sha, "measured_at": iso(now),
             "period_id": f"week-{index}", "start": iso(start), "end": iso(end),
@@ -469,7 +470,7 @@ def collect(root: Path, output: Path, now: datetime) -> Path:
         "cycle_id": "roadmap-coordination-churn-redesign-m6-retire-compatibility",
         "measured_at": iso(now), "source_sha": source_sha, "verdict": "candidate",
         "collector": {"schema_version": 1, "command": ["python3", "scripts/coordination-health-collector.py",
-                    "--root", ".", "--output-dir", str(output_relative)]},
+                    "--root", ".", "--output-dir", CANONICAL_OUTPUT]},
         "candidate_periods": rows, "successor_queries": SUCCESSOR_QUERIES,
         "successor_census": census,
         "same_class_open": [{"url": row["url"], "reason": row["reason"]} for row in census if row["disposition"] == "blocking"],
