@@ -38,6 +38,33 @@ COMPLETENESS OF THE LIST.
                      alone (the registry's key), so Rendering's frozen re-declaration of a
                      Game-owned skill is satisfied by the `fs-gg-game` row.
 
+                     AND, SINCE .github#2547, THE SAME QUESTION ASKED OF THE POPULATION: every
+                     FS-GG repository `registry/repos.yml` rosters must be VISIBLE under
+                     `--repos-root`. Check 5 above is a predicate over the producers this run
+                     happened to find, so a producer nobody checked out was not a finding, it was
+                     nothing — which is #289's own lesson ("we validated the CONTENT OF WHAT IS
+                     LISTED and never the COMPLETENESS OF THE LIST") recurring one level up, over
+                     the list of PRODUCERS. FS.GG.Templates shipped a manifest declaring six
+                     `scope: product` skills; the CI clone loop was a hardcoded
+                     `for repo in FS.GG.SDD FS.GG.Rendering FS.GG.Game`, so its manifest was
+                     reconciled against nothing and its six absent rows were unreportable. Absence
+                     is the finding, not "no manifest here": the gate cannot tell a non-producer
+                     from an unreachable producer without looking. A rostered repo that IS present
+                     and carries no manifest stays silently fine.
+
+  8. PARAMETER VOCABULARY
+                     every parameter a row's `materializes-when` names is in the registry's
+                     `parameters:` list. That list declared the ONE materialization vocabulary the
+                     catalog models and nothing read it, so the catalog could assert
+                     `[profile, lifecycle, feedback, designSystem]` org-wide while a row evaluated
+                     `template` (.github#2547). NECESSARY, NOT SUFFICIENT, and the distinction is
+                     load-bearing: nothing evaluates a predicate against this list —
+                     `skill-union-assert.sh --params` reads a scaffold's `scaffold-provenance.json
+                     -> effectiveParameters` — so a parameter declared here but absent from that
+                     provenance still answers `false` for every scaffold its producer builds.
+                     Declaring it makes the catalog honest about the axes it carries; it does not
+                     make a predicate answerable.
+
 And over the CONTENT of a row the manifest also declares (.github#292, epic #266). Checks 1-3 are
 predicates over a row's BYTES; check 5 over its PRESENCE. Nothing compared the one field that is
 neither -- the emission condition:
@@ -105,6 +132,15 @@ measurement exercised it by mutating one declared digest against fresh producer 
 Producers are DERIVED, never hardcoded: the repos named by `source:` prefixes (which MUST carry a
 manifest), plus any other checkout under `--repos-root` that carries one -- so a brand-new producer
 whose rows are ALL missing is still read, rather than being invisible for want of a row to name it.
+
+THAT DERIVATION IS ONLY AS COMPLETE AS `--repos-root`, WHICH IS WHY THE ROSTER ARM EXISTS. Both
+sentences above answer "who did we find?"; neither answered "who should we have been able to look
+at?", and the de facto answer was a hardcoded `for repo in ...` in skill-registry-coherence.yml
+plus, in skill-registry-autofix.yml, the `source:` prefixes OF THE REGISTRY BEING RECONCILED -- a
+loop that is self-referential in the one direction that matters, since a producer with no rows yet
+is never cloned and so its rows can never be appended. `--producers` now prints the roster
+`registry/repos.yml` declares and BOTH loops read it, so the expected set has exactly one spelling
+and `roster_reachable` reds when the realised set is smaller (.github#2547).
 
 KNOWN BOUND, stated rather than hidden: a producer is recognised by a manifest at one of
 MANIFEST_CANDIDATES, directly under its checkout. A repo that publishes its manifest somewhere else
@@ -300,6 +336,162 @@ def producers(repos_root: str, rows: list[dict]) -> tuple[list[str], list[str]]:
         present = []
     unnamed = [r for r in present if r not in named and find_manifest(repos_root, r)]
     return named, unnamed
+
+
+def roster_path_for(registry_path: str) -> str:
+    """`registry/repos.yml` beside the `registry/skills.yml` this run judges.
+
+    A SIBLING rather than a flag with a default, because the two files are one directory by
+    construction and a flag is a thing a caller can quietly stop passing — which is the exact
+    failure this roster check exists to close, reintroduced one level up.
+    """
+    return os.path.join(os.path.dirname(os.path.abspath(registry_path)), "repos.yml")
+
+
+def roster(registry_path: str) -> tuple[list[str], str]:
+    """(the FS-GG checkout names `registry/repos.yml` rosters, error) — the set that MUST be visible.
+
+    DERIVED, NOT RESTATED (.github#2547). `producers()` above answers "who did we find?", over
+    whatever happens to be under `--repos-root`. Nothing answered "who should we have been able to
+    look at?", so the honest answer was whatever the CI clone loop happened to list — and that loop
+    was a hardcoded `for repo in FS.GG.SDD FS.GG.Rendering FS.GG.Game` in
+    skill-registry-coherence.yml (and, in skill-registry-autofix.yml, the `source:` prefixes of the
+    registry BEING RECONCILED, which is self-referential: a producer with no rows yet is never
+    cloned, so its rows can never be appended).
+
+    FS.GG.Templates shipped a producer manifest declaring six `scope: product` skills and was in
+    neither list. Every arm below then ran, green, over a set that silently excluded it: its
+    manifest was reconciled against nothing and its absence from the catalog was not a finding, it
+    was nothing. That is #289's fail-open — "we validated the CONTENT OF WHAT IS LISTED and never
+    the COMPLETENESS OF THE LIST" — recurring one level up, over the list of PRODUCERS rather than
+    the list of skills.
+
+    The roster this reads is `registry/repos.yml`, the organisation's own repository roster, which
+    has carried `FS-GG/FS.GG.Templates` since long before it became a skill producer. So the check
+    fires on the real cause the day it lands, rather than only on producers somebody remembered to
+    add to a second list here. Non-FS-GG rows (`EHotwagner/S.I.R.`, `role: non-participant`) are
+    excluded: this organisation does not clone them and does not catalog their skills.
+    """
+    path = roster_path_for(registry_path)
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - environment guard
+        return [], "PyYAML is required to read the repository roster"
+    try:
+        with open(path) as handle:
+            doc = yaml.safe_load(handle)
+    except (OSError, ValueError) as exc:
+        return [], f"unreadable repository roster {path}: {exc}"
+    rows = doc.get("repos") if isinstance(doc, dict) else None
+    if not isinstance(rows, list):
+        return [], f"repository roster has no `repos` list: {path}"
+    names = []
+    for row in rows:
+        full = row.get("full") if isinstance(row, dict) else None
+        if isinstance(full, str) and full.startswith("FS-GG/"):
+            names.append(full.split("/", 1)[1])
+    return sorted(set(names)), ""
+
+
+def roster_reachable(registry_path: str, repos_root: str) -> list[dict]:
+    """Every rostered FS-GG repository must be VISIBLE under `--repos-root` (.github#2547).
+
+    Reported under the `declared-completeness` arm, because it is the same question that arm has
+    always asked, asked of the population instead of the members: a repository this gate cannot see
+    is a repository whose producer manifest — if it has one — is reconciled against nothing.
+
+    ABSENCE IS THE FINDING, NOT "no manifest here". The gate cannot tell a non-producer from an
+    unreachable producer without looking, and answering the question by not asking it is precisely
+    how six shipped product skills stayed invisible. A rostered repo that IS present and carries no
+    manifest is silently fine (FS.GG.Governance, FS.GG.Audio and FS.GG.Net are all in that state
+    today) — `producers()` already skips it. Only the ones nobody checked out are reported.
+    """
+    names, error = roster(registry_path)
+    if error:
+        return [
+            {
+                "id": "registry/repos.yml",
+                "check": "declared-completeness",
+                "detail": (
+                    f"{error} — the set of repositories whose producer manifests this gate must be "
+                    "able to see is unknown, so every arm below would run over whatever happened to "
+                    "be checked out"
+                ),
+            }
+        ]
+    findings = []
+    for repo in names:
+        if os.path.isdir(os.path.join(repos_root, repo)):
+            continue
+        findings.append(
+            {
+                "id": repo,
+                "check": "declared-completeness",
+                "detail": (
+                    f"registry/repos.yml rosters {repo} but it is absent from --repos-root "
+                    f"({repos_root}) — if it carries a producer skill-manifest, that manifest is "
+                    "reconciled against NOTHING here and every skill it declares is invisible to "
+                    "this gate (the .github#2547 cause); check it out, or drop it from the roster"
+                ),
+            }
+        )
+    return findings
+
+
+def parameter_vocabulary(registry: dict) -> list[dict]:
+    """Every parameter a `materializes-when` names must be in the registry's `parameters:` list.
+
+    The list is the catalog's declaration of the ONE materialization vocabulary it models, and it
+    was decoration: nothing read it. `registry/skills.yml` declared
+    `[profile, lifecycle, feedback, designSystem]` while FS.GG.Templates' six product-skill
+    predicates are written over `template`, and no gate could say the two disagreed (.github#2547).
+
+    THIS IS NECESSARY AND NOT SUFFICIENT, AND SAYING SO IS THE POINT. Nothing evaluates a predicate
+    against this list — `scripts/skill-union-assert.sh --params` reads a scaffold's
+    `scaffold-provenance.json -> effectiveParameters`, and a parameter that is declared here but
+    absent from that provenance still answers `false` for every scaffold. Declaring it makes the
+    catalog HONEST about the axes it carries; it does not make a predicate ANSWERABLE. The second
+    half is the producer's, and for `template` it is tracked separately — see the `template` entry
+    in the registry's own `parameters:` comment.
+    """
+    findings: list[dict] = []
+    declared = registry.get("parameters")
+    used: dict[str, list[str]] = {}
+    for row in registry.get("skills", []):
+        when = str(row.get("materializes-when", DEFAULT_WHEN))
+        for name in sorted(_relevant_keys(when)):
+            used.setdefault(name, []).append(str(row.get("id")))
+    if not isinstance(declared, list):
+        if not used:
+            return findings
+        return [
+            {
+                "id": "parameters",
+                "check": "parameter-vocabulary",
+                "detail": (
+                    f"the registry declares predicates over {', '.join(sorted(used))} but carries no "
+                    "`parameters:` list — the vocabulary its predicates are written in is undeclared"
+                ),
+            }
+        ]
+    declared_set = {str(p) for p in declared}
+    for name in sorted(used):
+        if name in declared_set:
+            continue
+        rows = ", ".join(sorted(set(used[name]))[:6])
+        findings.append(
+            {
+                "id": name,
+                "check": "parameter-vocabulary",
+                "detail": (
+                    f"`{name}` is referenced by the `materializes-when` of {rows} but is not in the "
+                    f"registry's `parameters:` list ({', '.join(sorted(declared_set))}) — the catalog "
+                    "asserts one materialization vocabulary org-wide while a row evaluates a "
+                    "different one"
+                ),
+            }
+        )
+    return findings
 
 
 def read_manifest(path: str) -> tuple[list[dict] | None, str]:
@@ -776,6 +968,8 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
     findings.extend(predicates(registry["skills"], declarers))
     findings.extend(manifest_findings)
     findings.extend(completeness(registry["skills"], declarers))
+    findings.extend(roster_reachable(registry_path, repos_root))
+    findings.extend(parameter_vocabulary(registry))
     findings.extend(cross_references(registry["skills"], repos_root))
     return findings
 
@@ -1084,6 +1278,16 @@ def main() -> int:
         "--repos-root, or PyYAML.",
     )
     parser.add_argument(
+        "--producers",
+        action="store_true",
+        help="print, one per line, the FS-GG checkout names registry/repos.yml rosters — the set "
+        "`--repos-root` must hold — and exit. THE CLONE LOOPS IN CI READ THIS RATHER THAN LISTING "
+        "REPOS THEMSELVES (.github#2547): a hardcoded loop excluded FS.GG.Templates for as long as "
+        "it had been a skill producer, and the `roster_reachable` arm that now reds on an absent "
+        "one would merely have moved the same list one file over if the loop kept its own copy. "
+        "Pure-stdlib + PyYAML: needs no --repos-root.",
+    )
+    parser.add_argument(
         "--baseline-registry",
         metavar="PATH",
         help="the registry as it stands on the MERGE BASE. Turns the verdict from 'is the world "
@@ -1104,6 +1308,16 @@ def main() -> int:
         if raw is None:
             sys.exit(f"fsgg-skill-registry-check: --digest '{args.digest}' is not a readable file.")
         print(canonical_digest(raw))
+        return 0
+
+    if args.producers:
+        # An UNREADABLE roster is exit 2, never an empty list: a clone loop reading this would
+        # otherwise clone NOTHING and every arm below would run green over an empty world — the
+        # fail-open shape (#266) this seam exists to close.
+        names, error = roster(args.registry)
+        if error:
+            sys.exit(f"fsgg-skill-registry-check: --producers: {error}")
+        print("\n".join(names))
         return 0
 
     if not os.path.isdir(args.repos_root):

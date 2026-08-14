@@ -41,11 +41,36 @@ OWNED="$(sha "$ROOT/Producer.Two/skills/owned/SKILL.md")"
 ACTUAL_STALE="$(sha "$ROOT/Producer.One/skills/stale/SKILL.md")"
 WRONG="deadbeef00000000000000000000000000000000000000000000000000000000"
 
+# THE SIBLING ROSTER EVERY REGISTRY IN $WORK SHARES (.github#2547). `roster_reachable` reads
+# `repos.yml` beside the registry under judgement, and it FAILS CLOSED on a missing or unreadable
+# one — a gate whose expected population is unknown would otherwise run over whatever happened to be
+# checked out, which is the exact defect that arm exists to close. Every registry this fixture builds
+# lives in $WORK, so one file serves them all.
+#
+# IT DELIBERATELY ROSTERS NO `FS-GG/` ROW. `roster_reachable` quantifies over FS-GG repositories
+# only, so an empty FS-GG set makes the arm inert for the forty-odd cases below, whose roots
+# (ROOT/DROOT/SROOT/XROOT) hold different producers and could not all satisfy one roster. The arm's
+# own firing and clearing are proved by cases 65-67, which build a registry + roster + root of their
+# own. Non-FS-GG rows are here rather than an empty `repos:` so this file also pins the FILTER: a
+# roster row that is not `FS-GG/…` must not become an expectation.
+cat > "$WORK/repos.yml" <<'YAML'
+schemaVersion: 1
+repos:
+  - { id: one, full: Fixture/Producer.One, role: framework }
+  - { id: two, full: Fixture/Producer.Two, role: framework }
+YAML
+
 REG="$WORK/skills.yml"
 write_registry() {
   cat > "$REG" <<YAML
 schemaVersion: 1
 updated: "2026-07-08"
+# The vocabulary the cases below actually evaluate: profile throughout, plus name for the
+# quoted-literal predicates of cases 16 and 23. Declared because parameter-vocabulary
+# (.github#2547) is a live arm over EVERY case in this file, not only over the two that name it --
+# omit name here and case 16's --write exits 1 on the undeclared parameter. (No backticks: this
+# heredoc is unquoted, so a backtick would be command substitution.)
+parameters: [profile, name]
 skills:
   - { id: good,    scope: process, owner: producer-one, source: Producer.One/skills/good/SKILL.md,    sha256: $GOOD,  materializes-when: always }
   - { id: stale,   scope: process, owner: producer-one, source: Producer.One/skills/stale/SKILL.md,   sha256: $WRONG, materializes-when: always }
@@ -1004,6 +1029,7 @@ TAIL="$(sha "$ROOT/Producer.One/skills/tail/SKILL.md")"
 cat > "$REG" <<YAML
 schemaVersion: 1
 updated: "2026-07-08"
+parameters: [profile]
 skills:
   - { id: good, scope: process, owner: producer-one, source: Producer.One/skills/good/SKILL.md, sha256: $GOOD, materializes-when: always }
   - { id: sib,  scope: product, owner: producer-two, source: Producer.Two/skills/sib/SKILL.md,  sha256: $SIB,  materializes-when: "profile in [game]" }
@@ -1099,6 +1125,7 @@ DREG="$WORK/driver-skills.yml"
 cat > "$DREG" <<YAML
 schemaVersion: 2
 updated: "2026-07-19"
+parameters: [feedback, lifecycle]
 skills:
   - { id: work-roadmap, scope: driver, owner: .github, source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: $DRIVER, materializes-when: "feedback == true and lifecycle == spec-kit" }
 YAML
@@ -1339,6 +1366,139 @@ grep -q "xref-nonexistent" <<<"$out" \
 # Restore the shared xref fixture to its coherent state for any case added after this one.
 write_xref_registry "always"
 echo "   ok"
+
+# =================================================================================================
+# CASES 65-67 — THE ROSTER ARM AND THE PARAMETER-VOCABULARY ARM (.github#2547).
+#
+# Both close a fail-open that lived one level ABOVE every case so far. Cases 9-13 prove
+# `declared-completeness` reports a manifest-declared skill with no row — over the producers found
+# under `--repos-root`. Nothing asked whether that set was the set it should have been, and the de
+# facto answer was a hardcoded `for repo in FS.GG.SDD FS.GG.Rendering FS.GG.Game` in
+# skill-registry-coherence.yml. FS.GG.Templates shipped a manifest declaring six `scope: product`
+# skills, was in neither clone loop, and so its six absent rows were not a finding — they were
+# nothing, with every arm green throughout.
+#
+# These build their OWN registry + roster + root under $WORK/roster-case, because the shared roster
+# above deliberately rosters no FS-GG row (see its comment).
+# =================================================================================================
+RCASE="$WORK/roster-case"
+mkdir -p "$RCASE" "$RCASE/repos/FS.GG.Present/skills/rostered"
+printf 'rostered body\n' > "$RCASE/repos/FS.GG.Present/skills/rostered/SKILL.md"
+RPRESENT="$(sha "$RCASE/repos/FS.GG.Present/skills/rostered/SKILL.md")"
+mkdir -p "$RCASE/repos/FS.GG.Present/template/skill-manifest"
+cat > "$RCASE/repos/FS.GG.Present/template/skill-manifest/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "rostered", "scope": "product", "sha256": "$RPRESENT", "supplied-by": "skills/rostered/", "materializes-when": "profile in [game]" }
+] }
+JSON
+cat > "$RCASE/skills.yml" <<YAML
+schemaVersion: 3
+updated: "2026-08-14"
+parameters: [profile]
+skills:
+  - { id: rostered, scope: product, owner: fs-gg-present, source: FS.GG.Present/skills/rostered/SKILL.md, sha256: $RPRESENT, materializes-when: "profile in [game]" }
+YAML
+write_roster() {
+  cat > "$RCASE/repos.yml" <<YAML
+schemaVersion: 1
+repos:
+$1
+YAML
+}
+
+echo "== 65. a ROSTERED repo absent from --repos-root is a declared-completeness finding =="
+# Both rows are rostered; only FS.GG.Present is checked out. FS.GG.Absent is the .github#2547 shape:
+# a repository the organisation rosters, that this gate was never pointed at, and whose producer
+# manifest — if it has one — is therefore reconciled against nothing.
+write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: absent,  full: FS-GG/FS.GG.Absent,  role: framework }
+  - { id: outside, full: Someone/Else.Repo,   role: non-participant }'
+out="$(run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" || true)"
+grep -q "\[declared-completeness\] FS.GG.Absent" <<<"$out" \
+  || { echo "FAIL: an unreachable rostered producer was not reported"; echo "$out"; exit 1; }
+grep -q "reconciled against NOTHING" <<<"$out" \
+  || { echo "FAIL: the finding does not say what the absence COSTS"; echo "$out"; exit 1; }
+# The filter is real: a non-FS-GG roster row is not an expectation this organisation can satisfy.
+grep -q "Else.Repo" <<<"$out" && { echo "FAIL: a non-FS-GG roster row became an expectation"; exit 1; }
+run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" >/dev/null 2>&1 \
+  && { echo "FAIL: expected exit 1 while a rostered producer is unreachable"; exit 1; }
+echo "   ok"
+
+echo "== 66. GATE-INVERSION: with every rostered repo reachable the SAME registry is coherent =="
+# The inversion that matters is the arm's own subject, not a mutated assertion: drop the unreachable
+# row from the roster and nothing else changes. A leg that only ever reds proves a constant, and an
+# arm that reds on a satisfied roster would be unshippable — the two failure modes this pins apart.
+write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }'
+run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" >/dev/null \
+  || { echo "FAIL: a fully-reachable roster still reported"; run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" || true; exit 1; }
+# A rostered repo that IS present and carries NO manifest stays silently fine — it is a
+# non-producer, and `producers()` already skips it. Absence is the finding; emptiness is not.
+mkdir -p "$RCASE/repos/FS.GG.Quiet"
+write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: quiet,   full: FS-GG/FS.GG.Quiet,   role: framework }'
+run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" >/dev/null \
+  || { echo "FAIL: a present, manifest-less rostered repo was reported"; exit 1; }
+# ...and an UNREADABLE roster fails closed rather than degrading to "no expectations".
+mv "$RCASE/repos.yml" "$RCASE/repos.yml.bak"
+out="$(run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" || true)"
+grep -q "\[declared-completeness\] registry/repos.yml" <<<"$out" \
+  || { echo "FAIL: a missing roster did not fail closed"; echo "$out"; exit 1; }
+python3 "$TOOL" --registry "$RCASE/skills.yml" --producers >/dev/null 2>&1 \
+  && { echo "FAIL: --producers must exit non-zero on an unreadable roster, never print nothing"; exit 1; }
+mv "$RCASE/repos.yml.bak" "$RCASE/repos.yml"
+# --producers is the ONE spelling both CI clone loops read; it must print exactly the FS-GG rows.
+got="$(python3 "$TOOL" --registry "$RCASE/skills.yml" --producers)"
+[ "$got" = "FS.GG.Present
+FS.GG.Quiet" ] || { echo "FAIL: --producers printed '$got'"; exit 1; }
+echo "   ok"
+
+echo "== 67. a predicate over an UNDECLARED parameter is a parameter-vocabulary finding =="
+# The .github#2547 symptom: the catalog asserted one materialization vocabulary org-wide while a
+# second producer's rows evaluated a disjoint one, and the `parameters:` list — the place that
+# disagreement was visible — was read by nothing.
+sed -i 's|materializes-when: "profile in \[game\]" }|materializes-when: "template in [fable-game]" }|' "$RCASE/skills.yml"
+sed -i 's|"materializes-when": "profile in \[game\]"|"materializes-when": "template in [fable-game]"|' \
+  "$RCASE/repos/FS.GG.Present/template/skill-manifest/skill-manifest.json"
+out="$(run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" || true)"
+grep -q "\[parameter-vocabulary\] template" <<<"$out" \
+  || { echo "FAIL: an undeclared predicate parameter was not reported"; echo "$out"; exit 1; }
+grep -q "\[predicate-matches\]" <<<"$out" \
+  && { echo "FAIL: the row and its manifest agree — only the vocabulary arm may fire"; echo "$out"; exit 1; }
+# GATE-INVERSION: declaring the parameter is what clears it, and nothing else moved.
+sed -i 's|^parameters: \[profile\]$|parameters: [profile, template]|' "$RCASE/skills.yml"
+run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" >/dev/null \
+  || { echo "FAIL: declaring the parameter did not clear the finding"; run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" || true; exit 1; }
+# ...and a registry that declares NO `parameters:` at all while carrying predicates is a finding,
+# not a skip — otherwise deleting the list would delete the check with it.
+sed -i '/^parameters: /d' "$RCASE/skills.yml"
+out="$(run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" || true)"
+grep -q "\[parameter-vocabulary\] parameters" <<<"$out" \
+  || { echo "FAIL: a missing parameters: list did not fail closed"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 68. the REAL registry's roster sibling exists, and both CI clone loops read --producers =="
+REPO_ROOT="$(cd "$HERE/../.." && pwd)" python3 - <<'PY'
+import os, sys
+root = os.environ["REPO_ROOT"]
+# `roster_reachable` binds to `repos.yml` BESIDE `registry/skills.yml` rather than to a flag,
+# precisely so it cannot be quietly stopped being passed. That only holds while the sibling is
+# really there — assert the layout the design depends on.
+assert os.path.isfile(os.path.join(root, "registry", "repos.yml")), \
+    "registry/repos.yml must sit beside registry/skills.yml — roster_reachable reads it as a sibling"
+# THE POINT OF `--producers` IS THAT THE EXPECTED SET HAS ONE SPELLING. A clone loop keeping its own
+# copy would reintroduce .github#2547's cause with an extra file in the way, so assert that neither
+# workflow lists producers itself.
+for wf in ("skill-registry-coherence.yml", "skill-registry-autofix.yml"):
+    text = open(os.path.join(root, ".github", "workflows", wf)).read()
+    body = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
+    assert "fsgg-skill-registry-check --producers" in body, \
+        f"{wf} must derive its producer checkouts from `--producers` (.github#2547)"
+    assert "for repo in FS.GG" not in body, \
+        f"{wf} still hardcodes a producer list — that is the .github#2547 cause"
+    assert "yaml.safe_load(open('registry/skills.yml'))" not in body, \
+        f"{wf} still derives producers from the registry it reconciles — self-referential (.github#2547)"
+print("   ok")
+PY
 
 # =================================================================================================
 # THE TRIGGER SET (.github#1606) — this workflow's OTHER gate must be reachable from its own filter.
