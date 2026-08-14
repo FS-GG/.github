@@ -51,7 +51,11 @@ module LifecycleProjection =
           Difference: Difference }
 
     /// Persisted ordering receipt for lifecycle projections.
-    type Watermark = { ObservedAt: int64; Status: BoardStatus }
+    type Watermark =
+        { ObservedAt: int64
+          Status: BoardStatus
+          /// The scheduling input used for this projection. `None` is a readable legacy v1 receipt.
+          Intent: SchedulingIntent option }
 
     /// Stable, append-only receipt written only after a fresh board verification.
     val watermarkMarker: Watermark -> string

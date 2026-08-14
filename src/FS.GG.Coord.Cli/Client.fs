@@ -3168,9 +3168,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Ok mode -> mode
                     | Error reason -> invalidArg "FSGG_COORD_LIFECYCLE_PROJECTION" reason
 
-                let lifecycleChores, lifecycleWatermarks =
+                let lifecycleChores, lifecycleWatermarks, lifecycleShadowDifferences =
                     lifecycleItems
-                    |> List.fold (fun (chores, watermarks) item ->
+                    |> List.fold (fun (chores, watermarks, differences) item ->
                         // A SETTLED ROW IS SWEPT, NOT READ — and this is `.github#2300` again, arriving
                         // through the projector rather than the route search. `State = Closed` reads as a
                         // narrow condition and is the OPPOSITE of one: a closed row is the only kind this
@@ -3234,7 +3234,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                          LifecycleProjection.tryWatermark issueComments)
 
                         match delivery with
-                        | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
+                        | None -> chores, watermarks, differences // an unreadable fact withholds its write; scheduled reconciliation retries.
                         | Some(delivery, watermark) ->
                             let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                             let pullRequest =
@@ -3249,19 +3249,63 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // M1: migrate the deliberate board/body parks into typed intent, then ALWAYS
                             // compute the old/new pair. The switch selects from that pair; it never skips
                             // shadow evaluation, so rollback remains observable and bounded.
-                            let intent =
+                            let migratedIntent =
                                 LifecycleProjection.migrateIntent observedAt item.Status item.HumanBlock
+                            // A v2 projection watermark carries the intent which produced the active
+                            // column.  Without restoring it here, Backlog -> In review -> idle would read
+                            // the derived In-review column as Auto on pass two and permanently lose the
+                            // deliberate park. Legacy v1 receipts have `Intent=None` and take the bounded
+                            // migration path exactly once.
+                            let intent =
+                                watermark
+                                |> Option.bind (fun receipt -> receipt.Intent)
+                                |> Option.defaultValue migratedIntent
                             let shadow =
                                 LifecycleProjection.shadowAdvance
                                     LifecycleProjection.IntentStatusV1 intent watermark observation
+                            let differences =
+                                match shadow.Difference with
+                                | LifecycleProjection.Same -> differences
+                                | difference -> (item.Ref, difference, shadow.Legacy, shadow.Intended) :: differences
                             match LifecycleProjection.select projectionMode shadow with
                             | LifecycleProjection.Project(destination, timestamp) ->
                                 match Chore.lifecycleProjection item destination with
                                 | Some chore ->
                                     chore :: chores,
-                                    Map.add item.Ref ({ ObservedAt = timestamp; Status = destination }: LifecycleProjection.Watermark) watermarks
-                                | None -> chores, watermarks
-                            | LifecycleProjection.Withheld _ -> chores, watermarks) ([], Map.empty)
+                                    Map.add item.Ref
+                                        ({ ObservedAt = timestamp
+                                           Status = destination
+                                           Intent = Some intent }: LifecycleProjection.Watermark)
+                                        watermarks,
+                                    differences
+                                | None -> chores, watermarks, differences
+                            | LifecycleProjection.Withheld _ -> chores, watermarks, differences) ([], Map.empty, [])
+
+                // Opt-in audit output for historical replay and live shadow observation. It is a
+                // deterministic projection of the already-computed pair: no second reducer run, no
+                // mutation, no timestamp. The default stays silent; setting the path makes discarding a
+                // difference impossible and is the seam the recorded-board replay gate exercises.
+                Environment.GetEnvironmentVariable "FSGG_COORD_LIFECYCLE_SHADOW_REPORT"
+                |> Option.ofObj
+                |> Option.filter (String.IsNullOrWhiteSpace >> not)
+                |> Option.iter (fun path ->
+                    let resultLabel = function
+                        | LifecycleProjection.Project(status, _) -> statusWireName status
+                        | LifecycleProjection.Withheld reason -> $"withheld: %s{reason}"
+                    let rows =
+                        lifecycleShadowDifferences
+                        |> List.sortBy (fun (subject, _, _, _) -> subject.Canonical)
+                        |> List.map (fun (subject, difference, legacy, intended) ->
+                            let classification =
+                                match difference with
+                                | LifecycleProjection.DeliberateParkPreserved _ -> "deliberate-park-preserved"
+                                | LifecycleProjection.Unexpected _ -> "unexpected"
+                                | LifecycleProjection.Same -> "same"
+                            {| classification = classification
+                               intended = resultLabel intended
+                               legacy = resultLabel legacy
+                               subject = subject.Canonical |})
+                    File.WriteAllText(path, JsonSerializer.Serialize(rows, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
 
                 let legacyChores = Chore.derive lifecycleItems
 

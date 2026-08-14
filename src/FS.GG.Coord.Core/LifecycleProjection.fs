@@ -50,13 +50,34 @@ module LifecycleProjection =
     /// The durable portion of a projection receipt.  Callers persist this beside the status write and
     /// feed it back on the next event.  Keeping the water-mark in the typed boundary makes an event that
     /// arrived late a no-op rather than an opportunity to re-derive an older column value.
-    type Watermark = { ObservedAt: int64; Status: BoardStatus }
+    type Watermark =
+        { ObservedAt: int64
+          Status: BoardStatus
+          Intent: SchedulingIntent option }
 
     /// The comment-shaped receipt is deliberately small and append-only.  Project fields can be
     /// deferred and later repaired; this receipt is the durable ordering fact which says which
     /// lifecycle observation was actually verified on the row.
+    let private intentWireName intent =
+        match intent with
+        | Auto -> "auto", 0L, None, "automatic"
+        | Backlog record -> "backlog", record.Revision, None, record.Reason
+        | HumanPark(AwaitingHumanDecision, record) -> "human-decision", record.Revision, None, record.Reason
+        | HumanPark(AwaitingHumanAction, record) -> "human-action", record.Revision, None, record.Reason
+        | Deferred(reason, until, revision) -> "deferred", revision, until, reason
+
     let watermarkMarker watermark =
-        $"<!-- fsgg:lifecycle-watermark v=1 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} -->"
+        match watermark.Intent with
+        | None ->
+            $"<!-- fsgg:lifecycle-watermark v=1 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} -->"
+        | Some intent ->
+            let intentName, revision, until, reason = intentWireName intent
+            let untilText = until |> Option.map string |> Option.defaultValue "none"
+            let reasonText =
+                match Uri.EscapeDataString reason with
+                | "" -> "-"
+                | value -> value
+            $"<!-- fsgg:lifecycle-watermark v=2 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} intent=%s{intentName} revision=%d{revision} until=%s{untilText} reason=%s{reasonText} -->"
 
     // ANCHORED, NOT SUBSTRING (round-1 review repair, .github#2264 PR #2271). `body.IndexOf(marker)`
     // found the sentinel wherever it sat in a comment — including a documentation-style comment that
@@ -72,9 +93,15 @@ module LifecycleProjection =
     // logic. `Writes.lifecycleWatermark` posts nothing but this bare line (`watermarkMarker` above), so a
     // genuine receipt always satisfies a whole-body match; only a quotation can fail it, and a quotation
     // is exactly what must fail it.
-    let private watermarkLine =
+    let private legacyWatermarkLine =
         Regex(
             @"^<!-- fsgg:lifecycle-watermark v=1 observedAt=(?<observedAt>-?[0-9]+) status=(?<status>[A-Za-z ]+) -->$",
+            RegexOptions.Compiled
+        )
+
+    let private intentWatermarkLine =
+        Regex(
+            @"^<!-- fsgg:lifecycle-watermark v=2 observedAt=(?<observedAt>-?[0-9]+) status=(?<status>Backlog|Ready|In progress|Blocked|In review|Done) intent=(?<intent>auto|backlog|human-decision|human-action|deferred) revision=(?<revision>-?[0-9]+) until=(?<until>none|-?[0-9]+) reason=(?<reason>\S+) -->$",
             RegexOptions.Compiled
         )
 
@@ -88,14 +115,47 @@ module LifecycleProjection =
             | "Done" -> Some BoardStatus.Done
             | _ -> None
 
+        let parseIntent (matched: Match) =
+            try
+                match Int64.TryParse matched.Groups.["revision"].Value with
+                | false, _ -> None
+                | true, revision ->
+                    let rawReason = matched.Groups.["reason"].Value
+                    if not (Regex.IsMatch(rawReason, @"^(?:[^%]|%[0-9A-Fa-f]{2})+$")) then None
+                    else
+                        let reason = if rawReason = "-" then "" else Uri.UnescapeDataString rawReason
+                        match matched.Groups.["intent"].Value with
+                        | "auto" -> Some Auto
+                        | "backlog" -> Some(Backlog { Revision = revision; Reason = reason })
+                        | "human-decision" -> Some(HumanPark(AwaitingHumanDecision, { Revision = revision; Reason = reason }))
+                        | "human-action" -> Some(HumanPark(AwaitingHumanAction, { Revision = revision; Reason = reason }))
+                        | "deferred" ->
+                            match matched.Groups.["until"].Value with
+                            | "none" -> Some(Deferred(reason, None, revision))
+                            | value ->
+                                match Int64.TryParse value with
+                                | true, until -> Some(Deferred(reason, Some until, revision))
+                                | _ -> None
+                        | _ -> None
+            with :? UriFormatException -> None
+
         comments
         |> List.choose (fun body ->
-            let matched = watermarkLine.Match(body.Trim())
-            if not matched.Success then None
+            let trimmed = body.Trim()
+            let current = intentWatermarkLine.Match trimmed
+            if current.Success then
+                match Int64.TryParse(current.Groups.["observedAt"].Value), status current.Groups.["status"].Value, parseIntent current with
+                | (true, observedAt), Some value, Some intent ->
+                    Some { ObservedAt = observedAt; Status = value; Intent = Some intent }
+                | _ -> None
             else
-                match Int64.TryParse(matched.Groups.["observedAt"].Value), status matched.Groups.["status"].Value with
-                | (true, observedAt), Some value -> Some { ObservedAt = observedAt; Status = value }
-                | _ -> None)
+                let legacy = legacyWatermarkLine.Match trimmed
+                if not legacy.Success then None
+                else
+                    match Int64.TryParse(legacy.Groups.["observedAt"].Value), status legacy.Groups.["status"].Value with
+                    | (true, observedAt), Some value ->
+                        Some { ObservedAt = observedAt; Status = value; Intent = None }
+                    | _ -> None)
         |> List.sortByDescending (fun receipt -> receipt.ObservedAt)
         |> List.tryHead
 

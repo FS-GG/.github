@@ -1,0 +1,15 @@
+{
+  "active": [],
+  "activeComplete": true,
+  "schema": "fsgg.coord.driver-events/1",
+  "transitions": [
+    {
+      "evidence": "board-status:Backlog",
+      "previous": null,
+      "reason": "no live claim; unclaimed and schedulable",
+      "ref": "FS-GG/FS.GG.SDD#500",
+      "state": "ready"
+    }
+  ],
+  "unreadable": []
+}

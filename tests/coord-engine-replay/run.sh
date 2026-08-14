@@ -98,6 +98,13 @@ else
   export FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT0"
   for cmd in reconcile ready driver-events; do
     out="$(mktemp -p "$TMP_ROOT")"
+    shadow_out=""
+    if [ "$cmd" = reconcile ]; then
+      shadow_out="$(mktemp -p "$TMP_ROOT")"
+      export FSGG_COORD_LIFECYCLE_SHADOW_REPORT="$shadow_out"
+    else
+      unset FSGG_COORD_LIFECYCLE_SHADOW_REPORT
+    fi
     run_command "$cmd" FS.GG.SDD >"$out" 2>"$TMP_ROOT/direct-$cmd.err"
     rc=$?
     expected="$HERE/fixtures/smoke/expected/$cmd.json"
@@ -105,6 +112,17 @@ else
       bad "self-check: \`$cmd\` runs directly against the hermetic board" "rc=$rc: $(cat "$TMP_ROOT/direct-$cmd.err")"
     elif diffmsg="$(python3 "$HERE/compare.py" "$out" "$expected")"; then
       ok "self-check: direct \`$cmd\` matches fixtures/smoke/expected/$cmd.json"
+      if [ "$cmd" = reconcile ]; then
+        shadow_expected="$HERE/fixtures/smoke/expected/reconcile-shadow.json"
+        if [ "${FSGG_UPDATE_SHADOW_EXPECTED:-0}" = 1 ]; then
+          cp "$shadow_out" "$shadow_expected"
+          ok "self-check: refreshed classified intent shadow expectation"
+        elif shadow_diff="$(python3 "$HERE/compare.py" "$shadow_out" "$shadow_expected")"; then
+          ok "self-check: direct \`reconcile\` records classified intent shadow differences"
+        else
+          bad "self-check: direct \`reconcile\` records classified intent shadow differences" "$shadow_diff"
+        fi
+      fi
     else
       bad "self-check: direct \`$cmd\` matches fixtures/smoke/expected/$cmd.json" "$diffmsg"
     fi
@@ -156,6 +174,13 @@ else:
       continue
     fi
     out="$(mktemp -p "$TMP_ROOT")"
+    shadow_out=""
+    if [ "$cmd" = reconcile ]; then
+      shadow_out="$(mktemp -p "$TMP_ROOT")"
+      export FSGG_COORD_LIFECYCLE_SHADOW_REPORT="$shadow_out"
+    else
+      unset FSGG_COORD_LIFECYCLE_SHADOW_REPORT
+    fi
     run_command "$cmd" "$repo" >"$out" 2>"$TMP_ROOT/$name-$cmd.err"
     rc=$?
     is_xfail=0
@@ -175,6 +200,19 @@ else:
         xbad "$name/$cmd"
       else
         ok "$name/$cmd matches its recorded expectation"
+        if [ "$cmd" = reconcile ]; then
+          shadow_expected="$fixture_dir/expected/reconcile-shadow.json"
+          if [ "${FSGG_UPDATE_SHADOW_EXPECTED:-0}" = 1 ]; then
+            cp "$shadow_out" "$shadow_expected"
+            ok "$name/$cmd refreshed its classified intent shadow expectation"
+          elif [ ! -f "$shadow_expected" ]; then
+            bad "$name/$cmd: expected/reconcile-shadow.json is missing"
+          elif shadow_diff="$(python3 "$HERE/compare.py" "$shadow_out" "$shadow_expected")"; then
+            ok "$name/$cmd records its classified intent shadow differences"
+          else
+            bad "$name/$cmd records its classified intent shadow differences" "$shadow_diff"
+          fi
+        fi
       fi
     else
       if [ "$is_xfail" -eq 1 ]; then

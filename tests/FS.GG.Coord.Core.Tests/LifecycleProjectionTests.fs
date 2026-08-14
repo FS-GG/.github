@@ -65,7 +65,7 @@ module LifecycleProjectionTests =
                                        Blockers = { ObservedAt = 3L; Value = observation.Blockers.Value }
                                        Delivery = { ObservedAt = 3L; Value = observation.Delivery.Value }
                                        Issue = { ObservedAt = 3L; Value = observation.Issue.Value } }
-        let receipt : LifecycleProjection.Watermark = { ObservedAt = 3L; Status = InReview }
+        let receipt : LifecycleProjection.Watermark = { ObservedAt = 3L; Status = InReview; Intent = None }
         match LifecycleProjection.advance (Some receipt) observation with
         | LifecycleProjection.Withheld reason -> Assert.Contains("predates", reason)
         | result -> failwithf "expected stale event to be withheld, got %A" result
@@ -73,15 +73,15 @@ module LifecycleProjectionTests =
 
     [<Fact>]
     let ``#2264 equal-time contradictory events are withheld`` () =
-        let receipt : LifecycleProjection.Watermark = { ObservedAt = 1L; Status = InReview }
+        let receipt : LifecycleProjection.Watermark = { ObservedAt = 1L; Status = InReview; Intent = None }
         match LifecycleProjection.advance (Some receipt) observation with
         | LifecycleProjection.Withheld reason -> Assert.Contains("conflicts", reason)
         | result -> failwithf "expected contradictory event to be withheld, got %A" result
 
     [<Fact>]
     let ``#2264 lifecycle watermark is durable and selects the newest valid receipt`` () =
-        let old : LifecycleProjection.Watermark = { ObservedAt = 4L; Status = InProgress }
-        let latest : LifecycleProjection.Watermark = { ObservedAt = 9L; Status = InReview }
+        let old : LifecycleProjection.Watermark = { ObservedAt = 4L; Status = InProgress; Intent = None }
+        let latest : LifecycleProjection.Watermark = { ObservedAt = 9L; Status = InReview; Intent = None }
         let comments = [ "ordinary comment"; LifecycleProjection.watermarkMarker old; "<!-- fsgg:lifecycle-watermark v=1 observedAt=bad status=Done -->"; LifecycleProjection.watermarkMarker latest ]
         Assert.Equal(Some latest, LifecycleProjection.tryWatermark comments)
 
@@ -93,8 +93,8 @@ module LifecycleProjectionTests =
         // all quote prior markers in prose). A quoted marker carrying a large `observedAt` then outranked
         // the real receipt under `List.sortByDescending`, corrupting AC-4's guarantee that an older event
         // can never overwrite a newer observed state.
-        let real : LifecycleProjection.Watermark = { ObservedAt = 9L; Status = InReview }
-        let quotedMarker = LifecycleProjection.watermarkMarker { ObservedAt = 9999999999999L; Status = Done }
+        let real : LifecycleProjection.Watermark = { ObservedAt = 9L; Status = InReview; Intent = None }
+        let quotedMarker = LifecycleProjection.watermarkMarker { ObservedAt = 9999999999999L; Status = Done; Intent = None }
         let quoting =
             $"Repair note: for context, an earlier draft of this comment carried\n`{quotedMarker}`\nbefore it was corrected — ignore it, it was never real."
         let comments = [ "ordinary comment"; LifecycleProjection.watermarkMarker real; quoting ]
@@ -189,7 +189,7 @@ module LifecycleProjectionTests =
         let receipt =
             match projected with
             | LifecycleProjection.Project(status, observedAt) ->
-                Some({ ObservedAt = observedAt; Status = status }: LifecycleProjection.Watermark)
+                Some({ ObservedAt = observedAt; Status = status; Intent = Some intent }: LifecycleProjection.Watermark)
             | other -> failwithf "expected projection, got %A" other
         let second = LifecycleProjection.shadowAdvance LifecycleProjection.IntentStatusV1 intent receipt value
         Assert.Equal(projected, LifecycleProjection.select LifecycleProjection.Intent second)
@@ -201,3 +201,75 @@ module LifecycleProjectionTests =
         match LifecycleProjection.projectionMode (Some "newest") with
         | Error reason -> Assert.Contains("unknown lifecycle projection mode", reason)
         | result -> failwithf "expected invalid switch to fail, got %A" result
+
+    [<Fact>]
+    let ``M1 v2 watermark round-trips attributable Backlog intent while v1 remains readable`` () =
+        let intent =
+            LifecycleProjection.Backlog
+                { Revision = 17L
+                  Reason = "operator park: wait for API/v2" }
+        let receipt : LifecycleProjection.Watermark =
+            { ObservedAt = 21L
+              Status = InReview
+              Intent = Some intent }
+        let marker = LifecycleProjection.watermarkMarker receipt
+        Assert.Contains("v=2", marker)
+        Assert.Equal(Some receipt, LifecycleProjection.tryWatermark [ marker ])
+        let legacy = "<!-- fsgg:lifecycle-watermark v=1 observedAt=20 status=Ready -->"
+        Assert.Equal(
+            Some({ ObservedAt = 20L; Status = Ready; Intent = None }: LifecycleProjection.Watermark),
+            LifecycleProjection.tryWatermark [ legacy ]
+        )
+        let malformed =
+            "<!-- fsgg:lifecycle-watermark v=2 observedAt=22 status=Backlog intent=backlog revision=1 until=none reason=%ZZ -->"
+        Assert.Equal(None, LifecycleProjection.tryWatermark [ malformed ])
+
+    [<Fact>]
+    let ``M1 Backlog intent survives an active projection and returns after activity clears`` () =
+        let intent = LifecycleProjection.migrateIntent 30L Backlog None
+        let pr : LifecycleProjection.PullRequest = { Number = 12; Open = true; ReviewOrCiActive = true }
+        let active =
+            { observation with
+                Claim = { ObservedAt = 30L; Value = None }
+                PullRequest = { ObservedAt = 30L; Value = Some pr }
+                Blockers = { ObservedAt = 30L; Value = [] }
+                Delivery = { ObservedAt = 30L; Value = { Outstanding = false; DoneStamped = false } }
+                Issue = { ObservedAt = 30L; Value = Open } }
+        let first = LifecycleProjection.shadowAdvance LifecycleProjection.IntentStatusV1 intent None active
+        Assert.Equal(
+            LifecycleProjection.Project(InReview, 30L),
+            LifecycleProjection.select LifecycleProjection.Intent first
+        )
+        let receipt : LifecycleProjection.Watermark =
+            { ObservedAt = 30L
+              Status = InReview
+              Intent = Some intent }
+        let restoredIntent = receipt.Intent |> Option.defaultValue LifecycleProjection.Auto
+        let idle =
+            { active with
+                Claim = { ObservedAt = 31L; Value = None }
+                PullRequest = { ObservedAt = 31L; Value = None }
+                Blockers = { ObservedAt = 31L; Value = [] }
+                Delivery = { ObservedAt = 31L; Value = { Outstanding = false; DoneStamped = false } }
+                Issue = { ObservedAt = 31L; Value = Open } }
+        let second = LifecycleProjection.shadowAdvance LifecycleProjection.IntentStatusV1 restoredIntent (Some receipt) idle
+        Assert.Equal(
+            LifecycleProjection.Project(Backlog, 31L),
+            LifecycleProjection.select LifecycleProjection.Intent second
+        )
+
+    [<Fact>]
+    let ``M1 shadow explains a human park overriding active review`` () =
+        let pr : LifecycleProjection.PullRequest = { Number = 12; Open = true; ReviewOrCiActive = true }
+        let active = { observation with PullRequest = fact (Some pr) }
+        let intent =
+            LifecycleProjection.HumanPark(
+                AwaitingHumanDecision,
+                { Revision = 32L
+                  Reason = "human decision required" }
+            )
+        let shadow = LifecycleProjection.shadow LifecycleProjection.IntentStatusV1 intent active
+        Assert.Equal(
+            LifecycleProjection.DeliberateParkPreserved(InReview, Blocked),
+            shadow.Difference
+        )
