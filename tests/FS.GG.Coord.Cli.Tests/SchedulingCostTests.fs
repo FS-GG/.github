@@ -425,14 +425,10 @@ module SchedulingCostTests =
             Assert.Equal(0, comments)
             Assert.Equal(0, routeGraphQlCalls transport n)
 
-        // The schedulable candidate's route WAS read for real (AC3: the gate still consults a receipt
-        // when one could matter): ONE REST `comment-list`, from `Scan.snapshot`'s own unconditional
-        // per-open-row read (needed to build the `inFlight` lock set; out of this item's `Paths:`), and
-        // ONE bounded GraphQL call, from `enrichDeliveryRoutes` via the repair-2 route read. Repair 2
-        // moved the SECOND read from REST to GraphQL; it did not remove it — the candidate whose real
-        // answer matters still gets one.
-        Assert.Equal(1, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
-        Assert.Equal(1, routeGraphQlCalls transport 999)
+        // The schedulable candidate's route is read for real: one marker scan and one complete decision
+        // ledger read. M4 deliberately pays the second REST read so no buried v2 predecessor disappears.
+        Assert.Equal(2, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
+        Assert.Equal(0, routeGraphQlCalls transport 999)
 
     [<Fact>]
     let ``#2300 AC1/AC2: candidates rejected on column, blocker, or human grounds pay at most ONE issue read each, not two`` () =
@@ -465,12 +461,9 @@ module SchedulingCostTests =
             Assert.Equal(1, comments)
             Assert.Equal(0, routeGraphQlCalls transport n)
 
-        // The schedulable candidate still gets its real route read: one REST `comment-list`
-        // (`Scan.snapshot`) and one bounded GraphQL call (`enrichDeliveryRoutes`'s repair-2 route read) —
-        // this item narrows WHO pays the cost and WHICH BUDGET it lands on, not whether the one candidate
-        // that needs an answer gets one.
-        Assert.Equal(1, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
-        Assert.Equal(1, routeGraphQlCalls transport 999)
+        // The schedulable candidate still gets its real route read in addition to the marker scan.
+        Assert.Equal(2, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
+        Assert.Equal(0, routeGraphQlCalls transport 999)
 
     // ---- AC4 (sharpened): growth in comment-thread size does not grow scan cost for a rejected row -----
 
@@ -541,12 +534,11 @@ module SchedulingCostTests =
 
         let code, out, err = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
-        // The real route WAS consulted (one REST `comment-list` from `Scan.snapshot`, one bounded GraphQL
-        // call from `enrichDeliveryRoutes` — same accounting as the schedulable candidate above) even
+        // The real route WAS consulted (one REST marker scan and one complete REST decision-ledger read)
         // though it decided nothing: this is the read AC3 requires, distinct from the reads AC1/AC2
         // remove.
-        Assert.Equal(1, countExact transport "comment-list FS-GG/FS.GG.SDD 42")
-        Assert.Equal(1, routeGraphQlCalls transport 42)
+        Assert.Equal(2, countExact transport "comment-list FS-GG/FS.GG.SDD 42")
+        Assert.Equal(0, routeGraphQlCalls transport 42)
 
         // NEVER CHOSEN, and the refusal names the delivery route as the reason — the fail-closed behaviour
         // is unchanged by this fix. `batch --json` exits 0 on an empty-but-valid result (the same
@@ -557,16 +549,10 @@ module SchedulingCostTests =
         Assert.Contains("FS.GG.SDD#42", err)
         Assert.Contains("delivery-route", err)
 
-    // ---- Repair 2: the route search is bounded by construction, not by a promise --------------------
+    // ---- M4: route authorization reads the complete append-only ledger -----------------------------
 
     [<Fact>]
-    let ``#2300 repair 2: a route search costs the SAME one GraphQL call whether the thread has 1 comment or 251`` () =
-        // "Prove the growth is gone, not the constant" — the sharpened form the host held this repair to.
-        // Construct a candidate whose comment thread crosses at least two of the OLD REST `per_page=100`
-        // pages, and show the bounded read costs no more than a one-comment candidate. The recorded
-        // marker sits as the very LAST of 251 comments — recent, so a "last 100" fetch finds it without
-        // difficulty; the point under test here is the CALL COUNT, not recall (that is repair 2's other
-        // test, below).
+    let ``M4 a complete route ledger finds a recent marker in a 251-comment thread`` () =
         let deepButRecent =
             let marker = currentRouteComment "FS-GG/FS.GG.SDD#600" "Paths: src/item-600.fs"
             let noise = List.init 250 (fun i -> $"unrelated discussion comment %d{i}")
@@ -583,17 +569,13 @@ module SchedulingCostTests =
         Assert.Contains("FS-GG/FS.GG.SDD#600", out)
         Assert.Contains("FS-GG/FS.GG.SDD#999", out)
 
-        // THE PROOF: identical call count, 251 comments or 1. Cost does not scale with thread length.
-        Assert.Equal(1, routeGraphQlCalls transport 600)
-        Assert.Equal(1, routeGraphQlCalls transport 999)
+        Assert.Equal(0, routeGraphQlCalls transport 600)
+        Assert.Equal(0, routeGraphQlCalls transport 999)
+        Assert.Equal(2, countExact transport "comment-list FS-GG/FS.GG.SDD 600")
+        Assert.Equal(2, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
 
     [<Fact>]
-    let ``#2300 repair 2: a receipt older than the window reads as missing, refuses the row, and never falls back to an unbounded scan`` () =
-        // The fail-closed consequence the host asked to be made explicit — proven, not argued. The route
-        // marker here is the FIRST of 251 comments: 151 comments older than the trailing 100-wide window
-        // `Reads.recentCommentBodies` fetches, so the bounded read genuinely cannot see it. A receipt this
-        // is — a real, valid one, just buried — is exactly the case `Client.fs`'s `DeliveryRouteCommentWindow`
-        // doc comment names: it reads as no receipt, and the row is refused rather than guessed at.
+    let ``M4 a buried route receipt remains authoritative through the complete ledger read`` () =
         let buriedMarker =
             let marker = currentRouteComment "FS-GG/FS.GG.SDD#700" "Paths: src/item-700.fs"
             let noise = List.init 250 (fun i -> $"unrelated discussion comment %d{i}")
@@ -603,12 +585,9 @@ module SchedulingCostTests =
 
         let code, out, err = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
-        // REFUSED — the safe direction, exactly AC3's guarantee, now exercised on a receipt that is
-        // genuinely present but outside the window, rather than on one that is absent altogether.
         Assert.Equal(0, code)
-        Assert.Equal("[]", out.Trim())
-        Assert.Contains("FS.GG.SDD#700", err)
-        Assert.Contains("delivery-route", err)
+        Assert.Contains("FS-GG/FS.GG.SDD#700", out)
+        Assert.DoesNotContain("delivery-route", err)
 
         // BOUNDED EVEN ON A MISS: exactly one GraphQL call — never a retry, and never a fallback to the
         // unbounded REST search this repair exists to remove. `gets` is 2, not 1: `readDeliveryRouteVerdict`
@@ -617,7 +596,7 @@ module SchedulingCostTests =
         // — this candidate is NOT locally rejected, so both fire, same as every other schedulable-reaching
         // candidate in this file. `comments` stays 1: the only REST `/comments` call left is
         // `Scan.snapshot`'s `markerScan`.
-        Assert.Equal(1, routeGraphQlCalls transport 700)
+        Assert.Equal(0, routeGraphQlCalls transport 700)
         let gets, comments = readsFor transport 700
         Assert.Equal(2, gets)
-        Assert.Equal(1, comments)
+        Assert.Equal(2, comments)

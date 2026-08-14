@@ -399,6 +399,12 @@ module Client =
     [<Literal>]
     let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
 
+    [<Literal>]
+    let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
+
+    [<Literal>]
+    let private StructuredReviewMarker = "<!-- fsgg:review-decision/v2 -->"
+
     let private hashHex (text: string) =
         text |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -805,49 +811,17 @@ module Client =
                   yield! sddReadinessEvidenceErrors workId (File.ReadAllText readiness) ]
         | _ -> []
 
-    /// .github#2300 repair 2: BOUNDED, not the full thread. All three call sites below —
-    /// `readDeliveryRouteVerdict` (scheduling), `requireCurrentDeliveryRoute` (the claim/take mutation
-    /// boundary), and `deliveryRouteFact` (`delivery-route show`/`record`) — search for the LATEST
-    /// matching marker (`List.rev |> List.tryPick`) and render or act on ONLY that one receipt (`show`
-    /// prints `kind = "current"`, never a history). None of the three ever needed more than the tail of
-    /// the comment thread; the unbounded `Reads.commentBodies` (REST, paginates with the whole thread's
-    /// length — .github#2300's own growth defect) was paying for history none of them read.
-    /// `Reads.commentBodies` has no remaining caller in this file after this change. It is NOT removed:
-    /// deleting a public `Reads.fsi` surface is a separate decision from bounding these three reads, and
-    /// nothing here rules out a future caller that genuinely needs the complete thread.
-    ///
-    /// **THE BUDGET THIS MOVES, NOT ELIMINATES.** `Reads.recentCommentBodies` is a GraphQL call
-    /// (`Budget = GraphQl`), and GraphQL is a SEPARATE 5,000-point-per-hour budget from the REST core
-    /// these reads used to spend. Net effect per candidate that reaches real enrichment: REST cost for
-    /// its route search drops from `1 + ceil(comments/100)` (unbounded) to 0 (the `issueBody` read beside
-    /// it stays REST, unchanged); GraphQL cost rises by exactly 1 bounded call. On a board where REST has
-    /// been the binding constraint all session and GraphQL sits mostly idle, this is very likely a
-    /// straight win — but it is a shift between two meters, and a future reader measuring only REST would
-    /// wrongly conclude the cost vanished rather than moved.
-    ///
-    /// **WHY 100, AND WHAT HAPPENS WHEN A MARKER IS OLDER THAN THAT:**
-    /// - 100 matches the `per_page` this codebase already uses for REST comment pages (`Reads.fs`'s
-    ///   `commentBodies`/`markerScan`) and is GitHub's own conventional connection-page ceiling — not a
-    ///   number invented for this repair.
-    /// - The receipt search only ever wants the MOST RECENT matching marker, and a receipt is re-affirmed
-    ///   whenever the body it binds to changes (or whenever an agent chooses to), so ordinary staleness is
-    ///   self-correcting: a fresh `record` becomes the newest comment and is found on the very next read,
-    ///   bound or not.
-    /// - Measured on the live board this repair was built against (`gh issue view`, single-issue reads,
-    ///   no board scan): the heaviest rows carried 10-11 comments; `.github#2300` itself gathered 4 in
-    ///   roughly 5h17m while sitting `Ready` and unclaimed. Crossing 100 comments on one row between two
-    ///   re-affirmations was not observed anywhere in this session's evidence.
-    /// - IF IT HAPPENS ANYWAY: a receipt more than `DeliveryRouteCommentWindow` comments behind the
-    ///   issue's own recent activity reads as NO RECEIPT — `DeliveryRoute.Unreadable`/`Stale`, which
-    ///   REFUSES scheduling (`AwaitingDeliveryRouteDecision`) rather than guessing one direction or the
-    ///   other. That is safe (never schedules on a receipt this call could not see) but not free: the row
-    ///   becomes unschedulable until someone posts a fresh receipt — a RECOVERABLE stall, not `.github#2298`'s
-    ///   permanent deadlock (there, no actor was ever positioned to satisfy the gate at all; here, any
-    ///   agent who can comment on the issue clears it with one `delivery-route record`).
-    [<Literal>]
-    let private DeliveryRouteCommentWindow = 100
+    /// Structured decisions are append-only ledgers, so every effective read must see revision 1 and
+    /// every predecessor. A bounded tail is unsafe: a buried v2 record could otherwise disappear and
+    /// allow a newer legacy v1 marker to become authoritative. Use the complete, paginated identity read
+    /// for reads and writes; the pagination guard fails closed rather than truncating authorization.
+    let private completeDeliveryRouteComments (ctx: Context) (target: Ref) =
+        Reads.commentBodies ctx.Transport target.Owner target.Repo target.Number
 
-    /// THE LATEST delivery-route receipt in a comment window — the one search, in one place.
+    let private readDeliveryRouteComments (ctx: Context) (target: Ref) =
+        completeDeliveryRouteComments ctx target
+
+    /// THE LATEST legacy delivery-route receipt in the complete comment ledger — one search, in one place.
     ///
     /// It was written out three times (scheduling, the claim/take mutation boundary, and
     /// `delivery-route show`/`record`) and .github#2324 needed a fourth caller in `verifyPaths`. A rule
@@ -871,22 +845,57 @@ module Client =
                 |> Option.map (fun receipt -> receipt, locators)
             else None)
 
+    /// Read every v2 record in comment order. Once a v2 marker exists, malformed/tampered evidence is
+    /// an explicit refusal and can never fall through to the more permissive legacy reader. The v1
+    /// reader remains read-only until M6 after three stable cycles and zero unexplained dual-read drift.
+    let private structuredRouteLedger (subject: string) (comments: string list) =
+        let marked =
+            comments
+            |> List.choose (fun comment ->
+                if comment.StartsWith(StructuredRouteMarker + "\n", StringComparison.Ordinal) then
+                    Some(comment.Substring(StructuredRouteMarker.Length).Trim())
+                else None)
+
+        if List.isEmpty marked then Ok None
+        else
+            let decoded = marked |> List.map DeliveryRouteApplication.decodeStructured
+            let failures = decoded |> List.choose (function Error error -> Some error | Ok _ -> None)
+            if not (List.isEmpty failures) then Error failures
+            else
+                let records = decoded |> List.choose Result.toOption
+                StructuredDecision.validateRouteLedger subject records |> Result.map (fun latest -> Some(records, latest))
+
+    let private routeEvidence
+        (subject: string)
+        (body: string)
+        (comments: string list)
+        : DeliveryRoute.Verdict * SubjectMatch * StructuredDecision.RouteReadClassification =
+        let legacy = latestDeliveryRouteReceipt comments
+        match structuredRouteLedger subject comments with
+        | Error errors -> DeliveryRoute.Stale errors, NoSubjectMatch, StructuredDecision.Divergent
+        | Ok(Some(_, latest)) ->
+            let classification = StructuredDecision.classifyRoute (legacy |> Option.map fst) (Some latest)
+            DeliveryRoute.Current(StructuredDecision.toLegacyReceipt latest), CanonicalSubject, classification
+        | Ok None ->
+            let verdict, subjectMatch = decideDeliveryRouteMatch subject body legacy
+            verdict, subjectMatch, StructuredDecision.classifyRoute (legacy |> Option.map fst) None
+
     /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
     /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
     /// unreadable, rather than collapsing into a missing/lightweight decision.
     let private readDeliveryRouteVerdict (ctx: Context) (target: Ref) =
         match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
-              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
+              readDeliveryRouteComments ctx target with
         | Error error, _
         | _, Error error -> DeliveryRoute.Unreadable [ Errors.explain error ]
-        | Ok body, Ok comments -> decideDeliveryRoute target.Canonical body (latestDeliveryRouteReceipt comments)
+        | Ok body, Ok comments -> routeEvidence target.Canonical body comments |> fun (verdict, _, _) -> verdict
 
     /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
     /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
     /// a malformed/missing route and accidentally lose its back-off contract.
     let private requireCurrentDeliveryRoute (ctx: Context) (target: Ref) =
         match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
-              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
+              readDeliveryRouteComments ctx target with
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->
@@ -895,15 +904,15 @@ module Client =
             // `show` reporting it is not enough if the boundary that ACTS on the row says nothing, so the
             // same note is emitted here, from the one shared spelling. The verdict is untouched: this
             // reports, it does not refuse.
-            match decideDeliveryRouteMatch target.Canonical body (latestDeliveryRouteReceipt comments) with
-            | DeliveryRoute.Current route, subjectMatch ->
+            match routeEvidence target.Canonical body comments with
+            | DeliveryRoute.Current route, subjectMatch, _ ->
                 match subjectMatch with
                 | AdditiveSubject added -> eprint (additiveSubjectNote route.Subject added)
                 | _ -> ()
 
                 Ok route
-            | DeliveryRoute.Stale reasons, _
-            | DeliveryRoute.Unreadable reasons, _ ->
+            | DeliveryRoute.Stale reasons, _, _
+            | DeliveryRoute.Unreadable reasons, _, _ ->
                 Error(Errors.Malformed(target.Canonical, "delivery route is not current: " + String.concat "; " reasons))
 
     let private offlineDeliveryRoute =
@@ -2446,7 +2455,7 @@ module Client =
     ///     scheduler fact, not something one PR read can observe. Both outcomes of this default route to
     ///     `Park` (human/host action) in `Review.classify` either way — the default only changes the
     ///     STATE label (`OrdinaryExhaustion` vs `TerminalHumanPark`), never whether the action is safe.
-    let review (ctx: Context) (opts: Options) : int =
+    let private inspectReview (ctx: Context) (opts: Options) : int =
         match oneArg opts "review: an item ref", worker opts with
         | Error code, _ -> code
         | _, Error code -> code
@@ -2488,7 +2497,7 @@ module Client =
                             let phaseFacts = Driver.reviewPhaseFacts reviewComments
 
                             let binding: Review.Binding =
-                                { ItemRef = target.Short
+                                { ItemRef = target.Canonical
                                   Pr = pr
                                   HeadSha = head
                                   ClaimGeneration = string marker.Id
@@ -2506,6 +2515,118 @@ module Client =
                             ReviewApplication.render opts binding facts
                         | Error error, _, _
                         | _, _, Error error -> fail error
+
+    let private recordReview (ctx: Context) (opts: Options) (rawRef: string) (path: string) : int =
+        match parseRef ctx rawRef, opts.Pr with
+        | Error message, _ -> eprint $"fsgg-coord-engine: review record: %s{message}"; ExitError
+        | _, None -> eprint "fsgg-coord-engine: review record: --pr is required."; ExitError
+        | Ok target, Some pr ->
+            try
+                let raw = File.ReadAllText path
+                match Driver.decodeStructuredReview raw,
+                      Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                | Error reason, _ ->
+                    eprint $"fsgg-coord-engine: review record: only structured v2 drafts may be written: %s{reason}"
+                    ExitError
+                | _, Error error -> fail error
+                | Ok draft, Ok comments ->
+                    let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
+                    let marked =
+                        comments
+                        |> List.choose (fun comment ->
+                            if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
+                                Some(comment, comment.Body.Substring(StructuredReviewMarker.Length).Trim())
+                            else None)
+                    let decoded = marked |> List.map (fun (comment, payload) -> comment, Driver.decodeStructuredReview payload)
+                    let decodeErrors = decoded |> List.choose (fun (_, result) -> match result with Error error -> Some error | Ok _ -> None)
+                    if not (List.isEmpty decodeErrors) then
+                        let detail = String.concat "; " decodeErrors
+                        eprint $"fsgg-coord-engine: review record: existing structured ledger is unreadable: %s{detail}"
+                        ExitError
+                    else
+                        let pairs =
+                            decoded
+                            |> List.choose (fun (comment, result) ->
+                                result |> Result.toOption |> Option.map (fun record -> comment, record))
+                        let existing = pairs |> List.map snd
+                        let existingValidation =
+                            if List.isEmpty existing then Ok []
+                            else StructuredDecision.validateReviewLedger expectedSubject existing
+                        match existingValidation with
+                        | Error errors ->
+                            let detail = String.concat "; " errors
+                            eprint $"fsgg-coord-engine: review record: existing structured ledger is invalid: %s{detail}"
+                            ExitError
+                        | Ok _ when draft.Subject <> expectedSubject ->
+                            eprint $"fsgg-coord-engine: review record: subject must be '%s{expectedSubject}'."
+                            ExitError
+                        | Ok _ ->
+                            let latestInitialUrl =
+                                pairs
+                                |> List.rev
+                                |> List.tryPick (fun (comment, record) ->
+                                    if record.Kind = StructuredDecision.Initial then Some comment.Url else None)
+                            let precedingUrl = pairs |> List.tryLast |> Option.map (fun (comment, _) -> comment.Url)
+                            let backlinkErrors =
+                                match draft.Kind with
+                                | StructuredDecision.Initial ->
+                                    [ if draft.InitialReview.IsSome then yield "initial review records cannot name initialReview"
+                                      if draft.PrecedingReview.IsSome then yield "initial review records cannot name precedingReview" ]
+                                | StructuredDecision.Confirmation
+                                | StructuredDecision.Acceptance ->
+                                    [ if draft.InitialReview <> latestInitialUrl then
+                                          yield "initialReview must equal the actual current generation's initial comment URL"
+                                      if draft.PrecedingReview <> precedingUrl then
+                                          yield "precedingReview must equal the actual immediately preceding structured comment URL" ]
+                            if not (List.isEmpty backlinkErrors) then
+                                let detail = String.concat "; " backlinkErrors
+                                eprint $"fsgg-coord-engine: review record: %s{detail}"
+                                ExitError
+                            else
+                                let previous = existing |> List.tryLast |> Option.map _.Digest
+                                let unsigned =
+                                    { draft with
+                                        Revision = existing.Length + 1
+                                        PreviousDigest = previous
+                                        Digest = "" }
+                                let candidate = { unsigned with Digest = StructuredDecision.reviewDigest unsigned }
+                                match StructuredDecision.validateReviewLedger expectedSubject (existing @ [ candidate ]) with
+                                | Error errors ->
+                                    let detail = String.concat "; " errors
+                                    eprint $"fsgg-coord-engine: review record: %s{detail}"
+                                    ExitError
+                                | Ok _ ->
+                                    let body = StructuredReviewMarker + "\n" + Driver.encodeStructuredReview candidate
+                                    let pendingUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-pending"
+                                    let pendingId = comments |> List.map _.Id |> List.fold max 0L |> (+) 1L
+                                    let projected =
+                                        comments
+                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                    let effectiveValidation =
+                                        if candidate.Kind <> StructuredDecision.Acceptance then Ok None
+                                        else
+                                            Driver.parseEffectiveReviewComments candidate.HeadSha
+                                                (projected @ [ { Id = pendingId; Url = pendingUrl; Body = body } ])
+                                            |> Result.map Some
+                                    match effectiveValidation with
+                                    | Error errors ->
+                                        let detail = String.concat "; " errors
+                                        eprint $"fsgg-coord-engine: review record: resulting accepted chain is invalid: %s{detail}"
+                                        ExitError
+                                    | Ok _ ->
+                                        let prTarget = { target with Number = pr }
+                                        match Writes.postIssueComment ctx.Transport prTarget body with
+                                        | Error error -> fail error
+                                        | Ok commentId ->
+                                            let commentUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
+                                            printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-record-result/v2"; subject = expectedSubject; revision = candidate.Revision; digest = candidate.Digest; commentId = commentId; commentUrl = commentUrl; effectiveChainValidated = (candidate.Kind = StructuredDecision.Acceptance) |})
+                                            ExitGreen
+            with error -> eprint $"fsgg-coord-engine: review record: %s{error.Message}"; ExitError
+
+    let review (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ "record"; rawRef; path ] -> recordReview ctx opts rawRef path
+        | _ -> inspectReview ctx opts
 
     /// THE CHORE OFFER, at whichever of condition 3's safe points the caller is standing on — `AtNext` (the
     /// worker is idle and about to pick up work anyway) or `AfterDone` (the item is stamped and the claim is
@@ -8237,12 +8358,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// BOUND TO THIS ITEM'S OWN RECEIPT, never to `work/`/`readiness/` as roots: another item's package is
     /// ordinary drift, and stays so.
     ///
-    /// FAILS CLOSED, ALWAYS, AND SAYS SO. An unreadable comment window or a receipt that is not `Current`
+    /// FAILS CLOSED, ALWAYS, AND SAYS SO. An unreadable comment ledger or a receipt that is not `Current`
     /// yields the empty list — "I could not ask what this route obliges" and "this route obliges nothing"
     /// are opposite facts (#266) — and the reason goes to stderr rather than being swallowed, for the same
     /// reason `generatedPaths` forwards its child's stderr: a mute fail-closed leaves the right verdict and
-    /// removes the only pointer to its cause. It takes the body the caller ALREADY read, so this costs one
-    /// bounded GraphQL call and no second `issueBody`.
+    /// removes the only pointer to its cause. It takes the body the caller ALREADY read and one complete,
+    /// paginated REST ledger read, with no second `issueBody`.
     let private sddPackageTokens (ctx: Context) (issue: Ref) (body: string) : PathToken list =
         let nothingSubtracted (why: string) =
             eprint
@@ -8250,10 +8371,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
             []
 
-        match Reads.recentCommentBodies ctx.Transport issue.Owner issue.Repo issue.Number DeliveryRouteCommentWindow with
+        match readDeliveryRouteComments ctx issue with
         | Error e -> nothingSubtracted (Errors.explain e)
         | Ok comments ->
-            match decideDeliveryRoute issue.Canonical body (latestDeliveryRouteReceipt comments) with
+            match routeEvidence issue.Canonical body comments |> fun (verdict, _, _) -> verdict with
             // A `lightweight` route reaches here too and answers the empty list from
             // `mandatorySddPaths` — correctly, and SILENTLY: it has no mandatory package, so there is
             // nothing we failed to read and nothing to warn about.
@@ -10273,13 +10394,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
     /// Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
     /// are the append-only receipt ledger: a failure in either direction is not a missing decision.
-    /// `show` renders only the CURRENT (latest-matching) receipt (`kind = "current"`, never a history), so
-    /// it needs exactly the same bounded search `readDeliveryRouteVerdict`/`requireCurrentDeliveryRoute`
-    /// do — the third and last of the three near-identical marker searches this repair unifies onto
-    /// `Reads.recentCommentBodies` (.github#2300 repair 2).
+    /// `show` renders only the current receipt (`kind = "current"`, never a history), but validates the
+    /// complete append-only ledger before selecting it. This is the same fail-closed read used at the
+    /// scheduling and mutation boundaries.
     let private deliveryRouteFact (ctx: Context) (target: Ref) =
         match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
-              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
+              readDeliveryRouteComments ctx target with
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->
@@ -10287,10 +10407,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             // one: `Current` means it already equals whichever candidate (`deliveryRouteRevision` or, for
             // a pre-#2392 receipt, `legacyDeliveryRouteRevision`) `decideDeliveryRoute` matched it
             // against, so printing it back is exact either way and needs no second branch here.
-            match decideDeliveryRouteMatch target.Canonical body (latestDeliveryRouteReceipt comments) with
-            | DeliveryRoute.Current valid, subjectMatch -> Ok(valid, valid.SubjectRevision, subjectMatch)
-            | DeliveryRoute.Stale errors, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
-            | DeliveryRoute.Unreadable errors, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+            match routeEvidence target.Canonical body comments with
+            | DeliveryRoute.Current valid, subjectMatch, classification ->
+                let structuredCurrent =
+                    match structuredRouteLedger target.Canonical comments with
+                    | Ok(Some(_, current)) -> Some current
+                    | _ -> None
+                Ok(valid, valid.SubjectRevision, structuredCurrent, subjectMatch, classification)
+            | DeliveryRoute.Stale errors, _, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+            | DeliveryRoute.Unreadable errors, _, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
 
     /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
     /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
@@ -10303,7 +10428,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Ok ref ->
                 match deliveryRouteFact ctx ref with
                 | Error error -> fail error
-                | Ok(receipt, revision, subjectMatch) ->
+                | Ok(receipt, legacyRevision, structuredCurrent, subjectMatch, classification) ->
                     let route =
                         match receipt.Route with
                         | Some DeliveryRoute.Lightweight -> "lightweight"
@@ -10320,7 +10445,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | AdditiveSubject added -> eprint (additiveSubjectNote receipt.Subject added)
                     | _ -> ()
 
-                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; subjectMatch = subjectMatch.Name; addedSubjectLines = subjectMatch.AddedLines; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                    let revision = structuredCurrent |> Option.map _.Revision
+                    let digest = structuredCurrent |> Option.map _.Digest |> Option.defaultValue legacyRevision
+                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = "current"; subject = receipt.Subject; decisionRevision = legacyRevision; revision = revision; digest = digest; evidenceClassification = StructuredDecision.routeClassificationName classification; subjectMatch = subjectMatch.Name; addedSubjectLines = subjectMatch.AddedLines; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
                     ExitGreen
         | [ "record"; arg; path ] ->
             match target arg with
@@ -10328,17 +10455,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Ok ref ->
                 try
                     let raw = File.ReadAllText path
-                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number, DeliveryRouteApplication.decode raw with
+                    match completeDeliveryRouteComments ctx ref,
+                          DeliveryRouteApplication.decodeStructured raw with
                     | Error error, _ -> fail error
-                    | _, Error reason -> eprint $"fsgg-coord-engine: delivery-route: %s{reason}"; ExitError
-                    | Ok body, Ok receipt ->
-                        let revision = deliveryRouteRevision body
-                        match DeliveryRoute.validate ref.Canonical revision receipt with
+                    | _, Error reason -> eprint $"fsgg-coord-engine: delivery-route: only structured v2 records may be written: %s{reason}"; ExitError
+                    | Ok comments, Ok candidate ->
+                        let existing =
+                            match structuredRouteLedger ref.Canonical comments with
+                            | Ok(Some(records, _)) -> Ok records
+                            | Ok None -> Ok []
+                            | Error errors -> Error errors
+                        match existing |> Result.bind (fun records -> StructuredDecision.validateRouteLedger ref.Canonical (records @ [ candidate ])) with
                         | Error errors ->
                             let detail = String.concat "; " errors
                             eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
                             ExitError
-                        | Ok valid ->
+                        | Ok validRecord ->
+                            let valid = StructuredDecision.toLegacyReceipt validRecord
                             // #2298: an `sdd-required` decision records on the strength of the AGENT'S
                             // explicit, structurally valid receipt alone.  The coordinator authoring it
                             // holds no worktree and cannot produce `work/<id>/spec.md` or the readiness
@@ -10353,15 +10486,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             if not (List.isEmpty sddNotes) then
                                 let detail = String.concat "; " sddNotes
                                 eprint $"fsgg-coord-engine: delivery-route: recording sdd-required ahead of its SDD package (%s{detail}) — the claimed worker owns producing it before touching Paths."
-                            // .github#2583 DEC-003/FR-006: the locator record is DERIVED from the very
-                            // `body` whose `deliveryRouteRevision` this receipt was just validated
-                            // against, so it inherits that proof exactly and asks the author for
-                            // nothing. `raw` stays byte-verbatim between the two markers.
-                            let marker = DeliveryRouteMarker + "\n" + renderSubjectLineLocators body + "\n" + raw.Trim()
+                            let marker = StructuredRouteMarker + "\n" + raw.Trim()
                             match Writes.postIssueComment ctx.Transport ref marker with
                             | Error error -> fail error
                             | Ok commentId ->
-                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "recorded"; subject = valid.Subject; subjectRevision = revision; commentId = commentId; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = "recorded"; subject = valid.Subject; decisionRevision = validRecord.Revision; digest = validRecord.Digest; commentId = commentId; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
                                 ExitGreen
                 with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
         | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError

@@ -46,10 +46,15 @@
     <Compile Include="RegistryPredicateTests.fs" />
     <Compile Include="IntakeTests.fs" />
     <Compile Include="DeliveryRouteTests.fs" />
+    <Compile Include="StructuredDecisionTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="fixtures/structured-decisions/active-migration.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

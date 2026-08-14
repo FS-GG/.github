@@ -1,0 +1,132 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-coordination-churn-redesign-m4-structured-decisions",
+  "milestone": "M4 — structured decisions",
+  "critic": "m4-critic-heron-8c31",
+  "initial_reviewed_commit": "9f259a689485f9e2e66b52ad929fb7e0b091c54f",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 4,
+  "reviewed_commits": [
+    "9f259a689485f9e2e66b52ad929fb7e0b091c54f",
+    "7521234bcebbd96386abedfe990333b1626344a4",
+    "1b370441a977187509c9ebf5c45cc56dc38ff288",
+    "6aa5a4748b40d13e950ca323618f8bea667e6af4",
+    "15a1a48e2bbc3fb803265c521c4996ab4475006a"
+  ],
+  "findings": [
+    {
+      "id": "M4-STRUCTURED-CRIT-001",
+      "severity": "major",
+      "summary": "The append-only route ledger becomes permanently unreadable when its first revision falls outside the existing bounded comment tail.",
+      "evidence": [
+        "Verification: src/FS.GG.Coord.Cli/Client.fs at exact commit 9f259a689485f9e2e66b52ad929fb7e0b091c54f calls Reads.recentCommentBodies with DeliveryRouteCommentWindow = 100 at every route read and write boundary, including lines 917, 927, 10320, and 10376.",
+        "Verification: src/FS.GG.Coord.GitHub/Reads.fs:794-818 documents that recentCommentBodies returns only the oldest-to-newest tail of the last limit comments and that its recovery argument assumes a caller needs only the latest marker and can post a fresh reaffirmation.",
+        "Verification: src/FS.GG.Coord.Core/StructuredDecision.fs:85-96 validates the observed list from expected revision index + 1, requires revision 1 first, and binds every previousDigest to the preceding observed record. A tail beginning at revision 2 therefore cannot validate, and appending another revision cannot restore the missing prefix.",
+        "Verification: tests at exact commit 9f259a689485f9e2e66b52ad929fb7e0b091c54f cover short chains and the migrated writes harness but contain no chain whose first revision has fallen outside the 100-comment production window or a recovery from that state."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at the initial review; the worker accepted a repair requiring a complete/paginated v2 ledger read or a verifiable checkpoint design plus a greater-than-window refusal/recovery test.",
+        "Verification: repair-round-1 commit 7521234bcebbd96386abedfe990333b1626344a4 replaces every effective route read and append boundary with the complete paginated Reads.commentBodies adapter; no Client.fs production call to recentCommentBodies remains.",
+        "Verification: DeliveryRouteCliTests at repair-round-1 exact head exercise a revision-1 record buried behind 100 narrative comments and a wholly buried ledger that remains authoritative and accepts the correctly linked revision 2.",
+        "Verification: the uninterrupted workflow-derived selector recorded in /tmp/m4-selector-final2.log passed all 48 selected suites at repair-round-1 exact head, including DeliveryRouteCliTests."
+      ]
+    },
+    {
+      "id": "M4-STRUCTURED-CRIT-002",
+      "severity": "major",
+      "summary": "Structured-versus-legacy review differences are classified internally but never emitted to an operator or machine consumer.",
+      "evidence": [
+        "Verification: src/FS.GG.Coord.Core/Driver.fs computes LiveReviewComments.EvidenceClassification as legacy-only, structured-only, equivalent, or divergent.",
+        "Verification: `rg -n 'EvidenceClassification|evidenceClassification' src tests` at exact commit 9f259a689485f9e2e66b52ad929fb7e0b091c54f finds production use only in the Driver record declaration and assignment; Review.inspect discards the field, while tests read it directly.",
+        "Verification: src/FS.GG.Coord.Cli/ReviewApplication.fs:305-347 serializes the review verdict without an evidence-classification field, so the live `review --json` boundary cannot emit an equivalent or divergent dual-read result.",
+        "Verification: docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md:169-171 explicitly requires migration to dual-read structured and legacy evidence and emit differences."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at the initial review; the worker accepted a repair to surface the review classification at the live output boundary and add CLI-level equivalent/divergent coverage.",
+        "Verification: repair-round-1 Review.Verdict carries EvidenceClassification into its action key and ReviewApplication emits it in both JSON and text projections, so a changed classification also invalidates a stale action authorization.",
+        "Verification: ReviewApplicationTests at exact repair-round-1 head exercise equivalent and divergent dual-read snapshots through the CLI JSON boundary and pin legacy-only text/JSON output.",
+        "Verification: the uninterrupted workflow-derived selector recorded in /tmp/m4-selector-final2.log passed all 48 selected suites at repair-round-1 exact head, including ReviewApplicationTests."
+      ]
+    },
+    {
+      "id": "M4-STRUCTURED-CRIT-003",
+      "severity": "major",
+      "summary": "The shipped review-authoring contract still directs v1 writes and provides no operational way to construct the required digest-chained v2 records.",
+      "evidence": [
+        "Verification: .agents/skills/pnext-item/SKILL.md:212 at exact commit 9f259a689485f9e2e66b52ad929fb7e0b091c54f still requires the host's exact-SHA fsgg:review-accepted:v1 marker, while the new banner in references/independent-review.md says v1 must not be authored.",
+        "Verification: .agents/skills/pnext-item/references/independent-review.md retains copyable v1 templates and later instructions to post or observe v1 acceptance at lines 52 onward, 515, 591, 705, and 745, creating contradictory operator instructions beneath the banner.",
+        "Verification: docs/coordination/structured-decisions.md lists v2 fields but does not specify the UTF-8 length framing/canonicalization used by StructuredDecision.reviewDigest or provide a complete record template or generator command.",
+        "Verification: `rg -n 'review-decision/v2|StructuredReviewMarker' src` at exact commit 9f259a689485f9e2e66b52ad929fb7e0b091c54f finds only the private review decoder/projection in Driver.fs and the schema constant; no production review serializer or writer exists."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at the initial review; the worker accepted a repair to make source-owned guidance consistently v2, supply an executable structured review authoring boundary, and prove initial, confirmation, acceptance, and legacy-write-refusal behavior end to end.",
+        "Verification: repair-round-1 commit 7521234bcebbd96386abedfe990333b1626344a4 adds `review record`, a canonical encoder, writer guards, source-owned v2 instructions, draft documentation, and v1 write refusal; the guidance contradiction and missing command are repaired.",
+        "Verification: repair-round-1 Client.recordReview discards the actual comment URLs before validating the appended record, so caller-supplied initialReview and precedingReview values are not checked against the ledger comments they claim to bind.",
+        "Verification: tests/coord-engine-e2e/writes.sh supplies fabricated https://fixture/review/initial and https://fixture/review/confirmation links, while tests/coord-engine-e2e/stateful_server.py returns https://fixture.invalid/issues/42#issuecomment-* URLs; all three writes pass without proving Driver.parseReviewComments accepts the resulting chain. The authoring acceptance remains unresolved.",
+        "Verification: repair-round-2 Client.recordReview retains each observed v2 comment identity and refuses a confirmation or acceptance unless initialReview equals the current generation's actual initial URL and precedingReview equals the immediately preceding structured comment URL; the refusal occurs before Writes.postIssueComment.",
+        "Verification: every repair-round-2 acceptance is preflighted through Driver.parseEffectiveReviewComments, which applies generation retirement and then the existing terminal URL/head/critic/verdict parser. A successful writer result reports effectiveChainValidated=true only on that passing path.",
+        "Verification: repair-round-2 writes.sh consumes the actual commentUrl returned by each prior write, proves fabricated backlinks cause a nonzero exit with zero comment-count change, appends and validates both an ordinary repaired generation and a fresh-critic moved-head generation, and refuses v1 input. The suite passed 151 of 151 assertions.",
+        "Verification: the uninterrupted workflow-derived selector in /tmp/m4-selector-repair2.log passed 48 of 48 suites in 843 seconds at exact repair-round-2 head, including Core 875 and CLI 843 tests."
+      ]
+    },
+    {
+      "id": "M4-STRUCTURED-CRIT-004",
+      "severity": "major",
+      "summary": "Receiver-visible Kit guidance changes remain at already-published coherent-set version 0.54.0, so merging this head would make the publication-coherence gates red.",
+      "evidence": [
+        "Verification: on exact commit 9f259a689485f9e2e66b52ad929fb7e0b091c54f, `python3 scripts/check-kit-published-coherence.py --pr-arm --base ea6a9f7f02fdc6449de652c1cc45b0ce3195f1dd` exited 1 and reported that canonical Kit bytes changed while FS.GG.Kit 0.54.0 is already published.",
+        "Verification: the same gate explicitly requires a receiver-visible behavior change to bump the Kit version above 0.54.0 and release the new tag after merge, with the main-only arm proving publication.",
+        "Verification: Directory.Build.props:215 and registry/dependencies.yml:901-902 at exact commit 9f259a689485f9e2e66b52ad929fb7e0b091c54f still record coherent-set source/package version 0.54.0."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at the initial review; the worker accepted the normal coherent-set versioning, merge, release, external feed verification, and recorded-evidence obligation.",
+        "Verification: repair-round-1 advances the coherent source version and generated receiver projections to 0.55.0; `python3 scripts/check-kit-published-coherence.py --pr-arm --base ea6a9f7f02fdc6449de652c1cc45b0ce3195f1dd` exits 0 and reports 0.55.0 ahead of published 0.54.0.",
+        "Verification: registry/dependencies.yml truthfully leaves package-version at 0.54.0 and no 0.55.0 external feed evidence exists before merge; the normal post-merge coherent-set release and external verification remain required before milestone completion.",
+        "Verification: exact repair-round-2 head retains coherent source version 0.55.0 and regenerated Kit/Drivers/publishing projections; the PR-arm publication gate remains green. This resolves the implementation/review gate while leaving the explicitly recorded post-merge release and external-verification obligation for the host before milestone completion.",
+        "Verification: repair-round-3 exact head 6aa5a4748b40d13e950ca323618f8bea667e6af4 changes only registry/CHANGELOG.md relative to the passing critique head and adds the required human 0.55.0 source-intent entry while truthfully retaining package-version 0.54.0 until publication; `python3 scripts/check-registry-changelog.py --changed registry/CHANGELOG.md` and `git diff --check 2ced02a3cb8450d2f1cf4adf5674a1733ea19657..6aa5a4748b40d13e950ca323618f8bea667e6af4` both exit 0.",
+        "Verification: repair-round-4 exact head 15a1a48e2bbc3fb803265c521c4996ab4475006a changes only the two deterministic skill manifests after the round-3 critique commit: pnext-item SKILL/reference and publishing-and-deployment file/tree digests advance to match the already-reviewed 0.55 guidance bytes. `scripts/generate-driver-manifest --check` reports both manifests current and `git diff --check 6aa5a4748b40d13e950ca323618f8bea667e6af4..15a1a48e2bbc3fb803265c521c4996ab4475006a` exits 0."
+      ]
+    },
+    {
+      "id": "M4-STRUCTURED-CRIT-005",
+      "severity": "major",
+      "summary": "The structured v2 ledger cannot represent the documented fresh review chain required after an accepted pull-request head moves.",
+      "evidence": [
+        "Verification: StructuredDecision.validateReviewLedger at repair-round-1 exact commit 7521234bcebbd96386abedfe990333b1626344a4 rejects every initial record after revision 1 and every record after an acceptance record.",
+        "Verification: .agents/skills/pnext-item/references/independent-review.md:553-605 requires retaining the accepted old chain and appending a genuinely fresh full review chain on the same pull request after the accepted head moves; Driver.liveReviewComments retains explicit retirement machinery for that behavior.",
+        "Verification: new-only review authoring means the documented recovery cannot fall back to a second legacy v1 initial. `review record` validates the complete prior ledger and therefore refuses the fresh initial immediately after structured acceptance.",
+        "Verification: `rg -n 'structured|review-decision/v2|StructuredDecision' tests/review-post-acceptance-head-move tests/FS.GG.Coord.Core.Tests/ReviewTests.fs` produced no output at repair-round-1 exact head; existing head-move coverage exercises legacy v1 only."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: unresolved at repair round 1; the ledger model and writer need revision-bound chain generations that preserve accepted history, admit the required fresh critic/initial after a real head move, and are covered through structured retirement and final acceptance.",
+        "Verification: repair-round-2 StructuredDecision.validateReviewLedger admits a new initial only immediately after acceptance and only at a head different from the accepted generation, resets critic and confirmation-round continuity per generation, and retains the global contiguous revision/previousDigest chain.",
+        "Verification: repair-round-2 Core tests construct accepted generation A, append fresh-critic generation B at a moved exact head, verify the old generation is retired and the new effective chain parses, and prove a same-head restart is rejected.",
+        "Verification: repair-round-2 E2E appends both accepted generations through the live v2-only writer using actual returned comment URLs; both acceptance outputs report effectiveChainValidated=true and writes.sh passes 151 of 151 assertions.",
+        "Verification: the uninterrupted workflow-derived selector in /tmp/m4-selector-repair2.log passed all 48 selected suites at exact repair-round-2 head, including review-post-acceptance-head-move and the structured Core/CLI tests."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "15a1a48e2bbc3fb803265c521c4996ab4475006a",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

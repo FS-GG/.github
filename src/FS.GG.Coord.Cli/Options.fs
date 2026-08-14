@@ -302,6 +302,8 @@ DECISION (pure — no board, no network):
                                              park for human action — bound to a freshness token a changed
                                              head invalidates, or a fail-closed no-verdict
   review --snapshot FILE [--json|--text]     inspect a supplied review-protocol snapshot without IO
+  review record REF draft.json --pr N [--json]
+                                             seal and append the next structured v2 review decision
   driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
   driver --events [--cursor FILE] [--json|--text]
                                              derive material transitions and the complete active-item
@@ -1049,10 +1051,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         // ---- PURE DECISION — no board, no network at all (ADR-0034) ------------------------------------
         | Decide -> Reads
-        // .github#2175: `review` (snapshot or live) only ever inspects — unlike `delivery` (moved out of
-        // this section, .github#2488 — see "WRITE UNDER A CONDITION" below) it has no mutating arm at
-        // all, so it is unconditionally `Reads`, beside `DriverCmd`/`CycleCmd`.
-        | ReviewCmd -> Reads
+        // M4 adds `review record`, which posts the next sealed v2 decision. Classified conservatively
+        // like `delivery-route`: the read-only inspect spelling does not make the verb safe on a stale
+        // engine when another argv shape is explicitly an evidence writer.
+        | ReviewCmd -> Writes
         | DriverCmd -> Reads
         | CycleCmd -> Reads
         | LanesView -> Reads

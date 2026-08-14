@@ -180,7 +180,7 @@
 # One space between, spaces added once around the whole, and no pattern for an empty verb can match.
 
 # WRITES, UNCONDITIONALLY — every invocation of these can mutate state the whole fleet shares.
-BOARD_WRITES="add adopt child claim done flush heartbeat intake release room say set-field set-paths take widen"
+BOARD_WRITES="add adopt child claim done flush heartbeat intake release review room say set-field set-paths take widen"
 
 # WRITES ONLY UNDER A CONDITION — and the flat list above CANNOT say that, which is how it got wrong.
 # These are refused all the same, verb-level and fail-closed, and they are held in a set of their own so
@@ -253,7 +253,7 @@ BOARD_WRITES_CONDITIONAL="delivery delivery-route next reap reconcile"
 # ONE LINE, AND NO SUBSTITUTION IN IT — the parity gate lifts these three assignments straight out of this
 # file and refuses any that is not a plain literal, so a `$…`/`$(…)`/continuation spelling would red §3b
 # rather than be evaluated. Long, therefore, on purpose.
-BOARD_READS="batch board body-edits bootstrap budget command-contract cycle decide diff-audit driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap predicate ready review scan verify-paths who whoami"
+BOARD_READS="batch board body-edits bootstrap budget command-contract cycle decide diff-audit driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap predicate ready scan verify-paths who whoami"
 
 # STAT THE .dll, NOT THE APPHOST. `fsgg-coord-engine` is the .NET apphost — a fixed ~78 KB native stub,
 # BYTE-IDENTICAL across every build of every commit. The IL, which is the thing that goes stale, is in

@@ -311,6 +311,7 @@ module ReviewApplication =
                 let payload =
                     {| schema = "fsgg.coord.review/1"
                        verdict = "next"
+                       evidenceClassification = verdict.EvidenceClassification
                        state = stateName verdict.State
                        stateRound = stateRound verdict.State
                        stateReason = stateReason verdict.State
@@ -333,7 +334,8 @@ module ReviewApplication =
                        freshnessToken = verdict.FreshnessToken
                        actionKey = verdict.ActionKey |}
                 printfn "%s" (JsonSerializer.Serialize payload)
-            | Text -> printfn "%s — %s" (stateName verdict.State) (actionName verdict.NextAction)
+            | Text ->
+                printfn "%s — %s — evidence %s" (stateName verdict.State) (actionName verdict.NextAction) verdict.EvidenceClassification
             ExitCode.toInt ExitCode.Green
 
     /// The live path's entrypoint — always `None` for the succession grant; see `renderVerdict`'s doc
