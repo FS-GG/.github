@@ -3144,10 +3144,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // #2264: the board column is a projection, not the source of lifecycle truth.  Gather the
                 // facts again at the reconciliation boundary and send every coherent observation through
                 // the typed projector before handing its one repair to the existing verified write path.
-                // Comments are read for the terminal/review-shaped rows.  Besides delivery evidence they
-                // carry the verified projection watermark.  A Ready row has no prior lifecycle write to
-                // regress, so not reading it keeps the scheduled fallback bounded rather than turning it
-                // into a REST request per dormant board item.
+                // Comments are read for terminal/review rows and Ready rows. Besides delivery evidence
+                // they carry the verified projection watermark. M1 deliberately adds Ready: the bounded
+                // legacy rollback can project an explicit Backlog intent to Ready while persisting that
+                // intent in a v2 watermark. Reading Ready is what lets switching back to intent-v1 restore
+                // the park rather than making rollback destructive. Settled Done remains the only
+                // historical population and is still skipped below; Ready is the small live queue.
                 //
                 // TWO comment threads, not one (round-1 review repair). The watermark and the done receipt
                 // are ISSUE facts — `Writes.lifecycleWatermark`/`Writes.doneReceipt` both post to `ref`,
@@ -3206,7 +3208,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         let settledDone = item.State = Closed && item.Status = Done
 
                         let needsDeliveryRead =
-                            not settledDone && (item.State = Closed || item.Status = InReview)
+                            not settledDone
+                            && (item.State = Closed || item.Status = InReview || item.Status = BoardStatus.Ready)
 
                         let delivery =
                             if not needsDeliveryRead then Some (({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery), None)
