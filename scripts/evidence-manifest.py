@@ -112,15 +112,21 @@ def main() -> int:
             now = timestamp(args.now) if args.now else datetime.now(timezone.utc)
             rows = validate(document, now, args.allow_expired)
             declared = {row["name"]: row for row in document["artifacts"]}
+            supplied: set[str] = set()
             for binding in args.artifact:
                 if "=" not in binding: raise EvidenceError("--artifact must be NAME=PATH")
                 name, raw_path = binding.split("=", 1)
                 if name not in declared: raise EvidenceError(f"artifact binding names undeclared artifact: {name}")
+                if name in supplied: raise EvidenceError(f"duplicate artifact binding: {name}")
+                supplied.add(name)
                 path = Path(raw_path)
                 if not path.is_file(): raise EvidenceError(f"artifact payload does not exist: {path}")
                 actual = digest(path)
                 if actual != declared[name]["sha256"]:
                     raise EvidenceError(f"{name}: payload sha256 mismatch: expected {declared[name]['sha256']}, got {actual}")
+            missing = sorted(set(declared) - supplied)
+            if missing:
+                raise EvidenceError("content verification requires every artifact payload; missing: " + ", ".join(missing))
             print(f"evidence manifest: ok ({len(rows)} artifact(s))")
         return 0
     except (EvidenceError, OSError, json.JSONDecodeError) as error:

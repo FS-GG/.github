@@ -9,9 +9,12 @@ on:
       - "scripts/check-*"
       - "scripts/policy-*"
       - "scripts/policy-runner.py"
+      - "scripts/evidence-manifest.py"
       - "registry/dependencies.yml"
       - "docs/registry/compatibility.md"
       - "tests/projection/**"
+      - "tests/policy-runner/**"
+      - "tests/evidence-manifest/**"
   push:
     branches: [main]
     paths:
@@ -21,9 +24,12 @@ on:
       - "scripts/check-*"
       - "scripts/policy-*"
       - "scripts/policy-runner.py"
+      - "scripts/evidence-manifest.py"
       - "registry/dependencies.yml"
       - "docs/registry/compatibility.md"
       - "tests/projection/**"
+      - "tests/policy-runner/**"
+      - "tests/evidence-manifest/**"
   workflow_dispatch:
 
 permissions:
@@ -41,4 +47,29 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-policy-python
       - name: Discover and exercise every declared policy subject
-        run: python3 scripts/policy-runner.py run all
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/policy
+          python3 scripts/policy-runner.py run all 2>&1 | tee artifacts/policy/policy.log
+      - name: Bind bulky output to source, reproduction, retention, and bytes
+        if: always()
+        run: |
+          set -euo pipefail
+          test -f artifacts/policy/policy.log || printf 'policy runner did not start\n' > artifacts/policy/policy.log
+          created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          expires="$(date -u -d '+90 days' +%Y-%m-%dT%H:%M:%SZ)"
+          python3 scripts/evidence-manifest.py create \
+            --cycle policy-${{ github.run_id }} --source-sha "${{ github.sha }}" \
+            --created-at "$created" --expires-at "$expires" \
+            --reproduce 'python3 scripts/policy-runner.py run all' \
+            --url '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            --name policy-log --file artifacts/policy/policy.log \
+            --output artifacts/policy/evidence-manifest.json
+      - name: Retain content-addressed policy evidence outside Git
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: policy-evidence-${{ github.run_id }}
+          path: artifacts/policy/
+          if-no-files-found: error
+          retention-days: 90

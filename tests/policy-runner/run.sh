@@ -18,3 +18,13 @@ if python3 "$ROOT/scripts/policy-runner.py" list --root "$WORK"; then
   echo 'duplicate policy subject unexpectedly passed' >&2; exit 1
 fi
 echo 'policy runner fixture: ok'
+
+# The consolidated workflow must trigger when any discovered subject implementation or fixture moves.
+workflow="$ROOT/.github/workflows/policy.yml"
+for required in 'policy/**' 'scripts/policy-runner.py' 'scripts/evidence-manifest.py' \
+                'tests/projection/**' 'tests/policy-runner/**' 'tests/evidence-manifest/**'; do
+  [ "$(grep -cF -- "- \"$required\"" "$workflow")" -eq 2 ] || {
+    echo "policy workflow does not cover subject dependency in both triggers: $required" >&2; exit 1
+  }
+done
+echo 'policy trigger coverage: ok'

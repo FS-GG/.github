@@ -18,6 +18,15 @@ create() {
 
 create
 python3 "$ROOT/scripts/evidence-manifest.py" verify "$WORK/manifest.json" --now 2026-08-15T00:00:00Z --artifact "tests=$WORK/result.trx"
+if python3 "$ROOT/scripts/evidence-manifest.py" verify "$WORK/manifest.json" --now 2026-08-15T00:00:00Z; then
+  echo 'schema-only verification unexpectedly passed' >&2; exit 1
+fi
+
+jq '.artifacts += [{name:"logs", sha256:.artifacts[0].sha256, bytes:.artifacts[0].bytes, url:.artifacts[0].url, expires_at:.artifacts[0].expires_at}]' \
+  "$WORK/manifest.json" >"$WORK/two.json"
+if python3 "$ROOT/scripts/evidence-manifest.py" verify "$WORK/two.json" --now 2026-08-15T00:00:00Z --artifact "tests=$WORK/result.trx"; then
+  echo 'partial payload verification unexpectedly passed' >&2; exit 1
+fi
 
 # Integrity is content-addressed: changing the local payload changes the produced digest.
 first="$(jq -r '.artifacts[0].sha256' "$WORK/manifest.json")"
@@ -37,5 +46,5 @@ fi
 if python3 "$ROOT/scripts/evidence-manifest.py" verify "$WORK/manifest.json" --now 2026-11-13T00:00:00Z; then
   echo 'expired artifact unexpectedly passed' >&2; exit 1
 fi
-python3 "$ROOT/scripts/evidence-manifest.py" verify "$WORK/manifest.json" --now 2026-11-13T00:00:00Z --allow-expired
+python3 "$ROOT/scripts/evidence-manifest.py" verify "$WORK/manifest.json" --now 2026-11-13T00:00:00Z --allow-expired --artifact "tests=$WORK/result.trx"
 echo 'evidence manifest fixture: ok'
