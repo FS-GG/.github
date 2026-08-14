@@ -12,10 +12,11 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 1,
+  "repair_rounds": 2,
   "reviewed_commits": [
     "e7d25700f83070780524e996932331d7970811ec",
-    "657e81021c636cfb82dae241b4a7e71fdb29ddd8"
+    "657e81021c636cfb82dae241b4a7e71fdb29ddd8",
+    "3861b4d5e23165ba9e4dba6c4345d76a12d69ea5"
   ],
   "findings": [
     {
@@ -35,10 +36,26 @@
         "Verification: independent `dotnet pack` runs produced FS.GG.Kit.0.56.0.nupkg, FS.GG.Drivers.0.56.0.nupkg, and FS.GG.Coord.Cli.0.56.0.nupkg; nuspec inspection confirmed all three versions and the CLI's current 0.56.0 release narrative.",
         "Verification: `gh pr view 2619 --repo FS-GG/.github --json headRefOid,body,url,state,title,labels,mergeable,statusCheckRollup` after repair reports exact head 657e81021c636cfb82dae241b4a7e71fdb29ddd8, a standalone `architecture-map: unaffected` line, the content-addressed GitHub-first/NuGet-second 0.56.0 post-merge obligation, the 0.55.0-until-verified registry rule, and no false `No package release is owed` claim; the architecture-map check had already completed successfully."
       ]
+    },
+    {
+      "id": "M6-2561-CRIT-002",
+      "severity": "major",
+      "summary": "The 0.56.0 source-version move left three canonical generated release/version projections at 0.55.0, making the projection and semantic skill-quality gates fail.",
+      "evidence": [
+        "Verification: at prior confirmed head 657e81021c636cfb82dae241b4a7e71fdb29ddd8, the generated release-inventory rows in `.agents/skills/publishing-and-deployment/SKILL.md` and `.claude/skills/publishing-and-deployment/SKILL.md` each still recorded coord-engine source version 0.55.0, and the generated `fsgg-versions` row in docs/architecture.md also recorded source 0.55.0, while registry/dependencies.yml declared source 0.56.0.",
+        "Verification: `git diff --name-status 657e81021c636cfb82dae241b4a7e71fdb29ddd8..3861b4d5e23165ba9e4dba6c4345d76a12d69ea5` identifies the two publishing skill mirrors and docs/architecture.md as the generated projection repairs, alongside the previously reviewed critique artifact update."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5 changes only the coord-engine source-version cell from 0.55.0 to 0.56.0 in each of the three generated regions; published/package version and coherent-set identity remain correctly at verified 0.55.0, and no architecture topology prose or edge changes.",
+        "Verification: `bash scripts/generate-projections --check` at 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5 returned `projections: current`; the component-count fixture passed 6/6.",
+        "Verification: `bash tests/skill-quality/run.sh` at 3861b4d5e23165ba9e4dba6c4345d76a12d69ea5 completed successfully, including `skill-quality: OK`, current projections, and all 46 rejection cases.",
+        "Verification: final-head live checks remain green: FS.GG.Coord.GitHub.Tests passed 613/613; coherent-set projects resolve to 0.56.0; release notes measure 4422/35000 characters; typed registry validation reports 0 diagnostics; registry compatibility projection passes; and both feeds still equal retained package-version 0.55.0."
+      ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "657e81021c636cfb82dae241b4a7e71fdb29ddd8",
+    "reviewed_commit": "3861b4d5e23165ba9e4dba6c4345d76a12d69ea5",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
