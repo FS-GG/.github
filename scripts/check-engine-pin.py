@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate .github's canonical engine PIN against the version the org has PUBLISHED (.github#1196, epic #266).
+"""Gate .github's canonical engine PIN against the newest resolvable engine (.github#1196/#2580).
 
 THE SUBJECT OF THIS GATE. `dist/dotnet/.config/dotnet-tools.json` is `.github`'s own canonical
 tool manifest. It is the subject of this gate and is not distributed to receivers: ADR-0068 /
@@ -29,16 +29,18 @@ WHAT IT ASSERTS.
 
     dist/dotnet/.config/dotnet-tools.json  tools['fs.gg.coord.cli'].version
         ==
-    the newest STABLE version of FS.GG.Coord.Cli live on the org feed
+    the newest STABLE version of FS.GG.Coord.Cli live on nuget.org
 
-THE COMPARISON POINT IS THE FEED, NOT THE REGISTRY, AND THAT IS DELIBERATE. Keying on
+THE COMPARISON POINT IS THE READ FEED, NOT THE REGISTRY, AND THAT IS DELIBERATE. Keying on
 `registry.package-version` would look local and PR-cheap, but it is WRONG under publish-before-flip
 (FR-007): the package is live on the feed BEFORE the registry row is flipped, so at release time the
-correct pin is the newly-published version while `package-version` still names the old one. A
+correct pin is the newly-published, publicly resolvable version while `package-version` still names the old one. A
 registry-keyed gate would then red the Renovate pin-bump PR as "AHEAD" — fighting the very mechanism
-that keeps the canonical pin fresh. The feed is the ground truth for the version this manifest names,
-so the pin is measured against it directly. This is exactly `engine-freshness`'s reasoning: the subject
-is MAIN (the pin) plus the FEED, a property no PR diff carries, fixed by merging the Renovate pin
+that keeps the canonical pin fresh. ADR-0039 makes nuget.org the read path used by Renovate and five
+of six receivers, so it is the ground truth for the version this manifest may name. The org feed is
+also read to distinguish a completed release from a partial publish: an org-ahead version is not a
+pin target until nuget.org serves it. This is exactly `engine-freshness`'s reasoning: the subject
+is MAIN (the pin) plus the feeds, a property no PR diff carries, fixed by merging the Renovate pin
 bump — not by editing some unrelated PR. So the live check runs on main, on a schedule, and on
 demand; a PR runs the fixture, whose subject IS the diff. The two gates are duals:
 `engine-freshness` asks "is a release owed?" (source ahead of feed); this asks "is `.github`'s
@@ -46,8 +48,9 @@ canonical pin current?" (pin behind feed).
 
 Two directions, two messages:
 
-  * pin BEHIND feed-newest  -> `.github`'s canonical manifest names a stale engine.
-  * pin AHEAD  of feed-newest -> the canonical manifest names a version the feed does not serve.
+  * pin BEHIND nuget.org-newest -> `.github`'s canonical manifest names a stale engine.
+  * pin AHEAD of nuget.org-newest -> the canonical manifest names an unresolvable version.
+  * org feed ahead of nuget.org -> the release is partial; retain the nuget.org-resolvable pin.
 
 FAILS CLOSED, which is the whole point of epic #266. "Nothing to check" and "checked, and it's fine"
 must not share an exit code. Every one of these is an ERROR, not a skip and never "in sync":
@@ -68,7 +71,7 @@ Usage:  scripts/check-engine-pin.py [--manifest <dotnet-tools.json>]
 and it refuses to run unless FSGG_ENGINE_PIN_FIXTURE_OK=1 — which only tests/engine-pin/ sets. A test
 hook that can silently turn the gate into a no-op is the very defect class above.
 
-Exit 0 = .github's canonical pin is the newest engine the org has published.
+Exit 0 = .github's canonical pin is the newest stable engine resolvable from nuget.org.
 """
 from __future__ import annotations
 
@@ -90,6 +93,7 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     feed_versions,
     is_prerelease,
     newest,
+    nuget_org_versions,
     parse_version,
 )
 
@@ -133,7 +137,7 @@ def read_pin(manifest_path: str) -> str:
     return version
 
 
-def newest_stable(resolve) -> str:
+def newest_stable(resolve, label: str) -> str:
     """The newest STABLE feed version of PACKAGE. Raises GateError on any unreadable/empty feed."""
     live = resolve(PACKAGE)
     # The engine ships no prerelease: release-coord-engine.yml refuses one, because the org's Renovate
@@ -142,7 +146,7 @@ def newest_stable(resolve) -> str:
     stable = [v for v in live if not is_prerelease(v)]
     if not stable:
         raise GateError(
-            f"the feed serves no stable version of {PACKAGE} — only prereleases {sorted(live)}. "
+            f"{label} serves no stable version of {PACKAGE} — only prereleases {sorted(live)}. "
             f"release-coord-engine.yml refuses to publish a prerelease, so the comparison point is "
             f"unknown."
         )
@@ -158,8 +162,13 @@ def main(argv: list[str]) -> int:
         default=MANIFEST,
         help=f"the dist tool manifest carrying the pin (default: {MANIFEST})",
     )
-    ap.add_argument("--fixture", help="read the feed from a JSON file (tests only, never in CI)")
+    ap.add_argument("--fixture", help="read the org feed from a JSON file (tests only, never in CI)")
+    ap.add_argument("--fixture-nuget", help="read nuget.org from a JSON file (tests only; requires --fixture)")
     args = ap.parse_args(argv)
+
+    if args.fixture_nuget and not args.fixture:
+        print("::error::check-engine-pin: --fixture-nuget requires --fixture.", file=sys.stderr)
+        return 1
 
     if args.fixture:
         # A flag that makes the gate report green without reading the feed is precisely the
@@ -173,19 +182,29 @@ def main(argv: list[str]) -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"FIXTURE MODE — reading {args.fixture}, NOT the live feed. Not a freshness signal.")
+        nuget_fixture = args.fixture_nuget or args.fixture
+        print(
+            f"FIXTURE MODE — reading {args.fixture} (org) and {nuget_fixture} (nuget.org), "
+            "NOT the live feeds. Not a freshness signal."
+        )
 
-        def resolve(pkg: str) -> list[str]:
+        def fixture_versions(path: str, pkg: str, label: str) -> list[str]:
             try:
-                table = json.load(open(args.fixture, encoding="utf-8"))
+                table = json.load(open(path, encoding="utf-8"))
             except (OSError, ValueError) as e:
                 raise GateError(f"cannot read fixture: {e}") from e
             if pkg not in table:
-                raise GateError(f"package {pkg!r} is not on the org feed (fixture: absent)")
+                raise GateError(f"package {pkg!r} is not on {label} (fixture: absent)")
             vs = table[pkg]
             if not vs:
-                raise GateError(f"the feed served zero versions for {pkg!r}")
+                raise GateError(f"{label} served zero versions for {pkg!r}")
             return list(vs)
+
+        def resolve_org(pkg: str) -> list[str]:
+            return fixture_versions(args.fixture, pkg, "the org feed")
+
+        def resolve_nuget(pkg: str) -> list[str]:
+            return fixture_versions(nuget_fixture, pkg, "nuget.org")
     else:
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
         if not token:
@@ -197,42 +216,52 @@ def main(argv: list[str]) -> int:
             )
             return 1
 
-        def resolve(pkg: str) -> list[str]:
+        def resolve_org(pkg: str) -> list[str]:
             return feed_versions(pkg, token)
+
+        def resolve_nuget(pkg: str) -> list[str]:
+            return nuget_org_versions(pkg)
 
     try:
         pin = read_pin(args.manifest)
-        published = newest_stable(resolve)
-        want = parse_version(published)
+        org_published = newest_stable(resolve_org, "the org feed")
+        resolvable = newest_stable(resolve_nuget, "nuget.org")
+        want = parse_version(resolvable)
         got = parse_version(pin)
     except GateError as e:
         print(f"::error::check-engine-pin: {e}", file=sys.stderr)
         return 1
 
     if got == want:
+        if parse_version(org_published) != want:
+            print(
+                f"ok: .github's canonical {TOOL_ID} pin remains {pin}, the newest {PACKAGE} "
+                f"resolvable from nuget.org. The org feed is at {org_published}; this is a PARTIAL "
+                f"RELEASE, so the pin must not advance until nuget.org serves the same version."
+            )
+            return 0
         print(
-            f"ok: .github's canonical {TOOL_ID} pin is {pin}, the newest {PACKAGE} live on the "
-            f"{ORG} feed."
+            f"ok: .github's canonical {TOOL_ID} pin is {pin}, the newest {PACKAGE} resolvable "
+            f"from nuget.org; the {ORG} feed agrees."
         )
         return 0
 
     if got < want:
         print(
             f"::error::check-engine-pin: .github's canonical engine pin is BEHIND the published engine — "
-            f"{args.manifest} pins {TOOL_ID} at {pin!r} but the newest {PACKAGE} on the {ORG} feed "
-            f"is {published!r}. This canonical manifest predates {published}. Bump the pin: set {TOOL_ID} to "
-            f"{published!r} in {args.manifest} (this is what the open `renovate/{TOOL_ID}-*` PR "
+            f"{args.manifest} pins {TOOL_ID} at {pin!r} but the newest {PACKAGE} resolvable from "
+            f"nuget.org is {resolvable!r}. This canonical manifest predates {resolvable}. Bump the pin: set {TOOL_ID} to "
+            f"{resolvable!r} in {args.manifest} (this is what the open `renovate/{TOOL_ID}-*` PR "
             f"does; merge it, or bump by hand in the release PR).",
             file=sys.stderr,
         )
         return 1
 
     print(
-        f"::error::check-engine-pin: .github's canonical engine pin is AHEAD of the feed — {args.manifest} "
-        f"pins {TOOL_ID} at {pin!r} but the newest {PACKAGE} on the {ORG} feed is {published!r}. "
-        f"The canonical manifest names a version the feed does not serve. Either publish {pin} "
-        f"(release-coord-engine.yml), or lower the pin to "
-        f"{published!r}.",
+        f"::error::check-engine-pin: .github's canonical engine pin is AHEAD of the read feed — {args.manifest} "
+        f"pins {TOOL_ID} at {pin!r} but the newest {PACKAGE} resolvable from nuget.org is {resolvable!r}. "
+        f"The canonical manifest names a version the declared read path does not serve. Complete "
+        f"the nuget.org publish, or lower the pin to {resolvable!r}.",
         file=sys.stderr,
     )
     return 1

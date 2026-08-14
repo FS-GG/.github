@@ -63,9 +63,9 @@ feed() { # $1 = file, $2... = versions
   printf '{"FS.GG.Coord.Cli": [%s]}' "${vs%,}" > "$f"
 }
 
-run() { # $1 = manifest, $2 = feed json  -> stdout+stderr, exit code in $rc
+run() { # $1 = manifest, $2 = org feed json, $3 = nuget feed json (optional) -> output + rc
   set +e
-  out="$(python3 "$GATE" --manifest "$1" --fixture "$2" 2>&1)"
+  out="$(python3 "$GATE" --manifest "$1" --fixture "$2" --fixture-nuget "${3:-$2}" 2>&1)"
   rc=$?
   set -e
 }
@@ -86,7 +86,7 @@ echo "== check-engine-pin fixture =="
 
 # The visible live-step label is part of the gate's declared subject. Keep it bound to the same
 # canonical-manifest scope as the checker: this pin is not distributed to receivers (#2257).
-if grep -Fqx "      - name: Is .github's canonical engine pin the newest published engine?" "$WORKFLOW" \
+if grep -Fqx "      - name: Is .github's canonical engine pin the newest resolvable engine?" "$WORKFLOW" \
   && ! grep -Fq "fleet's engine pin" "$WORKFLOW"; then
   ok "live workflow label names .github's canonical pin, not the fleet's"
 else
@@ -124,6 +124,21 @@ M="$WORK/m-ahead.json"; manifest "$M" "0.7.0"
 F="$WORK/f-ahead.json"; feed "$F" 0.5.0 0.6.0
 run "$M" "$F"
 must_fail "a pin AHEAD of the feed is RED" "engine pin is AHEAD"
+
+# ---------------------------------------------------------------------------------------------
+# 3b. THE PARTIAL RELEASE CASE (.github#2580): org accepted a version nuget.org did not. ADR-0039
+#     makes nuget.org the read path, so the old resolvable pin remains correct and the gate must not
+#     demand a bump that five receivers cannot restore. Feed-coherence owns the partial-release red.
+# ---------------------------------------------------------------------------------------------
+M="$WORK/m-partial.json"; manifest "$M" "0.6.0"
+ORG_PARTIAL="$WORK/f-org-partial.json"; feed "$ORG_PARTIAL" 0.5.0 0.6.0 0.7.0
+NUGET_PARTIAL="$WORK/f-nuget-partial.json"; feed "$NUGET_PARTIAL" 0.5.0 0.6.0
+run "$M" "$ORG_PARTIAL" "$NUGET_PARTIAL"
+must_pass "an org-ahead partial release retains the newest nuget.org-resolvable pin" "PARTIAL RELEASE"
+
+M="$WORK/m-unsafe-partial.json"; manifest "$M" "0.7.0"
+run "$M" "$ORG_PARTIAL" "$NUGET_PARTIAL"
+must_fail "advancing to the org-only version is AHEAD of the read feed" "AHEAD of the read feed"
 
 # ---------------------------------------------------------------------------------------------
 # 4. A STRAY PRERELEASE on the feed is NOT the comparison point (release-coord-engine ships no
