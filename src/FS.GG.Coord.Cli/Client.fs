@@ -445,12 +445,18 @@ module Client =
     /// real future work (recorded in the host's own follow-up evidence on this item) that would need a
     /// semantic touch-set comparison this fix's declared `Paths:` does not reach; it is out of scope here
     /// by that same declaration, not by oversight.
-    let private deliveryRouteSubject (body: string) : string =
+    /// ONE filter, two shapes (.github#2583). `deliveryRouteSubject` below is this list joined with
+    /// newlines and nothing else, so the hashed subject and the line-wise subject can never disagree
+    /// about which lines the route decision judged — the failure #485 records when one rule acquires a
+    /// second copy. The line-wise shape is what the additive candidate needs: a hash is opaque to
+    /// structure and cannot tell an insertion from a modification, which is the whole of .github#2583.
+    let private deliveryRouteSubjectLines (body: string) : string list =
         Markdown.classify body
         |> List.choose (fun (line, kind) ->
             if kind = Markdown.Text && (volatileDeclarationLine.IsMatch line || String.IsNullOrWhiteSpace line) then None
             else Some line)
-        |> String.concat "\n"
+
+    let private deliveryRouteSubject (body: string) : string = deliveryRouteSubjectLines body |> String.concat "\n"
 
     /// The CURRENT scheme (.github#2392): a hash of the canonical SUBJECT, not the raw body. This is the
     /// only revision `record` will ever accept for a newly authored receipt (see the `record` arm of
@@ -465,6 +471,135 @@ module Client =
     /// recorded — precisely the guarantee that receipt had before this fix (AC5).
     let private legacyDeliveryRouteRevision (body: string) = hashHex body
 
+    // ---- the additive (consolidating-edit) candidate, .github#2583 -------------------------------------
+
+    /// The sibling marker `delivery-route record` writes into the receipt comment, carrying the LOCATORS
+    /// of the subject lines the recorded route decision judged.
+    ///
+    /// It sits BESIDE the receipt JSON rather than inside it (.github#2583 DEC-004) so the agent-authored
+    /// object stays byte-verbatim in the posted comment and `DeliveryRouteApplication.decode` — shared
+    /// with the offline `route validate` path — is not touched. Putting it inside the object would force
+    /// `record` to re-serialize a receipt it did not write, losing that author's formatting and any field
+    /// this version does not know about, purely to store data the author never supplied.
+    [<Literal>]
+    let private SubjectLinesMarkerPrefix = "<!-- fsgg:delivery-route-subject-lines/v1 "
+
+    /// THE LOCATOR, AND IT IS NOT THE SAFETY BOUNDARY — read this before judging its width.
+    ///
+    /// A locator SELECTS which of the current subject's lines correspond to the judged ones. It never
+    /// decides acceptance: `additiveSubjectMatch` re-hashes the located lines with the full, unchanged
+    /// `hashHex` and compares that against the receipt's own `subjectRevision`, which is the same 256-bit
+    /// check .github#2392 already rests on. So a locator collision can only mis-SELECT an alignment,
+    /// which then fails that check — a false NEGATIVE (`Stale`), never a false positive. A false positive
+    /// would require a full SHA-256 collision, which is precisely today's assumption (.github#2583
+    /// DEC-002). 16 hex characters puts the false-negative probability at 2^-64 and keeps the marker near
+    /// 1.2 KB for a 70-line body such as .github#2583's own.
+    let private subjectLineLocator (line: string) = (hashHex line).Substring(0, 16)
+
+    /// Render the locator marker for a body. `record` derives this from the body it has JUST validated the
+    /// receipt's `subjectRevision` against, so it inherits that proof exactly and asks the receipt's author
+    /// for nothing (.github#2583 DEC-003): it is a mechanical function of the body, not a judgement, and an
+    /// author who hand-wrote it could only ever disagree with the body — a failure mode `record` would
+    /// then have to police.
+    let private renderSubjectLineLocators (body: string) =
+        let locators = deliveryRouteSubjectLines body |> List.map subjectLineLocator
+        SubjectLinesMarkerPrefix + String.concat " " locators + " -->"
+
+    /// Split an optional leading locator marker off a receipt comment's payload, returning the locators
+    /// and the REMAINING text to JSON-decode.
+    ///
+    /// FAILS CLOSED, AND SILENCE IS NEVER PERMISSION (.github#2583 FR-007). The marker is consumed only
+    /// when the payload's FIRST line both starts with the prefix and ends with `-->`; anything else —
+    /// a pre-.github#2583 receipt, a truncated marker, a marker a future version writes differently —
+    /// leaves the payload untouched and yields `None`, which disables the additive candidate entirely and
+    /// returns the exact pre-.github#2583 decision. A missing locator record is never read as "nothing was
+    /// judged" (#266).
+    let private splitSubjectLineLocators (payload: string) : string list option * string =
+        let firstLine, rest =
+            match payload.IndexOf '\n' with
+            | -1 -> payload, ""
+            | index -> payload.Substring(0, index), payload.Substring(index + 1)
+
+        let trimmed = firstLine.TrimEnd()
+
+        if trimmed.StartsWith(SubjectLinesMarkerPrefix, StringComparison.Ordinal) && trimmed.EndsWith("-->", StringComparison.Ordinal) then
+            let inner = trimmed.Substring(SubjectLinesMarkerPrefix.Length, trimmed.Length - SubjectLinesMarkerPrefix.Length - 3)
+            Some(inner.Split([| ' ' |], StringSplitOptions.RemoveEmptyEntries) |> List.ofArray), rest
+        else
+            None, payload
+
+    /// THE RULE, stated once and structurally (.github#2583). An edit is ROUTE-NEUTRAL when every subject
+    /// line the receipt judged is still present, in the same relative order, byte-identical — that is,
+    /// when the judged subject survives as an ordered SUBSEQUENCE of the current subject. It is a SCOPE
+    /// CHANGE when any judged line was modified, removed, or reordered.
+    ///
+    /// Equivalently, and this is the form the code actually checks:
+    ///
+    ///     `subjectRevision` equals the canonical revision of a SUBSEQUENCE of the current subject.
+    ///
+    /// Insertion at ANY position qualifies, which is what folding another row's cause into an existing
+    /// `## Root cause` or `## Dedupe` section actually looks like. Append is not privileged; it is merely
+    /// the easiest instance of the rule (AC1 asked for the rule, not a special case for appending). And
+    /// when nothing was inserted the located subsequence is the WHOLE subject, so this degenerates to the
+    /// canonical check exactly — a strict generalisation, not a parallel scheme.
+    ///
+    /// WHY ONE GREEDY LEFTMOST SCAN IS EXACT, with no search. In the no-collision case a locator is a
+    /// full-strength identity of one line, so every line that matches a given locator carries IDENTICAL
+    /// TEXT — and therefore every valid alignment reconstructs byte-identical text. There is nothing a
+    /// search could find that greedy matching misses. When locators DO collide, greedy may reconstruct
+    /// different text, which fails the revision check below: still fail-closed.
+    ///
+    /// THE EDGE THIS CANNOT SEE, recorded rather than hidden (.github#2583 DEC-001). A pure insertion CAN
+    /// redefine scope — `## Also: migrate every downstream repo` inserts perfectly cleanly. Nothing here
+    /// reads intent from prose, and the only alternatives were a semantic rule this engine cannot
+    /// implement or the status quo, which is the defect. What an insertion cannot do is CHANGE any
+    /// statement the decision judged; every one of them is still there, byte-identical, in order. The
+    /// residual is paid for by REPORTING: `delivery-route show` names an additive match and counts the
+    /// inserted lines, so an additive resolution is never indistinguishable from a byte-identical body.
+    ///
+    /// COMMENTS ARE OUTSIDE ALL OF THIS, and always were (.github#2583 AC5, stated here so the next
+    /// reader does not re-derive it from `deliveryRouteSubjectLines`' filter). Only the issue BODY is
+    /// hashed. Transplanting evidence as a comment has never touched a receipt in either direction, and
+    /// still does not. The same goes for the issue TITLE, measured on .github#2555, which stayed
+    /// `kind: current` across a retitle.
+    let private additiveSubjectMatch (recorded: string list) (body: string) (recordedRevision: string) : int option =
+        let current = deliveryRouteSubjectLines body
+
+        let rec align (want: string list) (have: string list) (matched: string list) =
+            match want, have with
+            | [], _ -> Some(List.rev matched)
+            | _ :: _, [] -> None
+            | wanted :: wantRest, line :: haveRest ->
+                if wanted = subjectLineLocator line then align wantRest haveRest (line :: matched)
+                else align want haveRest matched
+
+        match align recorded current [] with
+        // The located lines are taken from the CURRENT body and re-hashed at FULL width. This, not the
+        // locator comparison above, is what accepts or refuses.
+        | Some matched when hashHex (String.concat "\n" matched) = recordedRevision ->
+            Some(List.length current - List.length matched)
+        | Some _
+        | None -> None
+
+    /// How a `Current` verdict was reached — reported, never inferred (.github#2583 FR-004).
+    type private SubjectMatch =
+        | CanonicalSubject
+        | LegacySubject
+        | AdditiveSubject of addedLines: int
+        | NoSubjectMatch
+
+        member this.Name =
+            match this with
+            | CanonicalSubject -> "canonical"
+            | LegacySubject -> "legacy"
+            | AdditiveSubject _ -> "additive"
+            | NoSubjectMatch -> "none"
+
+        member this.AddedLines =
+            match this with
+            | AdditiveSubject added -> added
+            | _ -> 0
+
     /// One `DeliveryRoute.Verdict` from up to two candidate revisions (.github#2392 AC5's migration
     /// bridge): the canonical (post-fix) revision first, and — ONLY when that does not make the receipt
     /// `Current` — the legacy (pre-fix, whole-body) revision. A receipt that is `Current` only under the
@@ -473,13 +608,42 @@ module Client =
     /// canonical scheme, after which future such edits no longer touch it. When NEITHER candidate is
     /// current, the canonical verdict's reasons are reported: canonical is the scheme every future receipt
     /// is authored against, so its explanation is the one worth showing an agent deciding what to do next.
-    let private decideDeliveryRoute (subject: string) (body: string) (receipt: DeliveryRoute.Receipt option) : DeliveryRoute.Verdict =
-        match DeliveryRoute.decide subject (Some(deliveryRouteRevision body)) receipt with
-        | DeliveryRoute.Current _ as current -> current
+    ///
+    /// .github#2583 ADDS A THIRD CANDIDATE — the additive one — and adds it STRICTLY AFTER the two above,
+    /// which is what makes .github#2392 AC5 hold BY CONSTRUCTION rather than by care: both existing arms
+    /// are still reached on byte-identical inputs, so no body/receipt pair that is `Current` today can
+    /// become `Stale`. The third arm only ever converts a would-be `Stale` into `Current`.
+    ///
+    /// It re-decides through `DeliveryRoute.decide` passing the receipt's OWN `SubjectRevision` — the same
+    /// shape the legacy arm already uses, a different candidate revision rather than a bypass — so every
+    /// other `validate` rule (schema, subject, agent, timestamp, route, SDD binding) still runs in full.
+    /// Only the revision comparison is satisfied, and only by the proof `additiveSubjectMatch` has just
+    /// established at full width.
+    let private decideDeliveryRouteMatch
+        (subject: string)
+        (body: string)
+        (receipt: (DeliveryRoute.Receipt * string list option) option)
+        : DeliveryRoute.Verdict * SubjectMatch =
+        let bare = receipt |> Option.map fst
+
+        match DeliveryRoute.decide subject (Some(deliveryRouteRevision body)) bare with
+        | DeliveryRoute.Current _ as current -> current, CanonicalSubject
         | canonicalVerdict ->
-            match DeliveryRoute.decide subject (Some(legacyDeliveryRouteRevision body)) receipt with
-            | DeliveryRoute.Current _ as current -> current
-            | _ -> canonicalVerdict
+            match DeliveryRoute.decide subject (Some(legacyDeliveryRouteRevision body)) bare with
+            | DeliveryRoute.Current _ as current -> current, LegacySubject
+            | _ ->
+                match receipt with
+                | Some(candidate, Some locators) ->
+                    match additiveSubjectMatch locators body candidate.SubjectRevision with
+                    | Some added ->
+                        match DeliveryRoute.decide subject (Some candidate.SubjectRevision) bare with
+                        | DeliveryRoute.Current _ as current -> current, AdditiveSubject added
+                        | _ -> canonicalVerdict, NoSubjectMatch
+                    | None -> canonicalVerdict, NoSubjectMatch
+                | _ -> canonicalVerdict, NoSubjectMatch
+
+    let private decideDeliveryRoute (subject: string) (body: string) (receipt: (DeliveryRoute.Receipt * string list option) option) : DeliveryRoute.Verdict =
+        decideDeliveryRouteMatch subject body receipt |> fst
 
     /// Static receipt validation proves that an SDD route says which work package it governs.  Whether
     /// that package's files currently exist and are `implementationReady` is a SEPARATE, ADVISORY fact
@@ -582,12 +746,20 @@ module Client =
     /// collapsed here first. Every caller still owns what it does with `None` — the three existing ones
     /// deliberately differ (`Unreadable`/`Stale` vs. a raw IO error), and that judgement is theirs, not
     /// this function's.
-    let private latestDeliveryRouteReceipt (comments: string list) : DeliveryRoute.Receipt option =
+    ///
+    /// .github#2583: the receipt now comes back paired with the OPTIONAL locator record that `record`
+    /// wrote beside it. `None` — a pre-.github#2583 receipt, or a malformed marker — is the pre-#2583
+    /// decision exactly, because the additive candidate is simply not consulted without one.
+    let private latestDeliveryRouteReceipt (comments: string list) : (DeliveryRoute.Receipt * string list option) option =
         comments
         |> List.rev
         |> List.tryPick (fun comment ->
             if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
-                DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
+                let locators, payload = splitSubjectLineLocators (comment.Substring(DeliveryRouteMarker.Length).Trim())
+
+                DeliveryRouteApplication.decode (payload.Trim())
+                |> Result.toOption
+                |> Option.map (fun receipt -> receipt, locators)
             else None)
 
     /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
@@ -9897,10 +10069,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             // one: `Current` means it already equals whichever candidate (`deliveryRouteRevision` or, for
             // a pre-#2392 receipt, `legacyDeliveryRouteRevision`) `decideDeliveryRoute` matched it
             // against, so printing it back is exact either way and needs no second branch here.
-            match decideDeliveryRoute target.Canonical body (latestDeliveryRouteReceipt comments) with
-            | DeliveryRoute.Current valid -> Ok(valid, valid.SubjectRevision)
-            | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
-            | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+            match decideDeliveryRouteMatch target.Canonical body (latestDeliveryRouteReceipt comments) with
+            | DeliveryRoute.Current valid, subjectMatch -> Ok(valid, valid.SubjectRevision, subjectMatch)
+            | DeliveryRoute.Stale errors, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+            | DeliveryRoute.Unreadable errors, _ -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
 
     /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
     /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
@@ -9913,7 +10085,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Ok ref ->
                 match deliveryRouteFact ctx ref with
                 | Error error -> fail error
-                | Ok(receipt, revision) ->
+                | Ok(receipt, revision, subjectMatch) ->
                     let route =
                         match receipt.Route with
                         | Some DeliveryRoute.Lightweight -> "lightweight"
@@ -9923,7 +10095,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // claimed worker is the actor who completes it, and this command must stay readable
                     // (and postable, below) before that worker exists.
                     let sddNotes = sddEvidenceErrors receipt
-                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                    // .github#2583 FR-004: an additive resolution is REPORTED, never silently
+                    // indistinguishable from a byte-identical body. The structural rule cannot read
+                    // intent, and an insertion can redefine scope; this line is what that costs.
+                    match subjectMatch with
+                    | AdditiveSubject added ->
+                        eprint
+                            $"fsgg-coord-engine: delivery-route: %s{receipt.Subject}'s body has %d{added} subject line(s) added since this route was decided; every judged line is unchanged and in order, so the receipt stands. Re-record it if the addition changed the work's scope."
+                    | _ -> ()
+
+                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; subjectMatch = subjectMatch.Name; addedSubjectLines = subjectMatch.AddedLines; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
                     ExitGreen
         | [ "record"; arg; path ] ->
             match target arg with
@@ -9956,7 +10137,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             if not (List.isEmpty sddNotes) then
                                 let detail = String.concat "; " sddNotes
                                 eprint $"fsgg-coord-engine: delivery-route: recording sdd-required ahead of its SDD package (%s{detail}) — the claimed worker owns producing it before touching Paths."
-                            let marker = DeliveryRouteMarker + "\n" + raw.Trim()
+                            // .github#2583 DEC-003/FR-006: the locator record is DERIVED from the very
+                            // `body` whose `deliveryRouteRevision` this receipt was just validated
+                            // against, so it inherits that proof exactly and asks the author for
+                            // nothing. `raw` stays byte-verbatim between the two markers.
+                            let marker = DeliveryRouteMarker + "\n" + renderSubjectLineLocators body + "\n" + raw.Trim()
                             match Writes.postIssueComment ctx.Transport ref marker with
                             | Error error -> fail error
                             | Ok commentId ->
