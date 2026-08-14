@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "f772d553f6248280e45e0f289bc5d857f8b8c0741aa19086b1357cd466396c1b"
+        "value": "4075a98a97e9f58dcbb59a6c68bd0122a4d14c6cba6faa5fb152899f12d5e3a6"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "cdb8ab0195145a33d08287119c335b659a30ba7418cd937989feff92dfeb4570"
+        "value": "8ba9d7a80583c117223e5dde2bcf92ed447a8b99199249876b334579520a8ff7"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "7ee95e9bc303cd0e2bae8ea6f40a050ddb95d578368921be16f2fcfa7c58852b"
+        "value": "8310e1a0f0d4fd46bee10b27352a3d7c3711f39c0ccd6e9da59c0d63238ed90e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "484eea46940c6b83a15023401608014284f68d415671a69ff36c9669eccac6fb"
+        "value": "5f5ffad626b5a71ed422ba741b34db2258500d02e06eb9ac89e4463b5ce95046"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "5a28bf1fd9567546d29ae6d945ba1f6bc07609714599dc1361866b68024ccbb4"
+        "value": "ea2e9342fa33c5a20189cad7e41d15cdd5059ca3afa0704861fc422b82f5f94d"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "744e947513204e0b55530188b295629f5d1eb03c1bc0268fc6580f21e3637444"
+        "value": "c0ee6c5239812bca956783c5e6021acc69a9c453482ff5ea1e1c093471fdd45c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -609,6 +609,7 @@
       ],
       "affectedSourceIds": [
         "PC-001",
+        "PC-002",
         "PM-001"
       ],
       "severity": "ready",
@@ -1117,24 +1118,10 @@
       "path": "readiness/2563-cross-language-indent-limit/work-model.json",
       "kind": "workModel",
       "currency": "current",
-      "diagnosticIds": [
-        "staleGeneratedView"
-      ]
+      "diagnosticIds": []
     }
   ],
-  "findings": [
-    {
-      "id": "VF001",
-      "severity": "warning",
-      "category": "warning",
-      "path": "readiness/2563-cross-language-indent-limit/work-model.json",
-      "relatedIds": [
-        "readiness/2563-cross-language-indent-limit/work-model.json"
-      ],
-      "message": "Generated view \u0027readiness/2563-cross-language-indent-limit/work-model.json\u0027 is stale.",
-      "correction": "Regenerate readiness/\u003Cid\u003E/work-model.json from current lifecycle sources."
-    }
-  ],
+  "findings": [],
   "governanceCompatibility": [
     {
       "path": ".fsgg/policy.yml",
@@ -1158,18 +1145,7 @@
       "diagnosticIds": []
     }
   ],
-  "diagnostics": [
-    {
-      "id": "staleGeneratedView",
-      "severity": "warning",
-      "artifact": "readiness/2563-cross-language-indent-limit/work-model.json",
-      "message": "Generated view \u0027readiness/2563-cross-language-indent-limit/work-model.json\u0027 is stale.",
-      "correction": "Regenerate readiness/\u003Cid\u003E/work-model.json from current lifecycle sources.",
-      "relatedIds": [
-        "readiness/2563-cross-language-indent-limit/work-model.json"
-      ]
-    }
-  ],
+  "diagnostics": [],
   "readiness": "verificationReady",
   "nextAction": {
     "actionId": "verify.next.ship",

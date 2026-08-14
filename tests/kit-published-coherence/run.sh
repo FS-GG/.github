@@ -1423,10 +1423,16 @@ must_pass 'the no-obligations assertion is not parsed as an obligation' "carry n
 # the legs would have agreed with them the whole way.
 #
 # `tests/delivery-leading-line/corpus.json` is where that boundary is now STATED, once. This arm and
-# the F# suite both grade against it and neither keeps private legs for the declaration form, so a
-# coordinated edit has nowhere left to hide: move the limit in `check-kit-published-coherence.py` and
-# these legs red against the corpus; edit the corpus to restore them and
-# `DeliveryApplicationTests.fs` reds instead.
+# the F# suite both grade against it and neither keeps a private leg asserting a SINGLE COMMENT BODY's
+# declares/inert verdict, so a coordinated edit has nowhere left to hide: move the limit in
+# `check-kit-published-coherence.py` and these legs red against the corpus; edit the corpus to restore
+# them and `DeliveryApplicationTests.fs` reds instead.
+#
+# The F# suite DOES retain four `#2544` legs with four-space declaration-form bodies
+# (`DeliveryApplicationTests.fs:304`/`:307`/`:318`/`:492`) that the corpus cannot subsume — two are
+# multi-comment scenarios, one of them turning on a `fsgg:delivery-receipt` marker this arm never
+# parses, and one asserts the engine's diagnostic wording, which this arm does not emit. They make that
+# side stricter, never more permissive, and they red alongside the corpus under the same mutation.
 #
 # These legs drive `--obligation-arm`, i.e. the REAL entry point `obligation_declarations`, not
 # `_leading_line` in isolation — the pre-filter is the half `#2544` was actually filed about, and a
@@ -2006,11 +2012,15 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # + 21 corpus legs, one per entry of tests/delivery-leading-line/corpus.json, driven through the real
 #   `--obligation-arm` entry point. That file is the ONE statement of the leading-line boundary and
 #   `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` grades the engine against the same
-#   verdicts, so neither language keeps private legs for the declaration form any more — which is what
-#   makes a COORDINATED one-sided edit (one constant plus that language's own legs) impossible to hide.
-# + 4 non-vacuity legs for that corpus: its stated entry count, both verdict classes present, the
-#   two shapes either side of the limit still present AND still disagreeing, and every entry READ also
-#   EXECUTED. A shared corpus either side could consume zero entries of would be
+#   verdicts, so neither language keeps a private leg asserting a SINGLE COMMENT BODY's declares/inert
+#   verdict — which is what makes a COORDINATED one-sided edit (one constant plus that language's own
+#   legs) impossible to hide. Four `#2544` engine-only legs with four-space declaration-form bodies do
+#   remain in the F# suite; the corpus cannot subsume them (multi-comment scenarios and diagnostic
+#   wording), they make that side stricter, and they red alongside the corpus under the same mutation.
+# + 4 non-vacuity legs for that corpus: its stated entry count, both verdict classes present, the two
+#   shapes either side of the limit still PRESENT (presence only — NOT that they disagree; a limit
+#   legitimately moved in both languages leaves them agreeing, and see the note above the leg itself),
+#   and every entry READ also EXECUTED. A shared corpus either side could consume zero entries of would be
 #   a second way to be green while wrong, not a coupling.
 # The arithmetic, so it can be checked rather than trusted: 163 was 107 + 50 obligation-arm legs + 3
 # leading-line legs + 3 indent-limit legs. Seven of those are retired here — the 3 leading-line legs

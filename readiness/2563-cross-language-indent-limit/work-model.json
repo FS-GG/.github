@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "7ee95e9bc303cd0e2bae8ea6f40a050ddb95d578368921be16f2fcfa7c58852b"
+        "value": "8310e1a0f0d4fd46bee10b27352a3d7c3711f39c0ccd6e9da59c0d63238ed90e"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "484eea46940c6b83a15023401608014284f68d415671a69ff36c9669eccac6fb"
+        "value": "5f5ffad626b5a71ed422ba741b34db2258500d02e06eb9ac89e4463b5ce95046"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "5a28bf1fd9567546d29ae6d945ba1f6bc07609714599dc1361866b68024ccbb4"
+        "value": "ea2e9342fa33c5a20189cad7e41d15cdd5059ca3afa0704861fc422b82f5f94d"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "744e947513204e0b55530188b295629f5d1eb03c1bc0268fc6580f21e3637444"
+        "value": "c0ee6c5239812bca956783c5e6021acc69a9c453482ff5ea1e1c093471fdd45c"
       }
     }
   ],
@@ -303,7 +303,7 @@
       "acceptanceRefs": [],
       "source": "work/2563-cross-language-indent-limit/clarifications.md",
       "sourceLocation": {
-        "line": 66,
+        "line": 86,
         "column": 1
       },
       "linkedTaskIds": [
@@ -881,6 +881,7 @@
       "decisions": [],
       "sourceIds": [
         "PC-001",
+        "PC-002",
         "PM-001"
       ],
       "requiredSkills": [
@@ -1533,7 +1534,7 @@
           "path": "work/2563-cross-language-indent-limit/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "7ee95e9bc303cd0e2bae8ea6f40a050ddb95d578368921be16f2fcfa7c58852b"
+            "value": "8310e1a0f0d4fd46bee10b27352a3d7c3711f39c0ccd6e9da59c0d63238ed90e"
           },
           "schemaVersion": 1
         },
@@ -1541,7 +1542,7 @@
           "path": "work/2563-cross-language-indent-limit/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "484eea46940c6b83a15023401608014284f68d415671a69ff36c9669eccac6fb"
+            "value": "5f5ffad626b5a71ed422ba741b34db2258500d02e06eb9ac89e4463b5ce95046"
           },
           "schemaVersion": 1
         },
@@ -1549,7 +1550,7 @@
           "path": "work/2563-cross-language-indent-limit/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "5a28bf1fd9567546d29ae6d945ba1f6bc07609714599dc1361866b68024ccbb4"
+            "value": "ea2e9342fa33c5a20189cad7e41d15cdd5059ca3afa0704861fc422b82f5f94d"
           },
           "schemaVersion": 1
         },
@@ -1565,14 +1566,14 @@
           "path": "work/2563-cross-language-indent-limit/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "744e947513204e0b55530188b295629f5d1eb03c1bc0268fc6580f21e3637444"
+            "value": "c0ee6c5239812bca956783c5e6021acc69a9c453482ff5ea1e1c093471fdd45c"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "9f58f9492a43b05cef53d733e36540b33710743a91cb64eed53c9aa651df900c"
+        "value": "fa0399dab4a3c545dbda21666318d799d4f784b93004bf96ff962680e61ae746"
       },
       "currency": "current"
     }

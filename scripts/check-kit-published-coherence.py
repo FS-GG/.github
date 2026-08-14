@@ -507,10 +507,18 @@ def _leading_line(body: str) -> str:
     asserted. `tests/delivery-leading-line/corpus.json` is the single statement of this boundary;
     `tests/kit-published-coherence/run.sh` grades THIS function's real entry point
     (`obligation_declarations`) against it, and `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs`
-    grades the engine against the same verdicts. Neither side keeps private legs for the declaration
-    form, so changing the limit here reds the corpus, and editing the corpus to restore it reds the
-    engine suite. If you are about to change the test below, that corpus is the file to change, and it
-    will make the other language's disagreement visible rather than let it pass.
+    grades the engine against the same verdicts. Neither side keeps a private leg asserting a SINGLE
+    COMMENT BODY's declares/inert verdict, so changing the limit here reds the corpus, and editing the
+    corpus to restore it reds the engine suite. If you are about to change the test below, that corpus
+    is the file to change.
+
+    EXPECT THE ENGINE SUITE TO RED IN MORE PLACES THAN THE CORPUS, and do not read that as the corpus
+    being wrong. `DeliveryApplicationTests.fs` retains four `.github#2544` legs carrying four-space
+    declaration-form bodies (`:304`/`:307`/`:318`/`:492`) that the corpus cannot subsume: two are
+    MULTI-COMMENT scenarios — one of them turning on a `fsgg:delivery-receipt` marker this arm never
+    parses — and one asserts the engine's diagnostic wording, which this arm does not emit. A
+    coordinated one-sided edit reds those too: `Failed: 4, Passed: 801`, alongside the corpus legs.
+    They make the engine side stricter, never more permissive.
     """
     normalized = body.replace("\r\n", "\n")
     first = next((line for line in normalized.split("\n") if line.strip()), None)

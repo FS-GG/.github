@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2563-cross-language-indent-limit/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2563-cross-language-indent-limit/analysis.json
-    digest: f772d553f6248280e45e0f289bc5d857f8b8c0741aa19086b1357cd466396c1b
+    digest: 4075a98a97e9f58dcbb59a6c68bd0122a4d14c6cba6faa5fb152899f12d5e3a6
     schemaVersion: 1
   - label: checklist
     path: work/2563-cross-language-indent-limit/checklist.md
@@ -19,11 +19,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: clarifications
     path: work/2563-cross-language-indent-limit/clarifications.md
-    digest: 7ee95e9bc303cd0e2bae8ea6f40a050ddb95d578368921be16f2fcfa7c58852b
+    digest: 8310e1a0f0d4fd46bee10b27352a3d7c3711f39c0ccd6e9da59c0d63238ed90e
     schemaVersion: 1
   - label: plan
     path: work/2563-cross-language-indent-limit/plan.md
-    digest: 5a28bf1fd9567546d29ae6d945ba1f6bc07609714599dc1361866b68024ccbb4
+    digest: ea2e9342fa33c5a20189cad7e41d15cdd5059ca3afa0704861fc422b82f5f94d
     schemaVersion: 1
   - label: spec
     path: work/2563-cross-language-indent-limit/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2563-cross-language-indent-limit/tasks.yml
-    digest: 744e947513204e0b55530188b295629f5d1eb03c1bc0268fc6580f21e3637444
+    digest: c0ee6c5239812bca956783c5e6021acc69a9c453482ff5ea1e1c093471fdd45c
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -52,7 +52,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -77,7 +77,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -102,7 +102,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -127,7 +127,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -152,7 +152,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -177,7 +177,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -202,7 +202,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -227,13 +227,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
       failed: 0
       skipped: 0
-    notes: ["DEC-001 is implemented as authored: one corpus, two consumers, each driving its own side's real entry point (obligationsFromComments and obligation_declarations, never the private helper), and neither side retaining private legs for the declaration form."]
+    notes: ["DEC-001 is implemented as authored: one corpus, two consumers, each driving its own side's real entry point (obligationsFromComments and obligation_declarations, never the private helper), and neither side retaining a private leg asserting a single comment body's declares/inert verdict. The four .github#2544 engine-only legs with four-space declaration-form bodies (DeliveryApplicationTests.fs:304/:307/:318/:492) are NOT subsumed and deliberately stay: two are multi-comment scenarios (one turning on a delivery-receipt marker obligation_declarations never parses) and one asserts the engine diagnostic wording the gate does not emit. They make F# stricter and red alongside the corpus under the same mutation (Failed: 4, Passed: 801)."]
   - id: EV009
     kind: verification
     subject:
@@ -252,7 +252,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -277,7 +277,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -302,7 +302,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -327,7 +327,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -352,7 +352,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -377,7 +377,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -402,7 +402,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -427,7 +427,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -452,7 +452,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -477,7 +477,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -502,7 +502,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -527,7 +527,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -552,7 +552,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805
@@ -577,7 +577,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2563-cross-language-indent-limit/test-results/cli-tests.trx
-      digest: "sha256:06dbe247894038599f7c9db1d1c05a42a7e8321ba850622b9a3f92fb60eca1f9"
+      digest: "sha256:e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 805

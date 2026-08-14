@@ -17,7 +17,7 @@ sources:
     schemaVersion: 1
   - label: clarifications
     path: work/2563-cross-language-indent-limit/clarifications.md
-    digest: 7ee95e9bc303cd0e2bae8ea6f40a050ddb95d578368921be16f2fcfa7c58852b
+    digest: 8310e1a0f0d4fd46bee10b27352a3d7c3711f39c0ccd6e9da59c0d63238ed90e
     schemaVersion: 1
   - label: checklist
     path: work/2563-cross-language-indent-limit/checklist.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2563-cross-language-indent-limit/plan.md
-    digest: f2df64d5d14fed1d09eba6b9f6509a95ccb822c08f0d2072e618494cf5295f15
+    digest: ea2e9342fa33c5a20189cad7e41d15cdd5059ca3afa0704861fc422b82f5f94d
     schemaVersion: 1
 tasks:
   - id: T001
@@ -235,7 +235,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PC-001, PM-001]
+    sourceIds: [PC-001, PC-002, PM-001]
     requiredSkills: [schema-versioning]
     requiredEvidence: [EV021]
   - id: T022

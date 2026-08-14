@@ -374,10 +374,21 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     // fixtures agreed with them the whole way.
     //
     // `tests/delivery-leading-line/corpus.json` is the repair. Both sides consume it and NEITHER keeps
-    // private legs for the declaration form, so a coordinated edit has nowhere to hide: move the limit
-    // here and this test reds against the corpus; edit the corpus to restore it and the
-    // `kit-published-coherence` fixture reds instead, because it grades
+    // a private leg asserting a SINGLE COMMENT BODY's declares/inert verdict, so a coordinated edit has
+    // nowhere to hide: move the limit here and this test reds against the corpus; edit the corpus to
+    // restore it and the `kit-published-coherence` fixture reds instead, because it grades
     // `obligation_declarations` — the gate's real entry point — against the same verdicts.
+    //
+    // WHAT THE CORPUS DOES NOT SUBSUME, AND IT IS RIGHT ABOVE THIS COMMENT. The four `#2544` legs at
+    // `indentedSample` (:304, used at :307 and :492) and at the :318 declaration+receipt pair carry
+    // four-space bodies in the DECLARATION form and stay HERE, privately. They are not duplicates the
+    // corpus could absorb: :307 and :318 are MULTI-COMMENT scenarios that a one-body-one-verdict corpus
+    // cannot express — and :318 turns on a `fsgg:delivery-receipt` marker `obligation_declarations`
+    // never parses, so the gate has no answer even in principle — while :492 asserts this engine's
+    // diagnostic WORDING, which the gate does not emit. They make THIS side stricter, never more
+    // permissive, so they cannot mask a divergence: under the coordinated one-sided edit they red
+    // alongside the corpus, `Failed: 4, Passed: 801`. Expect that, and do not "fix" it by loosening
+    // them. The corpus's residual is exactly this — it couples SINGLE-COMMENT bodies only.
     //
     // THIS TEST DRIVES `obligationsFromComments`, NOT `leadingLine`. Transcribing a parser into another
     // language to check it is literally this row's bug class, and checking only the private helper

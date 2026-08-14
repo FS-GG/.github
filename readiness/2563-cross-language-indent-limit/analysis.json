@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2563-cross-language-indent-limit/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "480dc7001d248530353bfdb2d17e711ada390d93cd33ab6e3130e07560ce6389"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2563-cross-language-indent-limit/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -51,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "7ee95e9bc303cd0e2bae8ea6f40a050ddb95d578368921be16f2fcfa7c58852b"
+        "value": "8310e1a0f0d4fd46bee10b27352a3d7c3711f39c0ccd6e9da59c0d63238ed90e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "5a28bf1fd9567546d29ae6d945ba1f6bc07609714599dc1361866b68024ccbb4"
+        "value": "ea2e9342fa33c5a20189cad7e41d15cdd5059ca3afa0704861fc422b82f5f94d"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "744e947513204e0b55530188b295629f5d1eb03c1bc0268fc6580f21e3637444"
+        "value": "c0ee6c5239812bca956783c5e6021acc69a9c453482ff5ea1e1c093471fdd45c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -716,7 +726,7 @@
     {
       "path": "readiness/2563-cross-language-indent-limit/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

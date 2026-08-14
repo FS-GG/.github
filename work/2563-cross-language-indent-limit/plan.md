@@ -17,7 +17,7 @@ Prose status: planned
 
 ## Source Snapshot
 - spec: work/2563-cross-language-indent-limit/spec.md sha256:91b30031534f2c636f88b3ed532b72a3f4b999b65c152cfe5b973c3705a06b07 schemaVersion:1
-- clarifications: work/2563-cross-language-indent-limit/clarifications.md sha256:7ee95e9bc303cd0e2bae8ea6f40a050ddb95d578368921be16f2fcfa7c58852b schemaVersion:1
+- clarifications: work/2563-cross-language-indent-limit/clarifications.md sha256:8310e1a0f0d4fd46bee10b27352a3d7c3711f39c0ccd6e9da59c0d63238ed90e schemaVersion:1
 - checklist: work/2563-cross-language-indent-limit/checklist.md sha256:7fa349146e288fb4f9a06ab6f8c692b05f72a7e952b19b32b196263948bf5106 schemaVersion:1
 
 ## Plan Scope
@@ -30,8 +30,11 @@ Prose status: planned
 - PD-001 [AC-001] [FR-001] complete: Author `tests/delivery-leading-line/corpus.json` as the single
   statement of the delivery-marker leading-line boundary — one entry per comment body, each carrying
   `name`, `body` and the verdict `declares` or `inert` — and delete the per-language single-body indent
-  legs it replaces, so that no language retains private legs for this rule. Reproduce the pre-change
-  18/18 baseline first; it is both the corpus's content and the regression bar.
+  legs it replaces, so that no language retains a private leg asserting a SINGLE COMMENT BODY's
+  declares/inert verdict. The four `#2544` engine-only legs carrying four-space declaration-form bodies
+  (`DeliveryApplicationTests.fs:304`/`:307`/`:318`/`:492`) are NOT among them and stay — the
+  engine-only retention decision below, and DEC-001, record why the corpus cannot subsume them. Reproduce the pre-change 18/18 baseline first; it is
+  both the corpus's content and the regression bar.
 - PD-002 [AC-002] [FR-002] complete: Add the F# consumer to
   `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs`. It walks up from `AppContext.BaseDirectory`
   to the repository root — the idiom already used by `RuleSubsetTests`, `DocumentedInvocationTests` and

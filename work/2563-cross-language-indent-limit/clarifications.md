@@ -39,17 +39,37 @@ publicOrToolFacingImpact: true
   (`tests/delivery-leading-line/corpus.json`), driven through each side's real entry point:
   `DeliveryApplication.obligationsFromComments` in F#, and
   `check-kit-published-coherence.py --obligation-arm` → `obligation_declarations` in Python. The
-  coupling is mechanical because the corpus becomes the ONLY place the boundary's expected verdicts
-  are written: the per-language single-body indent legs that exist twice today are deleted in favour
-  of it. A coordinated one-sided edit therefore has nowhere to hide — moving one language's constant
-  reds that language against the corpus, and editing the corpus to restore green immediately reds the
-  other language, because neither side has private legs for this rule any more. The in-repo precedent
-  is `tests/skill-union/skillmirror.fixtures.json`, one table graded by an F# driver, a shell
-  conformance script and two Python gates. **Residual limitation, stated rather than glossed:** a
-  corpus couples only the shapes it enumerates, so a rule change in a shape no entry covers is not
-  caught. That is why the corpus enumerates the boundary from BOTH sides (3 spaces AND 4 spaces) and
-  carries all five tab arrangements and both CRLF cases, and why each consumer asserts a declared
-  entry count so the enumeration cannot silently shrink. **Rejected — a shared generated constant:**
+  coupling is mechanical because the corpus becomes the ONLY place a SINGLE COMMENT BODY's
+  declares/inert verdict is written for either language: the per-language single-body indent legs that
+  duplicated that verdict are deleted in favour of it. A coordinated one-sided edit therefore has
+  nowhere to hide — moving one language's constant reds that language against the corpus, and editing
+  the corpus to restore green immediately reds the other language. The in-repo precedent is
+  `tests/skill-union/skillmirror.fixtures.json`, one table graded by an F# driver, a shell conformance
+  script and two Python gates.
+
+  **What the corpus does NOT subsume, stated because an earlier draft of this decision claimed
+  otherwise and the claim was false.** The F# suite RETAINS four `.github#2544` legs whose bodies are
+  four-space-indented in the DECLARATION form — `DeliveryApplicationTests.fs:304` (the shared
+  `indentedSample` literal), used at `:307` and `:492`, plus `:318`'s inline declaration+receipt pair.
+  They are not duplicates the corpus could absorb:
+    * `:307` and `:318` are MULTI-COMMENT scenarios — a bystander's sample beside a valid `none`
+      declaration, and an indented declaration+receipt pair reading `Verified` — and a
+      one-body-one-verdict corpus cannot express "these two comments TOGETHER yield this". `:318`
+      additionally turns on a `fsgg:delivery-receipt` marker, which `obligation_declarations` never
+      parses at all, so Python has no answer to compare even in principle.
+    * `:492` is a single comment, but it asserts the engine's diagnostic WORDING (that the refusal does
+      not advise a documentation author to make their sample declare). The gate emits no such text.
+  These legs make the F# side STRICTER, never more permissive, so they cannot mask a divergence: under
+  the coordinated one-sided F# edit they RED alongside the corpus. Measured, not assumed —
+  `dotnet test tests/FS.GG.Coord.Cli.Tests` under that mutation reports `Failed: 4, Passed: 801`, and
+  those four are exactly these legs.
+
+  **Residual limitation, stated rather than glossed:** the corpus couples SINGLE-COMMENT BODIES ONLY.
+  Multi-comment scenarios and diagnostic wording stay engine-side by necessity, and a rule change in a
+  shape no entry covers is not caught. That is why the corpus enumerates the boundary from BOTH sides
+  (3 spaces AND 4 spaces), carries all five tab arrangements and both CRLF cases, and why each consumer
+  asserts a declared entry count and the presence of both discriminating shapes so the enumeration
+  cannot silently shrink. **Rejected — a shared generated constant:**
   it introduces a build-order dependency the gate does not have today, and the dependency runs the
   wrong way — `kit-published-coherence.yml`'s fixture job installs only `setup-policy-python` and has
   no .NET at all, by design, so the generated artifact would have to be committed and would become a
