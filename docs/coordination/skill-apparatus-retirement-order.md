@@ -389,7 +389,7 @@ exists**, which is blocker B2 below.
 >    root). Filed as [`FS.GG.SDD#771`](https://github.com/FS-GG/FS.GG.SDD/issues/771).
 > 3. **A view root stays in `materialize-skill-roots.fsx`'s WRITE set.** That driver derives its write
 >    set as `Schemas.agentSkillRoots` **minus `FsggKitRetiredSkillRoots`** and subtracts nothing for
->    `FsggKitViewSkillRoots` (`scripts/materialize-skill-roots.fsx:219-236`). With `.agents/skills`
+>    `FsggKitViewSkillRoots` (`FS-GG/FS.GG.SDD@main:scripts/materialize-skill-roots.fsx:219-236`). With `.agents/skills`
 >    moved to the view disposition it still reports `roots : .claude .agents` and `writes : 102 planned
 >    by SkillMirror.mirrorFiles` — `changed : 0` only because `--mode link` makes both paths the same
 >    object. Under `--mode copy` (the tool's own Windows fallback) it would write a second real copy
