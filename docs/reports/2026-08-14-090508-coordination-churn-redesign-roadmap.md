@@ -184,7 +184,7 @@ The goal is not less evidence. It is fewer independently mutable descriptions of
 
 Durations are sequencing estimates, not calendar commitments. Each milestone has an exit condition that prevents an incomplete migration from becoming another permanent compatibility layer.
 
-- [ ] **M0 — stabilize**
+- [x] **M0 — stabilize**
   - Target: 0–2 days
   - Deliverables: Land bounded release, feed-coherence, project-audit, engine-pin, and claim-auth repairs; triage lint; pause new process features; capture replay fixtures and baseline metrics
   - Exit criteria: Main has no standing red checks; open repair PRs are mergeable or explicitly superseded; baseline is reproducible
@@ -228,10 +228,18 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
 - **Baseline fixture:** The report header fixes the source baseline at
   `cb33188c`, the evidence window at 2026-08-10 through 2026-08-14, and the
   point-in-time issue, PR, board, release, workflow, source, test, and evidence
-  measurements in the first table. The issue and PR values are reproduced by
-  `gh api -X GET search/issues -f 'q=repo:FS-GG/.github is:<issue|pr> created:2026-08-09T22:00:00Z..2026-08-14T07:05:08Z <state>' -f per_page=1 --jq .total_count`,
-  using `is:closed` for closed issues and `is:merged`, `is:open`, or
-  `is:closed -is:merged` for the three PR dispositions. The Git-backed
+  measurements in the first table. The issue and PR values are frozen in the
+  content-addressed as-of manifest
+  `docs/reports/evidence/2026-08-14-coordination-churn-as-of.json`. Its cohort was
+  selected by the recorded GitHub GraphQL search, then `ClosedEvent`,
+  `ReopenedEvent`, and `MergedEvent` values were replayed only through the exact
+  `2026-08-14T07:05:08Z` cutoff. The manifest records the complete cohort and its
+  disjoint as-of classifications; `jq '.summary'` reproduces 131/103 issue
+  created/closed and 146/135/9/2 PR created/merged/open/closed-unmerged. Verify
+  the counts and partitions with
+  `jq -e '(.summary.issues_created == (.cohorts.issues.created | length)) and (.summary.issues_closed == (.cohorts.issues.closed_as_of | length)) and (.summary.pull_requests_created == (.cohorts.pull_requests.created | length)) and (.summary.pull_requests_merged == (.cohorts.pull_requests.merged_as_of | length)) and (.summary.pull_requests_open == (.cohorts.pull_requests.open_as_of | length)) and (.summary.pull_requests_closed_unmerged == (.cohorts.pull_requests.closed_unmerged_as_of | length)) and (((.cohorts.pull_requests.merged_as_of + .cohorts.pull_requests.open_as_of + .cohorts.pull_requests.closed_unmerged_as_of) | sort) == (.cohorts.pull_requests.created | sort))' docs/reports/evidence/2026-08-14-coordination-churn-as-of.json`.
+  Present-day `is:open`/`is:closed` searches are intentionally not reproduction
+  commands because later lifecycle transitions change their answers. The Git-backed
   workflow/checker counts are
   reproducible with `git ls-tree -r --name-only cb33188c .github/workflows` and
   `git ls-tree -r --name-only cb33188c scripts | rg '^scripts/check-'`. GitHub
@@ -253,6 +261,23 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   feedback-report machinery. The user-authorized break-glass integration records
   no fabricated SDD, cycle, or feedback artifact; independent tests, critique,
   GitHub checks, and exact merged-head inspection are the acceptance evidence.
+- **Landed stabilization:** Superseding PR
+  [#2591](https://github.com/FS-GG/.github/pull/2591) merged as
+  `22eeec6ac0a2f6f050e64e1c6be2c2ed7201d558` after its required checks passed;
+  PRs [#2588](https://github.com/FS-GG/.github/pull/2588) and
+  [#2589](https://github.com/FS-GG/.github/pull/2589) are closed as superseded.
+  The independent critique and repaired-head confirmation are recorded in
+  `reviews/roadmap/roadmap-coordination-churn-redesign-m0-stabilize.json`.
+- **Coherent stable channel:** `coord-engine/v0.53.0`, `kit/v0.53.0`, and
+  `drivers/v0.53.0` all peel to the merged SHA above. Trusted-publishing runs
+  [engine 31782583439](https://github.com/FS-GG/.github/actions/runs/31782583439),
+  [Kit 31782583496](https://github.com/FS-GG/.github/actions/runs/31782583496), and
+  [Drivers 31782583720](https://github.com/FS-GG/.github/actions/runs/31782583720)
+  passed in org-feed-first/NuGet.org-second order. Both feeds serve the full
+  0.53.0 trio; 101 normalized package entries compare byte-identically, all
+  nuspecs bind the packages to the merged SHA, and a fresh NuGet.org-only tool
+  install reports `0.53.0.0`. The registry, generated compatibility projection,
+  and canonical tool pin now select 0.53.0; 0.52.0 remains explicitly rejected.
 
 ### Cross-cutting health measures
 

@@ -12,10 +12,12 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 1,
+  "repair_rounds": 3,
   "reviewed_commits": [
     "101343fbb4f5c5d5626822f4363d69c3d79e154e",
-    "db64a53b5dde6f383c48ade10dad10c890a89288"
+    "db64a53b5dde6f383c48ade10dad10c890a89288",
+    "f4e26d71e4cfbdfd749af9aff30e2bba738093ee",
+    "2269324d73b49221e84a30f82da49ea064beaf2d"
   ],
   "findings": [
     {
@@ -35,12 +37,45 @@
         "Verification: SHA-256 verification against /tmp/fsgg-m0-053-local-sha256.txt succeeded for all three locally packed 0.53.0 nupkgs. Their nuspecs name versions 0.53.0 and repository commit db64a53b5dde6f383c48ade10dad10c890a89288; the engine nuspec's releaseNotes value is 5,382 characters.",
         "Verification: the three release workflows require all sibling 0.53.0 tags to resolve to one commit, pack independently from that tagged checkout, push each resulting nupkg first to the org feed and then byte-identically to nuget.org, and the live repository variable NUGET_ORG_PUBLISH is true. The prior 0.52.0 sibling tags all peel to one commit, demonstrating that the same tag precondition is operational.",
         "Verification: a focused dual-feed simulation with org versions 0.51.1/0.52.0/0.53.0 and nuget.org versions 0.51.1/0.53.0 made check-feed-coherence accept registry version 0.53.0, and a focused engine-pin fixture accepted a 0.53.0 pin. This proves the superseding version can converge both repaired gates without repacking immutable 0.52.0 bytes.",
-        "Verification: the 0.53.0 tags, feed publications, registry package-version flip, and canonical engine-pin bump are post-merge operations and have not yet occurred; confirmation accepts the repaired implementation and recovery route, not completion of those operational obligations."
+        "Verification: on completion head f4e26d71e4cfbdfd749af9aff30e2bba738093ee, the live feed-coherence and engine-pin checks exited 0 with FS.GG.Coord.Cli 0.53.0 on both feeds and the canonical pin at 0.53.0; the live coherent-set release check also exited 0 with FS.GG.Kit, FS.GG.Drivers, and FS.GG.Coord.Cli 0.53.0 on both feeds and all three tags resolving to merged M0 commit 22eeec6ac0a2f6f050e64e1c6be2c2ed7201d558."
+      ]
+    },
+    {
+      "id": "M0-INTEGRATION-CRIT-002",
+      "severity": "major",
+      "summary": "The roadmap marks M0 complete on a reproducible-baseline exit condition, but its documented point-in-time issue and pull-request disposition queries are state-volatile and no longer reproduce the recorded baseline.",
+      "evidence": [
+        "Verification: docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md marks M0 checked and states the exit criterion `baseline is reproducible`; its Baseline fixture section says the issue and PR values are reproduced with `gh api ... search/issues` queries bounded only by the cohort's `created:` interval and current `is:closed`, `is:open`, or `is:merged` predicates.",
+        "Verification: on reviewed completion head 13232fe483d4079f74e552077430168825dde853, the exact documented issue-closed query returned 105 while the baseline table records 103; the exact PR-open query returned 6 while the table records 9; and the exact closed-unmerged query returned 5 while the table records 2.",
+        "Verification: the same rerun still returned the recorded stable cohort totals of 131 created issues, 146 created PRs, and 135 merged PRs, isolating the mismatch to dispositions that changed after the observation timestamp rather than to the creation window itself.",
+        "Verification: the roadmap calls later live reads comparison samples but references no immutable raw response, issue/PR identity snapshot, or as-of reconstruction from which the original 103/9/2 disposition counts can be reproduced; a timestamp in prose does not make GitHub's current-state predicates historical."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair head f4e26d71e4cfbdfd749af9aff30e2bba738093ee adds docs/reports/evidence/2026-08-14-coordination-churn-as-of.json and changes the roadmap baseline reproduction from mutable present-state searches to an explicit jq predicate over that committed as-of manifest; the only changes from pre-repair head 13232fe483d4079f74e552077430168825dde853 are the roadmap and this evidence file.",
+        "Verification: the roadmap's exact documented jq command exited 0. Independent structural checks found every cohort array sorted and duplicate-free, the 103 closed issues a subset of the 131 created issues, and the 135 merged, 9 open, and 2 closed-unmerged PR sets pairwise disjoint with union exactly equal to all 146 created PRs.",
+        "Verification: fresh GitHub search pagination for the exact 2026-08-09T22:00:00Z through 2026-08-14T07:05:08Z creation window returned exactly the manifest's 131 issue identities and 146 pull-request identities, with no missing or extra numbers.",
+        "Verification: an independent replay of GitHub REST closed, reopened, and merged lifecycle events at or before 2026-08-14T07:05:08Z across all 277 manifest identities reproduced exactly 103 closed issues and the PR partition of 135 merged, 9 open, and 2 closed-unmerged, with no identity mismatch in any class."
+      ]
+    },
+    {
+      "id": "M0-INTEGRATION-CRIT-003",
+      "severity": "major",
+      "summary": "The prior confirmed head changed the publishing-and-deployment skill without refreshing its generated driver-skill manifest digests, leaving the manifest-current CI gate red.",
+      "evidence": [
+        "Verification: at prior confirmation head f4e26d71e4cfbdfd749af9aff30e2bba738093ee, .agents/skills/publishing-and-deployment/SKILL.md hashes to e687227d474ab1ea5a05976241baa260095e179844427b23faeb8b0efce45abf while registry/driver-skill-manifest.json still records 3e20282ac8c40a8894fdd502a3378f68b0127eba9ab7ec9874f42f461af6df7c for that file, an observable stale generated projection.",
+        "Verification: the implementation-only diff from f4e26d71e4cfbdfd749af9aff30e2bba738093ee to repair head 2269324d73b49221e84a30f82da49ea064beaf2d changes exactly the publishing-and-deployment sha256, tree-sha256, and file sha256 fields in registry/driver-skill-manifest.json; the other intervening commit changes only this critique artifact."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: on exact repair head 2269324d73b49221e84a30f82da49ea064beaf2d, `scripts/generate-driver-manifest --check` exited 0 and reported both driver-skill manifests current, while also reporting that every projection agrees with the protocol.",
+        "Verification: the repaired manifest's publishing-and-deployment file digest e687227d474ab1ea5a05976241baa260095e179844427b23faeb8b0efce45abf exactly equals `sha256sum .agents/skills/publishing-and-deployment/SKILL.md`; its regenerated tree digest is fd9d2bbe807559a85fb17ebdac7552d675b1f31130a9268ff02fb5d6951f4a51.",
+        "Verification: `git diff --check 22eeec6ac0a2f6f050e64e1c6be2c2ed7201d558..2269324d73b49221e84a30f82da49ea064beaf2d` exited 0, and review of the full base-to-head name set found no post-confirmation implementation change beyond the mechanical manifest refresh."
       ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "db64a53b5dde6f383c48ade10dad10c890a89288",
+    "reviewed_commit": "2269324d73b49221e84a30f82da49ea064beaf2d",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
