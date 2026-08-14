@@ -1406,65 +1406,136 @@ printf '[{"body": "<!-- fsgg:delivery-obligations none head=%s -->"}]' "$HEAD_SH
 obl "$OBL/none.json"
 must_pass 'the no-obligations assertion is not parsed as an obligation' "carry no \`fsgg:delivery-obligation\`"
 
-# ---- THE LEADING-LINE RULE (.github#2544; it was the BYTE-0 rule until then, and the change is the
-#      point). `DeliveryApplication.fs` selects on the first line of the TRIMMED body, so a comment
-#      that opens with prose parses as ABSENT in the engine. This arm must agree: flagging a
-#      declaration the engine cannot see would report a control that is not there, and staying silent
-#      here is what keeps the two readings the same one.
-printf '[{"body": "Here is what I owe:\\n\\n<!-- fsgg:delivery-obligation id=x kind=package-release head=%s -->"}]' \
-  "$HEAD_SHA" > "$OBL/prose-first.json"
-obl "$OBL/prose-first.json"
-must_pass "a declaration below its comment's leading line parses as absent, exactly as the engine reads it" \
-  "carry no \`fsgg:delivery-obligation\`"
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# THE SHARED CROSS-LANGUAGE CORPUS (.github#2563). Seven hand-written legs used to sit here — the
+# leading-line legs (.github#2544) and the indent-limit legs (its round-1 repair). They are gone, and
+# their absence is the point rather than a saving.
+#
+# `#2544` collapsed a rule that lived in two places INSIDE the engine, and its round-1 repair then
+# re-created a weaker version of the same hazard ACROSS the language boundary:
+# `DeliveryApplication.leadingLine` and `check-kit-published-coherence.py`'s `_leading_line` each held
+# their own copy of the CommonMark indent limit, each side pinned its copy with its OWN legs — the
+# seven that were here — and the only coupling was two prose sentences that nothing read.
+#
+# So a ONE-SIDED edit reddened that side's legs. What was caught by nothing was a COORDINATED
+# one-sided edit: moving one language's constant AND updating that same language's legs to match.
+# That is not exotic. It is what a careful engineer does when they believe they are fixing a bug, and
+# the legs would have agreed with them the whole way.
+#
+# `tests/delivery-leading-line/corpus.json` is where that boundary is now STATED, once. This arm and
+# the F# suite both grade against it and neither keeps a private leg asserting a SINGLE COMMENT BODY's
+# declares/inert verdict, so a coordinated edit has nowhere left to hide: move the limit in
+# `check-kit-published-coherence.py` and these legs red against the corpus; edit the corpus to restore
+# them and `DeliveryApplicationTests.fs` reds instead.
+#
+# The F# suite DOES retain four `#2544` legs with four-space declaration-form bodies
+# (`DeliveryApplicationTests.fs:304`/`:307`/`:318`/`:492`) that the corpus cannot subsume — two are
+# multi-comment scenarios, one of them turning on a `fsgg:delivery-receipt` marker this arm never
+# parses, and one asserts the engine's diagnostic wording, which this arm does not emit. They make that
+# side stricter, never more permissive, and they red alongside the corpus under the same mutation.
+#
+# These legs drive `--obligation-arm`, i.e. the REAL entry point `obligation_declarations`, not
+# `_leading_line` in isolation — the pre-filter is the half `#2544` was actually filed about, and a
+# corpus that graded only the helper would leave it ungraded.
+CORPUS="$HERE/../delivery-leading-line/corpus.json"
+CORPUS_DIR="$WORK/leading-line-corpus"
+mkdir -p "$CORPUS_DIR"
 
-# ---- AND THE OTHER SIDE OF THAT SAME RULE, which is the defect .github#2544 actually fixed: leading
-#      WHITESPACE before the marker does not move it off the leading line. A newline is what heredocs
-#      and `gh api --field` payloads add for free, so an arm that stayed byte-0 while the engine
-#      trimmed would call a LIVE declaration absent — the same invisibility, one layer down, and
-#      silently unflagged rather than merely unparsed.
-printf '[{"body": "\\n<!-- fsgg:delivery-obligation id=newline-led kind=package-release head=%s -->"}]' \
-  "$HEAD_SHA" > "$OBL/newline-led.json"
-obl "$OBL/newline-led.json"
-must_fail "a declaration whose body opens with a newline is seen, exactly as the engine now reads it" \
-  "obligation id=newline-led kind=package-release"
+# THIS ARM'S OWN COPY OF THE ENTRY COUNT, stated rather than counted from the file it is checking.
+# `DeliveryApplicationTests.fs` states its own copy independently, and the corpus itself deliberately
+# carries no count: a number stored beside the entries can be edited in the same breath as the entry
+# it counts, which is the vacuity .github#2534 (an empty-corpus green) and .github#1768 (157 passing
+# legs while the script was dying mid-run) each measured. Adding or removing an entry is therefore a
+# deliberate three-file edit.
+EXPECTED_CORPUS_ENTRIES=21
 
-printf '[{"body": " <!-- fsgg:delivery-obligation id=space-led kind=package-release head=%s -->"}]' \
-  "$HEAD_SHA" > "$OBL/space-led.json"
-obl "$OBL/space-led.json"
-must_fail "a declaration whose body opens with a space is seen, exactly as the engine now reads it" \
-  "obligation id=space-led kind=package-release"
+set +e
+corpus_index="$(python3 - "$CORPUS" "$CORPUS_DIR" 2>&1 <<'PY'
+import json, pathlib, sys
 
-# ---- AND THE LIMIT ON THAT TOLERANCE, which is CommonMark's (.github#2544 round-1 review repair).
-#      FOUR spaces, or a tab, opens an INDENTED CODE BLOCK: the marker is then a visible code sample,
-#      and reading it as a declaration is a fail-open — the critic measured a bystander's indented
-#      sample destroying a valid declaration already on a PR. Three spaces render as nothing and must
-#      still declare, so the boundary is pinned from both sides.
-printf '[{"body": "    <!-- fsgg:delivery-obligation id=indented kind=package-release head=%s -->"}]' \
-  "$HEAD_SHA" > "$OBL/indented.json"
-obl "$OBL/indented.json"
-must_pass "a four-space indented marker is a code sample, not a declaration" \
-  "carry no \`fsgg:delivery-obligation\`"
+corpus, outdir = sys.argv[1], sys.argv[2]
+doc = json.loads(pathlib.Path(corpus).read_text(encoding="utf-8"))
+for entry in doc["entries"]:
+    # The comment shape `gh api .../issues/<n>/comments` serves, so the arm is fed what it is fed live.
+    (pathlib.Path(outdir) / f"{entry['name']}.json").write_text(
+        json.dumps([{"body": entry["body"]}]), encoding="utf-8"
+    )
+    print(f"{entry['name']}\t{entry['verdict']}")
+PY
+)"
+corpus_rc=$?
+set -e
 
-printf '[{"body": "\\t<!-- fsgg:delivery-obligation id=tabbed kind=package-release head=%s -->"}]' \
-  "$HEAD_SHA" > "$OBL/tabbed.json"
-obl "$OBL/tabbed.json"
-must_pass "a tab-indented marker is a code sample too, because a tab is one tab stop" \
-  "carry no \`fsgg:delivery-obligation\`"
+if [ "$corpus_rc" -ne 0 ]; then
+  bad "the shared leading-line corpus is unreadable — an unreadable corpus is a no-verdict, not agreement" "$corpus_index"
+  corpus_index=""
+fi
 
-printf '[{"body": "   <!-- fsgg:delivery-obligation id=three-spaces kind=package-release head=%s -->"}]' \
-  "$HEAD_SHA" > "$OBL/three-spaces.json"
-obl "$OBL/three-spaces.json"
-must_fail "three spaces render invisibly, so that marker still declares" \
-  "obligation id=three-spaces kind=package-release"
+corpus_count="$(printf '%s' "$corpus_index" | grep -c . || true)"
+if [ "$corpus_count" -eq "$EXPECTED_CORPUS_ENTRIES" ]; then
+  ok "the shared leading-line corpus carries all $EXPECTED_CORPUS_ENTRIES declared entries"
+else
+  bad "the shared leading-line corpus carries $corpus_count entries, not the $EXPECTED_CORPUS_ENTRIES this arm declares — a corpus shorter than the one this arm claims to check is how a cross-language coupling stops coupling silently (.github#2563). If you added or removed an entry deliberately, update EXPECTED_CORPUS_ENTRIES here AND corpusEntryCount in tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs."
+fi
 
-# The trimmed filter must not make a QUOTED marker live: the fence is the comment's leading line, so
-# the marker on line 2 is not a declaration. `.github#2347` acceptance 2 and the `.github#2264`
-# round-1 anchoring fix are what this leg holds in place on this side of the boundary.
-printf '[{"body": "```\\n<!-- fsgg:delivery-obligation id=fenced kind=package-release head=%s -->\\n```"}]' \
-  "$HEAD_SHA" > "$OBL/fenced.json"
-obl "$OBL/fenced.json"
-must_pass "a fenced marker stays inert on this side of the boundary too" \
-  "carry no \`fsgg:delivery-obligation\`"
+corpus_declares="$(printf '%s' "$corpus_index" | grep -c 'declares$' || true)"
+corpus_inert="$(printf '%s' "$corpus_index" | grep -c 'inert$' || true)"
+if [ "$corpus_declares" -gt 0 ] && [ "$corpus_inert" -gt 0 ]; then
+  ok "the corpus pins the boundary from BOTH sides ($corpus_declares declares, $corpus_inert inert)"
+else
+  bad "the corpus carries $corpus_declares declares and $corpus_inert inert — one class alone pins only one side of the boundary, so it could not catch a fail-open in the other direction"
+fi
+
+# AND THE DISCRIMINATING SHAPES SURVIVE, which the count alone does not buy. A stated count forces a
+# deliberate edit to add or remove an entry, but an author moving the limit could delete exactly the
+# entries that discriminate and lower both stated counts, leaving two implementations that disagree over
+# a corpus with nothing left to disagree ABOUT. `spaces-3` and `spaces-4` are the two shapes that
+# discriminate a limit move in either direction — raise the limit and `spaces-4` changes verdict, lower
+# it and `spaces-3` does — so they must be PRESENT.
+#
+# Presence, deliberately, and not a required verdict or a required disagreement between them. A limit
+# that legitimately moved to 8 in BOTH languages is a coherent change this gate must let through, and
+# it leaves those two entries agreeing; a leg demanding they disagree would red on exactly the correct
+# action, which is how a gate teaches people to edit it out. The DIRECTION lives in the corpus alone —
+# restating it here would re-create the second copy .github#2563 exists to remove.
+corpus_below="$(printf '%s' "$corpus_index" | awk -F'\t' '$1 == "spaces-3" { print $1 }')"
+corpus_at_limit="$(printf '%s' "$corpus_index" | awk -F'\t' '$1 == "spaces-4" { print $1 }')"
+if [ -n "$corpus_below" ] && [ -n "$corpus_at_limit" ]; then
+  ok "the corpus still carries both shapes that discriminate a limit move (spaces-3, spaces-4)"
+else
+  bad "the corpus must keep spaces-3 and spaces-4: they are the two shapes either side of the indented-code-block limit, and a corpus that has lost them can no longer tell a moved limit from an unmoved one (spaces-3 present='$corpus_below', spaces-4 present='$corpus_at_limit')"
+fi
+
+corpus_ran=0
+while IFS="$(printf '\t')" read -r corpus_name corpus_verdict; do
+  [ -n "$corpus_name" ] || continue
+  obl "$CORPUS_DIR/$corpus_name.json"
+  case "$corpus_verdict" in
+    declares)
+      must_fail "corpus $corpus_name: this body declares, exactly as the engine reads it" \
+        "obligation id=$corpus_name kind=package-release"
+      ;;
+    inert)
+      must_pass "corpus $corpus_name: this body is inert, exactly as the engine reads it" \
+        "carry no \`fsgg:delivery-obligation\`"
+      ;;
+    *)
+      bad "corpus $corpus_name carries the unknown verdict '$corpus_verdict'; only 'declares' and 'inert' are defined"
+      ;;
+  esac
+  corpus_ran=$((corpus_ran + 1))
+done <<EOF
+$corpus_index
+EOF
+
+# EVERY entry READ was also EXECUTED. `failcount -eq 0` cannot tell "all agreed" from "the loop never
+# ran" — .github#1768 is that exact defect, and a herestring loop that read nothing would otherwise be
+# indistinguishable from 21 silent agreements.
+if [ "$corpus_ran" -eq "$corpus_count" ]; then
+  ok "every one of the $corpus_ran corpus entries this arm read was actually executed"
+else
+  bad "read $corpus_count corpus entries but executed $corpus_ran — the loop stopped early (.github#1768)"
+fi
 
 # A comment that DOES open with the marker but whose leading line is not a declaration is a
 # no-verdict, not a guess — the engine owns the diagnosis of which field is malformed.
@@ -1936,11 +2007,27 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # 107 + 50 obligation-arm legs (.github#2533). Four of the 50 are gate-inversion controls: M1/M2 on
 # the arm itself, plus the two round-1 repair controls that execute the workflow step and prove each
 # behaviour leg reds when the thing it names is removed.
-# + 3 leading-line legs (.github#2544): the newline-led and space-led declarations this arm could not
-# see once the engine could, and the fenced control that holds the inertness boundary still.
-# + 3 indent-limit legs (.github#2544 round-1 repair): four-space and tab indentation are CommonMark
-# code blocks and must stay inert; three spaces render invisibly and must still declare.
-EXPECTED_LEGS=163
+# The 7 hand-written leading-line/indent legs that lived here (.github#2544 and its round-1 repair)
+# are GONE, replaced by the shared cross-language corpus (.github#2563):
+# + 21 corpus legs, one per entry of tests/delivery-leading-line/corpus.json, driven through the real
+#   `--obligation-arm` entry point. That file is the ONE statement of the leading-line boundary and
+#   `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` grades the engine against the same
+#   verdicts, so neither language keeps a private leg asserting a SINGLE COMMENT BODY's declares/inert
+#   verdict — which is what makes a COORDINATED one-sided edit (one constant plus that language's own
+#   legs) impossible to hide. Four `#2544` engine-only legs with four-space declaration-form bodies do
+#   remain in the F# suite; the corpus cannot subsume them (multi-comment scenarios and diagnostic
+#   wording), they make that side stricter, and they red alongside the corpus under the same mutation.
+# + 4 non-vacuity legs for that corpus: its stated entry count, both verdict classes present, the two
+#   shapes either side of the limit still PRESENT (presence only — NOT that they disagree; a limit
+#   legitimately moved in both languages leaves them agreeing, and see the note above the leg itself),
+#   and every entry READ also EXECUTED. A shared corpus either side could consume zero entries of would be
+#   a second way to be green while wrong, not a coupling.
+# The arithmetic, so it can be checked rather than trusted: 163 was 107 + 50 obligation-arm legs + 3
+# leading-line legs + 3 indent-limit legs. Seven of those are retired here — the 3 leading-line legs
+# (newline-led, space-led, fenced), the 3 indent-limit legs (four-space, tab, three-spaces), and
+# prose-first, which was one of the 50. That leaves 107 + 49 = 156, plus 21 corpus legs and 3
+# non-vacuity legs: 163 - 7 + 25 = 181.
+EXPECTED_LEGS=181
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

@@ -130,6 +130,26 @@ UNSUPPORTED = re.compile(r"[!\[\]+{}]")
 # tree carries no inert entries; keeping it there is what lets `--assert-wired` run over a synthetic
 # root that has none of these directories.
 DELIBERATELY_UNWIRED: dict[str, str] = {
+    "tests/delivery-leading-line": (
+        "DELIBERATE, and not a suite at all. This directory holds ONE data file — corpus.json, the "
+        "single statement of the delivery-marker leading-line boundary (.github#2563) — and no runner. "
+        "It CANNOT be wired, for the reason recorded for tests/coord-report just above: RX_SHELL and "
+        "RX_DOTNET are the whole scrape vocabulary, so `wired` is derivable only for a directory "
+        "containing a *.sh or a *.fsproj that a workflow `run:` names. A data-only directory has "
+        "neither, so the only way to make this one read WIRED would be to invent a runner purely to be "
+        "scraped — a wrapper re-invoking the two consumers CI already runs, which is ceremony that "
+        "would drift from the real invocations rather than any kind of coverage. It is not unwired in "
+        "the sense this gate is built to catch: CI executes every entry of this file TWICE on every "
+        "pull request, through both consumers' real entry points. "
+        "tests/kit-published-coherence/run.sh drives it through "
+        "check-kit-published-coherence.py --obligation-arm, and that workflow is deliberately "
+        "unfiltered (.github#1597) so it starts on every PR; "
+        "tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs drives it through "
+        "DeliveryApplication.obligationsFromComments under coord-engine.yml, whose paths: filter names "
+        "tests/delivery-leading-line/** in BOTH copies precisely so an edit to this file starts it. "
+        "Each consumer also asserts the corpus's stated entry count, so this directory cannot go "
+        "silently unread the way an unwired suite can."
+    ),
     "tests/merge-guard": (
         "DELIBERATE. Fixtures .claude/hooks/block-merge-and-main-push.sh, a LOCAL Claude Code "
         "PreToolUse hook. CI has no agent tool-call to intercept, so there is nothing for a workflow "
