@@ -12,11 +12,12 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 2,
+  "repair_rounds": 3,
   "reviewed_commits": [
     "101343fbb4f5c5d5626822f4363d69c3d79e154e",
     "db64a53b5dde6f383c48ade10dad10c890a89288",
-    "f4e26d71e4cfbdfd749af9aff30e2bba738093ee"
+    "f4e26d71e4cfbdfd749af9aff30e2bba738093ee",
+    "2269324d73b49221e84a30f82da49ea064beaf2d"
   ],
   "findings": [
     {
@@ -56,10 +57,25 @@
         "Verification: fresh GitHub search pagination for the exact 2026-08-09T22:00:00Z through 2026-08-14T07:05:08Z creation window returned exactly the manifest's 131 issue identities and 146 pull-request identities, with no missing or extra numbers.",
         "Verification: an independent replay of GitHub REST closed, reopened, and merged lifecycle events at or before 2026-08-14T07:05:08Z across all 277 manifest identities reproduced exactly 103 closed issues and the PR partition of 135 merged, 9 open, and 2 closed-unmerged, with no identity mismatch in any class."
       ]
+    },
+    {
+      "id": "M0-INTEGRATION-CRIT-003",
+      "severity": "major",
+      "summary": "The prior confirmed head changed the publishing-and-deployment skill without refreshing its generated driver-skill manifest digests, leaving the manifest-current CI gate red.",
+      "evidence": [
+        "Verification: at prior confirmation head f4e26d71e4cfbdfd749af9aff30e2bba738093ee, .agents/skills/publishing-and-deployment/SKILL.md hashes to e687227d474ab1ea5a05976241baa260095e179844427b23faeb8b0efce45abf while registry/driver-skill-manifest.json still records 3e20282ac8c40a8894fdd502a3378f68b0127eba9ab7ec9874f42f461af6df7c for that file, an observable stale generated projection.",
+        "Verification: the implementation-only diff from f4e26d71e4cfbdfd749af9aff30e2bba738093ee to repair head 2269324d73b49221e84a30f82da49ea064beaf2d changes exactly the publishing-and-deployment sha256, tree-sha256, and file sha256 fields in registry/driver-skill-manifest.json; the other intervening commit changes only this critique artifact."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: on exact repair head 2269324d73b49221e84a30f82da49ea064beaf2d, `scripts/generate-driver-manifest --check` exited 0 and reported both driver-skill manifests current, while also reporting that every projection agrees with the protocol.",
+        "Verification: the repaired manifest's publishing-and-deployment file digest e687227d474ab1ea5a05976241baa260095e179844427b23faeb8b0efce45abf exactly equals `sha256sum .agents/skills/publishing-and-deployment/SKILL.md`; its regenerated tree digest is fd9d2bbe807559a85fb17ebdac7552d675b1f31130a9268ff02fb5d6951f4a51.",
+        "Verification: `git diff --check 22eeec6ac0a2f6f050e64e1c6be2c2ed7201d558..2269324d73b49221e84a30f82da49ea064beaf2d` exited 0, and review of the full base-to-head name set found no post-confirmation implementation change beyond the mechanical manifest refresh."
+      ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "f4e26d71e4cfbdfd749af9aff30e2bba738093ee",
+    "reviewed_commit": "2269324d73b49221e84a30f82da49ea064beaf2d",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
