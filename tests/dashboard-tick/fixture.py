@@ -630,15 +630,19 @@ def leg_the_wiring_is_still_there() -> None:
         if package is None:
             continue
         check(f"{name} calls the writer for {package}", f"--package {package}" in workflow)
-        # BOUND TO THE STEP, not to the file. `steps.v.outputs.push == 'true'` appears on the two
-        # nuget pushes independently, so a file-wide substring test passes with the tick step's
-        # `if:` deleted — a gate that cannot fail on its subject.
+        # BOUND TO THE STEP, not to the file. M6 retired `publish=false`: every publisher consumes the
+        # exact prepared manifest and a successful path is therefore a real publication. The tick must
+        # be unconditional after those saga steps; reviving `steps.v.outputs.push` would recreate the
+        # dry-run arm and allow a publisher execution to skip fleet delivery.
         step = re.search(
             r"^      - name: Tell every [^\n]*\n(?P<block>(?:^(?:        |\n).*\n)+)", workflow, re.M
         )
         check(f"{name}'s tick step is findable", step is not None, "the assertions below grade nothing without it")
         block = step.group("block") if step else ""
-        check(f"{name} gates the tick on a real publish", "if: steps.v.outputs.push == 'true'" in block, block)
+        check(f"{name} has no retired publish switch", "steps.v.outputs.push" not in workflow, workflow)
+        check(f"{name} ticks after every manifest-bound publish", re.search(r"^\s*if:", block, re.M) is None, block)
+        check(f"{name} downloads prepared bytes", "gh release download" in workflow, workflow)
+        check(f"{name} initializes the package saga", "release-saga-ci.sh init" in workflow, workflow)
         check(f"{name} passes the version through env, not into the shell", "VERSION: ${{ steps.v" in block, block)
         # A `case` arm that let rc=2 pass would make "I could not tell them" wear the same green as
         # "I told them" — the exact #266 shape, and invisible in a diff without this assertion. rc=3

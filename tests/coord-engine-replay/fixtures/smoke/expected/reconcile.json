@@ -8,6 +8,14 @@
     "subject": "FS.GG.SDD#44"
   },
   {
+    "id": "LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#45",
+    "remedy": "Status=Done",
+    "rule": "LIFECYCLE-PROJECTION-LAG",
+    "size": "quick",
+    "statement": "FS.GG.SDD#45: fresh lifecycle facts project Status=Done; repair the stale board projection.",
+    "subject": "FS.GG.SDD#45"
+  },
+  {
     "id": "LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#47",
     "remedy": "Status=Ready",
     "rule": "LIFECYCLE-PROJECTION-LAG",

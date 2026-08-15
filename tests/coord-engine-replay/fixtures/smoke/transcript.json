@@ -215,6 +215,12 @@
           "user": {
             "login": "fixture"
           }
+        },
+        {
+          "body": "<!-- fsgg:done-receipt v=1 -->\nfixture terminal receipt",
+          "html_url": "https://github.com/FS-GG/FS.GG.SDD/pull/45#issuecomment-650045",
+          "id": 650045,
+          "updated_at": "2026-01-01T00:00:00Z"
         }
       ],
       "responseHeaders": {

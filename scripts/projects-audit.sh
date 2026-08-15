@@ -90,7 +90,7 @@ if [ -f "$attestation" ]; then
 fi
 
 coord_bin=${FSGG_COORD_BIN:-"$(dirname "$0")/fsgg-coord"}
-if ! actual=$("$coord_bin" graphql project-visibility "$owner" "$title" | jq -r '.isPublic // "null"'); then
+if ! actual=$("$coord_bin" graphql project-visibility "$owner" "$title" | jq -r '.isPublic as $value | if $value == null then "null" else $value end'); then
   echo "noverdict: $project — ProjectV2 visibility could not be read" >&2
   exit 4
 fi
