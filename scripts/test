@@ -32,11 +32,26 @@ rather than trying to reconcile both. That drift is real and filed separately; i
 a PR runs.
 
 HOW IT INVOKES, and the one place it deliberately does NOT derive: WHICH suites to run comes from the
-workflows; HOW to run one is canonical per kind (`bash <script>`, `dotnet test <proj>`). The workflows'
-literal command lines carry CI-only scaffolding — `--no-build` steps that depend on a prior build,
-`--logger`, non-vacuity re-runs that invoke the same project a second time — none of which is a
-different SUITE. Normalising by kind is what lets the same project referenced from three workflows
-dedupe to one run.
+workflows; HOW to run one is canonical per kind (`bash <script>`, `dotnet test <proj>`, `node <script>`,
+`python3 <script>`). The workflows' literal command lines carry CI-only scaffolding — `--no-build` steps
+that depend on a prior build, `--logger`, non-vacuity re-runs that invoke the same project a second
+time — none of which is a different SUITE. Normalising by kind is what lets the same project referenced
+from three workflows dedupe to one run.
+
+THE SET OF KINDS IS THE ONE THING HERE THAT CAN SILENTLY UNDER-SELECT (.github#2555). It is a copy of a
+convention rather than a derivation of one, and it was frozen at two (`bash`, `dotnet test`) while
+`tests/` grew a third runner (`node`) and a fourth (`python3`). A suite whose runner was outside that
+list was STRUCTURALLY INVISIBLE: genuinely wired, named in a workflow `run:` step, executed on every
+matching PR — and still reported under `UNWIRED`, because `scrape()` matched nothing.
+`tests/preset-repo-scope-coherence/drive-package-rules.mjs` was the live witness, and it escaped the
+report only because a sibling `bash` step in the same workflow made its DIRECTORY visible; delete that
+sibling and a fully-wired, CI-executed suite read as never run. Under `--assert-wired` (.github#2537)
+that stopped being cosmetic: an invisible suite could not be discharged by WIRING it, because wiring
+changed nothing the selector could observe, so its only available answer was a `DELIBERATELY_UNWIRED`
+entry saying "deliberate" about something that is not. `KINDS` below is now the single statement of that
+vocabulary — one row per runner, carrying both how the workflows SPELL it and how we canonically RUN
+it — so adding a fifth kind is one row rather than four edits in three functions, which is how the set
+came to be frozen in the first place.
 
 The cost of that line is PRECONDITIONS, and it is worth stating plainly because you will meet it on a
 fresh worktree: `coord-engine.yml` builds the engine before running `tests/coord-engine-e2e/` and
@@ -107,9 +122,40 @@ except ImportError:
 
 EX_OK, EX_FAIL, EX_NOVERDICT = 0, 1, 3
 
-# `bash tests/x/run.sh` / `dotnet test tests/X.Tests/X.fsproj`, as the workflows spell them.
-RX_SHELL = re.compile(r"(?:bash|sh)\s+(tests/[\w.@/-]+\.sh)")
-RX_DOTNET = re.compile(r"dotnet\s+test\s+(tests/[\w.@/-]+\.fsproj)")
+
+@dataclass(frozen=True)
+class Kind:
+    """One runner vocabulary: how the workflows SPELL an invocation, and how we canonically RUN it.
+
+    Both halves live on the same row on purpose (.github#2555). They were previously three separate
+    lists — a pair of module-level regexes, a pair of `finditer` loops repeated in each of the two
+    scrape functions, and an inline conditional building the command — so teaching the selector a new
+    runner meant four edits nothing checked for completeness, and in practice nobody made them: the
+    vocabulary stayed at two kinds while `tests/` grew to four.
+    """
+
+    name: str
+    scrape: re.Pattern[str]
+    cmd: tuple[str, ...]
+
+
+# THE WHOLE SCRAPE VOCABULARY, as the workflows spell it: `bash tests/x/run.sh`,
+# `dotnet test tests/X.Tests/X.fsproj`, `node tests/x/run.mjs`, `python3 tests/x/run.py`.
+#
+# Each pattern anchors on `tests/` IMMEDIATELY after the runner word, which is deliberately narrow: it
+# reads a direct invocation and nothing else. `python3 -m pytest tests/x/y.py` and
+# `node --experimental-vm-modules tests/x.mjs` do not match, and that is the safe direction — a missed
+# invocation surfaces as an UNWIRED report somebody must answer for (.github#2537), whereas a greedy
+# pattern would invent a suite out of `rm -rf tests/tmp` and then fail `check_on_disk` for the whole
+# tree. `\b` guards the runner word so `mynode tests/x.mjs` is not read as `node`.
+KINDS: tuple[Kind, ...] = (
+    Kind("shell", re.compile(r"(?:bash|sh)\s+(tests/[\w.@/-]+\.sh)"), ("bash",)),
+    Kind("dotnet", re.compile(r"dotnet\s+test\s+(tests/[\w.@/-]+\.fsproj)"), ("dotnet", "test")),
+    Kind("node", re.compile(r"\bnode\s+(tests/[\w.@/-]+\.(?:mjs|cjs|js))"), ("node",)),
+    Kind("python", re.compile(r"\bpython3?\s+(tests/[\w.@/-]+\.py)"), ("python3",)),
+)
+KIND_CMD: dict[str, tuple[str, ...]] = {k.name: k.cmd for k in KINDS}
+
 RX_POLICY_ALL = re.compile(r"python3?\s+scripts/policy-runner\.py\s+run\s+all(?:\s|$)")
 
 # Glob syntax we implement. Anything else is refused rather than guessed at.
@@ -120,9 +166,12 @@ UNSUPPORTED = re.compile(r"[!\[\]+{}]")
 # membership in this dict is a written claim someone signed, not a mute allowlist.
 #
 # AN ENTRY IS NOT A VERDICT THAT THE STATE IS FINE. It is a verdict that the state is UNDERSTOOD. Four
-# of the five below say, in as many words, that they are unwired by OMISSION and are tracked at
+# of the six below say, in as many words, that they are unwired by OMISSION and are tracked at
 # .github#2556 — because the alternative was writing "deliberate" about something that is not, and the
-# single property that makes this list worth having is that its entries are true.
+# single property that makes this list worth having is that its entries are true. That property is what
+# .github#2555 was filed to protect: while the scrape vocabulary was frozen at two kinds, a python or
+# node suite could not be discharged by wiring it, so an entry here was the ONLY answer available and
+# it would have been a false one.
 #
 # HOW IT ROTS, AND WHICH WAY IT FAILS. An entry naming a directory that is now WIRED fails
 # (`--assert-wired` calls it STALE): a stale exemption is the dangerous kind, because it would silently
@@ -135,10 +184,11 @@ DELIBERATELY_UNWIRED: dict[str, str] = {
     "tests/delivery-leading-line": (
         "DELIBERATE, and not a suite at all. This directory holds ONE data file — corpus.json, the "
         "single statement of the delivery-marker leading-line boundary (.github#2563) — and no runner. "
-        "It CANNOT be wired, for the reason recorded for tests/coord-report just above: RX_SHELL and "
-        "RX_DOTNET are the whole scrape vocabulary, so `wired` is derivable only for a directory "
-        "containing a *.sh or a *.fsproj that a workflow `run:` names. A data-only directory has "
-        "neither, so the only way to make this one read WIRED would be to invent a runner purely to be "
+        "It CANNOT be wired, and — unlike tests/coord-report below — widening the scrape vocabulary "
+        "does not change that. `wired` is derivable only for a directory holding a RUNNER some KINDS "
+        "row can name in a workflow `run:` step; .github#2555 grew that set from two kinds to four, "
+        "and a data-only directory satisfies none of them because it has no runner at all. The only "
+        "way to make this one read WIRED would be to invent a runner purely to be "
         "scraped — a wrapper re-invoking the two consumers CI already runs, which is ceremony that "
         "would drift from the real invocations rather than any kind of coverage. It is not unwired in "
         "the sense this gate is built to catch: CI executes every entry of this file TWICE on every "
@@ -164,10 +214,12 @@ DELIBERATELY_UNWIRED: dict[str, str] = {
         "invokes the detector directly, never this fixture."
     ),
     "tests/coord-report": (
-        "UNWIRED BY OMISSION, tracked at .github#2556, and half-blocked on .github#2555. Fixtures "
-        "scripts/fsgg-coord-report, which no workflow runs. Wiring alone would NOT clear this report: "
-        "RX_SHELL/RX_DOTNET above are the whole scrape vocabulary, so `python3 tests/coord-report/"
-        "run.py` in a workflow is invisible to derivation and the directory would still read UNWIRED."
+        "UNWIRED BY OMISSION, tracked at .github#2556. Fixtures scripts/fsgg-coord-report, which no "
+        "workflow runs. It was HALF-BLOCKED on .github#2555 and is not any more: that row put python3 "
+        "into KINDS above, so `python3 tests/coord-report/run.py` in a workflow is now derived like any "
+        "other suite and wiring it is all this entry needs. Nothing here is deliberate — the remaining "
+        "half is the wiring judgement .github#2556 owns (which workflow, on which paths: filter), and "
+        "the moment it lands --assert-wired will call this entry STALE and it should be deleted."
     ),
     "tests/observed-command-report": (
         "UNWIRED BY OMISSION, tracked at .github#2556. Fixtures its own run-gate-junit.sh, a JUnit "
@@ -190,12 +242,12 @@ class NoVerdict(Exception):
 class Suite:
     """One runnable thing. Identity is its path, so N workflows referencing it dedupe to one run."""
 
-    kind: str  # "shell" | "dotnet"
+    kind: str  # a KINDS row's name
     path: str
 
     @property
     def cmd(self) -> list[str]:
-        return ["bash", self.path] if self.kind == "shell" else ["dotnet", "test", self.path]
+        return [*KIND_CMD[self.kind], self.path]
 
     @property
     def label(self) -> str:
@@ -261,23 +313,31 @@ def translate(pattern: str, where: str) -> re.Pattern[str]:
     return re.compile("".join(out) + r"\Z")
 
 
+def scrape_run(run: str, into: set[Suite]) -> None:
+    """Every suite invocation in one `run:` block, in every kind the vocabulary knows.
+
+    The single place the KINDS table is applied. Both callers below go through it, so a new row is
+    picked up by both for free — the two of them used to carry their own copy of the loop, and a kind
+    added to one but not the other would have been visible to `--list` and invisible to the policy
+    expansion, or the reverse (.github#2555).
+    """
+    for kind in KINDS:
+        for match in kind.scrape.finditer(run):
+            into.add(Suite(kind.name, match.group(1)))
+
+
 def scrape_commands(commands: list[object], into: set[Suite]) -> None:
     for command in commands:
         if not isinstance(command, list):
             continue
-        run = " ".join(str(value) for value in command)
-        for match in RX_SHELL.finditer(run): into.add(Suite("shell", match.group(1)))
-        for match in RX_DOTNET.finditer(run): into.add(Suite("dotnet", match.group(1)))
+        scrape_run(" ".join(str(value) for value in command), into)
 
 
 def scrape(root: Path, node: object, into: set[Suite]) -> None:
     """Pull suite invocations out of a job's steps."""
     for step in node if isinstance(node, list) else []:
         run = str((step or {}).get("run") or "") if isinstance(step, dict) else ""
-        for m in RX_SHELL.finditer(run):
-            into.add(Suite("shell", m.group(1)))
-        for m in RX_DOTNET.finditer(run):
-            into.add(Suite("dotnet", m.group(1)))
+        scrape_run(run, into)
         if RX_POLICY_ALL.search(run):
             try:
                 policy = json.loads((root / "policy/subjects.json").read_text(encoding="utf-8"))
