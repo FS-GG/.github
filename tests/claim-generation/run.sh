@@ -32,27 +32,52 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 #                                                      '.[] | {id,body,updated_at}'` would print.
 #   $WORLD/comments/<slug>.forbidden                  403 — the token may not read this issue's comments
 #   $WORLD/comments/<slug>.unreachable                rate limit / outage — never a verdict
+#   $WORLD/pulls.ndjson                             one {number,body,ref,sha} object per line — the
+#                                                      post-`--jq` shape `--sweep`'s PR listing reads.
+#   $WORLD/checkruns/<sha>.ndjson                     one {id,conclusion,started_at} per line — the
+#                                                      STANDING `claim-generation` verdict(s) on <sha>.
+#                                                      An ABSENT file is "no standing check run", which
+#                                                      the sweep must leave alone (it never originates).
+#   $WORLD/checkruns/<sha>.forbidden                  403 on reading that head's check runs.
+#   $WORLD/posted.ndjson                              WRITTEN BY THE STUB: every check run the sweep
+#                                                      published, so a leg can assert exactly what it did.
 #
 # An ABSENT comments file is a 404 — this item does not exist. That is deliberately different from a
 # PRESENT, empty (or marker-free) file, which is a real "this item exists and nobody holds it" answer
 # (the engine's own `released` sentinel). Collapsing the two would make "wrong item number" and
 # "correct item, currently unclaimed" indistinguishable, which is exactly the pair `check-claim-
 # generation.py`'s `Missing` vs. `RELEASED` handling is written to keep apart.
+#
+# The stub serves the ALREADY-`--jq`'d shape rather than the raw API envelope, as the comments case
+# above already does. That is a deliberate fixture concession, named here so nobody mistakes it for
+# fidelity: it exercises this gate's parsing of the lines it receives, not `gh`'s own `--jq`.
 # ---------------------------------------------------------------------------------------------
 STUB="$WORK/stub"; mkdir -p "$STUB"
 cat > "$STUB/gh" <<'STUB'
 #!/usr/bin/env bash
 set -uo pipefail
-path=""
-for a in "$@"; do case "$a" in repos/*) path="$a";; esac; done
+path=""; method="GET"
+for a in "$@"; do
+  case "$a" in
+    repos/*) path="$a";;
+    POST)    method="POST";;
+  esac
+done
 
 notfound()  { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 forbidden() { echo "gh: Resource not accessible by integration (HTTP 403)" >&2; exit 1; }
 apifail()   { echo "gh: API rate limit exceeded for installation (HTTP 500)" >&2; exit 1; }
 
-rest="${path#repos/}"
-case "$rest" in
-  */issues/*/comments)
+base="${path%%\?*}"
+rest="${base#repos/}"
+case "$method:$rest" in
+  POST:*/check-runs)
+    mkdir -p "$WORLD"
+    cat >> "$WORLD/posted.ndjson"
+    printf '\n' >> "$WORLD/posted.ndjson"
+    echo '{"id": 1}'
+    ;;
+  GET:*/issues/*/comments)
     repo="${rest%%/issues/*}"; num="${rest#*/issues/}"; num="${num%/comments}"
     slug="${repo//\//__}__${num}"
     [ -e "$WORLD/comments/$slug.forbidden" ]   && forbidden
@@ -60,6 +85,18 @@ case "$rest" in
     f="$WORLD/comments/$slug.ndjson"
     [ -f "$f" ] || notfound
     cat "$f"
+    ;;
+  GET:*/pulls)
+    f="$WORLD/pulls.ndjson"
+    [ -f "$f" ] || notfound
+    cat "$f"
+    ;;
+  GET:*/commits/*/check-runs)
+    sha="${rest#*/commits/}"; sha="${sha%/check-runs}"
+    [ -e "$WORLD/checkruns/$sha.forbidden" ] && forbidden
+    f="$WORLD/checkruns/$sha.ndjson"
+    [ -f "$f" ] && cat "$f"
+    exit 0
     ;;
   *) notfound ;;
 esac
@@ -80,6 +117,43 @@ comment() {
 import json
 print(json.dumps({'id': $id, 'body': '<!-- fsgg:claim worker=$worker lease=120 renewed=0 -->', 'updated_at': '$ts'}))
 " >> "$world/comments/$slug.ndjson"
+}
+
+# comment_at <world> <repo> <n> <id> <iso-updated-at> [lease] [worker]  — the same, at an ABSOLUTE
+# instant and with an explicit `lease=`. The lease-expiry legs (`.github#2656`) need both: a claim whose
+# staleness is decided by the lease the MARKER declares, and a clock the leg controls rather than
+# observes, so that "green at T, red at T+lease, nothing else changed" is a fact and not a race.
+# A lease of `none` emits a marker with NO `lease=` field at all, which is a different world from one
+# that declares a lease this gate happens to agree with: it is the only way to exercise the fallback.
+comment_at() {
+  local world="$1" repo="$2" num="$3" id="$4" ts="$5" lease="${6:-120}" worker="${7:-fixture-worker}"
+  mkdir -p "$world/comments"
+  local slug="${repo//\//__}__${num}" leasepart=" lease=$lease"
+  [ "$lease" = "none" ] && leasepart=""
+  python3 -c "
+import json
+print(json.dumps({'id': $id, 'body': '<!-- fsgg:claim worker=$worker$leasepart renewed=0 -->', 'updated_at': '$ts'}))
+" >> "$world/comments/$slug.ndjson"
+}
+
+# pr <world> <number> <ref> <sha> <body>  — one open pull request in the sweep's listing.
+pr() {
+  local world="$1" number="$2" ref="$3" sha="$4" body="$5"
+  mkdir -p "$world"
+  BODY="$body" python3 -c "
+import json, os
+print(json.dumps({'number': $number, 'body': os.environ['BODY'], 'ref': '$ref', 'sha': '$sha'}))
+" >> "$world/pulls.ndjson"
+}
+
+# checkrun <world> <sha> <conclusion> [started_at] [id]  — the STANDING claim-generation verdict.
+checkrun() {
+  local world="$1" sha="$2" conclusion="$3" started="${4:-2026-01-01T00:00:00Z}" id="${5:-900}"
+  mkdir -p "$world/checkruns"
+  python3 -c "
+import json
+print(json.dumps({'id': $id, 'conclusion': '$conclusion', 'started_at': '$started'}))
+" >> "$world/checkruns/$sha.ndjson"
 }
 
 # no_claim <world> <repo> <n>  — the item EXISTS (a readable comments payload) but nobody holds it.
@@ -172,7 +246,13 @@ expect "mismatched: item field names a different item" \
 
 W2R="$WORK/w2r"; no_claim "$W2R" "$REPO" 2342
 expect "mismatched: item exists but nobody currently holds it (released)" \
-  1 "not currently held by anyone" "$W2R" "$REPO" "$REF" "$HEAD_SHA" \
+  1 "carries no \`fsgg:claim\` marker at all" "$W2R" "$REPO" "$REF" "$HEAD_SHA" \
+  "$(marker "$ITEM" 5000000001 "$HEAD_SHA")"
+
+# .github#2656 AC3: this diagnosis must say EVICTION, so that a reader cannot confuse it with the
+# EXPIRY case (section 8 below), whose repair is entirely different — `heartbeat`, not re-`take`.
+expect "mismatched: the released diagnosis names eviction and points at [expired] for the other case" \
+  1 "This is EVICTION, not expiry" "$W2R" "$REPO" "$REF" "$HEAD_SHA" \
   "$(marker "$ITEM" 5000000001 "$HEAD_SHA")"
 
 W2M="$WORK/w2m"
@@ -235,8 +315,13 @@ expect "pass: unknown extra fields (opkey=/grant=) are tolerated" \
 W6="$WORK/w6"; comment "$W6" "$REPO" 2342 5000000001 50  # 50 minutes old
 expect "lease: 50-minute-old marker is LIVE under the 120-minute default" \
   0 "OK" "$W6" "$REPO" "$REF" "$HEAD_SHA" "$(marker "$ITEM" 5000000001 "$HEAD_SHA")"
-expect "lease: the SAME marker is STALE under a tightened 30-minute lease" \
-  1 "not currently held by anyone" "$W6" "$REPO" "$REF" "$HEAD_SHA" \
+expect "lease: the SAME marker is EXPIRED under a tightened 30-minute lease" \
+  1 "claim LEASE HAS LAPSED" "$W6" "$REPO" "$REF" "$HEAD_SHA" \
+  "$(marker "$ITEM" 5000000001 "$HEAD_SHA")" --lease-minutes 30
+# ...and an explicit --lease-minutes OUTRANKS the marker's own `lease=120` (`.github#2656` AC2's
+# precedence: an operator tightening the window in CI must not be opt-out-able by a marker).
+expect "lease: --lease-minutes outranks the marker's own lease= and is the one named in the diagnosis" \
+  1 "its 30-minute lease (set by --lease-minutes)" "$W6" "$REPO" "$REF" "$HEAD_SHA" \
   "$(marker "$ITEM" 5000000001 "$HEAD_SHA")" --lease-minutes 30
 
 # =============================================================================================
@@ -263,6 +348,169 @@ expect ".github#2488: a freshly opened item PR with no marker reds, exactly as m
 expect ".github#2488: the SAME PR greens once the emission (ensureAuthorization) has written the marker" \
   0 "OK" "$W7" "$REPO" "$REF_2488" "$HEAD_SHA" \
   "$(marker "$ITEM_2488" 5274354824 "$HEAD_SHA")"
+
+# =============================================================================================
+# 8. .github#2656 AC2 — THE LEASE IS THE MARKER'S OWN, NOT THIS GATE'S. Each `fsgg:claim` marker
+# carries `lease=<minutes>` (`Writes.claimMarker`). A gate that measured every marker against its own
+# built-in 120 would declare a worker who took an item with a SHORTER lease still live long after it
+# lapsed, and one who took it with a LONGER lease dead while it is held. Both directions are checked,
+# against an absolute clock so neither leg can pass by accident of when the fixture ran.
+# =============================================================================================
+T0="2026-06-01T00:00:00Z"
+at() { python3 -c "
+from datetime import datetime, timedelta, timezone
+print((datetime(2026,6,1,tzinfo=timezone.utc) + timedelta(minutes=$1)).strftime('%Y-%m-%dT%H:%M:%SZ'))
+"; }
+
+W8A="$WORK/w8a"; comment_at "$W8A" "$REPO" 2656 5300000001 "$T0" 30
+expect "marker lease: a 30-minute lease is EXPIRED at T+45 even though this gate's default is 120" \
+  1 "its 30-minute lease (declared by that marker)" "$W8A" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" \
+  "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --now "$(at 45)"
+
+W8B="$WORK/w8b"; comment_at "$W8B" "$REPO" 2656 5300000001 "$T0" 240
+expect "marker lease: a 240-minute lease is still LIVE at T+180 even though this gate's default is 120" \
+  0 "OK" "$W8B" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" \
+  "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --now "$(at 180)"
+
+W8C="$WORK/w8c"; comment_at "$W8C" "$REPO" 2656 5300000001 "$T0" none  # no lease= field at all
+expect "marker lease: a marker with no lease= falls back, and SAYS it fell back" \
+  1 "this gate's fallback — the marker declares no \`lease=\`" "$W8C" "$REPO" "item/2656-lease-expiry" \
+  "$HEAD_SHA" "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --now "$(at 121)"
+
+# =============================================================================================
+# 9. .github#2656 AC4 — THE ORDERING THAT WAS NEVER EXERCISED. `osprey-174c`'s near-miss was caught
+# only because the lease lapsed BEFORE `delivery`, so the authorization was stale on arrival. The
+# ordering that was NOT exercised, and that a green verdict survives, is this one: the gate is GREEN,
+# then the lease lapses with NO push and NO body edit, and the merge is attempted.
+#
+# ONE world, ONE PR body, ONE head SHA, evaluated at two instants. Nothing about the pull request
+# changes between the two legs — that is the whole point, and it is why `--now` exists rather than a
+# `sleep`. A gate that only ever covered expiry-before-`delivery` stays green through this defect.
+# =============================================================================================
+W9="$WORK/w9"; comment_at "$W9" "$REPO" 2656 5300000042 "$T0" 120 "osprey-174c"
+BODY9="$(marker "$REPO#2656" 5300000042 "$HEAD_SHA")"
+
+expect "AC4: at T+60 the verdict is GREEN" \
+  0 "OK" "$W9" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" "$BODY9" --now "$(at 60)"
+
+# ...and the green publishes the instant it stops being true, derived from that marker's own lease.
+expect "AC4: the green publishes its own deadline (T0 + the marker's 120-minute lease)" \
+  0 "verdict-expires-at=$(at 120)" "$W9" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" "$BODY9" \
+  --now "$(at 60)"
+
+expect "AC4: at T+121 the SAME unchanged PR is RED — no push, no body edit, only time passing" \
+  1 "claim LEASE HAS LAPSED" "$W9" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" "$BODY9" --now "$(at 121)"
+
+expect "AC4: and the red names the holder, so expiry cannot be misread as a lost race" \
+  1 "still names \`osprey-174c\`" "$W9" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" "$BODY9" \
+  --now "$(at 121)"
+
+# =============================================================================================
+# 10. .github#2656 AC1 — THE RE-EVALUATION ITSELF (`--sweep`). Sections 8 and 9 prove the VERDICT is a
+# function of time; they cannot prove a merge is fenced, because nothing in GitHub recomputes a check
+# run when a lease lapses. `--sweep` is what recomputes it. These legs assert what it publishes, and —
+# just as importantly — the two cases where it must publish NOTHING.
+# =============================================================================================
+sweep() {  # sweep <world> [extra args…]
+  local world="$1"; shift
+  PATH="$STUB:$PATH" WORLD="$world" FSGG_CLAIM_GEN_TRIES=1 FSGG_CLAIM_GEN_RETRY_DELAY=0 \
+    python3 "$TOOL" --sweep --repo "$REPO" "$@" 2>&1
+}
+
+# posted <world>  — every check run the sweep published, as one blob (empty when it published none).
+posted() { cat "$1/posted.ndjson" 2>/dev/null || true; }
+
+sweep_expect() {  # sweep_expect <name> <want-rc> <needle> <posted-needle|-> <world> [extra…]
+  local name="$1" want="$2" needle="$3" want_posted="$4"; shift 4
+  local out rc=0
+  out="$(sweep "$@")" || rc=$?
+  local got_posted; got_posted="$(posted "$1")"
+  # WHAT IT PUBLISHED IS ASSERTED BEFORE WHAT IT SAID. The sweep writes a REQUIRED context's verdict,
+  # so "it published a check run it had no business publishing" is the failure a reader must see first;
+  # a mutation that removes one of the two refusals also removes the log line that names it, and
+  # grading the prose first would report the missing sentence and never mention the stray write.
+  if [ "$rc" -ne "$want" ]; then
+    bad "$name (exit $rc, want $want)" "$out"
+  elif [ "$want_posted" = "-" ] && [ -n "$got_posted" ]; then
+    bad "$name (it published a check run and must not have)" "$got_posted"
+  elif [ -n "$needle" ] && ! grep -qF "$needle" <<<"$out"; then
+    bad "$name (exit $want, but not for the stated reason: want '$needle')" "$out"
+  elif [ "$want_posted" != "-" ] && ! grep -qF "$want_posted" <<<"$got_posted"; then
+    bad "$name (published nothing matching '$want_posted')" "${got_posted:-<nothing published>}"
+  else
+    ok "$name"
+  fi
+}
+
+SHA_A="$(printf '%040d' 11)"
+REF_A="item/2656-lease-expiry"
+BODY_A="$(marker "$REPO#2656" 5300000042 "$SHA_A")"
+
+# (a) THE DEFECT, CLOSED: the standing verdict is `success`, the lease has since lapsed with no push
+#     and no body edit — the sweep revokes it.
+WSA="$WORK/wsa"
+comment_at "$WSA" "$REPO" 2656 5300000042 "$T0" 120 "osprey-174c"
+pr "$WSA" 2657 "$REF_A" "$SHA_A" "$BODY_A"
+checkrun "$WSA" "$SHA_A" success
+sweep_expect "sweep: a green whose lease has since lapsed is REVOKED" \
+  0 "success -> failure [expired]" '"conclusion": "failure"' "$WSA" --now "$(at 121)"
+
+# (b) ...and the same sweep RESTORES a green once the claim is live again, so a lapse that the holder
+#     repairs with `heartbeat` does not wedge the PR until someone forces an event.
+WSB="$WORK/wsb"
+comment_at "$WSB" "$REPO" 2656 5300000042 "$T0" 120 "osprey-174c"
+pr "$WSB" 2657 "$REF_A" "$SHA_A" "$BODY_A"
+checkrun "$WSB" "$SHA_A" failure
+sweep_expect "sweep: a red whose claim is live again is RESTORED" \
+  0 "failure -> success [ok]" '"conclusion": "success"' "$WSB" --now "$(at 60)"
+
+# (c) NO CHANGE, NO WRITE. The sweep runs on a schedule; a sweep that re-posted an unchanged verdict
+#     every period would bury each PR's checks list under identical check runs.
+WSC="$WORK/wsc"
+comment_at "$WSC" "$REPO" 2656 5300000042 "$T0" 120 "osprey-174c"
+pr "$WSC" 2657 "$REF_A" "$SHA_A" "$BODY_A"
+checkrun "$WSC" "$SHA_A" success
+sweep_expect "sweep: an unchanged verdict publishes nothing" \
+  0 "is unchanged (success)" "-" "$WSC" --now "$(at 60)"
+
+# (d) IT NEVER ORIGINATES A VERDICT. A head with no standing `claim-generation` check run has not been
+#     judged by the required job, and a cron must not be the first thing to judge it.
+WSD="$WORK/wsd"
+comment_at "$WSD" "$REPO" 2656 5300000042 "$T0" 120 "osprey-174c"
+pr "$WSD" 2657 "$REF_A" "$SHA_A" "$BODY_A"
+sweep_expect "sweep: a head with no standing check run is left entirely alone" \
+  0 "it never originates" "-" "$WSD" --now "$(at 121)"
+
+# (e) A FAILED READ LEAVES THE STANDING VERDICT ALONE (#266, in the only direction available here).
+WSE="$WORK/wse"
+mkdir -p "$WSE/comments"; : > "$WSE/comments/${REPO//\//__}__2656.unreachable"
+pr "$WSE" 2657 "$REF_A" "$SHA_A" "$BODY_A"
+checkrun "$WSE" "$SHA_A" success
+sweep_expect "sweep: an unreadable claim state warns and publishes nothing" \
+  0 "could not be re-evaluated" "-" "$WSE" --now "$(at 121)"
+
+# (f) A NON-ITEM BRANCH IS NOT THE SWEEP'S BUSINESS — the same applicability rule the required job
+#     uses, because `item_args` is the only place either of them asks the question.
+WSF="$WORK/wsf"
+pr "$WSF" 2658 "chore/bump-deps" "$SHA_A" "no marker here"
+checkrun "$WSF" "$SHA_A" success
+sweep_expect "sweep: a non-item branch is not re-evaluated at all" \
+  0 "0 item PR(s) re-evaluated" "-" "$WSF" --now "$(at 121)"
+
+# (g) --dry-run reports the change and publishes nothing, so the mechanism can be exercised against a
+#     live repository before it is allowed to write.
+WSG="$WORK/wsg"
+comment_at "$WSG" "$REPO" 2656 5300000042 "$T0" 120 "osprey-174c"
+pr "$WSG" 2657 "$REF_A" "$SHA_A" "$BODY_A"
+checkrun "$WSG" "$SHA_A" success
+sweep_expect "sweep: --dry-run reports the revocation without publishing it" \
+  0 "success -> failure [expired]" "-" "$WSG" --now "$(at 121)" --dry-run
+
+# (h) The sweep takes no per-PR arguments — it reads the whole repository itself. Accepting them would
+#     let a caller point "the sweep" at one PR's body while claiming to have swept the repo.
+WSH="$WORK/wsh"
+sweep_expect "sweep: refuses per-PR arguments rather than silently ignoring them" \
+  3 "takes no --head-ref" "-" "$WSH" --head-ref "$REF_A"
 
 echo
 echo "claim-generation fixture: $pass passed, $failcount failed"

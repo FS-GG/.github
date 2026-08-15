@@ -28,6 +28,18 @@ name: coherence
 # forever (measured: five for five real PRs, #2488's evidence table). The other jobs below re-run on a
 # body edit too as a result — accepted, not free, and bounded to the rare case of an actual PR edit
 # (human or a worker's own authorization call), not every push.
+#
+# THERE IS DELIBERATELY NO `schedule:` HERE, AND THE ATTEMPT TO ADD ONE IS WORTH RECORDING
+# (.github#2656). `claim-generation` fences a merge on a claim whose LEASE EXPIRES, and a lease
+# expiring is not an event — it is the passage of time, so none of the four `pull_request` types above
+# re-evaluates it. A cron is the only Actions trigger that is a function of time, so the first draft of
+# `.github#2656` put one in THIS file and had the three jobs that do not want it decline with
+# `if: github.event_name != 'schedule'`. `scripts/check-required-contexts.py` refused that outright:
+# a required context whose every producer carries a job-level `if:` it cannot PROVE runs on a normal
+# pull request is a context that may silently never report, and its allowlist of provable conditions is
+# intentionally narrow. The gate was right, and the refusal is the design note: a trigger three of the
+# four jobs must opt out of does not belong on the workflow they share. The sweep lives in
+# `.github/workflows/claim-freshness-sweep.yml`, on its own cron, with its own `checks: write`.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
@@ -213,6 +225,21 @@ jobs:
   # measured live: `who --json` failed `not found: no Projects v2 board titled 'Coordination' in
   # FS-GG` on this PR's own first head (`da310d55`, run 31655633573/job 94309337287).
   #
+  # ITS GREEN IS PERISHABLE, AND SOMETHING ELSE HAS TO NOTICE (.github#2656). What this job asserts is
+  # "at the instant it ran, the item was held under generation G" — and the claim lease it read expires.
+  # None of this workflow's triggers fires on that expiry, so a green computed before a lapse stays
+  # green with nothing to re-compute it, and branch protection (the only fence on a merge made from the
+  # GitHub UI or a bare `gh pr merge`, since `delivery --apply` re-reads the winning claim itself) would
+  # admit the merge on a lapsed premise. `.github#2571`'s chain came within one ordering of showing that
+  # live: the lease lapsed mid-review and was caught ONLY because it lapsed BEFORE `pnext-item` §6's
+  # `delivery` call rather than after this job went green.
+  #
+  # `.github/workflows/claim-freshness-sweep.yml` is what notices. On its own cron it re-runs THIS
+  # script over every open `item/<n>-*` PR and publishes a fresh `claim-generation` check run when the
+  # answer has changed — so a revoked green blocks the merge exactly as this job's own red would. Every
+  # OK this job prints now carries the instant it stops being true (`verdict-expires-at=`), derived from
+  # the winning claim marker's own `lease=`.
+  #
   # THE EMISSION POINT, NAMED (.github#2488 AC2) AND WHERE IT ACTUALLY LIVES: `Client.ensureAuthorization`,
   # reached through a plain LIVE `delivery <ref> --pr N` status read — no `--apply`, so it can never merge
   # or close anything (see that function's own doc comment in `Client.fs`). That call is NOT made from
@@ -260,18 +287,22 @@ jobs:
         run: |
           echo "claim-generation: OK" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 'FINDING: missing, stale, or mismatched claim-generation authorization'
+      - name: 'FINDING: missing, stale, expired, or mismatched claim-generation authorization'
         if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
         run: |
           {
             echo "### claim-generation: this PR's authorization does not name the current live claim"
             echo
-            echo 'See the job log above for which of the three — missing, stale, or mismatched — and'
-            echo 'why. This check is REQUIRED on `main` (.github#1858 armed it), so this red BLOCKS the'
-            echo 'merge; see scripts/check-claim-generation.py for the `fsgg:pr-authorization` marker a'
-            echo 'PR body needs to carry, and `pnext-item` §6 for the `delivery` call that writes it.'
+            echo 'See the job log above for which of the four — missing, stale, expired, or mismatched'
+            echo '— and why. This check is REQUIRED on `main` (.github#1858 armed it), so this red BLOCKS'
+            echo 'the merge; see scripts/check-claim-generation.py for the `fsgg:pr-authorization` marker'
+            echo 'a PR body needs to carry, and `pnext-item` §6 for the `delivery` call that writes it.'
+            echo
+            echo '`[expired]` is the one that is NOT a lost race (.github#2656): the claim marker is'
+            echo 'still there and still names its holder, and the lease simply ran out. `heartbeat`'
+            echo 'renews the SAME generation, and this check goes green again without re-authorizing.'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=claim-generation: authorization is missing, stale, or mismatched::See the job log for which, and why."
+          echo "::error title=claim-generation: authorization is missing, stale, expired, or mismatched::See the job log for which, and why."
           exit 1
 
       - name: 'NO VERDICT (retryable): the live claim state could not be read'
