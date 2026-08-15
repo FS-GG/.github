@@ -1,0 +1,65 @@
+# The failure legs of the coordination session reporter (.github#2556, epic #266).
+#
+# `scripts/fsgg-coord-report` is a PUBLISHED client: `registry/repos.yml` ships it in the kit,
+# `src/FS.GG.Kit/verify-package.sh` asserts it materializes executable, and both board skills instruct
+# every driver to report live item state through it. Its fixture landed with it (f6321969) and no
+# workflow has ever run a line of it — the reporter that tells a human what the board is doing had no
+# CI opinion at all. It was HALF-BLOCKED on .github#2555 until that row put `python3` into
+# `scripts/test`'s scrape vocabulary; before then a `run:` step here would have executed the suite and
+# still reported it UNWIRED, which is why it waited.
+#
+# Per epic #266's ratified rule — A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE — the fixture
+# drives the client black-box, through its real entry point, over the properties a reporter can lose
+# silently: the JSON document is authoritative and both text projections retain every scalar in it;
+# rich is plain plus SGR and nothing else; a caller's terminal control bytes are visibly ENCODED
+# rather than emitted, and that encoding stays injective, so a raw control byte and a caller who typed
+# its six-character escape spelling never collapse into the same cell; display width, not code-point
+# count, is what `--width` bounds; the append-only ledger deduplicates a retried heartbeat, survives a
+# corrupt derived cache without losing an event, and serializes concurrent `emit`/`show` on its lock;
+# and a foreign Coordination scope receipt is REFUSED even when the supplied snapshot is entirely
+# self-consistent about being foreign.
+#
+# WHY THE SKILL BODIES ARE IN THE FILTER. The fixture also asserts that both canonical board skills
+# still name this reporter and its typed lane-capacity vocabulary, and that each routed variant still
+# inherits its canonical driver rather than growing a sixth reporting recipe — in BOTH runtime roots.
+# Those are SKILL.md reads, so an edit to one is a change to this suite's corpus and must re-run it.
+# The glob covers `drive-board`, `work-board` and their four routed variants in one line rather than
+# twelve; it also selects `check-board`, which is a cheap over-trigger and not a wrong one.
+#
+# Hermetic: the client imports no GitHub client and reads no credential, and the fixture supplies
+# every lane snapshot and scope receipt from a temp dir. stdlib only — no shared policy bootstrap.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a
+# divergence.
+name: coord-report-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/fsgg-coord-report"
+      - "tests/coord-report/**"
+      - ".claude/skills/*-board*/SKILL.md"
+      - ".agents/skills/*-board*/SKILL.md"
+      - ".github/workflows/coord-report-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fsgg-coord-report"
+      - "tests/coord-report/**"
+      - ".claude/skills/*-board*/SKILL.md"
+      - ".agents/skills/*-board*/SKILL.md"
+      - ".github/workflows/coord-report-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the coordination session reporter fixture
+        run: python3 tests/coord-report/run.py

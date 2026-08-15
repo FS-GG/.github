@@ -1,0 +1,49 @@
+# The hermetic failure legs of scripts/check-board-paths-live.py (.github#2556, epic #266).
+#
+# `board-paths-live.yml` runs the DETECTOR — nightly, `schedule` + `workflow_dispatch` only, invoking
+# the script directly against the live board. That workflow cannot exercise this fixture and never
+# will: it has no `pull_request` trigger, and its corpus is the live board rather than one this repo
+# controls. So from the day detector and fixture landed together (ba9c883c, #2213) the detector's own
+# self-test had never once been executed, and the only thing anyone would ever see from a broken
+# classifier is a nightly job going quietly green over a board it had stopped reading correctly.
+#
+# Per epic #266's ratified rule — A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE — this drives
+# the detector across a corpus whose answer is known: one `.codex/skills` declaration that must be
+# NAMED with its issue number, two live declarations that must NOT be, the retired-root count, and —
+# the leg that matters most for an unattended nightly — unreadable board evidence, which must be
+# REFUSED rather than reported clean. A detector that reads an unparseable `items.json` as "no
+# findings" reports green forever and nobody learns anything.
+#
+# Hermetic: the fixture writes its own `items.json` into a temp dir. No board, no network, no token,
+# no PyYAML — the detector is stdlib-only, so this needs no shared policy bootstrap.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a
+# divergence.
+name: board-paths-live-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-board-paths-live.py"
+      - "tests/board-paths-live/**"
+      - ".github/workflows/board-paths-live-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-board-paths-live.py"
+      - "tests/board-paths-live/**"
+      - ".github/workflows/board-paths-live-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the board-paths-live detector fixture
+        run: bash tests/board-paths-live/run.sh
