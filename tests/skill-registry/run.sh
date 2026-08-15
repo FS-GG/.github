@@ -1681,6 +1681,19 @@ enforce "requires a non-empty .channel."    '- { owner: owner-two, scope: produc
 enforce "permits kind"                      '- { owner: owner-two, scope: product, disposition: delivered, kind: template-payload, channel: A, evidence: e }'
 enforce "requires a non-empty .reason."     '- { owner: owner-two, scope: product, disposition: withheld, evidence: e }'
 enforce "requires a non-empty .tracked-by." '- { owner: owner-two, scope: product, disposition: gap }'
+enforce "requires a non-empty .evidence."   '- { owner: owner-two, scope: product, disposition: provider-scoped, kind: template-payload, provider: p, tracked-by: FS-GG/FS.GG.Rendering#1240 }'
+# ...AND `gap`'s ASYMMETRY IS DELIBERATE, so it is pinned here rather than left to be rediscovered by
+# probing. `gap` requires `tracked-by` and NOT `evidence:`: it asserts that NO artefact carries these
+# bytes, so there is nothing for it to name, and demanding evidence of that negative would only invite
+# a pointer to nothing. A reviewer read the surrounding prose, probed this by hand, and found the
+# commentary and the schema disagreeing (.github#2545 repair 1, finding 3) -- the schema was right and
+# the prose was wrong. This case is what stops them drifting apart again.
+{ printf 'schemaVersion: 1\nclasses:\n'
+  printf '  - { owner: owner-one, scope: process, disposition: delivered, kind: in-code, channel: A, evidence: e }\n'
+  printf '  - { owner: owner-two, scope: product, disposition: gap, tracked-by: FS-GG/FS.GG.Rendering#1240 }\n'
+} > "$CH/skills.delivery-channels.yml"
+out="$(dc "$CH/skills.yml")"
+[ -z "$out" ] || { echo "FAIL: a gap carrying tracked-by and no evidence was reported"; echo "$out"; exit 1; }
 echo "   ok"
 
 echo "== 75. a provider-scoped class must name who owes universal reach, or why it does not need it =="

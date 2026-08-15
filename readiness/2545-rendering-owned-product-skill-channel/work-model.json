@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "21509f554867b43ef765036e9a1f2ff83148ff994f6dc480a65b9521682e03b1"
+        "value": "7014621453fcc6e83254f3052fbe2e1ac0d61364a36fbc398b988010935dfb0b"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "7cf27acd8d137eac1bf859f797bc5d55d97b5fd9a4e0d364de7ad416c53f8595"
+        "value": "3d4ff4e97cbd3a1c31e3a5b5f93d70313e23beccda90d953a4ac88357adb7ebd"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2b2ce75bd3823a799160ec0825b4166c9e58913c6b7bed29b232984808df80f3"
+        "value": "deac6e256673d480283d386e5e6d87b30fe5809c446fe94002513c06d2406001"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50"
+        "value": "9f5e470c333693887a5f0de46c47b67227979cb0cf32b3b11e21523ec0cfed66"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2a1087f93d2a3aee16ff644387b944da89168a906e12c021bb14dea39a65e9ca"
+        "value": "14551d871aae21b05e34c1a915134adc5cc829aea76d89c853829155428d1387"
       }
     }
   ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 244,
+        "line": 280,
         "column": 1
       },
       "linkedTaskIds": [
@@ -158,7 +158,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 245,
+        "line": 281,
         "column": 1
       },
       "linkedTaskIds": [
@@ -179,7 +179,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 246,
+        "line": 282,
         "column": 1
       },
       "linkedTaskIds": [
@@ -200,7 +200,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 247,
+        "line": 283,
         "column": 1
       },
       "linkedTaskIds": [
@@ -221,7 +221,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 248,
+        "line": 284,
         "column": 1
       },
       "linkedTaskIds": [
@@ -242,7 +242,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 249,
+        "line": 285,
         "column": 1
       },
       "linkedTaskIds": [
@@ -263,7 +263,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 250,
+        "line": 286,
         "column": 1
       },
       "linkedTaskIds": [
@@ -284,7 +284,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 251,
+        "line": 287,
         "column": 1
       },
       "linkedTaskIds": [
@@ -305,7 +305,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 252,
+        "line": 288,
         "column": 1
       },
       "linkedTaskIds": [
@@ -326,7 +326,7 @@
       "classification": [],
       "source": "work/2545-rendering-owned-product-skill-channel/spec.md",
       "sourceLocation": {
-        "line": 253,
+        "line": 289,
         "column": 1
       },
       "linkedTaskIds": [
@@ -1696,7 +1696,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "21509f554867b43ef765036e9a1f2ff83148ff994f6dc480a65b9521682e03b1"
+            "value": "7014621453fcc6e83254f3052fbe2e1ac0d61364a36fbc398b988010935dfb0b"
           },
           "schemaVersion": 1
         },
@@ -1712,7 +1712,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "7cf27acd8d137eac1bf859f797bc5d55d97b5fd9a4e0d364de7ad416c53f8595"
+            "value": "3d4ff4e97cbd3a1c31e3a5b5f93d70313e23beccda90d953a4ac88357adb7ebd"
           },
           "schemaVersion": 1
         },
@@ -1720,7 +1720,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "2b2ce75bd3823a799160ec0825b4166c9e58913c6b7bed29b232984808df80f3"
+            "value": "deac6e256673d480283d386e5e6d87b30fe5809c446fe94002513c06d2406001"
           },
           "schemaVersion": 1
         },
@@ -1728,7 +1728,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50"
+            "value": "9f5e470c333693887a5f0de46c47b67227979cb0cf32b3b11e21523ec0cfed66"
           },
           "schemaVersion": 1
         },
@@ -1736,14 +1736,14 @@
           "path": "work/2545-rendering-owned-product-skill-channel/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "2a1087f93d2a3aee16ff644387b944da89168a906e12c021bb14dea39a65e9ca"
+            "value": "14551d871aae21b05e34c1a915134adc5cc829aea76d89c853829155428d1387"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "114e0bab38e72346077917338fb279d94f0a6c512f163274839da9bed3fa6190"
+        "value": "18e9c1da9ecf1c891e02a34a44f84541c5a127f05f4e16da1e3f5c6f50540f04"
       },
       "currency": "current"
     }

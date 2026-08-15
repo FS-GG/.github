@@ -44,8 +44,15 @@
 # directions — a class with no entry, and an entry with no class — so each catalog needs its own
 # declaration or one would always be reporting the other's classes as dead.
 #
-# `evidence:` IS REQUIRED ON EVERY DISPOSITION, AND THAT IS NOT CEREMONY. Delivery cannot be read
-# off a repository's git tree. FS.GG.Templates' six product bodies live at `template/product-skills/`
+# `evidence:` IS REQUIRED ON EVERY DISPOSITION THAT CLAIMS A CHANNEL, AND THAT IS NOT CEREMONY —
+# `delivered`, `provider-scoped` and `withheld` all require it; `gap` requires `tracked-by` instead
+# and carries no `evidence:` at all. The asymmetry is deliberate: a `gap` asserts that NO artefact
+# carries these bytes, so there is nothing for it to name, and demanding evidence of that negative
+# would only invite a pointer to nothing. What makes a `gap` accountable is naming who owes closing
+# it. The required-field table above is the authority; this paragraph describes it.
+#
+# For the other three, delivery cannot be read off a repository's git tree.
+# FS.GG.Templates' six product bodies live at `template/product-skills/`
 # — OUTSIDE every `templates/<name>/` template root, whose `.template.config/template.json` declares
 # a single `{"source": "./", "target": "./"}` — which reads as a fourth instance of the class until
 # you notice `FS.GG.Templates.csproj` PROJECTS them into `content/templates/<id>/.agents/skills/` at

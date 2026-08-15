@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/2545-rendering-owned-product-skill-channel/clarifications.md
 
 ## Source Snapshot
-- spec: work/2545-rendering-owned-product-skill-channel/spec.md sha256:838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50 schemaVersion:1
+- spec: work/2545-rendering-owned-product-skill-channel/spec.md sha256:9f5e470c333693887a5f0de46c47b67227979cb0cf32b3b11e21523ec0cfed66 schemaVersion:1
 - clarifications: work/2545-rendering-owned-product-skill-channel/clarifications.md sha256:768db4d522c67d0eaba249842d1a646de13b2c6eee4aed9493045e6c1ca79745 schemaVersion:1
 
 ## Checklist Items

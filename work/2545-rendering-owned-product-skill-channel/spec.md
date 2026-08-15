@@ -79,6 +79,42 @@ stops the decision from having to be rediscovered per class.
 - SB-106: Does **not** touch `EHotwagner/S.I.R.` or any product tree. That posture is `.github#2548`.
 - SB-107: Does not implement Governance policy enforcement.
 
+## `.github#2545`'s four acceptance criteria — where each is discharged
+
+Stated as a map, because an earlier revision of this package discharged three of the four explicitly
+and left the fourth to be inferred from the fixture's existence. It was not lost — but the durable
+record did not say so, and a record that needs inference is the thing this package exists to stop.
+
+| Criterion | Discharged | Where |
+|---|---|---|
+| **1.** Choose a route, on the record, with the ADR-0063/ADR-0058 consistency argument | **here** | `## Route decision` below; DEC-001 in `clarifications.md` |
+| **2.** Implement the chosen channel so the row reaches a tree from **any** activated provider | **routed** | `.github` owns neither the bytes nor the materializer: FS.GG.Rendering#1240 publishes, FS.GG.SDD#864 consumes — `## Filed receiver rows` |
+| **3.** A regression fixture over the exact measured shape — a non-rendering-provider scaffold that receives the driver and process sets and is asserted to also receive `fs-gg-feedback-report` — shipping with gate-inversion evidence | **routed, verbatim** | **FS.GG.SDD#864 acceptance criterion 4**, which restates it word for word, including the inversion obligation |
+| **4.** State whether the other Rendering-owned product rows are in scope or deliberately gated out | **here** | `## Disposition of the Rendering-owned product rows` |
+
+### Why criterion 3 cannot be discharged in this repository, and what is not claimed instead
+
+Criterion 3 names a **scaffold**: a product tree built through a non-rendering provider, carrying the
+driver and process sets, asserted to also carry `fs-gg-feedback-report`. Producing one needs the
+`dotnet new` provider templates (FS.GG.Templates), the scaffold materializer (`fsgg-sdd scaffold`, in
+FS.GG.SDD), and the delivered bytes (FS.GG.Rendering). `.github` has none of the three — and the bytes
+the fixture would assert on **do not exist yet**, because the package carrying them is
+FS.GG.Rendering#1240, which this item files rather than lands. A fixture written here today could only
+assert the absence that `.github#2380` already measured.
+
+So it is filed where it can be executed, against the change that makes it pass: FS.GG.SDD#864
+acceptance criterion 4 carries it verbatim, on the row whose implementation is the thing under test,
+`Blocked by` FS.GG.Rendering#1240.
+
+**`tests/skill-registry/run.sh` cases 69-77 are not that fixture and must not be read as it.** They
+assert a categorically different thing: that the *declaration* answers for every `(owner, scope)` class
+the catalog carries, in both directions, with accountable fields. That is this item's own contribution
+— the mechanical question nothing was asking — and it is covered by FR-002..FR-006 and their
+verification obligations, not by criterion 3. A scaffold fixture asks *"did these bytes arrive?"*; these
+cases ask *"does anything even claim to carry them?"*. Reporting criterion 3 satisfied by a suite that
+never touches a scaffold would be the assert-X-is-wired-by-looking-for-X's-name shape this package
+records against elsewhere.
+
 ## Route decision
 
 **Route B — a Rendering-owned, published, pinned, content-addressed package

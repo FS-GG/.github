@@ -34,6 +34,14 @@ next one. The unmutated suite exits 0 with `skill-registry fixture: all checks p
 | M3 | `TRACKED_BY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*#[1-9][0-9]*")` → `re.compile(r".*")` — any string is an acceptable reference | **1** | `FAIL: expected 'full owner/repo#number' for entry: … tracked-by: .github#1240 }` (case 75) |
 | M4 | the unreadable-declaration arm `return [finding(…)]` → `return []` — a declaration the gate cannot read means every class is fine | **1** | `FAIL: a MISSING declaration was not a finding` (case 76) |
 | M5 | `check()`'s `findings.extend(delivery_channels(registry_path, registry["skills"]))` deleted — the arm is never wired in at all | **1** | `FAIL: an undeclared class was not reported` (case 70) |
+| M6 | `DELIVERY_DISPOSITIONS["gap"]` required fields `("tracked-by",)` → `("tracked-by", "evidence")` — a `gap` must evidence a negative | **1** | `FAIL: a gap carrying tracked-by and no evidence was reported` (case 74) |
+| M7 | `DELIVERY_DISPOSITIONS["provider-scoped"]` required fields lose `"evidence"` | **1** | `FAIL: expected 'requires a non-empty .evidence.' for entry: … provider-scoped …` (case 74) |
+
+M6 and M7 were added in **repair 1**. An independent reviewer read this package's prose, which said
+`evidence:` was required on *every* disposition, probed a `gap` entry carrying none, and found it
+green — the schema was right and three separate paragraphs were wrong. The prose is corrected; these
+two mutants are what stop the two drifting apart again, in **both** directions: M6 pins that `gap`
+must NOT demand evidence of a negative, M7 pins that `provider-scoped` must.
 
 M4 and M5 are the two that matter most and are the easiest to ship by accident: M4 is the fail-open
 shape (`#266`) one level up from the classes themselves — a gate answering confidently about a file it

@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2545-rendering-owned-product-skill-channel/spec.md
-    digest: 838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50
+    digest: 9f5e470c333693887a5f0de46c47b67227979cb0cf32b3b11e21523ec0cfed66
     schemaVersion: 1
   - label: clarifications
     path: work/2545-rendering-owned-product-skill-channel/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/2545-rendering-owned-product-skill-channel/checklist.md
-    digest: 21509f554867b43ef765036e9a1f2ff83148ff994f6dc480a65b9521682e03b1
+    digest: 7014621453fcc6e83254f3052fbe2e1ac0d61364a36fbc398b988010935dfb0b
     schemaVersion: 1
   - label: plan
     path: work/2545-rendering-owned-product-skill-channel/plan.md
-    digest: 2b2ce75bd3823a799160ec0825b4166c9e58913c6b7bed29b232984808df80f3
+    digest: deac6e256673d480283d386e5e6d87b30fe5809c446fe94002513c06d2406001
     schemaVersion: 1
 tasks:
   - id: T001

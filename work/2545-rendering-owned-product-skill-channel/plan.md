@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2545-rendering-owned-product-skill-channel/spec.md sha256:838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50 schemaVersion:1
+- spec: work/2545-rendering-owned-product-skill-channel/spec.md sha256:9f5e470c333693887a5f0de46c47b67227979cb0cf32b3b11e21523ec0cfed66 schemaVersion:1
 - clarifications: work/2545-rendering-owned-product-skill-channel/clarifications.md sha256:768db4d522c67d0eaba249842d1a646de13b2c6eee4aed9493045e6c1ca79745 schemaVersion:1
-- checklist: work/2545-rendering-owned-product-skill-channel/checklist.md sha256:21509f554867b43ef765036e9a1f2ff83148ff994f6dc480a65b9521682e03b1 schemaVersion:1
+- checklist: work/2545-rendering-owned-product-skill-channel/checklist.md sha256:7014621453fcc6e83254f3052fbe2e1ac0d61364a36fbc398b988010935dfb0b schemaVersion:1
 
 ## Plan Scope
 - Work item 2545-rendering-owned-product-skill-channel is planned from the current specification, clarification, and checklist facts.
@@ -27,7 +27,7 @@ Prose status: planned
 - Checklist result count: 10.
 
 ## Plan Decisions
-- PD-001 [AC-001] [FR-001] complete: Author `registry/skills.delivery-channels.yml` with one entry per `(owner, scope)` class, each carrying exactly one disposition — `delivered`, `provider-scoped`, `withheld`, or `gap` — plus that disposition's required fields. The vocabulary is four-valued, not two-valued, because `fs-gg-feedback-report` HAS a channel and lacks only reach; a has-channel/no-channel file would let this item's own subject be declared green. Six classes exist today; the file is authored, not generated, because the channel a class rides is a semantic declaration with no upstream to derive from — ADR-0058 clause 2 keeps the fail-closed gate on exactly that kind of field.
+- PD-001 [AC-001] [FR-001] complete: Author `registry/skills.delivery-channels.yml` with one entry per `(owner, scope)` class, each carrying exactly one disposition — `delivered`, `provider-scoped`, `withheld`, or `gap` — plus that disposition's required fields — `evidence:` on the three that CLAIM something about the bytes, and `tracked-by` rather than `evidence:` on `gap`, which asserts that no artefact carries them at all. The vocabulary is four-valued, not two-valued, because `fs-gg-feedback-report` HAS a channel and lacks only reach; a has-channel/no-channel file would let this item's own subject be declared green. Six classes exist today; the file is authored, not generated, because the channel a class rides is a semantic declaration with no upstream to derive from — ADR-0058 clause 2 keeps the fail-closed gate on exactly that kind of field.
 - PD-002 [AC-002] [FR-002] complete: Implement closure in the arm as `classes(registry) − classes(declaration)`. The class set is DERIVED from `registry/skills.yml` on every run, never restated in the arm, so a new owner or a new scope value reds the gate without any code change. This is the property all three ADR-0063 instances lacked.
 - PD-003 [AC-003] [FR-003] complete: Implement the reverse direction, `classes(declaration) − classes(registry)`, as a separate finding kind. Without it the declaration rots into a restatement of a class set that has moved on — the exact failure mode ADR-0058 exists to prevent, reintroduced by the fix for it.
 - PD-004 [AC-004] [FR-004] complete: Enforce each disposition's required fields, and validate `tracked-by` against `^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*#[1-9][0-9]*$` — full `owner/repo#n` only. The board's own `<repo>#<n>` shorthand is deliberately rejected: `.github#2107` measured that GitHub's closing-keyword grammar does not parse it, and a reference a reader cannot resolve names nobody. A `provider-scoped` entry must carry exactly one of `tracked-by` or `accepted`, so shortfall in reach is never silent. Liveness of the referenced issue is NOT checked; that would need the network PD-005 forbids.

@@ -67,7 +67,7 @@ COMPLETENESS OF THE LIST.
 
   9. DELIVERY CHANNEL
                      every `(owner, scope)` class the catalog carries has an accountable delivery
-                     disposition in `registry/skill-delivery-channels.yml` (.github#2545). Checks
+                     disposition in `registry/skills.delivery-channels.yml` (.github#2545). Checks
                      1-8 are predicates over a row's bytes, its presence, its emission condition, or
                      its parameters. NOTHING asked where a row's bytes are supposed to COME FROM, so
                      the answer "nowhere" was not a finding, it was nothing — the ADR-0063 class
@@ -86,9 +86,12 @@ COMPLETENESS OF THE LIST.
 
                      It does NOT verify that a declared channel works. Judging delivery from tree
                      shape yields false findings — FS.GG.Templates' six product bodies sit outside
-                     every template root and are PROJECTED into the payload at pack time — so every
-                     disposition instead carries `evidence:` naming the artefact that packs, embeds,
-                     or withholds the bytes.
+                     every template root and are PROJECTED into the payload at pack time — so a
+                     disposition that CLAIMS a channel (`delivered`, `provider-scoped`, `withheld`)
+                     carries `evidence:` naming the artefact that packs, embeds, or withholds the
+                     bytes. `gap` does not, and cannot: it asserts that no such artefact exists, so
+                     there is nothing to name. Its accountability is `tracked-by` — the issue that
+                     owes closing it — which is why that field is what `gap` requires instead.
 
 And over the CONTENT of a row the manifest also declares (.github#292, epic #266). Checks 1-3 are
 predicates over a row's BYTES; check 5 over its PRESENCE. Nothing compared the one field that is
@@ -290,7 +293,8 @@ DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 
 # ---- check 9: DELIVERY CHANNEL (.github#2545) ---------------------------------------------------
 #
-# The schema of `registry/skill-delivery-channels.yml`. Read the arm's docstring below for why the
+# The schema of `registry/skills.delivery-channels.yml` — named after the registry it judges, see
+# `channels_path_for`. Read the arm's docstring below for why the
 # vocabulary is four-valued rather than "has a channel / has no channel".
 DELIVERY_CHANNELS_SCHEMA_VERSION = 1
 
@@ -1008,9 +1012,16 @@ def delivery_channels(registry_path: str, rows: list[dict]) -> list[dict]:
     repository tree shape produces false findings: FS.GG.Templates' six product bodies sit at
     `template/product-skills/` OUTSIDE every `templates/<name>/` template root, which reads as a
     fourth instance until you notice `FS.GG.Templates.csproj` PROJECTS them into
-    `content/templates/<id>/.agents/skills/` at pack time. So `evidence:` is required on every
-    disposition — the entry must name the artefact that packs, embeds, or withholds the bytes — and
-    the verdict on whether that artefact works belongs to the producer's and consumer's own gates.
+    `content/templates/<id>/.agents/skills/` at pack time. So every disposition that CLAIMS something
+    about the bytes — `delivered`, `provider-scoped`, `withheld` — requires `evidence:` naming the
+    artefact that packs, embeds, or withholds them, and the verdict on whether that artefact works
+    belongs to the producer's and consumer's own gates.
+
+    `gap` REQUIRES `tracked-by` AND NOT `evidence:`, and the asymmetry is the schema being honest
+    rather than an omission. A `gap` asserts that no artefact carries these bytes at all; requiring it
+    to name one would be requiring evidence of a negative, and the only field that could be supplied
+    is a pointer to nothing. What makes a `gap` accountable is naming who owes closing it. See
+    `DELIVERY_DISPOSITIONS` for the required-field table this sentence describes.
 
     Offline: two YAML reads, no `--repos-root`, no network. That is what lets the fixture next door
     exercise it without producer trees.
