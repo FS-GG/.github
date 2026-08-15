@@ -96,7 +96,7 @@ two questions, not one:
 ```sh
 # 1. does each feed SERVE the version at all?
 curl -fsS https://api.nuget.org/v3-flatcontainer/fs.gg.kit/index.json | jq -r '.versions[-3:]'
-gh api 'orgs/FS-GG/packages/nuget/FS.GG.Kit/versions?per_page=100' --jq '[.[].name] | .[:3]'
+gh api 'orgs/FS-GG/packages/nuget/FS.GG.Kit/versions?per_page=100' --paginate --jq '[.[].name] | .[:3]'
 # 2. do the bytes it serves match canonical, and does the served nuspec name the tagged commit?
 ```
 
