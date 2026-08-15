@@ -67,6 +67,23 @@ If that ceiling is exhausted, append `escalation` then `repair-phase`. Escalatio
 repair-phase fact has no authority. Repair phase permits at most ten confirmations before human
 escalation.
 
+If the round's critic has despawned and the host grants succession, the successor performs a genuinely
+fresh, full review of the current head and records it under **its own minted identity** — never as a
+record bearing the despawned critic's id, and never as a second `initial`, which is allowed only after
+host acceptance. The record keeps whichever `kind` the chain needs (`confirmation`, `escalation` or
+`repair-phase`) and adds one object:
+
+```json
+"critic": "<successor-minted-id>",
+"succession": {"originalCritic": "<despawned-id>", "grantedBy": "<host-id>", "grantUrl": "<grant comment URL>"}
+```
+
+After a valid succession the successor IS the generation's critic: the host's `acceptance` binds the
+successor, and any further grant names the successor as its `originalCritic`. A differing critic
+carrying no grant is refused exactly as before, and a grant on an `initial` or `acceptance` record, or
+on one that changes no critic, is refused. The engine requires `grantUrl` to be present and never
+resolves it, and a grant is bound to one exact head — a moved head needs a new grant.
+
 Only the host posts `acceptance`, after the latest critic record is `pass` and all checks are green.
 It uses verdict `accepted`, binds the exact head, initial URL and latest critic URL, follows the
 critic comment, and preserves generation critic identity. When diff audit is required it carries
@@ -84,7 +101,7 @@ generation. Backlinks, head bindings, critic continuity, and digest continuity f
 
 The critic is independent of implementation context: provide the roadmap/spec, diff, exact head and
 verification evidence, but not hidden implementation reasoning. The same critic handles repairs in a
-generation. Use the explicit succession workflow if replacement is unavoidable; prose is never
+generation. Use the explicit succession workflow above if replacement is unavoidable; prose is never
 authority.
 
 Report concrete findings first, ordered by severity and linked to files or commands. A pass means no

@@ -71,12 +71,39 @@
 #      ABSENT leg asserts the clause is missing, which is what makes the pair discriminating rather
 #      than decorative.
 #
-#   3. GATE INVERSION (5 legs) — the measurement, on the precedent set by
+#   3. LEDGER WRITE (5 legs, added by .github#2662) — the half sections 1 and 2 cannot reach, and the
+#      reason this fixture was green while the recovery it tests was unusable in production.
+#
+#      Sections 1 and 2 drive `review --snapshot`: the pure DECISION. `.github#2417` shipped that and
+#      not the LEDGER, so `StructuredDecision.validateReviewLedger` had no succession branch and a
+#      granted successor could be dispatched, could review, and then could not record a verdict in any
+#      honest shape — `confirmation`, `escalation` and a second `initial` were all refused, measured
+#      live on two independent chains in one session. Sixteen green legs said nothing about it, because
+#      not one of them wrote a record. That is what these legs do.
+#
+#      They drive the REAL writer — `fsgg-coord-engine review record` — against the loopback
+#      `tests/coord-engine-e2e/stateful_server.py`, the same vehicle `tests/coord-engine-e2e/writes.sh`
+#      already uses for this command. Still no token and still no network; a server per case, so each
+#      chain starts from an empty ledger and no leg can be explained by another leg's state.
+#
+#      WHAT THESE LEGS DO NOT REACH, stated rather than papered over: they exercise `review record` end
+#      to end, so `Client.recordReview`'s backlink checks and the POST are covered, but the REAL grant
+#      is still an out-of-band `--snapshot` fact with no durable marker of its own (deferred, and
+#      recorded as such). These legs assert what the LEDGER accepts, never that a grant was genuine.
+#
+#   4. GATE INVERSION (6 legs) — the measurement, on the precedent set by
 #      `tests/review-post-acceptance-head-move/run.sh` leg 6. For each conjunct: delete THAT conjunct
 #      from `Review.fs` in a scratch copy of the tree, rebuild, and require THAT conjunct's refusal leg
 #      to flip to `enterCriticSuccession`. One mutant per refusal, ~10s each, because a single mutant
 #      with every conjunct deleted would show that the legs can red without showing that any leg is
 #      bound to the refusal it is named for.
+#
+#      The sixth is section 3's, and it inverts the other way round, which is the point. Sections 1-2
+#      guard gates that REFUSE, so their inversion deletes a refusal and requires an admission. Section
+#      3 guards a gate that ADMITS, so its inversion removes the admission — `validateReviewLedger`
+#      stops seeing the grant at all — and requires the three accepting legs to RED while the two
+#      refusing legs stay exactly as red as they were. A mutation that reddened everything would prove
+#      only that the mutant is broken.
 #
 #      A mutation whose anchor text no longer matches FAILS here rather than silently rebuilding an
 #      identical engine — the `tests/coord-engine-mutation/` rule, for the same reason: a leg that
@@ -84,10 +111,11 @@
 #      whole file is about.
 #
 # WHY A SHELL FIXTURE AND NOT `tests/FS.GG.Coord.Core.Tests/ReviewTests.fs`. Unchanged from #2417 and
-# still true at #2537: it drives the COMPILED `fsgg-coord-engine review --snapshot` — the pure DECISION
-# path, no board, no token, no network — and asserts on JSON stdout and exit code. Section 3 needs to
-# rebuild the engine from mutated source five times, which a unit suite inside that same build cannot
-# do to itself.
+# still true at #2537: it drives the COMPILED `fsgg-coord-engine` — sections 1-2 through
+# `review --snapshot`, the pure DECISION path with no board, no token and no network, and section 3
+# through `review record` against a loopback fixture, still with no token and no network — and asserts
+# on JSON stdout and exit code. Section 4 needs to rebuild the engine from mutated source six times,
+# which a unit suite inside that same build cannot do to itself.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -339,7 +367,172 @@ for row in "${REFUSALS[@]}"; do
 done
 
 echo
-echo "── 3. GATE INVERSION: delete each conjunct, its own refusal leg must RED"
+echo "── 3. LEDGER WRITE: can a granted successor actually RECORD a verdict (.github#2662)"
+
+# The ledger cases. Each is an independent two-record chain on a FRESH fixture server:
+#   record 1  initial, critic `tern-42`, changes-required, at head aaaa…  (the despawned critic)
+#   record 2  the successor `snipe-8934` appending under test
+# `grant` is the JSON for the record's `succession` object, or `none` for no grant at all.
+#
+#   name|kind|successor|succession-json|expect|description
+LEDGER_CASES=(
+  "granted-confirmation|confirmation|snipe-8934|GRANT|accept|a granted successor's confirmation"
+  "granted-escalation|escalation|snipe-8934|GRANT|accept|a granted successor's escalation"
+  "granted-repair-phase|repair-phase|snipe-8934|GRANT|accept|a granted successor's repair-phase record"
+  "ungranted-confirmation|confirmation|snipe-8934|none|refuse|an identity change nobody granted"
+  "mismatched-grant|confirmation|snipe-8934|MISMATCH|refuse|a grant naming a critic who never held the seat"
+)
+
+GRANT_JSON='{"originalCritic":"tern-42","grantedBy":"heron-61d6","grantUrl":"https://github.com/FS-GG/.github/pull/2650#issuecomment-5302904754"}'
+MISMATCH_JSON='{"originalCritic":"stranger-0000","grantedBy":"heron-61d6","grantUrl":"https://github.com/FS-GG/.github/pull/2650#issuecomment-5302904754"}'
+
+# ledger_draft <outfile> <kind> <critic> <round> <initial-url> <preceding-url> <succession-json|none>
+# `revision`/`digest` are deliberately left at 0/"" — the WRITER seals them, and a fixture that sealed
+# them itself would be testing its own arithmetic instead of the engine's.
+ledger_draft() {
+  python3 - "$@" <<'PY'
+import json, sys
+path, kind, critic, round_number, initial, preceding, succession = sys.argv[1:]
+record = {
+    "schema": "fsgg.coord.review-decision/v2",
+    "subject": "FS-GG/FS.GG.SDD#42/pr/42",
+    "revision": 0,
+    "previousDigest": None,
+    "headSha": "a" * 40,
+    "critic": critic,
+    "verdict": "changes-required",
+    "acceptedExceptions": [],
+    "routeApplicability": "not-meaningful",
+    "routeEvidence": ["hermetic ledger fixture"],
+    "policyVersion": "structured-decisions/1",
+    "kind": kind,
+    "round": int(round_number),
+    "initialReview": initial or None,
+    "precedingReview": preceding or None,
+    "diffAuditRequired": False,
+    "diffAuditReceipts": [],
+    "timestamp": "2026-08-15T00:00:00Z",
+    "digest": "",
+}
+if succession != "none":
+    record["succession"] = json.loads(succession)
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(record, stream, separators=(",", ":"))
+PY
+}
+
+# ledger_case <dll> <kind> <successor> <succession-json|none> -- drives ONE chain against a fresh
+# loopback server and echoes `<rc> <ledger-records-before> <ledger-records-after> <stderr-first-line>`.
+# The record COUNT is what makes a refusal leg discriminating: `review record` validates before it
+# posts, so a refusal that still appended a comment would be a different and worse defect than one
+# that refused, and only the count can tell those apart.
+ledger_case() {
+  local dll="$1" kind="$2" successor="$3" succession="$4"
+  local srv_out srv_pid port draft rc out before after initial_url
+  srv_out="$(mktemp "$WORK/ledger-srv.XXXXXX")"
+  python3 "$REPO_ROOT/tests/coord-engine-e2e/stateful_server.py" >"$srv_out" 2>&1 &
+  srv_pid=$!
+  port=""
+  for _ in $(seq 1 50); do port="$(head -n1 "$srv_out" 2>/dev/null)"; [ -n "$port" ] && break; sleep 0.1; done
+  if [ -z "$port" ]; then
+    kill "$srv_pid" 2>/dev/null
+    printf '99 0 0 the loopback fixture never bound a port'
+    return 0
+  fi
+
+  draft="$(mktemp "$WORK/ledger-draft.XXXXXX")"
+  (
+    export FSGG_GITHUB_API_BASE="http://127.0.0.1:$port"
+    export GITHUB_TOKEN="fixture-token"
+    export FSGG_COORD_OWNER="FS-GG"
+
+    ledger_draft "$draft" initial tern-42 0 "" "" none
+    out="$(dotnet "$dll" review record FS.GG.SDD#42 "$draft" --pr 42 --json 2>&1)"
+    initial_url="$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["commentUrl"])' 2>/dev/null)"
+    if [ -z "$initial_url" ]; then
+      printf '98 0 0 the initial record could not be written: %s' "$(printf '%s' "$out" | head -1)"
+      exit 0
+    fi
+
+    before="$(ledger_count "$port")"
+    if [ "$kind" = "confirmation" ]; then
+      ledger_draft "$draft" "$kind" "$successor" 1 "$initial_url" "$initial_url" "$succession"
+    else
+      ledger_draft "$draft" "$kind" "$successor" 0 "$initial_url" "$initial_url" "$succession"
+    fi
+    out="$(dotnet "$dll" review record FS.GG.SDD#42 "$draft" --pr 42 --json 2>&1)"; rc=$?
+    after="$(ledger_count "$port")"
+    printf '%s %s %s %s' "$rc" "$before" "$after" "$(printf '%s' "$out" | head -1)"
+  )
+  kill "$srv_pid" 2>/dev/null
+  wait "$srv_pid" 2>/dev/null
+}
+
+# ledger_count <port> -- how many `fsgg:review-decision/v2` comments the fixture is holding.
+ledger_count() {
+  python3 - "$1" <<'PY'
+import json, sys, urllib.request
+url = f"http://127.0.0.1:{sys.argv[1]}/repos/FS-GG/FS.GG.SDD/issues/42/comments"
+with urllib.request.urlopen(url) as response:
+    body = json.load(response)
+print(sum(1 for c in body if c.get("body", "").startswith("<!-- fsgg:review-decision/v2 -->")))
+PY
+}
+
+# ledger_legs <dll> <mode> -- `mode` is `pristine` (the accepting cases must accept) or `inverted`
+# (they must all red, while the refusing cases stay refused).
+ledger_legs() {
+  local dll="$1" mode="$2" row name kind successor succession expect description succ result rc before after detail
+  for row in "${LEDGER_CASES[@]}"; do
+    IFS='|' read -r name kind successor succession expect description <<<"$row"
+    case "$succession" in
+      GRANT) succ="$GRANT_JSON" ;;
+      MISMATCH) succ="$MISMATCH_JSON" ;;
+      *) succ="none" ;;
+    esac
+    result="$(ledger_case "$dll" "$kind" "$successor" "$succ")"
+    read -r rc before after detail <<<"$result"
+
+    if [ "$rc" = "98" ] || [ "$rc" = "99" ]; then
+      bad "$name: the chain could not be set up -- NOT MEASURED, which is not the same as passing" "$detail"
+      continue
+    fi
+
+    if [ "$expect" = "accept" ] && [ "$mode" = "pristine" ]; then
+      if [ "$rc" -ne 0 ]; then
+        bad "$name: $description must be RECORDABLE, the writer refused it (exit $rc)" "$detail"
+      elif [ "$after" != "$((before + 1))" ]; then
+        bad "$name: the writer reported success but appended no record ($before -> $after)" "$detail"
+      else
+        ok "$name: $description is written to the ledger under the successor's own identity"
+      fi
+    elif [ "$expect" = "accept" ]; then
+      if [ "$rc" -eq 0 ]; then
+        bad "$name INVERSION SURVIVED: the record was still accepted with the succession allowance removed -- this leg measures something else" "$detail"
+      else
+        ok "$name inversion: with the allowance removed, the accepting leg REDS (it is bound to the admission it names)"
+      fi
+    else
+      # The refusing cases are asserted in BOTH modes. In `inverted` they are the control that stops
+      # "everything went red" being mistaken for a bound inversion.
+      if [ "$rc" -eq 0 ]; then
+        bad "$name: $description must be REFUSED -- continuity was weakened generally" "$detail"
+      elif [ "$after" != "$before" ]; then
+        bad "$name: refused, but a comment was appended anyway ($before -> $after) -- validation must precede the post" "$detail"
+      elif [ "$name" = "ungranted-confirmation" ] \
+           && ! printf '%s' "$detail" | grep -q "every record in one review generation must bind the same critic"; then
+        bad "$name: refused with a DIFFERENT message -- the pre-existing continuity refusal must be unchanged" "$detail"
+      else
+        ok "$name ($mode): $description is refused and nothing is appended"
+      fi
+    fi
+  done
+}
+
+ledger_legs "$ENGINE_DLL" pristine
+
+echo
+echo "── 4. GATE INVERSION: delete each conjunct, its own refusal leg must RED"
 
 # Anchors are EXACT source text from `Review.criticSuccessionValid`, in `Review.fs`. Same discipline as
 # `tests/coord-engine-mutation/specs.yml`: an anchor that no longer matches is a FAILURE here, never a
@@ -420,13 +613,50 @@ PY
   done
 
   cp "$WORK/Review.fs.pristine" "$MUT/src/FS.GG.Coord.Core/Review.fs"
+
+  # ── the sixth inversion, and the one that runs the other way round ────────────────────────────────
+  #
+  # Section 3's gate ADMITS, so removing a conjunct from it cannot red anything — weakening a
+  # conjunction only ever admits more. The mutation that measures it is the one that stops
+  # `validateReviewLedger` from ever SEEING a grant: the two-armed match collapses to the arm it had
+  # before .github#2662, which is exactly the code that refused two live successions this session.
+  # Its accepting legs must then red, and — the half that makes it a measurement rather than a
+  # demolition — its refusing legs must stay green.
+  LEDGER_ANCHOR='                      match record.Succession with'
+  LEDGER_MUTATION='                      match (if true then None else record.Succession) with'
+  cp "$MUT/src/FS.GG.Coord.Core/StructuredDecision.fs" "$WORK/StructuredDecision.fs.pristine"
+  if ! ANCHOR="$LEDGER_ANCHOR" REPLACEMENT="$LEDGER_MUTATION" python3 - "$MUT/src/FS.GG.Coord.Core/StructuredDecision.fs" <<'PY'
+import os, sys
+
+path = sys.argv[1]
+anchor, replacement = os.environ["ANCHOR"] + "\n", os.environ["REPLACEMENT"] + "\n"
+src = open(path).read()
+if anchor not in src:
+    sys.exit(f"anchor no longer matches: {anchor.strip()!r}")
+out = src.replace(anchor, replacement, 1)
+if out == src:
+    sys.exit("the mutation changed nothing")
+open(path, "w").write(out)
+PY
+  then
+    bad "succession-allowance inversion: the mutation did not apply -- NOT MEASURED, which is not the same as passing"
+  elif ! dotnet build "$MUT/src/FS.GG.Coord.Cli" -c Release >"$WORK/mutant-build.log" 2>&1; then
+    bad "succession-allowance inversion: the mutant tree did not build; the inversion was not measured" \
+        "$(tail -20 "$WORK/mutant-build.log")"
+  else
+    echo
+    echo "   (re-running section 3's legs against the engine that cannot see a grant)"
+    ledger_legs "$MUT_DLL" inverted
+  fi
+  cp "$WORK/StructuredDecision.fs.pristine" "$MUT/src/FS.GG.Coord.Core/StructuredDecision.fs"
 fi
 
 # ---- non-vacuity floor -------------------------------------------------------------------------------
 # A gutted fixture exits 0 as happily as a whole one (#266, #436). Pin the leg count, so deleting legs
-# is a red gate rather than a quiet one. 6 wire + 5 refusals, plus 5 inversions when they ran.
-floor=11
-[ "$inversion_ran" -eq 1 ] && floor=16
+# is a red gate rather than a quiet one. 6 wire + 5 refusals + 5 ledger writes, plus 5 `Review.fs`
+# inversions and section 3's 5 legs re-run against the allowance-free engine when they ran.
+floor=16
+[ "$inversion_ran" -eq 1 ] && floor=26
 if [ "$failcount" -eq 0 ] && [ "$pass" -lt "$floor" ]; then
   bad "non-vacuity: only $pass leg(s) ran, expected at least $floor -- legs have been deleted, and a suite that asserts less than it claims is the defect this fixture exists to catch"
 fi

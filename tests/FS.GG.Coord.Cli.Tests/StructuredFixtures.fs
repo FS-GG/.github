@@ -79,6 +79,7 @@ module StructuredFixtures =
               PrecedingReview = None
               DiffAuditRequired = false
               DiffAuditReceipts = []
+              Succession = None
               Timestamp = "2026-08-15T00:00:00Z"
               Digest = "" }
         let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }

@@ -47,6 +47,7 @@ module StructuredDecisionTests =
               PrecedingReview = preceding
               DiffAuditRequired = false
               DiffAuditReceipts = []
+              Succession = None
               Timestamp = "2026-08-14T09:00:00Z"
               Digest = "" }
         { draft with Digest = StructuredDecision.reviewDigest draft }
@@ -148,6 +149,15 @@ module StructuredDecisionTests =
             | StructuredDecision.RepairPhase -> "repair-phase"
             | StructuredDecision.Acceptance -> "acceptance"
         let verdict = match record.Verdict with StructuredDecision.Pass -> "pass" | StructuredDecision.ChangesRequired -> "changes-required" | StructuredDecision.Accepted -> "accepted"
+        // Deliberately a SECOND, hand-written statement of the wire shape rather than a call to
+        // `Driver.encodeStructuredReview`: it is what stops a decode bug being cancelled by a matching
+        // encode bug. `.github#2662`'s `succession` object is spelled here for the same reason.
+        let succession =
+            record.Succession
+            |> Option.map (fun (grant: StructuredDecision.SuccessionGrant) ->
+                {| originalCritic = grant.OriginalCritic
+                   grantedBy = grant.GrantedBy
+                   grantUrl = grant.GrantUrl |})
         JsonSerializer.Serialize
             {| schema = record.Schema; subject = record.Subject; revision = record.Revision
                previousDigest = record.PreviousDigest; headSha = record.HeadSha; critic = record.Critic
@@ -156,6 +166,7 @@ module StructuredDecisionTests =
                policyVersion = record.PolicyVersion; kind = kind; round = record.Round
                initialReview = record.InitialReview; precedingReview = record.PrecedingReview
                diffAuditRequired = record.DiffAuditRequired; diffAuditReceipts = record.DiffAuditReceipts
+               succession = succession
                timestamp = record.Timestamp; digest = record.Digest |}
 
     let reseal (record: StructuredDecision.ReviewRecord) =
@@ -312,6 +323,242 @@ module StructuredDecisionTests =
         invalid
         |> List.iter (fun record ->
             Assert.True(StructuredDecision.validateReviewLedger initial.Subject [ initial; record ] |> Result.isError))
+
+    // ── .github#2662: a host-granted successor critic must be able to RECORD ──────────────────────────
+    //
+    // `.github#2417` taught the decision layer that a chain whose critic despawned can be handed on;
+    // `validateReviewLedger` never learned it, so the successor could review and had no honest shape to
+    // write in. These legs are the ledger half of that recovery, and the refusal legs are what keep the
+    // continuity rule from being weakened generally.
+
+    let private grant original =
+        ({ OriginalCritic = original
+           GrantedBy = "heron-61d6"
+           GrantUrl = "https://github.com/FS-GG/.github/pull/2650#issuecomment-5302904754" }
+        : StructuredDecision.SuccessionGrant)
+
+    /// initial(`tern-42`, changes-required) followed by one succession-bearing record of `kind`, appended
+    /// by `successor`. The base chain is exactly what the existing tests build, so nothing about the
+    /// generation is special except the record under test.
+    let private successionChain kind successor mutate =
+        let initial = review 1 None StructuredDecision.Initial StructuredDecision.ChangesRequired 0 None None
+        let appended =
+            { review 2 (Some initial.Digest) kind StructuredDecision.ChangesRequired
+                (if kind = StructuredDecision.Confirmation then 1 else 0)
+                (Some "https://review/1") (Some "https://review/1") with
+                Critic = successor
+                Succession = Some(grant initial.Critic) }
+            |> mutate
+            |> reseal
+        initial, appended
+
+    [<Fact>]
+    let ``2662 a granted successor records under its own identity on confirmation escalation and repair-phase`` () =
+        for kind in [ StructuredDecision.Confirmation; StructuredDecision.Escalation; StructuredDecision.RepairPhase ] do
+            let initial, appended = successionChain kind "snipe-8934" id
+            // A `Confirmation`-only exemption would leave the escalate-into-repair-phase hatch wedged,
+            // because the continuity conjunct is keyed on `Kind <> Initial` and exempts no other kind.
+            Assert.True(StructuredDecision.validateReviewLedger initial.Subject [ initial; appended ] |> Result.isOk)
+
+    [<Fact>]
+    let ``2662 the succession is legible from the record alone and survives the wire`` () =
+        let _, appended = successionChain StructuredDecision.Confirmation "snipe-8934" id
+        let decoded = Driver.decodeStructuredReview (Driver.encodeStructuredReview appended) |> expectOk
+        // Criterion 2: outgoing critic, granter and grant location are all readable without
+        // reconstructing the chain's history from other comments.
+        Assert.Equal(Some(grant "tern-42"), decoded.Succession)
+        Assert.Equal<string>("snipe-8934", decoded.Critic)
+        Assert.Equal<string>(appended.Digest, StructuredDecision.reviewDigest decoded)
+        Assert.Contains("\"originalCritic\":\"tern-42\"", Driver.encodeStructuredReview appended)
+
+    [<Fact>]
+    let ``2662 an absent grant is spelled null on the wire and decodes as no grant`` () =
+        let ordinary = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        let encoded = Driver.encodeStructuredReview ordinary
+        Assert.Contains("\"succession\":null", encoded)
+        let decoded = Driver.decodeStructuredReview encoded |> expectOk
+        Assert.True decoded.Succession.IsNone
+        // The same fact spelled by OMISSION — every record written before the field existed.
+        let omitted = encoded.Replace("\"succession\":null,", "")
+        Assert.DoesNotContain("succession", omitted)
+        let fromOmitted = Driver.decodeStructuredReview omitted |> expectOk
+        Assert.True fromOmitted.Succession.IsNone
+        Assert.Equal<string>(ordinary.Digest, StructuredDecision.reviewDigest fromOmitted)
+
+    [<Fact>]
+    let ``2662 an absent grant contributes nothing to the digest`` () =
+        // The stability property every already-written ledger record depends on: `digest` joins with
+        // `|`, so an absent grant must append no field at all — not an empty one.
+        let ordinary = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        Assert.Equal<string>(ordinary.Digest, StructuredDecision.reviewDigest ordinary)
+        let blankGrant =
+            { ordinary with Succession = Some { OriginalCritic = ""; GrantedBy = ""; GrantUrl = "" } }
+        Assert.NotEqual<string>(ordinary.Digest, StructuredDecision.reviewDigest blankGrant)
+        for field in
+            [ { grant "tern-42" with OriginalCritic = "other" }
+              { grant "tern-42" with GrantedBy = "other" }
+              { grant "tern-42" with GrantUrl = "other" } ] do
+            Assert.NotEqual<string>(
+                StructuredDecision.reviewDigest { ordinary with Succession = Some(grant "tern-42") },
+                StructuredDecision.reviewDigest { ordinary with Succession = Some field })
+
+    [<Fact>]
+    let ``2662 a succession record fails closed against an engine that predates the field`` () =
+        let initial, appended = successionChain StructuredDecision.Confirmation "snipe-8934" id
+        // What an engine built before `.github#2662` computes: it ignores the unknown `succession` key
+        // and digests the eighteen fields it knows. Modelled here by digesting the same record with the
+        // grant dropped, which is exactly the field list that engine sees.
+        let preFieldDigest = StructuredDecision.reviewDigest { appended with Succession = None; Digest = "" }
+        Assert.NotEqual<string>(appended.Digest, preFieldDigest)
+        let asPreFieldEngineWouldStore = { appended with Digest = preFieldDigest }
+        match StructuredDecision.validateReviewLedger initial.Subject [ initial; asPreFieldEngineWouldStore ] with
+        | Ok _ -> failwith "a succession record must never validate under a digest that omits the grant"
+        | Error errors -> Assert.Contains(errors, fun error -> error.Contains "digest does not match")
+
+    [<Fact>]
+    let ``2662 an ungranted critic change is still refused with the unchanged message`` () =
+        let initial = review 1 None StructuredDecision.Initial StructuredDecision.ChangesRequired 0 None None
+        let stranger =
+            { review 2 (Some initial.Digest) StructuredDecision.Confirmation StructuredDecision.Pass 1
+                (Some "https://review/1") (Some "https://review/1") with
+                Critic = "different-critic" }
+            |> reseal
+        match StructuredDecision.validateReviewLedger initial.Subject [ initial; stranger ] with
+        | Ok _ -> failwith "an ungranted critic change must stay refused"
+        | Error errors ->
+            // The exact string, not a substring: continuity is not weakened generally, and a consumer
+            // reading this message must keep reading the same one.
+            Assert.Contains("every record in one review generation must bind the same critic", errors)
+
+    [<Fact>]
+    let ``2662 an inadmissible grant is refused conjunct by conjunct`` () =
+        let cases =
+            [ "outgoing critic is not the generation's critic",
+              (fun (record: StructuredDecision.ReviewRecord) ->
+                  { record with Succession = Some(grant "somebody-else") })
+              "granting identity is blank",
+              (fun record -> { record with Succession = Some { grant "tern-42" with GrantedBy = "  " } })
+              "grant url is blank",
+              (fun record -> { record with Succession = Some { grant "tern-42" with GrantUrl = "" } })
+              "the successor is a generic route identity",
+              (fun record -> { record with Critic = "fsgg-critic-best" })
+              "the granter is a generic route identity",
+              (fun record -> { record with Succession = Some { grant "tern-42" with GrantedBy = "fsgg-critic-best" } })
+              "the record changes no critic at all",
+              (fun record -> { record with Critic = "tern-42" }) ]
+        for label, mutate in cases do
+            let initial, appended = successionChain StructuredDecision.Confirmation "snipe-8934" mutate
+            match StructuredDecision.validateReviewLedger initial.Subject [ initial; appended ] with
+            | Ok _ -> failwithf "a grant must be refused when %s" label
+            | Error _ -> ()
+
+    [<Fact>]
+    let ``2662 a generic outgoing critic cannot be laundered through a grant`` () =
+        // .github#2451 in the successor slot. `fsgg-critic-<route>` is shared by every critic dispatched
+        // at that route, so naming it as the outgoing critic witnesses nothing about which instance held
+        // the seat — the equality a grant rests on would be satisfied by a stranger.
+        let initial =
+            { review 1 None StructuredDecision.Initial StructuredDecision.ChangesRequired 0 None None with
+                Critic = "fsgg-critic-best" }
+            |> reseal
+        let appended =
+            { review 2 (Some initial.Digest) StructuredDecision.Confirmation StructuredDecision.Pass 1
+                (Some "https://review/1") (Some "https://review/1") with
+                Critic = "snipe-8934"
+                Succession = Some(grant "fsgg-critic-best") }
+            |> reseal
+        Assert.True(StructuredDecision.validateReviewLedger initial.Subject [ initial; appended ] |> Result.isError)
+
+    [<Fact>]
+    let ``2662 a grant belongs to no initial and no acceptance record`` () =
+        let initial =
+            { review 1 None StructuredDecision.Initial StructuredDecision.ChangesRequired 0 None None with
+                Succession = Some(grant "someone") }
+            |> reseal
+        Assert.True(StructuredDecision.validateReviewLedger initial.Subject [ initial ] |> Result.isError)
+        let clean = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        let acceptance =
+            { review 2 (Some clean.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0
+                (Some "https://review/1") (Some "https://review/1") with
+                Critic = "snipe-8934"
+                Succession = Some(grant clean.Critic) }
+            |> reseal
+        Assert.True(StructuredDecision.validateReviewLedger clean.Subject [ clean; acceptance ] |> Result.isError)
+
+    [<Fact>]
+    let ``2662 the seat changes hands so the host acceptance and a second grant bind the successor`` () =
+        let initial, confirmation = successionChain StructuredDecision.Confirmation "snipe-8934" id
+        // The acceptance now binds the SUCCESSOR, and one bearing the despawned critic is refused —
+        // that is what "rebind" means, and it is why the fix needs no special case at acceptance.
+        let acceptance critic =
+            { review 3 (Some confirmation.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0
+                (Some "https://review/1") (Some "https://review/2") with
+                Critic = critic }
+            |> reseal
+        Assert.True(
+            StructuredDecision.validateReviewLedger initial.Subject [ initial; confirmation; acceptance "snipe-8934" ]
+            |> Result.isOk)
+        Assert.True(
+            StructuredDecision.validateReviewLedger initial.Subject [ initial; confirmation; acceptance initial.Critic ]
+            |> Result.isError)
+        // A successor can itself despawn: the second grant must name the FIRST successor, not the
+        // record that opened the generation.
+        let second original =
+            { review 3 (Some confirmation.Digest) StructuredDecision.Confirmation StructuredDecision.Pass 2
+                (Some "https://review/1") (Some "https://review/2") with
+                Critic = "wren-4411"
+                Succession = Some(grant original) }
+            |> reseal
+        Assert.True(
+            StructuredDecision.validateReviewLedger initial.Subject [ initial; confirmation; second "snipe-8934" ]
+            |> Result.isOk)
+        Assert.True(
+            StructuredDecision.validateReviewLedger initial.Subject [ initial; confirmation; second initial.Critic ]
+            |> Result.isError)
+
+    [<Fact>]
+    let ``2662 the published generation critic is the identity in force and is unchanged without a grant`` () =
+        let initial, confirmation = successionChain StructuredDecision.Confirmation "snipe-8934" id
+        let comments = [ reviewComment 1L initial; reviewComment 2L confirmation ]
+        let facts = Driver.reviewPhaseFacts comments
+        Assert.Empty facts.StructuredErrors
+        Assert.Equal(Some "snipe-8934", facts.CriticIdentity)
+        // The equivalence floor: on a grant-free ledger the identity in force IS the opening record's
+        // critic, so this correction changes no answer the engine already gave.
+        let plainInitial = review 1 None StructuredDecision.Initial StructuredDecision.ChangesRequired 0 None None
+        let plainConfirmation =
+            review 2 (Some plainInitial.Digest) StructuredDecision.Confirmation StructuredDecision.Pass 1
+                (Some "https://review/1") (Some "https://review/1")
+        let plain = [ reviewComment 1L plainInitial; reviewComment 2L plainConfirmation ]
+        Assert.Equal(Some plainInitial.Critic, (Driver.reviewPhaseFacts plain).CriticIdentity)
+        // ...and through the terminal chain parser, whose accepted receipt must name the critic whose
+        // pass the host actually accepted.
+        let passing = { confirmation with Verdict = StructuredDecision.Pass; Digest = "" } |> reseal
+        let acceptance =
+            { review 3 (Some passing.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0
+                (Some "https://review/1") (Some "https://review/2") with
+                Critic = "snipe-8934" }
+            |> reseal
+        let accepted =
+            Driver.parseEffectiveReviewComments passing.HeadSha
+                [ reviewComment 1L initial; reviewComment 2L passing; reviewComment 3L acceptance ]
+            |> expectOk
+        Assert.Equal(Some "snipe-8934", accepted.CriticIdentity)
+
+    [<Fact>]
+    let ``2662 a malformed grant fails closed at the wire and names the field`` () =
+        let _, appended = successionChain StructuredDecision.Confirmation "snipe-8934" id
+        let encoded = Driver.encodeStructuredReview appended
+        let cases =
+            [ "\"succession\":{\"grantUrl\":\"u\",\"grantedBy\":\"g\"}", "originalCritic"
+              "\"succession\":{\"grantUrl\":\"u\",\"grantedBy\":\"g\",\"originalCritic\":7}", "originalCritic"
+              "\"succession\":\"not-an-object\"", "succession" ]
+        let intact = encoded.Substring(encoded.IndexOf "\"succession\":")
+        let original = intact.Substring(0, intact.IndexOf "}" + 1)
+        for replacement, expectedField in cases do
+            match Driver.decodeStructuredReview (encoded.Replace(original, replacement)) with
+            | Ok _ -> failwithf "a malformed grant must fail closed, not decode (%s)" replacement
+            | Error reason -> Assert.Contains(expectedField, reason)
 
     [<Fact>]
     let m6_generic_critic_and_wrong_acceptance_links_fail () =
