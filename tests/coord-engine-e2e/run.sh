@@ -30,16 +30,27 @@ set -uo pipefail
 #   haystack                                   `printf … | grep -q`   `grep -q <<<"$hay"`   `case`
 #   8,290 B  synthetic, needle on line 1        0     (30/30 runs)     0    (20/20)          0
 #   16,564 B synthetic, needle on line 1        141   (30/30 runs)     0    (20/20)          0
-#   22,956 B REAL: engine refusal + usage       141 AND 0, same host,  0    (20/20)          0
-#                                               same string, run to run
+#   22,956 B REAL: engine refusal + usage       see below              0    (20/20)          0
 #   264,782 B synthetic, needle on line 1       141   (30/30 runs)     0    (20/20)          0
 #   4,236,264 B synthetic, needle on line 1     141   (30/30 runs)     0    (20/20)          0
 #
 # The 22,956 B row is the one that cost two legs of this suite: the engine prints its refusal and then
-# its whole usage block, which lands in the size band where the race can go either way. The same
-# assertion over the same bytes was observed both RED and GREEN on one host within minutes. It fails in
-# the SAFE direction — a false RED, never a false green — but a suite that reds while printing its own
-# passing evidence is one readers learn to skim, which is the failure #570 and #266 are about.
+# its whole usage block. TWO MEASUREMENTS OF THAT ROW DISAGREE, and both are recorded because the
+# disagreement is the interesting part:
+#
+#   - the implementer observed BOTH 141 and 0 over the same bytes on one host within minutes, in small
+#     unreplicated samples (2 runs 141, then 1 run 0, then 40 runs 0);
+#   - the .github#2668 round-1 critic ran 200 trials at 22,973 B and got 141 on 200/200 — and 200/200
+#     agreement at every larger size too, never mixed.
+#
+# So do NOT read this row as "bimodal at ~23 KB, measured". The honest reading is that the two safe
+# spellings are 0 everywhere in both data sets, and the banned one is wrong at this size in at least
+# one of them — which is already disqualifying. Agreeing samples cannot disprove a rare intermittent,
+# and "it went green last time" is the wrong inference from one.
+#
+# It fails in the SAFE direction — a false RED, never a false green — but a suite that reds while
+# printing its own passing evidence is one readers learn to skim, which is the failure #570 and #266
+# are about.
 #
 # So: assertions here go through `contains` / `matches` / `matches_i` below. They have no pipeline, so
 # `pipefail` has nothing to mis-report. Leg 0 proves both directions of that at a size where the banned
@@ -49,7 +60,12 @@ set -uo pipefail
 # under `tests/` set `pipefail` and between them carried 992 lines consuming the status of a pipeline
 # that ends in an early-exiting reader (`grep -q`, `grep -m`, `head`); 983 of those, in 34 files,
 # survive here. They are green today only because the outputs they read are small — a property of
-# today's message lengths, not of the assertions. `.github#2681` carries that sweep.
+# today's message lengths, not of the assertions.
+#
+# That sweep was NOT filed as a repair row: the board analyst folded it, because the harm at those 983
+# sites is unmeasured and a row reserving most of `tests/` would glue every lane in the repo. The
+# measurements live on `.github#2668` itself, and `.github#2689` carries the source guard that would
+# catch the idiom instead.
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
@@ -97,9 +113,18 @@ if matches "$BIG_NEEDLE" "$BIG_HAY"; then
 else
   bad "matches finds a line-1 needle in a ${#BIG_HAY}-byte haystack"
 fi
+# `matches_i` is verdict-bearing too — legs 3 and 4 below decide on it — so it gets the same pair. It
+# had neither until .github#2668's round 1: `matches_i() { return 0; }` left this suite 20/20 green.
+# The needle is upper-cased here so a helper that quietly dropped `-i` fails this leg rather than
+# passing it by accident.
+if matches_i 'FSGG-2668-NEEDLE-ON-LINE-1' "$BIG_HAY"; then
+  ok "matches_i finds a line-1 needle case-insensitively in a ${#BIG_HAY}-byte haystack"
+else
+  bad "matches_i finds a line-1 needle case-insensitively in a ${#BIG_HAY}-byte haystack"
+fi
 
-# NEGATIVE, both helpers. Without these two, a helper spelled `return 0` passes the positives — the
-# repair would be a vacuous green, which is the mirror of the false red it exists to remove.
+# NEGATIVE, all three helpers. Without these, a helper spelled `return 0` passes every positive above —
+# the repair would be a vacuous green, which is the mirror of the false red it exists to remove.
 if contains "$BIG_ABSENT" "$BIG_HAY"; then
   bad "contains still says NO for a needle that is genuinely absent"
 else
@@ -110,30 +135,95 @@ if matches "$BIG_ABSENT" "$BIG_HAY"; then
 else
   ok "matches still says NO for a needle that is genuinely absent"
 fi
+if matches_i "$BIG_ABSENT" "$BIG_HAY"; then
+  bad "matches_i still says NO for a needle that is genuinely absent"
+else
+  ok "matches_i still says NO for a needle that is genuinely absent"
+fi
 
-# THE IDIOM CANNOT COME BACK. Grep this file's own source for a pipeline whose last stage exits early
+# THE IDIOM CANNOT COME BACK. Scan this file's own source for a pipeline whose last stage exits early
 # and whose status is therefore unsafe to consume. Comment lines are exempt (the header quotes the
-# banned spelling on purpose), as is any line tagged IDIOM-GUARD — used only by the guard itself and by
-# its own negative probe, which must contain the banned idiom to prove the guard can say NO.
-guard_re='\|[[:space:]]*(grep[^|]*-[A-Za-z]*q|head([[:space:]]|$))'   # IDIOM-GUARD
-guard_probe='  if printf "%s" "$out" | grep -q NEEDLE; then'          # IDIOM-GUARD
-guard_hits=""
-while IFS= read -r ln || [ -n "$ln" ]; do
-  case "$ln" in *IDIOM-GUARD*) continue ;; esac
-  [[ $ln =~ ^[[:space:]]*# ]] && continue
-  [[ $ln =~ $guard_re ]] && guard_hits="$guard_hits$ln"$'\n'
-done < "${BASH_SOURCE[0]}"
+# banned spelling on purpose), as is any line tagged IDIOM-GUARD — carried only by the guard's own
+# machinery and by the planted offenders it feeds itself below.
+#
+# The regex covers every early-exit spelling the header declares banned, NOT only the `-q` ones:
+#   `| grep … -q`      matches on any flag bundle ending in q, so `-qE`/`-qi`/`-m1 -q` are all caught
+#   `| grep … -m N`    stops after N matches and exits — early exit with no `q` in sight
+#   `| head`           stops after its count, including `$(… | head)` where `)` follows immediately
+# Missing the last two was .github#2668 round-1 finding M3: both were measured 141 on 30/30 runs at
+# 282,640 B, so a guard blind to them is blind to real offenders.
+guard_re='\|[[:space:]]*(grep[^|]*(-[A-Za-z]*q|-m[[:space:]]*[0-9])|head([^[:alnum:]_-]|$))'  # IDIOM-GUARD
 
-if [ -z "$guard_hits" ]; then
+# The scan is a FUNCTION so that the legs below can run it against a corpus whose answer is known.
+# It reports through globals rather than a command substitution, so its line count survives the call.
+scan_idiom() {
+  local ln
+  scan_lines=0
+  scan_hits=""
+  while IFS= read -r ln || [ -n "$ln" ]; do
+    scan_lines=$((scan_lines + 1))
+    case "$ln" in *IDIOM-GUARD*) continue ;; esac
+    [[ $ln =~ ^[[:space:]]*# ]] && continue
+    [[ $ln =~ $guard_re ]] && scan_hits="$scan_hits$ln"$'\n'
+  done < "$1"
+}
+
+# A corpus with a KNOWN answer: four planted offenders, one per banned spelling, and four lines that
+# must NOT be flagged. Each source line here carries IDIOM-GUARD so the real-file scan skips it; the
+# tag is a shell comment outside the quotes, so it is not written into the fixture and the fixture's
+# lines face the guard undefended.
+GUARD_FIXTURE="$(mktemp)"
+{
+  printf '%s\n' 'if printf "%s" "$out" | grep -q NEEDLE; then'            # IDIOM-GUARD
+  printf '%s\n' 'if printf "%s" "$out" | grep -m1 NEEDLE >/dev/null; then' # IDIOM-GUARD
+  printf '%s\n' 'first="$(printf "%s" "$out" | head)"'                     # IDIOM-GUARD
+  printf '%s\n' 'excerpt="$(printf "%s" "$out" | head -c 200)"'            # IDIOM-GUARD
+  printf '%s\n' '#  printf "%s" "$out" | grep -q NEEDLE   <- a comment'    # IDIOM-GUARD
+  printf '%s\n' 'safe_a="$(printf "%s" "$out" | sed -n 1p)"'
+  printf '%s\n' 'safe_b="$("$ENGINE" scan | "$ENGINE" decide --text)"'
+  printf '%s\n' 'safe_c() { grep -qE -- "$1" <<<"$2"; }'
+} > "$GUARD_FIXTURE"
+
+# THE GUARD CAN SAY NO — proved by RUNNING THE SCAN, not by testing the regex against a literal. That
+# distinction is .github#2668 round-1 finding M2: a probe that never calls the scan left the whole
+# guard green with its corpus replaced by /dev/null and a genuine offender planted in this file.
+scan_idiom "$GUARD_FIXTURE"
+fixture_hits="$scan_hits"
+planted_found=0
+for planted in 'grep -q NEEDLE' 'grep -m1 NEEDLE' '| head)' 'head -c 200'; do  # IDIOM-GUARD
+  contains "$planted" "$fixture_hits" && planted_found=$((planted_found + 1))
+done
+if [ "$planted_found" -eq 4 ]; then
+  ok "the idiom guard catches all four banned spellings when it is actually run over a corpus"
+else
+  bad "the idiom guard catches all four banned spellings ($planted_found/4)" "$fixture_hits"
+fi
+# ...and does not flag what is genuinely safe, or "no hits" in this file would mean nothing.
+guard_false=0
+for safe in 'sed -n 1p' 'decide --text' '<<<"$2"' '<- a comment'; do
+  contains "$safe" "$fixture_hits" && guard_false=$((guard_false + 1))
+done
+if [ "$guard_false" -eq 0 ]; then
+  ok "the idiom guard flags none of the four safe spellings (no false positives)"
+else
+  bad "the idiom guard flags a safe spelling ($guard_false/4)" "$fixture_hits"
+fi
+rm -f "$GUARD_FIXTURE"
+
+# Only now, with the scan itself demonstrated in both directions, is its verdict on this file worth
+# anything. The line count is asserted too: a corpus that was never opened reports zero hits and would
+# otherwise pass as cleanly as a clean file.
+scan_idiom "${BASH_SOURCE[0]}"
+src_lines="$(wc -l < "${BASH_SOURCE[0]}")"
+if [ "$scan_lines" -ge 150 ] && [ "$scan_lines" -ge "$src_lines" ]; then
+  ok "the idiom guard actually read this file ($scan_lines lines, wc says $src_lines)"
+else
+  bad "the idiom guard actually read this file" "read $scan_lines line(s); wc -l says $src_lines"
+fi
+if [ -z "$scan_hits" ]; then
   ok "no assertion in this suite consumes the status of an early-exiting pipeline"
 else
-  bad "an early-exiting pipeline's status is consumed here (see .github#2668)" "$guard_hits"
-fi
-# The guard must be able to say NO, or its green above means only that it matched nothing.
-if [[ $guard_probe =~ $guard_re ]]; then
-  ok "the idiom guard fires on the banned spelling (it is not vacuously green)"
-else
-  bad "the idiom guard fires on the banned spelling"
+  bad "an early-exiting pipeline's status is consumed here (see .github#2668)" "$scan_hits"
 fi
 
 if [ ! -x "$ENGINE" ]; then
