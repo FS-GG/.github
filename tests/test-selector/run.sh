@@ -305,6 +305,97 @@ printf '{"schema_version":1,"subjects":[{"id":"bad","command":[]}]}' > "$r/polic
 expect "a malformed policy subject is no verdict" 3 "invalid command" "$r" --list --all
 
 echo
+echo "── the scrape vocabulary: WHICH runners a workflow may name (.github#2555)"
+
+# The vocabulary was frozen at `bash` and `dotnet test` while tests/ grew a node runner and a python
+# one. A suite outside that list was not merely un-run — it was STRUCTURALLY INVISIBLE: wired, executed
+# by CI on every matching PR, and still reported UNWIRED, because scrape() matched nothing. Under
+# --assert-wired (.github#2537) that made it undischargeable, since wiring it changed nothing the
+# selector could observe. Every leg in this section reds if a KINDS row is deleted; that is the point.
+
+r="$(root vocab-node)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on:
+  pull_request:
+    paths: ["src/**"]
+jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: "node tests/nodesuite/run.mjs" }] } }
+EOF
+mkdir -p "$r/tests/nodesuite"; printf 'process.exit(0)\n' > "$r/tests/nodesuite/run.mjs"
+mkdir -p "$r/src"; echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
+selects "a node suite is derived from its workflow's run: step" "$r" yes "node tests/nodesuite/run.mjs"
+
+r="$(root vocab-python)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on:
+  pull_request:
+    paths: ["src/**"]
+jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: "python3 tests/pysuite/run.py" }] } }
+EOF
+mkdir -p "$r/tests/pysuite"; printf 'raise SystemExit(0)\n' > "$r/tests/pysuite/run.py"
+mkdir -p "$r/src"; echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
+selects "a python suite is derived from its workflow's run: step" "$r" yes "python3 tests/pysuite/run.py"
+
+# ...and a python suite is INVOKED as python3, not as the fallback the old two-kind conditional gave
+# every non-shell suite (`dotnet test <path>`). Only a real python3 process can produce this exit code,
+# so this leg grades the HOW half of the kind, which listing alone cannot reach.
+r="$(root vocab-python-runs)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on: { pull_request: { paths: ["src/**"] } }
+jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: "python3 tests/pyred/run.py" }] } }
+EOF
+mkdir -p "$r/tests/pyred"; printf 'print("87 passed, 0 failed")\nraise SystemExit(7)\n' > "$r/tests/pyred/run.py"
+mkdir -p "$r/src"; echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
+expect "a python suite is run BY python3 and its exit code is reported" 1 "exit 7" "$r" --base HEAD
+
+# NARROWNESS, in the safe direction. The patterns anchor tests/ immediately after the runner word, so
+# an indirect invocation is NOT invented as a suite — it surfaces as an UNWIRED report somebody must
+# answer for, whereas a greedy pattern would manufacture suites out of ordinary shell and then fail the
+# whole tree's on-disk check. `mynode` must not read as `node`.
+r="$(root vocab-narrow)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on: { pull_request: { paths: ["src/**"] } }
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "node tests/real/run.mjs"
+      - run: "python3 -m pytest tests/indirect/test_x.py"
+      - run: "mynode tests/indirect/other.mjs"
+      - run: "rm -rf tests/indirect/scratch.py"
+EOF
+mkdir -p "$r/tests/real"; printf 'process.exit(0)\n' > "$r/tests/real/run.mjs"
+mkdir -p "$r/src"; echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
+selects "the real node invocation is derived" "$r" yes "node tests/real/run.mjs"
+selects "'python3 -m pytest tests/…' is NOT invented as a suite" "$r" no "tests/indirect/test_x.py"
+selects "'mynode tests/…' is NOT read as the node runner" "$r" no "tests/indirect/other.mjs"
+
+# ACCEPTANCE 2 OF .github#2555, demonstrated over the REAL workflow's own bytes rather than a
+# hand-written imitation of them. `tests/preset-repo-scope-coherence/` holds two wired suites — a
+# `bash` one and a `node` one — and before this row the directory escaped the UNWIRED report ONLY
+# because the bash sibling was the half derivation could see. Delete that one `run:` line and the
+# directory must STILL be wired, on the strength of the node suite alone. With the node row removed
+# from KINDS this root has no derivable suite at all and the selector refuses at "discovers nothing",
+# which is this leg going red.
+r="$(root vocab-real-nodeonly)"
+WF="$REPO_ROOT/.github/workflows/preset-repo-scope-coherence.yml"
+grep -qF 'bash tests/preset-repo-scope-coherence/run.sh' "$WF" \
+  || bad "preset-repo-scope-coherence.yml no longer names its bash suite — this leg strips a line that is not there"
+grep -v 'bash tests/preset-repo-scope-coherence/run\.sh' "$WF" > "$r/.github/workflows/preset-repo-scope-coherence.yml"
+grep -qF 'bash tests/preset-repo-scope-coherence/run.sh' "$r/.github/workflows/preset-repo-scope-coherence.yml" \
+  && bad "the bash step survived the strip — the node-only demonstration would be vacuous"
+mkdir -p "$r/tests/preset-repo-scope-coherence"
+printf 'process.exit(0)\n' > "$r/tests/preset-repo-scope-coherence/drive-package-rules.mjs"
+seal "$r"
+selects "the real workflow's node suite is derived with its bash sibling deleted" "$r" yes \
+        "node tests/preset-repo-scope-coherence/drive-package-rules.mjs" --all
+expect "...and that directory stays OUT of UNWIRED with nothing but the node suite wiring it" 0 \
+       "1 wired, 0 explained, 0 unexplained" "$r" --assert-wired
+
+echo
 echo "── fails closed (#266): 'I could not tell' is never spelled like 'nothing to run'"
 
 # THE HEADLINE. Negation must be refused in EVERY mode and at ANY position. The trailing position is
@@ -460,11 +551,24 @@ out="$(python3 "$TOOL" --root "$REPO_ROOT" --list --all 2>&1)" && rc=0 || rc=$?
 if [ "$rc" -ne 0 ]; then
   bad "the real tree's workflows are readable (exit $rc)" "$out"
 else
-  n="$(grep -cE '^  (bash|dotnet) ' <<<"$out" || true)"
+  # Every kind, not just the two this counted while the vocabulary was frozen at two (.github#2555) —
+  # a floor that cannot see a kind would read a tree whose suites all moved to it as totally broken.
+  n="$(grep -cE '^  (bash|dotnet|node|python3) ' <<<"$out" || true)"
   # A floor, not an equality: suites get added, and a fixture that must be edited for every new
   # suite is a fixture people learn to edit without reading. Zero, or near it, is the bug.
   [ "$n" -ge 25 ] && ok "the real tree derives $n suites (floor 25)" \
                   || bad "the real tree derives only $n suites — discovery is broken" "$out"
+fi
+
+# .github#2555's own subject, pinned against the REAL tree by name: this repo's one node suite is
+# derived. It is the live witness the row was filed on — a suite CI executes on every matching PR that
+# the selector could not see — so if the vocabulary is ever narrowed back, this says which suite went
+# missing rather than leaving it to the floor count above, where one suite in ninety-odd is invisible.
+out="$(python3 "$TOOL" --root "$REPO_ROOT" --list --all 2>&1 || true)"
+if grep -qF "node tests/preset-repo-scope-coherence/drive-package-rules.mjs" <<<"$out"; then
+  ok "the real tree's node suite is derived (.github#2555)"
+else
+  bad "the real tree's node suite is NOT derived — the scrape vocabulary has lost its node row" "$out"
 fi
 
 # The side effect #860 asks for, pinned against the real tree: tests/merge-guard is wired to no
