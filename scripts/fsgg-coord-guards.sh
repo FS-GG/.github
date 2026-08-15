@@ -442,6 +442,26 @@ default_branch_ref() {   # $1 = checkout
 # answers the question actually being asked: has THIS BRANCH authored engine content since it was cut?
 # Behind-ness is `upstream_drift`'s subject and is deliberately not re-asked here.
 #
+# AND EVERY PROBE IS ASKED FOR ITS EXIT STATUS, NOT ONLY FOR ITS OUTPUT (.github#2653, review round 1,
+# repair 1). The first draft read `status --porcelain` through a command substitution and tested only
+# whether the STRING was empty — so `git status` FAILING and the tree being CLEAN produced the identical
+# answer, and the failure then fell through to probe 2, which is tree-to-tree, needs no index, and keeps
+# working. The result was `return 1`: "authors nothing", and the engine swapped out from under the
+# caller. That is the fail-OPEN direction, on precisely the reader the paragraph below calls the one
+# `:209-213` protects — the kit author mid-edit, whose only evidence of authorship is the dirt probe 1
+# cannot see.
+#
+# It is reachable without exotic permissions and was reproduced, not reasoned about: a truncated or
+# corrupt `.git/index`, or a `GIT_INDEX_FILE` leaked from a git hook, each exit 128 with EMPTY stdout
+# while `merge-base` and `diff --quiet <base> HEAD` both still answer 0. Measured on a linked-worktree
+# fixture — healthy: probe1 rc=0, probe2 rc=0; corrupt index: probe1 rc=**128**, probe2 rc=0. (A stale
+# `index.lock` does NOT do this: `status` still exits 0, so it is not the same hazard.)
+#
+# THE IDIOM CAME FROM `dirty_guard`, WHERE IT IS SAFE, AND THAT IS THE WHOLE LESSON. That guard reads
+# `status --porcelain` the same way and only ever WARNS, so a swallowed failure costs one missing line of
+# stderr. Here the same two lines decide which engine executes. A borrowed idiom keeps its shape and
+# loses its justification; the file's own §3g leg g7 now measures this one rather than trusting it.
+#
 # EVERY UNANSWERABLE PROBE RETURNS "AUTHORED", i.e. today's resolution. .github#1549's fourth criterion
 # settled that an unanswerable staleness question is not freshness; its counterpart here is that an
 # unanswerable INTENT question is not permission to swap the engine under the caller. No `origin` (the
@@ -465,12 +485,18 @@ default_branch_ref() {   # $1 = checkout
 # exists to prevent.
 AUTHORED_ENGINE_SOURCE_REASON=none
 authored_engine_source() {   # $1 = checkout
-  local top="$1" ref base
+  local top="$1" ref base dirt
   AUTHORED_ENGINE_SOURCE_REASON=none
   # WORD SPLITTING IS THE POINT — `$ENGINE_BUILD_INPUTS` is a pathspec LIST, and one spelling of it is
   # what keeps this in step with the comment above it rather than duplicating six literals.
+  #
+  # ASSIGN FIRST, THEN TEST THE STATUS, THEN TEST THE STRING — three separate facts, and collapsing the
+  # first two is repair 1's defect. `local dirt="$(…)"` would not do: `local` is itself a command and
+  # its OWN exit status wins, so the assignment's failure would be masked exactly as it was before.
   # shellcheck disable=SC2086
-  if [ -n "$(git -C "$top" -c status.showUntrackedFiles=normal status --porcelain -- $ENGINE_BUILD_INPUTS 2>/dev/null)" ]; then
+  dirt="$(git -C "$top" -c status.showUntrackedFiles=normal status --porcelain -- $ENGINE_BUILD_INPUTS 2>/dev/null)" \
+    || { AUTHORED_ENGINE_SOURCE_REASON=unanswerable; return 0; }
+  if [ -n "$dirt" ]; then
     AUTHORED_ENGINE_SOURCE_REASON=dirty; return 0
   fi
   AUTHORED_ENGINE_SOURCE_REASON=unanswerable

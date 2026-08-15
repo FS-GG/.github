@@ -1094,6 +1094,33 @@ else
 fi
 shadow_teardown "$SWROOT"
 
+# g7. A FAILING PROBE IS NOT A CLEAN TREE (.github#2653, review round 1, repair 1). g6 above reaches the
+# SECOND half of `authored_engine_source` — no default-branch ref, so no merge-base to diff against. It
+# cannot reach the FIRST half, and the first half is where the fail-OPEN was: `git status --porcelain`
+# was read through a command substitution that tested only whether the STRING was empty, so a FAILED
+# status and a CLEAN tree answered identically, and the failure fell through to the tree-to-tree diff —
+# which needs no index, still answers 0, and yielded "authors nothing". The engine was then swapped out
+# from under the caller, on exactly the reader tier 2a exists to protect.
+#
+# THE SUBJECT IS BROKEN THE WAY IT BREAKS IN THE FIELD, not by stubbing git. A truncated or corrupt
+# `.git/index` exits 128 with EMPTY stdout — measured here: healthy probe1 rc=0 / probe2 rc=0; corrupt
+# index probe1 rc=128 / probe2 rc=0. (A stale `index.lock` is NOT this hazard: `status` still exits 0.)
+# The worktree is otherwise the g1 world exactly — authoring nothing, behind by one engine commit, with
+# a current shared engine sitting there to be swapped to — so the ONLY difference between g1's exit 0
+# and this leg's refusal is whether a failed probe is read as an answer.
+SWROOT="$(mktemp -d)"; shadow_world "$SWROOT"
+printf 'not an index at all' >"$(git -C "$SW_WT" rev-parse --git-dir)/index"
+out="$(cd "$SW_WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qi 'refused' \
+   && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
+   && printf '%s' "$out" | grep -q "$SW_WT" \
+   && printf '%s' "$out" | grep -q 'could NOT be answered'; then
+  ok ".github#2653: a FAILING dirt probe (corrupt index, exit 128, empty stdout) is read as unanswerable, not as a clean tree — the caller's own build is kept, no engine runs, and the refusal says the question could not be answered"
+else
+  bad ".github#2653: a failed 'git status' must never read as 'authors nothing' — that swaps the engine out from under the one reader tier 2a protects" "rc=$rc out=$out"
+fi
+shadow_teardown "$SWROOT"
+
 # ---- 4. THE SOURCE BUILD OUTRANKS A PACKAGED ENGINE (#1018, #1008) -------------------------------
 # EVERY LEG IN §3 DRIVES THE SHIM WITH `env -u FSGG_COORD_ENGINE_BIN`, WHICH UNSETS TIER 1 AND NOTHING
 # ELSE — and that was never enough. Under the old order a global tool on PATH exec'd BEFORE the source

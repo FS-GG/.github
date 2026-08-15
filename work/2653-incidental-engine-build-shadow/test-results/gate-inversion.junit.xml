@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="github2653 gate inversion (tests/coord-engine-parity/shim.sh 3g)" tests="7" failures="0" skipped="0">
+    <testcase classname="github2653.gate-inversion" name="NONE: section 3g reports 0 failed leg(s)">
+      <system-out>mutation=NONE expected_failed=0 observed_failed=0 red_legs=</system-out>
+    </testcase>
+    <testcase classname="github2653.gate-inversion" name="M1: section 3g reports 1 failed leg(s)">
+      <system-out>mutation=M1 expected_failed=1 observed_failed=1 red_legs=.github#2653: an incidental build must not cost a worktree its board writes when the shared checkout is current</system-out>
+    </testcase>
+    <testcase classname="github2653.gate-inversion" name="M4: section 3g reports 1 failed leg(s)">
+      <system-out>mutation=M4 expected_failed=1 observed_failed=1 red_legs=.github#2653: the fall-through must never hand a worker a worse engine than the one it passed over</system-out>
+    </testcase>
+    <testcase classname="github2653.gate-inversion" name="M5: section 3g reports 1 failed leg(s)">
+      <system-out>mutation=M5 expected_failed=1 observed_failed=1 red_legs=.github#2653: an unanswerable authorship probe must take the status-quo branch, never the swap</system-out>
+    </testcase>
+    <testcase classname="github2653.gate-inversion" name="M6: section 3g reports 1 failed leg(s)">
+      <system-out>mutation=M6 expected_failed=1 observed_failed=1 red_legs=.github#2653: a worktree-local refusal must say why the local build was preferred, not guess how it got there</system-out>
+    </testcase>
+    <testcase classname="github2653.gate-inversion" name="M7: section 3g reports 4 failed leg(s)">
+      <system-out>mutation=M7 expected_failed=4 observed_failed=4 red_legs=.github#2653: the deliberate build must still win AND still be guarded — this is the hole .github#1549 closed | .github#2653: a worktree-local refusal must say why the local build was preferred, not guess how it got there | .github#2653: an unanswerable authorship probe must take the status-quo branch, never the swap | .github#2653: a failed &#x27;git status&#x27; must never read as &#x27;authors nothing&#x27; — that swaps the engine out from under the one reader tier 2a</system-out>
+    </testcase>
+    <testcase classname="github2653.gate-inversion" name="M8: section 3g reports 1 failed leg(s)">
+      <system-out>mutation=M8 expected_failed=1 observed_failed=1 red_legs=.github#2653: a failed &#x27;git status&#x27; must never read as &#x27;authors nothing&#x27; — that swaps the engine out from under the one reader tier 2a</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

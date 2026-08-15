@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="tests/repos-registry/run.sh + scripts/repos.sh validate" tests="183" failures="0" skipped="0">
+    <testcase classname="repos-registry.fixture" name="valid roster passes"/>
+    <testcase classname="repos-registry.fixture" name="a rostered dispatch triple passes"/>
+    <testcase classname="repos-registry.fixture" name="dispatch row refuses an empty object — each dispatch must be an object with non-empty string producer, target, and event-type."/>
+    <testcase classname="repos-registry.fixture" name="dispatch row refuses a missing producer — each dispatch must be an object with non-empty string producer, target, and event-type."/>
+    <testcase classname="repos-registry.fixture" name="dispatch row refuses wrong-typed values — each dispatch must be an object with non-empty string producer, target, and event-type."/>
+    <testcase classname="repos-registry.fixture" name="dispatch producer must be rostered — dispatch producer &#x27;FS-GG/FS.GG.Ghost&#x27; is not rostered."/>
+    <testcase classname="repos-registry.fixture" name="dispatch target must be rostered — dispatch target &#x27;FS-GG/FS.GG.Ghost&#x27; is not rostered."/>
+    <testcase classname="repos-registry.fixture" name="dispatch event-type must be non-empty — each dispatch must be an object with non-empty string producer, target, and event-type."/>
+    <testcase classname="repos-registry.fixture" name="duplicate dispatch triple is refused — duplicate dispatch edge(s): FS-GG/FS.GG.SDDFS-GG/FS.GG.SDDfixture-event"/>
+    <testcase classname="repos-registry.fixture" name="unknown receives capability — repo &#x27;sdd&#x27; receives unknown capability &#x27;bogus-cap&#x27; (known: labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union)."/>
+    <testcase classname="repos-registry.fixture" name="duplicate repo id — duplicate repo id(s): .github "/>
+    <testcase classname="repos-registry.fixture" name="invalid role — repo &#x27;sdd&#x27; role &#x27;banana&#x27; invalid (authority|framework|non-participant)."/>
+    <testcase classname="repos-registry.fixture" name="not exactly one authority — exactly one repo must have role &#x27;authority&#x27; (found 2)."/>
+    <testcase classname="repos-registry.fixture" name="kit-delivery bad value — repo &#x27;sdd&#x27; kit-delivery &#x27;bogus&#x27; invalid (byte-copy|package)."/>
+    <testcase classname="repos-registry.fixture" name="kit-delivery on non-receiver — repo &#x27;.github&#x27; sets kit-delivery &#x27;package&#x27; but does not receive coordination-kit — the field only governs how a coordination-kit receiver takes the kit."/>
+    <testcase classname="repos-registry.fixture" name="kit-delivery: package on a coordination-kit receiver"/>
+    <testcase classname="repos-registry.fixture" name="absence-cover bad value — repo &#x27;sdd&#x27; absence-cover &#x27;sometimes&#x27; invalid (required|unrequired)."/>
+    <testcase classname="repos-registry.fixture" name="absence-cover on non-receiver — repo &#x27;.github&#x27; sets absence-cover &#x27;required&#x27; but does not receive coordination-kit — the historical field states whether an unexcused view-root assertion/materialize pa"/>
+    <testcase classname="repos-registry.fixture" name="absence-cover: required on a coordination-kit receiver"/>
+    <testcase classname="repos-registry.fixture" name="absence-cover: unrequired on a coordination-kit receiver"/>
+    <testcase classname="repos-registry.fixture" name="absence-cover: &#x27;none&#x27; is not declarable — repo &#x27;sdd&#x27; sets absence-cover &#x27;none&#x27;. That is not a declarable state (#1785/#1869): a receiver may not assert that NO unexcused view-root assertion/materializ"/>
+    <testcase classname="repos-registry.fixture" name="authority receives the kit — authority repo &#x27;FS-GG/.github&#x27; must not RECEIVE coordination-kit — it is the SOURCE. repos-audit detects a receiver by a &#x27;uses:&#x27; of the authority&#x27;s own workflow and never "/>
+    <testcase classname="repos-registry.fixture" name="kit source missing — kit &#x27;democlient&#x27; source missing: scripts/nope"/>
+    <testcase classname="repos-registry.fixture" name="kit id is not kebab/dotted — kit id &#x27;Demo Skill&#x27; must be lowercase kebab/dotted."/>
+    <testcase classname="repos-registry.fixture" name="config kit row without a dest — kit &#x27;democlient&#x27; is kind &#x27;config&#x27; but declares no &#x27;dest&#x27; — a config row must name the receiver-relative path it is delivered to."/>
+    <testcase classname="repos-registry.fixture" name="config dest is absolute — kit &#x27;democlient&#x27; dest &#x27;/etc/x&#x27; must be receiver-RELATIVE, not absolute."/>
+    <testcase classname="repos-registry.fixture" name="config dest escapes the root — kit &#x27;democlient&#x27; dest &#x27;../x&#x27; must not escape the receiver root (no &#x27;..&#x27;)."/>
+    <testcase classname="repos-registry.fixture" name="non-config row carrying a dest — kit &#x27;democlient&#x27; (kind &#x27;client&#x27;) declares a &#x27;dest&#x27; — only &#x27;config&#x27; rows may; a skill&#x27;s dest is derived from its basename and a client&#x27;s IS its source path."/>
+    <testcase classname="repos-registry.fixture" name="shim WITHOUT an engine manifest row is a valid roster (#1615/ADR-0068 — the invariant moved to repos-audit&#x27;s engine-manifest sweep, which reads the receiver&#x27;s tree)"/>
+    <testcase classname="repos-registry.fixture" name="repo full with no owner at all — repo &#x27;sdd&#x27; full &#x27;FS.GG.SDD&#x27; must be &#x27;&lt;owner&gt;/&lt;repo&gt;&#x27;."/>
+    <testcase classname="repos-registry.fixture" name="repo full with an illegal owner — repo &#x27;sdd&#x27; full &#x27;has.dots/FS.GG.SDD&#x27; must be &#x27;&lt;owner&gt;/&lt;repo&gt;&#x27;."/>
+    <testcase classname="repos-registry.fixture" name="lock: a correctly-locked roster passes"/>
+    <testcase classname="repos-registry.fixture" name="lock: a STALE digest fails (the old drift case, now in the lock) — kit lock is STALE — repos.lock does not match the digests of the declared sources. Regenerate: repos.sh relock"/>
+    <testcase classname="repos-registry.fixture" name="lock: a MISSING lock fails closed, not &#x27;nothing to check&#x27; — kit lock missing: /tmp/repos-registry-fixture.crPSXc/locked.lock (generate it: repos.sh relock)"/>
+    <testcase classname="repos-registry.fixture" name="lock: a kit source the lock OMITS fails (an unguarded kit item) — kit lock is STALE — repos.lock does not match the digests of the declared sources. Regenerate: repos.sh relock"/>
+    <testcase classname="repos-registry.fixture" name="lock: a pin for a source NOT in the roster fails (a stale pin) — kit lock is STALE — repos.lock does not match the digests of the declared sources. Regenerate: repos.sh relock"/>
+    <testcase classname="repos-registry.fixture" name="lock: a &#x27;sha256:&#x27; back in a kit row is SPLIT TRUTH and is rejected — kit &#x27;demo-skill&#x27; carries a &#x27;sha256:&#x27; field — digests live in repos.lock (#527). Remove it and run: repos.sh relock"/>
+    <testcase classname="repos-registry.fixture" name="lock: relock is idempotent"/>
+    <testcase classname="repos-registry.fixture" name="lock: a roster with no kit: block needs no lock"/>
+    <testcase classname="repos-registry.fixture" name="lock: dropping kit: while the lock still has pins fails (orphan pins, not a free pass) — kit lock is STALE — repos.lock does not match the digests of the declared sources. Regenerate: repos.sh relock"/>
+    <testcase classname="repos-registry.fixture" name="duplicate kit id — duplicate kit id(s): demo-skill "/>
+    <testcase classname="repos-registry.fixture" name="duplicate skill source basename — kit skill rows share destination basename — they materialize to one path: demo-skill &lt;- demo-skill, vendored-demo"/>
+    <testcase classname="repos-registry.fixture" name="a capability naming a real reusable workflow passes"/>
+    <testcase classname="repos-registry.fixture" name="capability names a workflow that does not exist — capability &#x27;coordination-kit&#x27; names workflow &#x27;no-such.yml&#x27;, which is not in .github/workflows/."/>
+    <testcase classname="repos-registry.fixture" name="capability names a workflow that is not reusable — capability &#x27;coordination-kit&#x27; names workflow &#x27;not-reusable.yml&#x27;, which has no &#x27;workflow_call:&#x27; trigger — it is not reusable, so no repo can wire it."/>
+    <testcase classname="repos-registry.fixture" name="capability with no detector at all — capability &#x27;coordination-kit&#x27; declares no detector — set &#x27;workflow:&#x27; (a reusable workflow the receiver calls), &#x27;script:&#x27; (an authority script the receiver runs fro"/>
+    <testcase classname="repos-registry.fixture" name="a script-delivered capability passes on its script detector"/>
+    <testcase classname="repos-registry.fixture" name="a package-materialized capability passes on the supported compound detector"/>
+    <testcase classname="repos-registry.fixture" name="capability naming an unsupported materializer detector — capability &#x27;build-config&#x27; names unsupported materializer detector &#x27;imaginary&#x27; (supported: build-config)."/>
+    <testcase classname="repos-registry.fixture" name="a caller-detected capability passes on the supported compound detector"/>
+    <testcase classname="repos-registry.fixture" name="capability naming an unsupported caller detector — capability &#x27;skill-union&#x27; names unsupported caller detector &#x27;imaginary&#x27; (supported: skill-union)."/>
+    <testcase classname="repos-registry.fixture" name="caller detector whose subject workflow does not exist — capability &#x27;skill-union&#x27; names caller detector &#x27;skill-union&#x27;, whose subject .github/workflows/skill-union-assert.yml is not in .github/workflows"/>
+    <testcase classname="repos-registry.fixture" name="caller detector whose subject workflow is not reusable — capability &#x27;skill-union&#x27; names caller detector &#x27;skill-union&#x27;, but .github/workflows/skill-union-assert.yml has no &#x27;workflow_call:&#x27; trigger — it"/>
+    <testcase classname="repos-registry.fixture" name="caller plus another detector is rejected as ambiguous — capability &#x27;skill-union&#x27; declares more than one detector (workflow/script/materializer/caller/push) — a capability is verified ONE way; two lets"/>
+    <testcase classname="repos-registry.fixture" name="caller detector subject may be spelled .yaml, as the detector&#x27;s own regex allows"/>
+    <testcase classname="repos-registry.fixture" name="the authority may not RECEIVE skill-union — it is the source — authority repo &#x27;FS-GG/.github&#x27; must not RECEIVE skill-union — it is the SOURCE. repos-audit detects a receiver by a &#x27;uses:&#x27; of the author"/>
+    <testcase classname="repos-registry.fixture" name="...and the coordination-kit guard still holds, from the same list — authority repo &#x27;FS-GG/.github&#x27; must not RECEIVE coordination-kit — it is the SOURCE. repos-audit detects a receiver by a &#x27;uses:&#x27; of "/>
+    <testcase classname="repos-registry.fixture" name="capability declaring two detectors — capability &#x27;coordination-kit&#x27; declares more than one detector (workflow/script/materializer/caller/push) — a capability is verified ONE way; two lets a receiver sa"/>
+    <testcase classname="repos-registry.fixture" name="materializer plus another detector is also rejected as ambiguous — capability &#x27;build-config&#x27; declares more than one detector (workflow/script/materializer/caller/push) — a capability is verified ONE w"/>
+    <testcase classname="repos-registry.fixture" name="capability naming a script that does not exist — capability &#x27;build-config&#x27; names script &#x27;no-such-script.sh&#x27;, which is not in scripts/ — the audit greps receivers for a reference to it, so a script tha"/>
+    <testcase classname="repos-registry.fixture" name="capability naming a script by path rather than basename — capability &#x27;build-config&#x27; script &#x27;scripts/sync-build-config.sh&#x27; must be a BARE filename, not a path — receivers check .github out under a dire"/>
+    <testcase classname="repos-registry.fixture" name="a push capability with no reason — capability &#x27;build-config&#x27; declares &#x27;push: true&#x27; with no &#x27;reason&#x27; — a capability that is not verifiable at the receiver is the one place this roster can be unfalsifia"/>
+    <testcase classname="repos-registry.fixture" name="a capability that is RECEIVED but has no detector row — capability/ies received but NOT detectable — no &#x27;capabilities:&#x27; row, so repos-audit sweeps them in NEITHER direction and the roster&#x27;s claim abou"/>
+    <testcase classname="repos-registry.fixture" name="a workflow whose only &#x27;workflow_call:&#x27; is in a comment is not reusable — capability &#x27;coordination-kit&#x27; names workflow &#x27;prose-only.yml&#x27;, which has no &#x27;workflow_call:&#x27; trigger — it is not reusable, so n"/>
+    <testcase classname="repos-registry.fixture" name="capability outside the receives vocabulary — capability &#x27;bogus-cap&#x27; is not in the receives vocabulary (known: labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union)."/>
+    <testcase classname="repos-registry.fixture" name="duplicate capability id — duplicate capability id(s): coordination-kit "/>
+    <testcase classname="repos-registry.fixture" name="&#x27;receivers: none&#x27; with a reason, and no repo rostering it, passes"/>
+    <testcase classname="repos-registry.fixture" name="&#x27;receivers: none&#x27; with no reason — capability &#x27;coordination-kit&#x27; declares &#x27;receivers: none&#x27; with no &#x27;reason&#x27; — an unexplained exemption is a mute button."/>
+    <testcase classname="repos-registry.fixture" name="&#x27;receivers: none&#x27; contradicted by a rostered receiver — capability &#x27;coordination-kit&#x27; declares &#x27;receivers: none&#x27;, but repo(s) roster it: sdd."/>
+    <testcase classname="repos-registry.fixture" name="&#x27;receivers:&#x27; with a value other than none — capability &#x27;coordination-kit&#x27; receivers &#x27;some&#x27; is invalid (omit it, or set it to &#x27;none&#x27;)."/>
+    <testcase classname="repos-registry.fixture" name="caps -&gt; a TSV row per capability: id, workflow, script, materializer, caller, push, receivers, reason"/>
+    <testcase classname="repos-registry.fixture" name="caps --field caller -&gt; &#x27;skill-union&#x27; for its caller row, empty for the other two"/>
+    <testcase classname="repos-registry.fixture" name="caps --field id -&gt; the capability ids"/>
+    <testcase classname="repos-registry.fixture" name="caps --field push -&gt; &#x27;true&#x27; or empty, never the string &#x27;false&#x27;"/>
+    <testcase classname="repos-registry.fixture" name="caps --field materializer -&gt; empty for non-materializer rows"/>
+    <testcase classname="repos-registry.fixture" name="a user-owned repos[] row VALIDATES (#2245 acceptance 1)"/>
+    <testcase classname="repos-registry.fixture" name="a user-owned outside-fabric row VALIDATES (#2245 acceptance 1)"/>
+    <testcase classname="repos-registry.fixture" name="a non-participant row with NO recorded reason is REJECTED (#2245 acceptance 2) — repo &#x27;sir&#x27; is role &#x27;non-participant&#x27; and carries no &#x27;reason&#x27;. A row that participates in nothing is excused from every "/>
+    <testcase classname="repos-registry.fixture" name="a non-participant that RECEIVES a capability is REJECTED — repo &#x27;sir&#x27; is role &#x27;non-participant&#x27; but receives [labels]. A row that receives a capability IS a fabric participant; give it role &#x27;framework"/>
+    <testcase classname="repos-registry.fixture" name="a &#x27;reason&#x27; on a PARTICIPATING row is REJECTED, not ignored — repo &#x27;spike&#x27; sets &#x27;reason&#x27; but is role &#x27;framework&#x27;. The field explains why a NON-PARTICIPANT is rostered; on a participating row nothing re"/>
+    <testcase classname="repos-registry.fixture" name="an ORG-owned row with receives: [] VALIDATES (#2245 acceptance 3)"/>
+    <testcase classname="repos-registry.fixture" name="receives: [] VALIDATES when a LATER column is SET (#2253 acceptance 3)"/>
+    <testcase classname="repos-registry.fixture" name="inversion: the empty receives field reds with the former tab reader (#2253 acceptance 3)"/>
+    <testcase classname="repos-registry.fixture" name="an unknown capability is still rejected after the reader change — repo &#x27;spike&#x27; receives unknown capability &#x27;bogus&#x27; (known: labels, coordination-kit, build-config, lockfile-sync, contract-coherence, sk"/>
+    <testcase classname="repos-registry.fixture" name="a literal &#x27;-&#x27; under receives is rejected as an unknown capability — repo &#x27;spike&#x27; receives unknown capability &#x27;-&#x27; (known: labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skil"/>
+    <testcase classname="repos-registry.fixture" name="a role outside the GROWN vocabulary is STILL rejected — repo &#x27;spike&#x27; role &#x27;banana&#x27; invalid (authority|framework|non-participant)."/>
+    <testcase classname="repos-registry.fixture" name="#2206&#x27;s decided S.I.R. row is committed on the real checked-in roster"/>
+    <testcase classname="repos-registry.fixture" name="the real checked-in roster, S.I.R. row included, validates (#2245 acceptance 6)"/>
+    <testcase classname="repos-registry.fixture" name="the S.I.R. row receives no capability at all"/>
+    <testcase classname="repos-registry.fixture" name="list --all yields the user-owned row, so every sweep starting there sees it"/>
+    <testcase classname="repos-registry.fixture" name="list --all -&gt; every rostered repo, receives or not"/>
+    <testcase classname="repos-registry.fixture" name="empty repos[] is misconfig — repos[] is missing or empty."/>
+    <testcase classname="repos-registry.fixture" name="usage error (&#x27;list --all --receives coordination-kit&#x27;) -&gt; exit 2, never 1 (a roster finding)"/>
+    <testcase classname="repos-registry.fixture" name="usage error (&#x27;list&#x27;) -&gt; exit 2, never 1 (a roster finding)"/>
+    <testcase classname="repos-registry.fixture" name="usage error (&#x27;caps --field bogus&#x27;) -&gt; exit 2, never 1 (a roster finding)"/>
+    <testcase classname="repos-registry.fixture" name="usage error (&#x27;caps --field&#x27;) -&gt; exit 2, never 1 (a roster finding)"/>
+    <testcase classname="repos-registry.fixture" name="list --receives coordination-kit -&gt; the one receiver"/>
+    <testcase classname="repos-registry.fixture" name="list --receives labels --field id -&gt; both, in order"/>
+    <testcase classname="repos-registry.fixture" name="absent kit-delivery counts as byte-copy"/>
+    <testcase classname="repos-registry.fixture" name="no package receivers when none migrated"/>
+    <testcase classname="repos-registry.fixture" name="a migrated receiver drops out of the byte-copy set (propagate skips it)"/>
+    <testcase classname="repos-registry.fixture" name="a migrated receiver is in the package set"/>
+    <testcase classname="repos-registry.fixture" name="list --kit-delivery rejects a bad value"/>
+    <testcase classname="repos-registry.fixture" name="list --kit-delivery refuses --all (it narrows a --receives query)"/>
+    <testcase classname="repos-registry.fixture" name="digest skill dir -&gt; sha256 of SKILL.md"/>
+    <testcase classname="repos-registry.fixture" name="digest file -&gt; sha256 of file"/>
+    <testcase classname="repos-registry.fixture" name="kit -&gt; item ids, in roster order"/>
+    <testcase classname="repos-registry.fixture" name="kit --field kind"/>
+    <testcase classname="repos-registry.fixture" name="kit --field source"/>
+    <testcase classname="repos-registry.fixture" name="kit --field bogus -&gt; misconfig (exit 2)"/>
+    <testcase classname="repos-registry.fixture" name="kit --kind skill -&gt; only the skill rows"/>
+    <testcase classname="repos-registry.fixture" name="kit --kind client -&gt; only the client rows"/>
+    <testcase classname="repos-registry.fixture" name="kit --field source --kind skill"/>
+    <testcase classname="repos-registry.fixture" name="kit without --kind -&gt; every row"/>
+    <testcase classname="repos-registry.fixture" name="kit --kind bogus -&gt; misconfig (exit 2), not an empty list"/>
+    <testcase classname="repos-registry.fixture" name="kit -&gt; comma-joined PR title"/>
+    <testcase classname="repos-registry.fixture" name="the checked-in roster declares kit items"/>
+    <testcase classname="repos-registry.fixture" name="list --receives (absent value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="list --receives &#x27;&#x27; (empty value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="list --receives --registry (flag as value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="list --field (absent value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="list --field &#x27;&#x27; (empty value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="list --field --registry (flag as value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="list --registry (absent value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="list --registry &#x27;&#x27; (empty value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="list --registry --registry (flag as value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --field (absent value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --field &#x27;&#x27; (empty value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --field --registry (flag as value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --kind (absent value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --kind &#x27;&#x27; (empty value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --kind --registry (flag as value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --registry (absent value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --registry &#x27;&#x27; (empty value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="kit --registry --registry (flag as value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="validate --registry (absent value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="validate --registry &#x27;&#x27; (empty value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="validate --registry --registry (flag as value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="validate --root (absent value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="validate --root &#x27;&#x27; (empty value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="validate --root --registry (flag as value) -&gt; exit 2"/>
+    <testcase classname="repos-registry.fixture" name="digest (no path) -&gt; misconfig (exit 2)"/>
+    <testcase classname="repos-registry.fixture" name="the checked-in registry/repos.yml validates"/>
+    <testcase classname="repos-registry.fixture" name="every kit source is covered by the selftest paths: filter"/>
+    <testcase classname="repos-registry.fixture" name="every capability&#x27;s detector subject is covered by the selftest paths: filter"/>
+    <testcase classname="repos-registry.fixture" name="build-config: the four ADOPTERS receive it — and templates/audio, which never adopted, do not (#626, #628)"/>
+    <testcase classname="repos-registry.fixture" name="skill-union: no repo declares the retired shape, and the authority is still out (#1715, #1742)"/>
+    <testcase classname="repos-registry.fixture" name="skill-union: the capability row survives its receiver set — detector + &#x27;receivers: none&#x27; + reason intact, so the reverse sweep still runs (#1742)"/>
+    <testcase classname="repos-registry.fixture" name="deleting the skill-union capability row reds, even though its receiver set stays empty (#1806) — capability &#x27;skill-union&#x27; has no &#x27;capabilities:&#x27; row — it is retired-with-no-receiver (CAPS_REQUIRING_RO"/>
+    <testcase classname="repos-registry.fixture" name="a roster edit that adds a repo but touches no capability row stays green (#1806)"/>
+    <testcase classname="repos-registry.fixture" name="remove REFUSES without --confirm-remove"/>
+    <testcase classname="repos-registry.fixture" name="remove REFUSES a --confirm-remove naming a DIFFERENT context"/>
+    <testcase classname="repos-registry.fixture" name="add REJECTS --confirm-remove outright, and names the separate verb"/>
+    <testcase classname="repos-registry.fixture" name="add has no &#x27;--remove&#x27; — there is no argument that flips it to removal"/>
+    <testcase classname="repos-registry.fixture" name="add has no &#x27;--delete&#x27; — there is no argument that flips it to removal"/>
+    <testcase classname="repos-registry.fixture" name="add has no &#x27;--unrequire&#x27; — there is no argument that flips it to removal"/>
+    <testcase classname="repos-registry.fixture" name="add has no &#x27;--op&#x27; — there is no argument that flips it to removal"/>
+    <testcase classname="repos-registry.fixture" name="add has no &#x27;--mode&#x27; — there is no argument that flips it to removal"/>
+    <testcase classname="repos-registry.fixture" name="add has no &#x27;--prune&#x27; — there is no argument that flips it to removal"/>
+    <testcase classname="repos-registry.fixture" name="add path issues GET+POST only — zero DELETE, zero PUT, zero PATCH over the whole roster"/>
+    <testcase classname="repos-registry.fixture" name="add path never names the protection object, enforce_admins, or review requirements"/>
+    <testcase classname="repos-registry.fixture" name="repos.sh invokes &#x27;gh api&#x27; from exactly ONE place (the audited wrapper)"/>
+    <testcase classname="repos-registry.fixture" name="every gh_api_capture call passes an rsc_read_path/rsc_write_path path"/>
+    <testcase classname="repos-registry.fixture" name="the only two protection paths repos.sh names are both under required_status_checks"/>
+    <testcase classname="repos-registry.fixture" name="no --apply: reports WOULD-ADD, issues zero writes, leaves the branch untouched"/>
+    <testcase classname="repos-registry.fixture" name="--apply arms every roster-derived receiver, preserving the contexts already required"/>
+    <testcase classname="repos-registry.fixture" name="a second --apply reports UNCHANGED and issues zero writes (idempotent, and provably so)"/>
+    <testcase classname="repos-registry.fixture" name="a branch reporting its contexts via checks[] is read correctly — no redundant write"/>
+    <testcase classname="repos-registry.fixture" name="a repo whose write 403s: per-repo outcomes, exit 1, the credential named, and NO blind retry"/>
+    <testcase classname="repos-registry.fixture" name="an unprotected branch is a REFUSAL — the tool never creates protection it would have to PUT"/>
+    <testcase classname="repos-registry.fixture" name="a write that returns 200 and changes nothing is a FAILURE, caught by read-back, not retried"/>
+    <testcase classname="repos-registry.fixture" name="an add that would REDUCE the required set (a context vanished) fails read-back"/>
+    <testcase classname="repos-registry.fixture" name="the removal verb, fully confirmed, removes exactly the named context and nothing else"/>
+    <testcase classname="repos-registry.fixture" name="removing a context that is NOT required is a failure, not a silent no-op"/>
+    <testcase classname="repos-registry.fixture" name="a capability NO repo receives is refused, never swept as an empty set"/>
+    <testcase classname="repos-registry.fixture" name="--only NARROWS the roster set and cannot extend it"/>
+    <testcase classname="repos-registry.fixture" name="--context is required"/>
+    <testcase classname="repos-registry.fixture" name="a multi-line --context is refused, not silently mis-compared"/>
+    <testcase classname="repos-registry.fixture" name="--receives is required — targets are never hand-listed"/>
+    <testcase classname="repos-registry.fixture" name="--only arms exactly one roster member — the recovery path after a partial application"/>
+    <testcase classname="repos-registry.fixture" name="adding a receiver to the ROSTER moves the target set, with no other edit (no fifth copy)"/>
+    <testcase classname="repos-registry.fixture" name="require-context&#x27;s real target set for coordination-kit is the SEVEN receivers #1587 names"/>
+    <testcase classname="repos-registry.validate" name="scripts/repos.sh validate">
+      <system-out>repos-registry: OK — 9 repo(s), 6 audited capabilit(ies), 9 kit item(s), authority=FS-GG/.github</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>
