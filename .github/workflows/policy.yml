@@ -57,6 +57,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Historical-evidence verification resolves the exact pre-deletion
+          # source commit and its bound blobs, which a one-commit PR checkout
+          # cannot contain.
+          fetch-depth: 0
       - uses: ./.github/actions/setup-policy-python
       - name: Discover and exercise every declared policy subject
         run: |
