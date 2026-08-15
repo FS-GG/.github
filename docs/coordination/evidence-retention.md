@@ -14,11 +14,14 @@ every row, so validating caller-authored metadata without observing all retained
 download the named artifact and compare its SHA-256;
 the URL locates bytes, while the digest establishes identity.
 
-Historical checked-in evidence is not deleted in M5. The 29 existing TRX files (27,532,297 bytes at
-`7a9b8742f259af4d82b9562bfbe8e40d963b0be7`) remain recoverable while new runs use manifests. M6 may migrate
-them only after uploading the exact bytes and committing a hash/URL manifest, or retain them when no durable
-artifact can be established. Rollback is to keep or restore the checked-in output and remove its ignore rule;
-no manifest is accepted as a replacement unless `verify` passes.
+The 29 historical TRX files (27,532,297 bytes) left Git at M6 only after their exact bytes were packed
+from source commit `a8207eb1d493365ce5e1205af18211e8724ce104`, uploaded once to the immutable GitHub release
+`evidence/m6-trx-a8207eb1`, downloaded afresh, and verified file-by-file. The compact manifest
+`docs/reports/evidence/2026-08-15-m6-historical-trx-archive.json` binds every source path, size, SHA-256,
+Git blob, canonical-row digest, archive digest, immutable release URL, asset id, and server digest.
+Repository immutable releases were enabled before publication; overwrite and deletion are refused.
+Rollback downloads and verifies the release asset, or restores the same blobs from the still-ancestral
+source commit. Old bulky bytes do not remain tracked at the new tip.
 
 Material coordination policy remains authored in the typed neutral sources named by
 `scripts/generate-projections` (principally `Protocol.fs` and the registries). Runtime skill files are generated
@@ -37,6 +40,8 @@ Verification commands:
 
 ```sh
 bash tests/evidence-manifest/run.sh
+bash tests/historical-evidence/run.sh
+python3 scripts/m6-cutover-acceptance.py docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json
 python3 scripts/policy-runner.py run all
 bash scripts/skill-view check --source .agents/skills --tree .
 ```

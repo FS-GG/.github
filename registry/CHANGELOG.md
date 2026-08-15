@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-15** — **coord-engine coherent set `0.58.0` source-ahead for M6 new-only cutover**
+  (owner `github`; roadmap M6). The shared source version advances from `0.57.0` to `0.58.0` as a
+  receiver-visible MINOR. Lifecycle, GraphQL, route/review authorization, release publishing, and
+  historical evidence retention now have one authority each; rollback/shadow/raw/prose/body-hash/dry-run
+  compatibility paths are removed. `package-version` and the distributed pin remain `0.57.0` until the
+  exact merged source is packed once, observed byte-identical on both feeds, promoted, adopted, and pinned.
+
 - **2026-08-14** — **coord-engine coherent set `0.57.0` published, adopted, and pinned**
   (owner `github`; [.github#2587](https://github.com/FS-GG/.github/issues/2587);
   [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.57.0)).

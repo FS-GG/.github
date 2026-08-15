@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "owner_decision": {
+    "authorized_at": "2026-08-15T00:00:00Z",
+    "supersedes_calendar_gate": true,
+    "reason": "The owner explicitly replaced the three-week elapsed-time condition with comprehensive load-bearing tests, live new-only acceptance, retirement of old paths, and coherent release adoption. No weekly period is claimed to have elapsed."
+  },
+  "implementation": {
+    "sha": "b84423e7f8c28e08efd3697d7fd62d13b2f90527",
+    "base_sha": "a8207eb1d493365ce5e1205af18211e8724ce104",
+    "description": "Frozen lifecycle, GraphQL, release-path, structured-decision, and historical-evidence retirement implementation."
+  },
+  "superseded_history": {
+    "path": "docs/reports/evidence/2026-08-14-m6-retirement-readiness.json",
+    "sha256": "d2f5035645653bcab41ae74bdf058b6c6be92a77f927ee32b7ad55cb3bdd7a16",
+    "disposition": "superseded-not-passed"
+  },
+  "deletion_inventory": {
+    "absent_paths": [
+      "scripts/graphql_complete_read.py",
+      "scripts/coordination-health-collector.py",
+      "scripts/coordination-retirement-readiness.py",
+      "scripts/release-train-audit.fsx",
+      "scripts/release-train-lib.fsx",
+      "scripts/release-train-state.fsx",
+      "scripts/release-train-status.fsx",
+      "scripts/release-train-verify.fsx",
+      "scripts/release-train-workflows.fsx",
+      ".github/workflows/release-train-tooling.yml",
+      "tests/release-train-tooling/run.sh",
+      "tests/coordination-health-collector/run.sh",
+      "tests/coordination-retirement-readiness/run.sh"
+    ],
+    "absent_markers": [
+      {"marker": "FSGG_COORD_LIFECYCLE_PROJECTION", "roots": ["src", ".github"]},
+      {"marker": "let private graphQlData", "roots": ["src"]},
+      {"marker": "graphql_complete_read", "roots": ["src", ".github/workflows"]},
+      {"marker": "fsgg:delivery-route/v1", "roots": ["src", ".agents", ".claude"]},
+      {"marker": "fsgg:independent-review:v1", "roots": ["src", ".agents", ".claude"]},
+      {"marker": "fsgg:review-accepted:v1", "roots": ["src", ".agents", ".claude"]},
+      {"marker": "DISPATCH_PUBLISH", "roots": [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-drivers.yml"]},
+      {"marker": "pack locally (dry run)", "roots": [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-drivers.yml"]}
+    ]
+  },
+  "decision_census": {
+    "path": "docs/reports/evidence/2026-08-15-m6-active-inert-decision-census.json",
+    "sha256": "28dbf37d0435e228ef9ba619555134fa9e8be4b3e9ce223d89b5c6503b03e788"
+  },
+  "lifecycle_seed": {
+    "path": "docs/reports/evidence/2026-08-15-m6-live-intent-seed.json",
+    "sha256": "a0b121e39ce94006d5bdc4af5c27d96e3eb101e43797fb4d11fd1b9b6ae0a4ba"
+  },
+  "trx_archive": {
+    "path": "docs/reports/evidence/2026-08-15-m6-historical-trx-archive.json",
+    "sha256": "ddc6b1af68ce5a08fb44aa6f6f252d9778cf947c12b70645b62dcab284876e5e"
+  },
+  "test_results": [],
+  "mutation_results": [],
+  "release": {
+    "version": "0.58.0",
+    "source_sha": "b84423e7f8c28e08efd3697d7fd62d13b2f90527",
+    "prepared_manifest_verified": false,
+    "package_bytes_identical": false,
+    "github_feed_observed": false,
+    "nuget_feed_observed": false,
+    "promoted": false,
+    "adopted_and_pinned": false
+  },
+  "live_acceptance": {
+    "exact_main_sha": null,
+    "new_only_smoke": false,
+    "same_class_open_issues": null,
+    "issue_2569_closed": false
+  },
+  "status": "pending-comprehensive-tests-critic-merge-release-live-acceptance"
+}

@@ -22,9 +22,9 @@ echo 'policy runner fixture: ok'
 # The consolidated workflow must trigger when any discovered subject implementation or fixture moves.
 workflow="$ROOT/.github/workflows/policy.yml"
 for required in 'policy/**' 'scripts/policy-runner.py' 'scripts/evidence-manifest.py' \
-                'scripts/coordination-retirement-readiness.py' 'tests/projection/**' \
+                'scripts/m6-cutover-acceptance.py' 'tests/projection/**' \
                 'tests/policy-runner/**' 'tests/evidence-manifest/**' \
-                'tests/coordination-retirement-readiness/**' 'docs/reports/evidence/**'; do
+                'tests/m6-cutover-acceptance/**' 'docs/reports/evidence/**'; do
   [ "$(grep -cF -- "- \"$required\"" "$workflow")" -eq 2 ] || {
     echo "policy workflow does not cover subject dependency in both triggers: $required" >&2; exit 1
   }

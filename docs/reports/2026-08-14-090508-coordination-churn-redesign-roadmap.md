@@ -265,6 +265,16 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
 
 ### M6 retirement-readiness evidence (blocked; M6 remains unchecked)
 
+> **Superseded, not passed:** On 2026-08-15 the owner explicitly directed that the three-week elapsed-time
+> criterion be replaced by comprehensive load-bearing tests followed by immediate new-only go-live and
+> deletion of the old paths. The facts below remain accurate historical evidence: the short M3–M5 windows
+> were not weeks and `0 < 0` was false. Nothing below is reclassified as passing. The replacement
+> fail-closed acceptance is `scripts/m6-cutover-acceptance.py` over
+> `docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json`; it requires the exact implementation SHA,
+> empty removal inventory, complete active/inert decision census, idempotent live intent seed, immutable
+> TRX archive, named comprehensive suites and red mutations, coherent 0.58 feed promotion/adoption,
+> exact-main new-only smoke, closed #2569, and zero same-class successors.
+
 - **The three-cycle prerequisite is not met:** M3, M4, and M5 completed in three short windows on
   2026-08-14, not three weekly operating measurement periods. GitHub's complete day census has zero
   issue creations and zero closures inside each exact window, so the strict `creation < closure`

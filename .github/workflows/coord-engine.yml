@@ -40,7 +40,6 @@ on:
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
       - "tests/coord-engine-replay/**"
-      - "tests/review-post-acceptance-head-move/**"
       - "tests/review-critic-succession-wire/**"
       - "scripts/fsgg-coord"
       - "scripts/record-board-fixture.py"
@@ -69,7 +68,6 @@ on:
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
       - "tests/coord-engine-replay/**"
-      - "tests/review-post-acceptance-head-move/**"
       - "tests/review-critic-succession-wire/**"
       - "scripts/fsgg-coord"
       - "scripts/record-board-fixture.py"
@@ -117,6 +115,9 @@ jobs:
 
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      - name: Assert M6 structured-decision retirement and replacement coverage
+        run: bash tests/m6-decision-cutover/run.sh
 
       # THE BINARY, END TO END, OVER HTTP — hermetically. Every other test drives the engine through
       # `Fake.Recorder` or a snapshot on stdin; this one runs the COMPILED binary against a fixture GitHub
@@ -189,9 +190,6 @@ jobs:
       # an acceptance naming no present initial review, each of which must STILL fail closed — and the
       # single-chain boundary. Its last leg rebuilds the engine with the mechanism reduced to the identity
       # function and requires the recovery leg to red, so the gate is measured rather than asserted.
-      - name: A head that moved after acceptance recovers — and the laundering counterpart stays refused
-        run: bash tests/review-post-acceptance-head-move/run.sh
-
       # CRITIC SUCCESSION'S REFUSALS (.github#2417/#2451), AND THE REASON THIS STEP EXISTS AT ALL
       # (.github#2537). The fixture shipped with #2417 as that change's gate-inversion proof and was
       # then invoked by NO workflow — so the proof that succession can say NO had never once been
