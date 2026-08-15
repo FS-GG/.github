@@ -13,6 +13,7 @@ python3 "$ROOT/tests/skill-quality/review-round-contract.py"
 python3 "$ROOT/tests/skill-quality/roadmap-critique-contract.py"
 python3 "$ROOT/tests/skill-quality/agent-definition-coverage.py"
 python3 "$ROOT/tests/skill-quality/recency-comment-edit.py"
+python3 "$ROOT/tests/skill-quality/analyst-dispatch.py"
 
 # .github#2666 — a gate nothing invokes is graded NOT_MEASURED at best. Each gate above asserts its
 # own workflow path filter, but the workflow only ever runs THIS file, so a gate dropped from the
@@ -96,6 +97,23 @@ expect_recency_rejection() {
   local label="$1" evidence="$2"
   local rc=0
   python3 "$ROOT/tests/skill-quality/recency-comment-edit.py" \
+    --root "$WORK/tree" >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
+    echo "PASS  $label"
+    pass=$((pass+1))
+  else
+    echo "FAIL  $label (wanted exit 1 containing: $evidence; got exit $rc)" >&2
+    sed 's/^/    | /' "$WORK/out" >&2
+    fail=$((fail+1))
+  fi
+}
+
+# .github#2675. Same three-part shape again — its own `--root` entry point, exit 1, and the exact
+# finding text — so a regression that merely reworded the message reds here too.
+expect_analyst_rejection() {
+  local label="$1" evidence="$2"
+  local rc=0
+  python3 "$ROOT/tests/skill-quality/analyst-dispatch.py" \
     --root "$WORK/tree" >"$WORK/out" 2>&1 || rc=$?
   if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
     echo "PASS  $label"
@@ -784,6 +802,151 @@ path.write_text(text.replace('      - "tests/skill-quality/**"\n', "", 1))
 PY
 expect_recency_rejection "the gate no longer triggers on its own source" \
   "does not list 'tests/skill-quality/**' under pull_request.paths"
+
+# --- .github#2675: the board host loops must dispatch the analyst they told finders to feed --------
+#
+# `.github#2584` routed finders to post `fsgg:finding-packet` comments INSTEAD of filing, and codified
+# the analyst's own behaviour once invoked — but no host step collected the packets, so every finding
+# became a comment with no reader. These are the committed inversions: each is a real mutation of a
+# seeded tree, run through the gate's own entry point, and each fails a DIFFERENT leg.
+
+# The defect verbatim, and the exact state `main` was in before this row: a host loop that owns critic
+# dispatch and says nothing about the analyst.
+seed_agents
+python3 - "$WORK/tree" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("gate", root / "tests/skill-quality/analyst-dispatch.py")
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+path = root / ".claude/skills/drive-board/references/host-loop.md"
+text = path.read_text()
+if gate.CANONICAL + "\n\n" not in text:
+    raise SystemExit("fixture: drive-board host-loop does not carry the canonical dispatch step")
+path.write_text(text.replace(gate.CANONICAL + "\n\n", "", 1))
+PY
+expect_analyst_rejection "a host loop that never collects finding packets is rejected" \
+  ".claude/skills/drive-board/references/host-loop.md carries the canonical analyst-dispatch step 0 time(s)"
+
+# Criterion 2 of the row, and `.github#485`'s drift: the routed variants change MODEL ROUTING ONLY.
+# A variant that grows its own copy of the protocol is how the two stop agreeing. Note the mutation
+# carries no copy of the canonical block — it is one reworded sentence, which is what real drift looks
+# like — so this case proves the vocabulary detector, not a byte comparison.
+seed_agents
+printf '\nAfter each wave, collect every finding packet and dispatch `fsgg-analyst-best` to adjudicate.\n' \
+  >>"$WORK/tree/.claude/skills/drive-board-best/SKILL.md"
+expect_analyst_rejection "a routed variant that restates analyst-dispatch protocol is rejected" \
+  ".claude/skills/drive-board-best/SKILL.md states analyst-dispatch protocol"
+
+# Criterion 5: the branch every kit receiver reads. `board-analyst` is `scope: operator` and reaches no
+# receiver, so "where no analyst is available, the finder files" is the whole design for seven repos.
+# Deleting it strands them — a finder told to post a packet nothing in its tree will ever read.
+seed_agents
+python3 - "$WORK/tree" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("gate", root / "tests/skill-quality/analyst-dispatch.py")
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+path = root / ".claude/skills/pnext-item/references/findings-and-filing.md"
+text = path.read_text()
+if gate.NO_ANALYST_BRANCH not in text:
+    raise SystemExit("fixture: findings-and-filing.md does not carry the no-analyst branch")
+path.write_text(text.replace(gate.NO_ANALYST_BRANCH, "**Where no analyst is available**, stop and ask.", 1))
+PY
+expect_analyst_rejection "deleting the no-analyst branch every kit receiver reads is rejected" \
+  "no longer carries its no-analyst branch verbatim"
+
+# The other half of criterion 5, and the one prose alone cannot hold: the branch above is CORRECT only
+# while the analyst materializes nowhere. Flip the predicate and receivers start resolving an analyst
+# whose subject is this repo's board, its `scripts/check-*.py` corpus, and its lane partition.
+seed_agents
+python3 - "$WORK/tree" <<'PY'
+import sys
+from pathlib import Path
+import re
+path = Path(sys.argv[1]) / "registry/skills.yml"
+text = path.read_text()
+# Flip ONLY the board-analyst row's predicate, leaving every other operator row untouched.
+pattern = re.compile(r'(id:\s*board-analyst\s*,.*?materializes-when:\s*)"false"', re.DOTALL)
+patched, n = pattern.subn(r"\1always", text, count=1)
+if n != 1:
+    raise SystemExit("fixture: board-analyst registry row not found")
+path.write_text(patched)
+PY
+expect_analyst_rejection "an analyst that starts materializing to receivers is rejected" \
+  'no longer declares `board-analyst` with `materializes-when: "false"`'
+
+# Vacuous green (.github#2551/.github#2510), aimed at the ONE leg of this gate that can sweep nothing.
+# Leg 1 fails closed on a missing host loop, but leg 2's variant glob can match no directory at all and
+# clear every restatement by default. Renaming the variants leaves the boards themselves intact, so
+# leg 1 still passes and this case can only red on the measured variant count.
+seed_agents
+python3 - "$WORK/tree" <<'PY'
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+for runtime in (".claude", ".agents"):
+    for route in ("best", "normal"):
+        src = root / runtime / "skills" / f"drive-board-{route}"
+        if not src.is_dir():
+            raise SystemExit(f"fixture: {src} missing")
+        src.rename(root / runtime / "skills" / f"driveboard{route}")
+PY
+expect_analyst_rejection "a variant glob that matches nothing sweeps no restatement" \
+  "found 0 routed variant(s) of drive-board under .claude/skills"
+
+# The neighbouring shape: the variant directories exist and hold no markdown, which clears exactly as
+# an unmatched glob does. Measured separately because the count that catches it is a different one.
+seed_agents
+python3 - "$WORK/tree" <<'PY'
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+for runtime in (".claude", ".agents"):
+    for route in ("best", "normal"):
+        target = root / runtime / "skills" / f"drive-board-{route}"
+        for path in target.rglob("*.md"):
+            path.unlink()
+PY
+expect_analyst_rejection "variant directories holding no markdown sweep nothing" \
+  "read 0 file(s) across 2 routed variant(s) of drive-board under .claude/skills"
+
+# Epic #266's class, aimed at this gate's own source: drop `tests/skill-quality/**` and a change to the
+# scanner would never be checked by the workflow that runs it.
+seed_agents
+python3 - "$WORK/tree/.github/workflows/skill-quality.yml" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+if '      - "tests/skill-quality/**"\n' not in text:
+    raise SystemExit("fixture trigger line missing")
+path.write_text(text.replace('      - "tests/skill-quality/**"\n', "", 1))
+PY
+expect_analyst_rejection "the gate no longer triggers on its own source" \
+  "does not list 'tests/skill-quality/**' under pull_request.paths"
+
+# And on `registry/skills.yml`, which leg 3 READS — a trigger that does not name it means the analyst's
+# materialization predicate could flip without this gate ever being asked about it.
+seed_agents
+python3 - "$WORK/tree/.github/workflows/skill-quality.yml" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+if '      - "registry/skills.yml"\n' not in text:
+    raise SystemExit("fixture trigger line missing")
+path.write_text(text.replace('      - "registry/skills.yml"\n', "", 1))
+PY
+expect_analyst_rejection "the gate no longer triggers on the registry it reads" \
+  "does not list 'registry/skills.yml' under pull_request.paths"
 
 if [ "$fail" -ne 0 ]; then
   echo "skill-quality fixture: $fail failure(s), $pass pass(es)" >&2
