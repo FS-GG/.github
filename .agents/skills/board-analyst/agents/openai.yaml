@@ -1,0 +1,4 @@
+interface:
+  display_name: "Board Analyst"
+  short_description: "Adjudicate findings and read the board for churn"
+  default_prompt: "Use $board-analyst to decide which findings become rows and to measure board churn."

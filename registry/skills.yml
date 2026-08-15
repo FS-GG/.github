@@ -380,3 +380,7 @@ skills:
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
   - { id: drive-board-normal,     scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-normal/SKILL.md, sha256: 8fc07f85b8548838a1c3d723c223284399a9b84fde108ab23551f94172b29639, materializes-when: "false" }
+  # board-analyst — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: board-analyst,          scope: operator,owner: .github,         source: .github/.claude/skills/board-analyst/SKILL.md, sha256: 4856222acb4f29f107fda6608464c5c1bd7d64056e33fd85f9344e1014c1e3a0, materializes-when: "false" }
