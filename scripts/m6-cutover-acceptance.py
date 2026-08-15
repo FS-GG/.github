@@ -104,6 +104,8 @@ def validate(document: object, root: Path) -> list[str]:
         return ["root must be an object"]
     if document.get("schema_version") != 1:
         failures.append("schema_version must be 1")
+    if document.get("status") != "terminal-new-only-release-live-acceptance-complete":
+        failures.append("status must declare terminal new-only release/live acceptance complete")
 
     decision = document.get("owner_decision")
     if not isinstance(decision, dict) or decision.get("supersedes_calendar_gate") is not True:

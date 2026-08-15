@@ -76,6 +76,7 @@ for name, mutate in seed_mutations.items():
     print(f"PASS {name}: {seed_failures[0]}")
 
 mutations = {
+    "terminal-status-pending": lambda d: d.update(status="pending"),
     "calendar-history-rewritten": lambda d: d["superseded_history"].update(disposition="passed"),
     "implementation-unbound": lambda d: d["implementation"].update(sha="0" * 40),
     "retired-path-returned": lambda d: d["deletion_inventory"]["absent_paths"].append("src/FS.GG.Coord.Core/StructuredDecision.fs"),

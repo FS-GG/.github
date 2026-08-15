@@ -115,5 +115,5 @@
     "same_class_searches_sha256": "3c7bf3a97fbffd1eade03a15032378cb6cf88054f872b21242864be6f1200128",
     "evidence": {"path": "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json", "sha256": "87bca7be823cb7b164a559437d06b59cdab8241432f9ce40e5155406c87b736b"}
   },
-  "status": "terminal-new-only-release-live-acceptance-pending-final-critic"
+  "status": "terminal-new-only-release-live-acceptance-complete"
 }

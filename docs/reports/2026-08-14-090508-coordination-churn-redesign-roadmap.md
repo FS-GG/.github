@@ -214,7 +214,7 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   - Deliverables: Introduce compact evidence manifests and artifact retention; generate skill projections; consolidate policy runners and subject discovery
   - Exit criteria: Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss
 
-- [ ] **M6 — retire compatibility paths**
+- [x] **M6 — retire compatibility paths**
   - Target: After 3 stable cycles
   - Deliverables: Remove old reducer, raw GraphQL helpers, legacy body hashes, and superseded release paths; document operations
   - Exit criteria: Three consecutive operating cycles meet the health measures below; no same-class successor issue remains open
@@ -379,8 +379,8 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   main was a
   generated registry digest left stale by adoption; the canonical registry writer has reconciled that
   one row on the final evidence branch, with its dated changelog entry and absolute coherence check green.
-  M6 remains unchecked only until that repair passes normal PR protection and the same critic records the
-  reserved terminal round-10 PASS on the exact final evidence head.
+  The repair passed normal PR protection and the same critic recorded the reserved terminal round-10
+  PASS at exact candidate `b088dd59298d4dc11a24828e6a42c300dfa43dce`; M6 is complete.
 
 ### M0 stabilization evidence
 
