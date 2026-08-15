@@ -2433,6 +2433,17 @@ lifted_shape "…nor is an unbound call result, for want of a name to track it u
   "    _guarded(\"x\", lambda: getattr(module, \"decide\", None))({})  # MUTATION" \
   "is inside \`_guarded\`" pass
 
+# ...nor a program-defined dunder reached by SYNTAX, which is the widest of the three and the one that
+# looks least like a boundary question. The unit of this check is `ast.Call`, so the SAME hazard is
+# graded in its call spelling and unseen in its syntactic one. The other half of that asymmetry is
+# already asserted above by `mutant-repr-not-inert` — `repr(decide)` is a touch — and this leg is
+# deliberately the f-string that runs the identical `__repr__` without a call. The pair is what pins
+# the boundary: move it either way and one of the two reds, forcing `WHAT THIS CANNOT SEE` to be
+# corrected in the same commit. A second `repr(decide)` leg here would assert nothing the one above
+# does not, so there is not one.
+lifted_shape "…nor a dunder reached by SYNTAX rather than by a call: the unit of this check is the call" \
+  mutant-residual-fstring "    _m = f\"decide is {decide!r}\"  # MUTATION" "is inside \`_guarded\`" pass
+
 # ...and the runtime half for the CLASS, not only for the direct invocation M9 covers. `map` is the
 # most idiomatic of the four — `merge_performs_act` already loops over completions asking `decide`
 # about each — and it carries the identical `rc == 0 AND no output` signature.
@@ -2742,12 +2753,12 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   from the loader calls a function makes (the hand-written set had already missed `run_obligation_arm`,
 #   a third function that loads a program), so a NEW holder is graded, and a DECLARED holder that has
 #   been renamed away is MAP ROT rather than a quietly smaller subject. 226 + 9 = 235.
-# + 17 legs for .github#2667, whose subject is that checker again — but a DATAFLOW gap rather than the
+# + 18 legs for .github#2667, whose subject is that checker again — but a DATAFLOW gap rather than the
 #   five SPELLING gaps above. A tracked reference that left through a CALL RESULT stopped being
 #   tracked, so `decision_function`'s own `decide`, lifted out under the guard and kept in a local,
 #   was certified safe to invoke.
 #
-#   4 are the hole itself. 1 is it through the ARM (M9, the same rc==0-and-no-output signature as
+#   5 are the hole itself. 1 is it through the ARM (M9, the same rc==0-and-no-output signature as
 #   M6/M7/M8) and 1 is its CONTROL — the identical decision program and declaration against the
 #   SHIPPED gate, where the same `decide()` exit becomes a typed no-verdict; that is also the first
 #   leg here to cover a `decide` that exits, rather than a `patch_tuple` or a `__getattr__`. 2 are the
@@ -2775,11 +2786,15 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   transforming it. They are cheap to walk, and closing them is what lets the disclosure state a
 #   single property instead of listing spellings.
 #
-#   2 assert the residual class is genuinely OPEN — indexing into a container, and an unbound call
-#   result. A disclosure nothing checks drifts from the code silently, which on a cause already three
-#   generations deep is how the fourth generation is born. If a later change closes either, these legs
-#   red and force `WHAT THIS CANNOT SEE` to be corrected in the same commit. 235 + 17 = 252.
-EXPECTED_LEGS=252
+#   3 assert the residual class is genuinely OPEN — indexing into a container, an unbound call result,
+#   and a dunder reached by SYNTAX rather than by a call. A disclosure nothing checks drifts from the
+#   code silently, which on a cause already three generations deep is how the fourth generation is
+#   born; and a disclosure claiming to be COMPLETE is worse than one that does not, because an
+#   enumeration invites the reader to keep looking while a completeness claim tells them to stop. The
+#   third of these pins one half of an asymmetry whose other half is the `repr` leg above — the same
+#   `__repr__`, once with a call and once without — so moving the call boundary either way reds one of
+#   the two. 235 + 18 = 253.
+EXPECTED_LEGS=253
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

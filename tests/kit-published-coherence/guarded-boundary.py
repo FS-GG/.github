@@ -58,17 +58,32 @@ not exist — and stated as a RULE a reader can apply to a spelling nobody has w
 this is the third generation of one cause (#2571 → .github#2652 → .github#2667) and an enumeration of
 exemplars is what invites a fourth.
 
-  Walk backwards from the call to the tracked name. In FUNC position the steps this checker follows
-  are attribute, subscript, conditional and boolean-operator. In ARGUMENT position it will first peel
-  any nesting of starred elements and literal list/tuple/set/dict, then follow that same chain. If the
-  path from the name to the call needs ANY other step, this checker does not see it.
+  FIRST, there must BE a call: the unit of this whole check is `ast.Call` (see `is_touch`). THEN walk
+  backwards from that call to the tracked name. In FUNC position the steps this checker follows are
+  attribute, subscript, conditional and boolean-operator. In ARGUMENT position it will first peel any
+  nesting of starred elements and literal list/tuple/set/dict, then follow that same chain. If there
+  is no call, or the path from the name to it needs ANY other step, this checker does not see it.
 
-Two steps are outside it, and between them they are the whole residual class. **Indexing into or
-iterating a container** — `[decide][0](x)`, `{"d": decide}["d"](x)`, `sorted(xs, key=[*[decide]][0])`,
-`f([d for d in [decide]])` — because knowing which element comes out means evaluating the container.
-And **an unbound call result** — `type(module)(...)`, `_guarded(w, lambda: getattr(module, "d"))(x)` —
+Three steps are outside it. The list is not claimed to be exhaustive — that claim is what a reader
+would rely on to stop looking, and it is the one thing this docstring must not get wrong.
+
+**No call at all**, which is the widest of the three and the easiest to miss because nothing about it
+looks like a boundary question. The unit is the CALL, so a program-defined dunder reached by SYNTAX is
+invisible: interpolation (`f"{decide!r}"`), `%`-formatting (`"%s" % decide`), comparison
+(`decide == x`), bare truth-testing (`if decide:`), iteration (`[x for x in decide]`), hashing. Note
+the asymmetry this produces, because it is the practical tell — the SAME hazard is graded in its call
+spelling and unseen in its syntactic one: `repr(decide)` and `bool(decide)` are touches, while
+`f"{decide!r}"` and `if decide:` are not. `NON_INVOKING` below excludes `repr` precisely because it
+runs `__repr__`; the f-string is that operation without the call, and this checker cannot reach it.
+
+**Indexing into or iterating a container** — `[decide][0](x)`, `{"d": decide}["d"](x)`,
+`sorted(xs, key=[*[decide]][0])`, `f([d for d in [decide]])` — because knowing which element comes out
+means evaluating the container.
+
+**An unbound call result** — `type(module)(...)`, `_guarded(w, lambda: getattr(module, "d"))(x)` —
 because a result is tracked when it is BOUND to a name (see `lifts_from`) and there is no name here.
-Note the rule also decides the cases that ARE seen: `functools.partial(decide, x)()` and
+
+The rule also decides the cases that ARE seen: `functools.partial(decide, x)()` and
 `getattr(module, "d")(x)` both reach a tracked name in argument position with no such step, so both
 are touches, and a reader can determine that from the paragraph without either being listed.
 
@@ -117,11 +132,20 @@ READERS = {"getattr", "vars"}
 # strictly unary form — `type(name, bases, ns)` is the class constructor and runs a metaclass, which
 # is a different function wearing one name.
 #
-# DELIBERATELY ABSENT: `repr(x)` runs `x.__repr__`, and `isinstance(x, C)` runs
-# `type(C).__instancecheck__` — neither is provably inert, so neither is exempt. `isinstance` is also
-# unnecessary here, and the reason is the whole design: the arm's `isinstance(decision, dict)` is
-# already untracked because an INVOCATION RESULT is never tracked. An allowlist entry that exists to
-# excuse a value that should not have been tracked is the weaker rule creeping back in.
+# THE TEST FOR A CANDIDATE, in the order that settles it soonest:
+#
+#   1. Could it ever qualify? `cannot_invoke` requires exactly one positional argument, so an
+#      always-binary builtin is DEAD CODE in this set. `isinstance` is the example — listing it would
+#      read as a considered exemption while never once applying. Structural ineligibility cannot rot,
+#      which is why it is asked first.
+#   2. Is it needed? The arm's `isinstance(decision, dict)` is already green because an INVOCATION
+#      RESULT is never tracked. An allowlist entry that exists to excuse a value that should not have
+#      been tracked is the weaker rule creeping back in.
+#   3. Is the hook on the tracked argument, or somewhere else? This is the one that needs care.
+#      `repr(x)` runs `x.__repr__` — the tracked object's own slot — so it is NOT inert and is
+#      excluded. `isinstance(x, C)` runs `type(C).__instancecheck__`, which lives on the OTHER
+#      argument's metaclass and never reaches `x`'s slots at all, so "not provably inert" would be the
+#      wrong reason to exclude it. Ask whose slot the builtin reaches, not whether a hook exists.
 NON_INVOKING = {"callable", "type", "id"}
 
 
