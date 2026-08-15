@@ -235,6 +235,36 @@ module Review =
     /// property `independent-review.md` states is never actually witnessed by a generic string. A
     /// receipt whose current-round critic identity is generic is refused exactly like a mismatched one:
     /// the caller falls back to `ResumeSameCritic`, never to a succession the marker text cannot support.
+    ///
+    /// `.github#2557` — WHY THERE IS NO BLANK-STRING CONJUNCT HERE, and it is a recorded decision rather
+    /// than an omission. This guard carried two more conjuncts,
+    /// `not (String.IsNullOrWhiteSpace receipt.SuccessorCriticIdentity)` and the same for `GrantedBy`,
+    /// and NEITHER COULD EVER RUN.
+    ///
+    /// The claim is about CONSTRUCTION, not about callers, and stating it the other way round is how the
+    /// first draft of this comment got it wrong. A receipt reaches this guard only by being built, and
+    /// `ReviewApplication.criticSuccessionReceipt` is the sole site in `src/` that builds one — it reads
+    /// EVERY field through `ReviewApplication.readString`, which refuses an empty or whitespace string
+    /// and names the offending field. "Sole site in `src/`" would prove nothing for a library another
+    /// repository could reference, so the second half of the argument is that
+    /// `FS.GG.Coord.Core.fsproj` sets `<IsPackable>false</IsPackable>`: there is no packaged consumer to
+    /// construct one out of band. Both ways INTO this guard take the receipt as a parameter and cannot
+    /// manufacture it — `inspect`, and `advance` below, which calls `inspect` UNQUALIFIED from inside
+    /// this same module and is therefore invisible to a `Review.inspect`-shaped grep — while the live
+    /// `review <ref> --pr N` path supplies `None` outright. A blank value therefore fails at parse with
+    /// exit 1, this guard is never reached, and deleting either conjunct was invisible to every suite in
+    /// this repo: two lines that read as protection and could not be observed to protect anything, which
+    /// is `.github#2223`/`.github#2515`'s shape and exactly what `.github#2537` exists to stop shipping.
+    ///
+    /// The decisive evidence is behavioural rather than textual, which is the point: with `readString`'s
+    /// refusal deleted these conjuncts DO fire — they were never wrong, only unreachable, and the order
+    /// of the two layers is the whole finding. The property is not weakened by their removal, it is
+    /// enforced by the wire, and that enforcement is PINNED — `tests/review-critic-succession-wire/run.sh`
+    /// section 1 asserts the blank `successorCriticIdentity` and blank `grantedBy` refusals by field
+    /// name and exit code, and section 5 inverts `readString`'s own refusal and requires both legs to
+    /// flip. Every conjunct that remains below is a REACHABLE refusal with its own gate-inversion leg in
+    /// section 4. Do not re-add a precondition here that the type's sole producer already guarantees;
+    /// if a second producer is ever written, give the rule ONE home and a leg that reds without it.
     let private criticSuccessionValid
         (binding: Binding)
         (successionGranted: CriticSuccessionReceipt option)
@@ -245,8 +275,6 @@ module Review =
             receipt.OriginalCriticIdentity = critic
             && not (isGenericCriticIdentity critic)
             && receipt.CandidateHeadSha = binding.HeadSha
-            && not (String.IsNullOrWhiteSpace receipt.SuccessorCriticIdentity)
-            && not (String.IsNullOrWhiteSpace receipt.GrantedBy)
             && receipt.SuccessorCriticIdentity <> binding.ImplementerIdentity
             && receipt.GrantedBy <> binding.ImplementerIdentity
             ->

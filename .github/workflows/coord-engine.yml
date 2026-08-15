@@ -209,7 +209,15 @@ jobs:
       # in exactly one field, each asserting the receipt was refused RATHER THAN never reached — and a
       # gate-inversion leg per conjunct that deletes that conjunct from `Review.fs` in a scratch tree,
       # rebuilds, and requires its own refusal leg to flip. Same discipline as the head-move step
-      # above; five mutants instead of one, at roughly ten seconds each.
+      # above; SEVEN mutants instead of one, at roughly ten seconds each — five for those conjuncts,
+      # one for the ledger allowance `.github#2662` added (which inverts the other way round: the
+      # accepting legs must red while the refusing ones stay red), and one for
+      # `ReviewApplication.readString`'s blank-string refusal. That last is `.github#2557`: the two
+      # blank-field conjuncts `Review.criticSuccessionValid` used to carry could not be reached from
+      # any route in `src/`, because the only site that builds a `CriticSuccessionReceipt` reads every
+      # field through `readString` first. They were deleted rather than kept as protection nothing
+      # could observe, and the wire refusal that actually enforces the property is now inverted in
+      # their place — so the surviving copy is measured rather than merely asserted.
       - name: Critic succession's refusals can still say NO — measured, one mutant per refusal
         run: bash tests/review-critic-succession-wire/run.sh
 

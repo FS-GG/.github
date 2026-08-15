@@ -21,7 +21,7 @@
 # "The workflow now runs the fixture" and "the fixture can say NO" are different claims. Only the
 # second is worth a gate, and it is the one this file now makes.
 #
-# THE THREE SECTIONS, and each answers a question the one before it cannot.
+# THE FIVE SECTIONS, and each answers a question the one before it cannot.
 #
 #   1. WIRE (6 legs) — the four from #2417, still load-bearing, plus two this rewrite moved here.
 #      Can the engine READ a grant off the JSON wire: absent key, explicit null, well-formed object,
@@ -29,20 +29,24 @@
 #      `grantedBy` — which must ALSO fail closed naming its field. A refusal that never receives the
 #      receipt refuses nothing.
 #
-#      WHY THOSE TWO ARE HERE AND NOT IN SECTION 2, which is a finding and not a filing choice
-#      (.github#2557, and .github#2537 AC5 asked for exactly this to be reported rather than papered
-#      over). `Review.criticSuccessionValid` has SEVEN conjuncts, and two of them —
-#      `not (String.IsNullOrWhiteSpace receipt.SuccessorCriticIdentity)` and the same for `GrantedBy` —
-#      cannot be reached from this route, or from any route in `src/`. `ReviewApplication.readString`
-#      refuses an empty string and names the field, `criticSuccessionReceipt` reads EVERY field through
-#      it, and that is the only site in `src/` that constructs a `CriticSuccessionReceipt`. So a blank
-#      value fails at parse, exit 1, and the guard never runs. Writing those two as REFUSAL legs was
-#      this fixture's first draft and it failed honestly: the engine exits 1 where the leg expected a
-#      verdict. They are pinned here, as the wire-layer refusal that actually enforces the property,
-#      and they get NO gate-inversion leg in section 3 — deleting either conjunct from `Review.fs`
-#      changes nothing this fixture, or any suite in this repo, can observe. Claiming inversion
-#      evidence for them would be the exact false green .github#2537 was filed about. Delete this
-#      paragraph when .github#2557 resolves which of the two copies is the real guard.
+#      WHY THOSE TWO ARE HERE AND NOT IN SECTION 2 — RESOLVED BY .github#2557, which .github#2537 AC5
+#      pre-authorized reporting rather than papering over. `Review.criticSuccessionValid` used to carry
+#      SEVEN conjuncts, two of which — `not (String.IsNullOrWhiteSpace receipt.SuccessorCriticIdentity)`
+#      and the same for `GrantedBy` — could not be reached from this route or from any route in `src/`:
+#      `ReviewApplication.readString` refuses an empty string and names the field,
+#      `criticSuccessionReceipt` reads EVERY field through it, that is the only site in `src/` that
+#      constructs a `CriticSuccessionReceipt`, and the live `review <ref> --pr N` path passes no grant
+#      at all. A blank value failed at parse, exit 1, and the guard never ran. Writing those two as
+#      REFUSAL legs was this fixture's first draft and it failed honestly: the engine exits 1 where the
+#      leg expected a verdict.
+#
+#      .github#2557 decided (a) of its own two options: THE WIRE IS THE REAL GUARD, and the unreachable
+#      Core copy is gone. So these legs are no longer a note about a duplicate — they are the only place
+#      the property is asserted at all, which is why section 5 now inverts them. `readString`'s refusal
+#      is deleted in a scratch tree and both legs must FLIP to `enterCriticSuccession`: that is the
+#      measurement that the surviving copy is load-bearing, and it also shows exactly what the deleted
+#      conjuncts would have caught had anything been able to reach them. Do not re-add a blank check to
+#      `Review.fs`; give the rule one home and a leg that reds without it.
 #
 #   2. REFUSALS (5 legs) — one per REACHABLE conjunct of `Review.criticSuccessionValid`: the four
 #      .github#2537 names (exact-critic, exact-head, generic-identity, self-grant) counted as five,
@@ -110,12 +114,33 @@
 #      matched nothing grades NOT MEASURED, and NOT MEASURED spelled like PASSED is the defect this
 #      whole file is about.
 #
-# WHY A SHELL FIXTURE AND NOT `tests/FS.GG.Coord.Core.Tests/ReviewTests.fs`. Unchanged from #2417 and
-# still true at #2537: it drives the COMPILED `fsgg-coord-engine` — sections 1-2 through
-# `review --snapshot`, the pure DECISION path with no board, no token and no network, and section 3
-# through `review record` against a loopback fixture, still with no token and no network — and asserts
-# on JSON stdout and exit code. Section 4 needs to rebuild the engine from mutated source six times,
-# which a unit suite inside that same build cannot do to itself.
+#   5. WIRE INVERSION (2 legs, added by .github#2557) — section 4 for the OTHER layer, and the reason
+#      .github#2557 could delete two conjuncts from `Review.fs` without weakening anything.
+#
+#      Sections 1-4 measure `Review.fs`. The blank-field property is not enforced there and never was
+#      (see section 1's header): its one home is `ReviewApplication.readString`. An unmeasured sole
+#      copy is worse than a measured duplicate, so this section deletes `readString`'s blank refusal in
+#      the scratch tree, rebuilds, and re-runs section 1's two BLANK legs — the same two snapshot files,
+#      byte for byte, so nothing about the input can explain the difference. Both must flip from
+#      "exit 1 naming the field" to `enterCriticSuccession`, which is simultaneously the proof that the
+#      surviving copy is load-bearing and an exact statement of what the deleted `Review.fs` conjuncts
+#      would have refused had any producer been able to reach them.
+#
+# WHY A SHELL FIXTURE. The reason is unchanged from #2417 and still true at #2537: it drives the
+# COMPILED `fsgg-coord-engine` — sections 1-2 through `review --snapshot`, the pure DECISION path with
+# no board, no token and no network, and section 3 through `review record` against a loopback fixture,
+# still with no token and no network — and asserts on JSON stdout and exit code. Sections 4-5 need to
+# rebuild the engine from mutated source seven times, which a unit suite inside that same build cannot
+# do to itself.
+#
+# This paragraph used to be headed "AND NOT `tests/FS.GG.Coord.Core.Tests/ReviewTests.fs`", which named
+# a file that `b84423e7` ("retire legacy decision authorities") deleted. .github#2557 corrected it, and
+# the fact underneath is stronger than the comparison it replaced: `Review.inspect` has NO unit coverage
+# anywhere in `tests/` — `grep -rn "Review\.inspect" tests/ --include=*.fs` finds one COMMENT, at
+# `DeliveryTests.fs:313`, and nothing that calls it. (`--include=*.fs` is load-bearing: without it the
+# same grep also hits generated `bin/**/FS.GG.Coord.Core.xml` doc comments, which are build output and
+# evidence of nothing.) So this file is not the better of two gates over `criticSuccessionValid`. It is
+# the ONLY one. Weaken it and nothing else is watching.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -297,8 +322,9 @@ else
 fi
 
 # BLANK FIELDS: `readString` refuses an empty string and names it, so a grant naming no successor, or
-# no accountable granter, never reaches `criticSuccessionValid` at all. See the header: this is where
-# the property is actually enforced, and .github#2557 is where the duplicate Core conjuncts are decided.
+# no accountable granter, never reaches `criticSuccessionValid` at all. See the header: since
+# .github#2557 deleted the unreachable Core copy, THIS is the only place the property is enforced, and
+# section 5 is the inversion that keeps that sole copy measured rather than merely asserted.
 for blank in successorCriticIdentity grantedBy; do
   case "$blank" in
     successorCriticIdentity) g="$(grant kite "" host-9b63 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)"; what="a grant naming no successor" ;;
@@ -649,14 +675,58 @@ PY
     ledger_legs "$MUT_DLL" inverted
   fi
   cp "$WORK/StructuredDecision.fs.pristine" "$MUT/src/FS.GG.Coord.Core/StructuredDecision.fs"
+
+  echo
+  echo "── 5. WIRE INVERSION: delete readString's blank refusal, section 1's BLANK legs must FLIP"
+
+  # .github#2557. The blank-field property has exactly ONE home — `ReviewApplication.readString` — and
+  # the two conjuncts that used to restate it in `Review.fs` were unreachable and are gone. A sole copy
+  # that nothing inverts is the same false green as an unwired fixture, so this deletes that copy in the
+  # scratch tree and requires section 1's BLANK legs to stop refusing. They are re-run from the SAME
+  # snapshot files section 1 built, so a flip cannot be explained by a different input.
+  WIRE_ANCHOR='        if String.IsNullOrWhiteSpace parsed then invalidArg name "must not be empty"'
+  cp "$MUT/src/FS.GG.Coord.Cli/ReviewApplication.fs" "$WORK/ReviewApplication.fs.pristine"
+  if ! ANCHOR="$WIRE_ANCHOR" python3 - "$MUT/src/FS.GG.Coord.Cli/ReviewApplication.fs" <<'PY'
+import os, sys
+
+path = sys.argv[1]
+anchor = os.environ["ANCHOR"] + "\n"
+src = open(path).read()
+if anchor not in src:
+    sys.exit(f"anchor no longer matches: {anchor.strip()!r}")
+out = src.replace(anchor, "", 1)
+if out == src:
+    sys.exit("the mutation changed nothing")
+open(path, "w").write(out)
+PY
+  then
+    bad "wire inversion: the mutation did not apply -- NOT MEASURED, which is not the same as passing"
+  elif ! dotnet build "$MUT/src/FS.GG.Coord.Cli" -c Release >"$WORK/mutant-build.log" 2>&1; then
+    bad "wire inversion: the mutant tree did not build; the inversion was not measured" \
+        "$(tail -20 "$WORK/mutant-build.log")"
+  else
+    for blank in successorCriticIdentity grantedBy; do
+      out="$(run_engine "$WORK/blank-$blank.json" "$MUT_DLL")"; rc=$?
+      action="$(field "$out" '["action"]')"
+      if [ "$rc" -ne 0 ]; then
+        bad "BLANK $blank INVERSION SURVIVED: the engine still refused it with readString's blank check deleted (exit $rc) -- that leg measures something else" "$out"
+      elif [ "$action" = "enterCriticSuccession" ]; then
+        ok "BLANK $blank inversion: with readString's refusal deleted the grant is ADMITTED (the wire leg is bound to the refusal it names, and this is what the removed Review.fs conjunct would have caught)"
+      else
+        bad "BLANK $blank inversion: the mutant returned a verdict but not the admission this leg is bound to (action=$action)" "$out"
+      fi
+    done
+  fi
+  cp "$WORK/ReviewApplication.fs.pristine" "$MUT/src/FS.GG.Coord.Cli/ReviewApplication.fs"
 fi
 
 # ---- non-vacuity floor -------------------------------------------------------------------------------
 # A gutted fixture exits 0 as happily as a whole one (#266, #436). Pin the leg count, so deleting legs
 # is a red gate rather than a quiet one. 6 wire + 5 refusals + 5 ledger writes, plus 5 `Review.fs`
-# inversions and section 3's 5 legs re-run against the allowance-free engine when they ran.
+# inversions, section 3's 5 legs re-run against the allowance-free engine, and .github#2557's 2 wire
+# inversions, when they ran.
 floor=16
-[ "$inversion_ran" -eq 1 ] && floor=26
+[ "$inversion_ran" -eq 1 ] && floor=28
 if [ "$failcount" -eq 0 ] && [ "$pass" -lt "$floor" ]; then
   bad "non-vacuity: only $pass leg(s) ran, expected at least $floor -- legs have been deleted, and a suite that asserts less than it claims is the defect this fixture exists to catch"
 fi
