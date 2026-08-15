@@ -12,6 +12,19 @@ python3 "$ROOT/tests/skill-quality/driver-feedback-delivery.py"
 python3 "$ROOT/tests/skill-quality/review-round-contract.py"
 python3 "$ROOT/tests/skill-quality/roadmap-critique-contract.py"
 python3 "$ROOT/tests/skill-quality/agent-definition-coverage.py"
+python3 "$ROOT/tests/skill-quality/recency-comment-edit.py"
+
+# .github#2666 — a gate nothing invokes is graded NOT_MEASURED at best. Each gate above asserts its
+# own workflow path filter, but the workflow only ever runs THIS file, so a gate dropped from the
+# list above stops running while every path filter still reads correctly. Enumerating the directory
+# closes that for the whole set at once: adding a gate script without calling it reds here.
+for gate in "$ROOT"/tests/skill-quality/*.py; do
+  if ! grep -Fq "tests/skill-quality/$(basename "$gate")" "$ROOT/tests/skill-quality/run.sh"; then
+    echo "skill-quality fixture: $(basename "$gate") exists but run.sh never invokes it — CI runs" \
+      "only run.sh, so that gate is dead code wearing a green check" >&2
+    exit 1
+  fi
+done
 
 ENGINE="$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
 "$ENGINE" command-contract --json >"$WORK/contract.json"
@@ -66,6 +79,23 @@ expect_agent_rejection() {
   local label="$1" evidence="$2"
   local rc=0
   python3 "$ROOT/tests/skill-quality/agent-definition-coverage.py" \
+    --root "$WORK/tree" >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
+    echo "PASS  $label"
+    pass=$((pass+1))
+  else
+    echo "FAIL  $label (wanted exit 1 containing: $evidence; got exit $rc)" >&2
+    sed 's/^/    | /' "$WORK/out" >&2
+    fail=$((fail+1))
+  fi
+}
+
+# .github#2666. Same three-part shape again — its own `--root` entry point, exit 1, and the exact
+# finding text — so a regression that merely reworded the message reds here too.
+expect_recency_rejection() {
+  local label="$1" evidence="$2"
+  local rc=0
+  python3 "$ROOT/tests/skill-quality/recency-comment-edit.py" \
     --root "$WORK/tree" >"$WORK/out" 2>&1 || rc=$?
   if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
     echo "PASS  $label"
@@ -654,6 +684,106 @@ path.write_text(text.replace('      - ".claude/agents/**"\n', "", 1))
 PY
 expect_agent_rejection "the gate no longer triggers on its own subject" \
   "does not list '.claude/agents/**' under pull_request.paths"
+
+# --- .github#2666: agent-facing prose must not reach for a recency-based comment edit -----------
+#
+# `gh pr comment --edit-last` edits by ACCOUNT and this whole fleet shares one, so on PR #2663 a
+# worker rebinding its own obligation declaration overwrote an independent critic's findings comment.
+# The `fsgg:review-decision/v2` record survived on ordering luck alone. These are the committed
+# inversions: each one is a real mutation of a seeded tree, run through the gate's own entry point.
+
+# The defect verbatim: an instruction telling an agent to edit by recency.
+seed_agents
+printf '\nIf the head moved, just `gh pr comment --edit-last` to rebind your declaration.\n' \
+  >>"$WORK/tree/.claude/skills/check-board/SKILL.md"
+expect_recency_rejection "an instruction to edit a comment by recency is rejected" \
+  "names a recency-based comment edit ('edit-last') outside the canonical hazard statement"
+
+# Criterion 3 of the row: the statement must be UNAVOIDABLE, which means it cannot be quietly
+# deleted. Removing it from one definition leaves that route's agents reading nothing about it.
+seed_agents
+python3 - "$WORK/tree" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location(
+    "gate", root / "tests/skill-quality/recency-comment-edit.py"
+)
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+path = root / ".claude/agents/fsgg-worker-normal.md"
+text = path.read_text()
+if gate.CANONICAL + "\n\n" not in text:
+    raise SystemExit("fixture: fsgg-worker-normal.md does not carry the canonical statement")
+path.write_text(text.replace(gate.CANONICAL + "\n\n", "", 1))
+PY
+expect_recency_rejection "a definition that drops the hazard statement is rejected" \
+  ".claude/agents/fsgg-worker-normal.md carries the canonical recency-edit hazard statement 0 time(s)"
+
+# Drift, not deletion. A definition that keeps a REWORDED near-copy still names the flag, and the
+# strip only removes byte-identical copies — so the residue carries the token and the prohibition
+# leg reds. This is why the gate needs no diff between the four files: divergence cannot survive it.
+seed_agents
+python3 - "$WORK/tree" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1]) / ".claude/agents/fsgg-critic-normal.md"
+text = path.read_text()
+if "Editing by recency is never safe here." not in text:
+    raise SystemExit("fixture: canonical closing sentence missing")
+path.write_text(text.replace("Editing by recency is never safe here.", "Prefer explicit ids.", 1))
+PY
+expect_recency_rejection "a definition whose copy of the statement drifted is rejected" \
+  ".claude/agents/fsgg-critic-normal.md names a recency-based comment edit"
+
+# Vacuous green (.github#2551): the sweep's subject is source text, so a root that exists and holds
+# nothing clears every mention by default. Three mutations land together, and the third is what makes
+# this leg honest. The violating instruction is real and sits in a directory the declaration no longer
+# points at; the renamed roots are ALSO taught to the workflow, so the trigger leg is satisfied and
+# cannot stand in for the count. Without that third mutation this case reds on the trigger message
+# instead and proves nothing about vacuity — measured, not assumed: deleting the per-root count with
+# the workflow left alone still exits 1, on the wrong finding.
+seed_agents
+mkdir -p "$WORK/tree/.claude/skills-v2" "$WORK/tree/.agents/skills-v2"
+printf '.claude/skills-v2\n.agents/skills-v2\n' >"$WORK/tree/.agent-skill-roots"
+python3 - "$WORK/tree/.github/workflows/skill-quality.yml" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+old = '      - ".claude/skills/**"\n'
+if text.count(old) != 2:
+    raise SystemExit("fixture: expected the skills trigger under both pull_request and push")
+path.write_text(text.replace(old, old + '      - ".claude/skills-v2/**"\n      - ".agents/skills-v2/**"\n'))
+PY
+printf '\nIf the head moved, just `gh pr comment --edit-last` to rebind your declaration.\n' \
+  >>"$WORK/tree/.claude/skills/check-board/SKILL.md"
+expect_recency_rejection "a declared root that exists but holds no prose sweeps nothing" \
+  "scanned 0 file(s) under .claude/skills-v2"
+
+# The neighbouring shape: the declaration points at a directory that is not there at all.
+seed_agents
+printf '.claude/skills-renamed\n.agents/skills-renamed\n' >"$WORK/tree/.agent-skill-roots"
+expect_recency_rejection "a declared root that resolves to nothing leaves that surface unswept" \
+  ".claude/skills-renamed, .agents/skills-renamed does not exist"
+
+# Epic #266's class again, aimed at this gate's OWN source: drop `tests/skill-quality/**` and a
+# change to the scanner itself would never be checked by the workflow that runs it.
+seed_agents
+python3 - "$WORK/tree/.github/workflows/skill-quality.yml" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+if '      - "tests/skill-quality/**"\n' not in text:
+    raise SystemExit("fixture trigger line missing")
+path.write_text(text.replace('      - "tests/skill-quality/**"\n', "", 1))
+PY
+expect_recency_rejection "the gate no longer triggers on its own source" \
+  "does not list 'tests/skill-quality/**' under pull_request.paths"
 
 if [ "$fail" -ne 0 ]; then
   echo "skill-quality fixture: $fail failure(s), $pass pass(es)" >&2

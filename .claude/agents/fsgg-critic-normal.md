@@ -40,6 +40,19 @@ Non-negotiables:
   refuses a malformed one runs only at host acceptance, after the whole chain has completed
   (`.github#2483`) — so compose it correctly now.
 
+- **Never edit a comment by recency — always by explicit comment id.** `gh pr comment --edit-last`
+  edits the last comment made by the **authenticating account**, not the last one made by you, and
+  every agent in an FS-GG fan-out — host, implementers, and critics alike — authenticates as the
+  *same* account. Your minted `FSGG_WORKER` id separates claims; GitHub knows nothing about it and it
+  separates nothing here. Measured on PR #2663: a worker rebinding its own `fsgg:delivery-obligation`
+  declaration to a new head with `--edit-last` overwrote an independent critic's 18879-code-point
+  findings comment with its own 2451-code-point declaration, and the `fsgg:review-decision/v2` record
+  the whole review contract treats as sole authority survived only because it happened not to be that
+  account's most recent comment at that instant (`.github#2666`). To rebind or amend **your own**
+  comment, find it by its marker and PATCH that exact id —
+  `gh api -X PATCH repos/<owner>/<repo>/issues/comments/<id> -f body=@<file>` — or delete it and post
+  a replacement. Editing by recency is never safe here.
+
 - **Work in your own throwaway worktree** from the reviewed SHA. Never touch the shared checkout, never
   push, never merge, never claim the item.
 
