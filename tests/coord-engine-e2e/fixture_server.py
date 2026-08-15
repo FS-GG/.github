@@ -24,6 +24,10 @@ import json
 import hashlib
 import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from route_decision_fixture import route_comment
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 OWNER = "FS-GG"
@@ -51,24 +55,9 @@ ISSUE_BODIES = {42: "A schedulable item.\n\nPaths: src/Thing/**"}
 
 def delivery_route_comment(number: int, body: str):
     """The ordinary success fixture includes the same source-bound agent decision production requires."""
-    receipt = {
-        "schema": "fsgg.coord.delivery-route/v1",
-        "subject": f"{OWNER}/{REPO}#{number}",
-        "subjectRevision": hashlib.sha256(body.encode()).hexdigest(),
-        "route": "lightweight",
-        "agent": "fixture-route",
-        "timestamp": "2026-01-01T00:00:00Z",
-        "reasonCodes": ["fixture"],
-        "rationale": "Hermetic current route receipt.",
-        "declaredImpacts": ["internal"],
-        "observedFacts": ["localized"],
-        "sddWorkId": None,
-        "specHome": None,
-        "requiredGates": [],
-    }
     return {
         "id": 7042,
-        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
+        "body": route_comment(f"{OWNER}/{REPO}#{number}", body, rationale="Hermetic current route receipt."),
         "user": {"login": "fixture"},
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",

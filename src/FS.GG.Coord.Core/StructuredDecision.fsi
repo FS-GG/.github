@@ -30,7 +30,7 @@ module StructuredDecision =
           RequiredGates: string list
           Digest: string }
 
-    type ReviewKind = Initial | Confirmation | Acceptance
+    type ReviewKind = Initial | Confirmation | Escalation | RepairPhase | Acceptance
     type ReviewVerdict = Pass | ChangesRequired | Accepted
 
     type ReviewRecord =
@@ -49,19 +49,13 @@ module StructuredDecision =
           Round: int
           InitialReview: string option
           PrecedingReview: string option
+          DiffAuditRequired: bool
+          DiffAuditReceipts: string list
           Timestamp: string
           Digest: string }
-
-    type RouteReadClassification =
-        | StructuredOnly
-        | LegacyOnly
-        | Equivalent
-        | Divergent
 
     val routeDigest: RouteRecord -> string
     val reviewDigest: ReviewRecord -> string
     val validateRouteLedger: expectedSubject: string -> RouteRecord list -> Result<RouteRecord, string list>
     val validateReviewLedger: expectedSubject: string -> ReviewRecord list -> Result<ReviewRecord list, string list>
-    val classifyRoute: DeliveryRoute.Receipt option -> RouteRecord option -> RouteReadClassification
-    val routeClassificationName: RouteReadClassification -> string
-    val toLegacyReceipt: RouteRecord -> DeliveryRoute.Receipt
+    val toEffectiveRoute: RouteRecord -> DeliveryRoute.Receipt

@@ -221,20 +221,12 @@ module Protocol =
             "A marker counts as any canonical whole line anywhere in the comment body. The same marker \
              occurring more than once anywhere in the body is a competing marker and is refused."
 
-    /// Marker vocabulary and bounded review policy enforced by `Driver`.
+    /// Structured-ledger vocabulary and bounded review policy enforced by `Driver`.
     type ReviewPolicyDoc =
-        { InitialMarker: string
-          ConfirmationMarker: string
-          AcceptanceMarker: string
-          EscalationMarker: string
-          RepairPhaseMarker: string
+        { Schema: string
+          Kinds: string list
           MaxAutomatedRepairRounds: int
-          RepairPhaseMaxRounds: int
-          /// Every marker name field above, paired with the `MarkerAnchor` `occurrences` checks it
-          /// against. Replaces `QuotedMarkerRule`'s hand-projected prose (.github#2399).
-          MarkerAnchors: Marker list }
-
-    type MarkerFieldGrammarDoc = { MarkerId: MarkerId; RequiredFields: string list }
+          RepairPhaseMaxRounds: int }
 
     /// Facts that determine whether an item can move between lifecycle stages.
     type LifecyclePolicyDoc =
@@ -819,24 +811,12 @@ module Protocol =
           ReviewSlots = 2
           ConsolidationThreshold = 3 }
 
-    /// One review marker/round vocabulary. `Driver.parseReviewComments` and `receiptFresh` consume
-    /// these values; projections only render them.
+    /// One structured review-ledger/round vocabulary.
     let reviewPolicy =
-        { InitialMarker = "independent-review"
-          ConfirmationMarker = "independent-review-confirmation"
-          AcceptanceMarker = "review-accepted"
-          EscalationMarker = "independent-review-escalation"
-          RepairPhaseMarker = "independent-review-repair-phase"
+        { Schema = StructuredDecision.ReviewSchema
+          Kinds = [ "initial"; "confirmation"; "escalation"; "repair-phase"; "acceptance" ]
           MaxAutomatedRepairRounds = 3
-          RepairPhaseMaxRounds = 10
-          // Every marker in the family anchors `LeadingBlock` today (#2221/#2248); `occurrences` is the
-          // rule now, this is its input (.github#2399 — replaces `QuotedMarkerRule`'s prose string).
-          MarkerAnchors =
-            [ { Id = "independent-review"; Anchor = LeadingBlock }
-              { Id = "independent-review-confirmation"; Anchor = LeadingBlock }
-              { Id = "review-accepted"; Anchor = LeadingBlock }
-              { Id = "independent-review-escalation"; Anchor = LeadingBlock }
-              { Id = "independent-review-repair-phase"; Anchor = LeadingBlock } ] }
+          RepairPhaseMaxRounds = 10 }
 
     let lifecyclePolicy =
         { RequiredHousekeeping =
@@ -844,24 +824,6 @@ module Protocol =
               "reconcile"; "triage" ]
           TerminalActions = [ "merge"; "post-merge-obligations"; "done-stamp" ]
           HostAcceptanceFields = [ "accepted-head"; "initial-review"; "latest-confirmation" ] }
-
-    /// The review family's field grammar (.github#2369) — mirrors `Driver.fs`'s private
-    /// `markerFieldGrammar` function value-for-value; `ProtocolTests` pins this list against
-    /// `Driver.parseReviewComments`'s own observed enforcement so the two cannot silently disagree.
-    /// Escalation and repair-phase carry no field grammar in `Driver.fs` — an omission `Driver.fs`
-    /// documents as deliberate, not something this list should invent.
-    let markerFieldGrammar: MarkerFieldGrammarDoc list =
-        [ { MarkerId = reviewPolicy.InitialMarker
-            RequiredFields = [ "critic"; "reviewed-head"; "verdict" ] }
-          { MarkerId = reviewPolicy.ConfirmationMarker
-            RequiredFields =
-              [ "initial-review"; "critic"; "round"; "preceding-review"; "reviewed-head"; "verdict" ] }
-          { MarkerId = reviewPolicy.AcceptanceMarker
-            RequiredFields = lifecyclePolicy.HostAcceptanceFields }
-          { MarkerId = reviewPolicy.EscalationMarker
-            RequiredFields = [] }
-          { MarkerId = reviewPolicy.RepairPhaseMarker
-            RequiredFields = [] } ]
 
     let ledgerPolicy =
         { Schema = "fsgg.coord.planning-receipt/3"

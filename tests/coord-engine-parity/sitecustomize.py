@@ -44,8 +44,11 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from route_decision_fixture import MARKER as ROUTE_MARKER, route_record
 
 BODY_CACHE = {}
 
@@ -71,29 +74,18 @@ def route_receipt(owner, repo, number, body):
     mode = os.environ.get("FSGG_PARITY_ROUTE_MODE", "current")
     if mode == "missing":
         return None
-    revision = hashlib.sha256(body.encode()).hexdigest()
+    record = route_record(
+        f"{owner}/{repo}#{number}",
+        body,
+        "parity-fixture",
+        "Explicit source-bound parity route receipt.",
+    )
     if mode == "stale":
-        revision = "stale-" + revision
+        # Tamper a structured input without resealing it: the canonical new-only stale inversion.
+        record["touchSet"] = ["stale/tampered/**"]
     return {
         "id": -number,
-        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(
-            {
-                "schema": "fsgg.coord.delivery-route/v1",
-                "subject": f"{owner}/{repo}#{number}",
-                "subjectRevision": revision,
-                "route": "lightweight",
-                "agent": "parity-fixture",
-                "timestamp": "2026-01-01T00:00:00Z",
-                "reasonCodes": ["fixture"],
-                "rationale": "Explicit source-bound parity route receipt.",
-                "declaredImpacts": ["internal"],
-                "observedFacts": ["fixture"],
-                "sddWorkId": None,
-                "specHome": None,
-                "requiredGates": [],
-            },
-            separators=(",", ":"),
-        ),
+        "body": ROUTE_MARKER + "\n" + json.dumps(record, separators=(",", ":")),
         "user": {"login": "parity-fixture"},
         "updated_at": "2026-01-01T00:00:00Z",
     }
@@ -118,7 +110,7 @@ def wrap_handler(cls):
             owner, repo, number = match.group(1), match.group(2), int(match.group(3))
             body = issue_body(sys.modules[cls.__module__], number) or BODY_CACHE.get((cls.__module__, number))
             receipt = route_receipt(owner, repo, number, body) if isinstance(body, str) else None
-            if receipt is not None and not any("fsgg:delivery-route/v1" in str(row.get("body", "")) for row in payload if isinstance(row, dict)):
+            if receipt is not None and not any("fsgg:route-decision/v2" in str(row.get("body", "")) for row in payload if isinstance(row, dict)):
                 payload = [*payload, receipt]
         return original(self, code, payload, *args[2:], **kwargs)
 

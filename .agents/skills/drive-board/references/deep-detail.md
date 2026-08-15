@@ -258,7 +258,7 @@ instead of narrating the intended state as current.
 - The **rate budget** did not silently strand a write. If any worker returned 75, run
   `scripts/fsgg-coord flush --dry-run` before the next wave — a queued board write that nothing
   replays reads later as drift you will "find" and duplicate.
-- The PR carries `<!-- fsgg:independent-review:v1 -->` for the exact reviewed/confirmed head, the
+- The PR carries `<!-- fsgg:review-decision/v2 -->` for the exact reviewed/confirmed head, the
   critic is not the implementer, every material finding has a terminal disposition, and every filed
   issue is directly verified. No nonmaterial observation created an issue, board row, blocker edge, or
   follow-up entry.

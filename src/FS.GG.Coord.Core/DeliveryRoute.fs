@@ -2,7 +2,7 @@ namespace FS.GG.Coord
 
 module DeliveryRoute =
     [<Literal>]
-    let Schema = "fsgg.coord.delivery-route/v1"
+    let Schema = "fsgg.coord.route-decision/effective"
 
     type Route = Lightweight | SddRequired
 

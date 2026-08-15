@@ -142,7 +142,6 @@ module Review =
           NextAction: NextAction
           FreshnessToken: string
           ActionKey: string
-          EvidenceClassification: string
           /// Every chain excluded from this verdict's evidence because a host acceptance already settled
           /// it at a head the PR has moved off (.github#2527). Empty for every verdict that retires
           /// nothing — which is every verdict this protocol could already describe. It is deliberately
@@ -176,14 +175,13 @@ module Review =
         |> String.concat "\n"
         |> digest
 
-    let private makeVerdict binding evidenceClassification retiredChains state action =
+    let private makeVerdict binding retiredChains state action =
         let token = freshnessToken binding
-        let actionKey = digest $"%s{token}\n%s{evidenceClassification}\n%A{state}\n%A{action}"
+        let actionKey = digest $"%s{token}\n%A{state}\n%A{action}"
         { State = state
           NextAction = action
           FreshnessToken = token
           ActionKey = actionKey
-          EvidenceClassification = evidenceClassification
           RetiredChains = retiredChains }
 
     let private missing value label =
@@ -609,14 +607,14 @@ module Review =
             let expectedSubject = $"%s{binding.ItemRef}/pr/%d{binding.Pr}"
             if not (List.isEmpty partition.StructuredErrors) then
                 let state = MalformedEvidence partition.StructuredErrors
-                Ok(makeVerdict binding partition.EvidenceClassification partition.Retired state (Park(String.concat "; " partition.StructuredErrors)))
+                Ok(makeVerdict binding partition.Retired state (Park(String.concat "; " partition.StructuredErrors)))
             elif partition.StructuredSubject |> Option.exists ((<>) expectedSubject) then
                 let reason = $"structured review subject does not match '%s{expectedSubject}'"
-                Ok(makeVerdict binding partition.EvidenceClassification partition.Retired (MalformedEvidence [ reason ]) (Park reason))
+                Ok(makeVerdict binding partition.Retired (MalformedEvidence [ reason ]) (Park reason))
             else
                 let state, action =
                     classify binding facts partition.Live partition.Diagnostics successionGranted repairAssertionGranted
-                Ok(makeVerdict binding partition.EvidenceClassification partition.Retired state action)
+                Ok(makeVerdict binding partition.Retired state action)
 
     let advance freshnessToken actionKey binding facts successionGranted repairAssertionGranted =
         match inspect binding facts successionGranted repairAssertionGranted with

@@ -32,19 +32,8 @@ open FS.GG.Coord.Cli
 /// HALVING (not elimination) for open candidates rejected on column/blocker/human grounds.
 module SchedulingCostTests =
 
-    let private revision (body: string) =
-        SHA256.HashData(Encoding.UTF8.GetBytes body) |> Convert.ToHexString |> _.ToLowerInvariant()
-
-    [<Literal>]
-    let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
-
     let private currentRouteComment (subject: string) (body: string) =
-        let rev = revision body
-
-        let receipt =
-            $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"%s{subject}","subjectRevision":"%s{rev}","route":"lightweight","agent":"fixture-2300","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
-
-        DeliveryRouteMarker + "\n" + receipt
+        StructuredFixtures.routeComment subject (Some FS.GG.Coord.DeliveryRoute.Lightweight) "fixture-2300" None
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
@@ -598,5 +587,5 @@ module SchedulingCostTests =
         // `Scan.snapshot`'s `markerScan`.
         Assert.Equal(0, routeGraphQlCalls transport 700)
         let gets, comments = readsFor transport 700
-        Assert.Equal(2, gets)
+        Assert.Equal(1, gets)
         Assert.Equal(2, comments)

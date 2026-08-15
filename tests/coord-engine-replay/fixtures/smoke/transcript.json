@@ -103,7 +103,7 @@
       "requestBody": null,
       "responseBody": [
         {
-          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"88df2238a4e044495d37a3db889b3eb0fffff8978875d2b516af1a881645a724\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Thing/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"1e9b9ae4439e9ee502054a5c1878c803da6177b2cbd945afc76e3bc99cd2d039\"}",
           "created_at": "2026-01-01T00:00:00Z",
           "id": 700042,
           "updated_at": "2026-01-01T00:00:00Z",
@@ -138,7 +138,7 @@
       "requestBody": null,
       "responseBody": [
         {
-          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#43\",\"subjectRevision\":\"a3f55b3f5fead0acff6c8cc6516969d4fd7906a0a1f337542149a0881eaee488\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#43\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Other/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"d7dd8e6758ef8b37912ad86e89cf0221d6d259ca9ce7a6dba7dcd7332fd89a1c\"}",
           "created_at": "2026-01-01T00:00:00Z",
           "id": 700043,
           "updated_at": "2026-01-01T00:00:00Z",
@@ -173,7 +173,7 @@
       "requestBody": null,
       "responseBody": [
         {
-          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#44\",\"subjectRevision\":\"242fd7560a943bcfd0e67dfb92702d4f7be6b1633e8cf178f44754549e12c14e\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#44\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Verify/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"9cea04e17f9a014a76be943c483e8809ef76b3c8a9f345d3e2019b7eb88e86c7\"}",
           "created_at": "2026-01-01T00:00:00Z",
           "id": 700044,
           "updated_at": "2026-01-01T00:00:00Z",
@@ -208,7 +208,7 @@
       "requestBody": null,
       "responseBody": [
         {
-          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#45\",\"subjectRevision\":\"b7b3fc42681a1c7084bd148832097edb2dc51c3d29e63300e1fdc07274001c44\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#45\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Z/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"6397bc9a5ed9f1b62e2b0db332a0b838456ddef1b8241de8670bb21c72fba52e\"}",
           "created_at": "2026-01-01T00:00:00Z",
           "id": 700045,
           "updated_at": "2026-01-01T00:00:00Z",
@@ -228,7 +228,7 @@
       "requestBody": null,
       "responseBody": [
         {
-          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#46\",\"subjectRevision\":\"a0083eabca38b1c6eb01af4df85744584a23aef705ce4f4583687a25935dc1ca\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#46\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Verify/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"aa7f94a0e0b40b0e44e0d69a0faa5f5c19d0533badf06bd71e0872aa63b0bab5\"}",
           "created_at": "2026-01-01T00:00:00Z",
           "id": 700046,
           "updated_at": "2026-01-01T00:00:00Z",
@@ -263,7 +263,7 @@
       "requestBody": null,
       "responseBody": [
         {
-          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#47\",\"subjectRevision\":\"8cb3c3d17594ae6a78553b1f3e3feb1e01fcb43c047ddc07e90ff23022f3544b\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#47\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Blocked/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"fc1c1ef1c3e28cdbad7be77e75e4430512986f9e645813a47c4a1f61535530b0\"}",
           "created_at": "2026-01-01T00:00:00Z",
           "id": 700047,
           "updated_at": "2026-01-01T00:00:00Z",
@@ -298,7 +298,7 @@
       "requestBody": null,
       "responseBody": [
         {
-          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#99\",\"subjectRevision\":\"e6cd41c63e4ba4e5ca07938c3937241a1e74bdfd3c7e6647cbe0973183c1c753\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#99\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"none\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"e8d7588f18e27497b7ce38e2bee043f32b85238bde4262e4b7af88653f50a7b5\"}",
           "created_at": "2026-01-01T00:00:00Z",
           "id": 700099,
           "updated_at": "2026-01-01T00:00:00Z",

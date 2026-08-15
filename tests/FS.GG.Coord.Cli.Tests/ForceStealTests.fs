@@ -42,10 +42,7 @@ open FS.GG.Coord.Cli
 module ForceStealTests =
 
     let private currentRouteComment () =
-        let source = "Paths: src/Thing.fs"
-        let revision = SHA256.HashData(Encoding.UTF8.GetBytes source) |> Convert.ToHexString |> _.ToLowerInvariant()
-        "<!-- fsgg:delivery-route/v1 -->\n"
-        + $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"FS-GG/FS.GG.SDD#42","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-force","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
+        StructuredFixtures.routeComment "FS-GG/FS.GG.SDD#42" (Some FS.GG.Coord.DeliveryRoute.Lightweight) "fixture-force" None
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok

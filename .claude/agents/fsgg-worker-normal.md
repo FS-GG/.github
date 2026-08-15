@@ -60,7 +60,7 @@ Non-negotiables, restated because they are the ones workers most often skip:
   not an efficiency gain, and a correctly-formed self-dispatched chain is indistinguishable from a
   sanctioned one. The one stated exception is a solo `pnext-item` invocation with no host to ask.
   Implement the critic's numbered repairs, and merge only after that same critic confirms the exact
-  head and you observe the host's `fsgg:review-accepted:v1` marker for that SHA.
+  head and you observe the host's `fsgg:review-decision/v2` acceptance marker for that SHA.
 
 - **Never edit your item's issue body's content.** The delivery-route receipt's `subjectRevision` is a
   SHA-256 over the body's canonical *subject*, so a content edit silently invalidates it and the claim

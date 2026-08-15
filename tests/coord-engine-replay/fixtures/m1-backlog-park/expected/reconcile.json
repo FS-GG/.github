@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "id": "LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#500",
+    "remedy": "Status=Ready",
+    "rule": "LIFECYCLE-PROJECTION-LAG",
+    "size": "quick",
+    "statement": "FS.GG.SDD#500: fresh lifecycle facts project Status=Ready; repair the stale board projection.",
+    "subject": "FS.GG.SDD#500"
+  }
+]

@@ -50,6 +50,11 @@ runs each command once) so `run.sh` still exercises the two-pass claim this fixt
 import json
 import re
 import threading
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from route_decision_fixture import route_comment
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -71,24 +76,10 @@ def now_iso():
 
 
 def route_receipt_comment():
-    receipt = {
-        "schema": "fsgg.coord.delivery-route/v1",
-        "subject": f"{OWNER}/{REPO}#{ITEM}",
-        "subjectRevision": __import__("hashlib").sha256(ISSUE_BODY.encode()).hexdigest(),
-        "route": "lightweight",
-        "agent": "scenario-fixture",
-        "timestamp": "2026-01-01T00:00:00Z",
-        "reasonCodes": ["fixture"],
-        "rationale": "2216-oscillation scenario fixture route receipt.",
-        "declaredImpacts": ["internal"],
-        "observedFacts": ["localized"],
-        "sddWorkId": None,
-        "specHome": None,
-        "requiredGates": [],
-    }
     return {
         "id": 800000 + ITEM,
-        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
+        "body": route_comment(f"{OWNER}/{REPO}#{ITEM}", ISSUE_BODY, "scenario-fixture",
+                              "2216-oscillation scenario fixture route receipt."),
         "user": {"login": "fixture"},
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",

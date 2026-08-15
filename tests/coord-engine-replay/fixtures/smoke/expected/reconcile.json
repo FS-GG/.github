@@ -1,26 +1,26 @@
 [
   {
-    "id": "BLOCKER-CLEARED:FS-GG/FS.GG.SDD#47",
-    "remedy": "Status=Ready",
-    "rule": "BLOCKER-CLEARED",
-    "size": "quick",
-    "statement": "FS.GG.SDD#47: every blocker is resolved (FS.GG.SDD#45) but the board still says Blocked \u2014 set Status to Ready.",
-    "subject": "FS.GG.SDD#47"
-  },
-  {
-    "id": "LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#99",
-    "remedy": "Status=Ready",
-    "rule": "LIFECYCLE-PROJECTION-LAG",
-    "size": "quick",
-    "statement": "FS.GG.SDD#99: fresh lifecycle facts project Status=Ready; repair the stale board projection.",
-    "subject": "FS.GG.SDD#99"
-  },
-  {
     "id": "LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#44",
     "remedy": "Status=Ready",
     "rule": "LIFECYCLE-PROJECTION-LAG",
     "size": "quick",
     "statement": "FS.GG.SDD#44: fresh lifecycle facts project Status=Ready; repair the stale board projection.",
     "subject": "FS.GG.SDD#44"
+  },
+  {
+    "id": "LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#47",
+    "remedy": "Status=Ready",
+    "rule": "LIFECYCLE-PROJECTION-LAG",
+    "size": "quick",
+    "statement": "FS.GG.SDD#47: fresh lifecycle facts project Status=Ready; repair the stale board projection.",
+    "subject": "FS.GG.SDD#47"
+  },
+  {
+    "id": "LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#99",
+    "remedy": "Status=Backlog",
+    "rule": "LIFECYCLE-PROJECTION-LAG",
+    "size": "quick",
+    "statement": "FS.GG.SDD#99: fresh lifecycle facts project Status=Backlog; repair the stale board projection.",
+    "subject": "FS.GG.SDD#99"
   }
 ]

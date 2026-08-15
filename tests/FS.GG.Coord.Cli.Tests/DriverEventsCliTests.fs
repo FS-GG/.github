@@ -9,7 +9,7 @@ open FS.GG.Coord.Types
 open FS.GG.Coord.Cli
 
 /// `driver --events` CLI-layer coverage (.github#2135 repair round 1,
-/// fsgg:independent-review:v1 wrenlet-9f2c): the critic found the module (`DriverEvents`) fully
+/// independent-review finding wrenlet-9f2c: the critic found the module (`DriverEvents`) fully
 /// tested and the WIRING around it — fact assembly, cursor file I/O, JSON/text rendering,
 /// `Client.fs:1343-1472` — completely untested. `driver`'s `--events` branch now delegates to four
 /// NAMED functions (`Client.candidateToItemFacts`, `Client.readEventsCursor`,
@@ -49,7 +49,7 @@ module DriverEventsCliTests =
 
     [<Fact>]
     let ``readEventsCursor: a CORRUPT (truncated) cursor file is a REFUSED read, never a silent empty cursor`` () =
-        // The exact regression fsgg:independent-review:v1 round 1 finding 2 reproduced live: a process
+        // The exact independent-review round 1 finding 2 reproduced live: a process
         // killed mid-write leaves a truncated file. Before the fix, `readEventsCursor`'s predecessor
         // caught every parse exception and returned `Map.empty` — indistinguishable from a legitimate
         // first run. This is the gate-inversion evidence: this exact assertion fails against that old
@@ -76,7 +76,7 @@ module DriverEventsCliTests =
 
     [<Fact>]
     let ``readEventsCursor: a DIRECTORY at the cursor path is a REFUSED read, never a silent empty cursor (repair round 2)`` () =
-        // fsgg:independent-review:v1 round 2 (wrenlet-9f2c): `File.Exists` returns FALSE for a
+        // Independent-review round 2 (wrenlet-9f2c): `File.Exists` returns FALSE for a
         // directory as well as for a genuinely missing path, so the round-1 fix's existence check
         // silently classified a directory as "never written" — the exact absent-vs-corrupt confusion
         // repair round 1 closed everywhere else, surviving in the one case that does not look like a

@@ -47,10 +47,7 @@ module ClaimOverlapTests =
               Headers = Map.empty }
 
     let private currentRouteComment (paths: string) =
-        let revision = SHA256.HashData(Encoding.UTF8.GetBytes paths) |> Convert.ToHexString |> _.ToLowerInvariant()
-
-        "<!-- fsgg:delivery-route/v1 -->\n"
-        + $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"FS-GG/FS.GG.SDD#42","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-2459","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
+        StructuredFixtures.routeComment "FS-GG/FS.GG.SDD#42" (Some FS.GG.Coord.DeliveryRoute.Lightweight) "fixture-2459" None
 
     /// The board: one project, one Status field, and a single OPEN row for the item under claim (#42).
     /// `activeCollisions`'s closed-unstamped scan reads this same board and finds nothing to add, because

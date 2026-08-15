@@ -208,7 +208,7 @@ module DriverEvents =
 
     /// Idempotency is suppression of REPEATED news: a stable `Claimed`/`Ready`/etc. state that has not
     /// changed since the cursor is not worth re-announcing. `Unreadable` is the one state where that
-    /// reasoning inverts (fsgg:independent-review:v1 round 1, finding 1, .github#2135 repair round 1):
+    /// reasoning inverts (independent review round 1, finding 1, .github#2135 repair round 1):
     /// a PERSISTENT failure is itself the news, every read, for as long as it persists. Suppressing it
     /// after cycle one makes a rotting item indistinguishable from a healthy one — a failed read must
     /// never become an empty or successful result (issue acceptance #7), and "quiet because nothing
@@ -258,7 +258,7 @@ module DriverEvents =
         let missing = missingActiveRefs cursor regressionGuarded observedAt
         let reported = regressionGuarded @ missing
 
-        // Repair round 2 (fsgg:independent-review:v1, .github#2375): a naive fold would persist EVERY
+        // Repair round 2 (independent review, .github#2375): a naive fold would persist EVERY
         // reported state into the cursor, including the guards' own remedial `Unreadable` — which is
         // neither `isTerminal` nor `isActive`. That erases the very fact ("Done", "Claimed w") each
         // guard re-reads the cursor for, so a SECOND consecutive stale/missing read (the realistic

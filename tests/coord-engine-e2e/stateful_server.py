@@ -20,6 +20,10 @@ import hashlib
 import re
 import sys
 import threading
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from route_decision_fixture import route_comment
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -92,25 +96,10 @@ def route_receipt_comment(n):
     """
     issue = ISSUES[n]
     body = issue["body"]
-    receipt = {
-        "schema": "fsgg.coord.delivery-route/v1",
-        "subject": f"{owner_of(n)}/{repo_of(n)}#{n}",
-        "subjectRevision": hashlib.sha256(body.encode()).hexdigest(),
-        "route": "lightweight",
-        "agent": "fixture-route",
-        "timestamp": "2026-01-01T00:00:00Z",
-        "reasonCodes": ["fixture"],
-        "rationale": "Stateful fixture route receipt.",
-        "declaredImpacts": ["internal"],
-        "observedFacts": ["localized"],
-        "sddWorkId": None,
-        "specHome": None,
-        "requiredGates": [],
-    }
     return {
         "id": 700000 + n,
         "html_url": f"https://fixture.invalid/issues/{n}#issuecomment-{700000 + n}",
-        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
+        "body": route_comment(f"{owner_of(n)}/{repo_of(n)}#{n}", body, rationale="Stateful fixture route receipt."),
         "user": {"login": "fixture"},
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
@@ -120,7 +109,9 @@ def route_receipt_comment(n):
 def comments_for(n):
     # Chore locks deliberately have no issue/source body and therefore no delivery route receipt.
     raw = list(COMMENTS.get(n, []))
-    if n in ISSUES:
+    # Issue 42 is the record command's empty-ledger subject; its first structured decision is posted
+    # by the test itself. Every other issue gets a current fixture decision up front.
+    if n in ISSUES and n != 42:
         raw = [route_receipt_comment(n)] + raw
     return [dict(comment, html_url=comment.get("html_url", f"https://github.com/{owner_of(n)}/{repo_of(n)}/pull/{n}#issuecomment-{comment['id']}")) for comment in raw]
 

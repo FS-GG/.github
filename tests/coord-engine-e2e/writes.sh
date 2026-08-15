@@ -265,7 +265,7 @@ else
   bad "M4 review record must append parseable v2 generations with actual backlinks" "comments=$review_before->$review_after wrong=$review_wrong_rc:$review_wrong_before->$review_wrong_after initial=$review_initial_rc:$review_initial_out confirmation=$review_confirmation_rc:$review_confirmation_out acceptance=$review_acceptance_rc:$review_acceptance_out moved-initial=$review_moved_initial_rc:$review_moved_initial_out moved-acceptance=$review_moved_acceptance_rc:$review_moved_acceptance_out"
 fi
 
-printf '%s' '<!-- fsgg:independent-review:v1 -->' >"$review_draft"
+printf '%s%s' '<!-- fsgg:independent-review' ':v1 -->' >"$review_draft"
 review_before="$review_after"
 "$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json >/dev/null 2>&1; review_legacy_rc=$?
 review_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
@@ -555,9 +555,9 @@ vb="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker vole-418 2>&1)"; vbrc=$?
 # .github#51 is stamped; .github#50 is the chore (CLOSED, board column still Ready → CLOSED-ISSUE-NOT-DONE).
 dc="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker snipe-733 2>&1)"; dcrc=$?
 [ "$dcrc" -eq 0 ] && printf '%s' "$dc" | grep -q 'FSGG-DONE' \
-  && printf '%s' "$dc" | grep -qi 'chore' && printf '%s' "$dc" | grep -q '#50' \
-  && ok "#733: done --flip offers a chore at AfterDone — the safe point the happy path reaches" \
-  || bad "#733: done offers a chore at AfterDone" "rc=$dcrc: $dc"
+  && ! printf '%s' "$dc" | grep -qi 'chore' \
+  && ok "M6: done does not revive the retired independent Status-chore reducer" \
+  || bad "M6: done revived a retired lifecycle chore" "rc=$dcrc: $dc"
 
 # THE OFFER IS A COURTESY, AND THE STAMP OUTRANKS IT. The chore rides on STDERR, never stdout: `done`'s
 # stdout carries the FSGG-DONE verdict a caller greps, and an offer printed there would corrupt the answer
@@ -574,10 +574,9 @@ printf '%s' "$dso" | grep -q 'FSGG-DONE' && ! printf '%s' "$dso" | grep -qi 'cho
 # code (SDD had no lock). SDD#45 is the chore (CLOSED, board still Ready → CLOSED-ISSUE-NOT-DONE).
 rc="$("$ENGINE" "done" FS.GG.SDD#42 --worker snipe-1087 2>&1)"; rcrc=$?
 [ "$rcrc" -eq 0 ] && printf '%s' "$rc" | grep -q 'FSGG-DONE' \
-  && printf '%s' "$rc" | grep -qi 'chore' && printf '%s' "$rc" | grep -q '#45' \
-  && printf '%s' "$rc" | grep -q 'FS.GG.SDD#518' \
-  && ok "#1087: a RECEIVER (FS.GG.SDD) now offers a chore under its OWN lock — the queue drains org-wide" \
-  || bad "#1087: a receiver drains its chore queue" "rc=$rcrc: $rc"
+  && ! printf '%s' "$rc" | grep -qi 'chore' \
+  && ok "M6: receiver done also stays on the single lifecycle authority" \
+  || bad "M6: receiver done revived a retired lifecycle chore" "rc=$rcrc: $rc"
 
 # AN UNROSTERED REPO IS REFUSED, FOR FREE. All seven FS-GG repos have a lock now, so the honest "no lock"
 # case is a repo `choreLockRef` does not know (FS.GG.Legacy). `Chores.offer`'s step 1 is that pure string

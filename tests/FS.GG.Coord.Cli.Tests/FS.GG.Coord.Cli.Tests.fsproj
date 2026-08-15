@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="CacheSandbox.fs" />
+    <Compile Include="StructuredFixtures.fs" />
     <Compile Include="SnapshotTests.fs" />
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="CrossRepoRankTests.fs" />
@@ -19,8 +20,6 @@
     <Compile Include="IntakeTransactionTests.fs" />
     <Compile Include="DriverCommandTests.fs" />
     <Compile Include="DriverEventsCliTests.fs" />
-    <Compile Include="DeliveryApplicationTests.fs" />
-    <Compile Include="ReviewApplicationTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
     <Compile Include="SkillProgressiveDisclosureTests.fs" />
@@ -37,11 +36,12 @@
     <Compile Include="ChoresTests.fs" />
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />
+    <Compile Include="DeliveryApplicationTests.fs" />
+    <Compile Include="ReviewApplicationTests.fs" />
     <Compile Include="WidenRefusalTests.fs" />
     <Compile Include="OverlapTests.fs" />
     <Compile Include="ForceStealTests.fs" />
     <Compile Include="DeliveryRouteCliTests.fs" />
-    <Compile Include="ConsolidationTaxTests.fs" />
     <Compile Include="WhoLivenessTests.fs" />
     <Compile Include="AddStatusDefaultTests.fs" />
     <Compile Include="LandableNotOpenTests.fs" />

@@ -427,11 +427,9 @@ render_wave_policy() {
 }
 
 render_review_policy() {
-  echo "*Generated review contract. The marker parser and receipt validator consume these exact values.*"
+  echo "*Generated structured review contract. The digest validator and state machine consume these exact values.*"
   echo ""
-  jq -r '"| fact | value |\n|---|---|\n| initial marker | `fsgg:\(.reviewPolicy.initialMarker):v1` |\n| confirmation marker | `fsgg:\(.reviewPolicy.confirmationMarker):v1` |\n| host acceptance marker | `fsgg:\(.reviewPolicy.acceptanceMarker):v1` |\n| escalation marker | `fsgg:\(.reviewPolicy.escalationMarker):v1` |\n| repair-phase marker | `fsgg:\(.reviewPolicy.repairPhaseMarker):v1` |\n| ordinary repair ceiling | \(.reviewPolicy.maxAutomatedRepairRounds) |\n| repair-phase ceiling | \(.reviewPolicy.repairPhaseMaxRounds) |"' "$FACTS"
-  echo ""
-  jq -r '"**Quoted vs. competing markers:** " + .reviewPolicy.quotedMarkerRule' "$FACTS"
+  jq -r '"| fact | value |\n|---|---|\n| schema | `\(.reviewPolicy.schema)` |\n| kinds | `\(.reviewPolicy.kinds | join(", "))` |\n| ordinary repair ceiling | \(.reviewPolicy.maxAutomatedRepairRounds) |\n| repair-phase ceiling | \(.reviewPolicy.repairPhaseMaxRounds) |"' "$FACTS"
   echo ""
 }
 

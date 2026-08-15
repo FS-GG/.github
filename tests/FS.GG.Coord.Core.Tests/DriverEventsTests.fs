@@ -258,7 +258,7 @@ module DriverEventsTests =
         Assert.Empty(secondRead.Transitions)
         Assert.Single(secondRead.Active) |> ignore
 
-    // ---- repair round 1 (fsgg:independent-review:v1, wrenlet-9f2c): a PERSISTENT Unreadable must ----
+    // ---- repair round 1 (wrenlet-9f2c): a PERSISTENT Unreadable must ----
     // ---- never go silent — idempotency is an exception for this one state, not the default rule ----
 
     [<Fact>]
@@ -276,7 +276,7 @@ module DriverEventsTests =
         // the idempotent-no-duplicate-event case (`deriveEvents: idempotent re-read`). For Unreadable
         // it must NOT be: a driver that only sees "no material transitions" after cycle one has no way
         // to tell "this item recovered" from "this item is still broken", which is worse than silence
-        // — it reads as an all-clear over a rotting item (fsgg:independent-review:v1 round 1, finding 1).
+        // — it reads as an all-clear over a rotting item (independent review round 1, finding 1).
         let secondEvents, cursor2 = deriveEvents cursor1 [ classify unreadable ]
         Assert.Single(secondEvents) |> ignore
         Assert.Equal(Some(Unreadable "board scan timed out"), secondEvents.[0].Previous)
@@ -388,7 +388,7 @@ module DriverEventsTests =
         Assert.Equal(Ready, Map.find ".github#1" unguardedCursor)
         Assert.Contains("no live claim; unclaimed and schedulable", events.[0].Reason)
 
-    // ---- repair round 2 (fsgg:independent-review:v1, .github#2375): a PERSISTENT stale/missing read
+    // ---- repair round 2 (.github#2375): a PERSISTENT stale/missing read
     // ---- must keep failing the same guard on every cycle, not just the first ----------------------
 
     [<Fact>]
