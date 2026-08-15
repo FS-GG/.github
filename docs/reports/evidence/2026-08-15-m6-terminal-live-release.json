@@ -11,11 +11,17 @@
     "content_id": "sha256:c203408880cfe785f9fd4a5ee8879617c93a1b95d46cd43f57df6d3c05e1fd92",
     "manifest_sha256": "34cb470e8450a741bcb8f88302c670915397c0412ac510dae40087e97a1933ea",
     "stable_channel_sha256": "1c467c38f70c85ad1fc206813e7c31c63155e2ea93e8df9fdb01362e72cc2f85",
+    "prepared_manifest_verified": true,
+    "package_bytes_identical": true,
+    "github_feed_observed": true,
+    "nuget_feed_observed": true,
+    "promoted": true,
+    "adopted_and_pinned": true,
     "feeds": ["GitHub Packages", "NuGet.org"],
     "package_payload_sha256": {
-      "FS.GG.Coord.Cli": "6da2f5e2d2b2e77878395528d48c376d870b35d8b4b93754d8e08cb5eea9e6e4",
-      "FS.GG.Drivers": "9d5d009621eb74f915b09be6649dd4727baf739d84fe8fc54c84b6442e292468",
-      "FS.GG.Kit": "18d13342bdb0cc947a342ea033031426039221110505b28884551a2420481c9e"
+      "FS.GG.Coord.Cli": "6da2f5e2fad3bb4096f409cfb8a59f935b9854c57add00bd6c0e65d7705961cb",
+      "FS.GG.Drivers": "9d5d0096ddbb4db5310808bbc90e58c7feac9fe0803468de5b207335ab40ac4d",
+      "FS.GG.Kit": "18d133421ab4bd8ca69d9e059aaa9c1b6cbcc25233f785067a3a66953de0df6b"
     }
   },
   "live": {
@@ -36,6 +42,11 @@
       {"name": "installed-cli-help", "observed_exit": 0, "stdout_sha256": "202997f9e173644e04f02e712db42e81636c970014df6c4f14988761cc2615ea"}
     ],
     "issue_2569": {"state": "closed", "closed_at": "2026-08-15T06:04:09Z"},
-    "same_class_open_issues": 0
+    "same_class_open_issues": 0,
+    "same_class_searches": [
+      {"command": ["gh", "search", "issues", "--repo", "FS-GG/.github", "--state", "open", "--match", "title,body", "--limit", "100", "--json", "number,title,url,updatedAt", "--", "graphql_complete_read"], "results": []},
+      {"command": ["gh", "search", "issues", "--repo", "FS-GG/.github", "--state", "open", "--match", "title,body", "--limit", "100", "--json", "number,title,url,updatedAt", "--", "raw GraphQL envelope"], "results": []},
+      {"command": ["gh", "search", "issues", "--repo", "FS-GG/.github", "--state", "open", "--match", "title,body", "--limit", "100", "--json", "number,title,url,updatedAt", "--", "GraphQL compatibility decoder"], "results": []}
+    ]
   }
 }

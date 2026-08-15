@@ -342,9 +342,23 @@ def validate(document: object, root: Path) -> list[str]:
         release_evidence = bound_json(root, release.get("evidence"), "release.evidence", failures)
         if release_evidence is not None:
             observed_release = release_evidence.get("release", {})
-            for field in ("version", "source_sha", "tag", "immutable", "manifest_sha256", "stable_channel_sha256"):
+            for field in (
+                "version", "source_sha", "tag", "immutable", "manifest_sha256",
+                "stable_channel_sha256", "prepared_manifest_verified", "package_bytes_identical",
+                "github_feed_observed", "nuget_feed_observed", "promoted", "adopted_and_pinned",
+                "content_id", "feeds", "package_payload_sha256",
+            ):
                 if release.get(field) != observed_release.get(field):
                     failures.append(f"release.{field} contradicts terminal evidence")
+            if not HASH.fullmatch(str(observed_release.get("content_id", "")).removeprefix("sha256:")):
+                failures.append("release evidence lacks an exact content ID")
+            if observed_release.get("feeds") != ["GitHub Packages", "NuGet.org"]:
+                failures.append("release evidence does not bind both feeds")
+            payloads = observed_release.get("package_payload_sha256", {})
+            if set(payloads) != {"FS.GG.Coord.Cli", "FS.GG.Drivers", "FS.GG.Kit"} or any(
+                not HASH.fullmatch(str(value)) for value in payloads.values()
+            ):
+                failures.append("release evidence does not bind all three package payload hashes")
 
     live = document.get("live_acceptance")
     if not isinstance(live, dict):
@@ -356,16 +370,39 @@ def validate(document: object, root: Path) -> list[str]:
             failures.append("live_acceptance must bind a verified main descendant of release source and ancestor of this checkout")
         if live.get("new_only_smoke") is not True or live.get("same_class_open_issues") != 0 or live.get("issue_2569_closed") is not True:
             failures.append("live_acceptance must bind new-only smoke, zero successors, and closed #2569")
-        if not isinstance(live.get("commands"), list) or not live.get("commands") or not all(
-            isinstance(row, dict) and row.get("observed_exit") == 0 and HASH.fullmatch(str(row.get("stdout_sha256", "")))
-            for row in live.get("commands", [])
-        ):
-            failures.append("live_acceptance must bind successful commands and output hashes")
+        if "commands" in live:
+            failures.append("live_acceptance commands must come only from its content-addressed terminal evidence")
         live_evidence = bound_json(root, live.get("evidence"), "live_acceptance.evidence", failures)
         if live_evidence is not None:
             observed_live = live_evidence.get("live", {})
             if observed_live.get("verified_main_sha") != live_sha or observed_live.get("same_class_open_issues") != 0 or observed_live.get("issue_2569", {}).get("state") != "closed":
                 failures.append("live_acceptance contradicts terminal evidence")
+            commands = observed_live.get("commands")
+            required_commands = {
+                "release-build", "ready-complete-pagination", "reconcile-idempotent",
+                "typed-graphql-project-visibility", "typed-graphql-project-id",
+                "typed-graphql-repository-policy", "typed-graphql-meter",
+                "typed-graphql-roster", "typed-graphql-archive-scan",
+                "immutable-promotion-replay", "public-nuget-clean-install", "installed-cli-help",
+            }
+            if not isinstance(commands, list) or {row.get("name") for row in commands if isinstance(row, dict)} != required_commands or any(
+                not isinstance(row, dict) or row.get("observed_exit") != 0 or not HASH.fullmatch(str(row.get("stdout_sha256", "")))
+                for row in commands if isinstance(commands, list)
+            ):
+                failures.append("live evidence does not bind the exact successful new-only command matrix")
+            commands_hash = hashlib.sha256(json.dumps(commands, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            if live.get("command_matrix_sha256") != commands_hash:
+                failures.append("live_acceptance command matrix digest contradicts terminal evidence")
+            searches = observed_live.get("same_class_searches")
+            if not isinstance(searches, list) or len(searches) != 3 or any(
+                not isinstance(row, dict) or not isinstance(row.get("command"), list)
+                or row.get("command", [])[:3] != ["gh", "search", "issues"] or row.get("results") != []
+                for row in searches if isinstance(searches, list)
+            ):
+                failures.append("live evidence does not bind three empty same-class GitHub searches")
+            searches_hash = hashlib.sha256(json.dumps(searches, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            if live.get("same_class_searches_sha256") != searches_hash:
+                failures.append("live_acceptance same-class search digest contradicts terminal evidence")
     return failures
 
 

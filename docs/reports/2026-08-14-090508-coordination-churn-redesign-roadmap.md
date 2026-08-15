@@ -375,7 +375,8 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   0.58 CLI. Issue [#2569](https://github.com/FS-GG/.github/issues/2569) is closed and a fresh same-class
   search is empty. The terminal acceptance now passes with an explicit ancestry chain from first-green
   `e41a762f` through release source `12ec83f8` to verified main `57211eeb`; it does not pretend those
-  intentionally distinct commits are one identity. The only observed exact-main check failure was a
+  intentionally distinct commits are one identity. The only non-superseded terminal-gate failure on exact
+  main was a
   generated registry digest left stale by adoption; the canonical registry writer has reconciled that
   one row on the final evidence branch, with its dated changelog entry and absolute coherence check green.
   M6 remains unchecked only until that repair passes normal PR protection and the same critic records the

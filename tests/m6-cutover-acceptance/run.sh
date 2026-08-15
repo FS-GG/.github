@@ -6,7 +6,9 @@ python3 - "$ROOT" <<'PY'
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 
@@ -35,6 +37,14 @@ candidate["release"].update({
     "adopted_and_pinned": True,
 })
 assert module.validate(candidate, root) == [], module.validate(candidate, root)
+
+git_env = dict(os.environ, GIT_AUTHOR_NAME="M6 fixture", GIT_AUTHOR_EMAIL="m6-fixture@example.invalid",
+               GIT_COMMITTER_NAME="M6 fixture", GIT_COMMITTER_EMAIL="m6-fixture@example.invalid",
+               GIT_AUTHOR_DATE="2000-01-01T00:00:00Z", GIT_COMMITTER_DATE="2000-01-01T00:00:00Z")
+empty_tree = subprocess.check_output(["git", "mktree"], cwd=root, input=b"").decode().strip()
+unrelated_sha = subprocess.check_output(
+    ["git", "commit-tree", empty_tree], cwd=root, input=b"M6 unrelated ancestry fixture\n", env=git_env
+).decode().strip()
 
 with tempfile.TemporaryDirectory() as directory:
     temporary = Path(directory)
@@ -77,8 +87,11 @@ mutations = {
     "test-family-missing": lambda d: d.update(test_results=d["test_results"][1:]),
     "mutation-did-not-red": lambda d: d["mutation_results"][0].update(outcome="pass"),
     "release-not-promoted": lambda d: d["release"].update(promoted=False),
-    "release-source-unrelated": lambda d: d["release"].update(source_sha="0" * 40),
-    "live-main-unrelated": lambda d: d["live_acceptance"].update(verified_main_sha="0" * 40),
+    "release-source-unrelated": lambda d: d["release"].update(source_sha=unrelated_sha),
+    "live-main-unrelated": lambda d: d["live_acceptance"].update(verified_main_sha=unrelated_sha),
+    "release-source-wrong-direction": lambda d: d["release"].update(source_sha=d["implementation"]["base_sha"]),
+    "live-main-wrong-direction": lambda d: d["live_acceptance"].update(verified_main_sha=d["implementation"]["sha"]),
+    "live-command-fabricated": lambda d: d["live_acceptance"].update(commands=[{"command": ["fabricated"], "observed_exit": 0, "stdout_sha256": "0" * 64}]),
     "live-successor-open": lambda d: d["live_acceptance"].update(same_class_open_issues=1),
 }
 for name, mutate in mutations.items():
