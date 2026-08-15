@@ -96,7 +96,7 @@ let private blocker n state =
 /// condition `BLOCKER-CLEARED` names, and it is why the wiring is worth having: the rule was written,
 /// tested, and unreachable while the item it would have freed sat invisible to every scheduler path.
 let private blockerClearedBoard =
-    [ item 733 Blocked Open [ blocker 979 BlockerClosed ] None ]
+    [ { item 733 Ready Open [] None with Class = Some Hardening; BoardClass = None } ]
 
 [<Fact>]
 let ``an idle worker on a board with a cleared blocker is offered the chore, and HOLDS the lock`` () =
@@ -112,7 +112,7 @@ let ``an idle worker on a board with a cleared blocker is offered the chore, and
         // would hand a worker a remedy pointed at the lock issue.
         Assert.Equal(ref' 733, chore.Subject)
         Assert.Equal(lockRef, got)
-        Assert.Equal("BLOCKER-CLEARED:FS-GG/.github#733", chore.Id)
+        Assert.Equal("CLASS-PROJECTION-LAG:FS-GG/.github#733", chore.Id)
 
 [<Fact>]
 let ``a worker holding a live claim is offered NOTHING, and no lock is attempted`` () =
@@ -157,11 +157,13 @@ let ``a repo with no chore lock offers nothing, and never asks the network`` () 
 /// The same cleared-blocker condition, on a row belonging to a DIFFERENT repo. The org board is one board
 /// for seven repos, so this is what a bare `next` (no `--repo`, hence `Scan.scope None`) actually hands us.
 let private otherRepoBoard =
-    [ { item 733 Blocked Open [ blocker 979 BlockerClosed ] None with
+    [ { item 733 Ready Open [] None with
           Ref =
             { Owner = "FS-GG"
               Repo = "FS.GG.Rendering"
-              Number = 640 } } ]
+              Number = 640 }
+          Class = Some Hardening
+          BoardClass = None } ]
 
 [<Fact>]
 let ``a chore is NEVER offered under another repo's lock — the subject and the lock must name one repo`` () =
@@ -786,18 +788,6 @@ let private claimedParkedRow (humanBlock: HumanBlock option) =
         HumanBlock = humanBlock }
 
 [<Fact>]
-let ``.github#2394 round 1 — CLAIM-REVIEW-LAG does not flip a human-parked Blocked row under a live claim with an open PR`` () =
-    Assert.Empty(Chore.derive [ claimedParkedRow (Some AwaitingHumanAction) ])
-
-[<Fact>]
-let ``.github#2394 round 1 — the human/decision sentinel gates the claimed path too, not only human/action`` () =
-    Assert.Empty(Chore.derive [ claimedParkedRow (Some AwaitingHumanDecision) ])
-
-[<Fact>]
-let ``.github#2394 round 1 AC3 — the SAME claimed row without the sentinel still derives CLAIM-REVIEW-LAG`` () =
-    // The release half: the round-1 guard must not have been written as "never flip a claimed Blocked row"
-    // — it must key on the sentinel exactly as the unclaimed path's guard does.
-    Assert.Equal<string list>(
-        [ "CLAIM-REVIEW-LAG" ],
-        Chore.derive [ claimedParkedRow None ] |> List.map (fun c -> c.Kind.RuleId)
-    )
+let ``claimed rows never reach a second lifecycle reducer regardless of prose facts`` () =
+    for humanBlock in [ None; Some AwaitingHumanAction; Some AwaitingHumanDecision ] do
+        Assert.Empty(Chore.derive [ claimedParkedRow humanBlock ])

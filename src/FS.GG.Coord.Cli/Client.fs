@@ -3216,42 +3216,6 @@ module Client =
         | Errors.NotFound subject -> subject.StartsWith("no Projects v2 board titled ", StringComparison.Ordinal)
         | _ -> false
 
-    /// One Status authority per subject. Explicit scheduling intent owns lifecycle Status; Auto keeps
-    /// the established legacy precedence for touch-set-specific destinations and coupled writes.
-    let reconcileStatusPrecedence
-        (legacyChores: Chore.Chore list)
-        (lifecycleChores: Chore.Chore list)
-        (lifecycleWatermarks: Map<Ref, LifecycleProjection.Watermark>)
-        : Chore.Chore list =
-        let explicitIntentSubjects =
-            lifecycleWatermarks
-            |> Map.toSeq
-            |> Seq.choose (fun (subject, watermark) ->
-                match watermark.Intent with
-                | Some LifecycleProjection.Auto
-                | None -> None
-                | Some _ -> Some subject)
-            |> Set.ofSeq
-
-        let retainedLegacy =
-            legacyChores
-            |> List.filter (fun chore ->
-                match chore.Kind.Write with
-                | Some("Status", _) when explicitIntentSubjects.Contains chore.Subject -> false
-                | _ -> true)
-
-        let legacyStatusSubjects =
-            retainedLegacy
-            |> List.choose (fun chore ->
-                match chore.Kind.Write with
-                | Some("Status", _) -> Some chore.Subject
-                | _ -> None)
-            |> Set.ofList
-
-        retainedLegacy
-        @ (lifecycleChores
-           |> List.filter (fun chore -> not (legacyStatusSubjects.Contains chore.Subject)))
-
     let reconcile (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx { opts with Limit = None } Cache.Reconciling with
         | Error e when boardUnreachable e ->
@@ -3319,14 +3283,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // actually posted to, so `Outstanding` measured an always-empty set and stayed `false`
                 // regardless of what was truly owed: silently reproducing the exact `.github#2135`/
                 // `.github#2333` failure this projector exists to prevent, parsing precision aside.
-                let projectionMode =
-                    match
-                        LifecycleProjection.projectionMode
-                            (Environment.GetEnvironmentVariable "FSGG_COORD_LIFECYCLE_PROJECTION" |> Option.ofObj)
-                    with
-                    | Ok mode -> mode
-                    | Error reason -> invalidArg "FSGG_COORD_LIFECYCLE_PROJECTION" reason
-
                 let resultLabel = function
                     | LifecycleProjection.Project(status, _) -> statusWireName status
                     | LifecycleProjection.Withheld reason -> $"withheld: %s{reason}"
@@ -3337,9 +3293,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | LifecycleProjection.HumanPark(AwaitingHumanAction, _) -> "human-action"
                     | LifecycleProjection.Deferred _ -> "deferred"
                 let lifecycleHealthRows = ResizeArray<_>()
-                let lifecycleChores, lifecycleWatermarks, lifecycleShadowDifferences =
+                let lifecycleChores, lifecycleWatermarks =
                     lifecycleItems
-                    |> List.fold (fun (chores, watermarks, differences) item ->
+                    |> List.fold (fun (chores, watermarks) item ->
                         // A SETTLED ROW IS SWEPT, NOT READ — and this is `.github#2300` again, arriving
                         // through the projector rather than the route search. `State = Closed` reads as a
                         // narrow condition and is the OPPOSITE of one: a closed row is the only kind this
@@ -3408,7 +3364,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                          LifecycleProjection.tryWatermark issueComments)
 
                         match delivery with
-                        | None -> chores, watermarks, differences // an unreadable fact withholds its write; scheduled reconciliation retries.
+                        | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
                         | Some(delivery, watermark) ->
                             let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                             let pullRequest =
@@ -3420,34 +3376,39 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                   Blockers = { ObservedAt = observedAt; Value = item.Blockers }
                                   Delivery = { ObservedAt = observedAt; Value = delivery }
                                   Issue = { ObservedAt = observedAt; Value = item.State } }
-                            // M1: migrate the deliberate board/body parks into typed intent, then ALWAYS
-                            // compute the old/new pair. The switch selects from that pair; it never skips
-                            // shadow evaluation, so rollback remains observable and bounded.
-                            let migratedIntent =
-                                LifecycleProjection.migrateIntent observedAt item.Status item.HumanBlock
-                            // A v2 projection watermark carries the intent which produced the active
-                            // column.  Without restoring it here, Backlog -> In review -> idle would read
-                            // the derived In-review column as Auto on pass two and permanently lose the
-                            // deliberate park. Legacy v1 receipts have `Intent=None` and take the bounded
-                            // migration path exactly once.
+                            // A v2 projection watermark is the durable scheduling decision. For subjects
+                            // that have never been projected, bootstrap only from explicit policy inputs;
+                            // mutable Project Status is never read back as intent.
+                            let policyIntent =
+                                match item.HumanBlock, item.Class, item.TouchSet with
+                                | Some human, _, _ ->
+                                    LifecycleProjection.HumanPark(
+                                        human,
+                                        { Revision = observedAt; Reason = "explicit human scheduling hold" })
+                                | None, Some Decision, _ ->
+                                    LifecycleProjection.HumanPark(
+                                        AwaitingHumanDecision,
+                                        { Revision = observedAt; Reason = "decision-class work requires a human decision" })
+                                | None, _, (Undeclared | DeclaredNone) ->
+                                    LifecycleProjection.Backlog
+                                        { Revision = observedAt; Reason = "touch-set policy is not schedulable" }
+                                | None, _, (DeclaredChore | Declared _) -> LifecycleProjection.Auto
+                                | None, _, Unreadable reason ->
+                                    LifecycleProjection.Deferred(
+                                        $"touch-set unreadable: %s{reason}", None, observedAt)
                             let intent =
                                 watermark
-                                |> Option.bind (fun receipt -> receipt.Intent)
-                                |> Option.defaultValue migratedIntent
-                            let shadow =
-                                LifecycleProjection.shadowAdvance
+                                |> Option.map _.Intent
+                                |> Option.defaultValue policyIntent
+                            let selected =
+                                LifecycleProjection.advance
                                     LifecycleProjection.IntentStatusV1 intent watermark observation
-                            let selected = LifecycleProjection.select projectionMode shadow
                             lifecycleHealthRows.Add(
                                 {| current = statusWireName item.Status
-                                   intended = resultLabel shadow.Intended
+                                   intended = resultLabel selected
                                    intent = intentLabel intent
                                    readComplete = true
                                    subject = item.Ref.Canonical |})
-                            let differences =
-                                match shadow.Difference with
-                                | LifecycleProjection.Same -> differences
-                                | difference -> (item.Ref, difference, shadow.Legacy, shadow.Intended) :: differences
                             match selected with
                             | LifecycleProjection.Project(destination, timestamp) ->
                                 match Chore.lifecycleProjection item destination with
@@ -3456,106 +3417,20 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     Map.add item.Ref
                                         ({ ObservedAt = timestamp
                                            Status = destination
-                                           Intent = Some intent }: LifecycleProjection.Watermark)
-                                        watermarks,
-                                    differences
-                                | None -> chores, watermarks, differences
-                            | LifecycleProjection.Withheld _ -> chores, watermarks, differences) ([], Map.empty, [])
+                                           Intent = intent }: LifecycleProjection.Watermark)
+                                        watermarks
+                                | None -> chores, watermarks
+                            | LifecycleProjection.Withheld _ -> chores, watermarks) ([], Map.empty)
 
-                // Opt-in audit output for historical replay and live shadow observation. It is a
-                // deterministic projection of the already-computed pair: no second reducer run, no
-                // mutation, no timestamp. The default stays silent; setting the path makes discarding a
-                // difference impossible and is the seam the recorded-board replay gate exercises.
-                Environment.GetEnvironmentVariable "FSGG_COORD_LIFECYCLE_SHADOW_REPORT"
-                |> Option.ofObj
-                |> Option.filter (String.IsNullOrWhiteSpace >> not)
-                |> Option.iter (fun path ->
-                    let rows =
-                        lifecycleShadowDifferences
-                        |> List.sortBy (fun (subject, _, _, _) -> subject.Canonical)
-                        |> List.map (fun (subject, difference, legacy, intended) ->
-                            let classification =
-                                match difference with
-                                | LifecycleProjection.DeliberateParkPreserved _ -> "deliberate-park-preserved"
-                                | LifecycleProjection.Unexpected _ -> "unexpected"
-                                | LifecycleProjection.Same -> "same"
-                            {| classification = classification
-                               intended = resultLabel intended
-                               legacy = resultLabel legacy
-                               subject = subject.Canonical |})
-                    File.WriteAllText(path, JsonSerializer.Serialize(rows, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
-
-                // Once a non-Auto intent exists, the intent reducer owns Status. This removes the live-
-                // claim precedence hole where ClaimStatusLag/ClaimReviewLag wrote the same active column
-                // first, filtered out LifecycleProjectionLag, and therefore skipped its durable v2
-                // watermark. Automatic rows retain the established legacy precedence (including
-                // touch-set-specific BLOCKER-CLEARED destinations).
-                let legacyChores = Chore.derive lifecycleItems
-
-                // A reconcile pass is allowed one Status decision per item.  The long-standing Chore
-                // rules carry facts the lifecycle projector intentionally does not (for example the
-                // `Paths: none` destination and the coupled `Blocked by` clear), so they are the
-                // authority whenever they have already derived a Status remedy.  The lifecycle projector
-                // fills the remaining gaps (PR/review/CI, delivery and verified terminal evidence); it is
-                // never appended as a second competing writer.  This is precedence, not a de-dup after
-                // the fact: the losing observation produces no receipt and no mutation.
-                let chores =
-                    reconcileStatusPrecedence legacyChores lifecycleChores lifecycleWatermarks
-
-                // .github#2079: BLOCKER-CLEARED must not promote a row whose BODY's `Blocked by:` line
-                // names ref(s) the FIELD does not carry — the `FS.GG.Templates#348` shape, where the
-                // field's all-resolved read is not trustworthy because the park's real edge landed only
-                // in the body. `Chore.derive` above is untouched and correct on the FIELD alone, which is
-                // the only fact `Item` carries; the body's RAW text is the one additional fact only this
-                // CLI layer has (read straight off the snapshot document, since `Item` has nowhere to put
-                // it), so the withholding happens here — one predicate, `blockedByBodyDivergence`, shared
-                // with `lint`'s `BLOCKED-BY-INERT` above, never a second copy that could disagree with it.
-                let bodyByRef: Map<Ref, string> =
-                    try
-                        use parsed = JsonDocument.Parse(doc)
-
-                        match parsed.RootElement.TryGetProperty "items" with
-                        | false, _ -> Map.empty
-                        | true, elItems ->
-                            elItems.EnumerateArray()
-                            |> Seq.choose (fun el ->
-                                match el.TryGetProperty "body" with
-                                | true, bodyEl when bodyEl.ValueKind = JsonValueKind.String ->
-                                    let owner = el.GetProperty("owner").GetString()
-                                    let repo = el.GetProperty("repo").GetString()
-                                    let number = el.GetProperty("number").GetInt32()
-
-                                    Some({ Owner = owner; Repo = repo; Number = number }, bodyEl.GetString())
-                                | _ -> None)
-                            |> Map.ofSeq
-                    with _ ->
-                        // FAIL OPEN INTO NO EVIDENCE, NOT INTO A CRASH (#266's other edge): a document this
-                        // read cannot make is a document this rule cannot act on, and the rule it defers to
-                        // is `Chore.derive`'s own — already computed above, already correct on the field.
-                        // This block only ever WITHHOLDS a promotion; it never grants one, so an empty map
-                        // here costs nothing but the withholding this issue exists to add.
-                        Map.empty
-
-                let blockedByRawByRef: Map<Ref, string> =
-                    rows |> List.map (fun r -> r.Ref, r.BlockedByRaw) |> Map.ofList
-
-                let divergenceOf (c: Chore.Chore) : string list =
-                    let fieldRaw = Map.tryFind c.Subject blockedByRawByRef |> Option.defaultValue ""
-                    let body = Map.tryFind c.Subject bodyByRef |> Option.defaultValue ""
-                    blockedByBodyDivergence c.Subject.Owner c.Subject.Repo fieldRaw body
-
-                let chores, blockerClearedWithheld =
-                    chores
-                    |> List.partition (fun c ->
-                        match c.Kind with
-                        | Chore.BlockerCleared _ -> List.isEmpty (divergenceOf c)
+                // Scheduling Status has one authority: the intent reducer above. `Chore.derive` remains
+                // responsible only for non-lifecycle maintenance such as stale-claim cleanup and Class.
+                let maintenanceChores =
+                    Chore.derive lifecycleItems
+                    |> List.filter (fun chore ->
+                        match chore.Kind.Write with
+                        | Some("Status", _) -> false
                         | _ -> true)
-
-                for c in blockerClearedWithheld do
-                    let named = divergenceOf c |> String.concat ", "
-
-                    eprint
-                        $"fsgg-coord-engine: reconcile: withheld BLOCKER-CLEARED for %s{c.Subject.Short} — its body's `Blocked by:` line names %s{named}, which the FIELD does not carry, so the field's all-resolved read is not trustworthy (.github#2079). Run `lint` for the divergence (`BLOCKED-BY-INERT`), reconcile the FIELD to match, then re-run."
+                let chores = maintenanceChores @ List.rev lifecycleChores
 
                 // The field write a chore implies — the SINGLE source for the write this phase performs,
                 // the `field`/`value` the receipt reports, AND the `remedy`/human-table prose below.
@@ -3570,25 +3445,21 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // #983 argument one call deeper.
                 let write (chore: Chore.Chore) = chore.Kind.Write
 
-                // A cleared dependency is a two-field projection.  Keeping the old `Blocked by` text
-                // beside a Ready status creates the half-converged shape this reconciler is meant to
-                // remove, so send both values in one aliased mutation.
-                //
-                // THE STATUS HALF IS `write`'S, NOT A LITERAL — .github#2220. This spelled
-                // `statusWireName Ready` directly, which was the SECOND hand-maintained answer to "what
-                // column does BLOCKER-CLEARED write" and is exactly the duplication the note above forbids.
-                // It went unnoticed while the Core's answer was also an unconditional `Ready`; once the
-                // Core began choosing `Backlog` for a row whose touch-set makes `Ready` unreachable, this
-                // literal would have written `Ready` anyway — the receipt saying `Backlog` and the board
-                // getting `Ready`, which is worse than the defect it repairs. Only the `Blocked by` clear
-                // is genuinely local, because it is this kind's second field and no other kind has one.
+                let lifecycleByRef =
+                    lifecycleItems |> List.map (fun item -> item.Ref, item) |> Map.ofList
+
                 let writesFor (chore: Chore.Chore) =
                     match write chore with
-                    | None -> []
                     | Some(field, value) ->
-                        match chore.Kind with
-                        | Chore.BlockerCleared _ -> [ field, Board.Set value; "Blocked by", Board.Clear ]
-                        | _ -> [ field, Board.Set value ]
+                        let primary = [ field, Board.Set value ]
+                        match chore.Kind, Map.tryFind chore.Subject lifecycleByRef with
+                        | Chore.LifecycleProjectionLag destination, Some item
+                            when destination <> Blocked
+                                 && not (List.isEmpty item.Blockers)
+                                 && Blockers.cleared item.Blockers ->
+                            primary @ [ "Blocked by", Board.Clear ]
+                        | _ -> primary
+                    | None -> []
 
                 // DERIVED from `write`, not matched a second time. These are the same fact in two
                 // renderings — the `remedy` key and the `field`/`value` pair of the SAME JSON object, plus
@@ -3904,12 +3775,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                       let outcome =
                                           match gate with
                                           | Error _ -> Ok Board.NotOnBoard
+                                          | Ok() when List.length writes > 1 ->
+                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number writes w.Id
                                           | Ok() ->
-                                              match chore.Kind with
-                                              | Chore.BlockerCleared _ ->
-                                                  Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number writes w.Id
-                                              | _ ->
-                                                  Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
+                                              Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
 
                                       match outcome with
                                       // The two lines .github#1524 is about. They are the HUMAN projection
@@ -6493,7 +6362,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
           DeliberatePark "set-field --batch Status=Blocked"
           DeliberatePark "add --status Blocked"
           DeliberatePark "intake apply Status=Blocked"
-          DeliberatePark "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
           GuardedRestore "release (recorded previous Status=Blocked)"
           GuardedRestore "reap (recorded previous Status=Blocked)" ]
 

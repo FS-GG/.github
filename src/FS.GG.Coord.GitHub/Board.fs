@@ -44,11 +44,6 @@ module Board =
     /// `errors`, exactly like a failed alias. Test the partial arm first and an exhausted budget is
     /// misreported as *"the board is half-written"*: the caller would then refuse to queue it (a partial is
     /// never queued), and the write would be silently lost on a condition that was only ever temporary.
-    // M6 removal condition: delete this compatibility shim when Board's legacy JsonElement domain
-    // decoders have become typed DTO decoders. The envelope is already monopolised by GraphQl.
-    let private graphQlData (subject: string) (body: string) : IoResult<JsonElement> =
-        GraphQl.decode subject body Ok
-
     let private query (document: string) (variables: (string * Var) list) (subject: string) =
         { Method = "POST"
           Path = "graphql"
@@ -162,7 +157,7 @@ module Board =
         | Error e -> Error e
         | Ok fieldsResponse ->
 
-        match graphQlData subject fieldsResponse.Body with
+        match GraphQl.decode subject fieldsResponse.Body Ok with
         | Error e -> Error e
         | Ok fieldsData ->
 
@@ -389,7 +384,7 @@ module Board =
         | Error e -> Error e
         | Ok response ->
 
-        match graphQlData subject response.Body with
+        match GraphQl.decode subject response.Body Ok with
         | Error e -> Error e
         | Ok data ->
 
@@ -581,7 +576,7 @@ module Board =
         | Error e -> Error e
         | Ok response ->
 
-        match graphQlData subject response.Body with
+        match GraphQl.decode subject response.Body Ok with
         | Error e -> Error e
         | Ok data ->
 
@@ -677,7 +672,7 @@ module Board =
         | Error e -> Error e
         | Ok response ->
 
-        match graphQlData subject response.Body with
+        match GraphQl.decode subject response.Body Ok with
         | Error e -> Error e
         | Ok data ->
 
@@ -746,7 +741,7 @@ module Board =
         | Error e -> Error e
         | Ok response ->
 
-        match graphQlData subject response.Body with
+        match GraphQl.decode subject response.Body Ok with
         | Error e -> Error e
         | Ok data ->
 
@@ -841,7 +836,7 @@ module Board =
         | Error e -> Error e
         | Ok response ->
 
-        match graphQlData subject response.Body with
+        match GraphQl.decode subject response.Body Ok with
         | Error e -> Error e
         | Ok data ->
 
@@ -932,7 +927,7 @@ module Board =
         | Error e -> Error e
         | Ok response ->
 
-        match graphQlData subject response.Body with
+        match GraphQl.decode subject response.Body Ok with
         | Error e -> Error e
         | Ok data ->
 
@@ -1097,7 +1092,7 @@ module Board =
 
         match transport.Send(query document variables subject) with
         | Error e -> Error e
-        | Ok response -> graphQlData subject response.Body |> Result.map ignore
+        | Ok response -> GraphQl.decode subject response.Body (fun _ -> Ok())
 
     // ---- the aliased batch (#448) --------------------------------------------------------------------
 
@@ -1184,24 +1179,24 @@ module Board =
         // THE PARTIAL-APPLY ARM. A GraphQL failure mid-document arrives as HTTP 200 carrying BOTH `data`
         // and `errors`, and `errors[].path[0]` names the failing ALIAS. Mutations execute SERIALLY, so the
         // aliases before the failure DID land — the body tells us exactly which.
-        match graphQlData subject response.Body with
+        match GraphQl.decode subject response.Body Ok with
         | Ok _ -> Ok()
 
-        // A rate limit is not a partial write. `graphQlData` tests for it FIRST, so by the time we get a
+        // A rate limit is not a partial write. `GraphQl.decode` tests for it FIRST, so by the time we get a
         // `GraphQlErrors` we know the budget was not the cause.
         //
         // PROPAGATE THE VALUE, do not rebuild it: re-tupling the fields here would silently drop any the
         // case grows later, and this arm has no opinion about which budget died.
         | Error(RateLimited _ as e) -> Error e
 
-        | Error(GraphQlErrors _) ->
+        | Error(GraphQlErrors _ as graphQlError) ->
             match GraphQl.partialMutation subject response.Body with
             | Error error -> Error error
             | Ok(applied, failedAliases) ->
                 if List.isEmpty applied then
                     // NOTHING LANDED. This is a clean failure, and it is safe to queue or retry: the board
                     // is exactly as it was.
-                    Error(GraphQlErrors(failedAliases |> List.map snd))
+                    Error graphQlError
                 else
                     // SOME OF IT LANDED. `EX_PARTIAL`, and it is NEVER queued — replaying the document would
                     // rewrite the half that already took effect.

@@ -1101,7 +1101,7 @@ let ``#1738 a BLOCKED row whose blockers ALL resolved IS probed - its open item 
     Assert.Empty(Chore.derive [ item ])
 
 [<Fact>]
-let ``#1738 the SAME blocked row with NO open item PR still derives BLOCKER-CLEARED - #620 intact end to end`` () =
+let ``a scanned cleared blocker cannot invoke the retired Status reducer`` () =
     // The mate, over the real writer: without it, "the probe reaches the gate" is satisfied by a scan that
     // holds every blocked row, and #620's remedy would be deleted at the impure edge rather than in the rule.
     let transport, _ = blockedRowTransport """{"number":7,"state":"closed"}""" "[]"
@@ -1117,9 +1117,7 @@ let ``#1738 the SAME blocked row with NO open item PR still derives BLOCKER-CLEA
     let item = request.Candidates.[0].Item
     Assert.Equal(None, item.ItemPr)
 
-    match Chore.derive [ item ] |> List.map (fun c -> c.Kind.RuleId) with
-    | [ "BLOCKER-CLEARED" ] -> ()
-    | other -> failwith $"a cleared Blocked row with no in-flight PR must still promote — got %A{other}"
+    Assert.Empty(Chore.derive [ item ])
 
 [<Fact>]
 let ``#1738 a BLOCKED row with an OPEN blocker is NOT probed - the widened probe buys no request it need not`` () =

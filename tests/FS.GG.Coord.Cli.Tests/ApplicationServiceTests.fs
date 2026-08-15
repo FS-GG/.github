@@ -70,34 +70,6 @@ module ApplicationServiceTests =
         Assert.Empty(Client.filingLaneOfOne narrow (TouchSet.parse "Paths: docs/reports/new-file.md") existing)
         Assert.Empty(Client.filingLaneOfOne otherRepo (TouchSet.parse "Paths: docs/reports") existing)
 
-    [<Fact>]
-    let ``M1 explicit Backlog lifecycle projection owns precedence over live-claim lag`` () =
-        let item =
-            Snapshot.parse
-                """{"schema":"fsgg.coord.snapshot/1","allowBacklog":false,"items":[{"owner":"FS-GG","repo":"FS.GG.SDD","number":42,"status":"Backlog","state":"OPEN","body":"Paths: src/A.fs","claim":{"worker":"w-a","ageSeconds":1,"prevStatus":"Backlog","liveness":{"kind":"lease-held"}}}]}"""
-            |> Result.defaultWith (fun errors -> failwithf "fixture snapshot did not parse: %A" errors)
-            |> fun request -> request.Candidates.Head.Item
-        let legacy = Chore.derive [ item ]
-        let lifecycle = Chore.lifecycleProjection item InProgress |> Option.toList
-        let backlogIntent =
-            LifecycleProjection.Backlog
-                { Revision = 42L
-                  Reason = "operator park" }
-        let watermark : LifecycleProjection.Watermark =
-            { ObservedAt = 42L
-              Status = InProgress
-              Intent = Some backlogIntent }
-
-        let selected =
-            Client.reconcileStatusPrecedence legacy lifecycle (Map.ofList [ item.Ref, watermark ])
-
-        Assert.Equal<string list>([ "LIFECYCLE-PROJECTION-LAG" ], selected |> List.map _.Kind.RuleId)
-
-        let automatic = { watermark with Intent = Some LifecycleProjection.Auto }
-        let control =
-            Client.reconcileStatusPrecedence legacy lifecycle (Map.ofList [ item.Ref, automatic ])
-        Assert.Equal<string list>([ "CLAIM-STATUS-LAG" ], control |> List.map _.Kind.RuleId)
-
     let private row number repo title status state isPullRequest : Scan.Row =
         { Ref =
             { Owner = "FS-GG"
@@ -2650,6 +2622,7 @@ module ApplicationServiceTests =
             // exists only to keep an unexpected REST call loud rather than silently empty.
             | "GET", path when path.EndsWith "/comments" ->
                 ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
+            | "POST", path when path.EndsWith "/comments" -> ok """{"id":9001}"""
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
@@ -2707,6 +2680,7 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok """{"number":47,"body":"Paths: src/A.fs"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
@@ -2771,6 +2745,7 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok """{"number":47,"body":"Paths: none"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
@@ -2836,6 +2811,7 @@ module ApplicationServiceTests =
                 ok """{"number":301,"body":"Paths: src/Real/**\n\nClass: defect"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
+            | "POST", path when path.EndsWith "/comments" -> ok """{"id":9047}"""
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     /// .github#2394 — a coherent `Blocked on: human/...` park must not be projected away by
@@ -3086,6 +3062,7 @@ module ApplicationServiceTests =
             | "GET", "repos/EHotwagner/rogue3/issues/96" ->
                 ok """{"number":96,"state":"open","body":"Paths: src/A.fs"}"""
             | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok "[]"
+            | "POST", "repos/EHotwagner/rogue3/issues/96/comments" -> ok """{"id":9096}"""
             | "GET", "repos/EHotwagner/rogue3/pulls" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
@@ -3268,7 +3245,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         if code <> 0 then failwithf ".github#2220 reconcile failed: %s" err
 
-        Assert.Equal("BLOCKER-CLEARED", str "rule" row)
+        Assert.Equal("LIFECYCLE-PROJECTION-LAG", str "rule" row)
         Assert.Equal("written", str "outcome" row)
 
         // The RECEIPT names Backlog...
@@ -3323,7 +3300,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Equal("Done", str "value" queued)
 
         // The finding fields are still there — `--apply` ADDS to the dry-run row, it does not replace it.
-        Assert.Equal("CLOSED-ISSUE-NOT-DONE", str "rule" queued)
+        Assert.Equal("LIFECYCLE-PROJECTION-LAG", str "rule" queued)
         Assert.Equal("quick", str "size" queued)
 
         // Exit code UNCHANGED. A deferred write is not a failure — it is a promise the queue keeps.
@@ -3374,8 +3351,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         let expected =
             "applying (2 mechanical finding(s))" + nl
-            + "  CLOSED-ISSUE-NOT-DONE    FS.GG.SDD#101            Status=Done" + nl
-            + "  CLOSED-ISSUE-NOT-DONE    FS.GG.SDD#102            Status=Done" + nl
+            + "  LIFECYCLE-PROJECTION-LAG FS.GG.SDD#101            Status=Done" + nl
+            + "  LIFECYCLE-PROJECTION-LAG FS.GG.SDD#102            Status=Done" + nl
             + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
             + "applied  FS.GG.SDD#101  Status=Done" + nl
             + "queued   FS.GG.SDD#102  Status=Done (run scripts/fsgg-coord flush)" + nl
@@ -3573,12 +3550,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // The em dash in `Chore.Statement` is NOT emitted raw: the default encoder escapes every
         // non-ASCII character, and it does so identically for the old `JsonSerializer` and the new
         // `Utf8JsonWriter`. Spelled from ASCII so the assertion says which bytes it means.
-        let escapedEmDash = "\\u2014"
-
         let expected =
-            """[{"id":"CLOSED-ISSUE-NOT-DONE:FS-GG/FS.GG.SDD#101","remedy":"Status=Done","rule":"CLOSED-ISSUE-NOT-DONE","size":"quick","statement":"FS.GG.SDD#101: the issue is CLOSED but the board says In progress """
-            + escapedEmDash
-            + """ set Status to Done.","subject":"FS.GG.SDD#101"}]"""
+            """[{"id":"LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#101","remedy":"Status=Done","rule":"LIFECYCLE-PROJECTION-LAG","size":"quick","statement":"FS.GG.SDD#101: fresh lifecycle facts project Status=Done; repair the stale board projection.","subject":"FS.GG.SDD#101"}]"""
 
         Assert.Equal(expected, out.Trim())
         Assert.Equal(0, code)

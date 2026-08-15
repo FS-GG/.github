@@ -29,23 +29,9 @@ module LifecycleProjection =
     type PolicyVersion =
         | IntentStatusV1
 
-    type ProjectionMode =
-        | Legacy
-        | Intent
-
     type Result =
         | Project of status: BoardStatus * observedAt: int64
         | Withheld of reason: string
-
-    type Difference =
-        | Same
-        | DeliberateParkPreserved of legacy: BoardStatus * intended: BoardStatus
-        | Unexpected of legacy: Result * intended: Result
-
-    type Shadow =
-        { Legacy: Result
-          Intended: Result
-          Difference: Difference }
 
     /// The durable portion of a projection receipt.  Callers persist this beside the status write and
     /// feed it back on the next event.  Keeping the water-mark in the typed boundary makes an event that
@@ -53,7 +39,7 @@ module LifecycleProjection =
     type Watermark =
         { ObservedAt: int64
           Status: BoardStatus
-          Intent: SchedulingIntent option }
+          Intent: SchedulingIntent }
 
     /// The comment-shaped receipt is deliberately small and append-only.  Project fields can be
     /// deferred and later repaired; this receipt is the durable ordering fact which says which
@@ -67,17 +53,13 @@ module LifecycleProjection =
         | Deferred(reason, until, revision) -> "deferred", revision, until, reason
 
     let watermarkMarker watermark =
-        match watermark.Intent with
-        | None ->
-            $"<!-- fsgg:lifecycle-watermark v=1 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} -->"
-        | Some intent ->
-            let intentName, revision, until, reason = intentWireName intent
-            let untilText = until |> Option.map string |> Option.defaultValue "none"
-            let reasonText =
-                match Uri.EscapeDataString reason with
-                | "" -> "-"
-                | value -> value
-            $"<!-- fsgg:lifecycle-watermark v=2 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} intent=%s{intentName} revision=%d{revision} until=%s{untilText} reason=%s{reasonText} -->"
+        let intentName, revision, until, reason = intentWireName watermark.Intent
+        let untilText = until |> Option.map string |> Option.defaultValue "none"
+        let reasonText =
+            match Uri.EscapeDataString reason with
+            | "" -> "-"
+            | value -> value
+        $"<!-- fsgg:lifecycle-watermark v=2 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} intent=%s{intentName} revision=%d{revision} until=%s{untilText} reason=%s{reasonText} -->"
 
     // ANCHORED, NOT SUBSTRING (round-1 review repair, .github#2264 PR #2271). `body.IndexOf(marker)`
     // found the sentinel wherever it sat in a comment — including a documentation-style comment that
@@ -93,12 +75,6 @@ module LifecycleProjection =
     // logic. `Writes.lifecycleWatermark` posts nothing but this bare line (`watermarkMarker` above), so a
     // genuine receipt always satisfies a whole-body match; only a quotation can fail it, and a quotation
     // is exactly what must fail it.
-    let private legacyWatermarkLine =
-        Regex(
-            @"^<!-- fsgg:lifecycle-watermark v=1 observedAt=(?<observedAt>-?[0-9]+) status=(?<status>[A-Za-z ]+) -->$",
-            RegexOptions.Compiled
-        )
-
     let private intentWatermarkLine =
         Regex(
             @"^<!-- fsgg:lifecycle-watermark v=2 observedAt=(?<observedAt>-?[0-9]+) status=(?<status>Backlog|Ready|In progress|Blocked|In review|Done) intent=(?<intent>auto|backlog|human-decision|human-action|deferred) revision=(?<revision>-?[0-9]+) until=(?<until>none|-?[0-9]+) reason=(?<reason>\S+) -->$",
@@ -146,16 +122,9 @@ module LifecycleProjection =
             if current.Success then
                 match Int64.TryParse(current.Groups.["observedAt"].Value), status current.Groups.["status"].Value, parseIntent current with
                 | (true, observedAt), Some value, Some intent ->
-                    Some { ObservedAt = observedAt; Status = value; Intent = Some intent }
+                    Some { ObservedAt = observedAt; Status = value; Intent = intent }
                 | _ -> None
-            else
-                let legacy = legacyWatermarkLine.Match trimmed
-                if not legacy.Success then None
-                else
-                    match Int64.TryParse(legacy.Groups.["observedAt"].Value), status legacy.Groups.["status"].Value with
-                    | (true, observedAt), Some value ->
-                        Some { ObservedAt = observedAt; Status = value; Intent = None }
-                    | _ -> None)
+            else None)
         |> List.sortByDescending (fun receipt -> receipt.ObservedAt)
         |> List.tryHead
 
@@ -202,64 +171,15 @@ module LifecycleProjection =
             | Deferred _ -> Project(BoardStatus.Backlog, observedAt)
             | HumanPark _ -> Project(BoardStatus.Blocked, observedAt) // handled above; exhaustive and stable
 
-    let project observation = projectWithIntent Auto observation
-
     let reduce policy intent observation =
         match policy with
         | IntentStatusV1 -> projectWithIntent intent observation
 
-    let migrateIntent revision status humanBlock =
-        match humanBlock with
-        | Some human ->
-            HumanPark(
-                human,
-                { Revision = revision
-                  Reason = "migrated from the explicit human-park sentinel" }
-            )
-        | None when status = BoardStatus.Backlog ->
-            Backlog
-                { Revision = revision
-                  Reason = "migrated from the deliberate Backlog projection" }
-        | None -> Auto
-
-    let private classify intent legacy intended =
-        if legacy = intended then Same
-        else
-            match intent, legacy, intended with
-            | Backlog _, Project(BoardStatus.Ready, _), Project(BoardStatus.Backlog, _) ->
-                DeliberateParkPreserved(BoardStatus.Ready, BoardStatus.Backlog)
-            | Deferred _, Project(BoardStatus.Ready, _), Project(BoardStatus.Backlog, _) ->
-                DeliberateParkPreserved(BoardStatus.Ready, BoardStatus.Backlog)
-            | HumanPark _, Project(oldStatus, _), Project(BoardStatus.Blocked, _) ->
-                DeliberateParkPreserved(oldStatus, BoardStatus.Blocked)
-            | _ -> Unexpected(legacy, intended)
-
-    let shadow policy intent observation =
-        let legacy = project observation
-        let intended = reduce policy intent observation
-        { Legacy = legacy
-          Intended = intended
-          Difference = classify intent legacy intended }
-
-    let projectionMode raw =
-        match raw |> Option.map (fun (value: string) -> value.Trim().ToLowerInvariant()) with
-        | None
-        | Some ""
-        | Some "intent"
-        | Some "intent-v1" -> Ok Intent
-        | Some "legacy" -> Ok Legacy
-        | Some value -> Error $"unknown lifecycle projection mode '%s{value}' (expected intent-v1 or legacy)"
-
-    let select mode shadow =
-        match mode with
-        | Legacy -> shadow.Legacy
-        | Intent -> shadow.Intended
-
     /// Accept a newly projected lifecycle result only when it is newer than the last applied receipt.
     /// Equal timestamps are idempotent only when they agree; different values at the same timestamp are
     /// withheld because the ordering source was not strong enough to decide which event won.
-    let advance watermark observation =
-        match project observation with
+    let advance policy intent watermark observation =
+        match reduce policy intent observation with
         | Withheld reason -> Withheld reason
         | Project(status, observedAt) ->
             match watermark with
@@ -268,22 +188,3 @@ module LifecycleProjection =
             | Some previous when observedAt = previous.ObservedAt && status <> previous.Status ->
                 Withheld "lifecycle observation conflicts with the persisted projection watermark"
             | _ -> Project(status, observedAt)
-
-    let private advanceResult watermark result =
-        match result with
-        | Withheld reason -> Withheld reason
-        | Project(status, observedAt) ->
-            match watermark with
-            | Some previous when observedAt < previous.ObservedAt ->
-                Withheld "lifecycle observation predates the persisted projection watermark"
-            | Some previous when observedAt = previous.ObservedAt && status <> previous.Status ->
-                Withheld "lifecycle observation conflicts with the persisted projection watermark"
-            | _ -> result
-
-    let shadowAdvance policy intent watermark observation =
-        let projections = shadow policy intent observation
-        let legacy = advanceResult watermark projections.Legacy
-        let intended = advanceResult watermark projections.Intended
-        { Legacy = legacy
-          Intended = intended
-          Difference = classify intent legacy intended }
