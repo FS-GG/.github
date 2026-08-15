@@ -76,6 +76,45 @@ belong on the initial or confirmation record. Every acceptance is preflighted th
 retirement and terminal-chain parser; successful output reports `effectiveChainValidated: true`. The
 command rejects legacy v1 input before any write.
 
+## Critic succession
+
+Every record in one review generation binds the same critic. The single exception is an accountable,
+host-granted succession, and it is written into the record itself — a record, never a parameter, because
+the host's acceptance-time and `landable`-time readers see only the comment ledger.
+
+When the round's critic has despawned and the host has granted succession, the successor performs a
+genuinely fresh, full review of the current head and records it under **its own minted identity**, adding
+one optional object to the ordinary record:
+
+```json
+  "critic": "successor-minted-identity",
+  "succession": {
+    "originalCritic": "despawned-minted-identity",
+    "grantedBy": "granting-host-identity",
+    "grantUrl": "https://github.com/OWNER/REPO/pull/77#issuecomment-123456789"
+  }
+```
+
+The record's `kind` stays what the chain needs — `confirmation`, `escalation` or `repair-phase` — so the
+escalate-into-repair-phase route stays open to a successor, not only confirmation. A `succession` object
+on an `initial` or an `acceptance` record is refused, and so is one on a record that does not actually
+change the critic. After a valid succession the generation's critic is the successor: the host's
+`acceptance` binds the successor, and a further grant must name the successor as its `originalCritic`.
+
+Two shapes are refused and must never be reached for: a record bearing the despawned critic's identity,
+which is a false statement about who reviewed, and a second `initial`, which is allowed only after host
+acceptance. A differing critic carrying no grant is refused exactly as before.
+
+The field is additive and digest-conditional: it contributes to `digest` only when present, so every
+record written before it existed keeps its exact digest, and an engine that predates the field refuses a
+succession record on a digest mismatch rather than silently ignoring the grant.
+
+Two bounds are deliberate. `grantUrl` is required to be present and is **never resolved** — the validator
+is pure and acquires no network dependency, so the URL locates the grant for a human or auditing reader
+and asserts nothing about its authenticity. And a grant is bound to one exact head by
+`Review.criticSuccessionValid`, so a moved head needs a new grant; nothing here makes a grant reusable
+across heads.
+
 ## New-only authority
 
 M6 removed v1 body hashes, locator/subsequence matching, evidence classifications, and prose review-marker

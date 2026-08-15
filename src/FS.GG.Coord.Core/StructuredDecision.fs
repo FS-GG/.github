@@ -25,12 +25,20 @@ module StructuredDecision =
     type ReviewKind = Initial | Confirmation | Escalation | RepairPhase | Acceptance
     type ReviewVerdict = Pass | ChangesRequired | Accepted
 
+    /// See `StructuredDecision.fsi` for why the grant lives in the record rather than beside it, and why
+    /// `GrantUrl` is required to be present but never resolved.
+    type SuccessionGrant =
+        { OriginalCritic: string
+          GrantedBy: string
+          GrantUrl: string }
+
     type ReviewRecord =
         { Schema: string; Subject: string; Revision: int; PreviousDigest: string option
           HeadSha: string; Critic: string; Verdict: ReviewVerdict; AcceptedExceptions: string list
           RouteApplicability: string; RouteEvidence: string list; PolicyVersion: string
           Kind: ReviewKind; Round: int; InitialReview: string option
           PrecedingReview: string option; DiffAuditRequired: bool; DiffAuditReceipts: string list
+          Succession: SuccessionGrant option
           Timestamp: string; Digest: string }
 
     let private frame (value: string) = $"%d{Encoding.UTF8.GetByteCount value}:%s{value}"
@@ -64,14 +72,27 @@ module StructuredDecision =
         | Acceptance -> "acceptance"
     let private verdictName = function Pass -> "pass" | ChangesRequired -> "changes-required" | Accepted -> "accepted"
 
+    /// APPENDED, and only when a grant is present (.github#2662). `digest` joins its fields with `|`, so
+    /// contributing NOTHING for an absent grant leaves the joined string — and therefore the digest —
+    /// byte-identical to what every record already written to a pull request recorded. Contributing the
+    /// three framed fields when present is what makes the grant tamper-evident, and is exactly what makes
+    /// an engine built before this field fail closed on a succession record: it ignores the unknown
+    /// `succession` key, recomputes over the eighteen fields it knows, and reports a digest mismatch
+    /// rather than accepting a record whose grant it cannot see.
+    let private successionFields =
+        function
+        | None -> []
+        | Some grant -> [ frame grant.OriginalCritic; frame grant.GrantedBy; frame grant.GrantUrl ]
+
     let reviewDigest (record: ReviewRecord) =
         digest
-            [ frame record.Schema; frame record.Subject; string record.Revision; scalar record.PreviousDigest
-              frame record.HeadSha; frame record.Critic; frame (verdictName record.Verdict)
-              strings record.AcceptedExceptions; frame record.RouteApplicability; strings record.RouteEvidence
-              frame record.PolicyVersion; frame (kindName record.Kind)
-              string record.Round; scalar record.InitialReview; scalar record.PrecedingReview
-              string record.DiffAuditRequired; strings record.DiffAuditReceipts; frame record.Timestamp ]
+            ([ frame record.Schema; frame record.Subject; string record.Revision; scalar record.PreviousDigest
+               frame record.HeadSha; frame record.Critic; frame (verdictName record.Verdict)
+               strings record.AcceptedExceptions; frame record.RouteApplicability; strings record.RouteEvidence
+               frame record.PolicyVersion; frame (kindName record.Kind)
+               string record.Round; scalar record.InitialReview; scalar record.PrecedingReview
+               string record.DiffAuditRequired; strings record.DiffAuditReceipts; frame record.Timestamp ]
+             @ successionFields record.Succession)
 
     let private blank field value = if String.IsNullOrWhiteSpace value then [ $"%s{field} is required" ] else []
     let private values field items =
@@ -84,6 +105,15 @@ module StructuredDecision =
         | _ -> [ "timestamp must be an ISO-8601 instant" ]
     let private sha (value: string) =
         value.Length = 40 && value |> Seq.forall Uri.IsHexDigit
+
+    /// See `StructuredDecision.fsi`. The check is a PREFIX, not a fixed list, because the dispatch
+    /// convention (`fsgg-critic-<route>`) is what is actually stable — a route name this module has no
+    /// reason to enumerate. Moved here from `Driver.fs`'s private copy by .github#2662, because the
+    /// ledger validator needs the same rule and the module that owns the record should own the predicate
+    /// about its `critic` field; `Review.fs` keeps its own copy for the reason the signature file states.
+    let isGenericCriticIdentity (identity: string) =
+        not (String.IsNullOrWhiteSpace identity)
+        && identity.Trim().StartsWith("fsgg-critic-", StringComparison.OrdinalIgnoreCase)
 
     let private chainErrors getRevision getPrevious getDigest calculate records =
         records
@@ -154,8 +184,62 @@ module StructuredDecision =
                           yield $"confirmation round must be contiguous within its generation: expected %d{expectedConfirmationRound}"
                   | (Escalation | RepairPhase | Acceptance), _ -> ()
                   | _, _ -> ()
-                  if record.Kind <> Initial && generationCritic <> Some record.Critic then
-                      yield "every record in one review generation must bind the same critic"
+
+                  // CRITIC CONTINUITY, and the ONE accountable exception to it (.github#2662).
+                  //
+                  // The no-grant arm is textually and behaviourally what it has always been, including its
+                  // message: an identity change nobody granted is refused exactly as before, which is the
+                  // property this change must not weaken and the reason the pre-existing differing-critic
+                  // test passes unmodified.
+                  //
+                  // The grant arm exists because `.github#2417` taught the DECISION layer that a chain
+                  // whose critic despawned can be handed to a successor, and never taught the LEDGER — so
+                  // a granted successor could review and then had no honest shape to record in. It applies
+                  // to `Confirmation`, `Escalation` and `RepairPhase` alike: the rule below is keyed on
+                  // `Kind <> Initial`, so exempting `Confirmation` alone would leave a successor able to
+                  // pass a chain but unable to escalate one into the repair phase, which was measured on a
+                  // live chain rather than inferred.
+                  //
+                  // Admitting REBINDS `generationCritic`, and that is the whole mechanism: every later
+                  // record in the generation — including the host's `acceptance` — then binds the
+                  // successor through this same unchanged conjunct, and a second grant (a successor can
+                  // itself despawn) must name the successor as ITS outgoing critic.
+                  let successionErrors =
+                      match record.Succession with
+                      | None ->
+                          [ if record.Kind <> Initial && generationCritic <> Some record.Critic then
+                                yield "every record in one review generation must bind the same critic" ]
+                      | Some grant ->
+                          [ match record.Kind with
+                            | Initial | Acceptance ->
+                                // An initial binds its own generation critic outright and has nothing to
+                                // succeed; an acceptance is the host's record and by then the seat has
+                                // already changed hands. Neither is a succession.
+                                yield "a critic-succession grant belongs to a confirmation, escalation, or repair-phase record"
+                            | Confirmation | Escalation | RepairPhase ->
+                                if generationCritic = Some record.Critic then
+                                    // Succession is an exception to a rule. A record that does not trip
+                                    // that rule has no exception to claim, and a decorative grant would
+                                    // assert a provenance no reader could tell from a real one.
+                                    yield "a critic-succession grant requires a record that changes the generation's critic"
+                                elif generationCritic <> Some grant.OriginalCritic then
+                                    yield "a critic-succession grant must name the generation's current critic as its outgoing critic"
+                                elif String.IsNullOrWhiteSpace grant.GrantedBy then
+                                    yield "a critic-succession grant must name the granting identity"
+                                elif String.IsNullOrWhiteSpace grant.GrantUrl then
+                                    yield "a critic-succession grant must name the grant's URL"
+                                elif isGenericCriticIdentity grant.OriginalCritic
+                                     || isGenericCriticIdentity record.Critic
+                                     || isGenericCriticIdentity grant.GrantedBy then
+                                    // .github#2451 in the successor slot: a bare `fsgg-critic-<route>`
+                                    // string is shared by every critic ever dispatched at that route, so
+                                    // it witnesses nothing about which instance reviewed.
+                                    yield "a critic-succession grant must bind minted, distinguishing identities" ]
+
+                  yield! successionErrors
+
+                  if record.Succession.IsSome && List.isEmpty successionErrors then
+                      generationCritic <- Some record.Critic
               for record in records do
                   if record.Schema <> ReviewSchema then yield $"schema must be '%s{ReviewSchema}'"
                   if record.Subject <> expectedSubject then yield "subject does not match the pull request"

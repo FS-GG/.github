@@ -79,6 +79,25 @@ module Driver =
                     entry.GetString())
                 |> List.ofSeq
             | _ -> invalidArg name "must be an array"
+        // .github#2662: an absent key and an explicit null are the SAME fact — no grant — exactly as
+        // `optionalText` already treats them for `previousDigest`, so a record written before the field
+        // existed decodes unchanged. Anything else fails closed, and names `succession.<field>` rather
+        // than the bare field name so a malformed grant says which half of the wire is wrong.
+        let optionalSuccession (name: string) (root: JsonElement) =
+            let inner (field: string) (value: JsonElement) =
+                match value.TryGetProperty field with
+                | true, entry when entry.ValueKind = JsonValueKind.String -> entry.GetString()
+                | true, _ -> invalidArg $"%s{name}.%s{field}" "must be a string"
+                | _ -> invalidArg $"%s{name}.%s{field}" "required field is missing"
+            match root.TryGetProperty name with
+            | false, _ -> None
+            | true, value when value.ValueKind = JsonValueKind.Null -> None
+            | true, value when value.ValueKind = JsonValueKind.Object ->
+                Some
+                    ({ OriginalCritic = inner "originalCritic" value
+                       GrantedBy = inner "grantedBy" value
+                       GrantUrl = inner "grantUrl" value }: StructuredDecision.SuccessionGrant)
+            | _ -> invalidArg name "must be an object or null"
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
@@ -115,6 +134,7 @@ module Driver =
                   PrecedingReview = optionalText "precedingReview" root
                   DiffAuditRequired = optionalBool "diffAuditRequired" root
                   DiffAuditReceipts = optionalTexts "diffAuditReceipts" root
+                  Succession = optionalSuccession "succession" root
                   Timestamp = text "timestamp" root
                   Digest = text "digest" root }
         with error -> Error error.Message
@@ -132,6 +152,16 @@ module Driver =
             | StructuredDecision.Pass -> "pass"
             | StructuredDecision.ChangesRequired -> "changes-required"
             | StructuredDecision.Accepted -> "accepted"
+        // Projected through an anonymous record so the wire keys are the WIRE's (camel-cased, matching
+        // every sibling field) rather than F#'s record property names, and emitted as an explicit null
+        // when absent — the same spelling this encoder already uses for `previousDigest`,
+        // `initialReview` and `precedingReview` (.github#2662).
+        let succession =
+            record.Succession
+            |> Option.map (fun grant ->
+                {| originalCritic = grant.OriginalCritic
+                   grantedBy = grant.GrantedBy
+                   grantUrl = grant.GrantUrl |})
         JsonSerializer.Serialize
             {| schema = record.Schema; subject = record.Subject; revision = record.Revision
                previousDigest = record.PreviousDigest; headSha = record.HeadSha; critic = record.Critic
@@ -140,6 +170,7 @@ module Driver =
                policyVersion = record.PolicyVersion; kind = kind; round = record.Round
                initialReview = record.InitialReview; precedingReview = record.PrecedingReview
                diffAuditRequired = record.DiffAuditRequired; diffAuditReceipts = record.DiffAuditReceipts
+               succession = succession
                timestamp = record.Timestamp; digest = record.Digest |}
 
     let private structuredReviewLedger (comments: ReviewComment list) =
@@ -217,20 +248,15 @@ module Driver =
     /// minted, distinguishing identity the way a worker's `whoami --mint` id is (.github#2451). Measured
     /// live: two separate critics dispatched during one run both posted `critic: fsgg-critic-normal`.
     ///
-    /// PRIVATE, and `Review.fs` carries its own copy of this exact predicate (`Review.isGenericCriticIdentity`,
-    /// same rule, same rename discipline if it ever changes — NOT byte-identical text: each file spells
-    /// `System.String`/`System.StringComparison` fully-qualified or unqualified to match its own file's
-    /// `open System` convention) rather than this module exposing it through `Driver.fsi` —
-    /// `.github#2451`'s own declared `Paths:` does not include `Driver.fsi`, and widening a signature
-    /// file for a single boolean helper is out of proportion to the file it would touch. Two
-    /// markers that both carry this shape can never be treated as proof of "the same critic": every
-    /// critic ever dispatched at that route satisfies the string equality, whether or not it is the same
-    /// instance, so the equality proves nothing about identity. The check is a prefix, not a fixed list,
-    /// because the dispatch convention (`fsgg-critic-<route>`) is what is actually stable — a route name
-    /// this module has no reason to enumerate.
-    let private isGenericCriticIdentity (identity: string) =
-        not (System.String.IsNullOrWhiteSpace identity)
-        && identity.Trim().StartsWith("fsgg-critic-", System.StringComparison.OrdinalIgnoreCase)
+    /// This was a PRIVATE copy here until `.github#2662`, whose ledger validator needs the same rule from
+    /// `StructuredDecision` — a module that compiles ahead of this one and owns the very record whose
+    /// `critic` field the predicate judges. The copy is therefore gone and this is an alias for the one
+    /// exported spelling, so a change to the rule can no longer leave this file disagreeing with the
+    /// validator. `Review.fs` still carries its own private copy under the same rename discipline: its
+    /// exact source lines are pinned as gate-inversion anchors by
+    /// `tests/review-critic-succession-wire/run.sh`, and moving them would silently disarm five legs
+    /// whose whole purpose is to prove that guard can refuse.
+    let private isGenericCriticIdentity = StructuredDecision.isGenericCriticIdentity
 
     let reviewPhaseFacts (comments: ReviewComment list) : ReviewPhaseFacts =
         if List.isEmpty comments then
@@ -284,7 +310,15 @@ module Driver =
                   InitialPresent = not (List.isEmpty initials)
                   InitialHeadSha = initial |> Option.map (snd >> _.HeadSha)
                   InitialVerdict = initial |> Option.map (snd >> _.Verdict >> verdictName)
-                  CriticIdentity = initial |> Option.map (snd >> _.Critic)
+                  // The critic IN FORCE, not the one that opened the generation (.github#2662). The seat
+                  // changes hands at a validated succession grant, so the last record's critic is the
+                  // identity a further grant must name as its outgoing critic and the identity whose
+                  // pass is being carried. For every ledger without a grant the two are the SAME string:
+                  // `validateReviewLedger`'s unwidened conjunct forces every non-initial record in a
+                  // generation to bind the generation's critic, and `reviewPhaseFacts` is only ever
+                  // reached on a ledger that validated. So this is a correction for the case succession
+                  // newly makes reachable, never a change to any answer the engine already gave.
+                  CriticIdentity = pairs |> List.tryLast |> Option.map (snd >> _.Critic)
                   ConfirmationCount = List.length confirmations
                   LatestVerdict = latestReview |> Option.map (snd >> _.Verdict >> verdictName)
                   LatestVerdictNearMissHints = []
@@ -522,9 +556,14 @@ module Driver =
 
                 if errors.Count = 0 then
                     let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. confirmations.Length ]
+                    // The critic IN FORCE at the end of the live generation (.github#2662) — the one whose
+                    // pass the host accepted — rather than the generation's opening record. Identical to
+                    // `first.Critic` on every grant-free ledger, for the reason `reviewPhaseFacts` states.
+                    let generationCritic =
+                        generation |> List.tryLast |> Option.map (snd >> _.Critic) |> Option.defaultValue first.Critic
                     Ok
                         { MarkerValid = true
-                          CriticIdentity = Some first.Critic
+                          CriticIdentity = Some generationCritic
                           HeadSha = Some latest.HeadSha
                           Rounds = rounds
                           RepairPhase = repairPhase
