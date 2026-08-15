@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "schema": "fsgg.coord.m6-cutover-inversion-results/1",
+  "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf",
+  "runner": "tests/m6-cutover-acceptance/inversion.py",
+  "setup": "The runner completes a copy of the pending acceptance envelope, proves that baseline passes, then creates one exact retired-marker subject or tampers one content binding.",
+  "restore": "The marker subject is removed in a finally block; evidence mutations operate only on an in-memory deep copy.",
+  "results": [
+    {"mutation":"lifecycle-old-reducer","command":["python3","tests/m6-cutover-acceptance/inversion.py","--case","lifecycle-old-reducer"],"expected_exit":"nonzero","observed_exit":1,"stdout_sha256":"53485219f85b25c97db72551532f871acdce96fe3ad8d517c316dcdf98be3198"},
+    {"mutation":"graphql-raw-envelope","command":["python3","tests/m6-cutover-acceptance/inversion.py","--case","graphql-raw-envelope"],"expected_exit":"nonzero","observed_exit":1,"stdout_sha256":"f9ad91724c479c7a27acef37b1790a247b444447a2efa48095ffa38ab37a1179"},
+    {"mutation":"route-v1-authority","command":["python3","tests/m6-cutover-acceptance/inversion.py","--case","route-v1-authority"],"expected_exit":"nonzero","observed_exit":1,"stdout_sha256":"cbb0e2d3efa8b1df9422373eb334d16264dd1ae1e3adc3f61e7bea2e7505250d"},
+    {"mutation":"review-prose-authority","command":["python3","tests/m6-cutover-acceptance/inversion.py","--case","review-prose-authority"],"expected_exit":"nonzero","observed_exit":1,"stdout_sha256":"18e71c2a757e69be0714edbb0f98e377ad6731c24dfd0aefcefc449c94dd6a6f"},
+    {"mutation":"release-local-pack","command":["python3","tests/m6-cutover-acceptance/inversion.py","--case","release-local-pack"],"expected_exit":"nonzero","observed_exit":1,"stdout_sha256":"dd30f8ba391f69cb9159e6c059f8c8dcc1f8a619f84eee15bf077e4ebcd55854"},
+    {"mutation":"evidence-manifest-byte-drift","command":["python3","tests/m6-cutover-acceptance/inversion.py","--case","evidence-manifest-byte-drift"],"expected_exit":"nonzero","observed_exit":1,"stdout_sha256":"23db440cd61426e9629e25571f2114a4aa81fb9ff33bfb8e6e6a0917d6442c3b"},
+    {"mutation":"acceptance-missing-binding","command":["python3","tests/m6-cutover-acceptance/inversion.py","--case","acceptance-missing-binding"],"expected_exit":"nonzero","observed_exit":1,"stdout_sha256":"e6ba81e9de2b347a86656e4ce08c0cdff39908528e4c96c08e714f0eee52c96f"}
+  ]
+}

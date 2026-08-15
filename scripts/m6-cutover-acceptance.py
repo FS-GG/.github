@@ -39,10 +39,24 @@ def relative_file(root: Path, value: object, where: str, failures: list[str]) ->
         failures.append(f"{where}: path escapes repository")
         return None
     path = root / candidate
-    if not path.is_file():
+    try:
+        resolved_root = root.resolve(strict=True)
+        resolved = path.resolve(strict=True)
+    except FileNotFoundError:
         failures.append(f"{where}: file does not exist: {value}")
         return None
-    return path
+    try:
+        resolved.relative_to(resolved_root)
+    except ValueError:
+        failures.append(f"{where}: resolved path escapes repository: {value}")
+        return None
+    if resolved != path.absolute():
+        failures.append(f"{where}: symbolic links are not accepted: {value}")
+        return None
+    if not resolved.is_file():
+        failures.append(f"{where}: file does not exist: {value}")
+        return None
+    return resolved
 
 
 def bound_json(root: Path, binding: object, where: str, failures: list[str]) -> dict | None:
@@ -158,6 +172,8 @@ def validate(document: object, root: Path) -> list[str]:
 
     seed = bound_json(root, document.get("lifecycle_seed"), "lifecycle_seed", failures)
     if seed is not None:
+        if seed.get("implementation_sha") != implementation_sha or not seed.get("collected_at"):
+            failures.append("lifecycle_seed does not bind implementation.sha and collection time")
         if seed.get("policy_version") != "intent-status/v1":
             failures.append("lifecycle_seed policy is not intent-status/v1")
         result = seed.get("result", {})
@@ -165,6 +181,30 @@ def validate(document: object, root: Path) -> list[str]:
             failures.append("lifecycle_seed does not prove the 24-row exact/idempotent seed")
         if "never derives intent from mutable Project Status" not in str(seed.get("decision", "")):
             failures.append("lifecycle_seed does not state the no-status-derived-intent rule")
+        replay_binding = seed.get("authenticated_replay")
+        replay = bound_json(root, replay_binding, "lifecycle_seed.authenticated_replay", failures)
+        if replay is not None:
+            if replay.get("implementation_sha") != implementation_sha:
+                failures.append("lifecycle seed replay does not bind implementation.sha")
+            rows = replay.get("comments")
+            board = replay.get("board", {})
+            second = replay.get("second_pass", {})
+            if not isinstance(rows, list) or len(rows) != 24:
+                failures.append("lifecycle seed replay does not bind 24 comment observations")
+            if board.get("pagination_complete") is not True or board.get("rows") != 108 or board.get("unique_refs") != 108:
+                failures.append("lifecycle seed replay does not bind the complete board population")
+            if second.get("would_post") != 0 or second.get("exact_existing") != 24 or second.get("conflicts") != 0:
+                failures.append("lifecycle seed replay does not bind an idempotent second pass")
+            if isinstance(replay_binding, dict):
+                seed_path = str(document.get("lifecycle_seed", {}).get("path", ""))
+                replay_path = str(replay_binding.get("path", ""))
+                check = subprocess.run(
+                    [sys.executable, "scripts/verify-m6-live-intent-seed.py", seed_path, replay_path,
+                     "--implementation-sha", str(implementation_sha)],
+                    cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                )
+                if check.returncode != 0:
+                    failures.append("lifecycle seed replay fails offline structural verification")
 
     archive = bound_json(root, document.get("trx_archive"), "trx_archive", failures)
     if archive is not None:
@@ -250,7 +290,29 @@ def validate(document: object, root: Path) -> list[str]:
                 failures.append(f"mutation_results[{index}] must bind expected nonzero and observed nonzero")
             if not isinstance(row.get("counts"), dict) or not row.get("counts") or not HASH.fullmatch(str(row.get("stdout_sha256", ""))):
                 failures.append(f"mutation_results[{index}] must bind result counts and stdout SHA-256")
-            bound_json(root, row.get("artifact"), f"mutation_results[{index}].artifact", failures)
+            artifact = bound_json(root, row.get("artifact"), f"mutation_results[{index}].artifact", failures)
+            if artifact is not None:
+                if artifact.get("implementation_sha") != implementation_sha:
+                    failures.append(f"mutation_results[{index}] artifact does not bind implementation.sha")
+                if not artifact.get("setup") or not artifact.get("restore") or not artifact.get("runner"):
+                    failures.append(f"mutation_results[{index}] artifact lacks setup/restore/runner provenance")
+                observed = artifact.get("results")
+                matches = [
+                    result for result in observed
+                    if isinstance(observed, list) and isinstance(result, dict)
+                    and result.get("mutation") == name
+                ] if isinstance(observed, list) else []
+                if len(matches) != 1:
+                    failures.append(f"mutation_results[{index}] has no unique executable artifact row")
+                else:
+                    match = matches[0]
+                    if (
+                        match.get("command") != row.get("command")
+                        or match.get("expected_exit") != row.get("expected_exit")
+                        or match.get("observed_exit") != row.get("observed_exit")
+                        or match.get("stdout_sha256") != row.get("stdout_sha256")
+                    ):
+                        failures.append(f"mutation_results[{index}] contradicts its executable artifact row")
     missing_mutations = REQUIRED_MUTATIONS - seen_mutations
     if missing_mutations:
         failures.append("missing required mutations: " + ", ".join(sorted(missing_mutations)))

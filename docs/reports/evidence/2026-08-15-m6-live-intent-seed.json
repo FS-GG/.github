@@ -1,6 +1,13 @@
 {
   "schema_version": 1,
   "cycle_id": "roadmap-coordination-churn-redesign-m6-retire-compatibility",
+  "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf",
+  "collected_at": "2026-08-14T23:47:10Z",
+  "authenticated_replay": {
+    "path": "docs/reports/evidence/2026-08-15-m6-live-intent-seed-replay.json",
+    "sha256": "aa6ba0539cce49f7bbe61a1472da77fd87777c261dad51807fb84038572b1cca",
+    "reproduce": ["python3", "scripts/verify-m6-live-intent-seed.py", "docs/reports/evidence/2026-08-15-m6-live-intent-seed.json", "docs/reports/evidence/2026-08-15-m6-live-intent-seed-replay.json", "--implementation-sha", "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "--live-github"]
+  },
   "board_snapshot_source_sha": "a8207eb1d493365ce5e1205af18211e8724ce104",
   "policy_version": "intent-status/v1",
   "decision": "The user superseded the calendar-only M6 gate with comprehensive cutover acceptance; this seed migrates only the 24 live open board rows and never derives intent from mutable Project Status.",
@@ -313,4 +320,3 @@
     }
   ]
 }
-

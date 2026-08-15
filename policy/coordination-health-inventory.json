@@ -10,6 +10,7 @@
     {"id":"release-saga-policy-gate","path":".github/workflows/release-saga-tooling.yml","marker":"scripts/release-saga-ci.sh"},
     {"id":"structured-route-review-v2","path":"src/FS.GG.Coord.Core/StructuredDecision.fs","marker":"module StructuredDecision"},
     {"id":"m6-cutover-acceptance","path":"scripts/m6-cutover-acceptance.py","marker":"REQUIRED_MUTATIONS ="},
+    {"id":"m6-live-intent-seed-verifier","path":"scripts/verify-m6-live-intent-seed.py","marker":"def replay_live("},
     {"id":"policy-runner","path":"scripts/policy-runner.py","marker":"def inventory"},
     {"id":"evidence-manifest","path":"scripts/evidence-manifest.py","marker":"def create"}
   ],
