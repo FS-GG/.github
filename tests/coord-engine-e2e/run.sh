@@ -13,6 +13,44 @@
 # reach GitHub at all, every other test would still be green and this is the only one that would not.
 set -uo pipefail
 
+# ---- WHY THIS SUITE NEVER PIPES A CAPTURED STRING INTO AN EARLY-EXITING READER (.github#2668) ------
+#
+# Under `pipefail` the spelling
+#
+#     printf '%s' "$out" | grep -q PATTERN        # <-- BANNED HERE. Read on.
+#
+# does not answer "does $out contain PATTERN?". `grep -q` exits the instant it matches, by contract.
+# If `printf` still had bytes to write at that moment it takes SIGPIPE, the pipeline's status under
+# `pipefail` becomes 141, and `if` reads 141 as "the pattern was NOT found" — for output that plainly
+# contains it. The verdict is a function of how much the writer had left when the reader stopped, which
+# is a buffer-size and scheduling fact, not a fact about the haystack.
+#
+# Measured on this repo's own engine, bash 5.3.15, Linux (.github#2668):
+#
+#   haystack                                   `printf … | grep -q`   `grep -q <<<"$hay"`   `case`
+#   8,290 B  synthetic, needle on line 1        0     (30/30 runs)     0    (20/20)          0
+#   16,564 B synthetic, needle on line 1        141   (30/30 runs)     0    (20/20)          0
+#   22,956 B REAL: engine refusal + usage       141 AND 0, same host,  0    (20/20)          0
+#                                               same string, run to run
+#   264,782 B synthetic, needle on line 1       141   (30/30 runs)     0    (20/20)          0
+#   4,236,264 B synthetic, needle on line 1     141   (30/30 runs)     0    (20/20)          0
+#
+# The 22,956 B row is the one that cost two legs of this suite: the engine prints its refusal and then
+# its whole usage block, which lands in the size band where the race can go either way. The same
+# assertion over the same bytes was observed both RED and GREEN on one host within minutes. It fails in
+# the SAFE direction — a false RED, never a false green — but a suite that reds while printing its own
+# passing evidence is one readers learn to skim, which is the failure #570 and #266 are about.
+#
+# So: assertions here go through `contains` / `matches` / `matches_i` below. They have no pipeline, so
+# `pipefail` has nothing to mis-report. Leg 0 proves both directions of that at a size where the banned
+# idiom is deterministically wrong, and then greps THIS FILE to keep the idiom from coming back.
+#
+# The class is repo-wide, and this file is only the first of it. Before this repair, 35 shell files
+# under `tests/` set `pipefail` and between them carried 992 lines consuming the status of a pipeline
+# that ends in an early-exiting reader (`grep -q`, `grep -m`, `head`); 983 of those, in 34 files,
+# survive here. They are green today only because the outputs they read are small — a property of
+# today's message lengths, not of the assertions. `.github#2681` carries that sweep.
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 ENGINE="${FSGG_COORD_ENGINE_BIN:-$REPO_ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
@@ -20,6 +58,83 @@ ENGINE="${FSGG_COORD_ENGINE_BIN:-$REPO_ROOT/src/FS.GG.Coord.Cli/bin/Release/net1
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
+
+# ---- assertion helpers: no pipeline, so no SIGPIPE, so no scheduling-dependent verdict -------------
+# `contains NEEDLE HAYSTACK`  — fixed string, no regex metacharacters interpreted.
+# `matches ERE HAYSTACK`      — extended regular expression.
+# `matches_i ERE HAYSTACK`    — extended regular expression, case-insensitive.
+# The `grep` forms read a here-string: bash materialises it as a file or a pipe it has already filled,
+# so there is no live writer to kill and no pipeline status for `pipefail` to promote.
+contains()  { case "$2" in *"$1"*) return 0 ;; *) return 1 ;; esac; }
+matches()   { grep -qE  -- "$1" <<<"$2"; }
+matches_i() { grep -qiE -- "$1" <<<"$2"; }
+
+# ---- 0. the assertion machinery itself, before anything is asserted WITH it ------------------------
+# This leg needs no engine and no fixture, so it runs first and fails loudly if the helpers rot.
+#
+# The haystack is a FIXED literal grown by doubling — deliberately not the engine's usage text, so that
+# shortening the engine's help can never silently shrink this leg back under the threshold and stop it
+# measuring anything. It comes out at 282,650 bytes — twelve times the 22,956 B that broke the two legs
+# below, and well inside the band where `printf … | grep -q` is wrong on 30 runs out of 30.
+BIG_UNIT='fsgg-2668-filler-line-kept-long-enough-to-grow-fast-0123456789abcdef'
+big_filler="$BIG_UNIT"
+while [ "${#big_filler}" -lt 262144 ]; do
+  big_filler="$big_filler"$'\n'"$big_filler"
+done
+BIG_NEEDLE='fsgg-2668-needle-on-line-1'
+BIG_ABSENT='fsgg-2668-needle-that-is-nowhere-in-this-haystack'
+BIG_HAY="$BIG_NEEDLE"$'\n'"$big_filler"
+
+# POSITIVE, both helpers. A needle on line 1 is the worst case: it is exactly when an early-exiting
+# reader stops soonest, and therefore when the writer is most certain to still be writing.
+if contains "$BIG_NEEDLE" "$BIG_HAY"; then
+  ok "contains finds a line-1 needle in a ${#BIG_HAY}-byte haystack (no pipeline, no SIGPIPE)"
+else
+  bad "contains finds a line-1 needle in a ${#BIG_HAY}-byte haystack"
+fi
+if matches "$BIG_NEEDLE" "$BIG_HAY"; then
+  ok "matches finds a line-1 needle in a ${#BIG_HAY}-byte haystack (here-string, not a pipe)"
+else
+  bad "matches finds a line-1 needle in a ${#BIG_HAY}-byte haystack"
+fi
+
+# NEGATIVE, both helpers. Without these two, a helper spelled `return 0` passes the positives — the
+# repair would be a vacuous green, which is the mirror of the false red it exists to remove.
+if contains "$BIG_ABSENT" "$BIG_HAY"; then
+  bad "contains still says NO for a needle that is genuinely absent"
+else
+  ok "contains still says NO for a needle that is genuinely absent"
+fi
+if matches "$BIG_ABSENT" "$BIG_HAY"; then
+  bad "matches still says NO for a needle that is genuinely absent"
+else
+  ok "matches still says NO for a needle that is genuinely absent"
+fi
+
+# THE IDIOM CANNOT COME BACK. Grep this file's own source for a pipeline whose last stage exits early
+# and whose status is therefore unsafe to consume. Comment lines are exempt (the header quotes the
+# banned spelling on purpose), as is any line tagged IDIOM-GUARD — used only by the guard itself and by
+# its own negative probe, which must contain the banned idiom to prove the guard can say NO.
+guard_re='\|[[:space:]]*(grep[^|]*-[A-Za-z]*q|head([[:space:]]|$))'   # IDIOM-GUARD
+guard_probe='  if printf "%s" "$out" | grep -q NEEDLE; then'          # IDIOM-GUARD
+guard_hits=""
+while IFS= read -r ln || [ -n "$ln" ]; do
+  case "$ln" in *IDIOM-GUARD*) continue ;; esac
+  [[ $ln =~ ^[[:space:]]*# ]] && continue
+  [[ $ln =~ $guard_re ]] && guard_hits="$guard_hits$ln"$'\n'
+done < "${BASH_SOURCE[0]}"
+
+if [ -z "$guard_hits" ]; then
+  ok "no assertion in this suite consumes the status of an early-exiting pipeline"
+else
+  bad "an early-exiting pipeline's status is consumed here (see .github#2668)" "$guard_hits"
+fi
+# The guard must be able to say NO, or its green above means only that it matched nothing.
+if [[ $guard_probe =~ $guard_re ]]; then
+  ok "the idiom guard fires on the banned spelling (it is not vacuously green)"
+else
+  bad "the idiom guard fires on the banned spelling"
+fi
 
 if [ ! -x "$ENGINE" ]; then
   echo "FAIL  the engine must be built first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2
@@ -86,7 +201,7 @@ fi
 
 # ---- 3. The live batch reads the source-bound receipt and schedules the item -----------------------
 batch_out="$("$ENGINE" batch --repo FS.GG.SDD --text 2>&1)"
-if printf '%s' "$batch_out" | grep -q 'FS.GG.SDD#42' && printf '%s' "$batch_out" | grep -qi 'schedulable in parallel'; then
+if contains 'FS.GG.SDD#42' "$batch_out" && matches_i 'schedulable in parallel' "$batch_out"; then
   ok "live batch reads the current route receipt and schedules FS.GG.SDD#42"
 else
   bad "live batch reads the current route receipt and schedules FS.GG.SDD#42" "$batch_out"
@@ -94,7 +209,7 @@ fi
 
 # ---- 4. the offline pipeline remains fail-closed, with no bash decision bypass --------------------
 pipe_out="$("$ENGINE" scan --repo FS.GG.SDD 2>/dev/null | "$ENGINE" decide --text 2>&1)"
-if printf '%s' "$pipe_out" | grep -qi 'awaiting an explicit current delivery-route decision'; then
+if matches_i 'awaiting an explicit current delivery-route decision' "$pipe_out"; then
   ok "scan | decide stays fail-closed without a live route read"
 else
   bad "scan | decide stays fail-closed without a live route read" "$pipe_out"
@@ -119,28 +234,28 @@ notok_rc=$?
 # `leaseMinutes`, which is what every downstream staleness verdict is computed against. This leg runs
 # the real binary, through the real parser, over the real transport, and reads the real document.
 lease_default="$(env -u FSGG_CLAIM_LEASE_MIN "$ENGINE" scan --repo FS.GG.SDD 2>/dev/null)"
-if printf '%s' "$lease_default" | grep -qE '"leaseMinutes":[[:space:]]*120'; then
+if matches '"leaseMinutes":[[:space:]]*120' "$lease_default"; then
   ok "unset FSGG_CLAIM_LEASE_MIN leaves the documented 120-minute default"
 else
-  bad "unset FSGG_CLAIM_LEASE_MIN leaves the 120-minute default" "$(printf '%s' "$lease_default" | head -c 200)"
+  bad "unset FSGG_CLAIM_LEASE_MIN leaves the 120-minute default" "${lease_default:0:200}"
 fi
 
 # 45 is the load-bearing number: it is not 120, so a snapshot carrying it CANNOT have come from the
 # default, and this assertion fails on the pre-#1677 engine that ignored the variable.
 lease_env="$(FSGG_CLAIM_LEASE_MIN=45 "$ENGINE" scan --repo FS.GG.SDD 2>/dev/null)"
-if printf '%s' "$lease_env" | grep -qE '"leaseMinutes":[[:space:]]*45'; then
+if matches '"leaseMinutes":[[:space:]]*45' "$lease_env"; then
   ok "FSGG_CLAIM_LEASE_MIN=45 actually changes the lease the snapshot carries"
 else
-  bad "FSGG_CLAIM_LEASE_MIN=45 changes the snapshot's lease" "$(printf '%s' "$lease_env" | head -c 200)"
+  bad "FSGG_CLAIM_LEASE_MIN=45 changes the snapshot's lease" "${lease_env:0:200}"
 fi
 
 # PRECEDENCE: an explicit flag beats the ambient environment. Both are set, and they disagree on
 # purpose — an assertion where they agreed would pass whichever one won.
 lease_both="$(FSGG_CLAIM_LEASE_MIN=45 "$ENGINE" scan --repo FS.GG.SDD --lease 30 2>/dev/null)"
-if printf '%s' "$lease_both" | grep -qE '"leaseMinutes":[[:space:]]*30'; then
+if matches '"leaseMinutes":[[:space:]]*30' "$lease_both"; then
   ok "--lease 30 beats FSGG_CLAIM_LEASE_MIN=45 (flag > env > default)"
 else
-  bad "--lease beats FSGG_CLAIM_LEASE_MIN" "$(printf '%s' "$lease_both" | head -c 200)"
+  bad "--lease beats FSGG_CLAIM_LEASE_MIN" "${lease_both:0:200}"
 fi
 
 # A MALFORMED value is REFUSED, not silently dropped back to 120. Falling back would rebuild the exact
@@ -148,10 +263,10 @@ fi
 # `--lease` arriving down another channel, so it gets `--lease`'s contract — including its exit code.
 bad_lease_out="$(FSGG_CLAIM_LEASE_MIN=abc "$ENGINE" scan --repo FS.GG.SDD 2>&1)"
 bad_lease_rc=$?
-if [ "$bad_lease_rc" -ne 0 ] && printf '%s' "$bad_lease_out" | grep -q 'FSGG_CLAIM_LEASE_MIN'; then
+if [ "$bad_lease_rc" -ne 0 ] && contains 'FSGG_CLAIM_LEASE_MIN' "$bad_lease_out"; then
   ok "a malformed FSGG_CLAIM_LEASE_MIN is REFUSED by name, never silently defaulted"
 else
-  bad "a malformed FSGG_CLAIM_LEASE_MIN is refused by name" "rc=$bad_lease_rc: $(printf '%s' "$bad_lease_out" | head -c 200)"
+  bad "a malformed FSGG_CLAIM_LEASE_MIN is refused by name" "rc=$bad_lease_rc: ${bad_lease_out:0:200}"
 fi
 
 # A NON-POSITIVE value is refused too, and this leg exists to kill a specific mutant: relaxing the
@@ -160,19 +275,19 @@ fi
 # must not be the way round it.
 zero_lease_out="$(FSGG_CLAIM_LEASE_MIN=0 "$ENGINE" scan --repo FS.GG.SDD 2>&1)"
 zero_lease_rc=$?
-if [ "$zero_lease_rc" -ne 0 ] && printf '%s' "$zero_lease_out" | grep -q 'FSGG_CLAIM_LEASE_MIN'; then
+if [ "$zero_lease_rc" -ne 0 ] && contains 'FSGG_CLAIM_LEASE_MIN' "$zero_lease_out"; then
   ok "FSGG_CLAIM_LEASE_MIN=0 is REFUSED — the env channel cannot mint an instantly-reapable lease"
 else
-  bad "FSGG_CLAIM_LEASE_MIN=0 is refused" "rc=$zero_lease_rc: $(printf '%s' "$zero_lease_out" | head -c 200)"
+  bad "FSGG_CLAIM_LEASE_MIN=0 is refused" "rc=$zero_lease_rc: ${zero_lease_out:0:200}"
 fi
 
 # WHITESPACE-ONLY is "not configured", not "malformed" — the value an unset shell variable expands to
 # inside a quoted export. It must take the default, not hard-fail every command.
 blank_lease="$(FSGG_CLAIM_LEASE_MIN='   ' "$ENGINE" scan --repo FS.GG.SDD 2>/dev/null)"
-if printf '%s' "$blank_lease" | grep -qE '"leaseMinutes":[[:space:]]*120'; then
+if matches '"leaseMinutes":[[:space:]]*120' "$blank_lease"; then
   ok "a whitespace-only FSGG_CLAIM_LEASE_MIN reads as UNSET, not as malformed"
 else
-  bad "a whitespace-only FSGG_CLAIM_LEASE_MIN reads as unset" "$(printf '%s' "$blank_lease" | head -c 200)"
+  bad "a whitespace-only FSGG_CLAIM_LEASE_MIN reads as unset" "${blank_lease:0:200}"
 fi
 
 # The DIAGNOSTIC verbs answer even when the variable is garbage, because a misconfigured shell is
