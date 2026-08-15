@@ -19,6 +19,22 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-15** — **coord-engine coherent set `0.58.0` published, adopted, and pinned**
+  (owner `github`; roadmap M6;
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.58.0)).
+  `package-version` catches up with source `0.58.0`, and the distributed dotnet-tool manifest moves
+  from `0.57.0` to `0.58.0`, only after stable promotion. Prepare run `31867079589` packed the set
+  once from merged source `12ec83f8af74d9456577e8f5518e13293e150b88`. Initial publishers
+  `31867175262`, `31867175037`, and `31867175051` reached GitHub Packages first and durably
+  journaled NuGet indexing waits; exact-source resumptions `31867406620`, `31867407808`, and
+  `31867408827` authenticated the served bytes without repacking. Promotion `31867458269` passed
+  and made the release immutable. Content ID is
+  `sha256:c203408880cfe785f9fd4a5ee8879617c93a1b95d46cd43f57df6d3c05e1fd92`; final manifest and
+  stable-channel SHA-256 values are `34cb470e8450a741bcb8f88302c670915397c0412ac510dae40087e97a1933ea`
+  and `1c467c38f70c85ad1fc206813e7c31c63155e2ea93e8df9fdb01362e72cc2f85`.
+  Both feeds serve all three packages at `0.58.0`; normalized payload hashes match the prepared
+  artifacts (Coord.Cli `6da2f5e2…`, Drivers `9d5d0096…`, Kit `18d13342…`).
+
 - **2026-08-15** — **coord-engine coherent set `0.58.0` source-ahead for M6 new-only cutover**
   (owner `github`; roadmap M6). The shared source version advances from `0.57.0` to `0.58.0` as a
   receiver-visible MINOR. Lifecycle, GraphQL, route/review authorization, release publishing, and

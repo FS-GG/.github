@@ -192,13 +192,67 @@ for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
     assert prepare.count(f"dotnet pack src/{project}/") == 1, project
 promote = (root / ".github/workflows/release-saga-promote.yml").read_text()
 for token in ("assert-identity", "merge-journals", "record-observed", "stable-channel.json", "--draft=false"):
-    assert token in promote, token
+    assert token in promote or token in (root / "scripts/release-saga-promote-release.sh").read_text(), token
 for token in ("source_sha=", 'refs/tags/$tag^{}', "head -1 | sed 's:/*$::'", '"${github_base}/${lower}'):
     assert token in promote, token
 assert 'journal_count=$((journal_count + 1))' in promote
 assert '[ "$journal_count" -eq 3 ]' in promote
 assert '[ "${#journals[@]}" -eq 3 ]' not in promote
+assert "release-saga-promote-release.sh" in promote
 print("production saga topology: pack-once, durable journals, org barrier, resume probes, identity, and promotion wired")
 PY
+
+# Once GitHub publishes a release, repository immutable-release enforcement activates. A queued
+# observer must compare the already-published content and return success; it may not try to clobber
+# immutable assets. Exercise both the first promotion and the exact replay against a fake gh.
+mkdir -p "$WORK/promote-bin" "$WORK/promote-assets"
+cp "$WORK/manifest.json" "$WORK/promote-assets/release-manifest.json"
+cp "$WORK/stable.json" "$WORK/promote-assets/stable-channel.json"
+cat > "$WORK/promote-bin/gh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_GH_CALLS"
+case "$1 $2" in
+  "release view")
+    if [ "$FAKE_RELEASE_MODE" = immutable ]; then printf '%s\n' '{"isDraft":false,"isImmutable":true}'
+    else printf '%s\n' '{"isDraft":true,"isImmutable":false}'; fi
+    ;;
+  "release download")
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --dir ]; then shift; target="$1"; break; fi
+      shift
+    done
+    mkdir -p "$target"
+    cp "$FAKE_RELEASE_ASSETS/release-manifest.json" "$target/"
+    cp "$FAKE_RELEASE_ASSETS/stable-channel.json" "$target/"
+    ;;
+  "release upload"|"release edit") ;;
+  *) echo "unexpected fake gh call: $*" >&2; exit 2 ;;
+esac
+SH
+chmod +x "$WORK/promote-bin/gh"
+: > "$WORK/promote-calls.log"
+PATH="$WORK/promote-bin:$PATH" FAKE_RELEASE_MODE=immutable \
+  FAKE_RELEASE_ASSETS="$WORK/promote-assets" FAKE_GH_CALLS="$WORK/promote-calls.log" \
+  bash "$ROOT/scripts/release-saga-promote-release.sh" example/repo coherent-set/v9.8.7 \
+    "$WORK/manifest.json" "$WORK/stable.json"
+! grep -Eq '^release (upload|edit)' "$WORK/promote-calls.log"
+cp "$WORK/promote-assets/stable-channel.json" "$WORK/promote-assets/stable-channel.good"
+jq '.contentId = "sha256:drift"' "$WORK/promote-assets/stable-channel.json" > "$WORK/promote-assets/drift"
+mv "$WORK/promote-assets/drift" "$WORK/promote-assets/stable-channel.json"
+if PATH="$WORK/promote-bin:$PATH" FAKE_RELEASE_MODE=immutable \
+  FAKE_RELEASE_ASSETS="$WORK/promote-assets" FAKE_GH_CALLS="$WORK/promote-calls.log" \
+  bash "$ROOT/scripts/release-saga-promote-release.sh" example/repo coherent-set/v9.8.7 \
+    "$WORK/manifest.json" "$WORK/stable.json" >/dev/null 2>&1; then
+  echo "expected immutable promotion with a different channel receipt to fail closed" >&2; exit 1
+fi
+mv "$WORK/promote-assets/stable-channel.good" "$WORK/promote-assets/stable-channel.json"
+: > "$WORK/promote-calls.log"
+PATH="$WORK/promote-bin:$PATH" FAKE_RELEASE_MODE=draft \
+  FAKE_RELEASE_ASSETS="$WORK/promote-assets" FAKE_GH_CALLS="$WORK/promote-calls.log" \
+  bash "$ROOT/scripts/release-saga-promote-release.sh" example/repo coherent-set/v9.8.7 \
+    "$WORK/manifest.json" "$WORK/stable.json"
+grep -Eq '^release upload .*--clobber' "$WORK/promote-calls.log"
+grep -Eq '^release edit .*--draft=false' "$WORK/promote-calls.log"
 
 echo "release saga: forced mid-publish recovery, byte drift, dual-feed observation, and promotion passed"
