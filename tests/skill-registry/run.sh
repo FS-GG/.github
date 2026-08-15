@@ -61,6 +61,29 @@ repos:
 YAML
 
 REG="$WORK/skills.yml"
+
+# THE DELIVERY-CHANNEL DECLARATION EVERY FIXTURE REGISTRY NEEDS (.github#2545). The
+# `delivery-channel` arm asks where each `(owner, scope)` class's BYTES come from, reads
+# `<registry-stem>.delivery-channels.yml` beside the registry under judgement, and FAILS CLOSED on a
+# missing one — a gate that cannot see the declaration would otherwise pass every class by not
+# asking, which is the exact ADR-0063 fail-open it exists to close. So each synthetic catalog below
+# carries its own, named after itself, and `write_registry` resets BOTH together: the arm's verdict
+# runs in both directions, so a registry reset without a declaration reset would leave the previous
+# case's extra class behind as a dead entry. Cases 68-76 exercise the arm's own firing and clearing.
+write_channels() {  # write_channels <registry-path>; the `classes:` entries on stdin
+  local reg="$1"
+  { printf 'schemaVersion: 1\nclasses:\n'; cat; } > "${reg%.yml}.delivery-channels.yml"
+}
+
+# add_channel <registry-path> <owner> <scope> — declare one more class on the CURRENT declaration.
+# Used by the cases below where `--write` RECONCILES IN a row of a class the registry has never
+# carried: the arm then reds until that class has a disposition, which is the arm working. Case 71
+# asserts that red directly, so declaring it here is not hiding it.
+add_channel() {
+  printf '  - { owner: %s, scope: %s, disposition: delivered, kind: package, channel: Fixture.Reconciled, evidence: tests/skill-registry/run.sh }\n' \
+    "$2" "$3" >> "${1%.yml}.delivery-channels.yml"
+}
+
 write_registry() {
   cat > "$REG" <<YAML
 schemaVersion: 1
@@ -76,6 +99,10 @@ skills:
   - { id: stale,   scope: process, owner: producer-one, source: Producer.One/skills/stale/SKILL.md,   sha256: $WRONG, materializes-when: always }
   - { id: owned,   scope: product, owner: fs-gg-game,   source: Producer.Two/skills/owned/SKILL.md,   sha256: $OWNED, materializes-when: "profile in [game]" }
 YAML
+  write_channels "$REG" <<'CHANNELS'
+  - { owner: producer-one, scope: process, disposition: delivered, kind: in-code, channel: fixture-inline, evidence: tests/skill-registry/run.sh }
+  - { owner: fs-gg-game,   scope: product, disposition: delivered, kind: package, channel: Fixture.Game,   evidence: tests/skill-registry/run.sh }
+CHANNELS
 }
 write_registry
 
@@ -170,6 +197,12 @@ grep -q "\[declared-completeness\] newbie" <<<"$out" || { echo "FAIL: absent row
 echo "   ok"
 
 echo "== 10. --write APPENDS the missing row, reconciled from the manifest =="
+# A RECONCILE THAT INTRODUCES A CLASS MUST DECLARE ITS CHANNEL FIRST (.github#2545). `newbie` is
+# owned by Producer.Two, so appending it creates a `(producer-two, product)` class this registry has
+# never carried -- and `--write`s own re-check reds on `delivery-channel` until the declaration
+# answers for it. That is the arm working as designed, not the fixture working around it: case 71
+# asserts that exact red directly, by doing this append WITHOUT the declaration below.
+add_channel "$REG" producer-two product
 run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should exit 0 once it can append"; exit 1; }
 grep -q "id: newbie" "$REG" || { echo "FAIL: missing row not appended"; cat "$REG"; exit 1; }
 grep -q "source: Producer.Two/skills/newbie/SKILL.md" "$REG" || { echo "FAIL: source not derived from supplied-by"; exit 1; }
@@ -222,6 +255,7 @@ grep -q "\[declared-completeness\] stranger" <<<"$out" || { echo "FAIL: unnamed 
 # absence of a manifest must NOT be reported.
 grep -q "\[manifest-found\] Unrelated.Repo" <<<"$out" && { echo "FAIL: unrelated checkout mistaken for a producer"; exit 1; }
 # `always` is written as a bare token, never quoted — the ADR-0017 default round-trips.
+add_channel "$REG" producer-three product
 run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should append stranger"; exit 1; }
 # Scope the assertion to the APPENDED row: `good`/`stale` already end `materializes-when: always }`,
 # so an unscoped grep passes no matter what format_row emitted.
@@ -258,6 +292,7 @@ mkdir -p "$ROOT/Producer.Two/skills/quoted"
 printf 'quoted body\n' > "$ROOT/Producer.Two/skills/quoted/SKILL.md"
 QUOTED="$(sha "$ROOT/Producer.Two/skills/quoted/SKILL.md")"
 write_manifests "" '{ "id": "quoted", "scope": "product", "sha256": "'"$QUOTED"'", "supplied-by": "skills/quoted/", "materializes-when": "name == \"Acme\"" }'
+add_channel "$REG" producer-two product
 run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should append quoted"; exit 1; }
 python3 -c "
 import yaml,sys
@@ -1035,6 +1070,13 @@ skills:
   - { id: sib,  scope: product, owner: producer-two, source: Producer.Two/skills/sib/SKILL.md,  sha256: $SIB,  materializes-when: "profile in [game]" }
   - { id: tail, scope: process, owner: producer-one, source: Producer.One/skills/tail/SKILL.md, sha256: $TAIL, materializes-when: always }
 YAML
+# This case writes $REG directly rather than through write_registry, so it resets the declaration
+# directly too — the arm judges the class set of THIS registry, and the previous case's classes
+# would otherwise linger as dead entries.
+write_channels "$REG" <<'CHANNELS'
+  - { owner: producer-one, scope: process, disposition: delivered, kind: in-code, channel: fixture-inline, evidence: tests/skill-registry/run.sh }
+  - { owner: producer-two, scope: product, disposition: delivered, kind: package, channel: Fixture.Two,    evidence: tests/skill-registry/run.sh }
+CHANNELS
 mkdir -p "$ROOT/Producer.One/.agents/skills" "$ROOT/Producer.Two/template/skill-manifest"
 cat > "$ROOT/Producer.One/.agents/skills/skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
@@ -1129,6 +1171,9 @@ parameters: [feedback, lifecycle]
 skills:
   - { id: work-roadmap, scope: driver, owner: .github, source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: $DRIVER, materializes-when: "feedback == true and lifecycle == spec-kit" }
 YAML
+write_channels "$DREG" <<'YAML'
+  - { owner: .github, scope: driver, disposition: delivered, kind: package, channel: FS.GG.Drivers, evidence: src/FS.GG.Drivers/stage-drivers.py }
+YAML
 run --registry "$DREG" --repos-root "$DROOT" >/dev/null \
   || { echo "FAIL: a coherent .github driver row was not accepted"; run --registry "$DREG" --repos-root "$DROOT" || true; exit 1; }
 
@@ -1175,6 +1220,9 @@ schemaVersion: 1
 updated: "2026-07-28"
 skills:
   - { id: srcskill, scope: process, owner: producer-src, source: Producer.Src/skills/srcskill/SKILL.md, sha256: $SRCSKILL, materializes-when: always }
+YAML
+write_channels "$SREG" <<'YAML'
+  - { owner: producer-src, scope: process, disposition: delivered, kind: in-code, channel: fixture-inline, evidence: tests/skill-registry/run.sh }
 YAML
 
 write_src_manifest_at() {
@@ -1277,6 +1325,11 @@ skills:
   - { id: xref-driver,  scope: driver,   owner: .github, source: .github/.claude/skills/xref-driver/SKILL.md,  sha256: $XDRIVER,  materializes-when: always }
   - { id: xref-product, scope: product,  owner: .github, source: .github/.claude/skills/xref-product/SKILL.md, sha256: $XPRODUCT, materializes-when: "$product_when" }
   - { id: xref-inert,   scope: operator, owner: .github, source: .github/.claude/skills/xref-inert/SKILL.md,   sha256: $XINERT,   materializes-when: "false" }
+YAML
+  write_channels "$XREG" <<'YAML'
+  - { owner: .github, scope: driver,   disposition: delivered, kind: package, channel: FS.GG.Drivers, evidence: src/FS.GG.Drivers/stage-drivers.py }
+  - { owner: .github, scope: product,  disposition: delivered, kind: package, channel: FS.GG.Drivers, evidence: src/FS.GG.Drivers/stage-drivers.py }
+  - { owner: .github, scope: operator, disposition: withheld,  reason: "authored here, materialized nowhere (ADR-0057)", evidence: src/FS.GG.Drivers/stage-drivers.py }
 YAML
   cat > "$XROOT/.github/registry/driver-skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
@@ -1397,6 +1450,9 @@ updated: "2026-08-14"
 parameters: [profile]
 skills:
   - { id: rostered, scope: product, owner: fs-gg-present, source: FS.GG.Present/skills/rostered/SKILL.md, sha256: $RPRESENT, materializes-when: "profile in [game]" }
+YAML
+write_channels "$RCASE/skills.yml" <<'YAML'
+  - { owner: fs-gg-present, scope: product, disposition: delivered, kind: package, channel: Fixture.Present, evidence: tests/skill-registry/run.sh }
 YAML
 write_roster() {
   cat > "$RCASE/repos.yml" <<YAML
@@ -1527,6 +1583,166 @@ PY
 #
 # The fixture job runs under `setup-policy-python`, so PyYAML is present — the same dependency
 # `catalog-metadata.py` above already assumes.
+# =================================================================================================
+# CASES 69-77 — THE `delivery-channel` ARM (.github#2545, ADR-0063).
+#
+# Checks 1-8 are predicates over a row's bytes, its presence, its emission condition, or its
+# parameters. NOTHING asked where a class's bytes are supposed to COME FROM, so the answer "nowhere"
+# was not a finding, it was nothing — and that class shipped three times (`fs-gg-playtest`
+# .github#1299, `workRoadmap` .github#1300, `fs-gg-feedback-report` .github#2380/#2545), each found
+# by accident rather than by a gate.
+#
+# These cases build their own registry + declaration pair under $CH so the REAL tree is never
+# mutated, and they pass an EMPTY --repos-root throughout: the arm is offline by construction, which
+# is what lets it run without producer checkouts at all. The other arms fire freely in that state;
+# every assertion below is scoped to `[delivery-channel]` lines, so their noise cannot pass for this
+# arm's verdict — and cases 69 and 77 assert the arm's verdict on the REAL shipped pair.
+# =================================================================================================
+CH="$WORK/channels"
+CHROOT="$WORK/channels-repos"
+mkdir -p "$CH" "$CHROOT"
+REAL_REG="$HERE/../../registry/skills.yml"
+REAL_CH="$HERE/../../registry/skills.delivery-channels.yml"
+
+# `dc <registry>` — the `[delivery-channel]` lines only, whatever else the other arms say.
+dc() { run --registry "$1" --repos-root "$CHROOT" 2>&1 | grep '\[delivery-channel\]' || true; }
+
+echo "== 69. the SHIPPED registry and its SHIPPED declaration are coherent =="
+# The gate this change adds passes on the tree this change lands, and it reaches that verdict with
+# no producer checkout at all — $CHROOT is empty.
+[ -f "$REAL_CH" ] || { echo "FAIL: registry/skills.delivery-channels.yml is missing"; exit 1; }
+out="$(dc "$REAL_REG")"
+[ -z "$out" ] || { echo "FAIL: the shipped declaration is not coherent with the shipped registry"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 70. a class the registry carries and the declaration ignores is a finding, naming its rows =="
+cat > "$CH/skills.yml" <<YAML
+schemaVersion: 1
+updated: "2026-08-15"
+parameters: [profile]
+skills:
+  - { id: alpha, scope: process, owner: owner-one, source: One/alpha/SKILL.md, sha256: $GOOD, materializes-when: always }
+  - { id: beta,  scope: product, owner: owner-two, source: Two/beta/SKILL.md,  sha256: $OWNED, materializes-when: "profile in [game]" }
+YAML
+write_channels "$CH/skills.yml" <<'CHANNELS'
+  - { owner: owner-one, scope: process, disposition: delivered, kind: in-code, channel: Fixture, evidence: tests/skill-registry/run.sh }
+CHANNELS
+out="$(dc "$CH/skills.yml")"
+grep -q "\[delivery-channel\] owner-two/product" <<<"$out" \
+  || { echo "FAIL: an undeclared class was not reported"; echo "$out"; exit 1; }
+grep -q "beta" <<<"$out" || { echo "FAIL: the finding does not name the rows it is about"; echo "$out"; exit 1; }
+grep -q "supplied from nowhere" <<<"$out" \
+  || { echo "FAIL: the finding does not say what the silence COSTS"; echo "$out"; exit 1; }
+run --registry "$CH/skills.yml" --repos-root "$CHROOT" >/dev/null 2>&1 \
+  && { echo "FAIL: an undeclared class must exit non-zero"; exit 1; }
+echo "   ok"
+
+echo "== 71. GATE-INVERSION on 70: declaring the class clears it, and nothing else did =="
+# Case 70's red must be THIS arm's doing. Add the one entry and the same registry goes quiet.
+add_channel "$CH/skills.yml" owner-two product
+out="$(dc "$CH/skills.yml")"
+[ -z "$out" ] || { echo "FAIL: declaring the class did not clear the finding"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 72. a declaration entry the registry no longer carries is a dead-entry finding =="
+# The converse direction. Without it the declaration rots into a restatement of a class set that has
+# moved on — the ADR-0058 failure this arm exists to prevent, reintroduced by the fix for it.
+add_channel "$CH/skills.yml" owner-ghost driver
+out="$(dc "$CH/skills.yml")"
+grep -q "\[delivery-channel\] owner-ghost/driver" <<<"$out" \
+  || { echo "FAIL: a dead declaration entry was not reported"; echo "$out"; exit 1; }
+grep -q "no such row" <<<"$out" || { echo "FAIL: the dead-entry finding does not say why"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 73. a class declared TWICE is a finding — two answers to one question =="
+write_channels "$CH/skills.yml" <<'CHANNELS'
+  - { owner: owner-one, scope: process, disposition: delivered, kind: in-code, channel: A, evidence: e }
+  - { owner: owner-two, scope: product, disposition: delivered, kind: package, channel: B, evidence: e }
+  - { owner: owner-two, scope: product, disposition: gap, tracked-by: FS-GG/FS.GG.Rendering#1240 }
+CHANNELS
+out="$(dc "$CH/skills.yml")"
+grep -q "declared twice" <<<"$out" || { echo "FAIL: a duplicated class was not reported"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 74. every disposition's required fields are enforced, and the vocabulary is CLOSED =="
+enforce() {  # enforce <expect-substring> <entry-yaml-for-owner-two>
+  { printf 'schemaVersion: 1\nclasses:\n'
+    printf '  - { owner: owner-one, scope: process, disposition: delivered, kind: in-code, channel: A, evidence: e }\n'
+    printf '  %s\n' "$2"
+  } > "$CH/skills.delivery-channels.yml"
+  local got
+  got="$(dc "$CH/skills.yml")"
+  grep -q "$1" <<<"$got" || { echo "FAIL: expected '$1' for entry: $2"; echo "$got"; exit 1; }
+}
+enforce "is not one of"                     '- { owner: owner-two, scope: product, disposition: probably-fine, evidence: e }'
+enforce "is not one of"                     '- { owner: owner-two, scope: product, channel: A, evidence: e }'
+enforce "requires a non-empty .evidence."   '- { owner: owner-two, scope: product, disposition: delivered, kind: package, channel: A }'
+enforce "requires a non-empty .channel."    '- { owner: owner-two, scope: product, disposition: delivered, kind: package, evidence: e }'
+enforce "permits kind"                      '- { owner: owner-two, scope: product, disposition: delivered, kind: template-payload, channel: A, evidence: e }'
+enforce "requires a non-empty .reason."     '- { owner: owner-two, scope: product, disposition: withheld, evidence: e }'
+enforce "requires a non-empty .tracked-by." '- { owner: owner-two, scope: product, disposition: gap }'
+echo "   ok"
+
+echo "== 75. a provider-scoped class must name who owes universal reach, or why it does not need it =="
+# THE DISPOSITION THIS WHOLE ARM EXISTS FOR. `fs-gg-feedback-report` HAS a channel — Rendering's
+# fs-gg-ui template emits it correctly and unconditionally — and lacks only REACH. A two-valued
+# has-channel/no-channel vocabulary would let exactly that be written down as green.
+PS='- { owner: owner-two, scope: product, disposition: provider-scoped, kind: template-payload, provider: p, evidence: e'
+enforce "EXACTLY ONE"        "$PS }"
+enforce "it carries neither" "$PS }"
+enforce "EXACTLY ONE"        "$PS, tracked-by: FS-GG/FS.GG.Rendering#1240, accepted: \"both at once\" }"
+enforce "it carries both"    "$PS, tracked-by: FS-GG/FS.GG.Rendering#1240, accepted: \"both at once\" }"
+# ...and a reference a reader cannot resolve names nobody (.github#2107: the board's own <repo>#<n>
+# shorthand is not a link GitHub's closing-keyword grammar parses).
+enforce "full owner/repo#number" "$PS, tracked-by: .github#1240 }"
+enforce "full owner/repo#number" "$PS, tracked-by: \"see the Rendering row\" }"
+enforce "full owner/repo#number" "$PS, tracked-by: FS-GG/FS.GG.Rendering#0 }"
+# Both accountable forms clear it.
+for good in "$PS, tracked-by: FS-GG/FS.GG.Rendering#1240 }" "$PS, accepted: \"provider-scoped reach is what these rows mean\" }"; do
+  { printf 'schemaVersion: 1\nclasses:\n'
+    printf '  - { owner: owner-one, scope: process, disposition: delivered, kind: in-code, channel: A, evidence: e }\n'
+    printf '  %s\n' "$good"
+  } > "$CH/skills.delivery-channels.yml"
+  out="$(dc "$CH/skills.yml")"
+  [ -z "$out" ] || { echo "FAIL: an accountable provider-scoped entry was reported: $good"; echo "$out"; exit 1; }
+done
+echo "   ok"
+
+echo "== 76. the arm FAILS CLOSED — a missing, mis-shaped, or unknown-schema declaration is a finding =="
+# A gate that cannot read the declaration must never answer "every class is fine": that is the
+# fail-open (#266) this arm exists to close, one level up from the classes themselves.
+rm -f "$CH/skills.delivery-channels.yml"
+grep -q "unreadable delivery-channel declaration" <<<"$(dc "$CH/skills.yml")" \
+  || { echo "FAIL: a MISSING declaration was not a finding"; exit 1; }
+printf 'schemaVersion: 99\nclasses: []\n' > "$CH/skills.delivery-channels.yml"
+grep -q "refusing to read a shape it does not know" <<<"$(dc "$CH/skills.yml")" \
+  || { echo "FAIL: an unknown schemaVersion was not refused"; exit 1; }
+printf 'schemaVersion: 1\n' > "$CH/skills.delivery-channels.yml"
+grep -q "no .classes. list" <<<"$(dc "$CH/skills.yml")" \
+  || { echo "FAIL: a declaration with no classes list was not a finding"; exit 1; }
+printf 'schemaVersion: 1\nclasses:\n  - "not a mapping"\n' > "$CH/skills.delivery-channels.yml"
+grep -q "not a mapping" <<<"$(dc "$CH/skills.yml")" \
+  || { echo "FAIL: a mis-shaped class entry was not a finding"; exit 1; }
+echo "   ok"
+
+echo "== 77. GATE-INVERSION ON THE SHIPPED PAIR: drop the fs-gg-rendering entry and the gate reds =="
+# Case 69 proves the shipped declaration is green. This proves that green MEANS something: remove the
+# one entry this item is about and the arm names the class, its row count, and fs-gg-feedback-report
+# itself — the row whose absence from EHotwagner/S.I.R. started .github#2380.
+cp "$REAL_REG" "$CH/inverted.yml"
+python3 "$HERE/invert-rendering-channel.py" "$REAL_CH" "$CH/inverted.delivery-channels.yml" \
+  || { echo "FAIL: could not build the inverted declaration"; exit 1; }
+out="$(dc "$CH/inverted.yml")"
+grep -q "\[delivery-channel\] fs-gg-rendering/product" <<<"$out" \
+  || { echo "FAIL: removing the entry did not red the gate"; echo "$out"; exit 1; }
+grep -q "fs-gg-feedback-report" <<<"$out" \
+  || { echo "FAIL: the finding does not name the row this item is about"; echo "$out"; exit 1; }
+grep -q "18 row(s)" <<<"$out" \
+  || { echo "FAIL: the finding does not report the class's row count"; echo "$out"; exit 1; }
+run --registry "$CH/inverted.yml" --repos-root "$CHROOT" >/dev/null 2>&1 \
+  && { echo "FAIL: the inverted pair must exit non-zero"; exit 1; }
+echo "   ok"
+
 # =================================================================================================
 echo "== trigger set: skill-registry-coherence.yml reaches generate-driver-manifest --check"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)" python3 - <<'PY'

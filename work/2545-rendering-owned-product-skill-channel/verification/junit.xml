@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="github2545-delivery-channel" tests="12" failures="0">
+    <testcase classname="github2545" name="VO-001"/>
+    <testcase classname="github2545" name="VO-002"/>
+    <testcase classname="github2545" name="VO-003"/>
+    <testcase classname="github2545" name="VO-004"/>
+    <testcase classname="github2545" name="VO-005"/>
+    <testcase classname="github2545" name="VO-006"/>
+    <testcase classname="github2545" name="VO-007"/>
+    <testcase classname="github2545" name="VO-008"/>
+    <testcase classname="github2545" name="FR-006"/>
+    <testcase classname="github2545" name="FR-008"/>
+    <testcase classname="github2545" name="PC-001"/>
+    <testcase classname="github2545" name="PM-001"/>
+  </testsuite>
+</testsuites>

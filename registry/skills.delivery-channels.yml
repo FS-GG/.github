@@ -1,0 +1,168 @@
+# Where each skill class's BYTES come from, and how far they reach (.github#2545, ADR-0063).
+#
+# WHY THIS FILE EXISTS. `registry/skills.yml` says what every skill IS — its owner, its source path
+# in that owner's tree, its canonical digest, and the predicate under which a scaffold should carry
+# it. It has never said how those bytes REACH a scaffold. ADR-0063 named the resulting defect class
+# — "declared ∧ gated-in ∧ supplied-from-nowhere … the `owner`/`source` fields name where the bytes
+# are, and nothing reads them for delivery" — and that class has now shipped three times:
+#
+#   1. `fs-gg-playtest`          (owner fs-gg-game)      .github#1299 — noticed by a human
+#   2. `workRoadmap`             (owner .github)         .github#1300 — filed by a consumer repo
+#   3. `fs-gg-feedback-report`   (owner fs-gg-rendering) .github#2380/#2545 — surfaced when a
+#      product tree could not run a tool the missing skill ships
+#
+# Each was closed at its own site, and none of the three closures made the fourth impossible,
+# because nothing anywhere asked the question. `scripts/fsgg-skill-registry-check`'s
+# `delivery-channel` arm asks it: every `(owner, scope)` class present in `registry/skills.yml`
+# must appear below with exactly one disposition and that disposition's required fields. The class
+# set is DERIVED from the catalog on every run (ADR-0058), so a new owner or a new scope value reds
+# the gate the day it lands, with no edit to the checker.
+#
+# THE DISPOSITIONS, AND WHY THERE ARE FOUR OF THEM.
+#
+#   delivered        the bytes reach a tree scaffolded through ANY provider.
+#                    requires: channel, kind (package | in-code), evidence
+#   provider-scoped  the bytes reach only trees created by a named provider.
+#                    requires: provider, kind (template-payload), evidence,
+#                              and EXACTLY ONE of tracked-by | accepted
+#   withheld         authored here, deliberately delivered nowhere.
+#                    requires: reason, evidence
+#   gap              no channel of any kind exists.
+#                    requires: tracked-by
+#
+# A two-valued has-channel/no-channel vocabulary would be worse than nothing here, because
+# `fs-gg-feedback-report` HAS a channel — FS.GG.Rendering's `fs-gg-ui` template emits it correctly
+# and unconditionally, and Rendering#434 already removed the `feedback` gate that used to default
+# false. What it lacks is REACH: a product scaffolded through a non-rendering provider never
+# restores that template. Two values would let this file's own founding defect be written down as
+# green. So `provider-scoped` is first class, and it must say either who owes making it universal
+# (`tracked-by`) or why provider-scoped reach is correct for that class (`accepted`).
+#
+# THE FILE IS NAMED AFTER ITS CATALOG. The checker derives this path from the registry it is
+# judging (`<registry-stem>.delivery-channels.yml`, the shape `registry/skills.CHANGELOG.md` already
+# uses), never from a flag and never from one fixed sibling filename: the arm's verdict runs in BOTH
+# directions — a class with no entry, and an entry with no class — so each catalog needs its own
+# declaration or one would always be reporting the other's classes as dead.
+#
+# `evidence:` IS REQUIRED ON EVERY DISPOSITION, AND THAT IS NOT CEREMONY. Delivery cannot be read
+# off a repository's git tree. FS.GG.Templates' six product bodies live at `template/product-skills/`
+# — OUTSIDE every `templates/<name>/` template root, whose `.template.config/template.json` declares
+# a single `{"source": "./", "target": "./"}` — which reads as a fourth instance of the class until
+# you notice `FS.GG.Templates.csproj` PROJECTS them into `content/templates/<id>/.agents/skills/` at
+# pack time. This item nearly filed that false finding. The checker therefore does not attempt to
+# verify a declared channel offline; it requires the entry to NAME the artefact that packs, embeds,
+# or withholds the bytes, and leaves the does-it-work verdict to that artefact's own gate.
+#
+# HOW TO CHANGE THIS FILE. Authored, never generated: which channel a class rides is a semantic
+# declaration with no upstream to derive from, which is exactly the kind of field ADR-0058 clause 2
+# keeps a fail-closed gate on. Run `python scripts/fsgg-skill-registry-check --repos-root .repos`
+# after editing; `.github/workflows/skill-registry-coherence.yml` selects this path on both
+# `pull_request` and `push: main`, so a change here cannot skip the gate that reads it.
+
+schemaVersion: 1
+updated: 2026-08-15
+
+classes:
+  # ---------------------------------------------------------------------------------------------
+  - owner: .github
+    scope: driver
+    disposition: delivered
+    kind: package
+    channel: FS.GG.Drivers
+    evidence: src/FS.GG.Drivers/stage-drivers.py
+    note: >-
+      ADR-0054's byte-transport, resolving .github#1300 — the SECOND instance of the ADR-0063 class,
+      and the one that picked the transport shape every class below is measured against. `.github`
+      authors these bodies under `.claude/skills/`, `scripts/generate-driver-manifest` emits
+      `registry/driver-skill-manifest.json` from them, and `stage-drivers.py` stages exactly that
+      manifest's `scope: driver` rows into the package the SDD CLI pins and restores. Measured
+      working: `EHotwagner/S.I.R.`, scaffolded 2026-08-10 through a `fable-game` provider, carries
+      42 `driverPaths`.
+
+  # ---------------------------------------------------------------------------------------------
+  - owner: .github
+    scope: operator
+    disposition: withheld
+    evidence: src/FS.GG.Drivers/stage-drivers.py
+    reason: >-
+      ADR-0057 operator skills are `.github`-authored and materialized NOWHERE — they run only in an
+      operator checkout where every repository is a sibling. `stage-drivers.py`'s
+      `DELIVERED_SCOPES = {"driver"}` carries no operator bytes into the package, and every one of
+      the seven rows declares `materializes-when: "false"`, so the catalog and the transport agree.
+      This is a deliberate non-delivery, not an undetected one, which is why it is `withheld` rather
+      than `gap`.
+
+  # ---------------------------------------------------------------------------------------------
+  - owner: fs-gg-sdd
+    scope: process
+    disposition: delivered
+    kind: in-code
+    channel: FS.GG.SDD SeededSkills.skillNames
+    evidence: FS.GG.SDD/src/FS.GG.SDD.Commands/CommandWorkflow/SeededSkills.fs
+    note: >-
+      A hard-coded in-code list of the 16 `fs-gg-sdd-*` process skills, whose own comment calls it
+      "the single in-code source of the set". It reads no registry, so it is not derived — but it IS
+      a real, universal channel: the materializer that owns the skills is the same assembly that
+      lists them, and `EHotwagner/S.I.R.` received all 16 through a non-rendering provider. Recorded
+      as `delivered` because reach is what this file measures; whether the list should instead be
+      derived from this catalog is a separate question and is not tracked by this row.
+
+  # ---------------------------------------------------------------------------------------------
+  - owner: fs-gg-game
+    scope: product
+    disposition: delivered
+    kind: package
+    channel: FS.GG.Game.Skills
+    evidence: registry/dependencies.yml (contract `game-skills`, owner game, consumers [sdd])
+    note: >-
+      The FIRST instance of the ADR-0063 class (`fs-gg-playtest`, .github#1299), and the precedent
+      that settled the route for every owner-authored product class. .github#1308 asked `.github` to
+      carry these bytes in FS.GG.Drivers and was closed SUPERSEDED with no `.github` change:
+      `.github` would have needed a frozen copy of another repository's bytes, the restatement
+      ADR-0058 forbids, ADR-0062 replaces and ADR-0063 rules out. FS.GG.Game#449 / PR#450 published
+      the owner package instead, and FS.GG.SDD's `GameSkills.fs` embeds it. Measured working:
+      `EHotwagner/S.I.R.` carries `fs-gg-game-fable` through a `fable-game` provider.
+
+  # ---------------------------------------------------------------------------------------------
+  - owner: fs-gg-rendering
+    scope: product
+    disposition: provider-scoped
+    kind: template-payload
+    provider: fs-gg-ui
+    evidence: FS.GG.Rendering/.template.config/template.json
+    tracked-by: FS-GG/FS.GG.Rendering#1240
+    note: >-
+      THE THIRD INSTANCE, AND THE REASON THIS FILE EXISTS (.github#2380 → #2545). All 18 rows are
+      emitted correctly by the `fs-gg-ui` `dotnet new` template — `fs-gg-feedback-report`'s entry
+      carries no `condition` key at all, deliberately, since Rendering#434. A product scaffolded
+      through ANY OTHER provider never restores that template, so the class reaches those trees
+      through nothing: `EHotwagner/S.I.R.` (`providerName: fable-game`) received 42 driver paths, 16
+      process skills, 2 game-skill paths, and ZERO Rendering-owned product skills. Only
+      `fs-gg-feedback-report`'s absence is DETECTABLE there, because `always` is the sole predicate
+      that evaluates true on a tree carrying no `profile` parameter — that is a fact about
+      detectability, not about intent, and all 18 rows are in scope of the missing channel.
+      .github#2545 chose Route B: FS.GG.Rendering publishes `FS.GG.Rendering.Skills` (#1240) and
+      FS.GG.SDD embeds it as a fourth enrollment channel (FS.GG.SDD#864), mirroring
+      `FS.GG.Game.Skills` exactly. This entry flips to `delivered` under .github#2639, together with
+      the `rendering-skills` contract row that cannot be written until the package is on the feed.
+
+  # ---------------------------------------------------------------------------------------------
+  - owner: fs-gg-templates
+    scope: product
+    disposition: provider-scoped
+    kind: template-payload
+    provider: fs-gg-fable-game, fs-gg-fable-bindings
+    evidence: FS.GG.Templates/FS.GG.Templates.csproj (the `template/product-skills/**` pack items)
+    accepted: >-
+      Provider-scoped reach is what these six rows MEAN, so there is nothing to make universal. Their
+      predicates are `template in [fable-game]`, `template in [fable-bindings]`, and
+      `template in [fable-game, fable-bindings]`: a `fable-signalr` skill on a rendering app tree
+      would be ADR-0017's `[unexpected]`, not a missing delivery. The bytes do reach every tree those
+      two templates create — `FS.GG.Templates.csproj` packs each `template/product-skills/<id>/SKILL.md`
+      into `content/templates/<template-id>/.agents/skills/<id>/`, and the csproj carries its own gate
+      reddening when an authored body has no package item, because "a skill authored under
+      template/product-skills/ with no package item is packed into NO template and silently reaches no
+      product". A SEPARATE defect, not this one, keeps those predicates from ever evaluating true:
+      `fable-game.providers.yml` declares no `template` parameter, so scaffold provenance can never
+      carry the axis. That is .github#2576, and it is a predicate-evaluation defect rather than a
+      delivery one — fixing it does not change this entry, and this entry does not discharge it.

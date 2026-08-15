@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2545-rendering-owned-product-skill-channel/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "3d91c60f47fe4556c12d0234109b16f441b054d9d701b6629bffe17ba5157e3f"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2545-rendering-owned-product-skill-channel/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -786,7 +796,7 @@
     {
       "path": "readiness/2545-rendering-owned-product-skill-channel/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
