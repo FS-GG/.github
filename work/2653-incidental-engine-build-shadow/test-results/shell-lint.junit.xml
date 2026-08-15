@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="scripts/lint-shell.sh" tests="1" failures="0" skipped="0">
+    <testcase classname="shell-lint" name="scripts/lint-shell.sh (shellcheck, severity=warning)">
+      <system-out>shell-lint: OK — 134 file(s) and 397 workflow-embedded step(s) clean at severity &#x27;warning&#x27;.</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

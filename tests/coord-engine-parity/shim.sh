@@ -928,6 +928,199 @@ if grep -q 'the engine-manifest sweep (#1615)' "$REPO_ROOT/scripts/repos-audit.s
 else
   bad "#1615: the engine manifest left the kit and NOTHING replaced #1077's invariant — templates and audio can hold a fsgg-coord shim with no engine again, which is exactly the defect #1077 closed" "the sweep is missing from scripts/repos-audit.sh"
 fi
+# ---- 3g. AN INCIDENTAL BUILD MUST NOT SHADOW A CURRENT SHARED ENGINE (.github#2653) ---------------
+# THE DEFECT, MEASURED FIVE TIMES ACROSS THREE AGENTS IN ONE BOARD-DRIVER RUN (2026-08-15). A gate
+# harness (`tests/skill-registry`, `tests/skill-quality`) builds the engine into the caller's worktree
+# transitively, and `scripts/generate-driver-manifest --write` REFUSES without such a build — so a
+# worker whose item touches no engine source is REQUIRED to create the artifact. Tier 2a then prefers
+# it, `stale_guard`'s `upstream_drift` arm measures the worktree's branch against `origin/main`, and a
+# feature branch is behind under the engine's source trees the moment any engine commit lands after it
+# was cut. Every board write from that worktree is refused, fail-closed, while the shared checkout is
+# perfectly current one directory up. `plover-9938` ×4 on .github#2576 (one blocking `heartbeat`),
+# `snipe-4fec` ×1 on .github#2571, `curlew-48f7` ×2 on .github#2642.
+#
+# NO EXISTING LEG CAN EXPRESS THE SHAPE, WHICH IS WHY IT SURVIVED §3, §3e AND §5. §3's fixture is one
+# `git init` directory with NO remote and no linked worktree, so `upstream_drift` returns silently on it
+# and only the mtime half is exercised. §3e's is a real clone that is its OWN main working tree, so
+# there is no distinct shared checkout to be shadowed. §5 builds a shared checkout and a linked worktree
+# but no `origin` and no default-branch ref, so its tier-2a legs exercise the preference under an
+# UNANSWERABLE authorship probe (leg 5g6 below pins exactly that, deliberately). This section builds the
+# one world all three miss: a linked worktree hanging off a shared checkout, both with a build, and a
+# real `refs/remotes/origin/{HEAD,main}` to be behind.
+#
+# EVERY LEG ASSERTS *WHICH* ENGINE RAN, NEVER MERELY THAT ONE DID — #1008's rule, and it is the whole
+# subject here: this section is about which of two engines is resolved, so a leg that checked only the
+# exit code would pass identically before and after the repair.
+#
+# AND A MEASURED HAZARD IN THE HOUSE IDIOM, RECORDED HERE BECAUSE THESE LEGS SIT CLOSEST TO IT
+# (.github#2668). This file is `set -uo pipefail`, and its 100+ assertions are spelled
+# `printf '%s' "$out" | grep -q PAT`. `grep -q` exits on its first match by contract, so when the
+# haystack is big enough that `printf` is still writing, `printf` takes SIGPIPE, the pipeline's status
+# becomes 141, and `pipefail` reports "no match" for output that plainly matched. Measured on this host:
+# a 22,956-byte haystack answers 141 every time; a 2,591-byte one answers 0. The refusal g3/g4 grep is
+# 2,591 bytes, so these legs are safe TODAY — but that is a property of the message's current length,
+# not of the assertion, and it fails toward a false RED rather than a false green. Two legs in
+# `tests/coord-engine-e2e/run.sh` are already living on the wrong side of it. The class is filed as
+# .github#2668 and is deliberately not repaired here: it is a different cause in a different file, and
+# broadening this PR for a nearby defect is what `findings-and-filing` refuses.
+shadow_engine() {   # $1 = checkout, $2 = marker. A build NEWER than the source beside it (i.e. FRESH).
+  local d="$1/src/FS.GG.Coord.Cli/bin/Release/net10.0"
+  mkdir -p "$d"
+  printf '#!/usr/bin/env bash\necho "%s RAN: $*"\n' "$2" >"$d/fsgg-coord-engine"
+  chmod +x "$d/fsgg-coord-engine"
+  : >"$d/fsgg-coord-engine.dll"
+  # EVERY mtime EXPLICIT, for §3's reason: `-newer` is a STRICT comparison, and two writes microseconds
+  # apart land on the same stamp on a coarse filesystem, which would make the verdict a coin toss.
+  touch -d '3 hours ago' "$1/$FIXSRC"
+  touch -d '2 hours ago' "$d/fsgg-coord-engine" "$d/fsgg-coord-engine.dll"
+}
+# A REAL WORLD, NOT A LOOKALIKE, for the reason §5 gives about `--git-dir` vs `--git-common-dir` and the
+# reason §3e gives about `refs/remotes/origin/HEAD`: only `git worktree add` makes a linked worktree,
+# and only a resolvable remote-tracking ref makes `upstream_drift` speak. The default-branch ref is
+# written by hand rather than by `git clone` because this world needs the SHARED checkout to be AT that
+# ref while the worktree is BEHIND it — which a clone cannot express without a second push.
+shadow_world() {    # $1 = root. Sets SW_SHARED, SW_WT, SW_C1.
+  SW_SHARED="$1/shared"; SW_WT="$1/wt"
+  mkdir -p "$SW_SHARED/src/FS.GG.Coord.Core" "$SW_SHARED/src/FS.GG.Coord.Cli"
+  ( cd "$SW_SHARED" && git init -q . ) >/dev/null 2>&1
+  printf 'bin/\nobj/\n' >"$SW_SHARED/.gitignore"
+  printf '// c1\n' >"$SW_SHARED/$FIXSRC"
+  ( cd "$SW_SHARED" && git add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm c1 ) >/dev/null 2>&1
+  SW_C1="$(git -C "$SW_SHARED" rev-parse HEAD)"
+  printf '// c2 — an engine fix landed on the default branch\n' >"$SW_SHARED/$FIXSRC"
+  ( cd "$SW_SHARED" && git -c user.email=t@t -c user.name=t commit -qam c2 ) >/dev/null 2>&1
+  git -C "$SW_SHARED" remote add origin https://example.invalid/fixture.git >/dev/null 2>&1
+  git -C "$SW_SHARED" update-ref refs/remotes/origin/main HEAD >/dev/null 2>&1
+  git -C "$SW_SHARED" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main >/dev/null 2>&1
+  # THE WORKTREE IS CUT AT c1 — behind the default branch under the engine's own source trees by one
+  # commit, and authoring nothing of its own. That is the reported population exactly.
+  git -C "$SW_SHARED" worktree add -q -b item/fixture "$SW_WT" "$SW_C1" >/dev/null 2>&1
+  shadow_engine "$SW_SHARED" "SHARED ENGINE"
+  shadow_engine "$SW_WT" "OWN ENGINE"
+}
+shadow_teardown() { git -C "$SW_SHARED" worktree remove --force "$SW_WT" >/dev/null 2>&1; rm -rf "$1"; }
+
+# g1. THE REPORTED DEFECT, REPAIRED. A board write from a worktree whose only distinction is an engine
+# build it never asked for must LAND, through the SHARED checkout's current engine.
+SWROOT="$(mktemp -d)"; shadow_world "$SWROOT"
+out="$(cd "$SW_WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'SHARED ENGINE RAN' \
+   && ! printf '%s' "$out" | grep -qi 'refused'; then
+  ok ".github#2653: a worktree carrying an INCIDENTAL engine build writes the board through the SHARED checkout's current engine — the build no longer shadows tier 2b"
+else
+  bad ".github#2653: an incidental build must not cost a worktree its board writes when the shared checkout is current" "rc=$rc out=$out"
+fi
+
+# g2. NON-VACUITY, AND IT IS THE LEG THAT STOPS g1 BEING A GREEN SENTENCE OVER AN EMPTY SUBJECT. g1
+# passes if the shim fell through to a current shared engine — and it would ALSO pass, for the wrong
+# reason, if the fixture never had a shared engine to fall through to and something else answered.
+# Delete the shared build and require g1's condition to STOP holding: "found a current shared engine"
+# and "looked at no shared engine" must not share an exit code (#266, one layer in).
+mv "$SW_SHARED/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine" "$SWROOT/parked-engine"
+out="$(cd "$SW_WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'SHARED ENGINE RAN'; then
+  ok ".github#2653: with the shared engine REMOVED, g1's condition no longer holds — the leg examines a real fall-through target rather than passing over nothing"
+else
+  bad ".github#2653: g1 passes even with no shared engine present, so it is measuring nothing" "rc=$rc out=$out"
+fi
+mv "$SWROOT/parked-engine" "$SW_SHARED/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+chmod +x "$SW_SHARED/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+
+# g3. THE KIT AUTHOR IS UNTOUCHED, AND THIS IS THE NEGATIVE HALF OF THE PAIR. Give the worktree's branch
+# a commit under the engine's source trees that the default branch does not have. The build now carries
+# code that exists nowhere else, `scripts/fsgg-coord:209-213` applies in full, tier 2a keeps its
+# preference — and because that build is genuinely behind the default branch, the board write is still
+# REFUSED. A repair that let this one through would be the stale-engine hole .github#1549 closed.
+printf '// an engine edit that exists only on this branch\n' >>"$SW_WT/$FIXSRC"
+( cd "$SW_WT" && git -c user.email=t@t -c user.name=t commit -qam "engine edit" ) >/dev/null 2>&1
+shadow_engine "$SW_WT" "OWN ENGINE"      # re-stamp: the commit rewrote the source, so rebuild after it
+out="$(cd "$SW_WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qi 'refused' \
+   && ! printf '%s' "$out" | grep -q 'ENGINE RAN'; then
+  ok ".github#2653: a worktree that AUTHORS engine source of its own keeps tier 2a — and a genuinely stale deliberate build is still REFUSED, with neither engine reached"
+else
+  bad ".github#2653: the deliberate build must still win AND still be guarded — this is the hole .github#1549 closed" "rc=$rc out=$out"
+fi
+
+# g4. AND THE REFUSAL SAYS WHY THAT BUILD WAS PREFERRED. Criterion 3: the worktree-local refusal must be
+# distinct from the shared-checkout wording .github#2471 settled, which sends this reader to the wrong
+# tree. It names the worktree by absolute path, says plainly it is not the shared checkout, and now also
+# reports the OBSERVATION that put the reader here rather than a guess about how the artifact arrived.
+if printf '%s' "$out" | grep -q "$SW_WT" \
+   && printf '%s' "$out" | grep -qi 'NOT THE SHARED CHECKOUT' \
+   && printf '%s' "$out" | grep -q 'WHY YOUR OWN BUILD WAS PREFERRED' \
+   && printf '%s' "$out" | grep -q 'COMMITTED work under them'; then
+  ok ".github#2653: the worktree-local refusal names the worktree, says it is not the shared checkout, and reports the observed reason tier 2a preferred that build"
+else
+  bad ".github#2653: a worktree-local refusal must say why the local build was preferred, not guess how it got there" "$out"
+fi
+shadow_teardown "$SWROOT"
+
+# g5. RESOLUTION NEVER MOVES TO A WORSE ENGINE. The mirror of g1, and the leg that stops this repair
+# manufacturing .github#2581's refusal in a neighbouring row: when the worktree authors nothing but the
+# SHARED engine is itself stale, the fall-through must NOT happen — the worker's own current build is
+# the better engine and keeps the board write landing.
+SWROOT="$(mktemp -d)"; shadow_world "$SWROOT"
+git -C "$SW_WT" merge --ff-only refs/remotes/origin/main >/dev/null 2>&1   # worktree now level: current
+shadow_engine "$SW_WT" "OWN ENGINE"
+touch -d '1 hour ago' "$SW_SHARED/$FIXSRC"                                 # shared source AFTER its build
+out="$(cd "$SW_WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'OWN ENGINE RAN' \
+   && ! printf '%s' "$out" | grep -qi 'refused'; then
+  ok ".github#2653: with the SHARED engine stale, an incidental-but-CURRENT local build is kept — resolution only ever moves toward an engine that answers 'current'"
+else
+  bad ".github#2653: the fall-through must never hand a worker a worse engine than the one it passed over" "rc=$rc out=$out"
+fi
+shadow_teardown "$SWROOT"
+
+# g6. AN UNANSWERABLE AUTHORSHIP PROBE PREFERS THE CALLER'S OWN BUILD — today's resolution, unchanged.
+# .github#1549's fourth criterion says an unanswerable staleness question is not freshness; the
+# counterpart adopted here is that an unanswerable INTENT question is not permission to swap the engine
+# under the caller. Strip the remote entirely, so `default_branch_ref` resolves nothing, and age the
+# worktree's own source past its own build: the refusal must name the WORKTREE, not fall through.
+SWROOT="$(mktemp -d)"; shadow_world "$SWROOT"
+git -C "$SW_SHARED" symbolic-ref -d refs/remotes/origin/HEAD >/dev/null 2>&1
+git -C "$SW_SHARED" update-ref -d refs/remotes/origin/main >/dev/null 2>&1
+git -C "$SW_SHARED" remote remove origin >/dev/null 2>&1
+touch -d '1 hour ago' "$SW_WT/$FIXSRC"                                     # own source AFTER its own build
+out="$(cd "$SW_WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qi 'refused' \
+   && printf '%s' "$out" | grep -q "dotnet build $SW_WT/src/FS.GG.Coord.Cli -c Release" \
+   && ! printf '%s' "$out" | grep -q 'ENGINE RAN'; then
+  ok ".github#2653: with no default-branch ref to answer the authorship question, the caller's own build is still preferred and still guarded — an unanswerable probe changes nothing"
+else
+  bad ".github#2653: an unanswerable authorship probe must take the status-quo branch, never the swap" "rc=$rc out=$out"
+fi
+shadow_teardown "$SWROOT"
+
+# g7. A FAILING PROBE IS NOT A CLEAN TREE (.github#2653, review round 1, repair 1). g6 above reaches the
+# SECOND half of `authored_engine_source` — no default-branch ref, so no merge-base to diff against. It
+# cannot reach the FIRST half, and the first half is where the fail-OPEN was: `git status --porcelain`
+# was read through a command substitution that tested only whether the STRING was empty, so a FAILED
+# status and a CLEAN tree answered identically, and the failure fell through to the tree-to-tree diff —
+# which needs no index, still answers 0, and yielded "authors nothing". The engine was then swapped out
+# from under the caller, on exactly the reader tier 2a exists to protect.
+#
+# THE SUBJECT IS BROKEN THE WAY IT BREAKS IN THE FIELD, not by stubbing git. A truncated or corrupt
+# `.git/index` exits 128 with EMPTY stdout — measured here: healthy probe1 rc=0 / probe2 rc=0; corrupt
+# index probe1 rc=128 / probe2 rc=0. (A stale `index.lock` is NOT this hazard: `status` still exits 0.)
+# The worktree is otherwise the g1 world exactly — authoring nothing, behind by one engine commit, with
+# a current shared engine sitting there to be swapped to — so the ONLY difference between g1's exit 0
+# and this leg's refusal is whether a failed probe is read as an answer.
+SWROOT="$(mktemp -d)"; shadow_world "$SWROOT"
+printf 'not an index at all' >"$(git -C "$SW_WT" rev-parse --git-dir)/index"
+out="$(cd "$SW_WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qi 'refused' \
+   && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
+   && printf '%s' "$out" | grep -q "$SW_WT" \
+   && printf '%s' "$out" | grep -q 'could NOT be answered'; then
+  ok ".github#2653: a FAILING dirt probe (corrupt index, exit 128, empty stdout) is read as unanswerable, not as a clean tree — the caller's own build is kept, no engine runs, and the refusal says the question could not be answered"
+else
+  bad ".github#2653: a failed 'git status' must never read as 'authors nothing' — that swaps the engine out from under the one reader tier 2a protects" "rc=$rc out=$out"
+fi
+shadow_teardown "$SWROOT"
+
 # ---- 4. THE SOURCE BUILD OUTRANKS A PACKAGED ENGINE (#1018, #1008) -------------------------------
 # EVERY LEG IN §3 DRIVES THE SHIM WITH `env -u FSGG_COORD_ENGINE_BIN`, WHICH UNSETS TIER 1 AND NOTHING
 # ELSE — and that was never enough. Under the old order a global tool on PATH exec'd BEFORE the source
