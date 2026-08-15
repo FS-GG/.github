@@ -298,10 +298,9 @@ for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
   make_package "$REPACK/first/$package.9.8.7.nupkg" "$package" 9.8.7 9c6d21a2a7774fb2bbc48858e7e6d136
   make_package "$REPACK/second/$package.9.8.7.nupkg" "$package" 9.8.7 341955db2e8847439fdf05b771ee2c5c
   make_package "$REPACK/divergent/$package.9.8.7.nupkg" "$package" 9.8.7 341955db2e8847439fdf05b771ee2c5c "rebuilt from different source"
-  # An honest re-pack that ALSO alters the manifest relationship. `Id` is deliberately the weakest
-  # field of that element to pick — it carries no semantics beyond uniqueness — so a normalization
-  # that still refuses on it necessarily refuses on `Type` and `Target`, which are attributes of the
-  # same preserved element.
+  # An honest re-pack that ALSO alters the manifest relationship, for the width bound below. `Id`
+  # is deliberately the weakest field of that element to perturb — see that leg's own comment for
+  # why choosing the weakest is what makes the bound the strong one.
   make_package "$REPACK/manifest-relationship/$package.9.8.7.nupkg" "$package" 9.8.7 \
     341955db2e8847439fdf05b771ee2c5c fixture RF00DFACE00DFACE0
 done
@@ -362,6 +361,15 @@ diagnosis_omits "$WORK/divergent.log" "_rels/.rels"
 # widening the predicate in `normalized_relationships` to drop EVERY relationship leaves this suite
 # green — a normalization that answers "equal" for two packages whose relationship parts disagree is
 # the fail-open .github#2240 and .github#2428 depend on this function not having.
+#
+# WHY `Id` AND NOT `Type` OR `Target`, since only one field can be perturbed at a time and the
+# choice decides what this leg proves: `Id` is the WEAKEST of the three. It is an OPC uniqueness
+# token carrying no semantics — nothing resolves through it — whereas `Type` and `Target` name what
+# the relationship IS and what it points AT. All three are attributes of the one element the
+# normalization either preserves or drops, so it cannot distinguish them: a normalization that
+# still refuses on the field with the least meaning necessarily refuses on the two with more. Had
+# this leg perturbed `Target` instead, it would pass under a normalization that kept `Target` and
+# discarded `Id`, and would prove the weaker statement.
 if python3 "$TOOL" assert-reusable --stored "$REPACK/second/release-manifest.json" \
   --candidate "$REPACK/manifest-relationship/release-manifest.json" >"$WORK/manifest-relationship.log" 2>&1; then
   echo "expected a changed manifest relationship to fail closed; the .rels normalization is too wide" >&2
