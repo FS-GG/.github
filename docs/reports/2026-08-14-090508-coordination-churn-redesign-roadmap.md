@@ -360,16 +360,26 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
   in `2026-08-15-m6-comprehensive-test-results.json` and `2026-08-15-m6-mutation-results.json`. After the
   round-9 repairs, the derived selector passed 27/27 in 149 seconds with log SHA-256
   `ed129fcf262d5d92904c7d75823fee289775165b1559ee973af0fbeac337670c`.
-- **Independent review and remaining terminal gates:** Round 9 recorded four truthful majors. The same
+- **Independent review and terminal execution:** Round 9 recorded four truthful majors. The same
   critic has independently rechecked the repaired heads and found 001 realpath/symlink containment, 002
   executable mutation evidence, and 003 authenticated seed/census binding structurally resolved; the
-  critique artifact remains at round 9, changes-required, so no pass is fabricated. Finding 004 remains
-  open by design. Preparatory PR [#2636](https://github.com/FS-GG/.github/pull/2636) must merge through
-  normal green protection; then exact-main new-only smoke and lifecycle repair must pass, coherent set
-  `0.58.0` must be prepared once, published byte-identically to both feeds, promoted, adopted and pinned,
-  issue `2569` must be resolved with no open same-class successor, and the same critic must record the
-  reserved terminal round-10 PASS. Only then may the acceptance JSON become terminal and this M6 checkbox
-  be checked.
+  critique artifact remains at round 9, changes-required, so no pass is fabricated. PR
+  [#2636](https://github.com/FS-GG/.github/pull/2636) merged normally at
+  `12ec83f8af74d9456577e8f5518e13293e150b88`. Coherent set `0.58.0` was prepared once from that exact
+  source, published byte-identically to GitHub Packages and NuGet.org, promoted as immutable release
+  `coherent-set/v0.58.0`, then adopted and pinned by normally merged PR
+  [#2637](https://github.com/FS-GG/.github/pull/2637) at main
+  `57211eeb79a89f88170b3cdcfadcc0849858540a`. Exact-main live verification built Release, read all 108
+  board rows, produced zero reconcile chores, exercised the typed GraphQL visibility/id/policy/meter/
+  roster/archive boundary, replayed immutable promotion idempotently, and clean-installed the public
+  0.58 CLI. Issue [#2569](https://github.com/FS-GG/.github/issues/2569) is closed and a fresh same-class
+  search is empty. The terminal acceptance now passes with an explicit ancestry chain from first-green
+  `e41a762f` through release source `12ec83f8` to verified main `57211eeb`; it does not pretend those
+  intentionally distinct commits are one identity. The only observed exact-main check failure was a
+  generated registry digest left stale by adoption; the canonical registry writer has reconciled that
+  one row on the final evidence branch, with its dated changelog entry and absolute coherence check green.
+  M6 remains unchecked only until that repair passes normal PR protection and the same critic records the
+  reserved terminal round-10 PASS on the exact final evidence head.
 
 ### M0 stabilization evidence
 

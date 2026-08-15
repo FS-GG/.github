@@ -68,7 +68,8 @@
     {"family": "evidence-retention", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["bash", "tests/evidence-manifest/run.sh"], "expected_exit": 0, "observed_exit": 0, "counts": {"passed": 1, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}},
     {"family": "shellcheck", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["bash", "tests/shell-lint/run.sh"], "expected_exit": 0, "observed_exit": 0, "counts": {"passed": 48, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}},
     {"family": "policy-projections", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["python3", "scripts/test", "--all"], "expected_exit": 0, "observed_exit": 0, "counts": {"selected": 91, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}},
-    {"family": "wiring-non-vacuity", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["bash", "tests/test-selector/run.sh"], "expected_exit": 0, "observed_exit": 0, "counts": {"passed": 50, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}}
+    {"family": "wiring-non-vacuity", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["bash", "tests/test-selector/run.sh"], "expected_exit": 0, "observed_exit": 0, "counts": {"passed": 50, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}},
+    {"family": "live-new-only-smoke", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["see", "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json"], "expected_exit": 0, "observed_exit": 0, "counts": {"commands": 12, "failed": 0}, "stdout_sha256": "dd1f69df4fc7468c0f671c4cdda5e92ddf8b004fb6202dac317d7863d4a54532", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json", "sha256": "dd1f69df4fc7468c0f671c4cdda5e92ddf8b004fb6202dac317d7863d4a54532"}}
   ],
   "engine_mutation_matrix": {
     "path": "docs/reports/evidence/2026-08-15-m6-mutation-results.json",
@@ -85,19 +86,33 @@
   ],
   "release": {
     "version": "0.58.0",
-    "source_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf",
-    "prepared_manifest_verified": false,
-    "package_bytes_identical": false,
-    "github_feed_observed": false,
-    "nuget_feed_observed": false,
-    "promoted": false,
-    "adopted_and_pinned": false
+    "source_sha": "12ec83f8af74d9456577e8f5518e13293e150b88",
+    "tag": "coherent-set/v0.58.0",
+    "immutable": true,
+    "manifest_sha256": "34cb470e8450a741bcb8f88302c670915397c0412ac510dae40087e97a1933ea",
+    "stable_channel_sha256": "1c467c38f70c85ad1fc206813e7c31c63155e2ea93e8df9fdb01362e72cc2f85",
+    "prepared_manifest_verified": true,
+    "package_bytes_identical": true,
+    "github_feed_observed": true,
+    "nuget_feed_observed": true,
+    "promoted": true,
+    "adopted_and_pinned": true,
+    "evidence": {"path": "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json", "sha256": "dd1f69df4fc7468c0f671c4cdda5e92ddf8b004fb6202dac317d7863d4a54532"}
   },
   "live_acceptance": {
-    "exact_main_sha": null,
-    "new_only_smoke": false,
-    "same_class_open_issues": null,
-    "issue_2569_closed": false
+    "verified_main_sha": "57211eeb79a89f88170b3cdcfadcc0849858540a",
+    "new_only_smoke": true,
+    "same_class_open_issues": 0,
+    "issue_2569_closed": true,
+    "commands": [
+      {"command": ["release-build"], "observed_exit": 0, "stdout_sha256": "83e0d81414f5c26eddd16a32638026dcb01afc29c51028d4c548e43dcb6f5be8"},
+      {"command": ["ready", "--all", "--json"], "observed_exit": 0, "stdout_sha256": "b362797852d792e8186e8ee62bf553db1cfe3717d8b5082468891c8992965d19"},
+      {"command": ["reconcile", "--dry-run"], "observed_exit": 0, "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"},
+      {"command": ["typed-graphql-live-matrix"], "observed_exit": 0, "stdout_sha256": "dd1f69df4fc7468c0f671c4cdda5e92ddf8b004fb6202dac317d7863d4a54532"},
+      {"command": ["immutable-promotion-replay"], "observed_exit": 0, "stdout_sha256": "20efef3e6175349a52a8079f6a9be3696efc6cc69bb789ebdaf04161d8c3c71a"},
+      {"command": ["public-nuget-clean-install", "0.58.0"], "observed_exit": 0, "stdout_sha256": "e55a06069301ccb3e298a1209c860a2eddc4789e2d1ded05d5af1ae028ba9949"}
+    ],
+    "evidence": {"path": "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json", "sha256": "dd1f69df4fc7468c0f671c4cdda5e92ddf8b004fb6202dac317d7863d4a54532"}
   },
-  "status": "pre-release-tests-and-mutations-green-pending-critic-merge-release-live-acceptance"
+  "status": "terminal-new-only-release-live-acceptance-pending-final-critic"
 }

@@ -34,12 +34,6 @@ candidate["release"].update({
     "promoted": True,
     "adopted_and_pinned": True,
 })
-candidate["live_acceptance"] = {
-    "exact_main_sha": sha,
-    "new_only_smoke": True,
-    "same_class_open_issues": 0,
-    "issue_2569_closed": True,
-}
 assert module.validate(candidate, root) == [], module.validate(candidate, root)
 
 with tempfile.TemporaryDirectory() as directory:
@@ -83,6 +77,8 @@ mutations = {
     "test-family-missing": lambda d: d.update(test_results=d["test_results"][1:]),
     "mutation-did-not-red": lambda d: d["mutation_results"][0].update(outcome="pass"),
     "release-not-promoted": lambda d: d["release"].update(promoted=False),
+    "release-source-unrelated": lambda d: d["release"].update(source_sha="0" * 40),
+    "live-main-unrelated": lambda d: d["live_acceptance"].update(verified_main_sha="0" * 40),
     "live-successor-open": lambda d: d["live_acceptance"].update(same_class_open_issues=1),
 }
 for name, mutate in mutations.items():
@@ -109,9 +105,5 @@ for inversion in \
   printf '%s\n' "$output"
 done
 
-if python3 "$ROOT/scripts/m6-cutover-acceptance.py" \
-  "$ROOT/docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json" --root "$ROOT" >/dev/null 2>&1; then
-  echo "pending production evidence unexpectedly passed" >&2
-  exit 1
-fi
-echo "m6-cutover-acceptance pending evidence: correctly blocked until tests/release/live bindings exist"
+python3 "$ROOT/scripts/m6-cutover-acceptance.py" \
+  "$ROOT/docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json" --root "$ROOT"
