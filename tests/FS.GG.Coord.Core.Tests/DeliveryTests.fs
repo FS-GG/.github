@@ -341,3 +341,107 @@ module DeliveryTests =
             failwith "GATE INVERSION: a receipt for a stale head was landable"
         | Delivery.Next transition -> Assert.Equal(Delivery.ReviewActive, transition.Stage)
         | Delivery.NoVerdict _ -> ()
+
+    // -- .github#2575: `delivery` no longer folds check state into a REVIEW problem ------------------
+    //
+    // The finding was measured through the compiled engine on two supplied snapshots differing ONLY in
+    // `checksGreen`. Host-measured against `main` at ae9b0dd6, BEFORE this change:
+    //
+    //   checksGreen=false                 -> {"stage":"reviewActive","action":"refreshReview"}
+    //   checksGreen=true                  -> {"stage":"landable","action":"awaitLandability"}
+    //   checksGreen=false, landable=true  -> {"stage":"reviewActive","action":"refreshReview"}
+    //
+    // The third line is the counterfactual that makes `reviewChecksPending` load-bearing rather than
+    // defensive: before this change, the checks clause INSIDE `reviewProblem` was the only thing
+    // holding that combination short of `GuardedLand`. These tests are written against `Delivery.
+    // inspect` itself — they CALL the decision rather than assert on its source text — so they cannot
+    // pass vacuously (.github#2551).
+
+    /// A snapshot whose review evidence is complete and accepted at the current head, parameterised on
+    /// the two facts the finding varies. Everything else is the file's ordinary landable snapshot, so
+    /// any difference these tests observe is attributable to the parameters and nothing else.
+    let private checksSnapshot checksGreen landable =
+        { snapshot "head-a" with
+            Review = Some { review "head-a" with ChecksGreen = checksGreen }
+            Landable = landable }
+
+    [<Fact>]
+    let ``#2575 two snapshots differing only in checksGreen no longer differ in their review stage`` () =
+        let pending = Delivery.inspect (checksSnapshot false false)
+        let green = Delivery.inspect (checksSnapshot true false)
+
+        // The pre-change answer for `pending` was `ReviewActive`/`RefreshReview "review checks are not
+        // green"`. Naming it explicitly, rather than only asserting the two agree, keeps this red on the
+        // pre-change engine even if some later edit moved `green` too.
+        transition Delivery.Landable Delivery.AwaitLandability pending
+        transition Delivery.Landable Delivery.AwaitLandability green
+
+        match pending, green with
+        | Delivery.Next left, Delivery.Next right ->
+            Assert.Equal(left.Stage, right.Stage)
+            Assert.Equal(left.Action, right.Action)
+        | _ -> failwith "expected transitions from both snapshots"
+
+    [<Fact>]
+    let ``#2575 a complete chain whose checks are not green is never reported as a review problem`` () =
+        match Delivery.inspect (checksSnapshot false false) with
+        | Delivery.Next { Stage = Delivery.ReviewActive } ->
+            failwith "an accepted chain awaiting a check that cannot be green yet was reported as an active review"
+        | Delivery.Next { Action = Delivery.RefreshReview reason } ->
+            failwithf "a check-state fact was reported as a review repair: %s" reason
+        | Delivery.Next _ -> ()
+        | Delivery.NoVerdict reason -> failwith reason
+
+    [<Fact>]
+    let ``#2575 a structurally broken chain is still a review problem, and never blamed on the checks`` () =
+        // Non-vacuity leg: the structural half of `Driver.reviewChainProblems` must still reach
+        // `RefreshReview`, so the test above is measuring the split and not a validator that stopped
+        // reporting anything at all. `ChecksGreen = false` on the SAME snapshot proves the two clauses
+        // are read independently.
+        let broken =
+            { snapshot "head-a" with
+                Review = Some { review "head-a" with ChecksGreen = false; Rounds = [ 1; 2; 3; 4 ] } }
+        match Delivery.inspect broken with
+        | Delivery.Next { Stage = Delivery.ReviewActive; Action = Delivery.RefreshReview reason } ->
+            Assert.Contains("round ceiling exceeded", reason)
+            Assert.DoesNotContain("checks are not green", reason)
+        | result -> failwithf "expected a structural review problem, got %A" result
+
+    [<Fact>]
+    let ``#2575 a snapshot claiming landable over a chain whose checks are not green still cannot land`` () =
+        // GATE INVERSION EVIDENCE. Deleting `reviewChecksPending` from `inspect`'s guard makes exactly
+        // this case reach `Accepted`/`GuardedLand`, because in a SUPPLIED snapshot `landable` and the
+        // chain's `checksGreen` are independent fields. Verified by mutation: with the guard removed
+        // this assertion reds and the rest of the file stays green.
+        match Delivery.inspect (checksSnapshot false true) with
+        | Delivery.Next { Action = Delivery.GuardedLand } ->
+            failwith "GATE INVERSION: a chain whose own checks are not green authorized a guarded landing"
+        | _ -> ()
+
+        transition Delivery.Landable Delivery.AwaitLandability (Delivery.inspect (checksSnapshot false true))
+
+    [<Fact>]
+    let ``#2575 the merge gate itself is unchanged: green checks and a landable pull request still land`` () =
+        transition Delivery.Accepted Delivery.GuardedLand (Delivery.inspect (checksSnapshot true true))
+
+    [<Fact>]
+    let ``#2575 reading the ceiling from Protocol.reviewPolicy preserves both literals`` () =
+        // The refactor replaced a hand-written `if review.RepairPhase then 10 else 3` with the policy
+        // record. Pin both boundaries so a future policy edit cannot silently move this validator, and
+        // so the refactor is demonstrably behaviour-preserving rather than asserted to be.
+        let atCeiling rounds repairPhase =
+            { snapshot "head-a" with
+                Review = Some { review "head-a" with Rounds = rounds; RepairPhase = repairPhase } }
+
+        transition Delivery.Accepted Delivery.GuardedLand (Delivery.inspect (atCeiling [ 1; 2; 3 ] false))
+        transition Delivery.Accepted Delivery.GuardedLand (Delivery.inspect (atCeiling [ 1 .. 10 ] true))
+
+        match Delivery.inspect (atCeiling [ 1; 2; 3; 4 ] false) with
+        | Delivery.Next { Stage = Delivery.ReviewActive; Action = Delivery.RefreshReview reason } ->
+            Assert.Contains("round ceiling exceeded", reason)
+        | result -> failwithf "expected the ordinary ceiling of 3 to be enforced, got %A" result
+
+        match Delivery.inspect (atCeiling [ 1 .. 11 ] true) with
+        | Delivery.Next { Stage = Delivery.ReviewActive; Action = Delivery.RefreshReview reason } ->
+            Assert.Contains("round ceiling exceeded", reason)
+        | result -> failwithf "expected the repair-phase ceiling of 10 to be enforced, got %A" result

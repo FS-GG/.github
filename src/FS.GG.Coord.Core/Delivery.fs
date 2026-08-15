@@ -180,6 +180,35 @@ module Delivery =
         elif not snapshot.PathsVerified then Some "declared paths are not verified"
         else None
 
+    /// The round ceiling this chain is judged against, read from the ONE policy record that defines
+    /// both literals (`Protocol.reviewPolicy`) rather than restated here. It was spelled `if
+    /// review.RepairPhase then 10 else 3` for as long as this function existed, which is the same
+    /// second-copy-of-one-rule shape `.github#2575` acceptance 2 names — `Driver.receiptFresh` already
+    /// reads the policy record for exactly this quantity, so the two spellings were one silent reword
+    /// away from disagreeing. The values are identical today (`MaxAutomatedRepairRounds = 3`,
+    /// `RepairPhaseMaxRounds = 10`), so this is behaviour-preserving by construction.
+    let private reviewCeiling (review: Driver.ReviewChain) =
+        if review.RepairPhase then Protocol.reviewPolicy.RepairPhaseMaxRounds
+        else Protocol.reviewPolicy.MaxAutomatedRepairRounds
+
+    /// What is wrong with the review EVIDENCE — and only that (.github#2575).
+    ///
+    /// This reads `Driver.validateReviewChainStructure`, not `Driver.validateReviewChain`. The full
+    /// list also carries one LIVENESS clause, "review checks are not green", which is a fact about a CI
+    /// run that has not reported yet rather than anything wrong with what the critic and host durably
+    /// wrote. Folding it in here made a complete, host-accepted chain report `stage: reviewActive,
+    /// action: refreshReview` — the state whose taught recovery is to go looking for a repair round
+    /// that does not exist. `.github#2549` removed exactly that conflation from `review`; leaving it
+    /// here meant the verb `review`'s own `authorizeDelivery` action routes to answered the corrected
+    /// question with the uncorrected answer.
+    ///
+    /// Worse, the check it fell over was structurally unable to be green yet: `claim-generation` cannot
+    /// report until the live `delivery` call PATCHes `fsgg:pr-authorization` onto the head
+    /// (`.github#2504`), and that call is the very one whose output this is.
+    ///
+    /// `Driver.validateReviewChain` is untouched and remains the single definition of chain validity;
+    /// the structural/liveness split lives once, at its source, in `Driver.reviewChainProblems`
+    /// (acceptance 2). Delivery does not fork a second copy and cannot drift from it.
     let private reviewProblem snapshot =
         match snapshot.ReviewProblem, snapshot.Review with
         | Some problem, _ when not (System.String.IsNullOrWhiteSpace problem) -> Some problem
@@ -187,10 +216,23 @@ module Delivery =
         | _, Some review when review.HeadSha <> Some snapshot.Freshness.HeadSha ->
             Some "independent review is for a different head SHA"
         | _, Some review ->
-            let ceiling = if review.RepairPhase then 10 else 3
-            match Driver.validateReviewChain ceiling review with
+            match Driver.validateReviewChainStructure (reviewCeiling review) review with
             | [] -> None
             | errors -> Some(String.concat "; " errors)
+
+    /// The one liveness fact `reviewProblem` above deliberately no longer reports, kept as a SEPARATE
+    /// question so that dropping it from the review problem list cannot loosen what may merge.
+    ///
+    /// This guard is load-bearing rather than defensive. In the live adapter `Landable` and the chain's
+    /// `ChecksGreen` are both derived from the same `landable = PrGreen` read, so they cannot disagree
+    /// there — but a SUPPLIED snapshot carries them as two independent fields, and host-measured
+    /// against the pre-fix engine, `landable=true` with `checksGreen=false` was held short of
+    /// `GuardedLand` by the checks clause inside `reviewProblem` and by nothing else. Removing that
+    /// clause without this guard would have made that combination authorize a merge on a chain whose
+    /// own checks are not green, which is the one thing `.github#2575` acceptance 6 forbids. The
+    /// answer stays `Landable`/`AwaitLandability`: fail-closed, and no new merge authority anywhere.
+    let private reviewChecksPending snapshot =
+        snapshot.Review |> Option.exists (fun review -> not review.ChecksGreen)
 
     /// See `Delivery.fsi` — folds a `Review.AcceptedReceipt` into the `Driver.ReviewChain` shape this
     /// module has always consumed, so `inspect`/`reviewProblem` need no changes to read it.
@@ -241,7 +283,15 @@ module Delivery =
                     match reviewProblem snapshot with
                     | Some "independent review evidence is absent" -> next snapshot ReviewActive AwaitIndependentReview
                     | Some problem -> next snapshot ReviewActive (RefreshReview problem)
-                    | None when not snapshot.Landable -> next snapshot Landable AwaitLandability
+                    // Nothing is wrong with the evidence. What remains is a CI verdict, and the stage
+                    // that names it already exists: `Landable`/`AwaitLandability` is what this same
+                    // snapshot answered the moment `checksGreen` flipped true, and it is also literally
+                    // the next step `pnext-item` section 6 prescribes after the live `delivery` call —
+                    // wait on `landable` for this exact head. So the two snapshots the finding was
+                    // measured with no longer differ in their REVIEW stage, and no parallel vocabulary
+                    // is invented for a window `Landable` already describes (acceptance 1 and 3).
+                    | None when reviewChecksPending snapshot || not snapshot.Landable ->
+                        next snapshot Landable AwaitLandability
                     | None -> next snapshot Accepted GuardedLand
 
     let advance freshnessToken actionKey snapshot =

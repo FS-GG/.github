@@ -3,6 +3,24 @@ namespace FS.GG.Coord
 /// Pure, fail-closed lifecycle decisions for a single claimed coordination item.
 module Delivery =
     /// The durable stage established by the facts currently available for an item.
+    ///
+    /// `ReviewActive` and `Landable` divide the post-handoff window on ONE question, and .github#2575
+    /// is the item that made the division true: is something wrong with the review EVIDENCE, or is the
+    /// evidence complete and only a CI verdict outstanding?
+    ///
+    ///   - `ReviewActive` — the durable review record is absent, bound to another head, unparseable, or
+    ///     structurally invalid (`Driver.validateReviewChainStructure`). A human or host act on the
+    ///     REVIEW is owed.
+    ///   - `Landable` — nothing is wrong with the evidence; what is outstanding is the pull request's
+    ///     own check/mergeability verdict, whether that is because the chain's `ChecksGreen` is still
+    ///     false or because `Landable` is. Nobody owes a review act; wait on `landable` for this head.
+    ///
+    /// Before .github#2575 the liveness clause `Driver.validateReviewChain` carries — "review checks
+    /// are not green" — was folded into the review problem list, so a complete, host-accepted chain
+    /// reported `ReviewActive` for the entire window in which `claim-generation` structurally COULD NOT
+    /// be green yet (.github#2504): that context cannot report until the live `delivery` call publishes
+    /// `fsgg:pr-authorization`, and that call is the one producing this very answer. Reading it as an
+    /// unfinished review is how PR #2514 was closed unmerged and reopened as #2528 (.github#2549).
     type Stage =
         | Claimed
         | Implementation
@@ -79,7 +97,15 @@ module Delivery =
         | RepairReviewHandoff of reason: string
         | MoveToReview
         | AwaitIndependentReview
+        /// A problem with the durable review EVIDENCE, never a liveness fact about a check run
+        /// (.github#2575). "The checks are not green yet" is `AwaitLandability` below.
         | RefreshReview of reason: string
+        /// The review evidence is complete and accepted at this head; only the pull request's own
+        /// check/mergeability verdict is outstanding. Poll `landable` for this exact head — which is
+        /// also what `pnext-item` section 6 prescribes immediately after the live `delivery` call.
+        /// Reached whenever the chain's `ChecksGreen` is false OR the snapshot's `Landable` is, so a
+        /// snapshot supplying `landable = true` alongside a chain whose checks are not green still
+        /// cannot reach `GuardedLand`.
         | AwaitLandability
         | GuardedLand
         | VerifyObligation of name: string
