@@ -12,14 +12,23 @@ on:
         type: boolean
         default: true
 
-# A single queue is the concurrency contract.  It covers the read, tag and
-# evidence-PR transaction; cancellation would strand a half-observed release.
+# A single queue is the concurrency contract.  It covers the read, prepare, tag and
+# evidence-PR transaction; cancellation would strand a half-observed release.  It is
+# WORKFLOW-scoped, so the three jobs below remain one transaction after .github#2654 split
+# them — a second run cannot interleave its own prepare between this run's decide and tag.
 concurrency:
   group: kit-auto-publish
   cancel-in-progress: false
 
+# `contents: write` and `packages: read` are here, at WORKFLOW level, specifically because of the
+# `prepare` job below: a called workflow's GITHUB_TOKEN scopes are capped by its CALLER, so
+# release-saga-prepare.yml's own `permissions:` block cannot grant itself what this workflow does
+# not hold — it would 403 creating the draft release.  This is the same grant coherence.yml makes
+# for its own reusable call, for the same reason.  Every job below still declares its own
+# `permissions:` block, so widening the default here widens nothing in practice.
 permissions:
-  contents: read
+  contents: write
+  packages: read
   actions: read
 
 jobs:
@@ -32,6 +41,10 @@ jobs:
       actions: read
       packages: read
       issues: write
+    outputs:
+      action: ${{ steps.observe.outputs.action }}
+      version: ${{ steps.observe.outputs.version }}
+      source-sha: ${{ steps.observe.outputs.source-sha }}
     steps:
       # The App token is intentional, and it is intentional ONLY FOR THE WRITES:
       # a GITHUB_TOKEN-created tag cannot start release-kit.yml, and the same
@@ -339,64 +352,6 @@ jobs:
           echo "action=$(jq -r .action decision.json)" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "source-sha=$source_sha" >> "$GITHUB_OUTPUT"
-      - name: Tag the coherent-set siblings
-        if: (steps.observe.outputs.action == 'tag' || steps.observe.outputs.action == 'tagSiblings') && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
-        env:
-          ACTION: ${{ steps.observe.outputs.action }}
-          VERSION: ${{ steps.observe.outputs.version }}
-          SOURCE_SHA: ${{ steps.observe.outputs.source-sha }}
-        run: |
-          set -euo pipefail
-          kit_tag="kit/v${VERSION}"
-          # This TOCTOU guard only applies to the FRESH candidate ('tag'): the decision engine reached
-          # that action specifically because it observed `tagExists=false`, so the kit tag existing here
-          # means it appeared between observation and this write — refuse rather than act on stale
-          # information, exactly as before .github#2495. `tagSiblings` is the opposite case BY
-          # CONSTRUCTION (.github#2495): it only ever fires when the kit tag is ALREADY observed present,
-          # so the same check would refuse the very state this action exists to repair.
-          if [ "$ACTION" = tag ]; then
-            git rev-parse -q --verify "refs/tags/$kit_tag" >/dev/null && { echo '::error::tag appeared after observation; refusing'; exit 1; }
-          fi
-          # `git tag -a` builds an annotated tag object, which requires a committer
-          # identity — a hosted runner carries none by default, so an unconfigured
-          # identity fails closed with `fatal: empty ident name ... not allowed`
-          # (exit 128) on EVERY eligible candidate (.github#2492). The sibling "Open
-          # or update the publish evidence PR" step below already configures this
-          # same identity before its own git operations; this mirrors it exactly.
-          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
-          git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
-          # .github#2495: FS.GG.Kit, FS.GG.Drivers and coord-engine release from one shared commit
-          # (.github#2402) and release-kit.yml/release-drivers.yml/release-coord-engine.yml each refuse
-          # to publish until ALL THREE tags exist and name that same commit (.github#2409 DEC-004). Tag
-          # and push whichever of the three are still missing, together, in one `git push` — matching
-          # `check_sibling_tag`'s own documented expectation ("push all three tags in one `git push`") so
-          # no sibling workflow can observe a state where only some of the trio are visible. Pinned to
-          # SOURCE_SHA rather than the checked-out HEAD: for a FRESH tag this is $GITHUB_SHA (identical to
-          # HEAD); for a REPAIR (`tagSiblings`) it is the commit the EXISTING kit tag already names, which
-          # may not be HEAD any more if main advanced after the earlier, partial run.
-          push_refs=()
-          tag_one() {
-            local tag="$1" label="$2"
-            git rev-parse -q --verify "refs/tags/$tag" >/dev/null && return 0
-            git tag -a "$tag" "$SOURCE_SHA" -m "Auto-publish FS.GG.$label ${VERSION} as part of the FS.GG coherent-set release (.github#2409)"
-            push_refs+=("refs/tags/$tag")
-          }
-          tag_one "$kit_tag" Kit
-          tag_one "drivers/v${VERSION}" Drivers
-          tag_one "coord-engine/v${VERSION}" Coord.Cli
-          if [ "${#push_refs[@]}" -eq 0 ]; then
-            echo '::error::nothing to tag/push — every coherent-set tag for '"$VERSION"' already exists at this commit; the decision engine should never have reached this step in that state'
-            exit 1
-          fi
-          # `--atomic`: a multi-ref push is NOT all-or-nothing by default — GitHub can accept some ref
-          # updates in one invocation and reject others (e.g. one tag name already exists on origin at a
-          # different commit, a genuine race this step cannot fully rule out from a single observation).
-          # Without `--atomic`, that partial acceptance is exactly how a split, mismatched coherent-set
-          # trio could land on `origin` even when this step's OWN logic is otherwise correct — the same
-          # split state `scripts/kit-auto-publish.py`'s sibling-tag check now also refuses to walk into
-          # from the read side (.github#2498 round-1 repair). `--atomic` closes the write side: either
-          # every ref in `push_refs` lands, or none do.
-          git push --atomic origin "${push_refs[@]}"
       - name: Escalate a non-eligible or partial state once
         if: steps.observe.outputs.action == 'refuse' || steps.observe.outputs.action == 'stickyEscalate'
         env:
@@ -517,3 +472,145 @@ jobs:
           title="docs: record FS.GG.Kit ${VERSION} publish evidence"
           existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$existing" ]; then gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"; else gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "$title" --body "$body"; fi
+
+  # ────────────────────────────────────────────────────────────────────────────────────────────────
+  # THE TAG WRITE IS DOWNSTREAM OF THE BYTES IT STARTS CONSUMING (.github#2654).
+  #
+  # `decide` answering `tag` used to be enough: the tag step ran in the same job, immediately after
+  # the observation, and `release-kit.yml` PACKED its own artifact when the tag push woke it. Since
+  # .github#2600's release saga, it does not pack anything — it DOWNLOADS
+  # `coherent-set/v<version>`, which only `release-saga-prepare.yml` creates, and which was
+  # `workflow_dispatch`-only. The two rails never met.
+  #
+  # `0.58.1` is what that cost: on 2026-08-15 this workflow decided `tag` at `a415652f`, pushed all
+  # three sibling tags, and all three release workflows died seconds later on `release not found`.
+  # Three namespaces are now immutably tagged (.github#1772 — tags here are ruled non-deletable and
+  # non-movable) with zero packages published on either feed.
+  #
+  # THE REPAIR IS A JOB DEPENDENCY, NOT A NEW OBSERVED FACT. A `preparedRelease` fact fed to
+  # `decide()` would have been the wrong shape twice over: the prepared release CANNOT exist before
+  # the merge commit does (`release-saga-ci.sh init` asserts the manifest's `sourceSha` equals the
+  # tag's commit), so such a fact would be permanently false on the very line it was added for; and
+  # it would move an irreversible-edge precondition into the pure decision program, whose whole
+  # design is to hold no write capability and no IO. So `decide()` is untouched, and the ordering
+  # lives where orderings belong — in the job graph:
+  #
+  #   decide ──▶ prepare (release-saga-prepare.yml) ──▶ tag
+  #
+  # `tag` NEEDS `prepare`. A `needs:` job that is skipped or that fails skips its dependents, so a
+  # failed preparation cannot be followed by a tag push; and because both jobs carry the IDENTICAL
+  # `if:`, there is no decided action that reaches `tag` without also reaching `prepare`. That pair
+  # of properties is what `tests/kit-auto-publish/run.sh` asserts structurally, over these very
+  # files, with a mutation leg for each — the gap this closes is downstream of `decide()`, so a leg
+  # that only scored `decide()` would have stayed green through the whole of .github#2654.
+  #
+  # Preparation is reversible and publishes nothing: it creates a DRAFT release. Running it and then
+  # failing to tag leaves an unreferenced draft, which the next run's own `contentId`/byte
+  # comparison reuses. The reverse order is the one that burns a namespace, which is why it is now
+  # unreachable.
+  # ────────────────────────────────────────────────────────────────────────────────────────────────
+  prepare:
+    needs: decide
+    # KEEP THIS CONDITION BYTE-IDENTICAL TO `tag`'s BELOW. It is not duplication for its own sake:
+    # `tests/kit-auto-publish/run.sh` asserts the two are equal, because an action that could reach
+    # `tag` without also reaching `prepare` would reopen .github#2654 exactly.
+    if: (needs.decide.outputs.action == 'tag' || needs.decide.outputs.action == 'tagSiblings') && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
+    # `source-sha`, not the caller's head. For a FRESH `tag` the two are the same commit; for the
+    # `tagSiblings` repair they are not, and packing at the caller's head would bind the manifest to
+    # a commit no coherent-set tag names — which every release workflow's `check_sibling_tag`
+    # precondition then refuses.
+    uses: ./.github/workflows/release-saga-prepare.yml
+    with:
+      source-sha: ${{ needs.decide.outputs.source-sha }}
+
+  tag:
+    needs: [decide, prepare]
+    # Byte-identical to `prepare`'s condition above — see the note there.
+    if: (needs.decide.outputs.action == 'tag' || needs.decide.outputs.action == 'tagSiblings') && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      # Minted again in this job because a job boundary is a token boundary, and for the SAME reason
+      # the `decide` job mints one: a GITHUB_TOKEN-created tag cannot start release-kit.yml. See the
+      # long note on that step for the 422-on-any-ungranted-scope rule these three inputs obey.
+      - name: Mint the release coordinator App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      # `fetch-depth: 0` so `SOURCE_SHA` — which on the `tagSiblings` path is an older commit that
+      # the existing kit tag names, not this run's head — is present locally for `git tag -a`.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Tag the coherent-set siblings
+        env:
+          ACTION: ${{ needs.decide.outputs.action }}
+          VERSION: ${{ needs.decide.outputs.version }}
+          SOURCE_SHA: ${{ needs.decide.outputs.source-sha }}
+        run: |
+          set -euo pipefail
+          kit_tag="kit/v${VERSION}"
+          # This TOCTOU guard only applies to the FRESH candidate ('tag'): the decision engine reached
+          # that action specifically because it observed `tagExists=false`, so the kit tag existing here
+          # means it appeared between observation and this write — refuse rather than act on stale
+          # information, exactly as before .github#2495. `tagSiblings` is the opposite case BY
+          # CONSTRUCTION (.github#2495): it only ever fires when the kit tag is ALREADY observed present,
+          # so the same check would refuse the very state this action exists to repair.
+          #
+          # The window this guard covers GREW when .github#2654 put `prepare` between the observation
+          # and this write — preparation builds, tests, packs and preflights three packages, so it is
+          # minutes, not seconds. That makes the guard more load-bearing than it was, not less, and it
+          # is why the check is a live `git rev-parse` against the freshly fetched refs rather than a
+          # re-use of the `tagExists` fact `decide` observed.
+          if [ "$ACTION" = tag ]; then
+            git rev-parse -q --verify "refs/tags/$kit_tag" >/dev/null && { echo '::error::tag appeared after observation; refusing'; exit 1; }
+          fi
+          # `git tag -a` builds an annotated tag object, which requires a committer
+          # identity — a hosted runner carries none by default, so an unconfigured
+          # identity fails closed with `fatal: empty ident name ... not allowed`
+          # (exit 128) on EVERY eligible candidate (.github#2492). The "Open or update
+          # the publish evidence PR" step in the `decide` job configures this same
+          # identity before its own git operations; this mirrors it exactly.
+          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          # .github#2495: FS.GG.Kit, FS.GG.Drivers and coord-engine release from one shared commit
+          # (.github#2402) and release-kit.yml/release-drivers.yml/release-coord-engine.yml each refuse
+          # to publish until ALL THREE tags exist and name that same commit (.github#2409 DEC-004). Tag
+          # and push whichever of the three are still missing, together, in one `git push` — matching
+          # `check_sibling_tag`'s own documented expectation ("push all three tags in one `git push`") so
+          # no sibling workflow can observe a state where only some of the trio are visible. Pinned to
+          # SOURCE_SHA rather than the checked-out HEAD: for a FRESH tag this is $GITHUB_SHA (identical to
+          # HEAD); for a REPAIR (`tagSiblings`) it is the commit the EXISTING kit tag already names, which
+          # may not be HEAD any more if main advanced after the earlier, partial run. It is also the exact
+          # commit the `prepare` job just bound the manifest to.
+          push_refs=()
+          tag_one() {
+            local tag="$1" label="$2"
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null && return 0
+            git tag -a "$tag" "$SOURCE_SHA" -m "Auto-publish FS.GG.$label ${VERSION} as part of the FS.GG coherent-set release (.github#2409)"
+            push_refs+=("refs/tags/$tag")
+          }
+          tag_one "$kit_tag" Kit
+          tag_one "drivers/v${VERSION}" Drivers
+          tag_one "coord-engine/v${VERSION}" Coord.Cli
+          if [ "${#push_refs[@]}" -eq 0 ]; then
+            echo '::error::nothing to tag/push — every coherent-set tag for '"$VERSION"' already exists at this commit; the decision engine should never have reached this step in that state'
+            exit 1
+          fi
+          # `--atomic`: a multi-ref push is NOT all-or-nothing by default — GitHub can accept some ref
+          # updates in one invocation and reject others (e.g. one tag name already exists on origin at a
+          # different commit, a genuine race this step cannot fully rule out from a single observation).
+          # Without `--atomic`, that partial acceptance is exactly how a split, mismatched coherent-set
+          # trio could land on `origin` even when this step's OWN logic is otherwise correct — the same
+          # split state `scripts/kit-auto-publish.py`'s sibling-tag check now also refuses to walk into
+          # from the read side (.github#2498 round-1 repair). `--atomic` closes the write side: either
+          # every ref in `push_refs` lands, or none do.
+          git push --atomic origin "${push_refs[@]}"

@@ -1099,10 +1099,17 @@ import yaml
 wf_path, out_path = sys.argv[1], sys.argv[2]
 with open(wf_path, encoding="utf-8") as fh:
     wf = yaml.safe_load(fh)
-steps = (wf.get("jobs") or {}).get("decide", {}).get("steps") or []
-step = next((s for s in steps if s.get("name") == "Tag the coherent-set siblings"), None)
-if step is None:
-    sys.exit("the tag step is GONE from kit-auto-publish.yml")
+# Searched across EVERY job rather than pinned to one job id. .github#2654 moved this step out of
+# `decide` and into its own `tag` job (so it could `needs:` the preparation job), and a pinned
+# extractor would have read that as "the tag step is GONE" — a red for a structural change that is
+# the whole point of the repair, and a green-by-vacuity if the pin were ever "fixed" by pointing it
+# at a job that no longer holds it. The step's NAME is the stable identity here; which job hosts it
+# is exactly what the topology legs below are for.
+steps = [s for job in (wf.get("jobs") or {}).values() if isinstance(job, dict) for s in (job.get("steps") or [])]
+matches = [s for s in steps if s.get("name") == "Tag the coherent-set siblings"]
+if len(matches) != 1:
+    sys.exit(f"expected exactly ONE 'Tag the coherent-set siblings' step in kit-auto-publish.yml, found {len(matches)}")
+step = matches[0]
 run = step["run"].replace("${{ steps.app-token.outputs.app-slug }}", "test-bot")
 with open(out_path, "w", encoding="utf-8") as out:
     out.write("#!/usr/bin/env bash\n")
@@ -1971,5 +1978,393 @@ checks=$((checks + 1))
 # The gate's second arm being live at all is asserted date-independently by
 # tests/registry-changelog/run.sh ("an entry correctly placed but with a stale updated: is still
 # refused"), which is where that property belongs; it is deliberately not restated here.
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────
+# .github#2654: THE TAG WRITE MUST BE DOWNSTREAM OF THE BYTES IT STARTS CONSUMING.
+#
+# EVERY LEG ABOVE SCORES `decide()`, AND EVERY ONE OF THEM STAYED GREEN THROUGH THIS DEFECT. That is
+# not a gap in their coverage; it is the shape of the bug. `decide()` answered `tag` correctly, the
+# workflow tagged correctly, and all three sibling tags landed at the right commit — and then all
+# three release workflows died on `gh release download "coherent-set/v0.58.1" ... release not found`,
+# because since .github#2600 `release-kit.yml` DOWNLOADS the packed set instead of packing it, and
+# the only thing that creates that set was `workflow_dispatch`-only. Nothing joined the two rails.
+# The subject of the legs below is therefore the JOB GRAPH, not the decision program: a leg that
+# scored `decide()` could not have caught this and cannot catch its recurrence.
+#
+# The invariant, stated once so the mutations below each falsify one clause of it:
+#
+#   (1) at least one job in kit-auto-publish.yml pushes a `refs/tags/` ref  [else no subject]
+#   (2) at least one job calls release-saga-prepare.yml                     [else no bytes]
+#   (3) every tagging job's TRANSITIVE `needs:` closure contains a preparing job
+#   (4) each tagging job's `if:` is identical to that preparing job's `if:` — so no decided action
+#       reaches the tag write without also reaching preparation
+#   (5) neither condition uses `always()`/`!cancelled()`/`failure()`, which would defeat (3) by
+#       running the dependent even when its `needs:` was skipped or failed
+#   (6) release-saga-prepare.yml admits `workflow_call`, and declares every input the caller passes
+#   (7) it BINDS to that input rather than merely declaring it: the checkout `ref:` reads it, and no
+#       `run:` block reaches for `$GITHUB_SHA` — which under `workflow_call` is the CALLER's head,
+#       not the commit the coherent-set tags name
+#
+# Clause (7) is not hypothetical tidiness. `release-saga-ci.sh init` asserts the manifest's
+# `sourceSha` equals the tag's commit, so on the `tagSiblings` repair path — where the existing kit
+# tag names a commit `main` has moved past — a `$GITHUB_SHA` left behind binds the manifest to the
+# wrong tree and every release workflow then refuses it. It is a mistake that reads as correct.
+# ──────────────────────────────────────────────────────────────────────────────────────────────────
+topo_work="$(mktemp -d)"
+trap 'rm -rf "$work" "$esc_work" "$topo_work"' EXIT
+topo_checker="$topo_work/topology.py"
+cat > "$topo_checker" <<'PY'
+"""Score the kit-auto-publish job graph against the .github#2654 invariant.
+
+Reads the two workflow files given on argv and prints one line per violation, exiting 1 if there
+are any. It restates no job id, no action name and no condition text: the tagging jobs are found by
+what their steps DO, the preparing jobs by what they CALL, and the conditions are compared to each
+other rather than to a literal. That is deliberate — a leg that hardcoded `tag`/`prepare` would go
+green the moment someone renamed a job while decoupling it, which is the failure it exists to catch.
+"""
+import re
+import sys
+
+import yaml
+
+kap_path, prep_path = sys.argv[1], sys.argv[2]
+kap = yaml.safe_load(open(kap_path, encoding="utf-8"))
+prep = yaml.safe_load(open(prep_path, encoding="utf-8"))
+prep_text = open(prep_path, encoding="utf-8").read()
+prep_file = prep_path.replace("\\", "/").rsplit("/", 1)[-1]
+problems = []
+
+jobs = {k: v for k, v in (kap.get("jobs") or {}).items() if isinstance(v, dict)}
+
+
+def triggers(doc):
+    # PyYAML resolves the bare key `on:` to the BOOLEAN True (YAML 1.1 truthy), so a plain
+    # doc["on"] misses it and every reusable workflow looks like a non-callee. Same trap the repo's
+    # own timeout gate documents.
+    return doc.get("on") or doc.get(True) or {}
+
+
+def needs_of(job):
+    declared = job.get("needs")
+    if declared is None:
+        return []
+    return [declared] if isinstance(declared, str) else list(declared)
+
+
+def closure(start):
+    seen, stack = set(), list(needs_of(jobs.get(start, {})))
+    while stack:
+        current = stack.pop()
+        if current in seen or current not in jobs:
+            continue
+        seen.add(current)
+        stack.extend(needs_of(jobs[current]))
+    return seen
+
+
+def pushes_tags(job):
+    for step in job.get("steps") or []:
+        run = step.get("run") or ""
+        if "git push" in run and "refs/tags/" in run:
+            return True
+    return False
+
+
+def condition(name):
+    return " ".join(str(jobs.get(name, {}).get("if") or "").split())
+
+
+tagging = sorted(name for name, job in jobs.items() if pushes_tags(job))
+preparing = sorted(
+    name for name, job in jobs.items()
+    if str(job.get("uses") or "").replace("\\", "/").rsplit("/", 1)[-1] == prep_file
+)
+
+# (1) and (2): a leg whose subject has vanished must be RED, never a vacuous green. Losing either
+# side is indistinguishable, from the graph alone, from a correctly-joined graph with nothing in it.
+if not tagging:
+    problems.append(
+        f"no job in {kap_path} pushes a `refs/tags/` ref — this leg's subject is gone. That is a "
+        f"no-verdict, not a pass."
+    )
+if not preparing:
+    problems.append(
+        f"no job in {kap_path} calls {prep_file} — the tag write has nothing to be downstream of, "
+        f"which is precisely the .github#2654 state (tags pushed, `coherent-set/v<version>` never "
+        f"prepared, all three release workflows dead on `release not found`)."
+    )
+
+for name in tagging:
+    reached = closure(name) & set(preparing)
+    # (3) A `needs:` job that is skipped or fails skips its dependents. That propagation IS the
+    # control; without the edge there is nothing stopping a tag push on a failed preparation.
+    if not reached:
+        problems.append(
+            f"job {name!r} pushes coherent-set tags, but no job calling {prep_file} is in its "
+            f"transitive `needs:` closure {sorted(closure(name))} — a run can therefore tag "
+            f"without prepared bytes (.github#2654)."
+        )
+        continue
+    for prepared in sorted(reached):
+        # (4) Identical conditions. `needs:` alone only covers "prepare ran and failed"; it does not
+        # cover "prepare was never selected". If the tag job's condition admitted an action the
+        # prepare job's did not, that action would skip prepare — and a skipped need skips the
+        # dependent, so the tag would not happen either. The real cost is the reverse asymmetry and
+        # every future edit to one condition alone, which is why they are pinned to each other
+        # rather than to a literal list of actions.
+        if condition(name) != condition(prepared):
+            problems.append(
+                f"job {name!r} and its preparing job {prepared!r} have different `if:` conditions "
+                f"({condition(name)!r} vs {condition(prepared)!r}) — the two must select exactly "
+                f"the same runs, or the tag write and its bytes can be decided independently."
+            )
+
+for name in sorted(set(tagging) | set(preparing)):
+    # (5) `always()`, `!cancelled()` and `failure()` all run a dependent whose `needs:` did not
+    # succeed, which silently converts clause (3) into decoration.
+    text = condition(name)
+    for token in ("always(", "cancelled(", "failure("):
+        if token in text:
+            problems.append(
+                f"job {name!r} guards itself with `{token})` ({text!r}) — that runs the job even "
+                f"when a `needs:` job was skipped or failed, defeating the ordering this leg "
+                f"asserts."
+            )
+
+prep_triggers = triggers(prep)
+if "workflow_call" not in prep_triggers:
+    # (6) Without it the caller's `uses:` cannot resolve at all — and the failure would read as a
+    # broken workflow reference rather than as the fail-closed refusal it must be.
+    problems.append(
+        f"{prep_file} does not admit `workflow_call` (triggers: {sorted(prep_triggers)}) — "
+        f"kit-auto-publish cannot call it, so preparation is operator-only again and the patch "
+        f"line tags without bytes."
+    )
+
+declared_inputs = set(((prep_triggers.get("workflow_call") or {}).get("inputs") or {}))
+for name in preparing:
+    for passed in sorted((jobs[name].get("with") or {})):
+        if passed not in declared_inputs:
+            problems.append(
+                f"job {name!r} passes `{passed}` to {prep_file}, which declares no such "
+                f"`workflow_call` input (declared: {sorted(declared_inputs)})."
+            )
+
+# (7) Declaring an input and ignoring it is the most expensive shape available here: it looks
+# joined, resolves cleanly, and binds the manifest to the wrong commit only on the repair path.
+if declared_inputs:
+    checkout_refs = [
+        str((step.get("with") or {}).get("ref") or "")
+        for job in (prep.get("jobs") or {}).values() if isinstance(job, dict)
+        for step in (job.get("steps") or [])
+        if str(step.get("uses") or "").startswith("actions/checkout")
+    ]
+    if not any(re.search(r"inputs\.[A-Za-z0-9_-]+", ref) for ref in checkout_refs):
+        problems.append(
+            f"{prep_file} declares `workflow_call` input(s) {sorted(declared_inputs)} but no "
+            f"`actions/checkout` step resolves its `ref:` from an input — it would pack the "
+            f"CALLER's head no matter what the caller asked for."
+        )
+
+for job in (prep.get("jobs") or {}).values():
+    if not isinstance(job, dict):
+        continue
+    for step in job.get("steps") or []:
+        run = step.get("run") or ""
+        if "GITHUB_SHA" in run:
+            problems.append(
+                f"{prep_file} step {step.get('name') or step.get('uses')!r} reads `$GITHUB_SHA` — "
+                f"under `workflow_call` that is the CALLER's head, not the commit the coherent-set "
+                f"tags name. `release-saga-ci.sh init` asserts the manifest's `sourceSha` equals "
+                f"the tag's commit, so on the repair path this binds the manifest to a tree no tag "
+                f"names and every release workflow then refuses it."
+            )
+
+for problem in problems:
+    print(problem)
+sys.exit(1 if problems else 0)
+PY
+
+real_kap="$root/.github/workflows/kit-auto-publish.yml"
+real_prep="$root/.github/workflows/release-saga-prepare.yml"
+
+# assert_topology <label> <expect: ok|red> <kap> <prep> [needle-that-must-appear-in-the-finding]
+assert_topology() {
+  local label="$1" expect="$2" kap="$3" prep="$4" needle="${5:-}" rc=0 out
+  out="$(python3 "$topo_checker" "$kap" "$prep" 2>&1)" || rc=$?
+  if [ "$expect" = ok ]; then
+    [ "$rc" -eq 0 ] || { echo "$label: expected the topology invariant to HOLD, but:" >&2; echo "$out" >&2; exit 1; }
+  else
+    [ "$rc" -ne 0 ] || { echo "$label: expected the topology invariant to be VIOLATED, but it passed — a mutation that cannot turn this leg red has not tested it" >&2; exit 1; }
+    if [ -n "$needle" ]; then
+      case "$out" in
+        *"$needle"*) : ;;
+        *) echo "$label: the leg went red for the WRONG reason — no finding mentioned '$needle'. Got:" >&2; echo "$out" >&2; exit 1 ;;
+      esac
+    fi
+  fi
+  checks=$((checks + 1))
+}
+
+# The shipped files must satisfy every clause.
+assert_topology topology-holds ok "$real_kap" "$real_prep"
+
+# ---- GATE-INVERSION EVIDENCE (pnext-item §3), one committed mutation per clause. Each rewrites a
+#      COPY of the real workflow through a YAML round-trip, changing exactly one key, and each must
+#      turn the leg red for its OWN reason — an inversion that reds for someone else's reason has
+#      not isolated the clause it claims to cover. ----
+mutate_kap() {
+  python3 - "$real_kap" "$1" "$2" <<'PY'
+import sys
+import yaml
+
+src, dst, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+doc = yaml.safe_load(open(src, encoding="utf-8"))
+jobs = doc["jobs"]
+
+def tagging_job():
+    for name, job in jobs.items():
+        for step in (job.get("steps") or []):
+            run = step.get("run") or ""
+            if "git push" in run and "refs/tags/" in run:
+                return name
+    raise SystemExit("mutation precondition failed: no tagging job to mutate")
+
+def preparing_job():
+    for name, job in jobs.items():
+        if str(job.get("uses") or "").endswith("release-saga-prepare.yml"):
+            return name
+    raise SystemExit("mutation precondition failed: no preparing job to mutate")
+
+if mode == "decouple-needs":
+    # The pre-repair shape, structurally: the tag write no longer waits on the bytes.
+    tag = tagging_job()
+    jobs[tag]["needs"] = [n for n in jobs[tag]["needs"] if n != preparing_job()]
+elif mode == "drift-condition":
+    # The asymmetry clause (4) exists for: the tag job selects a run the prepare job does not.
+    tag = tagging_job()
+    jobs[tag]["if"] = jobs[tag]["if"] + " || needs.decide.outputs.action == 'openEvidencePr'"
+elif mode == "always":
+    # `always()` runs the dependent even when its `needs:` failed — clause (3) with the teeth out.
+    tag = tagging_job()
+    jobs[tag]["if"] = "always()"
+elif mode == "drop-prepare-job":
+    # The literal .github#2654 state: a rail that tags and prepares nothing.
+    del jobs[preparing_job()]
+else:
+    raise SystemExit(f"unknown mutation {mode}")
+
+with open(dst, "w", encoding="utf-8") as out:
+    yaml.safe_dump(doc, out, sort_keys=False)
+PY
+}
+
+# The mutant keeps the callee's ORIGINAL BASENAME, in a directory of its own. The checker matches a
+# preparing job by comparing the caller's `uses:` basename against the callee it was handed, so a
+# mutant written as `prep-undeclared.yml` reds with "no job calls it" — a DIFFERENT clause, which
+# would leave the clause under test unexercised behind a red that looks like the right one.
+mutate_prep() {
+  mkdir -p "$1"
+  python3 - "$real_prep" "$1/release-saga-prepare.yml" "$2" <<'PY'
+import sys
+import yaml
+
+src, dst, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+doc = yaml.safe_load(open(src, encoding="utf-8"))
+on_key = "on" if "on" in doc else True
+triggers = doc[on_key]
+
+if mode == "dispatch-only":
+    # Exactly the pre-repair trigger surface: `workflow_dispatch` and nothing else — the sentence
+    # this workflow's header used to state as an assumption.
+    doc[on_key] = {"workflow_dispatch": None}
+elif mode == "undeclare-input":
+    del triggers["workflow_call"]["inputs"]["source-sha"]
+elif mode == "ignore-input":
+    # Declared, resolvable, and silently ignored: the checkout stops honouring it and the steps go
+    # back to `$GITHUB_SHA`.
+    for job in doc["jobs"].values():
+        for step in job.get("steps") or []:
+            if str(step.get("uses") or "").startswith("actions/checkout"):
+                step.pop("with", None)
+            if "run" in step:
+                step["run"] = step["run"].replace("$FSGG_SOURCE_SHA", "$GITHUB_SHA")
+else:
+    raise SystemExit(f"unknown mutation {mode}")
+
+with open(dst, "w", encoding="utf-8") as out:
+    yaml.safe_dump(doc, out, sort_keys=False)
+PY
+}
+
+mutate_kap "$topo_work/kap-decoupled.yml" decouple-needs
+assert_topology inversion-decoupled-needs red "$topo_work/kap-decoupled.yml" "$real_prep" \
+  "transitive \`needs:\` closure"
+
+mutate_kap "$topo_work/kap-drifted.yml" drift-condition
+assert_topology inversion-drifted-condition red "$topo_work/kap-drifted.yml" "$real_prep" \
+  "different \`if:\` conditions"
+
+mutate_kap "$topo_work/kap-always.yml" always
+assert_topology inversion-always red "$topo_work/kap-always.yml" "$real_prep" \
+  "defeating the ordering"
+
+mutate_kap "$topo_work/kap-noprepare.yml" drop-prepare-job
+assert_topology inversion-no-preparing-job red "$topo_work/kap-noprepare.yml" "$real_prep" \
+  "never prepared"
+
+mutate_prep "$topo_work/dispatch-only" dispatch-only
+assert_topology inversion-dispatch-only red "$real_kap" "$topo_work/dispatch-only/release-saga-prepare.yml" \
+  "does not admit \`workflow_call\`"
+
+mutate_prep "$topo_work/undeclared" undeclare-input
+assert_topology inversion-undeclared-input red "$real_kap" "$topo_work/undeclared/release-saga-prepare.yml" \
+  "declares no such"
+
+mutate_prep "$topo_work/ignores-input" ignore-input
+assert_topology inversion-ignored-input red "$real_kap" "$topo_work/ignores-input/release-saga-prepare.yml" \
+  "reads \`\$GITHUB_SHA\`"
+
+# ---- THE JOIN TO `decide()`. The clauses above are about the graph; this is the one assertion that
+#      ties them to the patch line the defect actually fired on. `decide()` must still answer `tag`
+#      for a next-patch candidate — that is the `eligible` fixture at the top of this file — and the
+#      action it answers must be one the tagging job's condition selects. Neither half is
+#      interesting alone: a graph that orders jobs nobody reaches is inert, and a decision nothing
+#      acts on is what .github#2654 measured from the other side. ----
+python3 - "$real_kap" "$work/eligible.json" <<'PY'
+import json
+import subprocess
+import sys
+
+import yaml
+
+kap_path, facts_path = sys.argv[1], sys.argv[2]
+action = json.loads(
+    subprocess.run(
+        [sys.executable, "scripts/kit-auto-publish.py", "--facts", facts_path, "--json"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+)["action"]
+if action != "tag":
+    sys.exit(f"the eligible next-patch fixture no longer decides `tag` (got {action!r})")
+
+jobs = yaml.safe_load(open(kap_path, encoding="utf-8"))["jobs"]
+tagging = [
+    name for name, job in jobs.items()
+    if any("git push" in (s.get("run") or "") and "refs/tags/" in (s.get("run") or "")
+           for s in (job.get("steps") or []))
+]
+if not tagging:
+    sys.exit("no tagging job to join the decision to")
+for name in tagging:
+    if f"'{action}'" not in str(jobs[name].get("if") or ""):
+        sys.exit(
+            f"`decide()` answers {action!r} on the patch line, but job {name!r}'s condition "
+            f"({jobs[name].get('if')!r}) does not select it — the decision and the act have come "
+            f"apart, which is the .github#2654 class of defect."
+        )
+PY
+checks=$((checks + 1))
 
 echo "kit auto-publish state machine: $checks passed"
