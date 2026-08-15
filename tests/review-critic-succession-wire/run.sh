@@ -126,12 +126,21 @@
 #      surviving copy is load-bearing and an exact statement of what the deleted `Review.fs` conjuncts
 #      would have refused had any producer been able to reach them.
 #
-# WHY A SHELL FIXTURE AND NOT `tests/FS.GG.Coord.Core.Tests/ReviewTests.fs`. Unchanged from #2417 and
-# still true at #2537: it drives the COMPILED `fsgg-coord-engine` — sections 1-2 through
-# `review --snapshot`, the pure DECISION path with no board, no token and no network, and section 3
-# through `review record` against a loopback fixture, still with no token and no network — and asserts
-# on JSON stdout and exit code. Sections 4-5 need to rebuild the engine from mutated source seven times,
-# which a unit suite inside that same build cannot do to itself.
+# WHY A SHELL FIXTURE. The reason is unchanged from #2417 and still true at #2537: it drives the
+# COMPILED `fsgg-coord-engine` — sections 1-2 through `review --snapshot`, the pure DECISION path with
+# no board, no token and no network, and section 3 through `review record` against a loopback fixture,
+# still with no token and no network — and asserts on JSON stdout and exit code. Sections 4-5 need to
+# rebuild the engine from mutated source seven times, which a unit suite inside that same build cannot
+# do to itself.
+#
+# This paragraph used to be headed "AND NOT `tests/FS.GG.Coord.Core.Tests/ReviewTests.fs`", which named
+# a file that `b84423e7` ("retire legacy decision authorities") deleted. .github#2557 corrected it, and
+# the fact underneath is stronger than the comparison it replaced: `Review.inspect` has NO unit coverage
+# anywhere in `tests/` — `grep -rn "Review\.inspect" tests/ --include=*.fs` finds one COMMENT, at
+# `DeliveryTests.fs:313`, and nothing that calls it. (`--include=*.fs` is load-bearing: without it the
+# same grep also hits generated `bin/**/FS.GG.Coord.Core.xml` doc comments, which are build output and
+# evidence of nothing.) So this file is not the better of two gates over `criticSuccessionValid`. It is
+# the ONLY one. Weaken it and nothing else is watching.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
