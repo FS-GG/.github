@@ -3428,7 +3428,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                       // definition once another actor can clear `Blocked by`.
                                       let gate =
                                           if field = "Status" then
-                                              requireCoherentBlockedWrite ctx chore.Subject (Reads.statusOfName value)
+                                              let status = Reads.statusOfName value
+                                              match status, Map.tryFind chore.Subject lifecycleWatermarks with
+                                              // A typed HumanPark intent is itself the durable reason for
+                                              // this lifecycle write. Requiring the old prose sentinel as
+                                              // well would make the new-only reducer compute Blocked and
+                                              // then let a retired authority veto its own projection.
+                                              // Blocker-derived Auto writes still pass through the live
+                                              // Blocked-by/body coherence boundary below.
+                                              | Some Blocked, Some watermark when LifecycleProjection.isHumanPark watermark.Intent -> Ok()
+                                              | _ -> requireCoherentBlockedWrite ctx chore.Subject status
                                           else
                                               Ok()
 

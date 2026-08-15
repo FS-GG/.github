@@ -101,7 +101,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-08-14"
+updated: "2026-08-15"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters. ENFORCED since .github#2547 by the
@@ -342,7 +342,7 @@ skills:
   # never-materialize behaviour rides the predicate. Schema growth ADR-0057 pays for (schemaVersion 2→3
   # below), publish-before-flip, SDD first (ADR-0037).
   - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: 4341449e50b5762cb2806b6b2b8f050f5e2bb1f260e6309f31c147417c372b0c, materializes-when: "false" }
-  - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: 642e1c67ebc2bc0112dffb4a46a01406af00f8823b8a95ca9a287412f886857c, materializes-when: "false" }
+  - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: 098f2cc7f04d7fffd31a27c53b916fc9135bf7f15e40e51d5c8dc3b78875104c, materializes-when: "false" }
   # p-add — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -354,7 +354,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: e7c9ed8bc212894b6b20dc37f66523c86530678c4a5bf132954bf6c7aee766b8, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: c2c472499bf08d1a0a528a5ac390b4c1ebcf2cd583b08c176c3685b9a2db3dbd, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.

@@ -26,6 +26,12 @@ module LifecycleProjection =
         | HumanPark of HumanBlock * IntentRecord
         | Deferred of reason: string * until: int64 option * revision: int64
 
+    /// A typed human scheduling hold is the complete reason for a lifecycle Blocked projection.  This
+    /// capability deliberately does not inspect mutable Status or a prose body sentinel.
+    let isHumanPark = function
+        | HumanPark _ -> true
+        | _ -> false
+
     type PolicyVersion =
         | IntentStatusV1
 
@@ -152,7 +158,7 @@ module LifecycleProjection =
         // HumanPark is scheduling intent, not a blocker inferred from mutable observations.  It survives
         // active-looking facts until its own revision is changed: a worker/PR cannot silently answer the
         // human question which parked the item.  A real blocker naturally projects the same column.
-        elif (match intent with HumanPark _ -> true | _ -> false) then
+        elif isHumanPark intent then
             Project(BoardStatus.Blocked, observedAt)
         elif observation.Blockers.Value |> List.exists (fun blocker -> blocker.State <> BlockerClosed && blocker.State <> BlockerMerged) then
             Project(BoardStatus.Blocked, observedAt)

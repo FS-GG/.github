@@ -31,10 +31,13 @@ required_tests=(
   'm6_moved_head_parses_only_new_live_generation'
   'historical_prose_cannot_authorize'
   'typed_acceptance_reaches_accept'
+  'M6 typed human park authorizes Blocked without prose authority'
 )
 for name in "${required_tests[@]}"; do
-  grep -Fq "$name" tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs
+  grep -Fq "$name" tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs tests/FS.GG.Coord.Core.Tests/LifecycleProjectionTests.fs tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs
 done
+
+grep -Fq 'LifecycleProjection.isHumanPark watermark.Intent' src/FS.GG.Coord.Cli/Client.fs
 
 retired_symbols='DeliveryRouteApplication\.decode([^S]|$)|RouteReadClassification|classifyRoute|toLegacyReceipt|projectStructuredReview|normalizeStructuredReviews|EvidenceClassification|FSGG_COORD_LIFECYCLE_PROJECTION'
 if grep -Enr --include='*.fs' --include='*.fsi' "$retired_symbols" src; then
@@ -43,7 +46,7 @@ if grep -Enr --include='*.fs' --include='*.fsi' "$retired_symbols" src; then
 fi
 
 printf '%s\n' \
-  'decision-cutover coverage map: 14 named inversions present' \
+  'decision-cutover coverage map: 15 named inversions present' \
   'route: digest/tamper/append/body-inert/effective/record-show-claim' \
   'review: parse/state/backlinks/escalation/repair/diff-audit/head-move/critic succession/landability' \
   'legacy: prose and v1 route evidence cannot authorize; retired production symbols absent'

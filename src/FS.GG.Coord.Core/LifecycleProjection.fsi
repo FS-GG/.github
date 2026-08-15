@@ -27,6 +27,9 @@ module LifecycleProjection =
         | HumanPark of HumanBlock * IntentRecord
         | Deferred of reason: string * until: int64 option * revision: int64
 
+    /// True only for a typed human scheduling hold; never derived from mutable Status or prose.
+    val isHumanPark: SchedulingIntent -> bool
+
     type PolicyVersion =
         | IntentStatusV1
 

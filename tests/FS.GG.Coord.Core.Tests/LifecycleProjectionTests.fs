@@ -64,6 +64,18 @@ module LifecycleProjectionTests =
         Assert.Equal(LifecycleProjection.Project(Blocked, 1L), reduce human active)
 
     [<Fact>]
+    let ``M6 typed human park authorizes Blocked without prose authority`` () =
+        let human =
+            LifecycleProjection.HumanPark(
+                AwaitingHumanDecision,
+                { Revision = 10L; Reason = "decision required" })
+        Assert.True(LifecycleProjection.isHumanPark human)
+        Assert.False(LifecycleProjection.isHumanPark LifecycleProjection.Auto)
+        Assert.False(
+            LifecycleProjection.isHumanPark(
+                LifecycleProjection.Backlog { Revision = 10L; Reason = "policy backlog" }))
+
+    [<Fact>]
     let ``M6 only closed plus verified receipt is Done`` () =
         let closed = { observation with Claim = fact None; Issue = fact Closed }
         match reduce LifecycleProjection.Auto closed with
