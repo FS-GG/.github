@@ -754,7 +754,7 @@ let ``#2254 an ALREADY-CLASSED Done row costs reconcile nothing either - the bou
 
 // ---- .github#2394 round 1 — the SAME defect through the RESERVED branch's second door -------------------
 //
-// Round 1 of independent review found the initial fix incomplete: `LifecycleProjection.project` has TWO
+// Round 1 of independent review found the initial fix incomplete: the lifecycle reducer has TWO
 // live call sites in `Chore.fs` (`choresFor`'s CLAIM-REVIEW-LAG arm, and the separate `lifecycleProjection`
 // function `ChoresTests`/`ApplicationServiceTests` already cover for the UNCLAIMED path), and only the
 // unclaimed one was gated. A live claim plus an open `item/<n>-*` PR on a coherently human-parked `Blocked`

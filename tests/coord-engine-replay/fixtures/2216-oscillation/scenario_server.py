@@ -16,7 +16,7 @@ Before `.github#2384`'s fix, running this against the compiled engine reproduced
 `itemPr` probe (the block discussed in the comment beginning "AND THE `| _ -> ()` BELOW IS A KNOWN
 FAIL-OPEN WITH A NEW CONSUMER — .github#1924") was only attempted for a markerless `Ready`/`Backlog` row,
 or a `Blocked` one whose blockers just cleared — never for a markerless `In review` row, which is exactly
-this fixture's shape. `Item.ItemPr` therefore read `None`, `LifecycleProjection.project`'s open-PR rule
+this fixture's shape. `Item.ItemPr` therefore read `None`, and the lifecycle reducer's open-PR rule
 (`elif ... pr.Open ...  -> Project(InReview, ...)`) never fired, and the projection fell through to
 `Ready`. `.github#1924` (closed) already named the same `ItemPr` collapse for a different consumer
 (`BLOCKER-CLEARED`); this was the `In review` sibling.

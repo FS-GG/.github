@@ -117,7 +117,16 @@ def comments_for(n):
 
 # 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
-COMMENTS = {42: [], 43: [], 99: [], 44: [], 46: [], 50: [], 51: [], 96: [], 1033: []}
+COMMENTS = {
+    42: [], 43: [], 99: [], 44: [], 46: [],
+    # Closed rows earn Done only from the immutable receipt. This is the direct-reducer offer fixture;
+    # closure/status alone must never resurrect the retired CLOSED-ISSUE-NOT-DONE chore.
+    50: [{"id": 650050, "body": "<!-- fsgg:done-receipt v=1 -->\nfixture terminal receipt",
+          "updated_at": "2026-01-01T00:00:00Z"}],
+    45: [{"id": 650045, "body": "<!-- fsgg:done-receipt v=1 -->\nfixture terminal receipt",
+          "updated_at": "2026-01-01T00:00:00Z"}],
+    51: [], 96: [], 1033: []
+}
 NEXT_COMMENT_ID = [900]
 NEXT_ROOM_NUMBER = [700]
 def now_iso():
@@ -236,9 +245,12 @@ def board_items():
                 "blockedBy": {"text": issue["blocked_by"]} if issue.get("blocked_by") else None,
                 "content": {
                     "__typename": "Issue",
+                    "id": f"ISSUE_{n}",
                     "number": n,
                     "title": f"item {n}",
                     "state": issue["state"],
+                    "createdAt": "2026-01-01T00:00:00Z",
+                    "body": issue["body"],
                     "repository": {"nameWithOwner": f"{owner_of(n)}/{repo_of(n)}"},
                 },
             }
@@ -254,6 +266,28 @@ def board_items():
 
 
 def graphql(query: str, variables: dict):
+    if re.search(r"\bn\d+: node\(id: \$id\d+\)", query):
+        # Scan's canonical typed freshness boundary batches stable board node ids, then re-reads body and
+        # exact comment count. Return every requested alias; omission would correctly fail the whole read.
+        data = {"rateLimit": RATE_LIMIT}
+        for key, raw_id in variables.items():
+            if not re.fullmatch(r"id\d+", key):
+                continue
+            alias = "n" + key[2:]
+            try:
+                n = int(str(raw_id).removeprefix("ISSUE_"))
+                issue = ISSUES[n]
+            except (KeyError, ValueError):
+                data[alias] = None
+                continue
+            data[alias] = {
+                "id": str(raw_id),
+                "body": issue["body"],
+                "comments": {"totalCount": len(comments_for(n))},
+            }
+        return {"data": data}
+    if "rateLimit { remaining cost }" in query:
+        return {"data": {"rateLimit": RATE_LIMIT}}
     if "comments(last:" in query:
         # .github#2300 repair 2: the bounded route-marker search (`Reads.recentCommentBodies`) — served
         # from the SAME `comments_for()` the REST `/comments` endpoint answers from (route receipt

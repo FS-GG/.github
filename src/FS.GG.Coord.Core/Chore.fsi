@@ -57,4 +57,6 @@ module Chore =
     val lifecycleProjection: item: Item -> destination: BoardStatus -> Chore option
 
     val offer: at: SafePoint -> Chore option
+    /// Rank reducer-produced lifecycle repairs beside maintenance without deriving a second Status authority.
+    val offerIncluding: at: SafePoint -> lifecycle: Chore list -> Chore option
     val isRetired: chore: Chore -> items: Item list -> bool

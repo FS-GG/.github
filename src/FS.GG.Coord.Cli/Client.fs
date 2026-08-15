@@ -1663,7 +1663,7 @@ module Client =
         | Error errors -> None, Some(String.concat "; " errors)
 
     /// True when a claimed PR has at least one declared, unverified delivery obligation — the sole
-    /// signal `LifecycleProjection.project` needs to keep a row `In review` rather than advance it
+    /// signal the lifecycle reducer needs to keep a row `In review` rather than advance it
     /// (round-1 review repair, .github#2264 PR #2271). Pure over already-read facts, precisely so this
     /// is testable directly rather than only through `reconcile`'s live GitHub wiring — the gap the
     /// critic named: the prior inline `.Contains` scan lived only inside that IO fold, and NO test drove
@@ -2442,6 +2442,91 @@ module Client =
     let private wholeOf (request: Snapshot.Request) : Chore.Board =
         Chore.Whole(request.Candidates |> List.map (fun c -> c.Item))
 
+    /// Explicit bootstrap policy for the single lifecycle reducer. Mutable Project Status is deliberately
+    /// absent: callers at next/claim/reconcile cannot silently turn a stale column back into intent.
+    let private lifecyclePolicyIntent observedAt (item: Item) =
+        match item.HumanBlock, item.Class, item.TouchSet with
+        | Some human, _, _ ->
+            LifecycleProjection.HumanPark(
+                human,
+                { Revision = observedAt; Reason = "explicit human scheduling hold" })
+        | None, Some Decision, _ ->
+            LifecycleProjection.HumanPark(
+                AwaitingHumanDecision,
+                { Revision = observedAt; Reason = "decision-class work requires a human decision" })
+        | None, _, (Undeclared | DeclaredNone) ->
+            LifecycleProjection.Backlog
+                { Revision = observedAt; Reason = "touch-set policy is not schedulable" }
+        | None, _, (DeclaredChore | Declared _) -> LifecycleProjection.Auto
+        | None, _, Unreadable reason ->
+            LifecycleProjection.Deferred($"touch-set unreadable: %s{reason}", None, observedAt)
+
+    let private lifecycleObservation observedAt (item: Item) delivery =
+        let fact value : LifecycleProjection.Fact<_> = { ObservedAt = observedAt; Value = value }
+        let pullRequest =
+            item.ItemPr
+            |> Option.map (fun number ->
+                ({ Number = number; Open = true; ReviewOrCiActive = true }: LifecycleProjection.PullRequest))
+        ({ Claim = fact item.Claim
+           PullRequest = fact pullRequest
+           Blockers = fact item.Blockers
+           Delivery = fact delivery
+           Issue = fact item.State }: LifecycleProjection.Observation)
+
+    let private lifecycleSelection
+        observedAt
+        (item: Item)
+        (delivery: LifecycleProjection.Delivery)
+        (watermark: LifecycleProjection.Watermark option) =
+        let intent = watermark |> Option.map _.Intent |> Option.defaultValue (lifecyclePolicyIntent observedAt item)
+        intent,
+        LifecycleProjection.advance
+            LifecycleProjection.IntentStatusV1
+            intent
+            watermark
+            (lifecycleObservation observedAt item delivery)
+
+    /// A successful lock is an observed lifecycle fact, not permission for the claim command to invent a
+    /// column value. Route it through the same reducer as next/reconcile and fail closed if that reducer can
+    /// no longer establish a destination.
+    let private claimLifecycleDestination observedAt (held: Writes.Held) =
+        let claim : Claim =
+            { Worker = held.Worker
+              Session = held.Session
+              AgeSeconds = 0
+              PreviousStatus = held.PreviousStatus }
+        let fact value : LifecycleProjection.Fact<_> = { ObservedAt = observedAt; Value = value }
+        let observation : LifecycleProjection.Observation =
+            { Claim = fact (Some(claim, LeaseHeld))
+              PullRequest = fact None
+              Blockers = fact []
+              Delivery = fact ({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery)
+              Issue = fact Open }
+        match LifecycleProjection.reduce LifecycleProjection.IntentStatusV1 LifecycleProjection.Auto observation with
+        | LifecycleProjection.Project(destination, _) -> destination
+        | LifecycleProjection.Withheld reason ->
+            invalidOp $"claim lifecycle projection was withheld: %s{reason}"
+
+    /// Next/AfterDone consume the same reducer as reconcile. Only its verified destination is admitted to
+    /// the chore queue; Chore.derive remains unable to manufacture a Status repair.
+    let private lifecycleOfferChores (ctx: Context) (observed: Chore.Board) =
+        let items = match observed with | Chore.Whole values | Chore.Filtered values -> values
+        items
+        |> List.choose (fun item ->
+            if item.Status = Done then None
+            else
+                match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
+                | Error _ -> None
+                | Ok comments ->
+                    let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                    let delivery : LifecycleProjection.Delivery =
+                        { Outstanding = false; DoneStamped = Done.hasReceipt comments }
+                    let _, selected =
+                        lifecycleSelection observedAt item delivery (LifecycleProjection.tryWatermark comments)
+                    match selected with
+                    | LifecycleProjection.Project(destination, _) -> Chore.lifecycleProjection item destination
+                    | LifecycleProjection.Withheld _ -> None)
+
     /// THE OFFER PATH'S BOARD — the scan's bytes AND the scan's rows, joined the way `reconcile` joins them
     /// (.github#1649).
     ///
@@ -2554,7 +2639,8 @@ module Client =
             // out-of-scope repos — which is what makes the rules reachable at all. `BLOCKER-CLEARED` needs a
             // `Blocked` row and `CLOSED-ISSUE-NOT-DONE` a closed one, and bash filtered on
             // `Status ∈ {Ready, Backlog}` before the engine was asked, so under it neither could ever fire.
-            Chores.offer ctx.Transport boundary (WorkerId w.Id) (selfOf w) session ctx.ChoreLocks ctx.Owner repo observed
+            let lifecycle = lifecycleOfferChores ctx observed
+            Chores.offerWithLifecycle lifecycle ctx.Transport boundary (WorkerId w.Id) (selfOf w) session ctx.ChoreLocks ctx.Owner repo observed
             |> Option.iter (fun (chore, lockRef) -> eprint (Chores.render chore lockRef))
 
     /// `next`'s call site. The repo the offer is FOR: `--repo` when given, else the checkout we are standing
@@ -2919,7 +3005,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         // recoverable by caching.
                         //
                         // THE BOUND IS A PROOF, NOT A BUDGET HEURISTIC — the same standard `memoisable`
-                        // holds. For `Closed` + `Done`, `LifecycleProjection.project` has exactly three
+                        // holds. For `Closed` + `Done`, the lifecycle reducer has exactly three
                         // reachable answers, and the read cannot change ANY of them:
                         //   * an unresolved blocker → `Project(Blocked)`. Decided by `observation.Blockers`,
                         //     a free scan fact, ABOVE the closure arm — so it still fires here, unread.
@@ -2976,42 +3062,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
                         | Some(delivery, watermark) ->
                             let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                            let pullRequest =
-                                item.ItemPr
-                                |> Option.map (fun number -> ({ Number = number; Open = true; ReviewOrCiActive = true }: LifecycleProjection.PullRequest))
-                            let observation : LifecycleProjection.Observation =
-                                { Claim = { ObservedAt = observedAt; Value = item.Claim }
-                                  PullRequest = { ObservedAt = observedAt; Value = pullRequest }
-                                  Blockers = { ObservedAt = observedAt; Value = item.Blockers }
-                                  Delivery = { ObservedAt = observedAt; Value = delivery }
-                                  Issue = { ObservedAt = observedAt; Value = item.State } }
-                            // A v2 projection watermark is the durable scheduling decision. For subjects
-                            // that have never been projected, bootstrap only from explicit policy inputs;
-                            // mutable Project Status is never read back as intent.
-                            let policyIntent =
-                                match item.HumanBlock, item.Class, item.TouchSet with
-                                | Some human, _, _ ->
-                                    LifecycleProjection.HumanPark(
-                                        human,
-                                        { Revision = observedAt; Reason = "explicit human scheduling hold" })
-                                | None, Some Decision, _ ->
-                                    LifecycleProjection.HumanPark(
-                                        AwaitingHumanDecision,
-                                        { Revision = observedAt; Reason = "decision-class work requires a human decision" })
-                                | None, _, (Undeclared | DeclaredNone) ->
-                                    LifecycleProjection.Backlog
-                                        { Revision = observedAt; Reason = "touch-set policy is not schedulable" }
-                                | None, _, (DeclaredChore | Declared _) -> LifecycleProjection.Auto
-                                | None, _, Unreadable reason ->
-                                    LifecycleProjection.Deferred(
-                                        $"touch-set unreadable: %s{reason}", None, observedAt)
-                            let intent =
-                                watermark
-                                |> Option.map _.Intent
-                                |> Option.defaultValue policyIntent
-                            let selected =
-                                LifecycleProjection.advance
-                                    LifecycleProjection.IntentStatusV1 intent watermark observation
+                            let intent, selected = lifecycleSelection observedAt item delivery watermark
                             lifecycleHealthRows.Add(
                                 {| current = statusWireName item.Status
                                    intended = resultLabel selected
@@ -5113,7 +5164,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         // the user-visible ledger. A green CAS cannot prove the latter. This receipt re-reads
                         // both AFTER the mutation and keeps every failure/lag explicit, so a worker can gate
                         // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
-                        let emitClaimReceipt (kind: string) (held: Writes.Held) (statusOutcome, statusPreserved) =
+                        let emitClaimReceipt (kind: string) (held: Writes.Held) statusOutcome =
                             let markerObserved, markerId =
                                 match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
                                 | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
@@ -5147,23 +5198,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         None, "failed"
 
                             let statusWrite =
-                                if statusPreserved then
-                                    "preserved"
-                                else
-                                    match statusOutcome with
-                                    | Ok Board.Written -> "written"
-                                    | Ok Board.Deferred -> "deferred"
-                                    | Ok Board.NotOnBoard -> "not-on-board"
-                                    | Error _ -> "failed"
+                                match statusOutcome with
+                                | Ok Board.Written -> "written"
+                                | Ok Board.Deferred -> "deferred"
+                                | Ok Board.NotOnBoard -> "not-on-board"
+                                | Error _ -> "failed"
 
                             let pending =
                                 match Cache.pending () with
                                 | Ok entries -> Some(List.length entries)
                                 | Error _ -> None
 
-                            let converged =
-                                markerObserved
-                                && (status = Some "In progress" || (kind = "renewed" && statusPreserved && status = Some "In review"))
+                            let converged = markerObserved && status = Some "In progress"
 
                             let receipt: ClaimReceipt =
                                 { Ref = ref
@@ -5199,8 +5245,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
 
                                 if converged then
-                                    let lifecycle = if statusPreserved then "In review preserved" else "Status=In progress"
-                                    printfn "%sboard confirmed: marker=%d, %s)" humanPrefix held.MarkerId lifecycle
+                                    printfn "%sboard confirmed: marker=%d, Status=In progress)" humanPrefix held.MarkerId
                                 else
                                     let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
                                     printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
@@ -5212,8 +5257,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     eprint
                                         $"fsgg-coord-engine: NOTE — this claim overlaps %d{List.length overlapCollisions} live claim(s); see OVERLAP lines above (or `overlap %s{ref.Short} --active`)."
 
-                            if not statusPreserved then
-                                boardWriteNote ref "Status" "In progress" statusOutcome
+                            boardWriteNote ref "Status" "In progress" statusOutcome
                             KitDigest.declaredWarn ctx.Transport ref
                             ExitGreen
 
@@ -5243,25 +5287,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                         // Move the board column to In progress — the ONE board write, through the queue-aware
                         // path so an exhausted budget defers rather than drops (#510).
-                        let setInProgress preserveReview () =
+                        let setClaimLifecycle (held: Writes.Held) =
+                            let destination =
+                                claimLifecycleDestination (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) held
+                            let destinationWire = statusWireName destination
                             let write b =
-                                Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                                Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set destinationWire) w.Id
 
                             match board.Force() with
-                            | Error e -> Error e, false
-                            | Ok b when not preserveReview ->
-                                // A fresh win/steal already owes exactly the pre-claim read plus the
-                                // post-write receipt readback.  Do not add a lifecycle probe to that hot path;
-                                // only an idempotent renewal can preserve an existing review state.
-                                write b, false
-                            | Ok b ->
-                                // A re-claim renews an existing lock; it is not a fresh start.  Moving a row
-                                // from In review back to In progress hides an active critic round, so preserve
-                                // that deliberate lifecycle state and report it distinctly in the receipt.
-                                match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
-                                | Ok(Some InReview) when preserveReview -> Ok Board.Written, true
-                                | _ ->
-                                    write b, false
+                            | Error e -> Error e
+                            | Ok b -> write b
 
                         let force =
                             if opts.Force then
@@ -5334,20 +5369,20 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         | Error e -> failWith opts.Render e
                         | Ok(Writes.Won(held, collected)) ->
                             announceCollected collected
-                            emitClaimReceipt "claimed" held (setInProgress false ())
+                            emitClaimReceipt "claimed" held (setClaimLifecycle held)
                         | Ok(Writes.Stolen(held, _, collected)) ->
                             // `announceTheft` has already run — it fired from inside the CAS, the moment the
                             // holder's marker went. All that is left here is the receipt, which reports the
                             // steal as a steal so a scripted caller can tell it from an ordinary win.
                             announceCollected collected
-                            emitClaimReceipt "stolen" held (setInProgress false ())
+                            emitClaimReceipt "stolen" held (setClaimLifecycle held)
                         | Ok(Writes.Renewed(held, collected)) ->
                             // A live marker already ours — the claim RENEWED it in place rather than posting a
                             // second (a `take` retry, or a worker beating its own lease). Any stale debris it
                             // claimed over was still collected, so tell the evicted workers exactly as a fresh
                             // win does.
                             announceCollected collected
-                            let outcome = setInProgress true ()
+                            let outcome = setClaimLifecycle held
 
                             // THE SHARED-ID HAZARD, WARNED WHERE IT ACTUALLY BITES. This path bypassed the CAS —
                             // it renewed a marker on the strength of its worker id alone — and a marker bearing

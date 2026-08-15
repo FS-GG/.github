@@ -104,10 +104,12 @@ module Chore =
         | LifecycleProjectionLag _ -> 1
         | ClassProjectionLag _ -> 2
 
-    let offer (at: SafePoint) =
-        derive at.Items
+    let offerIncluding (at: SafePoint) (lifecycle: Chore list) =
+        derive at.Items @ lifecycle
         |> List.sortBy (fun chore -> rank chore, chore.Id)
         |> List.tryHead
+
+    let offer (at: SafePoint) = offerIncluding at []
 
     let isRetired (chore: Chore) items =
         derive items |> List.forall (fun current -> current.Id <> chore.Id)

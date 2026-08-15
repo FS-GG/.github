@@ -2512,7 +2512,7 @@ module ApplicationServiceTests =
     /// `LIFECYCLE-PROJECTION-LAG`. One OPEN item, `Status=Blocked`, with NO recorded `Blocked by` ref at
     /// all — deliberately, so `Blockers.cleared` is `false` and `BLOCKER-CLEARED` (and the
     /// `humanHoldAllowsFlip` gate it already carried before this fix) is never even the rule in play. No
-    /// claim, no PR, no delivery obligation. Every mechanical fact `LifecycleProjection.project` reads
+    /// claim, no PR, no delivery obligation. Every mechanical fact the lifecycle reducer reads
     /// computes straight through to its final `Ready` fallthrough — exactly the reproduction recorded on
     /// the issue three times on one row — so only the body sentinel `sentinel` toggles stands between that
     /// computed destination and a board write.
@@ -2827,7 +2827,7 @@ module ApplicationServiceTests =
     /// .github#2382: a board whose rows are all SETTLED — closed, and already `Done`.
     ///
     /// `commentReads` records every issue-comment thread the pass actually fetches, because that is the
-    /// whole subject. A settled row's thread can change no reconcile outcome (`LifecycleProjection.project`
+    /// whole subject. A settled row's thread can change no reconcile outcome (the lifecycle reducer
     /// answers `Project(Done)`, which `Chore.lifecycleProjection` drops on `item.Status = destination`, or
     /// `Withheld`), so every one of those reads is pure budget — and they are the population that GROWS,
     /// one row per item the fleet ever completes.

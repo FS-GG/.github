@@ -97,6 +97,16 @@ module ChoreTests =
         Assert.Contains("Status=Blocked", chore.Statement)
 
     [<Fact>]
+    let ``offer admits a direct reducer result while derive cannot recreate it`` () =
+        let stale = { item 1 with Status = Backlog }
+        Assert.Empty(derive [ stale ])
+        let projected = lifecycleProjection stale Ready |> Option.toList
+        let safe = safePoint AtNext worker (Whole [ stale ]) [ stale ] |> Option.get
+        let offered = offerIncluding safe projected |> Option.get
+        Assert.Equal("LIFECYCLE-PROJECTION-LAG", offered.Kind.RuleId)
+        Assert.Equal(Some("Status", "Ready"), offered.Kind.Write)
+
+    [<Fact>]
     let ``lifecycleProjection is idempotent and refuses NoStatus`` () =
         Assert.True((lifecycleProjection { item 1 with Status = Blocked } Blocked).IsNone)
         Assert.True((lifecycleProjection (item 1) NoStatus).IsNone)

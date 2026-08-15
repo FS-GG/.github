@@ -1245,7 +1245,7 @@ let ``#2450 a CLAIMED, OPEN 'Blocked' row is NOT probed by this arm - the widene
 // ---- .github#2384: the MARKERLESS-ROW probe must cover 'In review' too, not just 'Ready'/'Backlog' -----
 //
 // The mate to #2450 above, one column left of it. `LIFECYCLE-PROJECTION-LAG`'s projector
-// (`LifecycleProjection.project` in `Client.fs`) reads `Item.ItemPr` the SAME way whether or not the row
+// (the lifecycle reducer in `Client.fs`) reads `Item.ItemPr` the SAME way whether or not the row
 // is claimed — only `Claim.Value` differs. The probe at `Scan.fs:1334` used to fire only for
 // `Ready`/`Backlog`/cleared-`Blocked`, so an UNCLAIMED row already `In review` never had `ItemPr`
 // populated: the projector then read no claim and no PR fact and fell through to its `Ready` default,

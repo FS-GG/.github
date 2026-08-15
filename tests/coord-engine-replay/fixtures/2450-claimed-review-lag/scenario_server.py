@@ -75,7 +75,7 @@ def claim_marker_comment():
     # time this replays it always reads as a LAPSED lease (`Reads.isStale`) rather than within-lease —
     # deliberately, because `.github#2450`'s fix does not depend on lease freshness: `Chore.choresFor`'s
     # RESERVED branch produces no chore for `LeaseExpiredPrOpen` either (`| _ -> ()`, the same as
-    # `LeaseHeld`), and `LifecycleProjection.project`'s open-PR rule fires before it ever inspects
+    # `LeaseHeld`), and the lifecycle reducer's open-PR rule fires before it ever inspects
     # liveness at all. A fixture whose correctness depended on staying within a 120-minute lease forever
     # would be a flaky fixture; this one is not.
     return {
