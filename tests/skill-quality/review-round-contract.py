@@ -37,6 +37,26 @@ def main() -> None:
     ):
         require(literal in contract, f"structured review contract is missing: {literal}")
 
+    # .github#2551. Gate-inversion evidence proved a gate CAN fail and never that anything RUNS it,
+    # and never named the case where a gate passes because it examined nothing. Both requirements are
+    # judgement a critic applies, so nothing downstream can enforce them; pinning the clauses here is
+    # what stops them being deleted silently, as the section itself was.
+    for literal in (
+        "Inventory the gates the change adds or modifies, and show each one is REACHED",
+        "name the workflow, the job, and the invocation line that actually calls it",
+        "A gate no workflow invokes is graded `NOT_MEASURED` at best",
+        '"Reached" includes the trigger\'s own `paths:` filter, evaluated against THIS change',
+        "Vacuous green: a gate can also pass because it examined nothing",
+        "subject is source text carries a **non-vacuity leg**",
+        "A source-text gate has this failure mode and a behavioural gate does not",
+        "a self-test for a scanner **calls** the scanner rather than grepping for its name",
+        "one mutation per touched gate",
+        "The fixture must reproduce production",
+        "The measurement environment must not supply what production lacks",
+        "`JUSTIFIED` fired, `DECORATIVE` could not fire, `NOT_MEASURED` obtained no measurement",
+    ):
+        require(literal in contract, f"gate-inversion contract is missing: {literal}")
+
     retired_parts = (
         "fsgg:independent-review" + ":v1",
         "fsgg:independent-review-confirmation" + ":v1",
