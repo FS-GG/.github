@@ -307,6 +307,36 @@
       "materializes-when": "false"
     },
     {
+      "id": "board-analyst",
+      "scope": "operator",
+      "sha256": "154194b9d17241bff001de1b804ddfc8f8d1751145c368300b0e5eca0a9947f9",
+      "tree-sha256": "c8f887e3682884587b6f1516f5d0c46751a6ec2a34367580feeebbb61f8ec572",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "154194b9d17241bff001de1b804ddfc8f8d1751145c368300b0e5eca0a9947f9",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "7cc156faca7dad5e5ab45d4d1392bab640f8f56191b9cf57e8848dd1b9698c0d",
+          "executable": false
+        },
+        {
+          "path": "references/churn-reading.md",
+          "sha256": "cc70458882d2c5e266535294285beed8db401b22319985869e6289c3e0bbd8ca",
+          "executable": false
+        },
+        {
+          "path": "references/the-bar.md",
+          "sha256": "c10c056d146c06c45c73e0dc65e4a82acb0910565edc5d166472950d8b31b8aa",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/board-analyst",
+      "materializes-when": "false"
+    },
+    {
       "id": "publishing-and-deployment",
       "scope": "operator",
       "sha256": "88b43f6b7e63afd1cef5d096b7687dce4480c137b956450830e2ff6118139b25",

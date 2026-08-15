@@ -122,7 +122,13 @@ DESCRIPTION_MAX = 220
 # Four explicit normal/best board-driver routes add the minimum useful runtime-selection metadata.
 # Keep headroom small but real: this remains a prompt-budget guard, not a frozen historical count.
 DESCRIPTION_CEILING = 3400
-ROOT_CATALOG_CEILING = 4100
+# 4100 -> 4350 for the 18th skill (board-analyst, .github#2584). RAISED DELIBERATELY, and the margin is
+# the point: the catalog measures 4263, so the guard keeps 87 chars of headroom — the SAME margin it
+# held at 17 skills, so the next addition binds exactly as this one did. The alternative was to shorten
+# other skills' descriptions until the new row fit, which buys a green by degrading the discoverability
+# of skills that have nothing to do with this change: a guard gamed rather than a budget spent. Raise
+# this only alongside a skill that earns it, and never to restore headroom a growing catalog consumed.
+ROOT_CATALOG_CEILING = 4350
 # DERIVED, not restated (ADR-0058): the effective ceiling is the per-root ceiling once per root Codex
 # actually catalogs. It was the literal 6400 while Codex had two native roots; hard-coding it would
 # now leave a ceiling that can never bind, which is a gate that always passes (#1611 category D).
@@ -223,6 +229,18 @@ DRIVERS = [
         "id": "lane-steward",
         "scope": "operator",
         "supplied-by": ".claude/skills/lane-steward",
+        "materializes-when": "false",
+    },
+    # board-analyst is `scope: operator` AND DELIBERATELY NOT A `kit:` ROW (.github#2584 AC4) — a
+    # decision, not an omission. Its subject is THIS board: this repo's rows, this repo's
+    # `scripts/check-*.py` corpus, and this repo's lane partition. The `kit:` block ships to seven
+    # receivers, none of which has that subject, and every edit to a kit row obliges a republish. Do
+    # not "fix" this by adding a kit row; `check-board` and `pnext-item` being kit rows is exactly why
+    # extending either of them would have been wrong here.
+    {
+        "id": "board-analyst",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/board-analyst",
         "materializes-when": "false",
     },
     {

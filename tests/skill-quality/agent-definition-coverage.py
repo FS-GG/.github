@@ -53,15 +53,23 @@ VARIANTS = (
     ("work-board-best", "best"),
 )
 
-ROLES = ("worker", "critic")
+# The dispatchable roles. `analyst` joined on .github#2584: the root-cause and board-churn analyst is
+# dispatched at the same routes as the other two, so its definitions are covered by the identical
+# closure — every route needs one, its model/effort must equal that route's published row, and a
+# definition no route reaches is still unreachable. Adding the role here rather than exempting it is
+# the point: an `.claude/agents/fsgg-analyst-*.md` outside this tuple would drift unnoticed, which is
+# exactly the defect .github#2510 filed this gate to close.
+ROLES = ("worker", "critic", "analyst")
 
 # `| Claude Code | `sonnet` | `high` |` — the runtime row every routing table carries. Codex's row is
 # read too, but only Claude Code's binds an agent definition: Codex has no `.claude/agents` surface.
 ROUTE_ROW = re.compile(r"^\|\s*Claude Code\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*$", re.MULTILINE)
 
-# A literal agent-type mention anywhere in a checked-in skill: `fsgg-worker-best`, `fsgg-critic-normal`.
-# `<route>`/`<role>` placeholders never match, because `<` is not in the class.
-NAMED_TYPE = re.compile(r"fsgg-(worker|critic)-([a-z0-9][a-z0-9-]*)")
+# A literal agent-type mention anywhere in a checked-in skill: `fsgg-worker-best`, `fsgg-critic-normal`,
+# `fsgg-analyst-best`. The role alternation is DERIVED from ROLES rather than retyped, so a role added
+# above cannot be silently unwatched here — the two-place edit that produced a half-armed gate is not
+# available. `<route>`/`<role>` placeholders never match, because `<` is not in the class.
+NAMED_TYPE = re.compile(rf"fsgg-({'|'.join(ROLES)})-([a-z0-9][a-z0-9-]*)")
 
 WORKFLOW = ".github/workflows/skill-quality.yml"
 AGENTS_TRIGGER = ".claude/agents/**"

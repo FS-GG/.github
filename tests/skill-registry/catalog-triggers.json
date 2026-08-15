@@ -1,4 +1,11 @@
 {
+  "board-analyst": {
+    "positive": "Decide which of these findings should become board rows and read the board for churn.",
+    "indirect": "Rows are multiplying faster than they land; work out which ones are one cause and what would stop it.",
+    "incomplete": "Look at whether these findings are worth filing",
+    "negative": "Implement the fix for this defect and open a pull request.",
+    "boundary": "Adjudicate the queued findings and measure the churn, but do not dispatch any worker."
+  },
   "check-board": {
     "positive": "Reconcile the Coordination board before we plan the next wave.",
     "indirect": "The blockers on the org board look stale; tell me what is actually ready.",
