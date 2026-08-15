@@ -1,0 +1,156 @@
+# Re-evaluate the `claim-generation` merge fence on a clock, because its premise expires on one
+# (.github#2656).
+#
+# THE DEFECT THIS CLOSES. `claim-generation` — `coherence.yml`'s job, one of `main`'s REQUIRED status
+# checks — asserts a PERISHABLE fact: "at the instant this ran, the item this PR delivers was held
+# under claim generation G". The claim it read carries a LEASE, and that lease expires. `coherence.yml`
+# runs the job on `opened`/`synchronize`/`reopened`/`edited`, and a lease lapsing is none of those: it
+# is the passage of time. So the green verdict survives the claim it fences on, and nothing in GitHub
+# re-computes it.
+#
+# THAT GAP IS ONLY VISIBLE FROM THE MERGE SIDE. `pnext-item` §6's own path is safe without this
+# workflow — `fsgg-coord delivery --apply` re-reads the winning claim marker immediately before its
+# merge request, so a lapsed lease refuses there. Branch protection is what stands between a lapsed
+# claim and a merge made any OTHER way: the GitHub UI's merge button, or a bare `gh pr merge`. And all
+# branch protection has is the standing check run.
+#
+# `.github#2571` came within one ordering of demonstrating it live. Worker `osprey-174c` carried that
+# item through a two-hour review chain against a 120-minute lease without heartbeating; the lease
+# lapsed. It was caught ONLY because it lapsed BEFORE §6's `delivery` call, so the authorization write
+# was stale on arrival and `claim-generation` reddened. Had it lapsed AFTER a green verdict and before
+# the merge, nothing would have re-triggered the check. The item is explicit that the bad ordering was
+# not observed — the hazard is reachable, not measured — and this workflow is what makes it
+# unreachable rather than merely unlucky.
+#
+# A CRON IS THE ONLY TRIGGER THAT IS A FUNCTION OF TIME. Every other Actions trigger is a function of a
+# repository event, and the whole defect is that no event fires. `schedule:` is therefore not a
+# convenience here; it is the mechanism.
+#
+# WHY THIS IS ITS OWN FILE RATHER THAN A JOB IN `coherence.yml`. The first draft put the cron there.
+# `scripts/check-required-contexts.py` refused it: three of that workflow's four jobs would have had to
+# decline the new trigger with `if: github.event_name != 'schedule'`, and a REQUIRED context whose
+# every producer carries a job-level `if:` that gate cannot PROVE runs on a normal pull request is a
+# context that may silently never report — so its allowlist of provable conditions is deliberately
+# narrow, and `!= 'schedule'` is not in it. The refusal was correct and is the reason for this file: a
+# trigger that three of four jobs must opt out of does not belong on the workflow they share. This one
+# also needs `checks: write`, which nothing in `coherence.yml` should carry.
+#
+# THE CADENCE IS SAMPLING RESOLUTION, NOT THE RULE (.github#2656 AC2, which requires the mechanism be
+# derived from the lease's own expiry rather than from a fixed timeout guessed alongside it). Every
+# verdict this workflow publishes is computed from the individual `fsgg:claim` marker's OWN `lease=`
+# and its own `updated_at` — 15 minutes is only how often the sweep LOOKS. The residual it leaves is
+# one sweep period, ~12% of the engine's 120-minute default lease, and it is stated here rather than
+# papered over. The rejected alternative is exactly what AC2 names: making the cadence itself the rule
+# ("a verdict goes stale 15 minutes after it is computed") would be a guessed number standing in for a
+# lease the marker already declares, and it would red every long-running review chain that is perfectly
+# healthy. GitHub also treats `schedule:` as best-effort and may delay or coalesce runs under load;
+# that widens the sampling window, and it is a further reason the cadence must not BE the rule.
+#
+# ITS INTERACTION WITH `.github#2581`, STATED (AC5). That row is about lease SURVIVAL — `stale_guard`
+# refusing `heartbeat`, so a worker blocked on a host-owned rebuild cannot renew. If it lands, lapses
+# get rarer. This workflow still holds: rarer is not never on a required merge gate, and a worker can
+# let a lease lapse for entirely ordinary reasons, as `osprey-174c` did. The two are adjacent and
+# neither substitutes for the other.
+name: claim-freshness-sweep
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  # Manual dispatch is how this is verified against a live repository after it lands — a scheduled
+  # workflow only ever runs from the DEFAULT branch's copy of this file, so its first real run cannot
+  # happen before merge. Pair it with `--dry-run` (below) the first time.
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Report what would change without publishing any check run'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # WHY THIS MAY WRITE A VERDICT THE REQUIRED JOB OWNS, WITHOUT BECOMING A SECOND OPINION: it runs the
+  # SAME script (`scripts/check-claim-generation.py`) over the same applicability rule (`item_args`),
+  # the same lease precedence, and the same five diagnoses. This is not a re-implementation of the
+  # fence — #485's shape, one question answered in two places that agree in neither — it is the
+  # IDENTICAL computation at a later instant, and the instant is precisely the variable the defect
+  # turns on. Branch protection reads the most recent check run for a required context, so a revoked
+  # green blocks the merge exactly as the required job's own red would.
+  #
+  # THREE REFUSALS BOUND ITS BLAST RADIUS. All three are enforced in `sweep_all` and all three have
+  # their own fixture legs in `tests/claim-generation/run.sh`, because a cron that can write a required
+  # context's verdict on every open pull request is exactly the thing whose limits must be tested
+  # rather than intended:
+  #
+  #   * IT NEVER ORIGINATES A VERDICT. A head with no standing `claim-generation` check run is left
+  #     entirely alone. Everything this can ever do is CHANGE an answer `coherence.yml`'s own job
+  #     already gave, so a cron can never be the first thing to judge a pull request.
+  #   * IT ONLY EVER REVOKES. The one transition it publishes is `success` -> `failure`. A live claim
+  #     under a standing red is left alone, deliberately. Round 1 of this PR's review measured the
+  #     earlier draft publishing `failure -> success` — a cron flipping a REQUIRED merge gate green
+  #     with no repository event behind it. That is a strictly larger power than `.github#2656` asked
+  #     for and it points the wrong way: revocation can only ever block a merge, granting can admit
+  #     one. Clearing a standing red is an event-driven or human-initiated act (a push, a `delivery`
+  #     call that really PATCHes the body, or re-running the `claim-generation` job), and the gate's
+  #     own `[expired]` message says so where the worker reads the failure.
+  #   * A FAILED READ LEAVES THE STANDING VERDICT ALONE. A rate limit, an outage, a permission problem
+  #     — or any unexpected exception — on one PR is a warning and a skip, never a conclusion, and
+  #     never the end of the sweep. Declining to act reproduces exactly today's behaviour; posting a
+  #     guess would be a verdict nobody computed (#266). Round 1 also measured an `OverflowError` from
+  #     a ten-digit `lease=` aborting the whole loop and leaving every LATER pull request unswept,
+  #     which reinstated the very defect this workflow exists to close, so the containment is per pull
+  #     request and the summary counts the crashes rather than hiding them.
+  #
+  # ITS OWN RED IS NOT A MERGE GATE. `claim-freshness-sweep` is not, and must not become, a required
+  # status check: it runs on the DEFAULT BRANCH's schedule, and reddening `main` because one pull
+  # request's issue comments could not be read would be a false alarm about the repository rather than
+  # a true one about that pull request. Per-PR trouble is a warning; only a total failure to enumerate
+  # the open pull requests — which means the sweep did not run at all — is worth a line in the summary.
+  sweep:
+    # An explicit `name:` because GitHub names a plain job's check run after its `name:` if it has one
+    # and its bare JOB ID otherwise, with NO workflow-file prefix — and `sweep` is exactly the kind of
+    # generic id that a second workflow adopts a year later, at which point branch protection's purely
+    # string-based context matching cannot tell the two apart (`.github#2354`, measured live on three
+    # workflows that all declared a job id `reconcile`). `check-job-uniqueness.py` only grades what a
+    # PR makes NEWLY ambiguous, so the collision it would catch is the one somebody else introduces.
+    name: claim-freshness-sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read          # the fsgg:claim markers live on the item's issue comments
+      pull-requests: read   # the open item/<n>-* pull requests, their bodies and their head SHAs
+      checks: write         # publish the re-evaluated claim-generation verdict
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+
+      # The fixture FIRST, exactly as every gate job in this org does it — and here it earns its place
+      # twice over: this job WRITES a required context's verdict, so a regression in either of the two
+      # refusals above must stop it before it reaches a live pull request, not after.
+      - name: Run the claim-generation fixture (no network)
+        run: bash tests/claim-generation/run.sh
+
+      - name: Re-evaluate every open item PR's claim-generation verdict
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          args=(--sweep --repo "${{ github.repository }}")
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          set +e
+          python scripts/check-claim-generation.py "${args[@]}" | tee sweep.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### claim-freshness-sweep"
+            echo
+            echo '```'
+            cat sweep.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning title=claim-freshness-sweep: the sweep did not complete::check-claim-generation.py --sweep exited $rc, so some or all open pull requests were NOT re-evaluated. Any verdict it did revoke before stopping is named in the log above; every pull request it did not reach keeps its standing verdict, so nothing was decided wrongly — it simply was not re-checked. The next scheduled sweep retries. This is not a finding about any pull request."
+          fi
+          exit 0
