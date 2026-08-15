@@ -2436,13 +2436,30 @@ lifted_shape "…nor is an unbound call result, for want of a name to track it u
 # ...nor a program-defined dunder reached by SYNTAX, which is the widest of the three and the one that
 # looks least like a boundary question. The unit of this check is `ast.Call`, so the SAME hazard is
 # graded in its call spelling and unseen in its syntactic one. The other half of that asymmetry is
-# already asserted above by `mutant-repr-not-inert` — `repr(decide)` is a touch — and this leg is
+# already asserted below by `mutant-repr-not-inert` — `repr(decide)` is a touch — and this leg is
 # deliberately the f-string that runs the identical `__repr__` without a call. The pair is what pins
 # the boundary: move it either way and one of the two reds, forcing `WHAT THIS CANNOT SEE` to be
 # corrected in the same commit. A second `repr(decide)` leg here would assert nothing the one above
 # does not, so there is not one.
 lifted_shape "…nor a dunder reached by SYNTAX rather than by a call: the unit of this check is the call" \
   mutant-residual-fstring "    _m = f\"decide is {decide!r}\"  # MUTATION" "is inside \`_guarded\`" pass
+
+# ...and the member of that family that differs IN KIND, pinned on the same anchor M7 uses because it
+# is the same removal spelled without a call. The three pins above are all CONSUMPTIONS of a value
+# whose lift was checked; this is the LIFT. Removing the guard here does not move a touch from guarded
+# to unguarded — it drops `decision_function` from two touches to one and still reports `ok:`, so the
+# guard .github#2571's round-2 repair added can be deleted invisibly. M7 asserts the `getattr`
+# spelling of the identical removal REDS, so the pair pins the boundary: whichever way a later change
+# moves it, one of the two legs reds and `WHAT THIS CANNOT SEE` must be corrected in the same commit.
+mutate mutant-residual-plain-lift \
+  "    decide = _guarded(
+        f\"reading \`decide\` from the mapped decision program {path!r} failed\",
+        lambda: getattr(module, \"decide\", None),
+    )" \
+  "    decide = module.decide  # MUTATION: the guarded lift respelled without a call"
+boundary_run mutant-residual-plain-lift
+must_pass "…nor the LIFT itself spelled without a call, which leaves the touch accounting entirely" \
+  "is inside \`_guarded\`"
 
 # ...and the runtime half for the CLASS, not only for the direct invocation M9 covers. `map` is the
 # most idiomatic of the four — `merge_performs_act` already loops over completions asking `decide`
@@ -2753,7 +2770,7 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   from the loader calls a function makes (the hand-written set had already missed `run_obligation_arm`,
 #   a third function that loads a program), so a NEW holder is graded, and a DECLARED holder that has
 #   been renamed away is MAP ROT rather than a quietly smaller subject. 226 + 9 = 235.
-# + 18 legs for .github#2667, whose subject is that checker again — but a DATAFLOW gap rather than the
+# + 19 legs for .github#2667, whose subject is that checker again — but a DATAFLOW gap rather than the
 #   five SPELLING gaps above. A tracked reference that left through a CALL RESULT stopped being
 #   tracked, so `decision_function`'s own `decide`, lifted out under the guard and kept in a local,
 #   was certified safe to invoke.
@@ -2786,15 +2803,18 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   transforming it. They are cheap to walk, and closing them is what lets the disclosure state a
 #   single property instead of listing spellings.
 #
-#   3 assert the residual class is genuinely OPEN — indexing into a container, an unbound call result,
-#   and a dunder reached by SYNTAX rather than by a call. A disclosure nothing checks drifts from the
-#   code silently, which on a cause already three generations deep is how the fourth generation is
-#   born; and a disclosure claiming to be COMPLETE is worse than one that does not, because an
-#   enumeration invites the reader to keep looking while a completeness claim tells them to stop. The
-#   third of these pins one half of an asymmetry whose other half is the `repr` leg above — the same
-#   `__repr__`, once with a call and once without — so moving the call boundary either way reds one of
-#   the two. 235 + 18 = 253.
-EXPECTED_LEGS=253
+#   4 assert the residual class is genuinely OPEN — indexing into a container, an unbound call result,
+#   a dunder reached by SYNTAX rather than by a call, and the LIFT spelled without a call. A disclosure
+#   nothing checks drifts from the code silently, which on a cause already three generations deep is
+#   how the fourth generation is born; and a disclosure claiming to be COMPLETE is worse than one that
+#   does not, because an enumeration invites the reader to keep looking while a completeness claim
+#   tells them to stop. Two of these pin one half of an asymmetry each, whose other halves are already
+#   asserted RED elsewhere in this file — the `repr` leg for the third, and M7 for the fourth — so
+#   moving the call boundary either way reds one leg of a pair. The fourth differs in kind from the
+#   rest: the other three are consumptions of a checked value, while a lift spelled without a call
+#   leaves the touch accounting entirely, which is how the arm's own guard could be deleted with this
+#   checker still reporting `ok:`. 235 + 19 = 254.
+EXPECTED_LEGS=254
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

@@ -76,6 +76,17 @@ spelling and unseen in its syntactic one: `repr(decide)` and `bool(decide)` are 
 `f"{decide!r}"` and `if decide:` are not. `NON_INVOKING` below excludes `repr` precisely because it
 runs `__repr__`; the f-string is that operation without the call, and this checker cannot reach it.
 
+  ONE MEMBER OF THAT FAMILY DIFFERS IN KIND, and it is the one worth knowing. Every exemplar above is
+  a CONSUMPTION of a value whose own lift was checked. The LIFT ITSELF can be spelled without a call —
+  `decide = module.decide`, `decide = module.__dict__[k]` — and then it is not merely unseen: it
+  leaves the touch accounting altogether. Substituting either spelling for the arm's guarded lift
+  drops `decision_function` from two touches to one and still reports `ok:`, where M7's `getattr`
+  spelling of the very same removal reports UNGUARDED. So the guard `.github#2571`'s round-2 repair
+  put there — the one whose absence let a PEP 562 `__getattr__` green EVERY subject in silence — can
+  be deleted with this checker still naming `decision_function` as a holder it checked. DECLARED_HOLDERS
+  and MAP ROT refuse a subject that rots to zero HOLDERS; nothing here refuses a holder that rots to
+  zero TOUCHES, so read `ok:` as "no touch I can see is unguarded", never as "the guards are present".
+
 **Indexing into or iterating a container** — `[decide][0](x)`, `{"d": decide}["d"](x)`,
 `sorted(xs, key=[*[decide]][0])`, `f([d for d in [decide]])` — because knowing which element comes out
 means evaluating the container.
