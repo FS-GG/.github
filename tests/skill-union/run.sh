@@ -16,6 +16,9 @@
 # `.effectiveParameters` arrives in EITHER of two encodings of the same map — the object form, or the
 # `{key,value}` array FS.GG.SDD.Artifacts actually emits — and the gate must be unable to tell them
 # apart; anything else is a fail-closed exit 2 that names what it got (.github#2546, section 7j-7o).
+# Check 4's binding environment is those parameters PLUS derived provenance facts — today exactly one,
+# `template`, read from the document's own `.templateRef` because no template declares a `template`
+# symbol and so no scaffold can carry it as a parameter (.github#2576, section 7p-7w).
 #
 # Self-contained: builds throwaway product trees under a temp dir, no network, no other repos.
 
@@ -890,6 +893,184 @@ bad_shape "unsupported shape: .effectiveParameters is a JSON string" \
 bad_shape "params that is not valid JSON at all is named as such, not as a shape" \
   '{ "effectiveParameters": [' \
   'params is not valid JSON'
+
+# --- 7p-7w. the DERIVED `template` parameter, from .templateRef (.github#2576) -------------------
+# Every leg above supplies its predicate values through `.effectiveParameters`. One real axis cannot
+# arrive that way AT ALL: `effectiveParameters` is forwarded verbatim to `dotnet new` as
+# `--<key> <value>`, so it can only carry keys the template declares as symbols, and no `fs-gg-*`
+# template declares `template`. FS.GG.Templates' six product-skill rows are written over exactly that
+# axis (`template in [fable-game]`, `template in [fable-game, fable-bindings]`,
+# `template in [fable-bindings]`), so before the derived binding check 4 read `PARAM[template]` as the
+# empty string and answered a confident `false` for all six against every product that producer builds —
+# tolerating a dropped skill as "justified" and flagging a correct one as [unexpected], silently, in both
+# directions. Measured on the live `EHotwagner/S.I.R.` document (`providerName: fable-game`,
+# `templateRef: FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game`): all six answered `false`; five of
+# those answers were wrong.
+#
+# THE PROVENANCE DOCUMENTS BELOW DELIBERATELY CARRY NO `template` KEY IN `effectiveParameters`. That is
+# what makes these vectors load-bearing: a leg that passes here can only have passed through the derived
+# binding, and cannot be satisfied by the parameter map every other leg uses.
+echo "--- derived template parameter from .templateRef (.github#2576) ---"
+
+# The bare shape `fsgg-sdd scaffold` writes (`TemplateRef = descriptor.TemplateId`)…
+PROV_TPL="$WORK/prov-template-bare.json"
+cat > "$PROV_TPL" <<'EOF'
+{ "schemaVersion": 1,
+  "generator": { "id": "FS.GG.SDD.Artifacts", "version": "1.0.0" },
+  "providerName": "fable-game",
+  "templateRef": "fs-gg-fable-game",
+  "effectiveParameters": [
+    { "key": "productName",   "value": "Acme" },
+    { "key": "rootNamespace", "value": "Acme" }
+  ] }
+EOF
+# …and the packaged shape a consumer-migration document carries. SAME template, so SAME verdicts (7s).
+PROV_TPL_PKG="$WORK/prov-template-packaged.json"
+cat > "$PROV_TPL_PKG" <<'EOF'
+{ "schemaVersion": 1,
+  "generator": { "id": "FS.GG.SDD.Artifacts", "version": "1.0.0" },
+  "providerName": "fable-game",
+  "templateRef": "FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game",
+  "effectiveParameters": [
+    { "key": "productName",   "value": "Acme" },
+    { "key": "rootNamespace", "value": "Acme" }
+  ] }
+EOF
+
+# 7p. [missing]: a declared skill whose `template in [fable-game]` predicate is TRUE for this scaffold
+#     and which is materialized in NO root. Before the derived binding the predicate was false and this
+#     absence was silently "justified" — the exact fail-open, one axis over from ADR-0017 §C2's.
+TPL_MISS="$WORK/tpl-missing"; build_good "$TPL_MISS"
+MAN_TPL_MISS="$WORK/man-template-missing.json"
+cat > "$MAN_TPL_MISS" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$TPL_MISS/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$TPL_MISS/.claude/skills/beta")",  "materializes-when": "template in [fable-game, fable-bindings]" },
+  { "id": "fable-remoting", "scope": "product", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "materializes-when": "template in [fable-game]" }
+] }
+EOF
+expect_fail "derived template: [missing] (declared∧template-TRUE∧absent — the fable-remoting case)" \
+  missing "$TPL_MISS" --manifest "$MAN_TPL_MISS" --params "$PROV_TPL"
+
+# 7q. [unexpected] from the other direction: a skill present in every root whose predicate names a
+#     DIFFERENT template. `template in [fable-bindings]` is false on an `fs-gg-fable-game` scaffold, so
+#     its presence is off-template. Before the binding this also read false — and reported [unexpected]
+#     for the wrong reason, on a tree where it was correct; here it is the derived value that decides.
+TPL_UNEXP="$WORK/tpl-unexpected"; build_good "$TPL_UNEXP"
+for r in $ROOTS; do mk_skill "$TPL_UNEXP/$r" fable-bindings "# fable-bindings skill"; done
+MAN_TPL_UNEXP="$WORK/man-template-unexpected.json"
+cat > "$MAN_TPL_UNEXP" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$TPL_UNEXP/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$TPL_UNEXP/.claude/skills/beta")",  "materializes-when": "template in [fable-game, fable-bindings]" },
+  { "id": "fable-bindings", "scope": "product", "sha256": "$(digest "$TPL_UNEXP/.claude/skills/fable-bindings")", "materializes-when": "template in [fable-bindings]" }
+] }
+EOF
+expect_fail "derived template: [unexpected] (present∧template-FALSE — materialized off-template)" \
+  unexpected "$TPL_UNEXP" --manifest "$MAN_TPL_UNEXP" --params "$PROV_TPL"
+
+# 7r. GREEN on a conforming tree, which is what makes 7p/7q falsifiable rather than merely non-crashing:
+#     the template-TRUE skill (beta) IS present and digest-clean, and the template-FALSE one
+#     (fable-bindings) is absent — a JUSTIFIED omission, not a tolerated one.
+TPL_OK="$WORK/tpl-ok"; build_good "$TPL_OK"
+MAN_TPL_OK="$WORK/man-template-ok.json"
+cat > "$MAN_TPL_OK" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$TPL_OK/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$TPL_OK/.claude/skills/beta")",  "materializes-when": "template in [fable-game, fable-bindings]" },
+  { "id": "fable-bindings", "scope": "product", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "materializes-when": "template in [fable-bindings]" }
+] }
+EOF
+expect_pass "derived template: green on a conforming fable-game tree (template-true present, template-false absent)" \
+  "$TPL_OK" --manifest "$MAN_TPL_OK" --params "$PROV_TPL"
+
+# 7s. THE TWO `templateRef` SHAPES NAME THE SAME TEMPLATE, so the gate must be unable to tell them
+#     apart — same exit code and byte-identical output, on all three trees. A rule that handled only the
+#     bare id would answer `false` for every consumer-migration document (which is the shape the one live
+#     document this repair was measured against actually carries), and vice versa.
+same_verdict "bare vs packaged templateRef agree on the [missing] tree" \
+  1 "$TPL_MISS"  "$MAN_TPL_MISS"  "$PROV_TPL" "$PROV_TPL_PKG"
+same_verdict "bare vs packaged templateRef agree on the conforming tree" \
+  0 "$TPL_OK"    "$MAN_TPL_OK"    "$PROV_TPL" "$PROV_TPL_PKG"
+same_verdict "bare vs packaged templateRef agree on the [unexpected] tree" \
+  1 "$TPL_UNEXP" "$MAN_TPL_UNEXP" "$PROV_TPL" "$PROV_TPL_PKG"
+
+# 7t. AN UNUSABLE `templateRef` BINDS NOTHING, and the assertion of that is non-vacuous. `devRepoRecord`
+#     writes `""` — this repo's own `.fsgg/scaffold-provenance.json` is exactly that document — and a
+#     repo with no provider template has no template axis, so `template in [...]` must be FALSE rather
+#     than fabricated. Run against the CONFORMING tree, where beta is present and template-TRUE: with
+#     nothing bound its predicate flips false and beta becomes [unexpected]/exit 1. A binding that
+#     invented a value (or that left a previous one in place) would keep this green.
+for tpl_bad in '""' 'null' '"#"' '"fs-gg-"'; do
+  printf '%s\n' "{ \"templateRef\": $tpl_bad, \"effectiveParameters\": [] }" > "$WORK/prov-tpl-unusable.json"
+  expect_fail "derived template: templateRef $tpl_bad binds nothing (template-true skill flips to off-template)" \
+    unexpected "$TPL_OK" --manifest "$MAN_TPL_OK" --params "$WORK/prov-tpl-unusable.json"
+done
+# …and an ABSENT `templateRef` key is the same fact as an empty one, not a different one.
+printf '%s\n' '{ "effectiveParameters": [] }' > "$WORK/prov-tpl-absent.json"
+printf '%s\n' '{ "templateRef": "", "effectiveParameters": [] }' > "$WORK/prov-tpl-empty.json"
+same_verdict "an absent templateRef and an empty one are the same fact" \
+  1 "$TPL_OK" "$MAN_TPL_OK" "$WORK/prov-tpl-absent.json" "$WORK/prov-tpl-empty.json"
+
+# 7u. AN AGREEING DUPLICATE IS NOT A CONFLICT. A future provider whose template really does declare a
+#     `template` symbol would put the key in `effectiveParameters` too; when it says what the id says,
+#     the verdict must be unchanged rather than refused.
+PROV_TPL_DUP="$WORK/prov-template-agreeing-dup.json"
+cat > "$PROV_TPL_DUP" <<'EOF'
+{ "templateRef": "fs-gg-fable-game",
+  "effectiveParameters": [
+    { "key": "productName", "value": "Acme" },
+    { "key": "template",    "value": "fable-game" }
+  ] }
+EOF
+same_verdict "an agreeing effectiveParameters.template changes nothing" \
+  0 "$TPL_OK" "$MAN_TPL_OK" "$PROV_TPL" "$PROV_TPL_DUP"
+
+# 7v. A DISAGREEING DUPLICATE IS A FAIL-CLOSED EXIT 2 NAMING BOTH VALUES — never a silent precedence
+#     rule. Two sources for one axis that answer differently is the defect this whole section closes;
+#     resolving it by picking a winner would re-create it one layer down, and there is no correct answer
+#     to inherit. Asserted through the REAL gate, so it is check 4's own param load being exercised.
+cat > "$WORK/prov-template-conflict.json" <<'EOF'
+{ "templateRef": "fs-gg-fable-game",
+  "effectiveParameters": [
+    { "key": "template", "value": "fable-bindings" }
+  ] }
+EOF
+tpl_conflict_rc=0
+bash "$ASSERT" --product "$TPL_OK" --roots "$ROOTS" --manifest "$MAN_TPL_OK" \
+  --params "$WORK/prov-template-conflict.json" >"$WORK/out" 2>&1 || tpl_conflict_rc=$?
+tpl_conflict_miss=""
+for frag in "template='fable-bindings'" "template='fable-game'" "two disagreeing sources"; do
+  grep -qF -- "$frag" "$WORK/out" || tpl_conflict_miss="$tpl_conflict_miss [$frag]"
+done
+if [ "$tpl_conflict_rc" -eq 2 ] && [ -z "$tpl_conflict_miss" ]; then
+  echo "PASS  (fail-closed exit 2, both values named) derived template: a disagreeing effectiveParameters.template is refused"
+  pass=$((pass+1))
+else
+  echo "FAIL  (want exit 2 naming both values; got rc=$tpl_conflict_rc, unmentioned:$tpl_conflict_miss) derived template: a disagreeing effectiveParameters.template is refused"
+  sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# 7w. THE SIX REAL ROWS, VERBATIM. The predicates below are copied from `registry/skills.yml`'s
+#     `fs-gg-templates` block, and the expected answers are what FS.GG.Templates' OWN gate returns for
+#     `--template fs-gg-fable-game` (generate-skill-manifest.fsx, `shortName`). This is the demonstration
+#     `.github#2547` acceptance 2 named and could not discharge, pinned so it cannot silently regress:
+#     before .github#2576 every one of these answered `false`.
+tpl_row() { # <id> <predicate> <expected>
+  local id="$1" pred="$2" want="$3" got
+  got="$(bash "$ASSERT" --eval-when "$pred" --params "$PROV_TPL_PKG")"
+  if [ "$got" = "$want" ]; then
+    echo "PASS  (registry row) $id: '$pred' -> $got"; pass=$((pass+1))
+  else
+    echo "FAIL  (registry row) $id: '$pred' -> $got (want $want)"; failcount=$((failcount+1))
+  fi
+}
+tpl_row fable-bindings "template in [fable-bindings]"             false
+tpl_row fable-interop  "template in [fable-game, fable-bindings]" true
+tpl_row fable-project  "template in [fable-game, fable-bindings]" true
+tpl_row fable-remoting "template in [fable-game]"                 true
+tpl_row fable-signalr  "template in [fable-game]"                 true
+tpl_row fable-testing  "template in [fable-game, fable-bindings]" true
 
 # --- root-set resolution: --roots > $AGENT_SKILL_ROOTS > .agent-skill-roots > ADR-0065's two ------
 # (.github#517) A tree can deliberately override the universal default. This fixture keeps proving

@@ -145,7 +145,9 @@ predicate (absent ⇒ `always`):
 ```
 
 Pass the scaffold's own parameters with **`--params <scaffold-provenance.json>`** (read from
-`.effectiveParameters`) and the assertion evaluates each declared skill's predicate, turning
+`.effectiveParameters`, plus the derived facts in
+[the binding environment](#the-binding-environment-is-parameters-plus-derived-provenance-facts-2576)
+below) and the assertion evaluates each declared skill's predicate, turning
 "declared ∧ absent" from blanket-tolerated into **justified**. Two classes are added to the four
 above:
 
@@ -173,6 +175,48 @@ its two arms are `--product` and `--product --manifest --co-tenants`; it passes 
 The check is implemented and fixture-covered here; adoption is still zero, and this document says so
 rather than naming a caller that a plan once expected. Corrected at
 [#1643](https://github.com/FS-GG/.github/issues/1643).
+
+### The binding environment is parameters **plus derived provenance facts** (#2576)
+
+`--params` reads `.effectiveParameters` — and, since
+[#2576](https://github.com/FS-GG/.github/issues/2576), one **derived** value that cannot live there:
+
+| predicate param | source | derivation |
+|---|---|---|
+| everything else | `.effectiveParameters` | verbatim (`tostring` for booleans/numbers) |
+| `template` | `.templateRef` | the id after the last `#` (or the whole value), less an `fs-gg-` prefix |
+
+The derivation is not a convenience. `effectiveParameters` is the provider descriptor's declared
+parameters overlaid with the author's `--param`, and `fsgg-sdd scaffold` forwards **every** entry
+verbatim to `dotnet new <templateId>` as `--<key> <value>` — which exposes only declared template
+*symbols* as options. So a key can appear there only if the template declares a symbol of that name,
+and no `fs-gg-*` template declares `template`: adding one to the descriptor would emit
+`dotnet new fs-gg-fable-game --template fable-game …` and **break scaffolding**. `FS.GG.Templates`'
+six product-skill rows are written over exactly that axis (`template in [fable-game]`,
+`template in [fable-game, fable-bindings]`, `template in [fable-bindings]`), so until #2576 check 4
+answered a confident `false` for all six against **every product that producer builds** — tolerating a
+dropped skill as "justified" and flagging a correct one as `[unexpected]`, in both directions,
+silently. Measured on the live `EHotwagner/S.I.R.` provenance: all six answered `false`; five of those
+answers were wrong.
+
+No producer was asked for a new field, because none was needed —
+`FS.GG.SDD.Artifacts.ScaffoldProvenance` has always written `providerName` and `templateRef`
+unconditionally, beside `effectiveParameters`. The value binds from **`templateRef`, not
+`providerName`**, because `FS.GG.Templates`' manifest generator emits these predicates as
+`sprintf "template in [%s]"` over `shortName templateId` and its own `--assert-product` gate
+re-derives the same way: binding the same function of the same fact is what makes the two evaluators
+unable to answer differently. (`providerName` merely *coincides* for the fable providers — for the
+`rendering` provider the name is `rendering` while the template id is `fs-gg-ui`.)
+
+Two boundaries, both fixture-pinned (`tests/skill-union/run.sh` §7p-7w):
+
+- an **unusable** `templateRef` — absent, `null`, empty (what `devRepoInit` writes, and what this
+  repo's own `.fsgg/scaffold-provenance.json` carries), a bare `#`, or a bare `fs-gg-` — binds
+  **nothing**, leaving `template in [...]` false. A repo with no provider template has no template
+  axis, and an invented value is worse than an unset one;
+- an `.effectiveParameters` `template` that **disagrees** with the derived value is a fail-closed
+  exit 2 naming both. Two sources for one axis that answer differently is the defect this closes;
+  resolving it by precedence would re-create it one layer down. An **agreeing** duplicate is accepted.
 
 **The predicate language** is deliberately tiny — evaluable in both the shell gate
 (`eval_condition`) and the Python drift-normalizer (`normalize_when`) without a real expression

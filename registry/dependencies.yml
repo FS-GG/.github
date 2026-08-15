@@ -811,7 +811,13 @@ contracts:
       ADR-0057, `scope: operator` (never-materialized, e.g. drive-board) classes), never
       hand-authored bytes. `materializes-when` is the ADR-0017
       predicate grammar the union gate (scripts/skill-union-assert.sh --params) evaluates against a
-      scaffold's scaffold-provenance.json effectiveParameters. `mirrored` (OPTIONAL boolean, .github#658)
+      scaffold's scaffold-provenance.json — its effectiveParameters PLUS the facts the gate DERIVES
+      from that same document (.github#2576, ADR-0017's 2026-08-15 amendment). Today exactly one is
+      derived: `template`, from the document's top-level templateRef. That is not a shortcut —
+      effectiveParameters is forwarded verbatim to `dotnet new <templateId>` as `--<key> <value>`,
+      which accepts only declared template SYMBOLS, so a `template` key can never appear there and no
+      producer could have supplied one. A parameter declared in the registry's `parameters:` list but
+      reachable through neither channel evaluates as unset. `mirrored` (OPTIONAL boolean, .github#658)
       is the ADR-0022 §6 frozen-mirror OBLIGATION the owner asserts — "FS.GG.Rendering is required to ship
       a byte-identical copy of this body" — never an observation that a same-named file exists in both
       trees. ABSENT MEANS "NOT CLASSIFIED", NEVER `false`: a reader that coerces absent → false answers

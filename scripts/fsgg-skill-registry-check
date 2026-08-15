@@ -58,12 +58,14 @@ COMPLETENESS OF THE LIST.
                      catalog models and nothing read it, so the catalog could assert
                      `[profile, lifecycle, feedback, designSystem]` org-wide while a row evaluated
                      `template` (.github#2547). NECESSARY, NOT SUFFICIENT, and the distinction is
-                     load-bearing: nothing evaluates a predicate against this list —
-                     `skill-union-assert.sh --params` reads a scaffold's `scaffold-provenance.json
-                     -> effectiveParameters` — so a parameter declared here but absent from that
-                     provenance still answers `false` for every scaffold its producer builds.
-                     Declaring it makes the catalog honest about the axes it carries; it does not
-                     make a predicate answerable.
+                     load-bearing: nothing evaluates a predicate against this list, so declaring a
+                     parameter here makes the catalog honest about the axes it carries and does not
+                     by itself make a predicate answerable. Whether it IS answerable is a fact about
+                     the EVALUATOR's binding environment, not about this list. That environment is a
+                     scaffold's `effectiveParameters` PLUS the facts `skill-union-assert.sh`
+                     derives from the same provenance document (.github#2576) — `template` is bound
+                     from `.templateRef`, precisely because `effectiveParameters` is forwarded
+                     verbatim to `dotnet new` and so can never carry it.
 
   9. DELIVERY CHANNEL
                      every `(owner, scope)` class the catalog carries has an accountable delivery
@@ -496,12 +498,18 @@ def parameter_vocabulary(registry: dict) -> list[dict]:
     predicates are written over `template`, and no gate could say the two disagreed (.github#2547).
 
     THIS IS NECESSARY AND NOT SUFFICIENT, AND SAYING SO IS THE POINT. Nothing evaluates a predicate
-    against this list — `scripts/skill-union-assert.sh --params` reads a scaffold's
-    `scaffold-provenance.json -> effectiveParameters`, and a parameter that is declared here but
-    absent from that provenance still answers `false` for every scaffold. Declaring it makes the
-    catalog HONEST about the axes it carries; it does not make a predicate ANSWERABLE. The second
-    half is the producer's, and for `template` it is tracked separately — see the `template` entry
-    in the registry's own `parameters:` comment.
+    against this list, so declaring a parameter here makes the catalog HONEST about the axes it
+    carries and does not by itself make a predicate ANSWERABLE.
+
+    WHAT THE SECOND HALF ACTUALLY IS (.github#2576 — this used to say "the producer's", and that was
+    wrong). Answerability is a property of the EVALUATOR's binding environment, and that environment
+    is a scaffold's `effectiveParameters` PLUS the facts `scripts/skill-union-assert.sh` derives from
+    the same provenance document. `template` is the case that proved it: it can NEVER appear in
+    `effectiveParameters`, because `fsgg-sdd scaffold` forwards every entry verbatim to
+    `dotnet new <templateId>` as `--<key> <value>` and only declared template SYMBOLS are accepted —
+    so no producer could have supplied it and none was asked to. It is bound instead from the
+    document's own `.templateRef`, which `FS.GG.SDD.Artifacts` already wrote. See the `template`
+    entry in the registry's own `parameters:` comment and ADR-0017's 2026-08-15 amendment.
     """
     findings: list[dict] = []
     declared = registry.get("parameters")

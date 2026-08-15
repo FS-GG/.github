@@ -64,7 +64,16 @@
 # of the two encodings that denote the same map — the object form, or the `{key,value}` array
 # `FS.GG.SDD.Artifacts` actually emits, which is exactly `to_entries` of it (.github#2546; see
 # `load_params`, which accepted only the first and so had never run against that provider family at
-# all). An unrecognised encoding is a fail-closed exit 2 naming what it got and what is supported. This
+# all). An unrecognised encoding is a fail-closed exit 2 naming what it got and what is supported.
+# THE BINDING ENVIRONMENT IS THOSE PARAMETERS **PLUS DERIVED PROVENANCE FACTS** (.github#2576): today
+# exactly one, `template`, derived from the document's own top-level `.templateRef`. ADR-0017 named the
+# predicate's inputs "the scaffold parameter set" and this reader took it literally, which made one real
+# axis permanently unanswerable — `effectiveParameters` is forwarded verbatim to `dotnet new` as
+# `--<key> <value>`, so it can only ever carry keys the template declares as SYMBOLS, and no `fs-gg-*`
+# template declares `template`. The six `fs-gg-templates` rows are written over exactly that axis, so
+# check 4 answered a confident `false` for all six against every product that producer builds — in both
+# directions, silently. The fact was already in the document; it was simply never read. See
+# `provenance_template` and the note at the end of `load_params`. This
 # turns the superset catalog's "declared ∧ absent" from BLANKET-tolerated into JUSTIFIED —
 # absence is legitimate only when the condition is false. Two new classes close the manifest→disk
 # blind spot (the direction checks 1-3 never enforced):
@@ -158,6 +167,12 @@ Options:
                           .effectiveParameters may be an object of name -> value, or the equivalent
                           array of {"key":…,"value":…} entries that FS.GG.SDD.Artifacts emits; any
                           other shape is a misconfiguration (exit 2) naming what was received.
+                          The predicate parameter `template` is DERIVED from the document's own
+                          .templateRef (the id after any `#`, less an `fs-gg-` prefix) — the same
+                          short name FS.GG.Templates' manifest generator writes its predicates in —
+                          because no template declares a `template` symbol, so no scaffold can carry
+                          it as a parameter. An unusable .templateRef binds nothing; an
+                          .effectiveParameters `template` that DISAGREES with it is exit 2.
   --digest <skill-dir>    reference generator: print the canonical-body sha256 of the dir's SKILL.md,
                           then exit (so producers and this assertion never drift)
   --eval-when <predicate> reference evaluator: evaluate a materializes-when <predicate> against the
@@ -300,6 +315,29 @@ declare -A PARAM=()
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
 unquote() { local s="$1"; if [ "${#s}" -ge 2 ] && [ "${s:0:1}" = '"' ] && [ "${s: -1}" = '"' ]; then s="${s:1:${#s}-2}"; fi; printf '%s' "$s"; }
 
+# Derive the `template` predicate value from a provenance document's top-level `.templateRef`, or print
+# NOTHING when it cannot be derived. See the long note at the end of `load_params`, which is this
+# function's only caller, for why the axis is read from `templateRef` rather than requested as a
+# scaffold parameter or taken from `providerName`.
+#
+# TWO SHAPES ARE OBSERVED IN THE FIELD AND BOTH ARE HANDLED. `fsgg-sdd scaffold` writes the bare template
+# id (`TemplateRef = descriptor.TemplateId` ⇒ `fs-gg-fable-game`); a consumer-migration document carries
+# the packaged form (`FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game`, as `EHotwagner/S.I.R.`'s does).
+# The fragment after the LAST `#` is the template id in the second shape and is the whole string in the
+# first, so one rule covers both. Then the `fs-gg-` prefix is stripped to reach the short name the
+# producer's own predicates are written in.
+provenance_template() {                       # <provenance-file> → the short name, or nothing
+  local file="$1" ref
+  ref="$(jq -r '(.templateRef // "") | tostring' "$file" 2>/dev/null || true)"
+  ref="$(trim "$ref")"
+  [ -n "$ref" ] || return 0
+  ref="${ref##*#}"                            # packaged `PKG::VER#<id>` → `<id>`; a bare id is unchanged
+  [ -n "$ref" ] || return 0                   # a trailing `#` leaves nothing to derive from
+  case "$ref" in fs-gg-*) ref="${ref#fs-gg-}" ;; esac
+  [ -n "$ref" ] || return 0                   # the bare prefix `fs-gg-` names no template
+  printf '%s' "$ref"
+}
+
 # Populate PARAM[] from a scaffold-provenance.json (.effectiveParameters). Booleans/numbers are
 # stringified so `feedback == true` compares against the literal token. Shared by the real gate
 # (check 4) and the --eval-when reference evaluator, so the fixture pins the SAME param extraction
@@ -380,6 +418,57 @@ load_params() {
     [ -n "$k" ] || continue
     PARAM["$k"]="$v"
   done < <(jq -r "$entries"' | [.key, (.value | tostring)] | @tsv' "$file")
+
+  # THE BINDING ENVIRONMENT IS SCAFFOLD PARAMETERS **PLUS DERIVED PROVENANCE FACTS** (.github#2576).
+  # ADR-0017 called the predicate's inputs "the scaffold parameter set", and this reader took that
+  # literally: `.effectiveParameters` and nothing else. One real axis is not expressible there AT ALL,
+  # and it is not an oversight in the producer — it is a consequence of what `effectiveParameters` IS.
+  # `fsgg-sdd scaffold` computes it as the provider descriptor's declared parameter defaults overlaid
+  # with the author's `--param` (FS.GG.SDD HandlersScaffold.fs `effectiveParameters`) and then forwards
+  # EVERY entry verbatim as `--<key> <value>` to `dotnet new <templateId>` (same file,
+  # `scaffoldInvocationEffects`), which exposes only declared TEMPLATE SYMBOLS as options. So a key can
+  # live in `effectiveParameters` only if the template declares a symbol of that name, and
+  # `fs-gg-fable-game` declares none called `template`: adding one to the descriptor to make the axis
+  # visible here would emit `dotnet new fs-gg-fable-game --template fable-game …` and BREAK SCAFFOLDING.
+  # The descriptor's `parameters:` list is a `dotnet new` argument list, not a provenance annotation
+  # channel.
+  #
+  # It never needed to be one. `scaffold-provenance.json` ALREADY carries the template identity as a
+  # first-class top-level fact, written unconditionally beside `providerName`
+  # (FS.GG.SDD ScaffoldProvenance.fs `serialize`), and it is present in every live document —
+  # `EHotwagner/S.I.R.`'s reads `FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game`. So the axis is
+  # resolved HERE, by reading a fact the producer already publishes, and NO cross-repo change is
+  # requested of FS.GG.SDD or of FS.GG.Templates.
+  #
+  # WHY `.templateRef` AND NOT `.providerName`, WHICH WOULD ALSO HAVE MATCHED THE FABLE ROWS. The
+  # predicate vocabulary is not free-form: FS.GG.Templates' manifest generator EMITS these predicates as
+  # `sprintf "template in [%s]"` over `shortName templateId`, where
+  # `shortName t = t.Substring "fs-gg-".Length` (generate-skill-manifest.fsx), and its own
+  # `--assert-product` gate re-derives the same way. Binding the same function of the same fact is what
+  # makes the two evaluators UNABLE to answer differently — which is the whole point of this repair, and
+  # is exactly what `providerName` would NOT give: for the `rendering` provider `name` is `rendering`
+  # while `templateId` is `fs-gg-ui`, so the two diverge, and matching on the fable rows would be a
+  # coincidence rather than a derivation.
+  #
+  # An unusable `templateRef` binds NOTHING rather than something empty or invented: `devRepoRecord`
+  # writes `""` (this very repo's `.fsgg/scaffold-provenance.json` is that document), and a repo with no
+  # provider template has no template axis — an unset parameter, and therefore a false
+  # `template in [...]`, is the correct answer there. An id that does not carry the `fs-gg-` prefix is
+  # bound whole; this deliberately does NOT mirror the producer's unconditional `Substring`, which would
+  # mangle such an id, because reproducing a latent bug is not agreement.
+  local derived
+  derived="$(provenance_template "$file")"
+  if [ -n "$derived" ]; then
+    # A `template` key that reached `.effectiveParameters` anyway (a future provider whose template
+    # really does declare the symbol) and DISAGREES with the id is refused, not silently resolved by a
+    # precedence rule. Two sources for one axis that answer differently is the defect .github#2576
+    # exists to close; picking a winner here would re-create it one layer down, and there is no correct
+    # answer to inherit. Agreeing sources are not a conflict and are accepted.
+    if [ -n "${PARAM[template]+set}" ] && [ "${PARAM[template]}" != "$derived" ]; then
+      die "params declares .effectiveParameters template='${PARAM[template]}' but .templateRef derives template='$derived' — one predicate axis with two disagreeing sources; refusing to guess which value the materializes-when predicates see: $file"
+    fi
+    PARAM[template]="$derived"
+  fi
 }
 
 # Evaluate a single comparison clause. Returns 0 (true) / 1 (false); dies (2) on an unparseable clause.

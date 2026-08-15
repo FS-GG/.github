@@ -135,6 +135,67 @@ The unused bodies remain progressively disclosed. The measured cost is catalog c
 demonstrated wrong-skill selection; nevertheless, the savings are material for the `app`,
 `headless-scene`, and `governed` profiles. Conditional materialization therefore remains justified.
 
+### 2026-08-15 amendment — the predicate's inputs are scaffold parameters **plus derived provenance facts** (.github#2576)
+
+Decision 1 above describes `materializes-when` as "a predicate over the scaffold parameter set
+(`profile`, `lifecycle`, `feedback`, `designSystem`, …)", and Decision 3 wires the gate to read those
+values from `scaffold-provenance.json`. The gate read that literally — `.effectiveParameters` and
+nothing else — and one real axis turned out not to be expressible there **at all**.
+
+`FS.GG.Templates`' six `scope: product` rows are conditioned on a `template` axis
+(`template in [fable-game]`, `template in [fable-game, fable-bindings]`,
+`template in [fable-bindings]`). No scaffold can carry a `template` *parameter*, and that is a
+consequence of what a parameter **is**, not an omission anyone can repair: `fsgg-sdd scaffold`
+computes `effectiveParameters` as the provider descriptor's declared parameters overlaid with the
+author's `--param`, then forwards **every** entry verbatim to `dotnet new <templateId>` as
+`--<key> <value>`, and `dotnet new` exposes only declared template *symbols* as options. Declaring
+`template` in `FS.GG.Templates/providers/fable-game.providers.yml` to make the axis visible would emit
+`dotnet new fs-gg-fable-game --template fable-game …` against a template that declares no such symbol
+and **break scaffolding**. The descriptor's `parameters:` list is a `dotnet new` argument list, not a
+provenance annotation channel.
+
+So check 4 answered a confident `false` for all six rows against **every product that producer
+builds** — tolerating a dropped skill as "justified" and reporting a correctly materialized one as
+`[unexpected]`, in both directions, silently. Measured against the live `EHotwagner/S.I.R.`
+provenance document: all six answered `false`, and five of those answers were wrong.
+
+**Amendment.** The predicate's binding environment is the scaffold parameters **plus derived
+provenance facts** — today exactly one: `template`, derived from the provenance document's own
+top-level `.templateRef` (the id after the last `#`, less an `fs-gg-` prefix).
+
+Two candidate repairs were considered on `.github#2576` and both are **refused**:
+
+- *(a) ask `FS-GG/FS.GG.SDD` to record the provider name / template id as a first-class provenance
+  fact* — there is nothing to ask for. `FS.GG.SDD.Artifacts.ScaffoldProvenance.serialize` already
+  writes `providerName` and `templateRef` unconditionally, beside `effectiveParameters`, and every
+  live document carries them. The fact was never missing; it was simply never read.
+- *(b) ask `FS-GG/FS.GG.Templates` to rewrite the six predicates in a vocabulary provenance already
+  carries, and re-express its own `--assert-product` gate to match* — that changes a **working**
+  evaluator to accommodate a broken one. Templates' gate resolves this axis correctly today, from a
+  `--template <templateId>` argument mapped through `shortName`.
+
+The axis is therefore resolved in `.github`'s own evaluator, and **no cross-repo change is
+requested**. It binds from `templateRef` rather than `providerName` because the predicate vocabulary
+*is* the short-name space: Templates' manifest generator emits these predicates as
+`sprintf "template in [%s]"` over `shortName templateId` (`shortName t = t.Substring "fs-gg-".Length`)
+and its `--assert-product` gate re-derives the same way, so binding the same function of the same fact
+is what makes the two evaluators **unable** to answer differently. `providerName` only coincides for
+the fable providers — for the `rendering` provider the name is `rendering` while the template id is
+`fs-gg-ui`.
+
+Boundaries, both fixture-pinned (`tests/skill-union/run.sh` §7p-7w): an unusable `templateRef`
+(absent, `null`, empty — what `devRepoInit` writes — a bare `#`, or a bare `fs-gg-`) binds **nothing**,
+so `template in [...]` stays false, because a repo with no provider template has no template axis; and
+an `.effectiveParameters` `template` that **disagrees** with the derived value is a fail-closed exit 2
+naming both, because two sources for one axis that answer differently is the defect this amendment
+closes and a precedence rule would re-create it one layer down. An agreeing duplicate is accepted.
+
+Nothing about `registry/skills.yml` changes: `template` was already in its `parameters:` list
+(.github#2547), and the six rows' `materializes-when` values are the producer's bytes and stay
+untouched. The demonstration `.github#2547` acceptance 2 asked for — the six predicates answering
+correctly for a real `fs-gg-fable-game` scaffold — is discharged by that fixture section and by the
+`--eval-when` run against the live S.I.R. document.
+
 <!-- This decision adds a contract (`skill-registry`) + a registry node surface, so
 docs/architecture.md is reconciled as part of resolution — after the registry update. See
 docs/coordination/README.md#system-overview--the-architecture-map. -->
