@@ -2320,6 +2320,86 @@ boundary_run mutant-holder-rot
 must_fail "a DECLARED holder that no longer exists is MAP ROT, never a quietly smaller subject" \
   "MAP ROT"
 
+# ---- .github#2667: AND THE VALUE THAT ESCAPES THROUGH A CALL RESULT. Every shape above is about
+#      RECOGNISING a handover. This one is about PROPAGATING the tracked set through a value that
+#      provably came out of the program — a different kind of gap, and the one `LOADERS`' own
+#      `decision_function` entry is a hand-placed patch for.
+#
+#      `decision_function` already lifts the program's own `decide` into a local under the guard, so
+#      the hole needed exactly one line nobody had written: a call to it. The lifted callable stopped
+#      being tracked at the guard's closing paren, and the invocation was therefore certified safe.
+#      Proved twice, on the M8 discipline, because the shape has a measured runtime consequence: once
+#      through the ARM (the same `rc == 0 AND no output` signature as M6/M7/M8), and once through the
+#      checker that exists to make writing it impossible in the first place.
+ANCHOR_RETURN="            f\"merge performs the act, and cannot substitute its own copy of the rule.\"
+        )
+    return module"
+
+# M9 — invoke the callable the guard handed back. The guard covered the LIFT; nothing covers the CALL.
+mutate mutant-lifted-callable "$ANCHOR_RETURN" \
+  "            f\"merge performs the act, and cannot substitute its own copy of the rule.\"
+        )
+    decide({})  # MUTATION: the callable the guard lifted out, invoked outside it
+    return module"
+# The REAL decision program with ONLY `decide` overridden to exit. A hand-written stub would stop the
+# control below earlier, on a missing `patch_tuple`, and a control that reds for a different reason
+# than the one under test is not a control.
+cp "$HERE/../../scripts/kit-auto-publish.py" "$DECIDER"
+printf '\n\nimport sys as _exiting_sys  # MUTATION\n\n\ndef decide(facts):  # MUTATION: overrides the real one\n    _exiting_sys.exit(0)\n' >> "$DECIDER"
+silent_green "INVERSION M9: invoke the callable lifted out under the guard and a sys.exit(0) in it greens the arm SILENTLY" \
+  "$MUT_OBL/scripts/mutant-lifted-callable.py" "$OBL/release-obligation.json"
+
+# ...and the CONTROL beside it, because M9's silent zero is only evidence if the SHIPPED gate reds on
+# the identical decision program and the identical declaration. It does: the arm reaches `decide()`
+# through the guard, so the same `sys.exit(0)` becomes a typed no-verdict instead of a pass. This is
+# also the first leg to cover a `decide` that EXITS — the .github#2571 legs above cover `patch_tuple`
+# and the PEP 562 `__getattr__`, and neither reaches this call.
+set +e
+out="$(cd "$OBL_TREE" && python3 "$GATE" --obligation-arm --obligations "$OBL/release-obligation.json" \
+  --obligation-candidate-version 0.58.1 --obligation-published-version 0.58.0 2>&1)"
+rc=$?
+set -e
+must_fail "CONTROL: through the boundary, that same decide() exit is a typed no-verdict" \
+  "decide() raised on the candidate fact set"
+
+boundary_run mutant-lifted-callable
+must_fail "INVERSION: the boundary check FLAGS the lifted-callable invocation M9 introduces" \
+  "UNGUARDED: 1 touch(es)"
+# Exactly one, and it is the CALL — not the guarded lift that produced the value, which is correct
+# code. A checker that reported the lift too would be reporting the boundary working.
+if grep -q "in decision_function(): decide({})" <<<"$out"; then
+  ok "INVERSION M9: …and it names the invocation, not the guarded lift that produced the value"
+else
+  bad "INVERSION M9: …and it names the invocation, not the guarded lift that produced the value" "$out"
+fi
+
+# The same escape spelled without the guard: a bare `getattr` result, bound to a local and invoked
+# later. The LIFT here was always flagged — it hands `module` over, which is M7's shape — so a leg
+# asserting `UNGUARDED` would pass with or without this repair. The COUNT is what isolates it: the
+# invocation is a SECOND finding, and the second is the one the previous checker could not see.
+mutate mutant-lifted-getattr "$ANCHOR_RETURN" \
+  "            f\"merge performs the act, and cannot substitute its own copy of the rule.\"
+        )
+    lifted = getattr(module, \"decide\", None)  # MUTATION: lifted by a bare getattr
+    lifted({})  # MUTATION: ...and invoked later
+    return module"
+boundary_run mutant-lifted-getattr
+must_fail "a bare getattr result, bound and then INVOKED, is a touch as well as the lift" \
+  "UNGUARDED: 2 touch(es)"
+
+# ...and the documented limit is LOCKED, not merely written down. A derived value handed to a callee
+# is deliberately NOT a touch, because the arm's own `if not callable(decide)` does exactly that,
+# outside the guard and correctly. An implementation that treated the derived tier like the program
+# tier would red this leg — and would red the shipped gate above it.
+mutate mutant-derived-handover "$ANCHOR_RETURN" \
+  "            f\"merge performs the act, and cannot substitute its own copy of the rule.\"
+        )
+    _kind = type(decide)  # MUTATION: a derived value HANDED OVER, never invoked
+    return module"
+boundary_run mutant-derived-handover
+must_pass "a derived value handed over but never invoked is left alone, as the docstring states" \
+  "is inside \`_guarded\`"
+
 cp "$HERE/../../scripts/kit-auto-publish.py" "$DECIDER"
 
 # ---- THE ARM IS WIRED, ON EVERY PULL REQUEST. An unwired gate is the exact defect .github#2533 is
@@ -2608,7 +2688,21 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   from the loader calls a function makes (the hand-written set had already missed `run_obligation_arm`,
 #   a third function that loads a program), so a NEW holder is graded, and a DECLARED holder that has
 #   been renamed away is MAP ROT rather than a quietly smaller subject. 226 + 9 = 235.
-EXPECTED_LEGS=235
+# + 6 legs for .github#2667, whose subject is that checker again — but a DATAFLOW gap rather than the
+#   five SPELLING gaps above. A tracked reference that left through a CALL RESULT stopped being
+#   tracked, so `decision_function`'s own `decide`, lifted out under the guard and kept in a local,
+#   was certified safe to invoke. 1 is that hole through the ARM (M9, the same rc==0-and-no-output
+#   signature as M6/M7/M8) and 1 is its CONTROL — the identical decision program and declaration
+#   against the SHIPPED gate, where the same `decide()` exit becomes a typed no-verdict, which is also
+#   the first leg here to cover a `decide` that exits rather than a `patch_tuple` or a `__getattr__`.
+#   2 are the checker flagging M9's mutant: the count (exactly one finding) and the finding naming the
+#   INVOCATION rather than the guarded lift that produced the value. 1 is the same escape spelled as a
+#   bare `getattr` result, asserted on the COUNT because the lift alone was always flagged and a leg
+#   matching `UNGUARDED` would have passed before the repair as well. 1 locks the documented limit:
+#   a derived value HANDED OVER is deliberately not a touch, because the arm's own
+#   `if not callable(decide)` is exactly that and is correct — an implementation that collapsed the
+#   two tiers would red this leg and the shipped gate with it. 235 + 6 = 241.
+EXPECTED_LEGS=241
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

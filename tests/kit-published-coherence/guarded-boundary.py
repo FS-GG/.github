@@ -28,25 +28,45 @@ at the time: that edit made the arm exit 0 in silence on a program whose `patch_
 is guarded now; the message argument, the lambda's own defaults, and a `_guarded` call spelled with
 keywords or the wrong arity defer nothing and are reported as NOT A THUNK.
 
-WHAT COUNTS AS A TOUCH. A call whose func reaches a tracked reference (`module.decide(...)`,
-`m.decide(...)`, `module.__dict__["decide"](...)`), or one that HANDS a tracked reference over as a
+WHAT COUNTS AS A TOUCH. A call whose func reaches a tracked PROGRAM (`module.decide(...)`,
+`m.decide(...)`, `module.__dict__["decide"](...)`), or one that HANDS a tracked program over as a
 positional argument, a keyword argument, a starred element, or an entry of a literal container
 (`getattr(module, ...)`, `f(mod=module)`, `f(*[module])`, `f(**{"mod": module})`), or any
-`exec_module(...)`.
+`exec_module(...)` — and, since .github#2667, a call that INVOKES a value lifted out of a program
+(`decide(...)`, where `decide` is what came back from under the guard).
 
-WHAT COUNTS AS A TRACKED REFERENCE. The name `module`, whatever a call to a LOADERS function is bound
-to, and every local name aliased from one of those. The alias pass deliberately OVER-approximates —
-`a, b = module, other` marks both — because a false flag costs an author one line of explanation while
-a miss costs a silent exit 0.
+WHAT COUNTS AS A TRACKED REFERENCE. Two tiers, because two different facts license two different
+rules (.github#2667).
+
+  A PROGRAM is the name `module`, whatever a call to a LOADERS function is bound to, every local
+  aliased from one of those, and any expression rooted at one (`module.decide`,
+  `module.__dict__[k]`). Invoking through it and handing it over are BOTH touches: the callee will
+  reach into it.
+
+  A DERIVED value is what a name holds when it is bound to a CALL that reached into a program — the
+  result of `_guarded(what, lambda: getattr(module, "decide", None))`, or of a bare
+  `getattr(module, "decide")`. INVOKING it runs the program's own code, so that is a touch. Handing
+  it over is NOT, and the asymmetry is deliberate rather than an oversight: the arm's own
+  `if not callable(decide)` hands the lifted callable to `callable`, which cannot run the program,
+  and it does so correctly and outside the guard. A rule that reddened that line would make this
+  checker unkeepable against the very file it exists to grade.
+
+The alias pass deliberately OVER-approximates — `a, b = module, other` marks both — because a false
+flag costs an author one line of explanation while a miss costs a silent exit 0.
 
 WHAT THIS CANNOT SEE, stated because a checker that overstates its reach is worse than one that does
 not exist. It is a NAME-based AST check over one file, so a program stashed into a container or an
 attribute (`sys.modules[spec.name] = module`, which the arm really does) and later reached back
 through an expression that names none of the tracked names is outside it; so is a program reached
-through a dynamic name, and so is a touch in another module. It also assumes the boundary is still
-spelled `_guarded`: rename that function and every touch reports UNGUARDED, which is the right
-direction to be wrong in. What it does cover, it covers by shape, so the next ordinary-looking line to
-reach into a loaded program reds here at authoring time rather than in a later review round.
+through a dynamic name, and so is a touch in another module. A DERIVED value carries a narrower fact
+than a program does, and the two limits that follow from it are stated rather than papered over:
+handing one to a callee that will invoke it later (`sorted(xs, key=decide)`) is not reported, and
+neither is an invocation spelled off the name rather than through it (`decide.__call__(x)`) — the
+fact tracked is about that ONE lifted value, not about everything reachable from it. It also assumes
+the boundary is still spelled `_guarded`: rename that function and every touch reports UNGUARDED,
+which is the right direction to be wrong in. What it does cover, it covers by shape, so the next
+ordinary-looking line to reach into a loaded program reds here at authoring time rather than in a
+later review round.
 
 Usage:  guarded-boundary.py <gate.py>       # exits 3 and names each finding
 """
@@ -116,14 +136,28 @@ def handed_over(node, tracked):
     return reaches(node, tracked)
 
 
-def is_touch(node, tracked):
+def invokes_derived(node, derived):
+    """Is this call INVOKING a value that was lifted out of a loaded decision program? (.github#2667)
+
+    The NAME in func position, and only that. `decide(...)` runs the program's own code. But
+    `decision.get("action")` calls a method of whatever `decide()` RETURNED — a different object, and
+    one the arm reads unguarded and correctly — so an attribute step off a derived name is not this
+    rule's business. The fact a derived name carries is about that one lifted value, and it is spent
+    on the one place that value can run.
+    """
+    return isinstance(node.func, ast.Name) and node.func.id in derived
+
+
+def is_touch(node, programs, derived):
     if not isinstance(node, ast.Call):
         return False
-    if reaches(node.func, tracked):
+    if reaches(node.func, programs):
         return True  # module.decide(...), m.decide(...), module.__dict__["decide"](...)
-    if any(handed_over(argument, tracked) for argument in node.args):
+    if invokes_derived(node, derived):
+        return True  # decide(...) — the callable lifted out from under the guard (.github#2667)
+    if any(handed_over(argument, programs) for argument in node.args):
         return True  # getattr(module, ...), automation.completions(module, ...), f(*[module])
-    if any(handed_over(keyword.value, tracked) for keyword in node.keywords):
+    if any(handed_over(keyword.value, programs) for keyword in node.keywords):
         return True  # f(mod=module), f(**{"mod": module}), f(**kwargs)
     # `spec.loader.exec_module(module)` is caught by the argument rule above, but name it too so a
     # future `exec_module()` spelled without the argument cannot slip past.
@@ -159,6 +193,35 @@ def guard_thunk(node):
     return None
 
 
+def program_derived(value, programs, derived):
+    """Does this bound VALUE come OUT of a loaded decision program? (.github#2667)
+
+    This is the dataflow step `handed_over` deliberately does not take. It refuses to recurse into a
+    nested call — correctly, because a nested call is judged as a touch in its own right — but that
+    left the call's RESULT untracked, so a callable lifted out under the guard and invoked later was
+    certified as safe. `LOADERS` already carries `decision_function` for exactly this reason: that
+    entry is a hand-placed patch for the one instance of this gap somebody remembered, and the gap it
+    patches is general.
+
+    Two shapes yield program-derived state:
+
+      * a `_guarded(what, thunk)` whose DEFERRED thunk reaches a tracked reference — the guard hands
+        back whatever the thunk evaluated to, and that came out of the program;
+      * any other call that is itself a touch — `getattr(module, "decide")`, `module.decide(facts)`,
+        or a call through an already-derived name.
+
+    The guard case has to read the THUNK rather than the call, because a `_guarded(...)` call is
+    deliberately not a touch: `handed_over` does not peel a lambda, which is precisely what makes
+    deferral mean something. `guard_thunk` already computes the one subtree that is deferred.
+    """
+    if not isinstance(value, ast.Call):
+        return False
+    thunk = guard_thunk(value)
+    if thunk is not None:
+        return any(reaches(node, programs | derived) for node in ast.walk(thunk))
+    return is_touch(value, programs, derived)
+
+
 def bindings(node):
     """(target, value) for every shape that can bind a name to an existing object."""
     if isinstance(node, ast.Assign):
@@ -189,23 +252,35 @@ def bound_names(target):
 
 
 def tracked_names(function):
-    """Every local name in this function that holds a loaded decision program.
+    """The local names in this function that hold a loaded decision program, and those that hold a
+    value lifted OUT of one.
 
-    Run to a fixpoint, so `a = module` followed by `b = a` tracks both. Over-approximating on purpose:
-    the direction of error is a false flag, never a miss.
+    Returns `(programs, derived)` — two sets, kept apart because the two facts license different
+    rules; see WHAT COUNTS AS A TRACKED REFERENCE. A name that qualifies as a program is never
+    demoted to the weaker tier, so this change only ever ADDS findings to what the previous single
+    set produced.
+
+    Run to a fixpoint, so `a = module` followed by `b = a` tracks both, and so does
+    `d = _guarded(..., lambda: getattr(module, "decide", None))` followed by `e = d`.
+    Over-approximating on purpose: the direction of error is a false flag, never a miss.
     """
-    names = {MODULE}
+    programs = {MODULE}
+    derived = set()
     changed = True
     while changed:
         changed = False
         for node in ast.walk(function):
             for target, value in bindings(node):
-                if not (is_loader_call(value) or handed_over(value, names)):
+                if is_loader_call(value) or handed_over(value, programs):
+                    tier = programs
+                elif program_derived(value, programs, derived) or handed_over(value, derived):
+                    tier = derived
+                else:
                     continue
-                for name in bound_names(target) - names:
-                    names.add(name)
+                for name in bound_names(target) - tier:
+                    tier.add(name)
                     changed = True
-    return names
+    return programs, derived
 
 
 def holders(tree):
@@ -241,7 +316,7 @@ def main(argv):
     malformed = []
     for name in sorted(found):
         function = found[name]
-        tracked = tracked_names(function)
+        programs, derived = tracked_names(function)
         # The subtrees a guard actually defers, collected first: a lambda's body is a GRANDCHILD of
         # the `_guarded(...)` call, so guardedness cannot be decided from the parent link alone.
         deferred = {
@@ -257,7 +332,7 @@ def main(argv):
             guarded = guarded or id(node) in deferred
             if is_guard_call(node) and guard_thunk(node) is None:
                 malformed.append((name, node.lineno, ast.unparse(node)))
-            if is_touch(node, tracked) and not guarded:
+            if is_touch(node, programs, derived) and not guarded:
                 unguarded.append((name, node.lineno, ast.unparse(node)))
             for child in ast.iter_child_nodes(node):
                 stack.append((child, guarded))
