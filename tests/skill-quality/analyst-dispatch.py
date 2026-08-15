@@ -72,21 +72,30 @@ the same boundary as the post-wave reconcile and re-triage: after this wave's me
 the next wave is sized. Hand the analyst the packets you collected and nothing else — it adjudicates what
 it is handed, it never re-derives a packet, and it never dispatches, claims, or merges.
 
-- **Collect without a board scan.** One REST read reaches every packet: the repository-wide issue-comments
-  listing, bounded by the previous boundary's timestamp —
-  `gh api -X GET repos/<owner>/<repo>/issues/comments -f since=<previous-boundary> -f per_page=100`.
-  It returns comments on issues AND on pull requests in one paginated call, which is both of the surfaces
-  a packet is allowed to live on, and it never fans out per issue. That spelling is load-bearing rather
-  than a preference: a `scan` costs more than the pass it would be deciding about, and
-  `scripts/fsgg-coord issues` cannot stand in for it — that command reads the issue LIST endpoint, which
-  carries a comment COUNT and no comment bodies, and it drops pull requests outright
-  (`src/FS.GG.Coord.GitHub/Reads.fs`).
+- **Collect without a board scan, and paginate — `--paginate` is not optional.** The repository-wide
+  issue-comments listing reaches every packet, anchored to the last collection that actually SUCCEEDED:
+  `gh api --paginate -X GET repos/<owner>/<repo>/issues/comments -f since=<last-successful-collection> -f per_page=100`.
+  It returns comments on issues AND on pull requests — both of the surfaces a packet is allowed to live
+  on — and it never fans out per issue. Two spellings here are load-bearing, and this row got both wrong
+  the first time. Without `--paginate`, `gh api` returns ONE page, and `per_page=100` caps that page
+  rather than lifting it: measured on this repository, a `since` of midnight the same day returned 100
+  comments against 275 paginated, and the previous midnight 100 against 408 — roughly two thirds of a
+  boundary-sized window dropped in silence. And the anchor is the last SUCCESSFUL collection, never "the
+  previous boundary": a pass skipped under the backoff below would otherwise orphan its window
+  permanently, because no later pass ever looks that far back again. `scripts/fsgg-coord issues` cannot
+  stand in for any of it — that command reads the issue LIST endpoint, which carries a comment COUNT and
+  no comment bodies, and it drops pull requests outright (`src/FS.GG.Coord.GitHub/Reads.fs`).
 - **The analyst occupies no slot, and that is a stated exemption with its cost, not silence.** It holds no
   claim, takes no lane, and blocks no chain — `board-analyst` may never `claim`, `take`, or `release` — so
   it can consume neither an implementer slot nor one of the reserved critic slots, and the generated
   policy above is unchanged by it. What it does spend is the one shared REST budget that also holds the
-  claim lock, at one `scan` per pass. Bound it exactly there: at most one analyst pass per boundary, never
-  two at once, and none at all while an `EX_RATE` backoff is in effect.
+  claim lock, counted in REST CALLS rather than in scans: the collection above is one paginated listing,
+  a handful of calls over a boundary-sized window, and the pass it feeds spends whatever `board-analyst`'s
+  own skill permits it — that budget is bounded there, not here. Nothing in this step authorises a board
+  `scan` to decide whether to dispatch, which is the cost the step exists to avoid. Bound it exactly
+  there: at most one analyst pass per boundary, never two at once, and none at all while an `EX_RATE`
+  backoff is in effect — and when a pass is skipped, record that the collection did not happen, so the
+  next one still starts from the last successful window rather than from this boundary.
 - **Where no analyst resolves, the step is a no-op and there are no packets to collect.** `board-analyst`
   is `scope: operator` and materializes nowhere, so it resolves only in an operator checkout; everywhere
   else findings-and-filing's other branch governs and the finder files its own row. An empty collection is
