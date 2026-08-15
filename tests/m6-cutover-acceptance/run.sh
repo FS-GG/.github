@@ -100,7 +100,37 @@ for name, mutate in mutations.items():
     failures = module.validate(changed, root)
     assert failures, f"{name}: mutation unexpectedly passed"
     print(f"PASS {name}: {failures[0]}")
-print(f"m6-cutover-acceptance fixture: positive plus {len(mutations)} fail-closed inversions passed")
+
+terminal_source = root / "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json"
+terminal_mutations = {
+    "live-count-drift": lambda d: d["live"]["commands"][1]["counts"].update(rows=0),
+    "same-class-definition-drift": lambda d: d["live"]["same_class_searches"][0]["command"].__setitem__(-1, "nonsense"),
+}
+for name, mutate in terminal_mutations.items():
+    changed_terminal = json.loads(terminal_source.read_text())
+    mutate(changed_terminal)
+    changed = copy.deepcopy(candidate)
+    changed["live_acceptance"]["command_matrix_sha256"] = module.hashlib.sha256(
+        json.dumps(changed_terminal["live"]["commands"], sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    changed["live_acceptance"]["same_class_searches_sha256"] = module.hashlib.sha256(
+        json.dumps(changed_terminal["live"]["same_class_searches"], sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    with tempfile.TemporaryDirectory(dir=root / "tests/m6-cutover-acceptance") as directory:
+        path = Path(directory) / "terminal.json"
+        path.write_text(json.dumps(changed_terminal, sort_keys=True), encoding="utf-8")
+        relative = str(path.relative_to(root))
+        terminal_hash = module.digest(path)
+        binding = {"path": relative, "sha256": terminal_hash}
+        changed["release"]["evidence"] = binding
+        changed["live_acceptance"]["evidence"] = binding
+        live_row = next(row for row in changed["test_results"] if row["family"] == "live-new-only-smoke")
+        live_row["artifact"] = binding
+        live_row["stdout_sha256"] = terminal_hash
+        failures = module.validate(changed, root)
+        assert failures, f"{name}: mutation unexpectedly passed"
+        print(f"PASS {name}: {failures[0]}")
+print(f"m6-cutover-acceptance fixture: positive plus {len(mutations) + len(terminal_mutations)} fail-closed inversions passed")
 PY
 
 for inversion in \

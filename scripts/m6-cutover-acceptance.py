@@ -385,20 +385,30 @@ def validate(document: object, root: Path) -> list[str]:
                 "typed-graphql-roster", "typed-graphql-archive-scan",
                 "immutable-promotion-replay", "public-nuget-clean-install", "installed-cli-help",
             }
-            if not isinstance(commands, list) or {row.get("name") for row in commands if isinstance(row, dict)} != required_commands or any(
+            if not isinstance(commands, list) or len(commands) != 12 or len({row.get("name") for row in commands if isinstance(row, dict)}) != 12 or {row.get("name") for row in commands if isinstance(row, dict)} != required_commands or any(
                 not isinstance(row, dict) or row.get("observed_exit") != 0 or not HASH.fullmatch(str(row.get("stdout_sha256", "")))
                 for row in commands if isinstance(commands, list)
             ):
                 failures.append("live evidence does not bind the exact successful new-only command matrix")
+            required_counts = {
+                "ready-complete-pagination": {"rows": 108},
+                "reconcile-idempotent": {"chores": 0},
+                "typed-graphql-roster": {"rows": 108},
+                "typed-graphql-archive-scan": {"pages": 2, "items": 108},
+            }
+            observed_counts = {
+                row.get("name"): row.get("counts") for row in commands if isinstance(row, dict) and "counts" in row
+            } if isinstance(commands, list) else {}
+            if observed_counts != required_counts:
+                failures.append("live evidence command counts do not prove 108-row complete reads and zero-chore idempotence")
             commands_hash = hashlib.sha256(json.dumps(commands, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
             if live.get("command_matrix_sha256") != commands_hash:
                 failures.append("live_acceptance command matrix digest contradicts terminal evidence")
             searches = observed_live.get("same_class_searches")
-            if not isinstance(searches, list) or len(searches) != 3 or any(
-                not isinstance(row, dict) or not isinstance(row.get("command"), list)
-                or row.get("command", [])[:3] != ["gh", "search", "issues"] or row.get("results") != []
-                for row in searches if isinstance(searches, list)
-            ):
+            search_prefix = ["gh", "search", "issues", "--repo", "FS-GG/.github", "--state", "open", "--match", "title,body", "--limit", "100", "--json", "number,title,url,updatedAt", "--"]
+            search_terms = ["graphql_complete_read", "raw GraphQL envelope", "GraphQL compatibility decoder"]
+            expected_searches = [{"command": search_prefix + [term], "results": []} for term in search_terms]
+            if searches != expected_searches:
                 failures.append("live evidence does not bind three empty same-class GitHub searches")
             searches_hash = hashlib.sha256(json.dumps(searches, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
             if live.get("same_class_searches_sha256") != searches_hash:
