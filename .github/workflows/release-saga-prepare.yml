@@ -111,13 +111,32 @@ jobs:
           set -euo pipefail
           tag="coherent-set/v$VERSION"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # A draft already exists, so an earlier run of this workflow got this far and something
+            # after it did not — a rejected tag push, a failed App-token mint, a runner fault. Resume
+            # against the STORED bytes: they are what the three release workflows download, and once
+            # the release is published they are immutable.
+            #
+            # THIS COMPARISON MAY NOT BE OVER RAW BYTES OR `contentId` (.github#2664). `dotnet pack`
+            # mints a fresh core-properties part per invocation (.github#2240), so a re-pack of an
+            # identical tree yields different archive bytes, a different `artifact.size`, and
+            # therefore a different `contentId` — every time, by construction. This branch used to
+            # assert exactly that, so it could only ever fail, and under `set -e` it failed the job.
+            # Harmless while preparation was `workflow_dispatch`-only; not harmless since
+            # `kit-auto-publish` began calling this workflow on its hourly `schedule`, where a draft
+            # left behind by one partial run reddened every subsequent run until a human deleted it.
+            # `assert-reusable` compares the re-pack-stable payload of both archive sets, and names
+            # the archive entries that genuinely differ when they do.
             mkdir -p /tmp/prior
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir /tmp/prior
-            test "$(jq -r .contentId /tmp/prior/release-manifest.json)" = "$(jq -r .contentId artifacts/packages/release-manifest.json)"
-            for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
-              cmp "/tmp/prior/$package.$VERSION.nupkg" "artifacts/packages/$package.$VERSION.nupkg"
-            done
-            echo "Existing draft contains the identical manifest-bound bytes; no asset was replaced."
+            python3 scripts/release-saga.py assert-reusable \
+              --stored /tmp/prior/release-manifest.json \
+              --candidate artifacts/packages/release-manifest.json
+            # The stored manifest and archives — not this run's throwaway re-pack — are what the tags
+            # will consume, so make them this run's outputs too. Otherwise the uploaded artifact and
+            # the draft would name different `contentId`s for one release, which is the confusion
+            # this branch exists to prevent.
+            cp /tmp/prior/release-manifest.json /tmp/prior/*.nupkg artifacts/packages/
+            echo "Existing draft already holds an equivalent coherent set; no asset was replaced."
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$FSGG_SOURCE_SHA" --draft \
               --title "FS.GG coherent set $VERSION (publishing)" \
