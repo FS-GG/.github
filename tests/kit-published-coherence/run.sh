@@ -1484,6 +1484,52 @@ else
   bad "AC3: and the flag, too, quotes the decision rather than only the trigger" "$out"
 fi
 
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# THE ENUMERATED WORLDS ARE COMPLETE (.github#2571 round-1 repair)
+#
+# Calling an act manual means ruling out every post-merge world the feed can still reach — and the
+# first draft of this arm ruled out exactly ONE, the frontier measured now, while its docstring claimed
+# the verdict held on "any post-merge state of the world". The frontier ADVANCES, `decide()`'s rail is
+# `candidate.patch == frontier.patch + 1`, so a forward move flips `candidate-not-next-patch` into
+# `tag`. That claim was prose no leg could falsify, which is exactly why it survived authoring and an
+# independent read; the repair is not only the fix but moving the invariant somewhere a leg CAN falsify.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+SWEEP="$HERE/completion-sweep.py"
+
+# The counterexample, executably. Two patches above the observed frontier: refused today, cut the moment
+# anyone publishes the patch in between — so the arm must flag it rather than hand its author a token.
+OBL_CANDIDATE=0.58.3
+OBL_FRONTIER=0.58.0
+obl "$OBL/release-obligation.json"
+must_fail "a candidate a REACHABLE frontier would admit is flagged, not declared manual" \
+  "THE MERGE ITSELF PERFORMS"
+# And the finding must not quote 0.58.2 as though it were on the feed: an author sent to check a number
+# that was never measured has been told something false by a control.
+if grep -q "not the 0.58.0 on the feed now" <<<"$out"; then
+  ok "…and the finding says which frontier is hypothetical, rather than quoting it as measured"
+else
+  bad "…and the finding says which frontier is hypothetical, rather than quoting it as measured" "$out"
+fi
+OBL_CANDIDATE=0.51.2
+OBL_FRONTIER=0.51.1
+
+# The minor's green must claim the SWEEP, not one evaluation — it is the sentence an author acts on.
+OBL_CANDIDATE=0.52.0
+obl "$OBL/release-obligation.json"
+must_pass "the minor's green rests on every reachable frontier, and says so" \
+  "every other frontier the feed can still reach"
+OBL_CANDIDATE=0.51.2
+
+# THE INVARIANT ITSELF, GRADED BY BRUTE FORCE rather than asserted in a docstring. For every
+# (candidate, observed) pair in a bounded grid, the shipped arm is compared against an exhaustive sweep
+# over every reachable frontier AND over `tagExists` and both feed-presence states — facts the builder
+# PINS rather than varies, so a pinned fact that turns out not to be uniquely permissive reds here too.
+set +e
+out="$(python3 "$SWEEP" "$GATE" "$HERE/../../scripts/kit-auto-publish.py" 2>&1)"; rc=$?
+set -e
+must_pass "the arm's enumerated worlds agree with brute force on every pair in the grid" \
+  "agrees with brute force on all"
+
 # ---- THE CANNED FACTS ARE LOCKED, like every other canned input: each one is a way to choose this
 #      arm's verdict instead of measuring it, and .github#2571 makes them load-bearing.
 for flag_pair in "--obligation-candidate-version=0.52.0" "--obligation-published-version=0.51.1"; do
@@ -1862,24 +1908,38 @@ obl_in "$OBL_TREE" "$OBL/registry-record.json"
 must_fail "a decision program that exits 0 at import is a no-verdict, not an inherited green" \
   "failed to load"
 
-printf 'def decide(facts):\n    raise ValueError("no idea")\n' > "$DECIDER"
+# The arm reads the mapped program's OWN `patch_tuple` to enumerate the frontiers the feed can still
+# reach (.github#2571 round-1 repair), so a program that has `decide` but not that grammar is a
+# no-verdict too — the alternative is this file keeping a second copy of what "forward" means.
+printf 'def decide(facts):\n    return {"action": "refuse", "reason": "stub"}\n' > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a decision program exposing no callable patch_tuple is a no-verdict" \
+  "no callable \`patch_tuple\`"
+
+# Every stub below carries one, so these legs reach `decide()` rather than stopping at the grammar
+# read above. It answers a constant, which keeps each stub to the one behaviour its leg is about.
+stub_decider() { # $1 body of decide(), as python source lines
+  { printf 'def patch_tuple(value):\n    return (0, 0)\n\n'; printf '%b' "$1"; } > "$DECIDER"
+}
+
+stub_decider 'def decide(facts):\n    raise ValueError("no idea")\n'
 obl_in "$OBL_TREE" "$OBL/release-obligation.json"
 must_fail "a decide() that RAISES on the candidate facts is a no-verdict, not a pass" \
   "raised on the candidate fact set"
 
-printf 'import sys\ndef decide(facts):\n    sys.exit(0)\n' > "$DECIDER"
+stub_decider 'import sys\ndef decide(facts):\n    sys.exit(0)\n'
 obl_in "$OBL_TREE" "$OBL/release-obligation.json"
 must_fail "a decide() that exits 0 is a no-verdict, not an inherited green" \
   "raised on the candidate fact set"
 
-printf 'def decide(facts):\n    return "nope"\n' > "$DECIDER"
+stub_decider 'def decide(facts):\n    return "nope"\n'
 obl_in "$OBL_TREE" "$OBL/release-obligation.json"
 must_fail "a decide() that returns no typed action is a no-verdict" "carries no string"
 
 # THE FAIL-CLOSED DIRECTION, STATED AS A LEG. An action this file has never classified must not be
 # guessed — guessing "performs" would flag a legitimate obligation, guessing "does not" would restore
 # .github#2533's defect, and only one of those two is visible to the person it happens to.
-printf 'def decide(facts):\n    return {"action": "somethingNobodyMapped", "reason": "new"}\n' > "$DECIDER"
+stub_decider 'def decide(facts):\n    return {"action": "somethingNobodyMapped", "reason": "new"}\n'
 obl_in "$OBL_TREE" "$OBL/release-obligation.json"
 must_fail "a decide() action this arm does not classify is a no-verdict, never a guess" \
   "neither performing the act nor declining to"
@@ -1887,7 +1947,7 @@ must_fail "a decide() action this arm does not classify is a no-verdict, never a
 # THE DECISION IS ACTUALLY CONSULTED, not merely loaded: a stub that unconditionally cuts flags a
 # candidate the REAL program refuses. This is the leg that would survive if the call were dropped and
 # the load kept, which is exactly the shape a careless refactor produces.
-printf 'def decide(facts):\n    return {"action": "tag", "reason": "stub-always-cuts"}\n' > "$DECIDER"
+stub_decider 'def decide(facts):\n    return {"action": "tag", "reason": "stub-always-cuts"}\n'
 OBL_CANDIDATE=0.52.0
 obl_in "$OBL_TREE" "$OBL/release-obligation.json"
 must_fail "the mapped program's decide() is CALLED — a stub that always cuts flags a minor candidate" \
@@ -2035,6 +2095,28 @@ out="$(cd "$OBL_TREE" && python3 "$MUT_OBL/scripts/mutant-decider-rot.py" --obli
 set -e
 must_pass "INVERSION M4: with the decision-map read deleted, a MISSING decision program goes GREEN" \
   "name no act that merging this PR performs"
+
+# M5 — RE-PIN THE FRONTIER TO THE OBSERVED VALUE, which is precisely the round-1 defect: the arm stops
+# enumerating the frontiers the feed can still reach and scores only the world as it stands. The sweep
+# above must RED on this mutant, or it is not measuring the completeness it claims to measure. This is
+# the inversion for the invariant the item exists to make sound, and the one leg that could not be
+# written while that invariant lived in a docstring.
+mutate mutant-pinned-frontier \
+  "    if here and there and here[1] >= 1:" \
+  "    if False:  # MUTATION: the frontier re-pinned to the observed value"
+set +e
+out="$(python3 "$SWEEP" "$MUT_OBL/scripts/mutant-pinned-frontier.py" \
+  "$HERE/../../scripts/kit-auto-publish.py" 2>&1)"; rc=$?
+set -e
+must_fail "INVERSION M5: with the frontier re-pinned, the sweep REDS — so it measures completeness" \
+  "UNSOUND"
+# Named pairs, not a bare count: a sweep that could only say "something is wrong" would send whoever
+# hits it back to re-derive the counterexample this leg already has.
+if grep -q "MISSES a reachable cut" <<<"$out"; then
+  ok "INVERSION M5: …and it names the pair and the direction of the unsoundness"
+else
+  bad "INVERSION M5: …and it names the pair and the direction of the unsoundness" "$out"
+fi
 
 # ---- THE ARM IS WIRED, ON EVERY PULL REQUEST. An unwired gate is the exact defect .github#2533 is
 #      about: an artifact that exists, is reviewed, and is not connected to anything.
@@ -2279,7 +2361,19 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   declared. 2 are gate-inversion controls (M3/M4), matching M1/M2 above: deleting the decision half
 #   flags the minor again, and deleting its unconditional load lets a missing decision program pass.
 #   181 + 29 = 210.
-EXPECTED_LEGS=210
+# + 7 legs for .github#2571's ROUND-1 REPAIR, which is about the soundness of that decision rather than
+#   its existence. The arm pinned the feed frontier to the value observed NOW and claimed the verdict
+#   held on any post-merge state of the world; the frontier moves FORWARD, `decide()`'s rail is
+#   `candidate.patch == frontier.patch + 1`, and a forward move flips `candidate-not-next-patch` into
+#   `tag`. 3 are the behaviour: the counterexample (a candidate two patches above the observed frontier)
+#   is flagged, the finding says WHICH frontier is hypothetical rather than quoting it as measured, and
+#   the minor's green claims the whole sweep. 1 is the mapped program's `patch_tuple` being read rather
+#   than restated, so a program missing it is a no-verdict. 1 is `completion-sweep.py` grading the
+#   invariant by BRUTE FORCE over every reachable frontier and over the facts the builder pins — the
+#   invariant moved out of a docstring nothing could falsify and into a leg that can. 2 are its
+#   gate-inversion control (M5): re-pinning the frontier makes that sweep RED, naming the pair and the
+#   direction. 210 + 7 = 217.
+EXPECTED_LEGS=217
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
