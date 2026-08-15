@@ -19,7 +19,7 @@ does not move the stable channel.
 
 Push `kit/v<version>`, `drivers/v<version>`, and `coord-engine/v<version>` together at the prepared
 source SHA. The existing package-owning workflows keep their trusted-publishing policy identities.
-For a real publish they download the full set from the draft, validate release/version/source/policy
+They download the full set from the draft, validate release/version/source/policy
 identity and every artifact hash, and observe their target before writing. Each package publishes to
 GitHub Packages and persists its own non-racing journal asset. Every workflow then waits until all
 three manifest-bound org packages are externally verified; only beyond that complete-set barrier may
@@ -45,9 +45,11 @@ the draft as the stable release only after every member is verified on GitHub Pa
 Its `stable-channel.json` receipt binds the version, source SHA, and manifest content ID. Re-running
 promotion for the same content is idempotent.
 
-## Compatibility path and removal
+## Rehearsal and recovery
 
-Pack-only manual dry runs retain their local pack step because they perform no registry write. Real
-publishes have no legacy re-pack fallback: the prepared manifest is mandatory. After M6's three
-healthy operating cycles, remove the dry-run compatibility arms and the superseded release-train
-coordination path; retain the manifest schema and observer as the operational release boundary.
+Preparation is the only rehearsal boundary: it packs once into a reversible draft and performs every
+preflight without publishing a package. Package-owning workflows have no local-pack or non-publish
+mode. A manual dispatch is an exact-source recovery operation and must consume the prepared manifest
+and its verified bytes. The superseded release-train coordinator and publisher dry-run arms were
+retired at M6; the manifest, journals, observers, trusted publisher identities, and promotion barrier
+are the sole operational release boundary.

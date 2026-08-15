@@ -362,12 +362,12 @@ echo "== reach: subject, declaration, trigger =="
 
 release_workflow="$ROOT/.github/workflows/release-coord-engine.yml"
 checker_line="$(grep -n 'python3 scripts/check-engine-release-notes.py' "$release_workflow" | head -1 | cut -d: -f1 || true)"
-pack_line="$(grep -nE '^      - name: (Pack|Use saga-prepared package \(publish\) or pack locally \(dry run\))$' "$release_workflow" | head -1 | cut -d: -f1 || true)"
+pack_line="$(grep -nF '      - name: Use the saga-prepared package' "$release_workflow" | head -1 | cut -d: -f1 || true)"
 if [ -n "$checker_line" ] && [ -n "$pack_line" ] && [ "$checker_line" -lt "$pack_line" ]; then
-  ok "the release workflow refuses incoherent notes before packing"
+  ok "the release workflow refuses incoherent notes before consuming prepared bytes"
 else
-  bad "the release workflow must run the checker before Pack" \
-    "checker line=${checker_line:-missing}; Pack line=${pack_line:-missing}"
+  bad "the release workflow must run the checker before consuming prepared bytes" \
+    "checker line=${checker_line:-missing}; prepared-package line=${pack_line:-missing}"
 fi
 
 # THE LIMIT IS EXPRESSED ONCE (.github#2579 criterion 2). A second copy in a workflow or a fixture is
