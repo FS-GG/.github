@@ -19,6 +19,20 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-15** — **`skill-registry` contract description: `materializes-when`'s binding environment
+  is `effectiveParameters` PLUS derived provenance facts** (owner `github`; .github#2576, ADR-0017's
+  2026-08-15 amendment). DESCRIPTION ONLY — no `version`, `schemaVersion`, pin, validator, consumer,
+  or coherence-state scalar moves, and `registry/skills.yml` is unchanged at `schemaVersion: 3` with
+  an unchanged `parameters:` list, so this is not ADR-0015 schema growth and no `contract-change` is
+  owed. The `contracts.skill-registry.description` text said the union gate evaluates the predicate
+  against "a scaffold's scaffold-provenance.json effectiveParameters", full stop. That is now false:
+  `.github#2576` binds `template` from the same document's top-level `templateRef`, because
+  `effectiveParameters` is forwarded verbatim to `dotnet new <templateId>` as `--<key> <value>` and
+  only declared template SYMBOLS are accepted — so that axis could never have arrived as a parameter
+  and no producer was asked to supply it. Corrected here rather than left standing because this is
+  the governed contract surface's own description of the field, and a governed description that
+  contradicts the gate is the defect `.github#2576`'s review raised twice.
+
 - **2026-08-15** — **coord-engine coherent set `0.58.0` published, adopted, and pinned**
   (owner `github`; roadmap M6;
   [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.58.0)).

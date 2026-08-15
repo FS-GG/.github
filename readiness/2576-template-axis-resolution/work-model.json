@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2dc67f1cd46937526bf0422b3ba866a50b95216b77528225ce4cc69407fa1d1f"
+        "value": "60295c42af0cee354952b409450dad8ee130d14bf3f55745943e6e8d54541b79"
       }
     },
     {
@@ -1077,7 +1077,7 @@
           "path": "work/2576-template-axis-resolution/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "2dc67f1cd46937526bf0422b3ba866a50b95216b77528225ce4cc69407fa1d1f"
+            "value": "60295c42af0cee354952b409450dad8ee130d14bf3f55745943e6e8d54541b79"
           },
           "schemaVersion": 1
         },
@@ -1108,7 +1108,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "7fa5302cb52f8718fd50869b32807eabddc69ccf2e75b5c2df4ff07080a0764d"
+        "value": "174d4260b703d8cb6fa0d532cccb0507bffa4607570da0dcaf6e36c35e9409da"
       },
       "currency": "current"
     }

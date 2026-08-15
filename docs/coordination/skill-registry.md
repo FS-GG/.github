@@ -31,8 +31,8 @@ and reconciled from the producer manifests** — never hand-authored bytes.
 schemaVersion: 1
 updated: "2026-07-04"
 
-# The scaffold parameters materializes-when predicates may reference, and where they are read at
-# scaffold time (scaffold-provenance.json → effectiveParameters).
+# The scaffold parameters materializes-when predicates may reference. Where each is READ from is
+# not this list's business — see "The materializes-when predicate" below for the binding environment.
 parameters: [profile, lifecycle, feedback, designSystem]
 
 skills:
