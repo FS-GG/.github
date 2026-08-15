@@ -27,6 +27,8 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/FS.GG.Coord.Core.Tests/**"
+      - "tests/m6-decision-cutover/**"
       # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
       # rather than bookkeeping. `tests/delivery-leading-line/corpus.json` is the one statement of
       # the delivery-marker leading-line boundary; `DeliveryApplicationTests` grades the ENGINE
@@ -55,6 +57,8 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/FS.GG.Coord.Core.Tests/**"
+      - "tests/m6-decision-cutover/**"
       # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
       # rather than bookkeeping. `tests/delivery-leading-line/corpus.json` is the one statement of
       # the delivery-marker leading-line boundary; `DeliveryApplicationTests` grades the ENGINE
@@ -111,6 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj --locked-mode
 
       - name: Build the engine
