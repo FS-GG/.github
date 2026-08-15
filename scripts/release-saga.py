@@ -96,6 +96,14 @@ def normalized_relationships(raw: bytes) -> bytes:
     alike — stays under the hash, and was measured stable across those same two runs, so a genuinely
     different nuspec target still fails closed. Unparseable bytes fall back to a verbatim comparison,
     which cannot pass on a difference this normalization was never asked to explain.
+
+    This removes the OPC-envelope instability, which was guaranteed on every re-pack; it does NOT make
+    `payloadSha256` re-pack stable in general, and no caller may assume it does. `FS.GG.Coord.Cli` has
+    a residual, rare per-compile instability inside `tools/net10.0/any/fsgg-coord-engine.dll` — the F#
+    compiler emits ten closure classes all named `contains@1` and the numeric suffix it gives each can
+    change between compiles of one unchanged tree. That is a different root cause, tracked on its own
+    row and deliberately NOT normalized away here: it is a real difference in packed content, and
+    hiding it would be the fail-open .github#2240 and .github#2428 exist to prevent.
     """
     try:
         root = ET.fromstring(raw)

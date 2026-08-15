@@ -7,20 +7,21 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/release-saga.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/artifacts" "$WORK/github" "$WORK/nuget"
 
-# make_package TARGET ID VERSION [CORE_PROPERTIES_GUID] [BODY]
+# make_package TARGET ID VERSION [CORE_PROPERTIES_GUID] [BODY] [MANIFEST_RELATIONSHIP_ID]
 #
 # The OPC shape is copied from real `dotnet pack` output, because two of its parts are the whole
 # subject of .github#2664. Measured on `src/FS.GG.Kit/FS.GG.Kit.csproj` at 2cd9518e, two consecutive
 # packs of one clean tree produced core-properties parts named 9c6d21a2a7774fb2bbc48858e7e6d136 and
 # 341955db2e8847439fdf05b771ee2c5c with byte-identical contents, `_rels/.rels` entries differing only
 # in the core-properties `Relationship`'s `Target` and its derived `Id` (the manifest relationship's
-# `Id` was identical in both), and an identical `[Content_Types].xml`. GUID and BODY are the two
-# knobs those legs need: GUID reproduces an honest re-pack, BODY a genuine content divergence.
+# `Id` was identical in both), and an identical `[Content_Types].xml`. The three knobs those legs
+# need: GUID reproduces an honest re-pack, BODY a genuine content divergence, and
+# MANIFEST_RELATIONSHIP_ID a change inside `_rels/.rels` that the normalization must NOT absorb.
 make_package() {
-  python3 - "$1" "$2" "$3" "${4:-9c6d21a2a7774fb2bbc48858e7e6d136}" "${5:-fixture}" <<'PY'
+  python3 - "$1" "$2" "$3" "${4:-9c6d21a2a7774fb2bbc48858e7e6d136}" "${5:-fixture}" "${6:-R411317ADCBB7CC3C}" <<'PY'
 import pathlib, sys, zipfile
 target, package_id, version = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-guid, body = sys.argv[4], sys.argv[5]
+guid, body, manifest_relationship_id = sys.argv[4], sys.argv[5], sys.argv[6]
 nuspec = f'''<?xml version="1.0"?><package><metadata><id>{package_id}</id><version>{version}</version><authors>FS-GG</authors><description>fixture</description><releaseNotes>{version} release</releaseNotes><dependencies><group targetFramework="net10.0"><dependency id="FSharp.Core" version="[10.0.100, )" /></group></dependencies></metadata></package>'''
 core_properties = f'''<?xml version="1.0" encoding="utf-8"?>
 <coreProperties xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties">
@@ -29,7 +30,7 @@ core_properties = f'''<?xml version="1.0" encoding="utf-8"?>
 </coreProperties>'''
 relationships = f'''<?xml version="1.0" encoding="utf-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Type="http://schemas.microsoft.com/packaging/2010/07/manifest" Target="/{package_id}.nuspec" Id="R411317ADCBB7CC3C" />
+  <Relationship Type="http://schemas.microsoft.com/packaging/2010/07/manifest" Target="/{package_id}.nuspec" Id="{manifest_relationship_id}" />
   <Relationship Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/package/services/metadata/core-properties/{guid}.psmdcp" Id="R{guid[:16].upper()}" />
 </Relationships>'''
 with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -291,11 +292,18 @@ grep -Eq '^release edit .*--draft=false' "$WORK/promote-calls.log"
 # The three sets below reproduce that exactly: `first` and `second` are honest re-packs of one tree —
 # same content, different core-properties part — and `divergent` is a real content change.
 REPACK="$WORK/repack"
-mkdir -p "$REPACK/first" "$REPACK/second" "$REPACK/divergent" "$REPACK/other-source" "$REPACK/partial"
+mkdir -p "$REPACK/first" "$REPACK/second" "$REPACK/divergent" "$REPACK/other-source" "$REPACK/partial" \
+  "$REPACK/manifest-relationship"
 for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
   make_package "$REPACK/first/$package.9.8.7.nupkg" "$package" 9.8.7 9c6d21a2a7774fb2bbc48858e7e6d136
   make_package "$REPACK/second/$package.9.8.7.nupkg" "$package" 9.8.7 341955db2e8847439fdf05b771ee2c5c
   make_package "$REPACK/divergent/$package.9.8.7.nupkg" "$package" 9.8.7 341955db2e8847439fdf05b771ee2c5c "rebuilt from different source"
+  # An honest re-pack that ALSO alters the manifest relationship. `Id` is deliberately the weakest
+  # field of that element to pick — it carries no semantics beyond uniqueness — so a normalization
+  # that still refuses on it necessarily refuses on `Type` and `Target`, which are attributes of the
+  # same preserved element.
+  make_package "$REPACK/manifest-relationship/$package.9.8.7.nupkg" "$package" 9.8.7 \
+    341955db2e8847439fdf05b771ee2c5c fixture RF00DFACE00DFACE0
 done
 cp "$REPACK/second/"*.nupkg "$REPACK/other-source/"
 cp "$REPACK/second/"*.nupkg "$REPACK/partial/"
@@ -307,7 +315,7 @@ prepare_repack_set() {
     --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
     --output "$1/release-manifest.json" >/dev/null
 }
-for set_dir in first second divergent partial; do prepare_repack_set "$REPACK/$set_dir"; done
+for set_dir in first second divergent partial manifest-relationship; do prepare_repack_set "$REPACK/$set_dir"; done
 prepare_repack_set "$REPACK/other-source" ffffffffffffffffffffffffffffffffffffffff
 
 kit_payload_sha() {
@@ -348,6 +356,32 @@ fi
 diagnosis_names "$WORK/divergent.log" "content/payload.txt"
 diagnosis_names "$WORK/divergent.log" "FS.GG.Kit"
 diagnosis_omits "$WORK/divergent.log" "_rels/.rels"
+# The normalization is bounded in WIDTH, not only in effect. Dropping the core-properties
+# relationship is the whole licence it has; the manifest relationship stays under the hash, and the
+# only leg that can say so is one whose `_rels/.rels` differs there and nowhere else. Without this,
+# widening the predicate in `normalized_relationships` to drop EVERY relationship leaves this suite
+# green — a normalization that answers "equal" for two packages whose relationship parts disagree is
+# the fail-open .github#2240 and .github#2428 depend on this function not having.
+if python3 "$TOOL" assert-reusable --stored "$REPACK/second/release-manifest.json" \
+  --candidate "$REPACK/manifest-relationship/release-manifest.json" >"$WORK/manifest-relationship.log" 2>&1; then
+  echo "expected a changed manifest relationship to fail closed; the .rels normalization is too wide" >&2
+  exit 1
+fi
+# `second` and `manifest-relationship` share a core-properties part and all content, so `_rels/.rels`
+# is the sole difference in the whole archive — the narrowest statement of the bound.
+diagnosis_names "$WORK/manifest-relationship.log" "_rels/.rels"
+diagnosis_omits "$WORK/manifest-relationship.log" "content/payload.txt"
+# And the same holds through an honest re-pack: against `first` the two also disagree on the
+# core-properties part, which the normalization IS licensed to absorb. It must absorb that half and
+# still refuse on the other, naming only `_rels/.rels`.
+if python3 "$TOOL" assert-reusable --stored "$REPACK/first/release-manifest.json" \
+  --candidate "$REPACK/manifest-relationship/release-manifest.json" >"$WORK/manifest-repack.log" 2>&1; then
+  echo "expected a changed manifest relationship to survive a re-pack and fail closed" >&2
+  exit 1
+fi
+diagnosis_names "$WORK/manifest-repack.log" "_rels/.rels"
+diagnosis_omits "$WORK/manifest-repack.log" "content/payload.txt"
+
 # Identical bytes prepared as a different release are not a re-pack either.
 if python3 "$TOOL" assert-reusable --stored "$REPACK/first/release-manifest.json" \
   --candidate "$REPACK/other-source/release-manifest.json" >"$WORK/identity.log" 2>&1; then
