@@ -3,13 +3,60 @@ name: release-saga-prepare
 # Preparation is intentionally separate from publishing. It packs every coherent-set member once,
 # validates those exact archives against both feeds' constraints, and places the immutable inputs in
 # a draft release. The three package-owning workflows retain their existing Trusted Publishing
-# identities and consume these bytes. Publishing starts only when an operator pushes all three tags.
+# identities and consume these bytes.
+#
+# WHO STARTS PUBLISHING — BOTH ANSWERS, BECAUSE ASSUMING ONE COST A WHOLE RELEASE (.github#2654).
+# Publishing starts when all three tags — `kit/v<version>`, `drivers/v<version>`,
+# `coord-engine/v<version>` — exist at one commit. TWO actors push them:
+#
+#   * an OPERATOR, via `workflow_dispatch` here followed by the `git push` this workflow's own step
+#     summary prints; and
+#   * `.github/workflows/kit-auto-publish.yml`, automatically, with no operator involved, on any
+#     merge whose `<Version>` is the next patch above both feed frontiers (.github#2442).
+#
+# This header used to state only the first, in the words "Publishing starts only when an operator
+# pushes all three tags." That sentence was already false when it was written: `kit-auto-publish`
+# has pushed the trio unattended since .github#2495. Nothing joined the two rails, so the FIRST
+# patch line to fire after the saga landed — `0.58.1` at `a415652f` — tagged three namespaces and
+# published nothing: all three release workflows died on
+# `gh release download "coherent-set/v0.58.1" ... release not found`, because the release this
+# workflow creates had never been prepared. The join is the `workflow_call` trigger below:
+# `kit-auto-publish` now CALLS this workflow and pushes its tags only if that call succeeded, so the
+# bytes always exist before the tags that start consuming them.
+#
+# Preparation itself publishes nothing and is reversible: it creates a DRAFT release. The
+# irreversible edge is still, and only, the tag push.
 on:
   workflow_dispatch:
+  # Called by kit-auto-publish.yml before it pushes the coherent-set tags. Do NOT remove this
+  # trigger without also removing that call: the caller's tag job `needs:` the calling job, so
+  # losing this trigger fails the run rather than silently tagging without bytes — but the failure
+  # would be a broken workflow reference rather than the fail-closed refusal it should be.
+  workflow_call:
+    inputs:
+      source-sha:
+        description: >-
+          The exact commit to pack, preflight and bind the manifest to. Every published version must
+          name the immutable commit its coherent-set tags name (.github#1772, .github#2409 DEC-004),
+          and `release-saga-ci.sh init` asserts the manifest's `sourceSha` equals the tag's commit —
+          so this is not the caller's head by default. On kit-auto-publish's `tagSiblings` repair
+          path the two genuinely differ: the existing `kit/v<version>` tag names a commit `main` may
+          have moved past, and packing at the caller's head would produce a manifest every release
+          workflow then refuses. Empty falls back to `github.sha`, which is what the operator
+          `workflow_dispatch` path wants.
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: write
   packages: read
+
+# The one commit this whole run is bound to. Read once, here, so no step can silently reach for
+# `$GITHUB_SHA` again: under `workflow_call`, `github.sha` is the CALLER's head, which is not
+# necessarily the commit whose tags will consume these bytes.
+env:
+  FSGG_SOURCE_SHA: ${{ inputs.source-sha != '' && inputs.source-sha || github.sha }}
 
 jobs:
   prepare:
@@ -17,6 +64,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          # `actions/checkout` does not move `$GITHUB_SHA`; it only moves the working tree. Both
+          # halves matter — the tree decides what is packed, `FSGG_SOURCE_SHA` decides what the
+          # manifest and the draft release are bound to — so they are set from one expression.
+          ref: ${{ inputs.source-sha != '' && inputs.source-sha || github.sha }}
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -46,7 +98,7 @@ jobs:
           [ -n "$previous" ]
           python3 scripts/release-saga.py prepare \
             --release-id "github:${{ steps.version.outputs.version }}" \
-            --version "${{ steps.version.outputs.version }}" --source-sha "$GITHUB_SHA" \
+            --version "${{ steps.version.outputs.version }}" --source-sha "$FSGG_SOURCE_SHA" \
             --policy-version release-saga/1 --previous-version "$previous" --artifact-dir artifacts/packages \
             --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit \
             --expected-package FS.GG.Drivers --output artifacts/packages/release-manifest.json
@@ -67,16 +119,18 @@ jobs:
             done
             echo "Existing draft contains the identical manifest-bound bytes; no asset was replaced."
           else
-            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft \
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$FSGG_SOURCE_SHA" --draft \
               --title "FS.GG coherent set $VERSION (publishing)" \
               --notes "Prepared content-addressed release. This remains draft until both feeds serve all three manifest-bound artifacts."
             gh release upload "$tag" --repo "$GITHUB_REPOSITORY" artifacts/packages/*.nupkg artifacts/packages/release-manifest.json
           fi
+          # Printed for the OPERATOR path. When kit-auto-publish called this workflow it pushes the
+          # same three refs at the same commit itself, in one `--atomic` push, as its next job.
           {
             echo 'Preparation complete. To start the irreversible phase, push these three refs together:'
-            echo "git tag kit/v$VERSION $GITHUB_SHA"
-            echo "git tag drivers/v$VERSION $GITHUB_SHA"
-            echo "git tag coord-engine/v$VERSION $GITHUB_SHA"
+            echo "git tag kit/v$VERSION $FSGG_SOURCE_SHA"
+            echo "git tag drivers/v$VERSION $FSGG_SOURCE_SHA"
+            echo "git tag coord-engine/v$VERSION $FSGG_SOURCE_SHA"
             echo "git push origin kit/v$VERSION drivers/v$VERSION coord-engine/v$VERSION"
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v6
