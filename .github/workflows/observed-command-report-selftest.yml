@@ -1,0 +1,51 @@
+# The failure legs of the observed-run JUnit wrapper (.github#2556, epic #266).
+#
+# WHAT `tests/observed-command-report/run-gate-junit.sh` IS, AND WHY IT IS NOT DEAD CODE. It runs an
+# arbitrary command and writes the one artifact an SDD evidence record cites: a JUnit `testsuite`
+# whose `failures=` attribute is the machine's answer to "did this gate pass?". Its output is already
+# load-bearing and already digest-pinned — `work/2136-generated-facts/evidence.yml` binds EV004,
+# EV005 and EV006 to `projection-junit.xml`, `skill-quality-junit.xml` and `package-junit.xml` under
+# `digestContract: exact-bytes-v1`, each with `synthetic: false` and `result: pass`. Nothing but this
+# wrapper (and its `package-junit.sh` sibling) produces those bytes.
+#
+# WHICH MAKES THE INVERSION THE POINT. A wrapper that recorded a FAILING command as `failures="0"`,
+# or that exited 0 while the command it ran exited 7, would mint a passing evidence record for a gate
+# that never passed — a forged observation, arriving through the one channel an SDD reviewer is
+# entitled to trust without re-running anything. That is strictly worse than an ungated wrapper: it
+# is a fails-OPEN evidence producer (#266), and until .github#2556 no workflow ran a line of it.
+#
+# So the three controls this fixture drives are exactly the three ways it could lie: a passing
+# command must yield `failures="0"`, a failing one must yield `failures="1"` AND propagate the
+# non-zero exit to the caller, and a missing command must refuse (exit 2) while writing NO artifact
+# at all — because a truncated or absent file is honest, and an empty green `testsuite` is not.
+#
+# Hermetic: bash, mktemp, grep. No network, no token, no SDK.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a
+# divergence.
+name: observed-command-report-selftest
+
+on:
+  pull_request:
+    paths:
+      - "tests/observed-command-report/**"
+      - ".github/workflows/observed-command-report-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/observed-command-report/**"
+      - ".github/workflows/observed-command-report-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the observed-run JUnit wrapper fixture
+        run: bash tests/observed-command-report/run.sh

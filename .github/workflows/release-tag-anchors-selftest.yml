@@ -1,0 +1,65 @@
+# The failure legs of the fleet release-tag anchor detector (.github#2556, epic #266).
+#
+# WHY THE FIXTURE IS WIRED AND THE `--live` ARM IS NOT, WHICH IS A DECISION AND NOT AN OMISSION.
+# `scripts/check-release-tag-anchors.py` is .github#2033's deliverable: it compares the immutable
+# `<repository commit>` in every served nuspec against the peeled release tag and REPORTS the four
+# verdicts. It is a measurement, not an enforcement — and structurally it cannot be a pass/fail CI
+# step, because it can never exit 0. `FS-GG/FS.GG.Rendering fs-gg-ui-template` is tabled with
+# `package=None`, which both arms print `UNCOVERED` and score into `bad`
+# (`scripts/check-release-tag-anchors.py:60-62` live, `:88-90` fixture), so `return 1 if bad else 0`
+# is `1` on any input. Wiring THAT as a gate would mint a job that is red forever on day one — the
+# #266 fails-open class turned inside out, and everyone would learn to ignore it inside a week.
+#
+# So the honest wiring is the one below: CI now RUNS this detector, on every pull request that
+# touches it, through the arm that has a determinate answer. The objection .github#2556 raised —
+# "wiring the fixture alone would gate a script nothing runs" — is answered by the wiring itself,
+# rather than by deleting a closed row's completed deliverable. The `--live` arm stays an on-demand
+# fleet audit, which is what a report is.
+#
+# WHAT THE FIXTURE PINS, and each of these is a property that rots in silence:
+#   * the four verdicts stay DISTINCT — `AGREE` must not absorb `DISAGREE`, `MISSING` or `UNRESOLVED`;
+#   * a roster mapping this detector cannot cover is emitted `UNCOVERED`, never omitted, so the
+#     report's silence is never mistaken for coverage;
+#   * the full FLEET table still carries both Rendering namespaces and the whole SDD sweep;
+#   * the two HISTORICAL dual-publish commits are retained verbatim. Those are evidence, not
+#     exemptions: a detector that "normalized" them would erase the only record that two releases
+#     ever shipped from a commit their tag does not name.
+#
+# `registry/repos.yml` IS IN THE FILTER BECAUSE THE DETECTOR READS IT (`--roster`, default): it
+# refuses a FLEET table naming a producer absent from that roster, so a roster edit can turn this
+# fixture red without a line of the detector changing.
+#
+# Hermetic: an offline `--fixture` TSV in a temp dir. No NuGet, no `git ls-remote`, no token.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a
+# divergence.
+name: release-tag-anchors-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-release-tag-anchors.py"
+      - "registry/repos.yml"
+      - "tests/release-tag-anchors/**"
+      - ".github/workflows/release-tag-anchors-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-release-tag-anchors.py"
+      - "registry/repos.yml"
+      - "tests/release-tag-anchors/**"
+      - ".github/workflows/release-tag-anchors-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the release-tag anchor detector fixture
+        run: bash tests/release-tag-anchors/run.sh

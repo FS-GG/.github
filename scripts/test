@@ -165,13 +165,27 @@ UNSUPPORTED = re.compile(r"[!\[\]+{}]")
 # either WIRED (fix it) or DELIBERATE (say why, here). `--assert-wired` refuses everything else, so
 # membership in this dict is a written claim someone signed, not a mute allowlist.
 #
-# AN ENTRY IS NOT A VERDICT THAT THE STATE IS FINE. It is a verdict that the state is UNDERSTOOD. Four
-# of the six below say, in as many words, that they are unwired by OMISSION and are tracked at
-# .github#2556 — because the alternative was writing "deliberate" about something that is not, and the
-# single property that makes this list worth having is that its entries are true. That property is what
-# .github#2555 was filed to protect: while the scrape vocabulary was frozen at two kinds, a python or
-# node suite could not be discharged by wiring it, so an entry here was the ONLY answer available and
-# it would have been a false one.
+# AN ENTRY IS NOT A VERDICT THAT THE STATE IS FINE. It is a verdict that the state is UNDERSTOOD, and
+# for a while four of the six entries here said, in as many words, that they were unwired by OMISSION
+# and tracked at .github#2556 — because the alternative was writing "deliberate" about something that
+# is not, and the single property that makes this list worth having is that its entries are true.
+# .github#2556 discharged all four by WIRING them (`board-paths-live-selftest.yml`,
+# `coord-report-selftest.yml`, `observed-command-report-selftest.yml`,
+# `release-tag-anchors-selftest.yml`), so the two that remain are genuinely deliberate and this dict
+# is again what it claims to be. THAT IS THE INTENDED LIFECYCLE OF A BY-OMISSION ENTRY: it is a
+# placeholder with a row number on it, it is written to be deleted, and the deletion is what
+# `--assert-wired` forces by calling a now-wired entry STALE.
+#
+# Do not read the discharge as "every unwired directory gets a workflow". `release-tag-anchors` was
+# the one where that would have been wrong: its detector can never exit 0 (a tabled mapping with no
+# package is always UNCOVERED), so it is a REPORT and wiring it as a pass/fail gate would have minted
+# a permanently red job. Its hermetic fixture is what got wired, and the reasoning is written down in
+# that workflow's header rather than here, next to the subject a reader is looking at.
+#
+# .github#2555 is the reason none of this could have been done sooner: while the scrape vocabulary was
+# frozen at two kinds, a python or node suite could not be discharged by wiring it — wiring changed
+# nothing the selector could observe — so an entry here was the ONLY answer available and it would
+# have been a false one.
 #
 # HOW IT ROTS, AND WHICH WAY IT FAILS. An entry naming a directory that is now WIRED fails
 # (`--assert-wired` calls it STALE): a stale exemption is the dangerous kind, because it would silently
@@ -184,8 +198,9 @@ DELIBERATELY_UNWIRED: dict[str, str] = {
     "tests/delivery-leading-line": (
         "DELIBERATE, and not a suite at all. This directory holds ONE data file — corpus.json, the "
         "single statement of the delivery-marker leading-line boundary (.github#2563) — and no runner. "
-        "It CANNOT be wired, and — unlike tests/coord-report below — widening the scrape vocabulary "
-        "does not change that. `wired` is derivable only for a directory holding a RUNNER some KINDS "
+        "It CANNOT be wired, and — unlike the four by-omission entries .github#2556 discharged by "
+        "wiring them — widening the scrape vocabulary does not change that. `wired` is derivable "
+        "only for a directory holding a RUNNER some KINDS "
         "row can name in a workflow `run:` step; .github#2555 grew that set from two kinds to four, "
         "and a data-only directory satisfies none of them because it has no runner at all. The only "
         "way to make this one read WIRED would be to invent a runner purely to be "
@@ -206,30 +221,6 @@ DELIBERATELY_UNWIRED: dict[str, str] = {
         "DELIBERATE. Fixtures .claude/hooks/block-merge-and-main-push.sh, a LOCAL Claude Code "
         "PreToolUse hook. CI has no agent tool-call to intercept, so there is nothing for a workflow "
         "to exercise. Documented since #860; this entry is that documentation, made load-bearing."
-    ),
-    "tests/board-paths-live": (
-        "UNWIRED BY OMISSION, tracked at .github#2556. Hermetic fixture for "
-        "scripts/check-board-paths-live.py. The DETECTOR is wired — board-paths-live.yml runs it "
-        "nightly against the live board — but that workflow is schedule/workflow_dispatch only and "
-        "invokes the detector directly, never this fixture."
-    ),
-    "tests/coord-report": (
-        "UNWIRED BY OMISSION, tracked at .github#2556. Fixtures scripts/fsgg-coord-report, which no "
-        "workflow runs. It was HALF-BLOCKED on .github#2555 and is not any more: that row put python3 "
-        "into KINDS above, so `python3 tests/coord-report/run.py` in a workflow is now derived like any "
-        "other suite and wiring it is all this entry needs. Nothing here is deliberate — the remaining "
-        "half is the wiring judgement .github#2556 owns (which workflow, on which paths: filter), and "
-        "the moment it lands --assert-wired will call this entry STALE and it should be deleted."
-    ),
-    "tests/observed-command-report": (
-        "UNWIRED BY OMISSION, tracked at .github#2556. Fixtures its own run-gate-junit.sh, a JUnit "
-        "wrapper referenced by nothing outside its own directory — so the remedy is a judgement (wire "
-        "it, or retire the wrapper) rather than a missing `run:` line."
-    ),
-    "tests/release-tag-anchors": (
-        "UNWIRED BY OMISSION, tracked at .github#2556. Fixtures scripts/check-release-tag-anchors.py, "
-        "which is itself invoked by no workflow — detector and fixture are both unwired, so wiring "
-        "this alone would gate a script nothing runs."
     ),
 }
 
