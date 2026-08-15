@@ -33,11 +33,11 @@ required_tests=(
   'typed_acceptance_reaches_accept'
 )
 for name in "${required_tests[@]}"; do
-  rg -q --fixed-strings "$name" tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs
+  grep -Fq "$name" tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs
 done
 
 retired_symbols='DeliveryRouteApplication\.decode([^S]|$)|RouteReadClassification|classifyRoute|toLegacyReceipt|projectStructuredReview|normalizeStructuredReviews|EvidenceClassification|FSGG_COORD_LIFECYCLE_PROJECTION'
-if rg -n "$retired_symbols" src; then
+if grep -Enr --include='*.fs' --include='*.fsi' "$retired_symbols" src; then
   echo 'retired decision/lifecycle authority remains in production source' >&2
   exit 1
 fi
