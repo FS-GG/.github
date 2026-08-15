@@ -277,25 +277,37 @@ therefore always safe to make again. Making the call here binds the marker to th
 `landable` is about to score and the one that actually merges — the same property §6 has always
 required, reached one step earlier.
 
-This call's JSON output reports `stage: landable, action: awaitLandability` at this point for a complete,
-host-accepted chain whose checks have not yet gone green — including the `claim-generation` window that
-by design cannot be green until this very call writes `fsgg:pr-authorization` (`.github#2504`). That is
-the expected answer here, and it is precisely the next step below: wait on `landable` for this exact
-head. The write happened either way — it is unconditional (`.github#2488` removed the `--apply` gate) —
-so do not make the call a second time.
+**Exactly one answer here means carry on: `stage: landable, action: awaitLandability`.** Everything else
+— any other stage/action pair, and any `verdict: noVerdict` — is a **stop**, and none of it is noise to
+proceed through. That one answer is what a PR gets when its handoff facts are in order *and* its review
+chain is complete and host-accepted, with checks not yet green — including the `claim-generation` window
+that by design cannot be green until this very call writes `fsgg:pr-authorization` (`.github#2504`). It
+is precisely the next step below: wait on `landable` for this exact head. The write happened either way
+— it is unconditional (`.github#2488` removed the `--apply` gate) — so whatever comes back, do not make
+the call a second time.
 
-`action: refreshReview, stage: reviewActive` is a **different** answer, and it is **not** noise to
-proceed through. `.github#2575` stopped folding the liveness clause "review checks are not green" into
-the review problem list, so a still-running check can no longer produce that pair here. At this call site
-it now means only that the durable review EVIDENCE is structurally invalid (`Delivery.reviewProblem` ->
-`Driver.validateReviewChainStructure`): a missing or invalid marker, a missing critic identity, a missing
-review head SHA, rounds not ordered from one, an exhausted round ceiling, missing runtime-route evidence,
-an unresolved diff-audit receipt, a missing host acceptance, or a chain recorded against a different head
-SHA. **That is a stop, not a proceed** — do not merge on it, and report the chain to whoever dispatched
-you. `delivery` prints the pair but not which of those it found (`DeliveryApplication.fs` renders
-`RefreshReview` without its problem text), so identify it from the review chain itself rather than from
-this output. A chain carrying no review evidence at all reports the distinct `action:
-awaitIndependentReview` instead.
+`stage: reviewReady` is a stop about the **handoff**, and it is the likeliest one to meet here, because
+`Delivery.inspect` tests these facts *before* it ever reads the review chain. `action:
+repairReviewHandoff` means the item branch is not canonical, the canonical closing linkage is missing,
+the declared paths are not verified, or the post-merge obligations are undeclared; `action: moveToReview`
+means the board row is not `In review`. Two of those are failures this same section calls unrepairable or
+obligation-dropping — closing linkage cannot be fixed once merged (`.github#2107`), and an undeclared
+obligation is one nothing downstream will ever chase (`.github#2496`) — so repair the named fact and call
+again rather than merging past it. Like `refreshReview` below, `repairReviewHandoff` renders without its
+problem text, so read the cause off the PR itself.
+
+`action: refreshReview, stage: reviewActive` is a stop about the review **evidence**. `.github#2575`
+stopped folding the liveness clause "review checks are not green" into the review problem list, so a
+still-running check can no longer produce that pair here. At this call site it now means the durable
+review evidence is structurally invalid (`Delivery.reviewProblem` ->
+`Driver.validateReviewChainStructure`) — chiefly a missing or invalid marker, a missing critic identity,
+a missing review head SHA, rounds not ordered from one, an exhausted round ceiling, missing runtime-route
+evidence, an unresolved diff-audit receipt, a missing host acceptance, or a chain recorded against a
+different head SHA; it also carries any error the live adapter hit parsing the review comments at all,
+which is a longer list. **Do not merge on it**, and report the chain to whoever dispatched you.
+`delivery` prints the pair but not which cause it found (`DeliveryApplication.fs` renders `RefreshReview`
+without its problem text), so identify it from the review chain itself rather than from this output. A
+chain carrying no review evidence at all reports the distinct `action: awaitIndependentReview` instead.
 
 - **Once per item, at this exact point — after the host-acceptance marker and all repairs, and before
   `landable`'s check — never after opening the PR, and never on every push.** A call made earlier binds
