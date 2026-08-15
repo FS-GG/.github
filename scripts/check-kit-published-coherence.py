@@ -2078,6 +2078,34 @@ def merge_triggers_workflow(triggers: dict, path: str) -> bool:
     return True  # `push:` with no branch filter at all — every branch, `main` included.
 
 
+def _guarded(what: str, call):
+    """Run ONE interaction with a loaded decision program behind this arm's fail-closed boundary.
+
+    EVERY line that reaches into a program this arm loaded goes through here, and that is the whole
+    point of the function existing rather than three `try` blocks (.github#2571 round-2 repair). The
+    guard was applied by discipline at each site instead, and the discipline failed twice in a row for
+    the same reason: `import`ing a program to ask it a question makes ANY touch of it — an import, an
+    attribute lookup, a call — a place its code runs, and a reviewer checking "is this call guarded"
+    must first notice that a line is a call at all. `getattr(module, "decide", None)` does not look
+    like one. Neither does handing `module` to a builder that will call something off it. One named
+    boundary can be audited by grepping for the sites that do NOT use it.
+
+    `BaseException`, not `Exception`, and not defensive breadth: `SystemExit` is a `BaseException`, so
+    a decision program that calls `sys.exit(0)` — at import, from a PEP 562 `__getattr__`, or inside
+    the function being called — propagates straight out of this gate and EXITS IT ZERO, greening the
+    arm on a program it never usefully read. Every measured instance of that here printed NOTHING at
+    all, which is the worst possible shape for a control: a pass that leaves no trace of not having
+    looked. A `GateError` raised INSIDE the guarded region is this file's own typed verdict and passes
+    through unwrapped; everything else becomes one.
+    """
+    try:
+        return call()
+    except GateError:
+        raise
+    except BaseException as e:  # noqa: BLE001 — see the docstring; `SystemExit` is the point.
+        raise GateError(f"{what}: {e!r}") from e
+
+
 def decision_function(path: str):
     """One mapped automation's decision program, LOADED from its own source file (.github#2571).
 
@@ -2112,17 +2140,23 @@ def decision_function(path: str):
         raise GateError(f"cannot load the mapped decision program {path!r} as a Python module")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    except BaseException as e:  # noqa: BLE001
-        # BaseException, not Exception, and that is not defensive breadth. `SystemExit` is a
-        # BaseException: a decision program that calls `sys.exit(0)` at import — or is edited into one
-        # by accident, a stray `exit()` in a debug session — would otherwise propagate straight out of
-        # this gate and EXIT IT ZERO, greening the arm on a program it never actually loaded. That is
-        # the fail-open this whole file is written against, so every way the load can end that is not
-        # "the module is now usable" ends here instead.
-        raise GateError(f"the mapped decision program {path!r} failed to load: {e!r}") from e
-    if not callable(getattr(module, "decide", None)):
+    _guarded(
+        f"the mapped decision program {path!r} failed to load",
+        lambda: spec.loader.exec_module(module),
+    )
+    # THE ATTRIBUTE LOOKUP IS ITSELF A CALL INTO THAT PROGRAM, and it is guarded for that reason
+    # (.github#2571 round-2 repair). A module may define a module-level `__getattr__` (PEP 562), so
+    # `getattr(module, "decide", None)` executes the program's code — and the three-argument form
+    # swallows only `AttributeError`, so a `__getattr__` that calls `sys.exit(0)` propagated straight
+    # out of this gate and EXITED IT ZERO. Measured: with such a program in place the arm printed
+    # NOTHING and returned 0 on every subject, including a PR declaring nothing at all — so the hole
+    # defeated the unconditional map-rot read itself, which is the one thing that read exists to make
+    # impossible.
+    decide = _guarded(
+        f"reading `decide` from the mapped decision program {path!r} failed",
+        lambda: getattr(module, "decide", None),
+    )
+    if not callable(decide):
         raise GateError(
             f"{path} exposes no callable `decide` — this arm reads that function to learn whether the "
             f"merge performs the act, and cannot substitute its own copy of the rule."
@@ -2155,7 +2189,15 @@ def merge_performs_act(
     """
     assert automation.decision and automation.completions  # guarded at load; see `_assert_map`
     module = decision_function(automation.decision)
-    completions = automation.completions(module, candidate, frontier)
+    # Guarded because the builder reaches into the loaded program — it reads and CALLS that program's
+    # own `patch_tuple` (.github#2571 round-2 repair). This call is the one the round-1 repair added,
+    # and it went in outside the boundary: a `patch_tuple` raising `SystemExit(0)` made the whole arm
+    # exit 0 in silence, and one raising anything else printed a raw traceback instead of a verdict.
+    completions = _guarded(
+        f"{automation.decision}'s reachable-world enumeration failed for {PACKAGE} {candidate} "
+        f"against frontier {frontier}",
+        lambda: automation.completions(module, candidate, frontier),
+    )
     if not completions:
         raise GateError(
             f"{automation.decision}'s completion builder produced NO post-merge world to score. An "
@@ -2163,13 +2205,11 @@ def merge_performs_act(
         )
     declined: list[tuple[Completion, dict]] = []
     for completion in completions:
-        try:
-            decision = module.decide(completion.facts)
-        except BaseException as e:  # noqa: BLE001 — `SystemExit` too; see `decision_function`'s note.
-            raise GateError(
-                f"{automation.decision}'s decide() raised on the candidate fact set "
-                f"(frontier {completion.frontier}): {e!r}"
-            ) from e
+        decision = _guarded(
+            f"{automation.decision}'s decide() raised on the candidate fact set "
+            f"(frontier {completion.frontier})",
+            lambda: module.decide(completion.facts),
+        )
         if not isinstance(decision, dict) or not isinstance(decision.get("action"), str):
             raise GateError(
                 f"{automation.decision}'s decide() returned {decision!r}, which carries no string "

@@ -1954,6 +1954,46 @@ must_fail "the mapped program's decide() is CALLED — a stub that always cuts f
   "stub-always-cuts"
 OBL_CANDIDATE=0.51.2
 
+# ---- EVERY TOUCH OF THE LOADED PROGRAM IS A PLACE ITS CODE RUNS (.github#2571 round-2 repair).
+#      Reading `patch_tuple` from the mapped program — the right call for the round-1 repair — put a
+#      NEW call outside the fail-closed boundary, and a `sys.exit(0)` there made this arm exit 0 in
+#      total silence. The legs above did not catch it: they cover the `decide()` site, and the only
+#      `patch_tuple` leg was the MISSING case, which never reaches the call. A green fixture is not
+#      evidence that a guard exists — only a leg that removes the guard is.
+cuts_nothing_decide='def decide(facts):\n    return {"action": "refuse", "reason": "stub"}\n'
+
+printf 'import sys\ndef patch_tuple(v):\n    sys.exit(0)\n%b' "$cuts_nothing_decide" > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a patch_tuple that exits 0 is a typed no-verdict, not a silent zero" \
+  "reachable-world enumeration failed"
+
+printf 'def patch_tuple(v):\n    raise ValueError("no idea")\n%b' "$cuts_nothing_decide" > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a patch_tuple that RAISES is a typed no-verdict" "reachable-world enumeration failed"
+# A raw traceback is not a verdict. It is also the tell that a call escaped the boundary rather than
+# being handled by it, so the absence of one is worth asserting rather than assuming.
+if ! grep -q "Traceback (most recent call last)" <<<"$out"; then
+  ok "…reported as a verdict rather than as an unhandled traceback"
+else
+  bad "…reported as a verdict rather than as an unhandled traceback" "$out"
+fi
+
+printf 'def patch_tuple(v):\n    return 5\n%b' "$cuts_nothing_decide" > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a patch_tuple that returns the wrong shape is a typed no-verdict" \
+  "reachable-world enumeration failed"
+
+# PEP 562: a module may define a module-level `__getattr__`, so even `getattr(module, "decide", None)`
+# runs the program's code — and the three-argument form swallows only AttributeError. This is the
+# WIDEST of the four holes and the one the round-2 review did not name: it fires during the
+# UNCONDITIONAL map read, so it greened every subject, including a PR declaring nothing mapped at all,
+# printing nothing. The subject here is deliberately the unmapped declaration, so the leg fails if the
+# guard is ever narrowed to the per-declaration path.
+printf 'import sys\ndef __getattr__(name):\n    sys.exit(0)\n' > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_fail "a module __getattr__ that exits 0 is a no-verdict, even for a PR declaring nothing mapped" \
+  "reading \`decide\` from the mapped decision program"
+
 cp "$HERE/../../scripts/kit-auto-publish.py" "$DECIDER"
 
 # ---- AC5: AND THE CANDIDATE ITSELF. With no canned version the arm evaluates `<Version>` from
@@ -2117,6 +2157,73 @@ if grep -q "MISSES a reachable cut" <<<"$out"; then
 else
   bad "INVERSION M5: …and it names the pair and the direction of the unsoundness" "$out"
 fi
+
+# M6/M7 — REMOVE THE FAIL-CLOSED BOUNDARY FROM ONE TOUCH OF THE LOADED PROGRAM, and watch this arm
+# exit ZERO in silence. These two are the reason `_guarded` exists as one named function rather than a
+# `try` repeated at each site: both holes were introduced by adding a perfectly ordinary-looking line,
+# and neither reddened a 217-leg fixture. The assertion is deliberately `rc == 0 AND no output`,
+# because that pair — a pass leaving no trace of not having looked — is the exact signature of the
+# defect, and a leg matching on a message would not have caught it.
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches: [main]
+jobs: {}
+YAML
+
+silent_green() { # $1 leg name; $2 mutant script; $3 comments file
+  set +e
+  out="$(cd "$OBL_TREE" && python3 "$2" --obligation-arm --obligations "$3" \
+    --obligation-candidate-version 0.58.1 --obligation-published-version 0.58.0 2>&1)"
+  rc=$?
+  set -e
+  if [ "$rc" -eq 0 ] && [ -z "$out" ]; then
+    ok "$1"
+  else
+    bad "$1 (expected a SILENT exit 0; got rc=$rc)" "$out"
+  fi
+}
+
+mutate mutant-unguarded-enumeration \
+  "    completions = _guarded(
+        f\"{automation.decision}'s reachable-world enumeration failed for {PACKAGE} {candidate} \"
+        f\"against frontier {frontier}\",
+        lambda: automation.completions(module, candidate, frontier),
+    )" \
+  "    completions = automation.completions(module, candidate, frontier)  # MUTATION: guard removed"
+printf 'import sys\ndef patch_tuple(v):\n    sys.exit(0)\ndef decide(f):\n    return {"action": "refuse", "reason": "s"}\n' > "$DECIDER"
+silent_green "INVERSION M6: unguard the patch_tuple read and a sys.exit(0) there greens the arm SILENTLY" \
+  "$MUT_OBL/scripts/mutant-unguarded-enumeration.py" "$OBL/release-obligation.json"
+
+mutate mutant-unguarded-attribute \
+  "    decide = _guarded(
+        f\"reading \`decide\` from the mapped decision program {path!r} failed\",
+        lambda: getattr(module, \"decide\", None),
+    )" \
+  "    decide = getattr(module, \"decide\", None)  # MUTATION: guard removed"
+printf 'import sys\ndef __getattr__(name):\n    sys.exit(0)\n' > "$DECIDER"
+silent_green "INVERSION M7: unguard the attribute lookup and a PEP 562 __getattr__ greens EVERY subject" \
+  "$MUT_OBL/scripts/mutant-unguarded-attribute.py" "$OBL/registry-record.json"
+
+# ---- AND THE SHAPE, NOT ONLY THE FOUR HOLES SOMEBODY THOUGHT OF. Behaviour legs can only cover the
+#      ways in that were imagined; this one reads the gate's AST and asserts that every touch of a
+#      loaded program sits inside `_guarded`, so the NEXT ordinary-looking line to reach into that
+#      program reds here at authoring time instead of in a third review round. Its inversion is free:
+#      the M6 mutant above is a real unguarded touch, so the same checker must flag it.
+BOUNDARY="$HERE/guarded-boundary.py"
+set +e
+out="$(python3 "$BOUNDARY" "$GATE" 2>&1)"; rc=$?
+set -e
+must_pass "every touch of a loaded decision program is inside the fail-closed boundary" \
+  "is inside \`_guarded\`"
+
+set +e
+out="$(python3 "$BOUNDARY" "$MUT_OBL/scripts/mutant-unguarded-enumeration.py" 2>&1)"; rc=$?
+set -e
+must_fail "INVERSION: the boundary check FLAGS the unguarded touch M6 introduces" "UNGUARDED"
+
+cp "$HERE/../../scripts/kit-auto-publish.py" "$DECIDER"
 
 # ---- THE ARM IS WIRED, ON EVERY PULL REQUEST. An unwired gate is the exact defect .github#2533 is
 #      about: an artifact that exists, is reviewed, and is not connected to anything.
@@ -2373,7 +2480,26 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   invariant moved out of a docstring nothing could falsify and into a leg that can. 2 are its
 #   gate-inversion control (M5): re-pinning the frontier makes that sweep RED, naming the pair and the
 #   direction. 210 + 7 = 217.
-EXPECTED_LEGS=217
+# + 7 legs for .github#2571's ROUND-2 REPAIR, whose subject is the boundary rather than the verdict.
+#   Reading `patch_tuple` out of the mapped program — the right call for the round-1 repair — put a new
+#   call OUTSIDE the fail-closed guard, and a `sys.exit(0)` there made this arm exit 0 in total silence;
+#   an audit of every site that touches the loaded module then found a fourth hole nobody had reported,
+#   a PEP 562 module `__getattr__` at the `decide` lookup, which greened EVERY subject including a PR
+#   declaring nothing at all. 4 are the behaviour: `patch_tuple` exiting 0, raising, and returning the
+#   wrong shape are typed no-verdicts (the raising one additionally asserting the absence of a raw
+#   traceback, which is the tell that a call escaped the boundary), and the `__getattr__` leg is driven
+#   through an UNMAPPED declaration so it fails if the guard is ever narrowed to the per-declaration
+#   path. 2 are gate-inversion controls (M6/M7), one per guard, asserting `rc == 0 AND no output` —
+#   that pair is the defect's actual signature, and a leg matching on a message would not have caught
+#   it. Neither hole reddened a 217-leg fixture, which is why the guard is now ONE named function
+#   (`_guarded`) that can be audited by grepping for the sites that do not use it, rather than a `try`
+#   repeated by discipline at each site. 217 + 7 = 224.
+# + 2 legs for `guarded-boundary.py`, which grades the SHAPE rather than the four holes anybody
+#   thought of: it reads the gate's AST and asserts every touch of a loaded program sits inside
+#   `_guarded`, so the next ordinary-looking line to reach into that program reds at authoring time
+#   instead of in a later review round. Its inversion reuses M6's mutant, which IS a real unguarded
+#   touch, so the checker must flag it. 224 + 2 = 226.
+EXPECTED_LEGS=226
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
