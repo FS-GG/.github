@@ -52,6 +52,11 @@ on:
   pull_request:
     paths:
       - "registry/skills.yml"
+      # The `delivery-channel` arm's other input (.github#2545): the per-class declaration of where
+      # each skill class's BYTES come from. It is derived-sibling-read, not flag-passed, so nothing
+      # else would select it — and an edit here that skipped this gate is exactly the shape #1606
+      # measured when `generate-driver-manifest --check`'s inputs were absent from this filter.
+      - "registry/skills.delivery-channels.yml"
       - "scripts/fsgg-skill-registry-check"
       - "tests/skill-registry/**"
       - ".github/workflows/skill-registry-coherence.yml"
@@ -67,6 +72,11 @@ on:
     branches: [main]
     paths:
       - "registry/skills.yml"
+      # The `delivery-channel` arm's other input (.github#2545): the per-class declaration of where
+      # each skill class's BYTES come from. It is derived-sibling-read, not flag-passed, so nothing
+      # else would select it — and an edit here that skipped this gate is exactly the shape #1606
+      # measured when `generate-driver-manifest --check`'s inputs were absent from this filter.
+      - "registry/skills.delivery-channels.yml"
       - "scripts/fsgg-skill-registry-check"
       - "tests/skill-registry/**"
       - ".github/workflows/skill-registry-coherence.yml"

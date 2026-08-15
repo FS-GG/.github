@@ -1,0 +1,636 @@
+schemaVersion: 1
+workId: 2545-rendering-owned-product-skill-channel
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2545-rendering-owned-product-skill-channel/spec.md
+sourceClarifications: work/2545-rendering-owned-product-skill-channel/clarifications.md
+sourceChecklist: work/2545-rendering-owned-product-skill-channel/checklist.md
+sourcePlan: work/2545-rendering-owned-product-skill-channel/plan.md
+sourceTasks: work/2545-rendering-owned-product-skill-channel/tasks.yml
+sourceAnalysis: readiness/2545-rendering-owned-product-skill-channel/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2545-rendering-owned-product-skill-channel/analysis.json
+    digest: aca50f5a5b07130b5e53414711d5c64621b4f503810e4031b7459edbb757c6fa
+    schemaVersion: 1
+  - label: checklist
+    path: work/2545-rendering-owned-product-skill-channel/checklist.md
+    digest: 7014621453fcc6e83254f3052fbe2e1ac0d61364a36fbc398b988010935dfb0b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2545-rendering-owned-product-skill-channel/clarifications.md
+    digest: 768db4d522c67d0eaba249842d1a646de13b2c6eee4aed9493045e6c1ca79745
+    schemaVersion: 1
+  - label: plan
+    path: work/2545-rendering-owned-product-skill-channel/plan.md
+    digest: deac6e256673d480283d386e5e6d87b30fe5809c446fe94002513c06d2406001
+    schemaVersion: 1
+  - label: spec
+    path: work/2545-rendering-owned-product-skill-channel/spec.md
+    digest: 9f5e470c333693887a5f0de46c47b67227979cb0cf32b3b11e21523ec0cfed66
+    schemaVersion: 1
+  - label: tasks
+    path: work/2545-rendering-owned-product-skill-channel/tasks.yml
+    digest: 14551d871aae21b05e34c1a915134adc5cc829aea76d89c853829155428d1387
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [registry/skills.delivery-channels.yml, scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: run-checks.sh cases VO-003 and VO-004 execute the arm against declarations whose dispositions are malformed, and VO-008 against the shipped one; the four-valued vocabulary and each disposition's required fields are enforced by the arm, not asserted about it."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: run-checks.sh case VO-001 builds a catalog carrying a class the declaration ignores and requires the arm to name the class, the row in it, and what the silence costs."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: run-checks.sh case VO-002 adds a declaration entry matching no catalog row and requires the arm to report it, closing the converse direction."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: run-checks.sh cases VO-003 (a tracked-by that is board shorthand) and VO-004 (a provider-scoped entry naming neither an owner nor a rationale) both execute the arm."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: run-checks.sh case VO-005 first asserts the scratch --repos-root is genuinely empty, then requires a real verdict out of that run — so 'it ran offline' cannot be satisfied by not looking."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [tests/skill-registry/run.sh, work/2545-rendering-owned-product-skill-channel/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["FR-006: tests/skill-registry/run.sh cases 69-77 exercise the arm's green case and every red case, and verification-evidence.md records five SOURCE mutations to the arm (M1-M5), each observed red against that suite. run-checks.sh case FR-006 EXECUTES that suite (it is hermetic: temp registries, temp producer trees, no network) and additionally requires cases 69-77 to have been reached, so a suite that passed by never running them is a failure here."]
+  - id: EV007
+    kind: review
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [work/2545-rendering-owned-product-skill-channel/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["FR-007: spec.md section 'Route decision' states Route B, refutes Route A against ADR-0058/ADR-0062/ADR-0063, and cites the .github#1308 precedent that closed the identical request for the game class."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [work/2545-rendering-owned-product-skill-channel/spec.md]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["FR-008: spec.md section 'Disposition of the Rendering-owned product rows' answers for all 18 by name with each measured predicate, and separates 'in scope of the channel' from 'detectable today' rather than conflating them. run-checks.sh case FR-008 derives the row ids from registry/skills.yml and requires each to be named in that section, so a 19th Rendering product row reds this until the record answers for it too."]
+  - id: EV009
+    kind: review
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: [work/2545-rendering-owned-product-skill-channel/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["FR-009: spec.md section 'Filed receiver rows' records FS.GG.Rendering#1240, FS.GG.SDD#864 and .github#2639 with the REST dedupe reads that preceded filing, and notes Blocked by is written on the Projects v2 field, not as a body line."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-010]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV010]
+    artifacts: [".github/workflows/skill-registry-coherence.yml"]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["FR-010: run-checks.sh case VO-007 parses the workflow with a YAML parser and requires the declaration under BOTH pull_request.paths and push.paths — a grep cannot tell a filter entry under the wrong trigger from a correct one (.github#1606)."]
+  - id: EV011
+    kind: review
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [work/2545-rendering-owned-product-skill-channel/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["DEC-001 (AMB-001, which route): decided Route B and recorded in spec.md 'Route decision'."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [registry/skills.delivery-channels.yml, work/2545-rendering-owned-product-skill-channel/spec.md]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 (AMB-002, where the declaration lives): a separate .github-owned file, so registry/skills.yml — the registry-schema contract surface owned by sdd — is untouched and skill-registry-autofix.yml never rewrites the declaration. run-checks.sh case PC-001 measures the untouched half: `git diff --quiet origin/main -- registry/skills.yml`."]
+  - id: EV013
+    kind: review
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [work/2545-rendering-owned-product-skill-channel/spec.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["DEC-003 (AMB-003, amend ADR-0063?): no. ADR-0063 states it builds nothing and delegates transport per class to coordination rows; recorded in spec.md so a reviewer who disagrees does so against a stated position."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: [registry/skills.delivery-channels.yml, scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: the new file is .github-owned and read only by this checker; registry/skills.yml is unchanged, so no cross-repo contract surface moves. The checker gains one finding `check` value and no CLI, exit-code, or --write behaviour change. run-checks.sh case PC-001 measures the load-bearing half rather than asserting it."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV015]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["VO-001, executed by run-checks.sh; inverted red via FSGG_2545_INVERT=VO-001."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV016]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["VO-002, executed by run-checks.sh; inverted red via FSGG_2545_INVERT=VO-002."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV017]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["VO-003, executed by run-checks.sh; inverted red via FSGG_2545_INVERT=VO-003."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV018]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["VO-004, executed by run-checks.sh; inverted red via FSGG_2545_INVERT=VO-004."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV019]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["VO-005, executed by run-checks.sh; inverted red via FSGG_2545_INVERT=VO-005."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV020]
+    artifacts: [registry/skills.delivery-channels.yml, scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["VO-006, the gate-inversion on the SHIPPED pair: tests/skill-registry/invert-rendering-channel.py removes the fs-gg-rendering/product entry (asserting it found exactly one to remove) and the arm must name the class, fs-gg-feedback-report, and the 18-row count. Inverted red via FSGG_2545_INVERT=VO-006."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV021]
+    artifacts: [".github/workflows/skill-registry-coherence.yml"]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["VO-007, executed by run-checks.sh; inverted red via FSGG_2545_INVERT=VO-007."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV022]
+    artifacts: [registry/skills.delivery-channels.yml]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["VO-008, the shipped registry and declaration are coherent — the gate this change adds passes on the tree this change lands. Inverted red via FSGG_2545_INVERT=VO-008."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV023]
+    artifacts: [scripts/fsgg-skill-registry-check]
+    sourceRefs:
+      - kind: verification
+        path: work/2545-rendering-owned-product-skill-channel/verification/run-checks.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2545-rendering-owned-product-skill-channel/verification/junit.xml
+      digest: "sha256:07d6d83eb2cc32e59dc36f2b1abb181352519e067a88f411877cc4139a4713a3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 12
+      failed: 0
+      skipped: 0
+    notes: ["PM-001: run-checks.sh case PM-001 feeds the arm a declaration carrying schemaVersion 99 and requires a refusal rather than an optimistic parse. Inverted red via FSGG_2545_INVERT=PM-001."]
+  - id: EV024
+    kind: generated-view
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV024]
+    artifacts: [readiness/2545-rendering-owned-product-skill-channel/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    notes: ["GV-001: the work model regenerates from current plan sources. registry/skills.delivery-channels.yml is deliberately NOT a generated artefact and is absent from scripts/generated-paths, so verify-paths does not subtract it and it stays in the item's declared Paths:."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

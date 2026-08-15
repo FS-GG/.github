@@ -65,6 +65,34 @@ COMPLETENESS OF THE LIST.
                      Declaring it makes the catalog honest about the axes it carries; it does not
                      make a predicate answerable.
 
+  9. DELIVERY CHANNEL
+                     every `(owner, scope)` class the catalog carries has an accountable delivery
+                     disposition in `registry/skills.delivery-channels.yml` (.github#2545). Checks
+                     1-8 are predicates over a row's bytes, its presence, its emission condition, or
+                     its parameters. NOTHING asked where a row's bytes are supposed to COME FROM, so
+                     the answer "nowhere" was not a finding, it was nothing — the ADR-0063 class
+                     *"declared ∧ gated-in ∧ supplied-from-nowhere"*, found three times
+                     (`fs-gg-playtest` .github#1299, `workRoadmap` .github#1300,
+                     `fs-gg-feedback-report` .github#2380/#2545) and each time by accident rather
+                     than by a gate. The class set is DERIVED from this registry on every run, so a
+                     new owner or scope reds the arm with no edit here.
+
+                     FOUR DISPOSITIONS, NOT TWO, and the difference is the point: `delivered`,
+                     `provider-scoped`, `withheld`, `gap`. `fs-gg-feedback-report` HAS a channel —
+                     Rendering's `fs-gg-ui` template emits it correctly — and lacks only REACH, so a
+                     has-channel/no-channel vocabulary would declare this arm's own founding defect
+                     green. A `provider-scoped` class must name either who owes making it universal
+                     or why provider-scoped reach is correct for it.
+
+                     It does NOT verify that a declared channel works. Judging delivery from tree
+                     shape yields false findings — FS.GG.Templates' six product bodies sit outside
+                     every template root and are PROJECTED into the payload at pack time — so a
+                     disposition that CLAIMS a channel (`delivered`, `provider-scoped`, `withheld`)
+                     carries `evidence:` naming the artefact that packs, embeds, or withholds the
+                     bytes. `gap` does not, and cannot: it asserts that no such artefact exists, so
+                     there is nothing to name. Its accountability is `tracked-by` — the issue that
+                     owes closing it — which is why that field is what `gap` requires instead.
+
 And over the CONTENT of a row the manifest also declares (.github#292, epic #266). Checks 1-3 are
 predicates over a row's BYTES; check 5 over its PRESENCE. Nothing compared the one field that is
 neither -- the emission condition:
@@ -262,6 +290,27 @@ DEFAULT_WHEN = "always"
 
 # A canonical-body digest: 64 lowercase hex chars. Anything else is a registry-shape defect.
 DIGEST_RE = re.compile(r"[0-9a-f]{64}")
+
+# ---- check 9: DELIVERY CHANNEL (.github#2545) ---------------------------------------------------
+#
+# The schema of `registry/skills.delivery-channels.yml` — named after the registry it judges, see
+# `channels_path_for`. Read the arm's docstring below for why the
+# vocabulary is four-valued rather than "has a channel / has no channel".
+DELIVERY_CHANNELS_SCHEMA_VERSION = 1
+
+# disposition -> (required fields, permitted `kind` values). An empty kinds tuple means the entry
+# carries no `kind` at all; a non-empty one makes `kind` required AND closed.
+DELIVERY_DISPOSITIONS = {
+    "delivered": (("channel", "kind", "evidence"), ("package", "in-code")),
+    "provider-scoped": (("provider", "kind", "evidence"), ("template-payload",)),
+    "withheld": (("reason", "evidence"), ()),
+    "gap": (("tracked-by",), ()),
+}
+
+# `owner/repo#n` in full, never the board's own `<repo>#<n>` shorthand. .github#2107 measured that
+# GitHub's closing-keyword grammar does not parse the shorthand; a reference a reader cannot resolve
+# names nobody, which is the whole failure this field exists to prevent.
+TRACKED_BY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*#[1-9][0-9]*")
 
 
 def canonical_digest(raw: bytes) -> str:
@@ -910,6 +959,239 @@ def cross_references(rows: list[dict], repos_root: str) -> list[dict]:
     return findings
 
 
+def channels_path_for(registry_path: str) -> str:
+    """`registry/skills.delivery-channels.yml` — the declaration for THE registry this run judges.
+
+    A DERIVED SIBLING rather than a flag with a default, for the reason `roster_path_for` gives: a
+    flag is a thing a caller can quietly stop passing, which is the exact failure this arm exists to
+    close, reintroduced one level up.
+
+    Named after its catalog (`<registry-stem>.delivery-channels.yml`, the shape
+    `registry/skills.CHANGELOG.md` already uses) rather than being one fixed sibling filename, and
+    that is load-bearing rather than cosmetic. This arm's verdict is a statement about ONE registry's
+    class set in BOTH directions — a class with no entry, and an entry with no class. A single
+    per-directory filename would force every registry that shares a directory to share one
+    declaration, so the fixture's several synthetic catalogs (and any future second catalog) could
+    not each be judged truthfully: one would always be reporting the other's classes as dead
+    entries. Deriving the name from the registry keeps the pairing 1:1.
+    """
+    absolute = os.path.abspath(registry_path)
+    stem = os.path.basename(absolute)
+    for suffix in (".yml", ".yaml"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    return os.path.join(os.path.dirname(absolute), f"{stem}.delivery-channels.yml")
+
+
+def delivery_channels(registry_path: str, rows: list[dict]) -> list[dict]:
+    """Every `(owner, scope)` class in the catalog carries an accountable delivery disposition.
+
+    THE CLASS ADR-0063 NAMED, ASKED ABOUT MECHANICALLY (.github#2545). ADR-0063 named
+    *"declared ∧ gated-in ∧ supplied-from-nowhere … the `owner`/`source` fields name where the bytes
+    are, and nothing reads them for delivery."* It has been found three times — `fs-gg-playtest`
+    (.github#1299), the `workRoadmap` driver (.github#1300), and `fs-gg-feedback-report`
+    (.github#2380/#2545) — and each time by accident: a human noticing an absence, a consumer repo
+    filing, and a product tree failing to run a tool. Every arm above is a predicate over a row's
+    bytes, its presence, its predicate, or its parameters. NOTHING asked where a row's bytes are
+    supposed to COME FROM, so the answer "nowhere" was not a finding, it was nothing — #289's
+    fail-open recurring a third time, now over the DELIVERY of the list rather than its contents.
+
+    DERIVED, NOT RESTATED (ADR-0058). The class set is computed from `registry/skills.yml` on every
+    run and never listed here, so a new `owner:` or a new `scope:` value reds this arm the day it
+    lands, with no edit to this file. That is the property all three instances lacked.
+
+    WHY THE VOCABULARY IS FOUR-VALUED, WHICH IS THE WHOLE POINT. `fs-gg-feedback-report` HAS a
+    channel: FS.GG.Rendering's `fs-gg-ui` template emits it correctly and unconditionally. What it
+    lacks is REACH — a tree scaffolded through any other provider never restores that template. A
+    two-valued has-channel/no-channel file would let this arm's own founding defect be declared
+    green, so `provider-scoped` is a first-class disposition and must name either who owes making it
+    universal (`tracked-by`) or why provider-scoped reach is correct for that class (`accepted`).
+
+    THE ARM DOES NOT TRY TO VERIFY A DECLARED CHANNEL, AND THAT IS DELIBERATE. Judging delivery from
+    repository tree shape produces false findings: FS.GG.Templates' six product bodies sit at
+    `template/product-skills/` OUTSIDE every `templates/<name>/` template root, which reads as a
+    fourth instance until you notice `FS.GG.Templates.csproj` PROJECTS them into
+    `content/templates/<id>/.agents/skills/` at pack time. So every disposition that CLAIMS something
+    about the bytes — `delivered`, `provider-scoped`, `withheld` — requires `evidence:` naming the
+    artefact that packs, embeds, or withholds them, and the verdict on whether that artefact works
+    belongs to the producer's and consumer's own gates.
+
+    `gap` REQUIRES `tracked-by` AND NOT `evidence:`, and the asymmetry is the schema being honest
+    rather than an omission. A `gap` asserts that no artefact carries these bytes at all; requiring it
+    to name one would be requiring evidence of a negative, and the only field that could be supplied
+    is a pointer to nothing. What makes a `gap` accountable is naming who owes closing it. See
+    `DELIVERY_DISPOSITIONS` for the required-field table this sentence describes.
+
+    Offline: two YAML reads, no `--repos-root`, no network. That is what lets the fixture next door
+    exercise it without producer trees.
+
+    Fails closed. An unreadable, mis-shaped, or unknown-schema declaration is a finding, never an
+    empty class set silently agreeing with the catalog.
+    """
+    path = channels_path_for(registry_path)
+
+    def finding(row_id: str, detail: str) -> dict:
+        return {"id": row_id, "check": "delivery-channel", "detail": detail}
+
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - environment guard
+        return [finding(path, "PyYAML is required to read the delivery-channel declaration")]
+    try:
+        with open(path) as handle:
+            doc = yaml.safe_load(handle)
+    except (OSError, ValueError) as exc:
+        return [
+            finding(
+                path,
+                f"unreadable delivery-channel declaration: {exc} — so no skill class can be shown "
+                "to have a byte channel at all, and every class would pass by not being asked "
+                "(the .github#2545 cause)",
+            )
+        ]
+    if not isinstance(doc, dict):
+        return [finding(path, "delivery-channel declaration is not a mapping")]
+
+    schema = doc.get("schemaVersion")
+    if schema != DELIVERY_CHANNELS_SCHEMA_VERSION:
+        # Refuse rather than parse optimistically: a future shape read as today's shape is a green
+        # verdict about fields that no longer mean what this arm thinks they mean.
+        return [
+            finding(
+                path,
+                f"delivery-channel declaration has schemaVersion {schema!r}, and this checker speaks "
+                f"only {DELIVERY_CHANNELS_SCHEMA_VERSION} — refusing to read a shape it does not know",
+            )
+        ]
+
+    entries = doc.get("classes")
+    if not isinstance(entries, list):
+        return [finding(path, "delivery-channel declaration has no `classes` list")]
+
+    findings: list[dict] = []
+    declared: dict[tuple[str, str], dict] = {}
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            findings.append(finding(f"{path}[{index}]", f"class entry is not a mapping: {entry!r}"))
+            continue
+        owner, scope = entry.get("owner"), entry.get("scope")
+        if not isinstance(owner, str) or not owner or not isinstance(scope, str) or not scope:
+            findings.append(
+                finding(f"{path}[{index}]", f"class entry has no `owner`/`scope` pair: {entry!r}")
+            )
+            continue
+        key = (owner, scope)
+        if key in declared:
+            findings.append(
+                finding(
+                    f"{owner}/{scope}",
+                    "declared twice — two entries for one class is two answers to one question, "
+                    "and nothing here picks between them",
+                )
+            )
+            continue
+        declared[key] = entry
+
+        disposition = entry.get("disposition")
+        if disposition not in DELIVERY_DISPOSITIONS:
+            findings.append(
+                finding(
+                    f"{owner}/{scope}",
+                    f"disposition {disposition!r} is not one of "
+                    f"{', '.join(sorted(DELIVERY_DISPOSITIONS))}",
+                )
+            )
+            continue
+        required, kinds = DELIVERY_DISPOSITIONS[disposition]
+        for field in required:
+            value = entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                findings.append(
+                    finding(
+                        f"{owner}/{scope}",
+                        f"disposition `{disposition}` requires a non-empty `{field}` and has "
+                        f"{value!r}",
+                    )
+                )
+        if kinds and entry.get("kind") not in kinds:
+            findings.append(
+                finding(
+                    f"{owner}/{scope}",
+                    f"disposition `{disposition}` permits kind {' | '.join(kinds)} and has "
+                    f"{entry.get('kind')!r}",
+                )
+            )
+        # `tracked-by` is required by `gap` and optional-but-exclusive on `provider-scoped`; either
+        # way, a value that is present must be resolvable by a reader.
+        tracked = entry.get("tracked-by")
+        if tracked is not None and not (
+            isinstance(tracked, str) and TRACKED_BY_RE.fullmatch(tracked)
+        ):
+            findings.append(
+                finding(
+                    f"{owner}/{scope}",
+                    f"`tracked-by` must be a full owner/repo#number reference and is {tracked!r} — "
+                    "the board's own <repo>#<n> shorthand is deliberately not accepted (.github#2107)",
+                )
+            )
+        if disposition == "provider-scoped":
+            has_tracked = tracked is not None
+            has_accepted = isinstance(entry.get("accepted"), str) and entry["accepted"].strip()
+            if has_tracked == bool(has_accepted):
+                findings.append(
+                    finding(
+                        f"{owner}/{scope}",
+                        "a `provider-scoped` class reaches only its own provider's trees, so it must "
+                        "carry EXACTLY ONE of `tracked-by` (who owes making it universal) or "
+                        "`accepted` (why provider-scoped reach is correct here) — it carries "
+                        + (
+                            "both"
+                            if has_tracked
+                            else "neither, which is how this class stayed invisible three times"
+                        ),
+                    )
+                )
+
+    # ---- closure, both directions -------------------------------------------------------------
+    catalog: dict[tuple[str, str], list[str]] = {}
+    for row in rows:
+        owner, scope = row.get("owner"), row.get("scope")
+        if isinstance(owner, str) and isinstance(scope, str):
+            catalog.setdefault((owner, scope), []).append(str(row.get("id")))
+
+    for key in sorted(catalog):
+        if key in declared:
+            continue
+        ids = sorted(catalog[key])
+        shown = ", ".join(ids[:6]) + (f", … (+{len(ids) - 6} more)" if len(ids) > 6 else "")
+        findings.append(
+            finding(
+                f"{key[0]}/{key[1]}",
+                f"{len(ids)} row(s) in registry/skills.yml declare owner `{key[0]}` scope "
+                f"`{key[1]}` and {os.path.basename(path)} says nothing about how their bytes reach "
+                f"a scaffold: {shown}. Declare a disposition (delivered | provider-scoped | "
+                "withheld | gap) — a class supplied from nowhere is ADR-0063's named defect, and it "
+                "has shipped three times",
+            )
+        )
+
+    for key in sorted(declared):
+        if key in catalog:
+            continue
+        findings.append(
+            finding(
+                f"{key[0]}/{key[1]}",
+                f"{os.path.basename(path)} declares a delivery disposition for owner `{key[0]}` "
+                f"scope `{key[1]}`, and registry/skills.yml has no such row — a declaration that "
+                "outlives its class is the restatement ADR-0058 forbids, reintroduced by the fix "
+                "for it",
+            )
+        )
+
+    return findings
+
+
 def _load_registry(registry_path: str) -> dict:
     try:
         import yaml
@@ -971,6 +1253,7 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
     findings.extend(roster_reachable(registry_path, repos_root))
     findings.extend(parameter_vocabulary(registry))
     findings.extend(cross_references(registry["skills"], repos_root))
+    findings.extend(delivery_channels(registry_path, registry["skills"]))
     return findings
 
 
