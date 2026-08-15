@@ -64,12 +64,24 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from graphql_complete_read import GraphQlReadError, drain, execute
+
+COORD = os.environ.get("FSGG_COORD_BIN") or str(Path(__file__).resolve().parent / "fsgg-coord")
+
+
+def coord_graphql(*args: str) -> object:
+    proc = subprocess.run([COORD, "graphql", *args], capture_output=True, text=True, timeout=120, check=False)
+    if proc.returncode:
+        raise RuntimeError(proc.stderr.strip() or f"typed GraphQL command failed ({proc.returncode})")
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"typed GraphQL command returned invalid JSON: {exc}") from exc
 
 PROJECT_ENV = "FSGG_COORD_PROJECT_ID"
 BATCH = 50
@@ -215,43 +227,11 @@ def plan(rows: list[dict], now: _dt.datetime, retention_days: int
 # IO below this line.
 # --------------------------------------------------------------------------------------------------
 
-SCAN = """
-query($project: ID!, $cursor: String) {
-  node(id: $project) { ... on ProjectV2 {
-    items(first: 100, after: $cursor) {
-      totalCount
-      pageInfo { hasNextPage endCursor }
-      nodes {
-        id
-        status: fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
-        blockedBy: fieldValueByName(name: "Blocked by") { ... on ProjectV2ItemFieldTextValue { text } }
-        content {
-          __typename
-          ... on Issue { number state closedAt repository { nameWithOwner } }
-          ... on PullRequest { number state closedAt repository { nameWithOwner } }
-        }
-      }
-    }
-  } }
-  rateLimit { cost remaining }
-}"""
-
-
 def scan(project: str) -> tuple[list[dict], int, int]:
-    def decode(node: dict) -> dict:
-        content = node.get("content") or {}
-        return {
-                "itemId": node["id"],
-                "status": (node.get("status") or {}).get("name"),
-                "blockedBy": (node.get("blockedBy") or {}).get("text"),
-                "number": content.get("number"),
-                "state": content.get("state"),
-                "closedAt": content.get("closedAt"),
-                "repo": (content.get("repository") or {}).get("nameWithOwner"),
-            }
-    result = drain(SCAN, {"project": project}, lambda d: d["node"]["items"], decode,
-                   lambda row: row["itemId"], max_pages=100, max_items=10000)
-    return result.items, result.pages, result.spent
+    result = coord_graphql("archive-scan", project)
+    if not isinstance(result, dict) or not isinstance(result.get("items"), list):
+        raise RuntimeError("typed archive scan omitted its items array")
+    return result["items"], int(result.get("pages", 0)), int(result.get("spent", 0))
 
 
 def archive_batch(project: str, chunk: list[dict]) -> None:
@@ -261,14 +241,7 @@ def archive_batch(project: str, chunk: list[dict]) -> None:
     the document — which makes cost track REQUEST COUNT, not row count. Aliased, the 2026-08-12 sweep
     archived 2,170 rows in 44 requests instead of 2,170. This is `.github#448`'s lever, applied here.
     """
-    decls = ", ".join(["$p: ID!"] + [f"$i{j}: ID!" for j in range(len(chunk))])
-    body = "\n".join(
-        f"  a{j}: archiveProjectV2Item(input: {{projectId: $p, itemId: $i{j}}}) {{ item {{ id }} }}"
-        for j in range(len(chunk)))
-    variables = {"p": project}
-    for j, row in enumerate(chunk):
-        variables[f"i{j}"] = row["itemId"]
-    execute(f"mutation({decls}) {{\n{body}\n}}", variables, lambda data: data)
+    coord_graphql("archive-items", project, *[str(row["itemId"]) for row in chunk])
 
 
 def main() -> int:
@@ -291,8 +264,11 @@ def main() -> int:
     # records what landed — but starting one on a budget that cannot finish it spends points to
     # accomplish nothing, and this job is never the urgent work on the board.
     try:
-        remaining = execute("query { rateLimit { remaining cost } }", {}, lambda data: int(data["rateLimit"]["remaining"]))
-    except (GraphQlReadError, KeyError, ValueError) as exc:
+        meter = coord_graphql("meter")
+        if not isinstance(meter, dict):
+            raise RuntimeError("typed meter result was not an object")
+        remaining = int(meter["remaining"])
+    except (RuntimeError, KeyError, ValueError) as exc:
         print(f"coord-board-archive: could not read the GraphQL meter ({exc}); deferring rather than "
               f"scanning blind", file=sys.stderr)
         return 0

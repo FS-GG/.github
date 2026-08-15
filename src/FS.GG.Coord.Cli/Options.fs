@@ -49,6 +49,8 @@ module Options =
         /// read `.github#2456`'s independent-review contract names as authoritative, reached through the
         /// one metered transport rather than an unmetered `gh api graphql` call.
         | BodyEdits
+        /// Typed operational GraphQL boundary for audit/archive automation.
+        | GraphQlOps
         | Add
         | Flush
         | LintCmd
@@ -480,6 +482,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              provenance check names as authoritative (#2456/#2477). FAILS
                                              CLOSED: a read it cannot complete is a FAILED READ, never
                                              reported as "0 edits". Defaults to text; --json for machines
+  graphql <operation> ...                    typed automation boundary: project-visibility OWNER TITLE;
+                                             project-id OWNER NUMBER; repository-policy OWNER NAME;
+                                             meter; archive-scan PROJECT-ID; archive-items PROJECT-ID ID...;
+                                             roster-board OWNER TITLE. JSON-only and fail-closed.
 
   lint   [--repo NAME] [--json] [--strict]   board-health gate: a Ready/Backlog item that no worker can
                                              ever pick up (no `Paths:`, or every token unmatchable) is an
@@ -597,6 +603,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // per-edit facts (`editedAt`, `editor`) machine-readable — same polarity as `who`/`budget`: a
         // human table by default, `--json` opts into the structured document (.github#2477).
         | BodyEdits -> Both Text
+        | GraphQlOps -> JsonOnly
 
         // ---- JSON ONLY: stdout is a machine document whatever the flag says ----------------------------
         // `scan` DOES match on `opts.Render` (`Program.fs`), and both arms print the same document —
@@ -1087,6 +1094,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | OptionId -> Reads
         | ItemId -> Reads
         | BodyEdits -> Reads // one `userContentEdits` GraphQL query, budget-attributed like every other read
+        | GraphQlOps -> WritesIf(NotOnArgv "archive-items mutates; every other subcommand is a typed read")
 
         // ---- WRITE THE BOARD, EVERY INVOCATION ---------------------------------------------------------
         | Claim -> Writes // POSTs the `fsgg:claim` marker comment and writes Status
@@ -1254,6 +1262,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | OptionId -> "option-id"
         | ItemId -> "item-id"
         | BodyEdits -> "body-edits"
+        | GraphQlOps -> "graphql"
         | Add -> "add"
         | Flush -> "flush"
         | LintCmd -> "lint"
@@ -1982,6 +1991,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "option-id" :: rest -> flags (start { defaults with Command = OptionId }) rest
         | "item-id" :: rest -> flags (start { defaults with Command = ItemId }) rest
         | "body-edits" :: rest -> flags (start { defaults with Command = BodyEdits }) rest
+        | "graphql" :: rest -> flags (start { defaults with Command = GraphQlOps }) rest
         | "add" :: rest -> flags (start { defaults with Command = Add }) rest
         | "flush" :: rest -> flags (start { defaults with Command = Flush }) rest
         | "lint" :: rest -> flags (start { defaults with Command = LintCmd }) rest

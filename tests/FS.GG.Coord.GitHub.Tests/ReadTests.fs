@@ -754,7 +754,7 @@ let ``#2477 contentEditProvenance FAILS CLOSED - a non-object JSON root is an er
 [<Fact>]
 let ``#2477 contentEditProvenance FAILS CLOSED - a 200-with-errors rate limit is RateLimited, never zero edits`` () =
     // GitHub reports an exhausted GraphQL budget as an HTTP 200 carrying `errors`, exactly like a
-    // genuinely partial response — the same shape `Board.graphQlData` guards. `errors` must be read
+    // genuinely partial response — the same shape `Board.GraphQl.decode` guards. `errors` must be read
     // BEFORE `data` is trusted, so this is a RateLimited error, not the generic Malformed the
     // missing-data arm would produce if `errors` were never inspected first.
     let transport =

@@ -4,17 +4,18 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/bin"
-cat >"$work/bin/gh" <<'EOF'
+cat >"$work/bin/fake-coord" <<'EOF'
 #!/usr/bin/env bash
+[ "${1:-}" = graphql ] && [ "${2:-}" = project-visibility ] || exit 64
 case "${PROJECTS_AUDIT_FIXTURE:-correct}" in
   correct)
-    printf '%s\n' '{"data":{"organization":{"projectsV2":{"totalCount":1,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVT_x","title":"Roadmap","public":true}]}},"rateLimit":{"cost":1,"remaining":4999}}}'
+    printf '%s\n' '{"isPublic":true}'
     ;;
   wrong-visibility)
-    printf '%s\n' '{"data":{"organization":{"projectsV2":{"totalCount":1,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVT_x","title":"Roadmap","public":false}]}},"rateLimit":{"cost":1,"remaining":4999}}}'
+    printf '%s\n' '{"isPublic":false}'
     ;;
   missing)
-    printf '%s\n' '{"data":{"organization":{"projectsV2":{"totalCount":0,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}},"rateLimit":{"cost":1,"remaining":4999}}}'
+    printf '%s\n' '{"isPublic":null}'
     ;;
   unreadable)
     exit 1
@@ -24,12 +25,12 @@ case "${PROJECTS_AUDIT_FIXTURE:-correct}" in
     ;;
 esac
 EOF
-chmod +x "$work/bin/gh"
+chmod +x "$work/bin/fake-coord"
 
 run_case() {
   local fixture=$1 expected=$2 visibility=$3
   set +e
-  (cd "$work" && PROJECTS_AUDIT_FIXTURE="$fixture" PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility "$visibility" --trusted-writers platform >"$work/out" 2>&1)
+  (cd "$work" && PROJECTS_AUDIT_FIXTURE="$fixture" FSGG_COORD_BIN="$work/bin/fake-coord" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility "$visibility" --trusted-writers platform >"$work/out" 2>&1)
   rc=$?
   set -e
   [ "$rc" = "$expected" ] || { cat "$work/out"; exit 1; }
@@ -64,12 +65,12 @@ verifier=operator
 -->
 EOF
 sed -i "s/__TODAY__/$today/; s/__EXPIRES__/$expires/" "$work/docs/coordination/project-access-attestation.md"
-(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
+(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct FSGG_COORD_BIN="$work/bin/fake-coord" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
 grep -q 'access attestation current' "$work/out"
 grep -q "verified $today by operator; expires $expires" "$work/out"
 
 sed -i '/verifier=operator/a unrecognised=field' "$work/docs/coordination/project-access-attestation.md"
-(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
+(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct FSGG_COORD_BIN="$work/bin/fake-coord" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
 grep -q 'access attestation unknown' "$work/out"
 grep -q 'record is malformed' "$work/out"
 if grep -q 'access attestation current' "$work/out"; then
@@ -78,13 +79,13 @@ if grep -q 'access attestation current' "$work/out"; then
 fi
 
 sed -i '/unrecognised=field/d; s/writers=platform/writers=other/' "$work/docs/coordination/project-access-attestation.md"
-(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
+(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct FSGG_COORD_BIN="$work/bin/fake-coord" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
 grep -q 'access attestation unknown' "$work/out"
 grep -q 'does not match required base Read and writers \[platform\]' "$work/out"
 
 sed -i 's/writers=other/writers=platform/' "$work/docs/coordination/project-access-attestation.md"
 sed -i 's/expires=.*/expires=2000-01-01/' "$work/docs/coordination/project-access-attestation.md"
-(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
+(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct FSGG_COORD_BIN="$work/bin/fake-coord" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
 grep -q 'access attestation stale' "$work/out"
 
 # The current/stale distinction is not decorative: making an expired record

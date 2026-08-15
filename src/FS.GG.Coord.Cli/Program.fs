@@ -419,6 +419,7 @@ let main argv =
                 | OptionId
                 | ItemId
                 | BodyEdits
+                | GraphQlOps
                 | Add
                 | Flush
                 | LintCmd

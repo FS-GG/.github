@@ -84,6 +84,8 @@ module CommandSurfaceTests =
           // `.github#2477`: the metered `userContentEdits` read the independent-review contract's
           // body-edit provenance check names as authoritative.
           "body-edits", BodyEdits
+          // M6 operational reads and partial archive mutations cross the single typed GraphQL boundary.
+          "graphql", GraphQlOps
 
           // The board-health gate (#496) and the REST listing (#446).
           "lint", LintCmd
@@ -223,6 +225,7 @@ module CommandSurfaceTests =
     let private renderUsageExemptions =
         set
             [ "scan"
+              "graphql"
               "whoami"
               "budget"
               "next"

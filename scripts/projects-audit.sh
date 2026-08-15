@@ -89,7 +89,8 @@ if [ -f "$attestation" ]; then
   fi
 fi
 
-if ! actual=$(python3 "$(dirname "$0")/graphql_complete_read.py" project-visibility --owner "$owner" --title "$title"); then
+coord_bin=${FSGG_COORD_BIN:-"$(dirname "$0")/fsgg-coord"}
+if ! actual=$("$coord_bin" graphql project-visibility "$owner" "$title" | jq -r '.isPublic // "null"'); then
   echo "noverdict: $project — ProjectV2 visibility could not be read" >&2
   exit 4
 fi

@@ -79,7 +79,7 @@ jobs:
           set -euo pipefail
           # Resolved live rather than hard-coded: a pinned node id silently sweeps the WRONG BOARD if
           # the project is ever recreated, and "wrong board" is the one failure this job must not have.
-          id="$(python3 scripts/graphql_complete_read.py project-id --owner FS-GG --number 1)"
+          id="$(scripts/fsgg-coord graphql project-id FS-GG 1 | jq -r '.id // empty')"
           case "$id" in
             PVT_*) ;;
             *) echo "::error::could not resolve the Coordination project id (got '${id:-empty}')"; exit 1 ;;

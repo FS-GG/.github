@@ -668,20 +668,13 @@ rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" \
   && ok "a definite BOARD violation outranks a simultaneous org no-verdict" \
   || bad "violation outranks no-verdict" "$out"
 
-# --- 11. the TRANSPORT/PAGINATION path (_gh_graphql / _resolve_board_project_number /
-# _fetch_board_items) — none of this is reachable through --board-json, which bypasses `gh`
-# entirely, so section 10 above proves nothing about it. A fake `gh` on PATH (tests/roster-closure/
-# fake-gh/gh) stands in for the real CLI so these run offline. Each case answers ONE question from
-# independent review of PR #2328 (.github#2206): can a network failure, a non-zero `gh` exit, a
-# malformed/truncated GraphQL reply, an ambiguous project lookup, a mid-page mutation, a bad cursor,
-# or a partially-resolved item produce anything OTHER than the same distinguishable exit-3 no-verdict
-# --board-json's fixtures already prove for a malformed FILE? If any of these silently produced exit
-# 0 (a vacuous green hiding a real gap) or crashed (a traceback, this item's own F1 shape), that
-# would be the same AC-4 violation arriving through the read path instead of the parse path.
+# --- 11. typed GraphQL caller integration. Canonical F# boundary tests own transport, pagination,
+# duplicate/cursor and partial-node semantics; this fake command proves this Python consumer treats
+# every typed refusal as a board no-verdict and consumes successful domain JSON without raw envelopes.
 FAKE_GH="$HERE/fake-gh"
 run_board_live() {
   local scenario="$1"
-  FAKE_GH_SCENARIO="$scenario" PATH="$FAKE_GH:$PATH" \
+  FAKE_GH_SCENARIO="$scenario" FSGG_COORD_BIN="$FAKE_GH/gh" \
     python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --skip-org 2>&1
 }
 expect_live_noverdict() {
@@ -732,7 +725,7 @@ out="$(run_board_live draft-issue-skip)" \
 
 # End-to-end pagination sanity: two real pages, a violation on page 1 and a Done row on page 2,
 # reached only through the live fetch path (no --board-json), still resolves correctly.
-rc=0; out="$(FAKE_GH_SCENARIO=two-pages-ok PATH="$FAKE_GH:$PATH" \
+rc=0; out="$(FAKE_GH_SCENARIO=two-pages-ok FSGG_COORD_BIN="$FAKE_GH/gh" \
         python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --skip-org 2>&1)" || rc=$?
 { [ "$rc" -eq 1 ] && grep -qF "FS-GG/A" <<<"$out"; } \
   && ok "two-page pagination through the live (faked) gh path resolves the same as --board-json" \

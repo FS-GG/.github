@@ -4,6 +4,7 @@ open System.Text.Json
 open Xunit
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
+open FS.GG.Coord.GitHub.Transport
 
 type private Item = { Id: string }
 
@@ -78,3 +79,51 @@ let ``empty continuing page and explicit item limit both fail closed`` () =
     match GraphQl.drain "limit" "fixture connection" { MaxPages = 1; MaxItems = 1 } (fun _ -> page "limit" full) with
     | Error(Malformed(_, detail)) -> Assert.Contains("item limit", detail)
     | other -> failwith $"expected explicit-limit refusal, got %A{other}"
+
+let private response body =
+    Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None }
+
+[<Fact>]
+let ``operational project lookup drains every page and returns one typed visibility`` () =
+    let replies =
+        System.Collections.Generic.Queue<_>(
+            [ response """{"data":{"organization":{"projectsV2":{"totalCount":2,"nodes":[{"id":"one","title":"Other","public":false,"number":2}],"pageInfo":{"hasNextPage":true,"endCursor":"next"}}},"rateLimit":{"cost":1,"remaining":99}}}"""
+              response """{"data":{"organization":{"projectsV2":{"totalCount":2,"nodes":[{"id":"target","title":"Coordination","public":true,"number":1}],"pageInfo":{"hasNextPage":false,"endCursor":null}}},"rateLimit":{"cost":1,"remaining":98}}}""" ])
+    let transport = Fake.Recorder(fun _ -> replies.Dequeue())
+    match OperationalGraphQl.projectVisibility transport "FS-GG" "Coordination" with
+    | Ok(Some true) -> Assert.Equal(2, transport.GraphQlCalls)
+    | other -> failwith $"expected typed visibility, got %A{other}"
+
+[<Fact>]
+let ``operational project lookup refuses duplicate title rather than choosing`` () =
+    let body = """{"data":{"organization":{"projectsV2":{"totalCount":2,"nodes":[{"id":"one","title":"Coordination","public":false,"number":1},{"id":"two","title":"Coordination","public":true,"number":2}],"pageInfo":{"hasNextPage":false,"endCursor":null}}},"rateLimit":{"cost":1,"remaining":99}}}"""
+    let transport = Fake.Recorder(fun _ -> response body)
+    match OperationalGraphQl.projectVisibility transport "FS-GG" "Coordination" with
+    | Error(Malformed(_, detail)) -> Assert.Contains("found 2", detail)
+    | other -> failwith $"expected ambiguous-project refusal, got %A{other}"
+
+[<Fact>]
+let ``operational repository policy never inverts mixed data and errors`` () =
+    let body = """{"data":{"repository":{"issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true}},"errors":[{"message":"field denied"}]}"""
+    let transport = Fake.Recorder(fun _ -> response body)
+    match OperationalGraphQl.repositoryPolicy transport "FS-GG" ".github" with
+    | Error(GraphQlErrors [ "field denied" ]) -> ()
+    | other -> failwith $"expected errors-first refusal, got %A{other}"
+
+[<Fact>]
+let ``operational archive mutation preserves partial alias accounting`` () =
+    let body = """{"data":{"a0":{"item":{"id":"one"}},"a1":null},"errors":[{"message":"denied","path":["a1"]}]}"""
+    let transport = Fake.Recorder(fun _ -> response body)
+    match OperationalGraphQl.archiveItems transport "PVT_board" [ "one"; "two" ] with
+    | Error(Partial([ "a0" ], [ ("a1", "denied") ])) -> ()
+    | other -> failwith $"expected exact partial mutation facts, got %A{other}"
+
+[<Fact>]
+let ``operational roster board refuses a partially resolved issue node`` () =
+    let projects = """{"data":{"organization":{"projectsV2":{"totalCount":1,"nodes":[{"id":"board","title":"Coordination","public":false,"number":1}],"pageInfo":{"hasNextPage":false,"endCursor":null}}},"rateLimit":{"cost":1,"remaining":99}}}"""
+    let items = """{"data":{"organization":{"projectV2":{"items":{"totalCount":1,"nodes":[{"id":"row","status":{"name":"Ready"},"content":{"__typename":"Issue","number":1}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}},"rateLimit":{"cost":1,"remaining":98}}}"""
+    let replies = System.Collections.Generic.Queue<_>([ response projects; response items ])
+    let transport = Fake.Recorder(fun _ -> replies.Dequeue())
+    match OperationalGraphQl.rosterBoard transport "FS-GG" "Coordination" with
+    | Error(Malformed(_, detail)) -> Assert.Contains("roster board node", detail)
+    | other -> failwith $"expected partial-node refusal, got %A{other}"

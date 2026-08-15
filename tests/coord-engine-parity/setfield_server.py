@@ -77,7 +77,7 @@ def mutation_response(doc):
     """The outcome of a FIELD mutation document, chosen by env — clean / partial / rate-limited."""
     if RATELIMIT:
         # The whole document is refused. `data` is null, and the message matches the engine's rate-limit
-        # pattern (`API rate limit ...`) so `graphQlData` classifies it RateLimited BEFORE it is read as a
+        # pattern (`API rate limit ...`) so `GraphQl.decode` classifies it RateLimited BEFORE it is read as a
         # partial. Nothing landed — so every pair is safe to queue.
         return {"data": None, "errors": [{"message": "API rate limit exceeded for installation"}]}
 

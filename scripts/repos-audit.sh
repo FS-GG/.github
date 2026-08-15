@@ -2934,7 +2934,8 @@ issue_policy_findings=0; issue_policy_undetermined=0; issue_policy_graded=0
 while IFS= read -r policy_repo; do
   [ -n "$policy_repo" ] || continue
   policy_owner=${policy_repo%%/*}; policy_name=${policy_repo#*/}
-  policy_json="$(python3 "$(dirname "$0")/graphql_complete_read.py" repository-policy --owner "$policy_owner" --name "$policy_name" 2>"$GH_ERR_FILE")" || {
+  coord_bin=${FSGG_COORD_BIN:-"$(dirname "$0")/fsgg-coord"}
+  policy_json="$("$coord_bin" graphql repository-policy "$policy_owner" "$policy_name" 2>"$GH_ERR_FILE")" || {
     echo "::error::repos-audit: $policy_repo — issue-creation policy no-verdict: $(gh_last_err)" >&2
     issue_policy_undetermined=$((issue_policy_undetermined + 1)); continue
   }

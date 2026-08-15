@@ -651,7 +651,8 @@ let private closedDoneRowJson (boardClass: string option) =
         | None -> "null"
         | Some c -> $"""{{"name":"%s{c}"}}"""
 
-    $"""{{"status":{{"name":"Done"}},"blockedBy":null,"class":%s{classField},"phase":null,"content":{{"__typename":"Issue","number":398,"title":"a Done row declaring its own class","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
+    let body = System.Text.Json.JsonSerializer.Serialize classedBody
+    $"""{{"status":{{"name":"Done"}},"blockedBy":null,"class":%s{classField},"phase":null,"content":{{"__typename":"Issue","number":398,"title":"a Done row declaring its own class","body":%s{body},"state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
 
 /// `.github`'s board, ONE closed-and-Done row (`#398`), the `Class` column under `boardClass`'s control —
 /// `None` is .github#2254's AC1 shape (empty column). `bodyReads` counts every `GET .../issues/398` (the
@@ -692,7 +693,7 @@ let private closedDoneBoard (boardClass: string option) (bodyReads: int ref) =
     Fake.Recorder(closedDoneBoardRoute boardClass bodyReads)
 
 [<Fact>]
-let ``#2254 reconcile PAYS the census read and reports the row - the critic's reconcile half`` () =
+let ``#2254 reconcile consumes the typed census body and reports the row without a REST fallback`` () =
     // `withCache` (.github#2525 repair 1): `reconcileIds` runs the REAL `Client.reconcile`, which reaches
     // `Scan.scanFresh` → `Cache.putScan`. Unisolated, that wrote this fixture's four rows into the
     // DEVELOPER'S OWN scan cache, where the next live `batch`/`driver` read served them as the board.
@@ -703,7 +704,7 @@ let ``#2254 reconcile PAYS the census read and reports the row - the critic's re
         let ids = reconcileIds transport
 
         Assert.Equal<string list>([ "CLASS-PROJECTION-LAG:FS-GG/.github#398" ], ids)
-        Assert.Equal(1, bodyReads.Value)) // read ONCE — never re-read on a retry, never skipped
+        Assert.Equal(0, bodyReads.Value)) // the complete GraphQL row is the sole body authority
 
 [<Fact>]
 let ``#2254 batch does NOT pay the census read - the critic's measured regression, closed`` () =

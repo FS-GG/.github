@@ -10416,6 +10416,34 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
         | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError
 
+    let private graphQlOps (ctx: Context) (opts: Options) : int =
+        let print value = printfn "%s" (JsonSerializer.Serialize value); ExitGreen
+        let result value project = match value with Ok resolved -> print (project resolved) | Error error -> fail error
+
+        match opts.Args with
+        | [ "project-visibility"; owner; title ] ->
+            result (OperationalGraphQl.projectVisibility ctx.Transport owner title) (fun publicValue -> {| isPublic = publicValue |})
+        | [ "project-id"; owner; number ] ->
+            match Int32.TryParse number with
+            | true, value when value > 0 -> result (OperationalGraphQl.projectId ctx.Transport owner value) (fun id -> {| id = id |})
+            | _ -> eprint "fsgg-coord-engine: graphql project-id requires a positive integer project number"; ExitError
+        | [ "repository-policy"; owner; name ] ->
+            result (OperationalGraphQl.repositoryPolicy ctx.Transport owner name) (fun policy -> {| issueCreationPolicy = policy.IssueCreationPolicy; hasIssuesEnabled = policy.HasIssuesEnabled |})
+        | [ "meter" ] ->
+            result (OperationalGraphQl.meterRemaining ctx.Transport) (fun remaining -> {| remaining = remaining |})
+        | [ "archive-scan"; projectId ] ->
+            result (OperationalGraphQl.archiveScan ctx.Transport projectId) (fun scan ->
+                {| pages = scan.Pages; spent = scan.Spent
+                   items = scan.Items |> List.map (fun row -> {| itemId = row.ItemId; status = row.Status; blockedBy = row.BlockedBy; number = row.Number; state = row.State; closedAt = row.ClosedAt; repo = row.Repo |}) |})
+        | "archive-items" :: projectId :: itemIds when not itemIds.IsEmpty ->
+            result (OperationalGraphQl.archiveItems ctx.Transport projectId itemIds) (fun () -> {| archived = itemIds |})
+        | [ "roster-board"; owner; title ] ->
+            result (OperationalGraphQl.rosterBoard ctx.Transport owner title) (fun rows ->
+                rows |> List.map (fun row -> {| owner = row.Owner; repo = row.Repo; number = row.Number; status = row.Status |}))
+        | _ ->
+            eprint "fsgg-coord-engine: graphql: expected project-visibility OWNER TITLE | project-id OWNER NUMBER | repository-policy OWNER NAME | meter | archive-scan PROJECT-ID | archive-items PROJECT-ID ID... | roster-board OWNER TITLE"
+            ExitError
+
     let run (opts: Options) : int =
         // #548: the bare-`<n>` default is resolved from what the CALLER actually passed, so it must be read
         // BEFORE the #480 rewrite below replaces `Repo` with the git-remote scope. That rewrite goes through
@@ -10503,6 +10531,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | OptionId -> optionId ctx opts
             | ItemId -> itemIdCmd ctx opts
             | BodyEdits -> bodyEditsCmd ctx opts
+            | GraphQlOps -> graphQlOps ctx opts
             | Add -> addCmd ctx opts
             | Flush -> flushCmd ctx opts
             | LintCmd -> lint ctx opts

@@ -48,7 +48,7 @@ module Reads =
     ///
     /// This is the `totalCount` half of `.github#2535`'s repair; the other half is a `pageInfo` cursor walk,
     /// used where the tail must actually be fetched rather than refused (`Board.bootstrap`'s project list,
-    /// `Board.externalItemId`). It is exposed — rather than private, like `graphQlData` beside it — because
+    /// `Board.externalItemId`). It is exposed because
     /// `Board` compiles after this module and shares it, and because a second copy of a completeness check
     /// is precisely the drift `.github#2535` is about: five connections in two files, none of them asking.
     val connectionComplete:

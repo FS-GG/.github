@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce the cross-language complete-read contract and its one temporary compatibility module."""
+"""Enforce the single typed GraphQL boundary and reject retired compatibility frontends."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def main() -> int:
     findings: list[tuple[Path, int, str]] = []
 
     for path in sorted(source.glob("*.fs")):
-        if path.name in {"GraphQl.fs", "GraphQlEnvelope.fs"}:
+        if path.name in {"GraphQl.fs", "GraphQlEnvelope.fs", "OperationalGraphQl.fs"}:
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             match = SELECTOR.search(line)
@@ -36,13 +36,12 @@ def main() -> int:
         args.root / "scripts" / "check-roster-closure.py",
         args.root / ".github" / "workflows" / "coord-board-archive.yml",
     ]
-    compatibility = args.root / "scripts" / "graphql_complete_read.py"
-    if not compatibility.exists():
-        findings.append((compatibility.relative_to(args.root), 1, "missing compatibility boundary"))
-    else:
-        contract = compatibility.read_text(encoding="utf-8")
-        if "M6 removes this file" not in contract or "three stable operating cycles" not in contract:
-            findings.append((compatibility.relative_to(args.root), 1, "missing M6 removal trigger"))
+    for retired in (
+        args.root / "scripts" / "graphql_complete_read.py",
+        args.root / "tests" / "test_graphql_complete_read.py",
+    ):
+        if retired.exists():
+            findings.append((retired.relative_to(args.root), 1, "retired compatibility boundary still exists"))
     for path in production:
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             match = PY_SELECTOR.search(line) or TRANSPORT.search(line)

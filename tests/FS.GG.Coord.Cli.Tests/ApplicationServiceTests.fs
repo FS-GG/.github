@@ -197,7 +197,12 @@ module ApplicationServiceTests =
     /// a queue whose empty arm is under test (.github#1562 needed the OTHER arm as well).
     let private boardItemIn (status: string) (number: int) (title: string) (blockedBy: string option) (state: string) =
         let blocked = blockedBy |> Option.map (fun value -> $"{{\"text\":\"%s{value}\"}}") |> Option.defaultValue "null"
-        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blocked},"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blocked},"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","body":"","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+
+    let private boardItemInWithBody status number title blockedBy state body =
+        let row = boardItemIn status number title blockedBy state
+        let encoded = System.Text.Json.JsonSerializer.Serialize body
+        row.Replace("\"body\":\"\"", $"\"body\":%s{encoded}")
 
     let private boardItem (number: int) (title: string) = boardItemIn "In progress" number title None "OPEN"
 
@@ -2637,7 +2642,7 @@ module ApplicationServiceTests =
         let items () =
             let status = if mutationAccepted then "Ready" else "Blocked"
 
-            [ boardItemIn status 47 "blocked item" (Some staleBlocker) "OPEN"
+            [ boardItemInWithBody status 47 "blocked item" (Some staleBlocker) "OPEN" "Paths: src/A.fs"
               boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
             |> String.concat ","
 
@@ -2701,7 +2706,7 @@ module ApplicationServiceTests =
         let mutable blockedBy = "FS-GG/FS.GG.SDD#45"
 
         let items () =
-            [ boardItemIn status 47 "a decision item" (if blockedBy = "" then None else Some blockedBy) "OPEN"
+            [ boardItemInWithBody status 47 "a decision item" (if blockedBy = "" then None else Some blockedBy) "OPEN" "Paths: none"
               boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
             |> String.concat ","
 
@@ -2834,12 +2839,12 @@ module ApplicationServiceTests =
 
         let body =
             if sentinel then
-                """{"number":47,"body":"Paths: src/A.fs\n\nBlocked on: human/action"}"""
+                "Paths: src/A.fs\n\nBlocked on: human/action"
             else
-                """{"number":47,"body":"Paths: src/A.fs"}"""
+                "Paths: src/A.fs"
 
         let items () =
-            [ boardItemIn status 47 "a human-parked item" None "OPEN" ] |> String.concat ","
+            [ boardItemInWithBody status 47 "a human-parked item" None "OPEN" body ] |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
@@ -2882,7 +2887,8 @@ module ApplicationServiceTests =
                     else
                         Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" -> ok body
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                ok (System.Text.Json.JsonSerializer.Serialize {| number = 47; body = body |})
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
@@ -3008,10 +3014,10 @@ module ApplicationServiceTests =
 
         let items () =
             let blocker =
-                """{"status":{"name":"Done"},"blockedBy":null,"content":{"__typename":"Issue","number":2155,"title":"resolved blocker","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
+                """{"status":{"name":"Done"},"blockedBy":null,"content":{"__typename":"Issue","number":2155,"title":"resolved blocker","body":"","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
 
             let external =
-                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{if blockedBy = "" then "null" else $"{{\"text\":\"%s{blockedBy}\"}}"},"content":{{"__typename":"Issue","number":96,"title":"external target","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}"""
+                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{if blockedBy = "" then "null" else $"{{\"text\":\"%s{blockedBy}\"}}"},"content":{{"__typename":"Issue","number":96,"title":"external target","body":"Paths: src/A.fs","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}"""
 
             String.concat "," [ external; blocker ]
 
@@ -3445,7 +3451,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let mutable status = "Blocked"
 
         let items () =
-            [ boardItemIn status 47 "a human-parked item" None "OPEN" ] |> String.concat ","
+            [ boardItemInWithBody status 47 "a human-parked item" None "OPEN" "Paths: src/A.fs\n\nBlocked on: human/decision" ]
+            |> String.concat ","
 
         let transport =
             Fake.Recorder(fun (req: Request) ->
@@ -4111,6 +4118,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
           "`Client.intakeCmd` is private; audited by transaction tests. Its validate arm emits one typed zero-write receipt, while apply emits one receipt-bound issue/projection result; malformed drafts and unreadable receipts fail on stderr before a POST."
           Options.RouteCmd,
           "`Client.deliveryRouteCmd` is private; audited by reading pending its recording-transport fixture. Its show arm emits one typed current receipt only after reading both the body and append-only comment ledger; record validates the source-bound receipt before its sole comment POST, and malformed or unreadable evidence fails on stderr."
+          Options.GraphQlOps,
+          "`Client.graphQlOps` is the JSON-only operational facade over `OperationalGraphQl`; the typed boundary fault, pagination, duplicate, repeated-cursor and partial-mutation cases are driven in GraphQlBoundaryTests, while every migrated shell/Python consumer has an executable integration fixture."
           Options.DiffAudit,
           "`SemanticDiffApplication.run` is a local git-object command; planted base/head, unresolved, resolved, stale, malformed, threshold and declaration arms are covered by SemanticDiffTests plus the executable engine fixture" ]
 

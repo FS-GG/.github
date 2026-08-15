@@ -729,7 +729,7 @@ module BlockerLintTests =
                   ETag = None
                   NextLink = None; Headers = Map.empty }
 
-        let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) =
+        let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) (body: string option) =
             // `Scan.parseRow` reads `nested node "blockedBy" "text"` — the TEXT field's value is a
             // nested `{"text": "..."}` object on the wire, exactly as every other field is, NOT a bare
             // string. `null` (no value at all) is the shape an empty field takes.
@@ -738,12 +738,13 @@ module BlockerLintTests =
                 | Some b -> $"""{{"text":"%s{b}"}}"""
                 | None -> "null"
 
-            $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blockedByJson},"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+            let bodyJson = body |> Option.map System.Text.Json.JsonSerializer.Serialize |> Option.defaultValue "null"
+            $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blockedByJson},"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":%s{bodyJson},"state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
         /// `#42` is `Blocked` with field = `FS-GG/FS.GG.SDD#8`; `#8` is CLOSED, on-board — so the field
         /// alone is a satisfied `BLOCKER-CLEARED` precondition. `body42` is the only thing that varies.
         let transport (body42: string) =
-            let items = [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN"; itemJson 8 "Done" None "CLOSED" ] |> String.concat ","
+            let items = [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42); itemJson 8 "Done" None "CLOSED" None ] |> String.concat ","
 
             Fake.Recorder(fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
