@@ -29,6 +29,14 @@
     <Compile Include="ExitCode.fs" />
     <Compile Include="RepoScope.fsi" />
     <Compile Include="RepoScope.fs" />
+    <!-- Operation (.github#2311, slice 1 of the 2026-08-04 executor-fencing design §11.2) opens NO
+         sibling module — only System, System.Security.Cryptography and System.Text — so it is placed
+         here, high in the list, deliberately: a module that depends on nothing must not become an
+         ordering constraint on anything below it. Nothing compiled after it references it yet; slices
+         2-6 are its first callers. This list has no globs, so a file that is not named here is not
+         compiled at all. -->
+    <Compile Include="Operation.fsi" />
+    <Compile Include="Operation.fs" />
     <!-- RegistryPredicate is dependency-free (it opens no sibling module) and is compiled FIRST among
          the domain files so `Types.Item` can carry its `Verdict` — the ADR-0050 flip-time gate needs
          the predicate verdict as a resolved FACT on the item, the way `Blocker.State` is a fact, and a
