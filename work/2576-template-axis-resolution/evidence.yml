@@ -1,0 +1,363 @@
+schemaVersion: 1
+workId: 2576-template-axis-resolution
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2576-template-axis-resolution/spec.md
+sourceClarifications: work/2576-template-axis-resolution/clarifications.md
+sourceChecklist: work/2576-template-axis-resolution/checklist.md
+sourcePlan: work/2576-template-axis-resolution/plan.md
+sourceTasks: work/2576-template-axis-resolution/tasks.yml
+sourceAnalysis: readiness/2576-template-axis-resolution/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2576-template-axis-resolution/analysis.json
+    digest: e8abe072415c4ad65b07f523b9b47acd0295744c009fedf433af9919641ccf0a
+    schemaVersion: 1
+  - label: checklist
+    path: work/2576-template-axis-resolution/checklist.md
+    digest: e525623c09e026ba0d4bbb2f5b0b2164b56c14e884cc8d54292685d887953ddc
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2576-template-axis-resolution/clarifications.md
+    digest: f7847b9afe69c7b14205fe80dba711bc3dd102dcca9ea860aae92b234afe8c34
+    schemaVersion: 1
+  - label: plan
+    path: work/2576-template-axis-resolution/plan.md
+    digest: 642e49801c814c43189e4886e2fc24139a353aca9b9adb2c81061524ddb6c792
+    schemaVersion: 1
+  - label: spec
+    path: work/2576-template-axis-resolution/spec.md
+    digest: b100cb69b5835f6b574e29b864ffed3f11a0d3fd6d7d4a27cb0781bcd00da18e
+    schemaVersion: 1
+  - label: tasks
+    path: work/2576-template-axis-resolution/tasks.yml
+    digest: 78ff9e13dff2c1625b9fba332507bc2f229e4e16528a8d30cccd213b8c10c17c
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [scripts/skill-union-assert.sh, tests/skill-union/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["load_params binds PARAM[template] from provenance_template(.templateRef) after populating .effectiveParameters. Measured, not asserted: run.sh 7p reports [missing] for a declared, template-TRUE, absent skill and 7q reports [unexpected] for a present, template-FALSE one, on provenance documents that carry NO template key in effectiveParameters at all — so a green leg can only have passed through the derived binding. Inversion I1 (drop the binding) turns 9 vectors red."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [scripts/skill-union-assert.sh, tests/skill-union/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["The derivation is fragment-after-last-# then strip a leading fs-gg-, and both observed templateRef shapes reach the same short name: run.sh 7s asserts byte-identical output and equal exit codes for the bare fs-gg-fable-game and the packaged FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game on all three trees. 7t pins the unusable cases — absent, null, empty (what devRepoInit writes and what this repo's own .fsgg/scaffold-provenance.json carries), a bare # and a bare fs-gg- — as binding NOTHING, non-vacuously: the SAME tree and manifest are green under 7r with a usable templateRef and red [unexpected] here without one. Inversions I2 and I3 turn 8 and 10 vectors red."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/skill-union-assert.sh, tests/skill-union/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["run.sh 7u drives an AGREEING effectiveParameters.template through same_verdict against the derived-only document and requires identical bytes and exit 0; 7v drives a DISAGREEING one through the real gate and requires exit 2 whose message names BOTH values and the phrase 'two disagreeing sources'. Inversion I4 (replace the die with silent precedence) turns 7v red and nothing else — the refusal is the only thing that leg measures."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [scripts/skill-union-assert.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["The demonstration .github#2547 acceptance 2 named and could not discharge from .github, run through the shipped --eval-when reference evaluator so it exercises the same load_params/eval_condition the gate uses, against the LIVE EHotwagner/S.I.R. document (providerName fable-game, templateRef FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game, effectiveParameters productName+rootNamespace only). BEFORE (origin/main's evaluator, same document): all six answered false, five wrongly. AFTER: fable-bindings false, fable-interop/project/remoting/signalr/testing true — the exact answers FS.GG.Templates' own --assert-product gate returns for --template fs-gg-fable-game. That document's outcome is consumerMigration, so it evidences the AXIS RESOLVING from a real document and is never read as evidence about which skills that tree should carry."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [tests/skill-union/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["Section 7p-7w adds 20 vectors to tests/skill-union/run.sh, which is hermetic (temp trees, no network, no other repos) and now reports 107 passed / 0 failed. Both new-class directions are covered on provenance documents whose only source of template is templateRef, and 7r supplies the GREEN pairing that makes 7p/7q falsifiable rather than merely non-crashing."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [scripts/skill-union-assert.sh, tests/skill-union/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["Four inversions applied to a COPY of the script and re-run through the suite's own SKILL_UNION_ASSERT hook, each observed red: I1 drop the derived binding -> 9 red; I2 stop extracting the packaged # fragment -> 8 red; I3 stop stripping the fs-gg- prefix -> 10 red; I4 silently resolve a disagreeing duplicate instead of refusing -> 1 red. Each mutator asserts its anchor occurs exactly once and the harness refuses a no-op mutation, so a survived-green result cannot be manufactured by a mutation that never applied."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [dist/skill-union-assert.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["dist/skill-union-assert.sh regenerated by scripts/generate-skill-union-bundle (2 libs inlined) and scripts/generate-skill-union-bundle --check reports it current. This is load-bearing rather than housekeeping: FS.GG.Templates' composition gate fetches dist/skill-union-assert.sh (tests/composition/lib/skill-union.sh SKILL_ASSERT_PATH), so a stale bundle would be a real behavioural split between the script this repo runs and the one Templates runs."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [registry/skills.CHANGELOG.md, registry/skills.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["The parameters: block comment and the fs-gg-templates row-block comment no longer state the axis is unanswerable; they name where it is resolved and cite the demonstration. No row bytes changed — no id, scope, owner, source, sha256 or materializes-when value was touched, schemaVersion stays 3 and parameters: is unchanged — which fsgg-skill-registry-check confirms with 'registry = manifest = bytes' against the live producer trees. One dated skills.CHANGELOG.md entry prepended per the registry protocol."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: [docs/adr/0017-skill-registry-condition-aware-materialization.md, docs/coordination/skill-union-assertion.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["ADR-0017 gains a 2026-08-15 amendment recording the decision and, explicitly, why BOTH cross-repo candidates on .github#2576 are refused: (a) has nothing to request because FS.GG.SDD.Artifacts.ScaffoldProvenance.serialize already writes providerName and templateRef unconditionally, and (b) would change a working evaluator to accommodate a broken one. docs/coordination/skill-union-assertion.md gains the binding-environment subsection with the source table and both boundaries. check-adr-coherence.py and check-prose-citations.py green over the live corpora."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [dist/skill-union-assert.sh, docs/coordination/skill-union-assertion.md, scripts/skill-union-assert.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["PC-001 is compatibility-preserving and that is measured, not claimed: no flag, exit code or output line changed, and the 87 pre-existing vectors in tests/skill-union/run.sh plus the 70 cross-implementation conformance vectors are byte-for-byte unchanged in verdict. A document with no usable templateRef binds nothing, so every existing caller's verdict is identical; the only new refusal (the disagreeing duplicate) is unreachable for any provider descriptor that exists today."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: [dist/skill-union-assert.sh, docs/adr/0017-skill-registry-condition-aware-materialization.md, docs/coordination/skill-union-assertion.md, registry/skills.yml, scripts/skill-union-assert.sh, tests/skill-union/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 discharged as one recorded run: work/2576-template-axis-resolution/test-results/gates.xml, 21 cases / 0 failures — tests/skill-union/run.sh (107 vectors, including both cross-implementation conformance harnesses), tests/skill-registry, fsgg-skill-registry-check against the live producer trees, tests/skill-quality, tests/adr-coherence + check-adr-coherence.py, tests/prose-citations + check-prose-citations.py, tests/registry-changelog, generate-skill-union-bundle --check, scripts/lint-shell.sh at severity=warning under the CI-pinned shellcheck 0.11.0, the six live predicate evaluations, and the four gate inversions."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [registry/skills.yml, scripts/skill-union-assert.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["PM-001: nothing migrates. scaffold-provenance.json is READ ONLY and stays schemaVersion 1 — no producer is asked to emit a new field — and registry/skills.yml stays schemaVersion 3 with an unchanged parameters: list, because template was already declared there by .github#2547. So this is not ADR-0015 schema growth and no contract-change bump is owed: fsgg-skill-registry-check and tests/skill-registry both green with the pinned validator untouched."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [dist/skill-union-assert.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2576-template-axis-resolution/test-results/gates.xml
+      digest: "sha256:dc96c6960cd0d19c063ecca6b28003bc8b055c52987ba293de2b3ef200c0bf20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 21
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: the only generated artifact this work touches is dist/skill-union-assert.sh, regenerated by its own checked-in generator and gated by scripts/generate-skill-union-bundle --check (green), never hand-edited. readiness/2576-template-axis-resolution/work-model.json refreshes from the current plan sources; analyze reports implementationReady with 0 generated-view findings. No projections.yml trigger path is touched by this change, so no projection is staled."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

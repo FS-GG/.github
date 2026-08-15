@@ -109,19 +109,26 @@ updated: "2026-08-15"
 # absent from this list is a finding. It was decoration before that — the catalog asserted these
 # four org-wide while a second producer's rows evaluated a fifth, and no gate could say so.
 #
-# `template` (.github#2547) IS DECLARED HERE AND IS NOT YET ANSWERABLE, WHICH IS NOT THE SAME THING.
-# The six `fs-gg-templates` rows below carry `template in [...]` verbatim from FS.GG.Templates'
-# producer manifest, and that axis is real: the producer's OWN gate resolves it, from a `--template
-# <templateId>` argument mapped to the template's short name
-# (FS.GG.Templates scripts/generate-skill-manifest.fsx, `--assert-product`). What no scaffold
-# carries is a `template` KEY IN PROVENANCE. `fsgg-sdd scaffold` derives effectiveParameters from
-# the provider descriptor's declared parameters plus the author's `--param`
-# (FS.GG.SDD src/FS.GG.SDD.Commands/CommandWorkflow/HandlersScaffold.fs, `effectiveParameters`),
-# and FS.GG.Templates' providers/fable-game.providers.yml declares only `productName` and
-# `rootNamespace`. So `skill-union-assert.sh --params` answers `false` for all six against every
-# product that producer builds. Declaring the parameter here makes this catalog honest about the
-# axes its rows evaluate; it does NOT make those six predicates answerable, and it must not be read
-# as having done so. The producer-side half is FS-GG/.github#2576.
+# `template` (.github#2547) IS DECLARED HERE AND IS NOW ANSWERABLE (.github#2576). It was not when
+# it was added, and the difference is worth keeping on the record. The six `fs-gg-templates` rows
+# below carry `template in [...]` verbatim from FS.GG.Templates' producer manifest, and that axis is
+# real: the producer's OWN gate resolves it, from a `--template <templateId>` argument mapped to the
+# template's short name (FS.GG.Templates scripts/generate-skill-manifest.fsx, `--assert-product`).
+# What no scaffold can carry is a `template` KEY IN `effectiveParameters` — `fsgg-sdd scaffold`
+# derives that map from the provider descriptor's declared parameters plus the author's `--param`
+# and forwards every entry verbatim to `dotnet new` as `--<key> <value>`, so a key can only be one
+# the template declares as a SYMBOL, and declaring `template` would break scaffolding rather than
+# annotate provenance. `skill-union-assert.sh --params` therefore answered `false` for all six
+# against every product that producer builds.
+#
+# The fact was never missing from provenance; it was never READ. `scaffold-provenance.json` has
+# always carried `templateRef` (and `providerName`) as a top-level fact beside `effectiveParameters`,
+# so ADR-0017's evaluator now DERIVES `template` from `.templateRef` — the same
+# `shortName templateId` the producer's own gate uses, so the two evaluators cannot answer
+# differently. No FS.GG.SDD or FS.GG.Templates change was requested. See the ADR-0017 2026-08-15
+# amendment; the demonstration `.github#2547` acceptance 2 asked for is
+# `tests/skill-union/run.sh` §7p-7w, which evaluates these six predicates verbatim against a real
+# `fs-gg-fable-game` provenance document and requires false/true/true/true/true/true.
 parameters: [profile, lifecycle, feedback, designSystem, template]
 
 skills:
@@ -271,16 +278,21 @@ skills:
   # `fsgg-skill-registry-check --producers` (the roster in registry/repos.yml), and the same arm reds
   # when a rostered repository is not reachable under `--repos-root`.
   #
-  # THESE SIX PREDICATES ARE NOT ANSWERABLE TODAY, AND THE ROWS SAY SO RATHER THAN HIDING IT. Their
-  # `template` axis is declared in `parameters:` above and IS evaluated correctly by the PRODUCER's
-  # own gate (generate-skill-manifest.fsx --assert-product --template <id>), which resolves it from a
-  # CLI argument. ADR-0017's evaluator resolves it from `scaffold-provenance.json ->
-  # effectiveParameters`, which `fsgg-sdd scaffold` derives from the provider descriptor's declared
-  # parameters plus the author's `--param` — and providers/fable-game.providers.yml declares only
-  # `productName` and `rootNamespace`. So `skill-union-assert.sh --params` answers `false` for all
-  # six against every product this producer builds. Recording the rows does not create that defect
-  # and does not repair it: it makes it visible, and puts `predicate-matches` on guard over these
-  # predicates from now on. The producer-side half is FS-GG/.github#2576. DO NOT "fix" these rows by
+  # THESE SIX PREDICATES ARE ANSWERABLE AS OF .github#2576, AND WERE NOT WHEN THE ROWS WERE RECORDED.
+  # Their `template` axis is declared in `parameters:` above and has always been evaluated correctly
+  # by the PRODUCER's own gate (generate-skill-manifest.fsx --assert-product --template <id>), which
+  # resolves it from a CLI argument mapped through `shortName`. ADR-0017's evaluator read only
+  # `scaffold-provenance.json -> effectiveParameters`, which can never contain a `template` key at
+  # all (it is forwarded verbatim to `dotnet new`, which accepts only declared template symbols), so
+  # `skill-union-assert.sh --params` answered `false` for all six against every product this producer
+  # builds. Recording the rows did not create that defect and did not repair it: it made it visible,
+  # and put `predicate-matches` on guard over these predicates. The repair, one row later, was to
+  # DERIVE `template` from the same document's `templateRef` — a fact FS.GG.SDD.Artifacts already
+  # wrote — using the producer's own short-name derivation, so the two evaluators cannot disagree.
+  # Measured against the live `EHotwagner/S.I.R.` provenance
+  # (`templateRef: FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game`): before, all six answered
+  # `false` and five of those were wrong; after, `fable-bindings` is false and the other five true.
+  # That demonstration is pinned in `tests/skill-union/run.sh` §7p-7w. DO NOT "fix" these rows by
   # editing their `materializes-when` here — the producer's manifest is authoritative and check 6
   # would red on the divergence.
   # ------------------------------------------------------------------------------------------------
