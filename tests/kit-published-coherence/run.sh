@@ -1351,10 +1351,21 @@ declaration() { # $1 file stem; $2 id; $3 kind  — marker at byte 0, prose belo
     | python3 -c 'import json,sys; print(json.dumps([{"body": sys.stdin.read()}]))' > "$OBL/$1.json"
 }
 
+# THE CANDIDATE THE ARM SCORES (.github#2571). The arm asks two questions, not one: does the merge
+# START kit-auto-publish, and does kit-auto-publish then CUT anything for the version this PR ships.
+# Every leg therefore has to say which version line it is standing on, and the DEFAULT here is the
+# PATCH line — the candidate `kit-auto-publish.py` admits — so that every trigger leg below keeps
+# asserting the trigger half against a candidate the merge really would publish. The .github#2571
+# section reassigns these two for the minor-line legs and restores them afterwards; nothing else does.
+OBL_CANDIDATE=0.51.2   # the NEXT PATCH above the frontier: `decide()` returns `tag`
+OBL_FRONTIER=0.51.1
+
 obl() { # $1 comments file; $@ extra args — run from the REAL repo root, against the REAL workflows
   local comments="$1"; shift
   set +e
-  out="$(python3 "$GATE" --obligation-arm --obligations "$comments" "$@" 2>&1)"
+  out="$(python3 "$GATE" --obligation-arm --obligations "$comments" \
+    --obligation-candidate-version "$OBL_CANDIDATE" \
+    --obligation-published-version "$OBL_FRONTIER" "$@" 2>&1)"
   rc=$?
   set -e
 }
@@ -1362,7 +1373,9 @@ obl() { # $1 comments file; $@ extra args — run from the REAL repo root, again
 obl_in() { # $1 tree to run from; $2 comments file; $@ extra args
   local tree="$1" comments="$2"; shift 2
   set +e
-  out="$(cd "$tree" && python3 "$GATE" --obligation-arm --obligations "$comments" "$@" 2>&1)"
+  out="$(cd "$tree" && python3 "$GATE" --obligation-arm --obligations "$comments" \
+    --obligation-candidate-version "$OBL_CANDIDATE" \
+    --obligation-published-version "$OBL_FRONTIER" "$@" 2>&1)"
   rc=$?
   set -e
 }
@@ -1399,6 +1412,96 @@ declaration registry-record registry-record-0.50.6 registry-record
 obl "$OBL/registry-record.json"
 must_pass "AC3: an obligation that genuinely requires manual action is not flagged" \
   "name no act that merging this PR performs"
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# A TRIGGER IS NOT AN ACT (.github#2571)
+#
+# The five legs above are the PATCH line, where the merge really does cut the release. On the MINOR
+# line — the line every coherent-set release produces (.github#2402) — `kit-auto-publish.yml` fires and
+# `kit-auto-publish.py` terminally refuses it with `candidate-not-next-patch` (.github#2442). The act
+# is real, manual and owed, and under the trigger-only rule its author had no declarable token for it:
+# every kind that NAMED the act was flagged, leaving only mislabelling, silence, or a red PR.
+#
+# THE PAIRING IS THE EVIDENCE. Each leg here uses the SAME declaration as an AC2 leg above and differs
+# only in the version line, so a change that merely stopped flagging things could not produce it — that
+# would have disarmed .github#2533 rather than corrected it.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+OBL_CANDIDATE=0.52.0   # a coherent-set MINOR, the exact candidate .github#2571 measured
+obl "$OBL/release-obligation.json"
+must_pass "AC1: a coherent-set MINOR can declare the release it genuinely owes, with a token that NAMES the act" \
+  "does NOT perform for the version it ships"
+if grep -q "candidate-not-next-patch" <<<"$out"; then
+  ok "AC2: the verdict quotes kit-auto-publish.py's OWN decision, not the workflow's trigger"
+else
+  bad "AC2: the verdict quotes kit-auto-publish.py's OWN decision, not the workflow's trigger" "$out"
+fi
+if grep -q "0.52.0 against feed frontier 0.51.1" <<<"$out"; then
+  ok "AC2: the verdict names the candidate and the frontier it was scored against"
+else
+  bad "AC2: the verdict names the candidate and the frontier it was scored against" "$out"
+fi
+# `SCOPE_NOTES` is attached to the DECISION, so carrying it here costs nothing and cannot drift: the
+# reader is told, in kit-auto-publish's own words, that this refusal is by design and not a bug.
+if grep -q "2442" <<<"$out"; then
+  ok "AC2: kit-auto-publish's own scope note reaches the author, unparaphrased"
+else
+  bad "AC2: kit-auto-publish's own scope note reaches the author, unparaphrased" "$out"
+fi
+if grep -q "IS merge-triggered" <<<"$out"; then
+  ok "AC2: the green says the workflow DOES fire — the pass is about the decision, not the trigger"
+else
+  bad "AC2: the green says the workflow DOES fire — the pass is about the decision, not the trigger" "$out"
+fi
+
+for kind in coherent-set-release kit-release coord-engine-release drivers-release; do
+  obl "$OBL/flag-$kind.json"
+  must_pass "AC1: kind=$kind is declarable on the minor line too" "kind=$kind"
+done
+
+# Not a stable 0.x.y at all: `decide()` refuses `version-not-stable-0x-patch`, so the act is the
+# author's. The rail is READ, so this leg needs nothing in the gate to know about 1.0.0.
+OBL_CANDIDATE=1.0.0
+obl "$OBL/release-obligation.json"
+must_pass "AC2: a candidate off the stable 0.x line is declarable, by the same read decision" \
+  "version-not-stable-0x-patch"
+
+# At or below the frontier — nothing to publish, so nothing the merge performs.
+OBL_CANDIDATE=0.51.1
+obl "$OBL/release-obligation.json"
+must_pass "AC2: a candidate that does not clear the frontier is declarable" \
+  "candidate-not-strictly-newer-than-frontier"
+
+# ---- AC3: THE CONTROLLED COUNTERPART, ASSERTED BESIDE THE NEW LEG. Restore the patch line and the
+#      SAME declaration is flagged again. Without this pair the section above would be indistinguishable
+#      from deleting the detection.
+OBL_CANDIDATE=0.51.2
+obl "$OBL/release-obligation.json"
+must_fail "AC3: the SAME declaration on the PATCH line is still flagged, exactly as before" \
+  "THE MERGE ITSELF PERFORMS"
+if grep -q "eligible-authored-unpublished-patch" <<<"$out"; then
+  ok "AC3: and the flag, too, quotes the decision rather than only the trigger"
+else
+  bad "AC3: and the flag, too, quotes the decision rather than only the trigger" "$out"
+fi
+
+# ---- THE CANNED FACTS ARE LOCKED, like every other canned input: each one is a way to choose this
+#      arm's verdict instead of measuring it, and .github#2571 makes them load-bearing.
+for flag_pair in "--obligation-candidate-version=0.52.0" "--obligation-published-version=0.51.1"; do
+  flag="${flag_pair%%=*}"
+  value="${flag_pair#*=}"
+  set +e
+  out="$(env -u FSGG_KIT_COHERENCE_FIXTURE_OK python3 "$GATE" --obligation-arm \
+    --obligations "$OBL/registry-record.json" "$flag" "$value" 2>&1)"; rc=$?
+  set -e
+  must_fail "$flag is refused without the fixture opt-in" "Refusing to run"
+done
+
+set +e
+out="$(python3 "$GATE" --pr-arm --changed-files /dev/null --obligation-candidate-version 0.52.0 2>&1)"
+rc=$?
+set -e
+must_fail "an obligation-arm canned input on another arm refuses rather than being ignored" \
+  "mean nothing to the PR arm"
 
 # The no-obligations assertion shares the declaration marker's PREFIX (plural, then a space). It is
 # the claim that nothing is owed, not an obligation, and parsing it as one would flag `none`.
@@ -1580,8 +1683,15 @@ must_fail "a plain list of comment bodies is accepted as the subject" "kind=pack
 # ---- THE TRIGGER IS READ, NEVER ASSUMED. These run against a synthetic tree at the mapped path, so
 #      the verdict is a function of the workflow file and of nothing else.
 OBL_TREE="$WORK/obligation-tree"
-mkdir -p "$OBL_TREE/.github/workflows"
+mkdir -p "$OBL_TREE/.github/workflows" "$OBL_TREE/scripts"
 MAPPED="$OBL_TREE/.github/workflows/kit-auto-publish.yml"
+# BOTH halves of the map are resolved against the tree the arm runs in (.github#2571), so the synthetic
+# tree carries the REAL decision program. Copying it rather than stubbing it is the point: these legs
+# vary the TRIGGER and must hold the decision constant at what the repository actually ships, or they
+# would be measuring a stub's opinion of the frontier rail. `$DECIDER` is varied on its own, further
+# down, with the trigger held constant instead.
+DECIDER="$OBL_TREE/scripts/kit-auto-publish.py"
+cp "$HERE/../../scripts/kit-auto-publish.py" "$DECIDER"
 
 cat > "$MAPPED" <<'YAML'
 name: kit-auto-publish
@@ -1723,6 +1833,95 @@ printf 'name: kit-auto-publish\non: [\njobs: {}\n' > "$MAPPED"
 obl_in "$OBL_TREE" "$OBL/registry-record.json"
 must_fail "an unparsable mapped workflow is a no-verdict" "not parsable as YAML"
 
+# ---- THE DECISION HALF CANNOT ROT IN SILENCE EITHER (.github#2571), and its every unreadable state is
+#      a NO-VERDICT rather than a verdict in either direction. Trigger held constant at a real merge
+#      trigger; the DECISION PROGRAM is what varies. The dangerous failure here is not a red — it is a
+#      quiet fallback to the trigger-only rule, which would look exactly like a pass.
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches: [main]
+jobs: {}
+YAML
+
+rm -f "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_fail "a mapped decision program that cannot be read is a no-verdict, even with nothing mapped declared" \
+  "cannot read the mapped decision program"
+
+printf 'VERSION = 1\n' > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_fail "a decision program exposing no callable decide is a no-verdict" "exposes no callable"
+
+# `SystemExit(0)`, deliberately, and not a plain exception: it is a BaseException, so a load guarded by
+# `except Exception` would let it propagate out of the gate and EXIT IT ZERO — a program that never
+# loaded, reported as a clean run. The leg names the fail-OPEN, not merely the failure.
+printf 'import sys\nsys.exit(0)\n' > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/registry-record.json"
+must_fail "a decision program that exits 0 at import is a no-verdict, not an inherited green" \
+  "failed to load"
+
+printf 'def decide(facts):\n    raise ValueError("no idea")\n' > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a decide() that RAISES on the candidate facts is a no-verdict, not a pass" \
+  "raised on the candidate fact set"
+
+printf 'import sys\ndef decide(facts):\n    sys.exit(0)\n' > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a decide() that exits 0 is a no-verdict, not an inherited green" \
+  "raised on the candidate fact set"
+
+printf 'def decide(facts):\n    return "nope"\n' > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a decide() that returns no typed action is a no-verdict" "carries no string"
+
+# THE FAIL-CLOSED DIRECTION, STATED AS A LEG. An action this file has never classified must not be
+# guessed — guessing "performs" would flag a legitimate obligation, guessing "does not" would restore
+# .github#2533's defect, and only one of those two is visible to the person it happens to.
+printf 'def decide(facts):\n    return {"action": "somethingNobodyMapped", "reason": "new"}\n' > "$DECIDER"
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "a decide() action this arm does not classify is a no-verdict, never a guess" \
+  "neither performing the act nor declining to"
+
+# THE DECISION IS ACTUALLY CONSULTED, not merely loaded: a stub that unconditionally cuts flags a
+# candidate the REAL program refuses. This is the leg that would survive if the call were dropped and
+# the load kept, which is exactly the shape a careless refactor produces.
+printf 'def decide(facts):\n    return {"action": "tag", "reason": "stub-always-cuts"}\n' > "$DECIDER"
+OBL_CANDIDATE=0.52.0
+obl_in "$OBL_TREE" "$OBL/release-obligation.json"
+must_fail "the mapped program's decide() is CALLED — a stub that always cuts flags a minor candidate" \
+  "stub-always-cuts"
+OBL_CANDIDATE=0.51.2
+
+cp "$HERE/../../scripts/kit-auto-publish.py" "$DECIDER"
+
+# ---- AC5: AND THE CANDIDATE ITSELF. With no canned version the arm evaluates `<Version>` from
+#      --csproj exactly as the PR arm does, so a project it cannot evaluate is a no-verdict. This is
+#      also the leg that proves the LIVE observation path is wired at all: every other leg here hands
+#      the versions in, and a canned-only fixture would pass with the live read deleted.
+set +e
+out="$(cd "$OBL_TREE" && python3 "$GATE" --obligation-arm \
+  --obligations "$OBL/release-obligation.json" --csproj "$WORK/no-such-project.csproj" 2>&1)"; rc=$?
+set -e
+must_fail "AC5: a candidate <Version> the arm cannot evaluate is a no-verdict, never a pass" \
+  "no-such-project.csproj"
+if grep -q "dotnet msbuild" <<<"$out"; then
+  ok "AC5: …and it says so in terms of the evaluation it could not perform"
+else
+  bad "AC5: …and it says so in terms of the evaluation it could not perform" "$out"
+fi
+
+# THE OBSERVATION IS DEFERRED. An unrelated PR must not pay an MSBuild evaluation and a nuget.org
+# round-trip for a question it never asked — the same discipline the PR arm states as "the feed was not
+# read". Same unevaluatable project, but nothing mapped is declared, so nothing is observed.
+set +e
+out="$(cd "$OBL_TREE" && python3 "$GATE" --obligation-arm \
+  --obligations "$OBL/registry-record.json" --csproj "$WORK/no-such-project.csproj" 2>&1)"; rc=$?
+set -e
+must_pass "the candidate is observed only when a mapped kind is declared, not on every run" \
+  "name no act that merging this PR performs"
+
 # ---- THE ARMS STAY SEPARATE. A flag silently ignored is a caller who believes they configured a
 #      run they did not get.
 set +e
@@ -1785,15 +1984,56 @@ must_pass "INVERSION M1: with the kind→automation join deleted, the AC2 leg go
 
 # M2 — DELETE THE FAIL-CLOSED MAP READ: stop opening the mapped workflows, so a renamed or deleted
 # one can no longer be noticed.
+# The anchor carries the line BELOW the loop header because `_assert_map` (.github#2571) opens with the
+# same header, and `mutate` refuses an ambiguous anchor rather than mutating the wrong one.
 mutate mutant-maprot \
-  "    for automation in MERGE_AUTOMATION:" \
-  "    for automation in ():  # MUTATION: the map-rot read deleted"
+  "    for automation in MERGE_AUTOMATION:
+        parsed[automation.workflow] = workflow_triggers(automation.workflow)" \
+  "    for automation in ():  # MUTATION: the map-rot read deleted
+        parsed[automation.workflow] = workflow_triggers(automation.workflow)"
 rm -f "$MAPPED"
 set +e
 out="$(cd "$OBL_TREE" && python3 "$MUT_OBL/scripts/mutant-maprot.py" --obligation-arm \
   --obligations "$OBL/registry-record.json" 2>&1)"; rc=$?
 set -e
 must_pass "INVERSION M2: with the map read deleted, a MISSING mapped workflow goes GREEN" \
+  "name no act that merging this PR performs"
+
+# M3 — DELETE THE .github#2571 HALF: never ask the mapped program whether it would cut anything, so the
+# verdict falls back to the trigger alone. The minor-line leg that PASSES on the shipped gate goes RED,
+# which is the pre-.github#2571 behaviour and the defect itself: a genuinely-owed coherent-set release
+# with no declarable token.
+mutate mutant-trigger-only \
+  "        decision = None
+        if automation.decision:" \
+  "        decision = None
+        if False:  # MUTATION: the .github#2571 decision half deleted"
+set +e
+out="$(python3 "$MUT_OBL/scripts/mutant-trigger-only.py" --obligation-arm \
+  --obligations "$OBL/release-obligation.json" \
+  --obligation-candidate-version 0.52.0 --obligation-published-version 0.51.1 2>&1)"; rc=$?
+set -e
+must_fail "INVERSION M3: with the decision half deleted, the coherent-set MINOR is flagged again" \
+  "THE MERGE ITSELF PERFORMS"
+
+# M4 — DELETE THE DECISION HALF'S UNCONDITIONAL LOAD, the counterpart of M2. A renamed or deleted
+# `kit-auto-publish.py` then stops being noticed on a run that declares nothing mapped.
+mutate mutant-decider-rot \
+  "            decision_function(automation.decision)" \
+  "            pass  # MUTATION: the decision-map-rot read deleted"
+cat > "$MAPPED" <<'YAML'
+name: kit-auto-publish
+on:
+  push:
+    branches: [main]
+jobs: {}
+YAML
+rm -f "$DECIDER"
+set +e
+out="$(cd "$OBL_TREE" && python3 "$MUT_OBL/scripts/mutant-decider-rot.py" --obligation-arm \
+  --obligations "$OBL/registry-record.json" 2>&1)"; rc=$?
+set -e
+must_pass "INVERSION M4: with the decision-map read deleted, a MISSING decision program goes GREEN" \
   "name no act that merging this PR performs"
 
 # ---- THE ARM IS WIRED, ON EVERY PULL REQUEST. An unwired gate is the exact defect .github#2533 is
@@ -2027,7 +2267,19 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # (newline-led, space-led, fenced), the 3 indent-limit legs (four-space, tab, three-spaces), and
 # prose-first, which was one of the 50. That leaves 107 + 49 = 156, plus 21 corpus legs and 3
 # non-vacuity legs: 163 - 7 + 25 = 181.
-EXPECTED_LEGS=181
+# + 29 legs for .github#2571, which splits "the merge performs this act" into the TRIGGER and the
+#   mapped program's own DECISION. 16 are the decision legs proper — the coherent-set MINOR that is now
+#   declarable, the four other mapped kinds on that line, the two other refusal reasons the read rail
+#   supplies for free, the PATCH counterpart asserted BESIDE them so this cannot read as disarming
+#   .github#2533, and the three locking/misdirection legs for the two new canned inputs. 11 are the
+#   decision half's fail-closed posture, which is the half that could rot into a silent fallback to the
+#   trigger-only rule: a missing, unloadable, `sys.exit(0)`-at-import, decide-less, raising, exiting,
+#   untyped or unclassified decision program, the leg proving `decide()` is CALLED and not merely
+#   loaded, and the pair proving the live candidate read is wired AND deferred until a mapped kind is
+#   declared. 2 are gate-inversion controls (M3/M4), matching M1/M2 above: deleting the decision half
+#   flags the minor again, and deleting its unconditional load lets a missing decision program pass.
+#   181 + 29 = 210.
+EXPECTED_LEGS=210
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

@@ -25,28 +25,46 @@ sub-obligations, and was explicitly host-gated — *"merge, then STOP and report
 worker verified zero `0.50.6` tags at 15:43:56Z; by 15:46:48Z all three tags existed at the merge commit
 and all three release workflows had run. `.github#2533` is that defect.
 
+**A TRIGGER IS NOT AN ACT, and row 1 turns on which version line you are on.** `kit-auto-publish.yml`
+fires on every merge. The program it runs, `scripts/kit-auto-publish.py`, deliberately admits **only a
+same-line PATCH bump** (`.github#2442`) and terminally refuses anything else. Every coherent-set release
+is a MINOR by design (`.github#2402`). So on a minor the workflow fires and cuts nothing, and the
+release is genuinely yours.
+
 | act | performed automatically by | trigger | so the obligation is |
 |---|---|---|---|
-| tagging `kit/v<version>`, `coord-engine/v<version>`, `drivers/v<version>` at the merge commit, and thereby starting `release-kit` / `release-coord-engine` / `release-drivers` | `.github/workflows/kit-auto-publish.yml` | `on: push: branches: [main]`, unfiltered — **every** merge | **verify the automatic release**, never perform it |
+| tagging `kit/v<version>`, `coord-engine/v<version>`, `drivers/v<version>` at the merge commit, and thereby starting `release-kit` / `release-coord-engine` / `release-drivers` — **when `<Version>` is the next PATCH above both feed frontiers** | `.github/workflows/kit-auto-publish.yml` | `on: push: branches: [main]`, unfiltered — **every** merge starts it, and on a next-patch candidate `kit-auto-publish.py` answers `tag` | **verify the automatic release**, never perform it |
+| the same tagging — **when `<Version>` is a MINOR, which every coherent-set release is** | nothing | the same merge starts the same workflow, and `kit-auto-publish.py` refuses it terminally: `candidate-not-next-patch`. Coherent-set versions publish through `.github#2409`'s release path instead | **yours**, and it must be declared — with a token that NAMES it |
 | regenerating `registry/coordination-kit-skill-manifest.json` and the other rostered projections | `skill-registry-coherence` / `projections` autofix | scheduled + `push` | none — but a projection you did not regenerate reds `main` until the bot catches up, so regenerate it in your PR |
 | recording a published coherent set in `registry/dependencies.yml` / `registry/CHANGELOG.md`, bumping a downstream repo, filing a follow-up row | nothing | — | **yours**, and it must be declared |
 
-**For row 1, the token you want is `kind=release-verification`.** Read that twice, because the obvious
-choice is the wrong one: `package-release` — and its artifact-specific spellings `kit-release`,
+**On the PATCH line, the token you want is `kind=release-verification`.** Read that twice, because the
+obvious choice is the wrong one: `package-release` — and its artifact-specific spellings `kit-release`,
 `coord-engine-release`, `drivers-release`, `coherent-set-release` — are exactly the tokens
-`check-kit-published-coherence.py --obligation-arm` **flags**, because they name an act the merge
-performs. They are listed here so you can recognise them, not so you can use them. Declaring one on a PR
-into `main` reds `kit-published-coherence / pr-arm`, which is the gate doing its job.
+`check-kit-published-coherence.py --obligation-arm` **flags there**, because on that line they name an
+act the merge performs. Declaring one on a next-patch PR into `main` reds
+`kit-published-coherence / pr-arm`, which is the gate doing its job.
+
+**On the MINOR line those same tokens are the RIGHT ones, and the gate accepts them.** This is
+`.github#2571`, and it is worth stating plainly because the rule above used to have no exception and the
+gate used to have no second question. A worker cutting a coherent set is performing the release; the
+token should say so. Do not reach for `release-verification`, and above all do not reach for an unmapped
+token like a bare `release` to get past the gate — `.github#2527` / PR #2532 did exactly that, silently,
+and choosing a word to evade a control is the thing the control exists to prevent.
 
 | you owe | use | why |
 |---|---|---|
-| confirming the automatic release published what you meant | `release-verification` | comparing published bytes to canonical is not something any workflow does |
-| performing a release by hand | `package-release` and friends | **flagged** — the merge already did it; rewrite the obligation as verification |
+| confirming the automatic release published what you meant (patch line) | `release-verification` | comparing published bytes to canonical is not something any workflow does |
+| performing a release by hand on a candidate the merge WILL publish (patch line) | `package-release` and friends | **flagged** — the merge already did it; rewrite the obligation as verification |
+| performing a coherent-set release by hand on a MINOR the merge will NOT publish | `coherent-set-release`, or the artifact-specific spelling | **accepted** — the gate asks `kit-auto-publish.py` what it would decide, not just whether the workflow fires |
 
-Those tokens are the join key the gate uses; it reads `kit-auto-publish.yml`'s live `on:` block rather
-than trusting this table. If you change one half, change the other. `.github#2533`'s own PR declares
-`kind=release-verification`, which is the worked example — the item self-applying rather than exempting
-itself.
+Those tokens are the join key the gate uses, and it restates neither half of the answer: it reads
+`kit-auto-publish.yml`'s live `on:` block **and** calls `kit-auto-publish.py`'s own `decide()` over the
+version this PR ships and the frontier it would ship above. If you change one half, change the other.
+`.github#2533`'s own PR declares `kind=release-verification`; `.github#2571`'s does too, because it ships
+a PATCH — each item self-applying rather than exempting itself. Neither is a worked example of the minor
+leg, which is by construction: the leg that needs an example is the one you will meet at a coherent-set
+cut, and `tests/kit-published-coherence/run.sh` carries it as an executable one.
 
 **Verifying an automatic release means reading the PUBLISHED BYTES against canonical.** A green release
 workflow proves the job ran, not that what shipped is what you meant: `release-kit` run `31716998803`
