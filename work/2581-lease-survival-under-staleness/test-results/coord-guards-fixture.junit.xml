@@ -1,0 +1,26 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[== tests/coord-guards/run.sh, repaired tree (exit 0) ==
+PASS  harness: the shim under test is byte-identical to scripts/fsgg-coord — the copy changes the module's location, never the resolver
+PASS  the .github#2581 condition reproduces: worktree caller + shared checkout BEHIND on the engine source trees ⇒ 'heartbeat' REFUSED (exit 69), engine never reached
+PASS  the verdict is the UPSTREAM-DRIFT half alone — the mtime half is silent, so this fixture measures the arm nothing else does
+PASS  the refusal names the host-owned regime: 'THIS *IS* THE SHARED CHECKOUT'
+PASS  the refusal names the host-owned regime: 'SERIALISED BY THE HOST'
+PASS  the refusal names the host-owned regime: 'NOT YOURS TO RUN'
+PASS  the refusal prints the self-service recovery route: 'KEEP YOUR CLAIM WITHOUT TOUCHING THAT CHECKOUT'
+PASS  the refusal prints the self-service recovery route: 'git worktree add --detach'
+PASS  the refusal prints the self-service recovery route: 'FSGG_COORD_ENGINE_BIN'
+PASS  the refusal prints the self-service recovery route: 'BUILD the engine you name'
+PASS  the recovery route names the ref the guard MEASURED (refs/remotes/origin/main), not a hard-coded literal
+PASS  the 'heartbeat' refusal names the lease consequence the generic write refusal hides, citing the two measured incidents
+PASS  the lease line is scoped to the renewal verb — 'done' is refused without it, so the message stays about the reader's situation
+PASS  the recovery route WORKS: the same blocked worker renews through a CURRENT engine it built — exit 0, no staleness verdict consulted, shared checkout untouched
+PASS  the shared checkout is still BEHIND after the recovery — the route repaired nothing the host owns
+PASS  every write verb the module declares is still refused under the .github#2581 condition — add adopt child claim done flush heartbeat intake release review room say set-field set-paths take widen delivery delivery-route graphql next reap reconcile
+PASS  acceptance 5 by name: done, claim, take, widen and set-paths are all still refused — this row does not reopen #1507
+PASS  a READ still warns and still runs, and does NOT carry the recovery route — the refusal-only text stays out of the warning path
+PASS  a checkout that is NOT behind, with an engine newer than its source, is wholly silent — the new text manufactures no refusal and no warning
+PASS  the unqualified 'local, cheap and theirs' cost claim is no longer asserted — it survives only as a quoted, retired wording
+PASS  the cost paragraph names the regime in which the claim is false, so a reader auditing this guard is not told the cost is bounded when it is not
+PASS  coord-engine.yml names scripts/fsgg-coord-guards.sh in both its pull_request and push paths filters (2 occurrences) — the parity gate now runs on the PRs whose subject it is
+PASS  coord-guards.yml runs this suite and is selected by a change to the guard module, the shim, or this suite
+coord-guards: 23 passed, 0 failed
+]]></system-out></testcase></testsuite>

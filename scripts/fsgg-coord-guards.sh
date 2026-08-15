@@ -134,9 +134,44 @@
 # WHAT IT COSTS, SAID PLAINLY, BECAUSE SOMEBODY WILL PAY IT MID-ITEM. This engine is edited often —
 # `check-engine-freshness.py` measured 33 engine commits in the 8 hours after one release — so a worker
 # whose item outlives an engine merge WILL be refused a `heartbeat` or a `done` and told to update and
-# rebuild. That is a stall of about a minute, on a remedy that is local, cheap and theirs, and it is the
-# same trade #929 already made for the mtime half. The alternative is #1507's defect recurring on a live
-# claim, which is what happened while this comment said the gap was deliberately unclosed.
+# rebuild. It is the same trade #929 already made for the mtime half, and the alternative is #1507's
+# defect recurring on a live claim, which is what happened while this comment said the gap was
+# deliberately unclosed.
+#
+# THIS PARAGRAPH USED TO PRICE THAT AT *"a stall of about a minute, on a remedy that is local, cheap and
+# theirs"*, FULL STOP, AND THAT CLAIM IS TRUE OF ONLY ONE OF THE TWO REGIMES THIS REPO RUNS IN
+# (.github#2581). The wording is retired rather than deleted, because what it got wrong is worth keeping
+# on the record:
+#
+#   WHEN THE WORKER OWNS THE REMEDY it is exactly right. A solo worker, or a lane that may rebuild the
+#   checkout it resolved through, runs the two printed commands and is clear in about a minute.
+#
+#   UNDER HOST-SERIALISED REPAIR IT IS FALSE, AND THE COST IS UNBOUNDED. Several lanes land at once, so
+#   the SHARED checkout's rebuild is a fleet-wide action the host serialises; workers are instructed to
+#   hold the claim, run no repair, build nothing, and REPORT. The remedy printed below is then not
+#   theirs, "about a minute" becomes a wait on another actor with no bound at all, and the one verb that
+#   would preserve the claim through that wait — `heartbeat` — is refused by this same guard. Measured
+#   twice in one session on 2026-08-14: .github#2549 (lease created 22:10:05Z, expired before
+#   `done --flip`, `heartbeat` refused as "EXPIRED and cannot be renewed in place") and .github#2563
+#   (claimed 22:55:59Z, dead at 00:55:59Z, the item reported as "not currently held by anyone"). Both
+#   recoveries cost a re-claim, which changed the claim generation, which reddened `claim-generation`
+#   until `delivery` was re-issued — a SECOND `delivery` call, visible in the record forever.
+#
+# A comment asserting a property the code does not have is itself a defect (#1059's class), and pricing a
+# fleet-wide stall as a one-minute local chore is that shape: a reader auditing this guard concludes the
+# cost is bounded when in the regime that actually bit twice it is not.
+#
+# WHAT DID *NOT* CHANGE IS THE REFUSAL. .github#2581 asked whether a STALE engine may write a lease
+# renewal, and the answer is NO, on measurement rather than caution: `Writes.heartbeat` PATCHes the
+# marker comment, a PATCH rewrites the WHOLE body, and the body is recomposed by `markerBody` out of the
+# RUNNING BUILD's idea of the grammar — `worker=`, `lease=`, `renewed=`, then `session=`, `prev=` and
+# `pathRepo=` emitted only if that build knows about them. An older engine therefore SILENTLY DROPS from
+# a LIVE claim any field it predates, which is not hypothetical: the same rewrite lost `prev=` (#550) and
+# lost `session=` (#1149), after which `twinSession` could no longer catch a same-id twin and two workers
+# ended on one item. A lease renewal is also the write whose corruption is hardest to notice, because it
+# is *expected* to leave the marker looking unchanged. So `heartbeat` stays in `BOARD_WRITES` below and
+# stays refused; what .github#2581 changes is that the refusal now names a recovery route the blocked
+# worker can actually take (see `stale_guard`'s own .github#2581 block).
 #
 # `dirty_guard` is unchanged and still asks only about the local checkout, so half of the retired sentence
 # survives verbatim: a worker who COMMITS kit WIP on a branch here defeats it, and that gap stays open.
@@ -766,6 +801,83 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
     fi
   fi
 
+  # WHO OWNS THE REMEDY, AND WHAT TO DO WHEN IT IS NOT YOU (.github#2581).
+  #
+  # THE BLOCK ABOVE ANSWERS "IS THIS THE SHARED CHECKOUT?" IN ONE DIRECTION ONLY. It speaks when $top is
+  # NOT shared; when $top IS shared it says nothing, and that silence is the case a tier-2b worker
+  # actually hits. Everything printed so far then reads as one instruction — go and repair $top — on the
+  # one checkout a worker under host-serialised repair is told to hold. So the guard printed a remedy the
+  # reader must not run, while the route that WOULD have worked sits three tiers above it in the same
+  # resolver and was never mentioned. That is #266's class one level up: a diagnostic naming a remedy it
+  # structurally cannot deliver to this reader. .github#2549 and .github#2563 each lost a lease to it.
+  #
+  # THE ROUTE IS TIER 1, AND IT IS NOT A LOOPHOLE. An explicit FSGG_COORD_ENGINE_BIN is an INSTRUCTION
+  # (the shim's first branch, taken before TOP is even computed, so no guard runs), and pointing it at a
+  # CURRENT engine does not weaken anything: the engine that writes the board is not stale, so #929 and
+  # #1507 are not in play at all. This does not exempt a stale engine from anything — see the
+  # .github#2581 paragraph in this file's header for why a stale engine may NOT write a lease renewal.
+  #
+  # THE ROUTE SAYS *BUILD*, AND THE COST IS STATED RATHER THAN MITIGATED. Tier 1 skips BOTH guards by
+  # design, so it runs whatever it is given, stale or dirty, and says nothing. A check here would
+  # contradict "an instruction, not a hint", so the text tells the reader to build the engine they name.
+  #
+  # COMPOSED ONLY WHEN A REFUSAL IS ALREADY BEING RAISED, and appended at the die() sites rather than to
+  # $detail — a READ still runs on a stale engine, and handing its warning a recovery route for a
+  # refusal that did not happen is the noise that teaches a fleet to skim this guard.
+  local recovery=""
+  if [ -n "$shared" ] && [ "$shared" = "$top" ]; then
+    recovery="
+
+            THIS *IS* THE SHARED CHECKOUT — the one every OTHER worker's engine resolves through, so
+            repairing it is a FLEET-WIDE action. On a board running several lanes at once that repair is
+            SERIALISED BY THE HOST, and workers are routinely told to hold the claim, build nothing, and
+            report. IF THAT IS YOUR INSTRUCTION, THE REMEDY ABOVE IS NOT YOURS TO RUN — and waiting for
+            it is not free, because this guard also refuses the verb that would renew your lease."
+  fi
+
+  # THE REF IS THE ONE THIS GUARD MEASURED, or none at all. $b is set only by the `behind` arm, and
+  # naming a literal `origin/main` on the other arms would print a remedy against a ref the count was
+  # never taken over — the same mistake the `merge --ff-only $b` note above refuses.
+  if [ -n "${b:-}" ]; then
+    recovery="$recovery
+
+            KEEP YOUR CLAIM WITHOUT TOUCHING THAT CHECKOUT. A CURRENT engine you build YOURSELF lifts
+            this refusal for every verb, immediately, with no shared-checkout repair and no host:
+              git worktree add --detach /tmp/fsgg-engine-current $b
+              dotnet build /tmp/fsgg-engine-current/src/FS.GG.Coord.Cli -c Release
+              export FSGG_COORD_ENGINE_BIN=/tmp/fsgg-engine-current/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+  else
+    recovery="$recovery
+
+            KEEP YOUR CLAIM WITHOUT TOUCHING THAT CHECKOUT. A CURRENT engine you build YOURSELF lifts
+            this refusal for every verb, immediately, with no shared-checkout repair and no host: check
+            out the default branch into a directory you own, build it there, and name it:
+              dotnet build <your-own-checkout>/src/FS.GG.Coord.Cli -c Release
+              export FSGG_COORD_ENGINE_BIN=<your-own-checkout>/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+  fi
+
+  recovery="$recovery
+            BUILD the engine you name. An explicit bin is honoured BEFORE any guard runs, so it will run
+            whatever you point it at — stale or dirty — and warn about neither.
+            The other route is tier 2a, \`dotnet build\` in your OWN worktree, but only while your head is
+            still free to move: clearing drift there means YOUR HEAD must contain it, and rebasing a
+            branch an independent critic may already have confirmed is authoring, not landing."
+
+  # AND FOR THE LEASE-RENEWAL VERB, THE CONSEQUENCE THE GENERIC REFUSAL HIDES. Every other refused write
+  # can simply be retried later; this one cannot, because the thing it renews is what "later" is spent
+  # from. Keyed on $verb, exactly as the delivery-route read arm below is — no new verb set, and the
+  # partition is untouched.
+  if [ "$verb" = "heartbeat" ]; then
+    recovery="$recovery
+
+            AND THIS REFUSAL CAN OUTLIVE THE LEASE IT IS STANDING ON (.github#2581). 'heartbeat' is the
+            verb that renews your claim, so being refused it spends the very thing you need in order to
+            act once you are unblocked. An EXPIRED lease cannot be renewed in place — the holder must
+            RE-CLAIM, which changes the claim generation, which reds 'claim-generation' until 'delivery'
+            is re-issued. Measured twice in one session: .github#2549 and .github#2563. Waiting is
+            therefore the one response that cannot work here. Take the route above."
+  fi
+
   # `delivery-route` has both evidence reads and a receipt-ledger write.  Its verb remains in the
   # conditional-write partition, but these two grammar-anchored read arms may diagnose on stale code;
   # `record` and every unknown subcommand remain fail-closed below.
@@ -781,7 +893,7 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
   case " $BOARD_WRITES $BOARD_WRITES_CONDITIONAL " in
     *" $verb "*)
       die "REFUSED — '$verb' writes the board the whole fleet shares, and the engine is STALE.
-$detail" ;;
+$detail$recovery" ;;
   esac
 
   # AN UNCLASSIFIED VERB IS REFUSED, NOT PERMITTED — the runtime half of the partition, and the reason
@@ -807,7 +919,7 @@ $detail" ;;
             Neither BOARD_WRITES, BOARD_WRITES_CONDITIONAL nor BOARD_READS in this file names it, so
             whether it writes the board the fleet shares is UNKNOWN — and an unknown write is refused.
             If it is a new verb, classify it here (tests/coord-engine-parity/shim.sh §3b gates the set).
-$detail" ;;
+$detail$recovery" ;;
       esac ;;
   esac
 
