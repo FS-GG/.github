@@ -235,8 +235,10 @@ jobs:
   # `delivery` call rather than after this job went green.
   #
   # `.github/workflows/claim-freshness-sweep.yml` is what notices. On its own cron it re-runs THIS
-  # script over every open `item/<n>-*` PR and publishes a fresh `claim-generation` check run when the
-  # answer has changed — so a revoked green blocks the merge exactly as this job's own red would. Every
+  # script over every open `item/<n>-*` PR and publishes a fresh `claim-generation` check run when this
+  # job's green has stopped being true — so a revoked green blocks the merge exactly as this job's own
+  # red would. It only ever REVOKES: it cannot turn this check green, deliberately, because clearing a
+  # required merge gate should not be something a cron can do with no repository event behind it. Every
   # OK this job prints now carries the instant it stops being true (`verdict-expires-at=`), derived from
   # the winning claim marker's own `lease=`.
   #

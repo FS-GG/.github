@@ -125,11 +125,14 @@ NOTHING IN GITHUB RE-EVALUATES A CHECK ON THAT DEADLINE, WHICH IS THE DEFECT `.g
 those — it is the passage of time — so a green computed before the lapse stays green, and branch
 protection (which is the ONLY fence on a merge made from the GitHub UI or a bare `gh pr merge`, since
 `delivery --apply` re-reads the winning claim itself) would admit the merge on a premise that has since
-lapsed. `--sweep` is the re-evaluation that bounds it: `coherence.yml`'s `claim-generation-sweep` job runs
-it on a schedule, re-computes this verdict for every open `item/<n>-*` PR from that PR's OWN lease, and
-PATCHes a fresh `claim-generation` check run when — and only when — the answer has changed. See that job's
-comment for the two invariants that bound its blast radius (it never ORIGINATES a verdict, and a failed
-read leaves the standing one alone).
+lapsed. `--sweep` is the re-evaluation that bounds it, and it runs from ITS OWN workflow —
+`.github/workflows/claim-freshness-sweep.yml`, job `claim-freshness-sweep`, NOT a job in `coherence.yml`;
+that file's header records why `scripts/check-required-contexts.py` forced it out. On a schedule it
+re-computes this verdict for every open `item/<n>-*` PR from that PR's OWN lease, and publishes a fresh
+`claim-generation` check run when, and only when, the answer has changed IN THE REVOKING DIRECTION. See
+`sweep_all` for the three refusals that bound its blast radius: it never ORIGINATES a verdict, it
+publishes only `success` -> `failure` (a required merge gate is never granted by a cron), and a failed
+read — or any crash — leaves the standing verdict alone.
 
 WHAT THIS GATE ENFORCES TODAY: IT IS ARMED, AND ITS RED BLOCKS THE MERGE. `claim-generation` is one of
 `FS-GG/.github`'s required status checks on `main`, read live on 2026-08-13:
@@ -225,6 +228,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -393,7 +397,21 @@ def marker_lease(fields: dict[str, str], fallback: int, *, cli_override: bool) -
 
     An unparsable or non-positive `lease=` is NOT a no-verdict: it is one malformed marker among
     possibly many, and refusing the whole verdict over it would let a single junk comment on an item
-    wedge that item's merges. It falls back, and says so.
+    wedge that item's merges. It falls back, and says so. `read_claim_state` extends that same rule to
+    a fourth malformation this function cannot see from here — a lease so large that no expiry instant
+    can be computed from it (repair 1, `.github#2673`'s F1) — because representability depends on the
+    marker's own timestamp, which only the caller holds.
+
+    WHAT THIS GATE TRUSTS A MARKER TO SAY, AND WHY THAT IS FAIL-CLOSED FOR A MERGE. Reading `lease=`
+    widens what the marker gets to assert: before `.github#2656` this gate used one number of its own
+    for every marker. A representable-but-long lease is therefore accepted, and a reader is owed the
+    reason that is not a hole. A forged `fsgg:claim` comment can only become the CAS winner by holding
+    the LOWEST live id, and a winner whose id differs from the PR's `gen=` reads `stale` — RED. So a
+    forged marker can never turn a red verdict green; it can only red a PR that was green, which is the
+    direction this whole fence already fails in. The remaining case is a legitimate holder declaring a
+    long lease for THEMSELVES, and that is what `--lease-minutes` is for: it outranks every marker, so
+    an operator who does not accept a repository's declared leases can bound them all in one place.
+    Inventing a ceiling here instead would be exactly the guessed number `.github#2656` AC2 refuses.
     """
     if cli_override:
         return fallback, "set by --lease-minutes"
@@ -407,6 +425,29 @@ def marker_lease(fields: dict[str, str], fallback: int, *, cli_override: bool) -
     if n <= 0:
         return fallback, f"this gate's fallback — the marker's `lease={raw}` is not positive"
     return n, "declared by that marker"
+
+
+def expiry_of(at: datetime, lease_minutes: int) -> datetime | None:
+    """`at` plus `lease_minutes`, or `None` when no such instant is representable.
+
+    THE CRASH THIS REPLACES (repair 1, F1 of `.github#2673`'s round 1). `at + timedelta(minutes=lease)`
+    raises `OverflowError` once the lease passes roughly 4.2e9 minutes — ten digits, and a .NET tick
+    count, which is what a claim marker's own `renewed=` field holds, is ~6.4e17. `OverflowError` is
+    not a `GateError`, so it went straight past `sweep_all`'s per-PR handler and ABORTED THE WHOLE
+    SWEEP: every open pull request after the offending one kept its standing verdict with nothing to
+    re-evaluate it, which is precisely the defect `.github#2656` exists to close, reachable through the
+    fix for it. The workflow then reported that nothing had changed, which was false twice over.
+
+    Returning `None` rather than raising is what lets the caller apply the rule `marker_lease` already
+    states for every other malformation: a lease this gate cannot use falls back to one it can, and
+    says so. `OSError`/`ValueError` are caught alongside `OverflowError` because platform `datetime`
+    arithmetic has been observed to raise either at the extremes, and the point of this function is
+    that NOTHING it is handed escapes as an exception.
+    """
+    try:
+        return at + timedelta(minutes=lease_minutes)
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def parse_instant(raw: str, what: str) -> datetime:
@@ -548,7 +589,27 @@ def read_claim_state(
                 at = None
             if at is not None:
                 age_seconds = int((now - at).total_seconds())
-                expires_at = at + timedelta(minutes=lease)
+                expires_at = expiry_of(at, lease)
+                if expires_at is None:
+                    # A lease from which no expiry instant can be computed is not a lease this gate
+                    # will use — the SAME rule `marker_lease` applies to a non-numeric or non-positive
+                    # one, extended to the malformation only this scope can detect (see `expiry_of`).
+                    # Falling back here rather than raising is what keeps one junk comment from
+                    # wedging an item's merges, and what keeps it from aborting a whole sweep.
+                    unusable = lease
+                    lease, lease_source = fallback_lease, (
+                        f"this gate's fallback — the marker's `lease={unusable}` is too large to "
+                        "compute an expiry instant from"
+                    )
+                    expires_at = expiry_of(at, lease)
+                    if expires_at is None:
+                        # Unreachable: `main` refuses a fallback lease it cannot compute with, before
+                        # any marker is read. Kept as a no-verdict rather than a crash, because the one
+                        # thing this function must never do is let an exception escape (`expiry_of`).
+                        raise GateError(
+                            f"neither the marker's lease nor this gate's own fallback of {lease} "
+                            f"minutes yields a representable expiry from {updated_at}"
+                        )
         claimant = Claimant(cid, worker, lease, lease_source, expires_at, age_seconds)
         # The SAME boundary `Reads.isStale` draws: strictly GREATER than the lease is lapsed, and a
         # negative (unreadable) age is not lapsed at all.
@@ -559,10 +620,20 @@ def read_claim_state(
     if live:
         return ClaimState("held", winner=min(live, key=lambda c: c.id))
     if lapsed:
-        # The one that lapsed MOST RECENTLY is the last worker to have held the item, and so the one a
-        # reader needs named. `age_seconds` is the ordering because it is the field every lapsed marker
-        # is guaranteed to have (a lapsed marker by definition had a readable timestamp).
-        return ClaimState("expired", lapsed=min(lapsed, key=lambda c: c.age_seconds))
+        # THE ONE THAT LAPSED MOST RECENTLY, WHICH IS NOT THE YOUNGEST MARKER (repair 1, F4 of
+        # `.github#2673`'s round 1). This ordered by `age_seconds` — "renewed most recently" — and that
+        # is a different question once two markers declare DIFFERENT leases: a 240-minute claim
+        # refreshed 250 minutes ago lapsed 10 minutes ago, while a 30-minute claim refreshed 115
+        # minutes ago lapsed 85 minutes ago. Age picks the second and names the wrong worker, in the
+        # one sentence AC3 exists to make correct. The lapse INSTANT is the question, so `expires_at`
+        # is the ordering; ties break on the id so the sentence is deterministic rather than
+        # dependent on comment order. Every lapsed marker has an `expires_at` by construction — it
+        # took a readable timestamp to be classified as lapsed at all — and the `datetime.min`
+        # fallback below is a total-ordering guard, not an expected branch.
+        floor = datetime.min.replace(tzinfo=timezone.utc)
+        return ClaimState(
+            "expired", lapsed=max(lapsed, key=lambda c: (c.expires_at or floor, c.id))
+        )
     return ClaimState("released")
 
 
@@ -653,9 +724,15 @@ def classify(
             f"({c.lease_source}) ran out at {when} — {over} minute(s) ago — and nothing has renewed it. This PR's "
             f"authorization names generation `gen={fields['gen']}`, which is no longer live.\n"
             "READ THIS AS EXPIRY, NOT AS A LOST RACE: nobody stole, reaped, or released the item, so "
-            "`heartbeat` renews the SAME generation and this verdict goes green again on the next "
-            "evaluation. Only if the holder is genuinely gone does the item need re-`take`ing — which "
-            "mints a HIGHER generation and requires a fresh `delivery` call to re-author this PR."
+            "`heartbeat` renews the SAME generation and this verdict is true again the moment it is "
+            "re-evaluated. Only if the holder is genuinely gone does the item need re-`take`ing — which "
+            "mints a HIGHER generation and requires a fresh `delivery` call to re-author this PR.\n"
+            "TO CLEAR THIS CHECK after renewing: any push re-runs it, and so does a `delivery` call "
+            "that actually PATCHes the PR body. A heartbeat alone changes no fact about the pull "
+            "request and therefore fires no event, so re-run the `claim-generation` job to pick the "
+            "renewal up. That step is deliberate rather than automatic: the scheduled sweep "
+            "(.github/workflows/claim-freshness-sweep.yml) only ever REVOKES this check, and never "
+            "grants it — a required merge gate is not something a cron should be able to turn green."
         )), state
     live = state.generation
     if live != fields["gen"]:
@@ -714,8 +791,9 @@ def deadline_lines(args: argparse.Namespace, state: ClaimState | None) -> list[s
             f"(in ~{left}m), when {who}'s {c.lease}-minute claim lease ({c.lease_source}) lapses "
             "unless it is renewed. "
             "No GitHub event fires on that instant, so this check run does not re-evaluate itself "
-            "(.github#2656); `coherence.yml`'s `claim-generation-sweep` job is what revokes this green "
-            "if the lease lapses before the merge."
+            "(.github#2656); the `claim-freshness-sweep` job in "
+            "`.github/workflows/claim-freshness-sweep.yml` is what revokes this green if the lease "
+            "lapses before the merge."
         ),
     ]
 
@@ -801,24 +879,47 @@ def sweep_all(args: argparse.Namespace) -> int:
     recomputes each PR's verdict from THAT PR's own claim lease and posts a fresh `claim-generation`
     check run when the answer has changed.
 
-    TWO INVARIANTS BOUND ITS BLAST RADIUS, and both are refusals rather than best-effort intentions:
+    THREE REFUSALS BOUND ITS BLAST RADIUS, and they are refusals rather than best-effort intentions:
 
       IT NEVER ORIGINATES A VERDICT. If a head has no standing `claim-generation` check run, the sweep
       does nothing for it. Everything it can ever do is CHANGE an answer `coherence.yml`'s own job
       already gave, using the same script, the same applicability rule, and the same lease — so a PR the
       required job has not judged cannot first be judged by a cron.
 
-      A FAILED READ LEAVES THE STANDING VERDICT ALONE. A rate limit, an outage, or a permission problem
-      on one PR is logged and skipped, never converted into a conclusion. That is #266 in the only
-      direction available here: this sweep can only ever STRENGTHEN the fence, so declining to act
-      leaves exactly today's behaviour, whereas posting a guess would be a verdict nobody computed.
+      IT ONLY EVER REVOKES (repair 1, F2 of `.github#2673`'s round 1). The sweep publishes exactly ONE
+      transition, `success` -> `failure`. Every other pairing is left alone, including a live claim
+      under a standing red. See ONLY ONE DIRECTION below: this is the finding's substance, not a guard
+      bolted onto it.
+
+      A FAILED READ LEAVES THE STANDING VERDICT ALONE. A rate limit, an outage, a permission problem,
+      or ANY unexpected exception on one PR is logged and skipped, never converted into a conclusion,
+      and never allowed to end the sweep. That is #266 in the only direction this sweep can move,
+      whereas posting a guess would be a verdict nobody computed.
+
+    ONLY ONE DIRECTION, AND WHY THAT IS A DECISION RATHER THAN A CONSERVATISM. Round 1 measured this
+    function publishing `failure -> success`: a cron flipping a REQUIRED merge gate green with no
+    repository event behind it. That is a strictly larger power than `.github#2656` asked for, and it
+    points the wrong way — the item's whole subject is a green outliving the claim it fences on, so the
+    capability it needs is REVOCATION. Revocation can only ever block a merge; granting can admit one.
+    Two capabilities with opposite worst cases do not belong behind one mechanism because they happen
+    to share a code path.
+
+    THE THING GREENING WAS COVERING FOR, AND WHAT COVERS IT NOW. A holder whose lease lapsed and who
+    then `heartbeat`s is live again under the SAME generation, and without this function's green they
+    keep the revoked red until something re-runs the required job. That is real, and it is answered by
+    an event-driven path that already exists rather than by a cron: any push re-runs it, and so does
+    `pnext-item` §6's own `delivery` call whenever it actually PATCHes the body. Where neither applies —
+    a heartbeat that changes no PR fact — re-running the `claim-generation` job clears it, which is a
+    human-initiated act, and a human-initiated act is exactly the right shape for GRANTING a merge
+    permission. The `[expired]` diagnosis now says so in as many words, so the recovery is documented
+    where the worker reads the failure rather than inferred from this docstring.
 
     The sweep's own exit code reports on the SWEEP, not on any PR: per-PR trouble is a warning line and
     exit 0, because this job is not a required context and must not red the default branch for it. Only
     a failure to enumerate the PRs at all — which means the sweep did not run — propagates as 2 or 3.
     """
     prs = open_item_prs(args.repo)
-    looked = changed = skipped = 0
+    looked = changed = skipped = crashed = 0
     for pr in prs:
         ref, sha, number = pr.get("ref"), pr.get("sha"), pr.get("number")
         if not isinstance(ref, str) or not isinstance(sha, str) or not HEAD_SHA_RE.match(sha.lower()):
@@ -836,6 +937,24 @@ def sweep_all(args: argparse.Namespace) -> int:
                 f"::warning::check-claim-generation sweep: PR #{number} ({ref}) could not be "
                 f"re-evaluated ({e}). The standing verdict is left exactly as it was — a failed read is "
                 "never a verdict (#266)."
+            )
+            continue
+        except Exception:  # noqa: BLE001 — see below; deliberately broad, deliberately per-PR.
+            # ONE PULL REQUEST MUST NEVER END THE SWEEP (repair 1, F1). An `OverflowError` from lease
+            # arithmetic escaped the handler above and aborted the loop, leaving every LATER pull
+            # request unswept — reinstating, through this fix, the exact defect `.github#2656` exists to
+            # close. `expiry_of` fixes that particular escape at its source; this catches the CLASS, so
+            # the next unanticipated exception costs one PR's re-evaluation instead of all of them.
+            # It is not a silent swallow: the traceback is printed, the PR is named, and `crashed` is
+            # reported in the summary line so a systematic bug is loud rather than a quiet all-skip.
+            crashed += 1
+            skipped += 1
+            traceback.print_exc()
+            print(
+                f"::warning::check-claim-generation sweep: PR #{number} ({ref}) CRASHED the "
+                "re-evaluation (traceback above). That is a bug in this gate, not a finding about the "
+                "pull request: its standing verdict is left exactly as it was, and the sweep continues "
+                "with the remaining pull requests rather than abandoning them."
             )
             continue
         conclusion = "success" if kind is None else "failure"
@@ -858,12 +977,24 @@ def sweep_all(args: argparse.Namespace) -> int:
         if standing == conclusion:
             print(f"check-claim-generation sweep: PR #{number} ({ref}) is unchanged ({conclusion}).")
             continue
+        # THE DIRECTION TEST. `success` -> `failure` is the one transition this sweep may publish; see
+        # ONLY ONE DIRECTION above. Naming every refusal on stdout rather than skipping quietly is what
+        # keeps the sweep auditable — a reader of a scheduled run can see that it considered the pull
+        # request and declined, which is a different fact from never having looked at it.
+        if not (standing == "success" and conclusion == "failure"):
+            print(
+                f"check-claim-generation sweep: PR #{number} ({ref}) would move {standing} -> "
+                f"{conclusion} [{kind or 'ok'}], which is not a revocation — leaving it alone. This "
+                "sweep publishes only `success` -> `failure`; a required merge gate is never granted "
+                "by a cron. Re-run the `claim-generation` job (or push) to clear a standing red."
+            )
+            continue
         summary = message or (
             f"{per.expected_item}'s authorization is current and its claim lease is still live."
         )
         print(
             f"check-claim-generation sweep: PR #{number} ({ref}) {standing} -> {conclusion} "
-            f"[{kind or 'ok'}] at head {sha}."
+            f"[{kind}] at head {sha} — REVOKING."
         )
         if args.dry_run:
             changed += 1
@@ -874,14 +1005,14 @@ def sweep_all(args: argparse.Namespace) -> int:
             "status": "completed",
             "conclusion": conclusion,
             "output": {
-                "title": (
-                    f"claim-generation re-evaluated: {kind}" if kind
-                    else "claim-generation re-evaluated: authorization is current"
-                ),
+                "title": f"claim-generation re-evaluated and REVOKED: {kind}",
                 "summary": (
-                    f"{summary}\n\nRe-evaluated by `check-claim-generation.py --sweep` "
-                    f"(.github#2656) because a claim lease expiring fires no GitHub event, so the "
-                    f"standing `{standing}` verdict could not have noticed."
+                    f"{summary}\n\nRevoked by `check-claim-generation.py --sweep` (.github#2656) "
+                    "because a claim lease expiring fires no GitHub event, so the standing "
+                    f"`{standing}` verdict could not have noticed. This sweep only ever revokes: it "
+                    "cannot turn this check green again, and will not try. Re-run the "
+                    "`claim-generation` job once the claim is live again (`heartbeat` renews the same "
+                    "generation; a re-`take` mints a new one and needs a fresh `delivery` call)."
                 ),
             },
         }
@@ -897,8 +1028,14 @@ def sweep_all(args: argparse.Namespace) -> int:
         changed += 1
     print(
         f"check-claim-generation sweep: {looked} item PR(s) re-evaluated, {changed} verdict(s) "
-        f"changed, {skipped} left alone."
+        f"REVOKED, {skipped} left alone ({crashed} of those because this gate crashed on them)."
     )
+    if crashed:
+        print(
+            f"::warning::check-claim-generation sweep: {crashed} pull request(s) could not be "
+            "re-evaluated because this gate crashed on them — see the tracebacks above. Their standing "
+            "verdicts stand, so nothing was decided wrongly, but they are NOT covered by this sweep."
+        )
     return ExitCode.OK
 
 
@@ -939,6 +1076,18 @@ def main(argv: list[str]) -> int:
     args.lease_from_cli = args.lease_minutes is not None
     args.lease_minutes = lease_minutes(args.lease_minutes)
     args.now = parse_instant(args.now, "--now") if args.now else None
+
+    # THE FALLBACK LEASE MUST ITSELF BE USABLE, CHECKED ONCE, BEFORE ANY MARKER IS READ (repair 1, F1).
+    # `read_claim_state` falls back to this number whenever a marker's own `lease=` cannot yield an
+    # expiry instant — so a fallback that cannot either would turn one malformed marker into a
+    # no-verdict, which is the wedge `marker_lease` promises never to cause. A `--lease-minutes` or
+    # `$FSGG_CLAIM_LEASE_MIN` this gate cannot compute with is an operator error, and an operator error
+    # is a no-verdict (exit 3) rather than a wrong verdict — refused here, in one place, up front.
+    if expiry_of(args.now or datetime.now(timezone.utc), args.lease_minutes) is None:
+        raise GateError(
+            f"a lease of {args.lease_minutes} minutes is too large to compute an expiry instant from; "
+            f"give --lease-minutes (or ${LEASE_ENV}) a value this gate can add to a timestamp"
+        )
 
     if args.sweep:
         if args.head_ref or args.head_sha or args.body:

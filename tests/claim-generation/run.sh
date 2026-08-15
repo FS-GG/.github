@@ -455,14 +455,39 @@ checkrun "$WSA" "$SHA_A" success
 sweep_expect "sweep: a green whose lease has since lapsed is REVOKED" \
   0 "success -> failure [expired]" '"conclusion": "failure"' "$WSA" --now "$(at 121)"
 
-# (b) ...and the same sweep RESTORES a green once the claim is live again, so a lapse that the holder
-#     repairs with `heartbeat` does not wedge the PR until someone forces an event.
+# (b) THIS LEG WAS INVERTED IN REPAIR 1, AND THE INVERSION IS THE POINT (F2 of `.github#2673`'s round 1).
+#     It used to assert that the sweep RESTORES a green once the claim is live again, and it passed —
+#     which is exactly why the leak survived authoring: the fixture PINNED the behaviour that had to
+#     change, the `.github#2662` shape. What the round-1 critic measured was `failure -> success` with
+#     `"conclusion": "success"` published, i.e. a cron flipping a REQUIRED merge gate green with no
+#     repository event behind it. That is a strictly larger power than `.github#2656` asked for and it
+#     points the wrong way: revocation can only ever block a merge, granting can admit one.
+#
+#     The behaviour this leg now asserts is the decision, not a conservatism: the sweep publishes ONLY
+#     `success` -> `failure`. The usability case the old leg was protecting — a holder who `heartbeat`s
+#     after a lapse and would otherwise sit on a revoked red — is answered by an event-driven or
+#     human-initiated path instead (a push, a `delivery` call that really PATCHes the body, or re-running
+#     the `claim-generation` job), and the gate's own `[expired]` message now spells that out. Note the
+#     refusal is NAMED on stdout rather than silently skipped: "considered it and declined" and "never
+#     looked at it" are different facts, and a reader of a scheduled run is owed the difference.
 WSB="$WORK/wsb"
 comment_at "$WSB" "$REPO" 2656 5300000042 "$T0" 120 "osprey-174c"
 pr "$WSB" 2657 "$REF_A" "$SHA_A" "$BODY_A"
 checkrun "$WSB" "$SHA_A" failure
-sweep_expect "sweep: a red whose claim is live again is RESTORED" \
-  0 "failure -> success [ok]" '"conclusion": "success"' "$WSB" --now "$(at 60)"
+sweep_expect "sweep: a red whose claim is live again is NOT restored — the sweep never publishes a green" \
+  0 "which is not a revocation" "-" "$WSB" --now "$(at 60)"
+
+# ...and the refusal is not an accident of the `[ok]` verdict shape: a red that would move to a DIFFERENT
+# red is still not a revocation this sweep publishes, because `success` -> `failure` is the only
+# transition it has. (Here the standing verdict is `cancelled` — a real GitHub conclusion — and the fresh
+# one is `failure`. Publishing would be defensible; it is still refused, because one transition is easier
+# to audit than a lattice of "more restrictive than" judgements on a required merge gate.)
+WSB2="$WORK/wsb2"
+comment_at "$WSB2" "$REPO" 2656 5300000042 "$T0" 120 "osprey-174c"
+pr "$WSB2" 2657 "$REF_A" "$SHA_A" "$BODY_A"
+checkrun "$WSB2" "$SHA_A" cancelled
+sweep_expect "sweep: only success -> failure is published, not every more-restrictive move" \
+  0 "cancelled -> failure" "-" "$WSB2" --now "$(at 121)"
 
 # (c) NO CHANGE, NO WRITE. The sweep runs on a schedule; a sweep that re-posted an unchanged verdict
 #     every period would bury each PR's checks list under identical check runs.
@@ -511,6 +536,92 @@ sweep_expect "sweep: --dry-run reports the revocation without publishing it" \
 WSH="$WORK/wsh"
 sweep_expect "sweep: refuses per-PR arguments rather than silently ignoring them" \
   3 "takes no --head-ref" "-" "$WSH" --head-ref "$REF_A"
+
+# =============================================================================================
+# 11. REPAIR 1 — F1 of `.github#2673`'s round 1. A `lease=` of ten digits or more made
+# `at + timedelta(minutes=lease)` raise `OverflowError`, which is not a `GateError` and so went past
+# `sweep_all`'s per-PR handler and ABORTED THE WHOLE SWEEP: every open PR after the offending one kept
+# its standing verdict with nothing to re-evaluate it — the exact defect this item exists to close,
+# reachable through the fix for it. Ten digits is not exotic: a claim marker's own `renewed=` token is
+# a .NET tick count, ~6.4e17.
+#
+# Two legs, because the repair has two halves and either alone would leave the leak: the malformed
+# lease must FALL BACK (the rule `marker_lease` already stated for every other malformation), and one
+# pull request must never be able to end the sweep whatever it does.
+# =============================================================================================
+HUGE_LEASE=9999999999   # ten digits — over the ~4.2e9-minute point where the arithmetic overflowed
+
+W11A="$WORK/w11a"; comment_at "$W11A" "$REPO" 2656 5300000001 "$T0" "$HUGE_LEASE"
+expect "F1: an unrepresentable lease= falls back and SAYS it fell back, instead of crashing" \
+  1 "too large to compute an expiry instant from" "$W11A" "$REPO" "item/2656-lease-expiry" \
+  "$HEAD_SHA" "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --now "$(at 121)"
+
+# ...and the same marker does not wedge the item either: falling back to 120 means it is judged, not
+# skipped. At T+60 it is still live under the fallback, so the verdict is a green — proving the
+# fallback is a real lease and not a synonym for "refuse".
+expect "F1: the fallen-back marker is still JUDGED — live at T+60 under the fallback lease" \
+  0 "OK" "$W11A" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" \
+  "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --now "$(at 60)"
+
+# THE SWEEP-WIDE HALF: the offending PR is FIRST in the listing, and a second PR whose green must be
+# revoked comes after it. Before the repair, the crash on #2657 meant #2658 was never reached. The
+# assertion is that #2658's revocation IS published — i.e. one pull request cannot cost the others
+# their re-evaluation.
+SHA_B="$(printf '%040d' 12)"
+W11B="$WORK/w11b"
+comment_at "$W11B" "$REPO" 2656 5300000001 "$T0" "$HUGE_LEASE"
+comment_at "$W11B" "$REPO" 2660 5300000077 "$T0" 120 "osprey-174c"
+pr "$W11B" 2657 "item/2656-lease-expiry" "$SHA_A" "$(marker "$REPO#2656" 5300000001 "$SHA_A")"
+pr "$W11B" 2658 "item/2660-second-pr"    "$SHA_B" "$(marker "$REPO#2660" 5300000077 "$SHA_B")"
+checkrun "$W11B" "$SHA_A" success
+checkrun "$W11B" "$SHA_B" success
+sweep_expect "F1: a pathological lease on one PR does not cost the NEXT PR its revocation" \
+  0 "PR #2658 (item/2660-second-pr) success -> failure [expired]" '"head_sha": "'"$SHA_B"'"' \
+  "$W11B" --now "$(at 121)"
+
+# =============================================================================================
+# 12. REPAIR 1 — F4 of `.github#2673`'s round 1. `[expired]` named the wrong holder whenever two
+# lapsed markers declared DIFFERENT leases, because "the youngest marker" and "the one that lapsed most
+# recently" are different questions once the leases differ, and the old ordering asked the first.
+#
+# THE CONSTRUCTION HAS TO BE BUILT DELIBERATELY, and my first attempt at it did NOT discriminate — the
+# old ordering happened to give the right answer, and the leg passed against both implementations,
+# which is a vacuous test wearing a green badge. Evaluated at T0+300:
+#
+#   comment 5300000001, `stale-holder`,  lease  30, refreshed T0+185 -> age 115m, LAPSED 85m ago
+#   comment 5300000200, `recent-holder`, lease 240, refreshed T0+50  -> age 250m, LAPSED 10m ago
+#
+# `recent-holder` is the correct answer and is the OLDER marker; every incidental signal points the
+# other way, exactly as the critic measured. `stale-holder` has the smaller age, holds the LOWEST id,
+# and is the generation this PR's `gen=` names — so an ordering by age, by id, or by "the one the PR
+# talks about" all name the wrong worker in the one sentence AC3 exists to make correct.
+# =============================================================================================
+W12="$WORK/w12"
+comment_at "$W12" "$REPO" 2656 5300000001 "$(at 185)" 30  "stale-holder"
+comment_at "$W12" "$REPO" 2656 5300000200 "$(at 50)"  240 "recent-holder"
+expect "F4: [expired] names the worker who lapsed MOST RECENTLY, not the youngest marker" \
+  1 "still names \`recent-holder\`" "$W12" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" \
+  "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --now "$(at 300)"
+
+# ...and it reports THAT marker's lease and lapse instant, not the other's — the whole sentence moves
+# together or it is still misleading.
+expect "F4: and it reports that holder's own lease and lapse instant" \
+  1 "its 240-minute lease (declared by that marker) ran out at $(at 290)" "$W12" "$REPO" \
+  "item/2656-lease-expiry" "$HEAD_SHA" "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --now "$(at 300)"
+
+# =============================================================================================
+# 13. REPAIR 1 — the fallback lease must itself be usable, refused ONCE and up front. `read_claim_state`
+# falls back to this number whenever a marker's own `lease=` cannot yield an expiry instant, so a
+# fallback that cannot either would turn one malformed marker into a no-verdict — the wedge
+# `marker_lease` promises never to cause. Both spellings exit 3; the leg asserts the UP-FRONT message,
+# because "the operator gave me an unusable lease" and "this item's markers are unusable" are different
+# facts and only one of them is the operator's to fix.
+# =============================================================================================
+W13="$WORK/w13"; comment_at "$W13" "$REPO" 2656 5300000001 "$T0" 120
+expect "repair 1: an unusable --lease-minutes is refused up front, naming the flag" \
+  3 "give --lease-minutes (or \$FSGG_CLAIM_LEASE_MIN) a value this gate can add to a timestamp" \
+  "$W13" "$REPO" "item/2656-lease-expiry" "$HEAD_SHA" \
+  "$(marker "$REPO#2656" 5300000001 "$HEAD_SHA")" --lease-minutes 9999999999
 
 echo
 echo "claim-generation fixture: $pass passed, $failcount failed"

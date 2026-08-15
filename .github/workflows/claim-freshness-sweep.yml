@@ -78,18 +78,29 @@ jobs:
   # turns on. Branch protection reads the most recent check run for a required context, so a revoked
   # green blocks the merge exactly as the required job's own red would.
   #
-  # TWO REFUSALS BOUND ITS BLAST RADIUS. Both are enforced in `sweep_all` and both have their own
-  # fixture legs in `tests/claim-generation/run.sh`, because a cron that can write a required context's
-  # verdict on every open pull request is exactly the thing whose limits must be tested, not intended:
+  # THREE REFUSALS BOUND ITS BLAST RADIUS. All three are enforced in `sweep_all` and all three have
+  # their own fixture legs in `tests/claim-generation/run.sh`, because a cron that can write a required
+  # context's verdict on every open pull request is exactly the thing whose limits must be tested
+  # rather than intended:
   #
   #   * IT NEVER ORIGINATES A VERDICT. A head with no standing `claim-generation` check run is left
   #     entirely alone. Everything this can ever do is CHANGE an answer `coherence.yml`'s own job
   #     already gave, so a cron can never be the first thing to judge a pull request.
-  #   * A FAILED READ LEAVES THE STANDING VERDICT ALONE. A rate limit, an outage, or a permission
-  #     problem on one PR is a warning and a skip, never a conclusion. Declining to act reproduces
-  #     exactly today's behaviour; posting a guess would be a verdict nobody computed (#266). That is
-  #     fail-closed in the only direction available here, since this sweep can only ever STRENGTHEN
-  #     the fence.
+  #   * IT ONLY EVER REVOKES. The one transition it publishes is `success` -> `failure`. A live claim
+  #     under a standing red is left alone, deliberately. Round 1 of this PR's review measured the
+  #     earlier draft publishing `failure -> success` — a cron flipping a REQUIRED merge gate green
+  #     with no repository event behind it. That is a strictly larger power than `.github#2656` asked
+  #     for and it points the wrong way: revocation can only ever block a merge, granting can admit
+  #     one. Clearing a standing red is an event-driven or human-initiated act (a push, a `delivery`
+  #     call that really PATCHes the body, or re-running the `claim-generation` job), and the gate's
+  #     own `[expired]` message says so where the worker reads the failure.
+  #   * A FAILED READ LEAVES THE STANDING VERDICT ALONE. A rate limit, an outage, a permission problem
+  #     — or any unexpected exception — on one PR is a warning and a skip, never a conclusion, and
+  #     never the end of the sweep. Declining to act reproduces exactly today's behaviour; posting a
+  #     guess would be a verdict nobody computed (#266). Round 1 also measured an `OverflowError` from
+  #     a ten-digit `lease=` aborting the whole loop and leaving every LATER pull request unswept,
+  #     which reinstated the very defect this workflow exists to close, so the containment is per pull
+  #     request and the summary counts the crashes rather than hiding them.
   #
   # ITS OWN RED IS NOT A MERGE GATE. `claim-freshness-sweep` is not, and must not become, a required
   # status check: it runs on the DEFAULT BRANCH's schedule, and reddening `main` because one pull
@@ -140,6 +151,6 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$rc" -ne 0 ]; then
-            echo "::warning title=claim-freshness-sweep: no verdict::The sweep could not enumerate this repository's open pull requests (exit $rc), so nothing was re-evaluated. Every standing claim-generation verdict is exactly as it was, and the next scheduled sweep retries. This is not a finding about any pull request."
+            echo "::warning title=claim-freshness-sweep: the sweep did not complete::check-claim-generation.py --sweep exited $rc, so some or all open pull requests were NOT re-evaluated. Any verdict it did revoke before stopping is named in the log above; every pull request it did not reach keeps its standing verdict, so nothing was decided wrongly — it simply was not re-checked. The next scheduled sweep retries. This is not a finding about any pull request."
           fi
           exit 0
