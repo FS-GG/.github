@@ -77,7 +77,11 @@
 #
 # (4) condition-aware — only when BOTH --manifest and --params <scaffold-provenance.json> are given
 # (ADR-0017). The manifest entry may carry a `materializes-when` predicate over the scaffold
-# parameters (absent ⇒ `always`); --params supplies the scaffold's `effectiveParameters`. This
+# parameters (absent ⇒ `always`); --params supplies the scaffold's `effectiveParameters`, in EITHER
+# of the two encodings that denote the same map — the object form, or the `{key,value}` array
+# `FS.GG.SDD.Artifacts` actually emits, which is exactly `to_entries` of it (.github#2546; see
+# `load_params`, which accepted only the first and so had never run against that provider family at
+# all). An unrecognised encoding is a fail-closed exit 2 naming what it got and what is supported. This
 # turns the superset catalog's "declared ∧ absent" from BLANKET-tolerated into JUSTIFIED —
 # absence is legitimate only when the condition is false. Two new classes close the manifest→disk
 # blind spot (the direction checks 1-3 never enforced):
@@ -269,6 +273,9 @@ Options:
   --params <file.json>    scaffold-provenance.json; enables the condition-aware check (check 4,
                           ADR-0017) — evaluates each declared skill's materializes-when against
                           .effectiveParameters, adding [missing] / [unexpected]. Requires --manifest.
+                          .effectiveParameters may be an object of name -> value, or the equivalent
+                          array of {"key":…,"value":…} entries that FS.GG.SDD.Artifacts emits; any
+                          other shape is a misconfiguration (exit 2) naming what was received.
   --digest <skill-dir>    reference generator: print the canonical-body sha256 of the dir's SKILL.md,
                           then exit (so producers and this assertion never drift)
   --eval-when <predicate> reference evaluator: evaluate a materializes-when <predicate> against the
@@ -415,17 +422,82 @@ unquote() { local s="$1"; if [ "${#s}" -ge 2 ] && [ "${s:0:1}" = '"' ] && [ "${s
 # stringified so `feedback == true` compares against the literal token. Shared by the real gate
 # (check 4) and the --eval-when reference evaluator, so the fixture pins the SAME param extraction
 # the gate uses, not a test-only re-read that could drift from it.
+#
+# TWO ENCODINGS ARE ACCEPTED AND THEY DENOTE THE SAME MAP (.github#2546). This used to gate on
+# `type == "object"` alone and `die` (exit 2) on anything else, and the shape it rejected is the one
+# the real producer emits: `FS.GG.SDD.Artifacts` (generator 1.0.0, provenance `schemaVersion: 1`)
+# writes `effectiveParameters` as an ARRAY of `{ "key": …, "value": … }` entries — see this repo's own
+# `.fsgg/scaffold-provenance.json`, and `EHotwagner/S.I.R.`'s. So check 4, the arm that distinguishes a
+# JUSTIFIED off-profile omission from a genuinely dropped skill, had never executed once against any
+# product of that provider family: not answering wrongly, refusing to run, and refusing in the shape of
+# a USAGE error rather than "this gate does not cover your tree". A kept mechanism (.github#1863) whose
+# gate cannot parse a whole provider family's provenance is a fail-OPEN — with no predicate evaluated
+# at all, ADR-0017's tolerated-absence rule silently applies to every declared skill (#266).
+#
+# WHICH ONE IS CANONICAL: the OBJECT form is the authoring/documentation form, and the `{key,value}`
+# array is exactly `to_entries` of it — the same map, transport-encoded. That is not a coincidence to
+# rely on tacitly, it is why the two branches below differ ONLY in the jq expression that produces the
+# entry stream and then share one reader: `to_entries[]` and `.effectiveParameters[]` emit the SAME
+# `{key,value}` records, so neither shape can acquire extraction behaviour the other lacks. The
+# equivalence is pinned rather than asserted — tests/skill-union/conformance.sh drives EVERY grammar
+# vector through both encodings and requires the identical verdict.
+#
+# AN UNRECOGNISED SHAPE STILL FAILS CLOSED (exit 2), and now says what it received and what is
+# supported instead of claiming the file "has no .effectiveParameters object" — which was false for
+# the array form and sent two items (.github#2366, .github#2380) hand-checking what this gate was
+# built to answer. A `{key,value}` array that declares one key TWICE is rejected too: the object form
+# cannot express it, so there is no correct answer to inherit, and silently taking the last one is a
+# guess about which value the predicates get evaluated against.
 load_params() {
   local file="$1"
   [ -f "$file" ] || die "params (scaffold-provenance) not found: $file"
   command -v jq >/dev/null 2>&1 || die "jq not found (required to read --params)."
-  jq -e '.effectiveParameters | type == "object"' "$file" >/dev/null 2>&1 \
-    || die "params has no .effectiveParameters object: $file"
+  # `jq empty` and not `jq -e .`: `-e` reports a FALSE-y last output as a failure, so a file whose
+  # whole content is `null` or `false` would be reported as a parse error it is not.
+  jq empty "$file" >/dev/null 2>&1 || die "params is not valid JSON: $file"
+
+  # One classification pass, so the accept branches and the refusal message read the same fact.
+  # `and` short-circuits in jq, so `has("key")` is never applied to a non-object entry.
+  local shape
+  shape="$(jq -r '
+    def kv: type == "object" and has("key") and has("value")
+            and (.key | type) == "string" and (.key | length) > 0;
+    .effectiveParameters as $p
+    | ($p | type) as $t
+    | if $t == "object" then "object"
+      elif $t == "array" then
+        (if ($p | all(kv))
+         then (($p | map(.key)) as $k
+               | if ($k | length) == ($k | unique | length) then "key-value-array"
+                 else "array-duplicate-keys" end)
+         else "array-not-key-value" end)
+      else $t end
+  ' "$file" 2>/dev/null)" || shape=""
+
+  local supported='supported: an object of parameter-name -> value, or an array of {"key":…,"value":…} entries (what FS.GG.SDD.Artifacts emits)'
+  local entries
+  case "$shape" in
+    object)          entries='.effectiveParameters | to_entries[]' ;;
+    key-value-array) entries='.effectiveParameters[]' ;;
+    array-duplicate-keys)
+      local dups
+      dups="$(jq -r '[.effectiveParameters[].key] | group_by(.) | map(select(length > 1) | .[0]) | join(", ")' "$file" 2>/dev/null || true)"
+      die "params .effectiveParameters is a {key,value} array declaring the same key more than once (${dups:-unknown}) — refusing to guess which value the materializes-when predicates see; $supported: $file" ;;
+    array-not-key-value)
+      die "params .effectiveParameters is an array whose entries are not all {key,value} objects with a non-empty string key; $supported: $file" ;;
+    null)
+      die "params .effectiveParameters is absent or null; $supported: $file" ;;
+    string|number|boolean)
+      die "params .effectiveParameters is a JSON $shape; $supported: $file" ;;
+    *)
+      die "params .effectiveParameters could not be classified (jq reported '${shape:-<nothing>}'); $supported: $file" ;;
+  esac
+
   local k v
   while IFS=$'\t' read -r k v; do
     [ -n "$k" ] || continue
     PARAM["$k"]="$v"
-  done < <(jq -r '.effectiveParameters | to_entries[] | [.key, (.value | tostring)] | @tsv' "$file")
+  done < <(jq -r "$entries"' | [.key, (.value | tostring)] | @tsv' "$file")
 }
 
 # Evaluate a single comparison clause. Returns 0 (true) / 1 (false); dies (2) on an unparseable clause.
