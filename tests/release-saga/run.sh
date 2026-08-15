@@ -314,6 +314,15 @@ kit_payload_sha() {
   jq -r '.descriptor.packages[] | select(.id == "FS.GG.Kit") | .artifact.payloadSha256' "$1"
 }
 
+# A refusal has to say the right thing, not merely happen: assert on its text, and say which
+# expectation failed rather than letting `set -e` abort a bare `grep` with no diagnosis.
+diagnosis_names() {
+  grep -q -- "$2" "$1" || { echo "refusal in $1 does not name '$2'" >&2; exit 1; }
+}
+diagnosis_omits() {
+  ! grep -q -- "$2" "$1" || { echo "refusal in $1 names '$2', which is normalized away" >&2; exit 1; }
+}
+
 # The fixture really does reproduce what the old comparison asserted against, or the legs below prove
 # nothing: raw bytes differ, and so does the `contentId` computed over their hashes and sizes.
 if cmp -s "$REPACK/first/FS.GG.Kit.9.8.7.nupkg" "$REPACK/second/FS.GG.Kit.9.8.7.nupkg"; then
@@ -336,22 +345,22 @@ if python3 "$TOOL" assert-reusable --stored "$REPACK/first/release-manifest.json
   --candidate "$REPACK/divergent/release-manifest.json" >"$WORK/divergent.log" 2>&1; then
   echo "expected a genuine payload divergence to fail closed" >&2; exit 1
 fi
-grep -q "content/payload.txt" "$WORK/divergent.log"
-grep -q "FS.GG.Kit" "$WORK/divergent.log"
-! grep -q "_rels/.rels" "$WORK/divergent.log"
+diagnosis_names "$WORK/divergent.log" "content/payload.txt"
+diagnosis_names "$WORK/divergent.log" "FS.GG.Kit"
+diagnosis_omits "$WORK/divergent.log" "_rels/.rels"
 # Identical bytes prepared as a different release are not a re-pack either.
 if python3 "$TOOL" assert-reusable --stored "$REPACK/first/release-manifest.json" \
   --candidate "$REPACK/other-source/release-manifest.json" >"$WORK/identity.log" 2>&1; then
   echo "expected a sourceSha change to fail closed" >&2; exit 1
 fi
-grep -q "descriptor.sourceSha" "$WORK/identity.log"
+diagnosis_names "$WORK/identity.log" "descriptor.sourceSha"
 # A draft whose asset upload did not finish is not reusable, and says so before anything is tagged.
 rm "$REPACK/partial/FS.GG.Kit.9.8.7.nupkg"
 if python3 "$TOOL" assert-reusable --stored "$REPACK/partial/release-manifest.json" \
   --candidate "$REPACK/second/release-manifest.json" >"$WORK/partial.log" 2>&1; then
   echo "expected an incomplete stored draft to fail closed" >&2; exit 1
 fi
-grep -q "manifest-bound artifact is missing" "$WORK/partial.log"
+diagnosis_names "$WORK/partial.log" "manifest-bound artifact is missing"
 
 # GATE INVERSION (.github#2664 AC4). Restore payload()'s previous shape — relationship parts hashed
 # verbatim — and the re-pack comparison above must go red, naming the entry that made it red. A gate
@@ -369,6 +378,6 @@ if python3 "$WORK/inverted-release-saga.py" assert-reusable \
   echo "gate inversion survived: payload() normalization is not what makes an honest re-pack reusable" >&2
   exit 1
 fi
-grep -q "_rels/.rels" "$WORK/inverted.log"
+diagnosis_names "$WORK/inverted.log" "_rels/.rels"
 
 echo "release saga: forced mid-publish recovery, byte drift, dual-feed observation, draft reuse, and promotion passed"
