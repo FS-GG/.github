@@ -104,7 +104,7 @@ Validate the chain and confirm its latest round is less than three before routin
 The critic may file review-discovered work only when materiality, distinct root cause, dedupe, and
 actionability are all evidenced; nonmaterial observations must not create issues, board rows, blocker
 edges, or follow-up entries. Only after these pre-merge checks pass, post the exact-SHA
-`fsgg:review-accepted:v1` marker; the worker may not merge before it observes that marker. If material
+`fsgg:review-decision/v2` marker; the worker may not merge before it observes that marker. If material
 findings remain after round three, verify the escalation marker, close the ordinary PR without merging,
 and automatically enter the repair phase; do not post acceptance, merge, or permit round four on the
 exhausted chain.
@@ -120,7 +120,7 @@ automatically. Reserve the same two review slots for its critic
 that every wave already reserves; an implementer may never fill one, in the repair phase either. Verify
 the repair-phase chain under the identical rules — durable markers, ordered round/URL/SHA chain, critic
 independence — but against `repair-phase-max-rounds: 10`, not `max-automated-repair-rounds: 3`, and
-require the `fsgg:independent-review-repair-phase:v1` marker naming the exhausted PR and its escalation
+require the `fsgg:review-decision/v2` marker naming the exhausted PR and its escalation
 marker before treating any repair-phase pass as landable. If the required route is unavailable, or once
 the repair phase itself exhausts its own round ceiling, verify the escalation marker, `Blocked on:
 human/action` sentinel, `Blocked` status, and released claim; do not post acceptance, merge, start a

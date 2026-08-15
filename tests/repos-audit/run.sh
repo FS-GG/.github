@@ -342,10 +342,10 @@ set -uo pipefail
 # The roster-wide issue-intake sweep uses GitHub's typed GraphQL enum. Its normal fixture world is
 # collaborator-only; individual policy failure/no-verdict legs can replace this shim response when
 # they need to exercise those dispositions.
-if [ "${1:-}" = api ] && [ "${2:-}" = graphql ]; then
+if [ "${1:-}" = graphql ] && [ "${2:-}" = repository-policy ]; then
   [ "${FSGG_FIX_ISSUE_POLICY:-}" != unreadable ] || { echo 'gh: API rate limit exceeded (HTTP 403)' >&2; exit 1; }
   policy="${FSGG_FIX_ISSUE_POLICY:-COLLABORATORS_ONLY}"
-  printf '{"data":{"repository":{"issueCreationPolicy":"%s","hasIssuesEnabled":%s}}}\n' "$policy" "${FSGG_FIX_ISSUES_ENABLED:-true}"
+  printf '{"issueCreationPolicy":"%s","hasIssuesEnabled":%s}\n' "$policy" "${FSGG_FIX_ISSUES_ENABLED:-true}"
   exit 0
 fi
 # args: api [-H ...] <path> [--jq ...]
@@ -507,6 +507,7 @@ case "$kind" in
 esac
 STUB
 chmod +x "$STUB/gh"
+export FSGG_COORD_BIN="$STUB/gh"
 
 # Helpers to shape a repo's workflows in the stub. Each clears any injected failure first, so a
 # fixture step never inherits the previous step's outage.
@@ -2759,7 +2760,6 @@ private_enumeration="$(grep -c 'enumeration_checked[[:space:]]*=' "$AUDIT" || tr
 # where the rule lives).
 SPARSEBOX="$WORK/sparsebox"; mkdir -p "$SPARSEBOX/scripts/lib"
 cp "$AUDIT" "$SPARSEBOX/scripts/repos-audit.sh"
-cp "$HERE/../../scripts/graphql_complete_read.py" "$SPARSEBOX/scripts/graphql_complete_read.py"
 cp "$HERE/../../scripts/lib/args.sh" "$SPARSEBOX/scripts/lib/args.sh"
 cp "$SPARSE_SEAM" "$SPARSEBOX/scripts/lib/repos-audit-sparse.sh"
 # The kit-pin sweep borrows fsgg_feed.py by the same mechanism, and asserts it at the same place. The

@@ -57,7 +57,7 @@ Non-negotiables:
   run the comparison rather than reading it off the source.
 
 - **Three rounds, then escalation — never a fourth.** If material findings remain after round three,
-  post `<!-- fsgg:independent-review-escalation:v1 -->` with the ordered confirmation URLs and stop; the
+  post a structured `escalation` review record with the ordered confirmation URLs and stop; the
   host closes the PR without merging and enters the one repair phase. Do not merge, and do not open a
   round four.
 

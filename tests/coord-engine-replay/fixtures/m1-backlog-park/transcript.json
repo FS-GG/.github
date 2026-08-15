@@ -54,7 +54,7 @@
       "requestBody": null,
       "responseBody": [
         {
-          "body": "<!-- fsgg:delivery-route/v1 -->\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#500\",\"subjectRevision\":\"d1733b8617a9fd6533c86bb8605d03389586691927f31933459a912de9099207\",\"route\":\"lightweight\",\"agent\":\"scenario-fixture\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"M1 deliberate Backlog intent shadow fixture route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}",
+          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#500\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Probe/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"scenario-fixture\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"M1 deliberate Backlog intent shadow fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"f279bba9ca8900d5bc002b6cc7ad8d8d19ac045310382d1e2c52cb67e684bbc6\"}",
           "created_at": "2026-01-01T00:00:00Z",
           "id": 800500,
           "updated_at": "2026-01-01T00:00:00Z",

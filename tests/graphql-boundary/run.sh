@@ -9,8 +9,12 @@ for f in projects-audit.sh repos-audit.sh coord-board-archive.py check-roster-cl
 : >"$work/src/FS.GG.Coord.GitHub/GraphQl.fs"
 : >"$work/src/FS.GG.Coord.GitHub/GraphQlEnvelope.fs"
 : >"$work/src/FS.GG.Coord.GitHub/Budget.fs"
-cp "$root/scripts/graphql_complete_read.py" "$work/scripts/graphql_complete_read.py"
 python3 "$root/scripts/check-graphql-boundary.py" --root "$work" >/dev/null
+printf '%s\n' '# retired compatibility frontend' >"$work/scripts/graphql_complete_read.py"
+if python3 "$root/scripts/check-graphql-boundary.py" --root "$work" >/dev/null 2>&1; then
+  echo "FAIL: checker accepted the retired compatibility frontend" >&2; exit 1
+fi
+rm "$work/scripts/graphql_complete_read.py"
 printf '%s\n' 'let bypass root = root.TryGetProperty "data"' >"$work/src/FS.GG.Coord.GitHub/Budget.fs"
 if python3 "$root/scripts/check-graphql-boundary.py" --root "$work" >/dev/null 2>&1; then
   echo "FAIL: checker accepted a raw Budget envelope selector" >&2; exit 1

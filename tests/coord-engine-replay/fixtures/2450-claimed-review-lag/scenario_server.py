@@ -37,6 +37,11 @@ import hashlib
 import json
 import re
 import threading
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from route_decision_fixture import route_comment
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOCK = threading.Lock()
@@ -54,24 +59,10 @@ RATE_LIMIT = {"cost": 1, "remaining": 4999}
 
 
 def route_receipt_comment():
-    receipt = {
-        "schema": "fsgg.coord.delivery-route/v1",
-        "subject": f"{OWNER}/{REPO}#{ITEM}",
-        "subjectRevision": hashlib.sha256(ISSUE_BODY.encode()).hexdigest(),
-        "route": "lightweight",
-        "agent": "scenario-fixture",
-        "timestamp": "2026-01-01T00:00:00Z",
-        "reasonCodes": ["fixture"],
-        "rationale": "2450-claimed-review-lag scenario fixture route receipt.",
-        "declaredImpacts": ["internal"],
-        "observedFacts": ["localized"],
-        "sddWorkId": None,
-        "specHome": None,
-        "requiredGates": [],
-    }
     return {
         "id": 800000 + ITEM,
-        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
+        "body": route_comment(f"{OWNER}/{REPO}#{ITEM}", ISSUE_BODY, "scenario-fixture",
+                              "2450-claimed-review-lag scenario fixture route receipt."),
         "user": {"login": "fixture"},
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
@@ -84,7 +75,7 @@ def claim_marker_comment():
     # time this replays it always reads as a LAPSED lease (`Reads.isStale`) rather than within-lease —
     # deliberately, because `.github#2450`'s fix does not depend on lease freshness: `Chore.choresFor`'s
     # RESERVED branch produces no chore for `LeaseExpiredPrOpen` either (`| _ -> ()`, the same as
-    # `LeaseHeld`), and `LifecycleProjection.project`'s open-PR rule fires before it ever inspects
+    # `LeaseHeld`), and the lifecycle reducer's open-PR rule fires before it ever inspects
     # liveness at all. A fixture whose correctness depended on staying within a 120-minute lease forever
     # would be a flaky fixture; this one is not.
     return {

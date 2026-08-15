@@ -457,7 +457,7 @@ def unwired(root: Path, known: set[Suite]) -> list[str]:
     return sorted(
         f"tests/{d.name}"
         for d in tests.iterdir()
-        if d.is_dir() and f"tests/{d.name}" not in wired
+        if d.is_dir() and d.name != "__pycache__" and f"tests/{d.name}" not in wired
     )
 
 
@@ -470,7 +470,11 @@ def assert_wired(root: Path, known: set[Suite]) -> int:
     never refuse is how the class survives being known about.
     """
     tests = root / "tests"
-    present = sorted(f"tests/{d.name}" for d in tests.iterdir() if d.is_dir()) if tests.is_dir() else []
+    # Python imports create ignored `__pycache__` directories during this selector itself. They are build
+    # products, not suites; counting one makes a clean preflight turn red because tests ran successfully.
+    present = sorted(
+        f"tests/{d.name}" for d in tests.iterdir() if d.is_dir() and d.name != "__pycache__"
+    ) if tests.is_dir() else []
     if not present:
         # THE VACUITY TRAP (#266, and .github#2534 measured it live: a gate that scanned an empty
         # corpus passed green and was caught only by a separate non-vacuity leg). Every set below is

@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "cycle_id": "roadmap-coordination-churn-redesign-m6-retire-compatibility",
+  "source_sha": "a8207eb1d493365ce5e1205af18211e8724ce104",
+  "created_at": "2026-08-14T23:41:43Z",
+  "purpose": "Permanent byte-exact archive of the historical TRX files removed from Git at the M6 new-only cutover.",
+  "release": {
+    "repository": "FS-GG/.github",
+    "tag": "evidence/m6-trx-a8207eb1",
+    "release_id": 370872423,
+    "url": "https://github.com/FS-GG/.github/releases/tag/evidence/m6-trx-a8207eb1",
+    "immutable": true,
+    "immutable_releases_setting": "enabled",
+    "asset_id": 515069652,
+    "asset_url": "https://github.com/FS-GG/.github/releases/download/evidence/m6-trx-a8207eb1/fsgg-m6-historical-trx-a8207eb1.tar.gz",
+    "server_digest": "sha256:d89b4d20068aac3df6ba3c6a5e7d5d90237243d4ed2dbba1a46d45e7dc56679c"
+  },
+  "archive": {
+    "name": "fsgg-m6-historical-trx-a8207eb1.tar.gz",
+    "prefix": "fsgg-m6-historical-trx-a8207eb1",
+    "bytes": 4779502,
+    "sha256": "d89b4d20068aac3df6ba3c6a5e7d5d90237243d4ed2dbba1a46d45e7dc56679c"
+  },
+  "file_count": 29,
+  "source_bytes": 27532297,
+  "canonical_rows_format": "<bytes>\\t<sha256>\\t<git_blob>\\t<path>\\n, sorted by path",
+  "canonical_rows_sha256": "fc7295a20ac4c28b6f01c189eb946509fd2b36b0f3defef52e03c2043c90cee7",
+  "reproduce": [
+    "git archive --format=tar.gz --prefix=fsgg-m6-historical-trx-a8207eb1/ -o fsgg-m6-historical-trx-a8207eb1.tar.gz a8207eb1d493365ce5e1205af18211e8724ce104 -- $(git ls-tree -r --name-only a8207eb1d493365ce5e1205af18211e8724ce104 | LC_ALL=C sort | rg '.trx$')",
+    "python3 scripts/verify-historical-evidence.py docs/reports/evidence/2026-08-15-m6-historical-trx-archive.json --archive fsgg-m6-historical-trx-a8207eb1.tar.gz --git-root ."
+  ],
+  "restore": [
+    "Download the immutable release asset and run the verifier command above.",
+    "To restore tracked copies from Git history: git restore --source=a8207eb1d493365ce5e1205af18211e8724ce104 -- <paths from files[]>; git add -f -- <paths from files[]>."
+  ],
+  "files": [
+    {
+      "path": "TestResults/2086-runtime-route.trx",
+      "bytes": 819316,
+      "sha256": "b1d488d20568d7ff979e196e8068d98d1873708010b45a2d67c03d6593a6d85a",
+      "git_blob": "a0106ab720ef189c93ab9d18328fc26333b84c04"
+    },
+    {
+      "path": "TestResults/coord-core.trx",
+      "bytes": 803042,
+      "sha256": "f44ddba52898fb7afc483e74b05b5e35b3e5f1048917c572cc2c7e8fafa0fd0d",
+      "git_blob": "d698734ec7d5142f5a4dbaa56b533ced74400c8c"
+    },
+    {
+      "path": "artifacts/test-results/2102/2102-sdd-lifecycle.trx",
+      "bytes": 842523,
+      "sha256": "eefe94cf27a0fae9a964f0449b9ab6263681f0e32006ce6172c9379478755b21",
+      "git_blob": "e6f1d5df010409204772850df31d7d9c143b39b1"
+    },
+    {
+      "path": "tests/FS.GG.Coord.Cli.Tests/TestResults/coord-cli-2133.trx",
+      "bytes": 884167,
+      "sha256": "cfe046c7e40fe44e03d041064d10f2072bb302e1fc2a215358d72a24ca6c60f9",
+      "git_blob": "586fbc2ba1220759e186325a893b3b97e458c38f"
+    },
+    {
+      "path": "tests/FS.GG.Coord.Cli.Tests/TestResults/coord-cli-2143.trx",
+      "bytes": 842523,
+      "sha256": "93f0cfe0c7fc5756c50b811a9f75ef83fca00616fb4091d4ba889764bd4e1661",
+      "git_blob": "6413a0b6a4b3ed8c862b64aa0c3fc971941eb3e0"
+    },
+    {
+      "path": "tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx",
+      "bytes": 908551,
+      "sha256": "df96de9d06cd03e77bab9cb8b76a41764c439cf3a8ce419f841d78d7402d25cb",
+      "git_blob": "96bf64c45a47d6e94a36570631c13a76f6b4c602"
+    },
+    {
+      "path": "tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx",
+      "bytes": 865294,
+      "sha256": "4205a6630ecbe2ef612b86830afb067e0789cb26bad5e23dbb9bed0437e281f6",
+      "git_blob": "2fedbc25f92f030abbabc7e362f627cfa1b1ce49"
+    },
+    {
+      "path": "tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx",
+      "bytes": 645206,
+      "sha256": "f01f35937e51dfd2d741fa5db321c839d4f434ae29a711db63a233178ccbc8e1",
+      "git_blob": "43341daf5d3b7d2ba4b8067c77d986e81d3e92a9"
+    },
+    {
+      "path": "work/2135-driver-event-projection/test-results/cli-tests.trx",
+      "bytes": 1038208,
+      "sha256": "98b26e9664c622bb15f500df6125b2a97d5356cd173aaa3be431ea567d438508",
+      "git_blob": "008c58478824299c16d184876a5cc4470f1d15d2"
+    },
+    {
+      "path": "work/2135-driver-event-projection/test-results/core-tests.trx",
+      "bytes": 995407,
+      "sha256": "5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f",
+      "git_blob": "1ab5aef5e20aac506e0c2b748a8cdae79bd75de3"
+    },
+    {
+      "path": "work/2136-generated-facts/test-results/cli-release.bom-free.trx",
+      "bytes": 842523,
+      "sha256": "1ce02d091ad5d9cd2c714fc6995e58f696ccd0ae8aab39f14051bc6728b81115",
+      "git_blob": "c505dbfca504199eff3bfdf0d79c399f0bf00f10"
+    },
+    {
+      "path": "work/2136-generated-facts/test-results/cli-release.trx",
+      "bytes": 842523,
+      "sha256": "92e684f048d260b4faf9417de92cd00db8d87f8e58617e0c79caef871bba644d",
+      "git_blob": "6e4bf47819336cc7bac9cf0c1af8f799d22f4b2a"
+    },
+    {
+      "path": "work/2136-generated-facts/test-results/cli.trx",
+      "bytes": 834811,
+      "sha256": "a351b08ae115fd4d85cf55b1e82582f36f3faba3fc3babe67a97f2d1ebe1332b",
+      "git_blob": "0fc21ad79070ba67d708737580f0d3a7b3084a3a"
+    },
+    {
+      "path": "work/2136-generated-facts/test-results/core-release.bom-free.trx",
+      "bytes": 822326,
+      "sha256": "2ec7b993f30498757a54318ba3da78162824cf357a69853c52232e49272375ae",
+      "git_blob": "48b7273b96d061d55e76549304fff9106f04c89f"
+    },
+    {
+      "path": "work/2136-generated-facts/test-results/core-release.trx",
+      "bytes": 820868,
+      "sha256": "644e4e3777a30c0d98cacb58d1f3bb1e6dfc631531c6166ff5764fd320260479",
+      "git_blob": "33acf08b622aaf9f389048cded18f6661570b815"
+    },
+    {
+      "path": "work/2136-generated-facts/test-results/github-release.bom-free.trx",
+      "bytes": 645206,
+      "sha256": "58240bc9740e910d213a6a9d23f76aa3959b33540211f43c7e75ac41096dfda8",
+      "git_blob": "ea7967a844e1c8946cd5126671632792b1f9c8c4"
+    },
+    {
+      "path": "work/2136-generated-facts/test-results/github-release.trx",
+      "bytes": 645206,
+      "sha256": "711c30a764bc60e6c94a23a8d2480e0a6045a9426956ab2d7cb815e720f868ff",
+      "git_blob": "667109469edb1aaf3206a61f38491ec2b3fdc208"
+    },
+    {
+      "path": "work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx",
+      "bytes": 844058,
+      "sha256": "f2cfefea153c1745bc71d47782224d38d9a1755c48f7b2f8e6fdbf31f6c325e3",
+      "git_blob": "48d3e2598a92c383e0caee3a7344ac16b70c4df1"
+    },
+    {
+      "path": "work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx",
+      "bytes": 848721,
+      "sha256": "0ebe5e7a619f61025d47454517bd4112f1f3eb2a56761b1ea18b8e82d749d68c",
+      "git_blob": "221748622e5e8fe0040009f28008750f2f48cda3"
+    },
+    {
+      "path": "work/2525-partial-read-fail-open/test-results/cli.trx",
+      "bytes": 1192677,
+      "sha256": "c927ba76c90314239e1746a991d31c8229d573418ea73f2b237dbda0d7f9a8b2",
+      "git_blob": "10eeefcd5ceae1e77b49fcfdf8b36c3ec1fa99e2"
+    },
+    {
+      "path": "work/2525-partial-read-fail-open/test-results/core.trx",
+      "bytes": 1199988,
+      "sha256": "aacf4849e208261a26b7595ec70e788c0d8bc9f6298169ffe4e56785a75c21ac",
+      "git_blob": "bee98b6906ed0d37b1010d0980beb8efc8cab581"
+    },
+    {
+      "path": "work/2525-partial-read-fail-open/test-results/github.trx",
+      "bytes": 798884,
+      "sha256": "7f46d86ded37df5188741b989a94d8251bc6a71b0a1b04d726527ed018da8cae",
+      "git_blob": "b50560e89577e0bbe9d88a77c0180d081e075a4a"
+    },
+    {
+      "path": "work/2549-review-state-vocabulary/test-results/cli.trx",
+      "bytes": 1307870,
+      "sha256": "e4848fe687b526240f04c36ebf29590693bd8e5b4ad23284628bbba986c3e854",
+      "git_blob": "045b7773eda7195fa7d89e6aef1ab0379dc36780"
+    },
+    {
+      "path": "work/2549-review-state-vocabulary/test-results/core.trx",
+      "bytes": 1340319,
+      "sha256": "effddca274a69f2e53f25e6a91ecfeb5c49763ace8aaf3d609a5957ed01e828b",
+      "git_blob": "b16d8887fa03617eb77a0f696b03bafbf7bc9707"
+    },
+    {
+      "path": "work/2549-review-state-vocabulary/test-results/github.trx",
+      "bytes": 900000,
+      "sha256": "52790c489e564ac6a1bca52275b87b6e74b210b0ed04d2f315b15ecd3e9f93d4",
+      "git_blob": "72c41c97dd447eb565fd40eab3c49092913f3f75"
+    },
+    {
+      "path": "work/2563-cross-language-indent-limit/test-results/cli-tests.trx",
+      "bytes": 1319464,
+      "sha256": "e919a98d3d5aaa8ba9b54292eae066bec5c9c233c7c18739d7f8f3f64ca98796",
+      "git_blob": "c7f18cf185f6ebc9dca9f4087887b3973321ef1c"
+    },
+    {
+      "path": "work/2583-consolidation-tax/test-results/cli.trx",
+      "bytes": 1374233,
+      "sha256": "5b0d03486d440c6d41b562d8d66069e193e15ebeccfc0142498c044c8e59ddf8",
+      "git_blob": "66f239af94729d620b711e4afe194023af7a2b20"
+    },
+    {
+      "path": "work/2583-consolidation-tax/test-results/core.trx",
+      "bytes": 1343727,
+      "sha256": "edaf23f01593095490c238592e64f829a374a5fe1686ebc933319dfe6d221c14",
+      "git_blob": "d60c81ae28b66241a88b181dd8bb110a0f841587"
+    },
+    {
+      "path": "work/2583-consolidation-tax/test-results/github.trx",
+      "bytes": 964656,
+      "sha256": "13d5051a4caef322e0cf333b69d8e35374436fcfdbbbc06a59c0c61a6c8e1731",
+      "git_blob": "929bccf44f8c7ece6ab2ac66c3bd666779554338"
+    }
+  ]
+}

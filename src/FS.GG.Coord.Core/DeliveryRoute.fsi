@@ -12,7 +12,7 @@ namespace FS.GG.Coord
 /// one — the only actor able to produce it could never get claimed to do so.
 module DeliveryRoute =
     [<Literal>]
-    val Schema: string = "fsgg.coord.delivery-route/v1"
+    val Schema: string = "fsgg.coord.route-decision/effective"
 
     type Route = Lightweight | SddRequired
 

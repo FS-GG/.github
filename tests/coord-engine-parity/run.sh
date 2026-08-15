@@ -1536,7 +1536,7 @@ rget() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.
 renv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$RS_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
 # The central fixture's source-bound route receipt is evidence, not a lock.  These restore assertions
 # measure only claim markers, so remove the route row before asking whether `release` dropped its lease.
-rbodies() { rget "$RS_PORT" "/repos/FS-GG/FS.GG.SDD/issues/$1/comments" | jq -r '.[] | select(.body | contains("fsgg:delivery-route/v1") | not) | .body'; }
+rbodies() { rget "$RS_PORT" "/repos/FS-GG/FS.GG.SDD/issues/$1/comments" | jq -r '.[] | select(.body | contains("fsgg:route-decision/v2") | not) | .body'; }
 rlastopt() { rget "$RS_PORT" /_writes | jq -r '.last.optionId'; }
 
 # (a) THE DEFECT. A claim over a Backlog item records `prev=Backlog`; release must put Backlog back, not Ready.
@@ -2503,7 +2503,7 @@ if [ -z "$TW_PORT" ]; then bad "twin fixture bound a port"; else
         FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
         env -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID CLAUDE_CODE_SESSION_ID="$s" FSGG_WORKER="$w" \
         "$ENGINE" claim "$@"; }
-  tmarkers() { python3 -c 'import sys,urllib.request; print(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/repos/FS-GG/FS.GG.SDD/issues/"+sys.argv[2]+"/comments").read().decode())' "$TW_PORT" "$1" 2>/dev/null | jq '[.[] | select(.body | contains("fsgg:delivery-route/v1") | not)]'; }
+  tmarkers() { python3 -c 'import sys,urllib.request; print(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/repos/FS-GG/FS.GG.SDD/issues/"+sys.argv[2]+"/comments").read().decode())' "$TW_PORT" "$1" 2>/dev/null | jq '[.[] | select(.body | contains("fsgg:route-decision/v2") | not)]'; }
 
   twin_err="$(tclaim ed60050b heron-7c2 FS.GG.SDD#74 2>&1 >/dev/null)"; twin_rc=$?
   [ "$twin_rc" -ne 0 ] \

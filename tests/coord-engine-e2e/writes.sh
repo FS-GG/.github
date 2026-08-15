@@ -265,7 +265,7 @@ else
   bad "M4 review record must append parseable v2 generations with actual backlinks" "comments=$review_before->$review_after wrong=$review_wrong_rc:$review_wrong_before->$review_wrong_after initial=$review_initial_rc:$review_initial_out confirmation=$review_confirmation_rc:$review_confirmation_out acceptance=$review_acceptance_rc:$review_acceptance_out moved-initial=$review_moved_initial_rc:$review_moved_initial_out moved-acceptance=$review_moved_acceptance_rc:$review_moved_acceptance_out"
 fi
 
-printf '%s' '<!-- fsgg:independent-review:v1 -->' >"$review_draft"
+printf '%s%s' '<!-- fsgg:independent-review' ':v1 -->' >"$review_draft"
 review_before="$review_after"
 "$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json >/dev/null 2>&1; review_legacy_rc=$?
 review_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
@@ -555,9 +555,9 @@ vb="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker vole-418 2>&1)"; vbrc=$?
 # .github#51 is stamped; .github#50 is the chore (CLOSED, board column still Ready → CLOSED-ISSUE-NOT-DONE).
 dc="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker snipe-733 2>&1)"; dcrc=$?
 [ "$dcrc" -eq 0 ] && printf '%s' "$dc" | grep -q 'FSGG-DONE' \
-  && printf '%s' "$dc" | grep -qi 'chore' && printf '%s' "$dc" | grep -q '#50' \
-  && ok "#733: done --flip offers a chore at AfterDone — the safe point the happy path reaches" \
-  || bad "#733: done offers a chore at AfterDone" "rc=$dcrc: $dc"
+  && printf '%s' "$dc" | grep -q '^chore \[quick\] \.github#50: fresh lifecycle facts project Status=Done' \
+  && ok "M6: done offers only the direct reducer's receipt-backed lifecycle projection" \
+  || bad "M6: done did not offer the direct reducer result" "rc=$dcrc: $dc"
 
 # THE OFFER IS A COURTESY, AND THE STAMP OUTRANKS IT. The chore rides on STDERR, never stdout: `done`'s
 # stdout carries the FSGG-DONE verdict a caller greps, and an offer printed there would corrupt the answer
@@ -571,13 +571,12 @@ printf '%s' "$dso" | grep -q 'FSGG-DONE' && ! printf '%s' "$dso" | grep -qi 'cho
 # receiver was refused for want of a lock and the queue drained in `.github` alone. The six receivers now
 # have closed `[chore-lock]` issues (SDD#518 among them) and the map resolves all seven, so stamping an SDD
 # item offers an SDD chore under SDD's OWN lock. This is the rollout's whole point, and it reds on pre-#1087
-# code (SDD had no lock). SDD#45 is the chore (CLOSED, board still Ready → CLOSED-ISSUE-NOT-DONE).
+# code (SDD had no lock). The direct reducer selects the first stale SDD projection (#44 → Ready).
 rc="$("$ENGINE" "done" FS.GG.SDD#42 --worker snipe-1087 2>&1)"; rcrc=$?
 [ "$rcrc" -eq 0 ] && printf '%s' "$rc" | grep -q 'FSGG-DONE' \
-  && printf '%s' "$rc" | grep -qi 'chore' && printf '%s' "$rc" | grep -q '#45' \
-  && printf '%s' "$rc" | grep -q 'FS.GG.SDD#518' \
-  && ok "#1087: a RECEIVER (FS.GG.SDD) now offers a chore under its OWN lock — the queue drains org-wide" \
-  || bad "#1087: a receiver drains its chore queue" "rc=$rcrc: $rc"
+  && printf '%s' "$rc" | grep -q '^chore \[quick\] FS.GG.SDD#44: fresh lifecycle facts project Status=Ready' \
+  && ok "M6: receiver done also offers the direct reducer's fresh projection" \
+  || bad "M6: receiver done did not offer the direct reducer result" "rc=$rcrc: $rc"
 
 # AN UNROSTERED REPO IS REFUSED, FOR FREE. All seven FS-GG repos have a lock now, so the honest "no lock"
 # case is a repo `choreLockRef` does not know (FS.GG.Legacy). `Chores.offer`'s step 1 is that pure string
@@ -1069,6 +1068,7 @@ no_mutation "overlap" run overlap FS.GG.SDD#42 FS.GG.SDD#44
 no_mutation "verify-paths" run verify-paths --pr 500 --repo FS.GG.SDD
 no_mutation "item-id" run item-id FS.GG.SDD#42
 no_mutation "body-edits" run body-edits FS.GG.SDD#42
+no_mutation "graphql" run graphql meter
 no_mutation "lint" run lint --repo .github
 no_mutation "whoami" run whoami
 
@@ -1163,7 +1163,7 @@ fi
 # The provider boundary consumes exact artifact bytes, not provenance fields asserted by the cycle
 # caller. Registration supplies the canonical cycle id used by all three provider envelopes.
 printf '%s\n' \
-  '{"sourceRevision":"base","units":[{"id":"2133-resumable-cycle-ledger","providerCycleId":"roadmap-cycle-ledger-m1-production","dependencies":[],"completed":false,"evidence":[]}],"executor":"worker","repository":".github","baseCommit":"base","liveCycles":[]}' \
+  '{"sourceRevision":"base","units":[{"id":"2206-board-roster-closure","providerCycleId":"roadmap-cycle-ledger-m1-production","dependencies":[],"completed":false,"evidence":[]}],"executor":"worker","repository":".github","baseCommit":"base","liveCycles":[]}' \
   >"$CYCLE_SNAPSHOT"
 cycle_register="$(run cycle register --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_register_rc=$?
 cycle_id="$(printf '%s' "$cycle_register" | jq -r '.cycleId // empty' 2>/dev/null)"
@@ -1186,7 +1186,7 @@ report_digest="$(sed 's/\r$//' "$provider_root/feedback/$provider_cycle.md" | sh
 jq -n --arg report "feedback/$provider_cycle.md" --arg digest "$report_digest" '{auditSchema:1,report:$report,reportSha256:$digest,findings:[]}' >"$provider_root/feedback/audits/$provider_cycle.audit.json"
 
 jq -n --arg cycle "$cycle_id" --arg providerCycle "$provider_cycle" --arg head "$candidate_head" --arg repo "$REPO_ROOT" --arg providerRoot "$provider_root" \
-  '{sourceRevision:"base",units:[{id:"2133-resumable-cycle-ledger",providerCycleId:$providerCycle,dependencies:[],completed:false,evidence:[]}],cycle:{id:$cycle,unitId:"2133-resumable-cycle-ledger",executor:"worker",repository:".github",baseCommit:"base"},implementation:{rootPath:$repo,artifactPath:"readiness/2133-resumable-cycle-ledger/verify.json"},review:{rootPath:$providerRoot,artifactPath:("reviews/roadmap/"+$providerCycle+".json")},feedback:{rootPath:$providerRoot,artifactPath:("feedback/"+$providerCycle+".md"),auditPath:("feedback/audits/"+$providerCycle+".audit.json"),phases:["implementation-test-evidence","verify-ship-pr"]},evidence:{implementationHead:$head,reviewHead:$head,feedbackCycle:$cycle,feedbackActive:true,mergedPr:7,mergeHead:$head,evidencePaths:["evidence/report.json"],dispositions:["all-findings-disposed"]}}' >"$CYCLE_SNAPSHOT"
+  '{sourceRevision:"base",units:[{id:"2206-board-roster-closure",providerCycleId:$providerCycle,dependencies:[],completed:false,evidence:[]}],cycle:{id:$cycle,unitId:"2206-board-roster-closure",executor:"worker",repository:".github",baseCommit:"base"},implementation:{rootPath:$repo,artifactPath:"readiness/2206-board-roster-closure/verify.json"},review:{rootPath:$providerRoot,artifactPath:("reviews/roadmap/"+$providerCycle+".json")},feedback:{rootPath:$providerRoot,artifactPath:("feedback/"+$providerCycle+".md"),auditPath:("feedback/audits/"+$providerCycle+".audit.json"),phases:["implementation-test-evidence","verify-ship-pr"]},evidence:{implementationHead:$head,reviewHead:$head,feedbackCycle:$cycle,feedbackActive:true,mergedPr:7,mergeHead:$head,evidencePaths:["evidence/report.json"],dispositions:["all-findings-disposed"]}}' >"$CYCLE_SNAPSHOT"
 cycle_advance="$(run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_advance_rc=$?
 if [ "$cycle_advance_rc" -eq 0 ] && [ "$(printf '%s' "$cycle_advance" | jq -r .action 2>/dev/null)" = advance ]; then
   ok "#2133: cycle advance validates real SDD, critique, and feedback provider artifact shapes"
@@ -1255,7 +1255,7 @@ else
   bad "#2133: an unpinned engine-side validator replacement must fail closed" "rc=$tampered_validator_rc output=$tampered_validator"
 fi
 
-printf '%s\n' "{\"schema\":\"fsgg.sdd.verify/1\",\"provider\":\"fsgg-sdd\",\"workId\":\"2133-resumable-cycle-ledger\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"$candidate_head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.SDD.Artifacts\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/forged-sdd.json"
+printf '%s\n' "{\"schema\":\"fsgg.sdd.verify/1\",\"provider\":\"fsgg-sdd\",\"workId\":\"2206-board-roster-closure\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"$candidate_head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.SDD.Artifacts\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/forged-sdd.json"
 jq --arg root "$CYCLE_FIX" '.implementation.rootPath=$root | .implementation.artifactPath="forged-sdd.json"' "$CYCLE_SNAPSHOT" >"$CYCLE_FIX/forged-advance.json"
 forged_advance="$(run cycle advance --snapshot "$CYCLE_FIX/forged-advance.json" --json 2>&1)"; forged_advance_rc=$?
 if [ "$forged_advance_rc" -ne 0 ] && printf '%s' "$forged_advance" | grep -q 'SDD verification artifact must be'; then
@@ -1275,7 +1275,7 @@ mkdir -p "$fake_sdd_dir"
 cat >"$fake_sdd_dir/fsgg-sdd" <<'FAKE_SDD'
 #!/usr/bin/env bash
 cat <<'JSON'
-{"schema":"fsgg.sdd.verify/1","toolVersion":"9.9.9","command":{"name":"verify"},"context":{"workId":"2133-resumable-cycle-ledger"},"coherent":true,"outcome":"noChange"}
+{"schema":"fsgg.sdd.verify/1","toolVersion":"9.9.9","command":{"name":"verify"},"context":{"workId":"2206-board-roster-closure"},"coherent":true,"outcome":"noChange"}
 JSON
 FAKE_SDD
 chmod +x "$fake_sdd_dir/fsgg-sdd"
@@ -1530,8 +1530,9 @@ curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/arm-reconcile-45-projection" >/dev/nul
 no_mutation "reconcile (bare, actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --worker reconcile-probe
 must_mutate "reconcile --apply (actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe
 
-# .github#2157 — BLOCKER-CLEARED is a coupled repair.  The JSON receipt names BOTH intended writes
-# and BOTH fresh observations; the fixture's mutation meter proves they travelled in ONE GraphQL batch.
+# .github#2157 — the single lifecycle reducer's blocker-clear result is a coupled repair. The JSON receipt
+# names BOTH intended writes and BOTH fresh observations; one GraphQL batch plus its durable receipt are
+# the complete mutation pair.
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-reconcile-47" >/dev/null
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 blocker_cleared="$("$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe --json)"; blocker_cleared_rc=$?
@@ -1542,9 +1543,9 @@ printf '%s' "$blocker_cleared" | jq -e '
   .[0].writes == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":""}] and
   .[0].observed == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":""}]' >/dev/null 2>&1 \
   && [ "$blocker_cleared_rc" -eq 0 ] \
-  && printf '%s' "$blocker_mutations" | jq -e '.count == 1 and .requests[0].kind == "graphql-mutation"' >/dev/null 2>&1 \
-  && ok "#2157: BLOCKER-CLEARED atomically writes and freshly observes Status=Ready plus an empty Blocked by" \
-  || bad "#2157: BLOCKER-CLEARED receipt and atomic batch" "rc=$blocker_cleared_rc receipt=$blocker_cleared mutations=$blocker_mutations"
+  && printf '%s' "$blocker_mutations" | jq -e '.count == 2 and .requests[0].kind == "graphql-mutation" and .requests[1].kind == "rest-mutation"' >/dev/null 2>&1 \
+  && ok "#2157: reducer result atomically writes/observes Status=Ready plus empty Blocked by and records its receipt" \
+  || bad "#2157: lifecycle receipt and atomic batch" "rc=$blocker_cleared_rc receipt=$blocker_cleared mutations=$blocker_mutations"
 
 # Negative control 1: an acknowledged batch that only projects Status is a FAILED repair, never a
 # written/converged receipt.  The stale Blocked by edge must remain visible in the verification error.

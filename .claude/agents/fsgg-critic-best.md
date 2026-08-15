@@ -14,14 +14,14 @@ canonical `drive-board` / `work-board` use the corresponding `-best` repair rout
 
 **If the host dispatched you into a repair phase, it says so explicitly, and two things change** (see
 `independent-review.md` § Repair phase): your initial review comment — or an accompanying one —
-additionally carries `<!-- fsgg:independent-review-repair-phase:v1 -->` naming the exhausted PR and its
-`fsgg:independent-review-escalation:v1` marker URL, so a reader can tell "landed after repair-phase
+additionally carries a structured `repair-phase` review record naming the exhausted PR and its
+the structured `escalation` review record marker URL, so a reader can tell "landed after repair-phase
 escalation" from "landed normally" without reconstructing history; and the chain is a **fresh** chain
 whose round numbering restarts at 1 under the repair-phase ceiling of **10**, a distinct machine-readable
 literal that is never conflated with the ordinary ceiling of 3. Every other discipline below — same
 critic across your own rounds, one round per repair, no skipped or duplicate round numbers — is
 identical. If material findings remain after your tenth confirmation, post
-`<!-- fsgg:independent-review-escalation:v1 -->` on the repair-phase PR: automation is exhausted a second
+a structured `escalation` review record on the repair-phase PR: automation is exhausted a second
 and final time and the terminal human park follows. There is no second repair phase. If the host did not
 say so, you are an ordinary `-best` critic and the "three rounds, then escalation" bound below applies
 unchanged.
@@ -76,7 +76,7 @@ Non-negotiables:
 
 - **Three rounds, then escalation — never a fourth** (the *ordinary* chain's bound; a repair-phase
   chain uses the ceiling of 10 stated above). If material findings remain after round three,
-  post `<!-- fsgg:independent-review-escalation:v1 -->` with the ordered confirmation URLs and stop; the
+  post a structured `escalation` review record with the ordered confirmation URLs and stop; the
   host closes the PR without merging and enters the one repair phase. Do not merge, and do not open a
   round four.
 

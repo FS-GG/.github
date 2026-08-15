@@ -554,11 +554,15 @@ module Scan =
                                     | _ -> None
                                 | _ -> None
 
-                        // Compatibility for replay fixtures and legacy cached projections that predate
-                        // selection of ProjectV2Item.id. M6 removes this raw-node fallback after three
-                        // stable cycles; production responses take one of the two typed ID arms above.
-                        let key = stableId |> Option.defaultWith node.GetRawText
-                        Ok(key, parseRow carrySweptBody node, isIssueRowNode node))
+                        let row = parseRow carrySweptBody node
+                        let issueRow = isIssueRowNode node
+                        match stableId, row, issueRow with
+                        | Some key, _, _ -> Ok(key, row, issueRow)
+                        // A typed content identity is sufficient for old recorded test pages that omit
+                        // ProjectV2Item.id; raw-node text is never an identity and cannot escape here.
+                        | None, Some value, _ -> Ok("ref:" + value.Ref.Canonical, row, issueRow)
+                        | None, None, false -> Ok("non-issue-card", row, issueRow)
+                        | None, None, true -> Error(Malformed(subject, "a board issue item omitted every typed stable identity")))
                     items)
 
         match GraphQl.drain subject "the board scan" { MaxPages = 100; MaxItems = 10000 } fetchPage with
@@ -573,29 +577,12 @@ module Scan =
                 Error(Malformed(subject, $"the board scan returned %d{unreadableRows} item node(s) selected as an Issue or PullRequest whose `number`/`repository.nameWithOwner` could not be read — refusing to report a short board as a complete one"))
             else
             let rows = parsed |> List.choose (fun (_, row, _) -> row)
-            // A server that accepted the reconciling document but omitted its selected `body` scalar is
-            // malformed. Keep the old REST read as a narrow compatibility/fail-closed fallback for that
-            // impossible-to-trust response shape; ordinary rows (including null bodies) never take it.
-            // If the fallback fails, its error remains `SweptBody` and the snapshot refuses to pretend the
-            // declaration was empty.
-            let rows =
-                if carrySweptBody then
-                    rows
-                    |> List.map (fun row ->
-                        match row.SweptBody with
-                        | Some(Error _) ->
-                            { row with SweptBody = Some(Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number) }
-                        | _ -> row)
-                else
-                    rows
-
-            // A FAILED SCAN IS NEVER CACHED (#344), and `putScan` is what enforces it — an empty document is
-            // refused there, at the write, because this is the last moment "the board is empty" and "I could
-            // not read the board" are still distinguishable. `renderRows` never serialises `SweptBody`
-            // (see its own field doc), so this cache entry carries none of the read above regardless of
-            // which branch produced `rows`.
-            Cache.putScan owner title (renderRows rows) |> ignore
-            Ok rows
+            match rows |> List.tryPick (fun row -> row.SweptBody |> Option.bind (function Error error -> Some error | Ok _ -> None)) with
+            | Some error -> Error error
+            | None ->
+                // A FAILED SCAN IS NEVER CACHED (#344), and `putScan` is what enforces it.
+                Cache.putScan owner title (renderRows rows) |> ignore
+                Ok rows
 
     let board
         (transport: IGitHubTransport)
@@ -1289,7 +1276,7 @@ module Scan =
                     // ALREADY CROSSED IT (.github#2450). The bound used to be `InProgress` alone, on the
                     // reasoning that it is "the one column whose next lifecycle projection is `In review`".
                     // That reasoning covered `LifecycleProjectionLag`'s FIRST caller
-                    // (`Chore.choresFor`'s `ClaimReviewLag` arm, reserved branch, `In progress` ->
+                    // (the retired lifecycle chore's reserved branch, `In progress` ->
                     // `In review`) and missed its SECOND: `Client.fs`'s lifecycle projector reads this SAME
                     // `itemPr` field for a row that is ALREADY `In review`, to decide whether it STAYS
                     // there. Unprobed, that read sees `None` — a live claim with no PR fact — and projects
@@ -1323,7 +1310,7 @@ module Scan =
                     // .github#2384 — THE MARKERLESS MATE OF #2450, ONE CONSUMER LATER AGAIN. `In review` was
                     // never a member of THIS arm's population either: an UNCLAIMED, `Open`, `In review` row
                     // fell to `| _ -> ()` exactly as a CLAIMED one did before #2450, so `ItemPr` was absent
-                    // for it too. `LifecycleProjection.project` (`Client.fs`) reads the same `itemPr` fact
+                    // for it too. The lifecycle intent reducer (`Client.fs`) reads the same `itemPr` fact
                     // for a markerless row precisely as it does for a claimed one — `Claim.Value = None` only
                     // changes which branch of `project` decides the destination, not whether `PullRequest`
                     // must be populated to decide it correctly. Unprobed, `PullRequest.Value = None` and an

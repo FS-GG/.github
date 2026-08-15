@@ -313,40 +313,13 @@ module SnapshotTests =
     // ================================================================================================
 
     [<Fact>]
-    let ``facts --json's reviewPolicy keeps quotedMarkerRule's value and additively carries markerAnchors/markerFieldGrammar`` () =
+    let ``facts --json projects only the structured review policy`` () =
         let json = Snapshot.renderFacts Protocol.factsDocument
         use document = JsonDocument.Parse json
         let reviewPolicy = document.RootElement.GetProperty("reviewPolicy")
 
-        // Unchanged existing keys/values — the "protocol bytes did not move" half of the check.
-        Assert.Equal(Protocol.reviewPolicy.InitialMarker, reviewPolicy.GetProperty("initialMarker").GetString())
-        Assert.Equal(Protocol.reviewPolicy.RepairPhaseMarker, reviewPolicy.GetProperty("repairPhaseMarker").GetString())
-        Assert.Equal(
-            Protocol.renderMarkerAnchorRule Protocol.LeadingBlock,
-            reviewPolicy.GetProperty("quotedMarkerRule").GetString())
-
-        // Additive: every MarkerAnchors entry appears, keyed by id and anchor.
-        let markerAnchors = reviewPolicy.GetProperty("markerAnchors").EnumerateArray() |> Seq.toList
-        Assert.Equal(List.length Protocol.reviewPolicy.MarkerAnchors, markerAnchors.Length)
-
-        for marker in Protocol.reviewPolicy.MarkerAnchors do
-            let entry =
-                markerAnchors
-                |> List.find (fun e -> e.GetProperty("id").GetString() = marker.Id)
-
-            Assert.Equal("leading-block", entry.GetProperty("anchor").GetString())
-
-        // Additive: every markerFieldGrammar entry appears, with its required fields in order.
-        let fieldGrammar = reviewPolicy.GetProperty("markerFieldGrammar").EnumerateArray() |> Seq.toList
-        Assert.Equal(List.length Protocol.markerFieldGrammar, fieldGrammar.Length)
-
-        let initialEntry =
-            fieldGrammar
-            |> List.find (fun e -> e.GetProperty("id").GetString() = Protocol.reviewPolicy.InitialMarker)
-
-        let initialFields =
-            initialEntry.GetProperty("requiredFields").EnumerateArray()
-            |> Seq.map (fun v -> v.GetString())
-            |> Seq.toList
-
-        Assert.Equal<string list>([ "critic"; "reviewed-head"; "verdict" ], initialFields)
+        Assert.Equal(StructuredDecision.ReviewSchema, reviewPolicy.GetProperty("schema").GetString())
+        let kinds = reviewPolicy.GetProperty("kinds").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+        Assert.Equal<string list>(Protocol.reviewPolicy.Kinds, kinds)
+        Assert.False(reviewPolicy.TryGetProperty("initialMarker") |> fst)
+        Assert.False(reviewPolicy.TryGetProperty("markerFieldGrammar") |> fst)

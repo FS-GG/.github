@@ -60,7 +60,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "c4da9c8e0ee92112dd2a0d27e16d2f96244afa3ffdd73852020d96b181ea4a0b",
-      "tree-sha256": "fc02b0a332e83a0970cf04fd0ac6d5015f6fd32bd8ebcea7b0716d5b1e0339d1",
+      "tree-sha256": "ccf3a00634de47f37025d6176988e51e12c3a612b01b4d0d76814416bd5effa2",
       "files": [
         {
           "path": "SKILL.md",
@@ -79,7 +79,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "9ac4921ca2f3ecca5872c9ee0429eb9ffe6b2d17b2e24f0124bdf556cb6b0d07",
+          "sha256": "87aae5dbb5834e6ecf98c3a656eddca573f8fe5af35c8adf77323a4e03981893",
           "executable": false
         },
         {
@@ -89,7 +89,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "68f0211d1e8e5a9712ff0e2ef78848f026be17db9fc7aaf52f0e89acd0df3440",
+          "sha256": "85e5a6bc84ba16494100b197c48a4c838d8f780a0d745b77235ada6ca7f5bb1f",
           "executable": false
         },
         {
@@ -170,7 +170,7 @@
       "id": "drive-board",
       "scope": "operator",
       "sha256": "4341449e50b5762cb2806b6b2b8f050f5e2bb1f260e6309f31c147417c372b0c",
-      "tree-sha256": "23fefb14ffd93308585d4dbfea898f47a1f0a968080092c5d6d477d67e4f530d",
+      "tree-sha256": "f36cd6157c12cef81433decdc53765e72b7d8cc2924b4af8524ede178e714f2a",
       "files": [
         {
           "path": "SKILL.md",
@@ -189,12 +189,12 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "7dd66b01ffd303ca11af65858ea37a0920b02fa0a3b615ed644388a1692047f6",
+          "sha256": "4f9326b2e929cb58a8dabcfd8e64d22f1bd8e2c087608b52d43ac5388a1df5f8",
           "executable": false
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "d29cd71c97d95cbdddb66eda380e412c02bb62cabfab5eece8fda8a5b665eb67",
+          "sha256": "492ec879eb6d881905f93a1fbdfd8a36ce3f6ced8e5abe2b9dd30ae836dced20",
           "executable": false
         },
         {
@@ -269,12 +269,12 @@
     {
       "id": "cut-nuget-release",
       "scope": "operator",
-      "sha256": "642e1c67ebc2bc0112dffb4a46a01406af00f8823b8a95ca9a287412f886857c",
-      "tree-sha256": "971f8149614ecafe1126750a686556d8a193816401d02a25740e5496658bbd30",
+      "sha256": "098f2cc7f04d7fffd31a27c53b916fc9135bf7f15e40e51d5c8dc3b78875104c",
+      "tree-sha256": "a3a0e6eea72852dd0e8771633b7cc4f293b37fcaee90a5b111eea91aba244cdd",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "642e1c67ebc2bc0112dffb4a46a01406af00f8823b8a95ca9a287412f886857c",
+          "sha256": "098f2cc7f04d7fffd31a27c53b916fc9135bf7f15e40e51d5c8dc3b78875104c",
           "executable": false
         },
         {
@@ -309,12 +309,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "e7c9ed8bc212894b6b20dc37f66523c86530678c4a5bf132954bf6c7aee766b8",
-      "tree-sha256": "afeb800be73ccbd8979a97042353f8aa83341a32e105cffb24988e92a9a92d8e",
+      "sha256": "c2c472499bf08d1a0a528a5ac390b4c1ebcf2cd583b08c176c3685b9a2db3dbd",
+      "tree-sha256": "33fb21addbd0cc2372cbd954b2f4213409d0a67539eb8d6e3eda8dd2eac6a7cd",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "e7c9ed8bc212894b6b20dc37f66523c86530678c4a5bf132954bf6c7aee766b8",
+          "sha256": "c2c472499bf08d1a0a528a5ac390b4c1ebcf2cd583b08c176c3685b9a2db3dbd",
           "executable": false
         },
         {

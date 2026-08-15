@@ -22,28 +22,8 @@ module VerifyPathsSddPackageTests =
     /// JSON. `Client`'s search matches on that literal prefix, so the fixture must reproduce it rather
     /// than approximate it.
     let private receiptComment (subjectRevision: string) (route: string) (workId: string option) =
-        let marker = "<!-- fsgg:delivery-route/v1 -->"
-
-        // `requiredGates` is REQUIRED by the decoder on BOTH routes — a lightweight receipt carries it
-        // empty, it does not omit it. Omitting it makes the receipt fail to DECODE, which reads as
-        // `Stale` ("receipt is missing") and would silently turn a lightweight-route test into a second
-        // stale-receipt test. (Measured: the first cut of this fixture did exactly that, and the
-        // fail-open inversion below reddened the "lightweight" case for the wrong reason.)
-        let bindings =
-            match workId with
-            | Some id ->
-                $""","sddWorkId":"%s{id}","specHome":"work/%s{id}/spec.md","requiredGates":["implementationReady","analyze","verify","ship"]"""
-            | None -> ""","requiredGates":[]"""
-
-        marker
-        + "\n{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/.github#42\",\"subjectRevision\":\""
-        + subjectRevision
-        + "\",\"route\":\""
-        + route
-        + "\",\"agent\":\"fixture-host\",\"timestamp\":\"2026-08-13T00:00:00Z\",\"reasonCodes\":[\"multi-phase\"],"
-        + "\"rationale\":\"fixture\",\"declaredImpacts\":[\"engine\"],\"observedFacts\":[\"process-wide\"]"
-        + bindings
-        + "}"
+        let selected = if route = "sdd-required" then Some FS.GG.Coord.DeliveryRoute.SddRequired else Some FS.GG.Coord.DeliveryRoute.Lightweight
+        StructuredFixtures.routeComment "FS-GG/.github#42" selected "fixture-host" workId
 
     /// The engine hashes the issue body's own canonical SUBJECT to decide whether a receipt is current
     /// (.github#2392), and that hash is `private`. Rather than restate the formula — which would make
@@ -227,7 +207,9 @@ module VerifyPathsSddPackageTests =
     let ``#2324 AC-004 a stale receipt is not a licence to exempt, and says why`` () =
         // Bound to a revision that is neither the canonical subject hash nor the legacy whole-body hash,
         // so `decideDeliveryRoute` answers `Stale` through both candidates.
-        let stale = receiptComment "not-this-body" "sdd-required" (Some "2324-mandatory-sdd-output-enforcement")
+        let stale =
+            receiptComment "ignored" "sdd-required" (Some "2324-mandatory-sdd-output-enforcement")
+            |> _.Replace("\"scope\":[\"fixture scope\"]", "\"scope\":[\"tampered scope\"]")
 
         let code, out, err = runVerifyPaths (serving issue (files packageFiles) (Some [ stale ]))
 
@@ -237,7 +219,7 @@ module VerifyPathsSddPackageTests =
         nothingSubtractedSaidSo err
         // The REASON is forwarded, not flattened to "something went wrong": a stale receipt is a
         // different repair from an unreadable window, and only the reason distinguishes them.
-        Assert.Contains("subjectRevision is stale", err)
+        Assert.Contains("digest does not match", err)
 
     [<Fact>]
     let ``#2324 AC-005 another item's sdd package is ordinary drift`` () =

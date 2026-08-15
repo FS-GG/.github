@@ -18,10 +18,7 @@ module ApplicationServiceTests =
     /// issue body revision.  Callers that mean to exercise missing/stale/unreadable evidence override the
     /// endpoint instead; they never inherit an implicit lightweight route from this helper.
     let private currentRouteComment (subject: string) (body: string) =
-        let revision = SHA256.HashData(Encoding.UTF8.GetBytes body) |> Convert.ToHexString |> _.ToLowerInvariant()
-        let receipt =
-            $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"%s{subject}","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-route","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
-        "<!-- fsgg:delivery-route/v1 -->\n" + receipt
+        StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-route" None
 
     [<Fact>]
     let ``#2137 SDD delivery evidence accepts only the current implementationReady work package`` () =
@@ -69,34 +66,6 @@ module ApplicationServiceTests =
         Assert.Equal<Ref list>([ existing.Head.Ref ], Client.filingLaneOfOne broad (TouchSet.parse "Paths: docs/reports") existing)
         Assert.Empty(Client.filingLaneOfOne narrow (TouchSet.parse "Paths: docs/reports/new-file.md") existing)
         Assert.Empty(Client.filingLaneOfOne otherRepo (TouchSet.parse "Paths: docs/reports") existing)
-
-    [<Fact>]
-    let ``M1 explicit Backlog lifecycle projection owns precedence over live-claim lag`` () =
-        let item =
-            Snapshot.parse
-                """{"schema":"fsgg.coord.snapshot/1","allowBacklog":false,"items":[{"owner":"FS-GG","repo":"FS.GG.SDD","number":42,"status":"Backlog","state":"OPEN","body":"Paths: src/A.fs","claim":{"worker":"w-a","ageSeconds":1,"prevStatus":"Backlog","liveness":{"kind":"lease-held"}}}]}"""
-            |> Result.defaultWith (fun errors -> failwithf "fixture snapshot did not parse: %A" errors)
-            |> fun request -> request.Candidates.Head.Item
-        let legacy = Chore.derive [ item ]
-        let lifecycle = Chore.lifecycleProjection item InProgress |> Option.toList
-        let backlogIntent =
-            LifecycleProjection.Backlog
-                { Revision = 42L
-                  Reason = "operator park" }
-        let watermark : LifecycleProjection.Watermark =
-            { ObservedAt = 42L
-              Status = InProgress
-              Intent = Some backlogIntent }
-
-        let selected =
-            Client.reconcileStatusPrecedence legacy lifecycle (Map.ofList [ item.Ref, watermark ])
-
-        Assert.Equal<string list>([ "LIFECYCLE-PROJECTION-LAG" ], selected |> List.map _.Kind.RuleId)
-
-        let automatic = { watermark with Intent = Some LifecycleProjection.Auto }
-        let control =
-            Client.reconcileStatusPrecedence legacy lifecycle (Map.ofList [ item.Ref, automatic ])
-        Assert.Equal<string list>([ "CLAIM-STATUS-LAG" ], control |> List.map _.Kind.RuleId)
 
     let private row number repo title status state isPullRequest : Scan.Row =
         { Ref =
@@ -225,7 +194,12 @@ module ApplicationServiceTests =
     /// a queue whose empty arm is under test (.github#1562 needed the OTHER arm as well).
     let private boardItemIn (status: string) (number: int) (title: string) (blockedBy: string option) (state: string) =
         let blocked = blockedBy |> Option.map (fun value -> $"{{\"text\":\"%s{value}\"}}") |> Option.defaultValue "null"
-        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blocked},"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blocked},"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","body":"","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+
+    let private boardItemInWithBody status number title blockedBy state body =
+        let row = boardItemIn status number title blockedBy state
+        let encoded = System.Text.Json.JsonSerializer.Serialize body
+        row.Replace("\"body\":\"\"", $"\"body\":%s{encoded}")
 
     let private boardItem (number: int) (title: string) = boardItemIn "In progress" number title None "OPEN"
 
@@ -854,7 +828,7 @@ module ApplicationServiceTests =
         // This drives the real `Client.driver` handler through scan, the PR liveness probe, the green
         // landability read and the PR conversation.  The backing issue deliberately has no review marker:
         // a handler that accidentally reads #2127's comments for review evidence therefore produces zero.
-        let mutable head = "31cffe6-driver-head"
+        let mutable head = String.replicate 40 "3"
         let mutable claimed = false
         let boardItem =
             """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"Issue","number":2127,"title":"driver","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
@@ -898,9 +872,10 @@ module ApplicationServiceTests =
                 | "GET", "repos/FS-GG/.github/actions/runs" -> ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
                 | "GET", path when path.StartsWith "repos/FS-GG/.github/commits/" && path.EndsWith "/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
                 | "GET", "repos/FS-GG/.github/issues/2140/comments" ->
-                    let initial = $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-7194\nreviewed-head: %s{head}\nverdict: pass\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: driver planning has no runtime-route comparison subject"
-                    let accepted = $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
-                    ok (JsonSerializer.Serialize [ {| id = 1; html_url = "https://reviews/1"; body = initial |}; {| id = 2; html_url = "https://reviews/2"; body = accepted |} ])
+                    let comments =
+                        StructuredFixtures.acceptedReviewComments "FS-GG/.github#2127/pr/2140" head "shrike-7194"
+                        |> List.map (fun (id, url, body) -> {| id = id; html_url = url; body = body |})
+                    ok (JsonSerializer.Serialize comments)
                 | method', path -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{path}"))
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let cache = Path.Combine(Path.GetTempPath(), "fsgg-2127-driver-" + Guid.NewGuid().ToString "n")
@@ -1013,315 +988,6 @@ module ApplicationServiceTests =
     /// quoted occurrences the single file's diff contains.  The old code passed the changed-FILE count
     /// (1, in both) to the occurrence threshold, so both were mechanically not-required and both merged
     /// green.  Measuring occurrences separates them, which is the whole repair.
-    [<Theory>]
-    [<InlineData(6, 0)>]
-    [<InlineData(1, 1)>]
-    let ``#2144 the no-receipt threshold is measured from live diff occurrences not changed-file count``
-        (occurrences: int)
-        (expectedEvidence: int)
-        =
-        let head = "2144-audit-head"
-        let baseSha = "2144-audit-base"
-        let path = "src/Rogue3/Protocol.fs"
-        let before =
-            [ yield "let oldName = 1"
-              for index in 1..occurrences -> $"let field%d{index} = \"oldName\"" ]
-            |> String.concat "\n"
-        let after = before.Replace("oldName", "newName")
-        let encode (text: string) =
-            Convert.ToBase64String(Text.Encoding.UTF8.GetBytes text)
-        let contents (text: string) =
-            $$"""{"encoding":"base64","content":"{{encode text}}"}"""
-        let boardItem =
-            """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"Issue","number":2144,"title":"diff audit","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
-        let graph (query: string) =
-            if query.Contains "projectsV2" then
-                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
-            elif query.Contains "fields(first" then
-                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
-            else
-                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardItem}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-        let transport =
-            Fake.Recorder(fun (req: Request) ->
-                let ref' = req.Query |> List.tryFind (fun (k, _) -> k = "ref") |> Option.map snd
-                match req.Method, req.Path.Trim '/' with
-                | "POST", "graphql" ->
-                    match req.Body with
-                    | Query(query, _) -> ok (graph query)
-                    | _ -> Error(Errors.NotFound "graphql without a query")
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-                | "GET", "repos/FS-GG/.github/issues/2144" ->
-                    ok $"""{{"number":2144,"state":"open","body":"Paths: %s{path}"}}"""
-                | "GET", "repos/FS-GG/.github/issues/2144/comments" -> ok "[]"
-                | "GET", "repos/FS-GG/.github/pulls" ->
-                    ok """[{"number":2149,"head":{"ref":"item/2144-quoted-diff-inventory"}}]"""
-                | "GET", "repos/FS-GG/.github/pulls/2149" ->
-                    ok $"""{{"number":2149,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2144-quoted-diff-inventory","sha":"%s{head}"}},"base":{{"ref":"main","sha":"%s{baseSha}"}}}}"""
-                | "GET", "repos/FS-GG/.github/pulls/2149/files" ->
-                    ok $"""[{{"filename":"%s{path}"}}]"""
-                | "GET", p when p = $"repos/FS-GG/.github/commits/%s{head}" ->
-                    ok """{"commit":{"message":"ordinary rename"}}"""
-                | "GET", p when p.StartsWith "repos/FS-GG/.github/contents/" ->
-                    match ref' with
-                    | Some r when r = baseSha -> ok (contents before)
-                    | Some r when r = head -> ok (contents after)
-                    | _ -> Error(Errors.NotFound $"unexpected contents ref: %A{ref'}")
-                | "GET", "repos/FS-GG/.github/actions/runs" ->
-                    ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2144-quoted-diff-inventory","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2149}]}]}"""
-                | "GET", p when p.StartsWith "repos/FS-GG/.github/commits/" && p.EndsWith "/check-runs" ->
-                    ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
-                | "GET", "repos/FS-GG/.github/issues/2149/comments" ->
-                    // A canonical, fully passing chain that opts OUT of the audit and attaches no receipt.
-                    let initial =
-                        $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-2144\nreviewed-head: %s{head}\nverdict: pass\ndiff-audit-required: false\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: no runtime-route comparison subject"
-                    let accepted =
-                        $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
-                    ok (JsonSerializer.Serialize [ {| id = 1; html_url = "https://reviews/1"; body = initial |}; {| id = 2; html_url = "https://reviews/2"; body = accepted |} ])
-                | method', p -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{p}"))
-        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
-        let cache = Path.Combine(Path.GetTempPath(), "fsgg-2144-driver-" + Guid.NewGuid().ToString "n")
-        let previousOut, previousErr = Console.Out, Console.Error
-        try
-            Directory.CreateDirectory cache |> ignore
-            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
-            use capturedOut = new StringWriter()
-            use capturedErr = new StringWriter()
-            Console.SetOut capturedOut
-            Console.SetError capturedErr
-            let code =
-                Client.driver
-                    (context transport)
-                    (options [ "driver"; "--repo"; ".github"; "--json"; "--worker"; "host-2144" ])
-            Console.Out.Flush()
-            Console.Error.Flush()
-            Console.SetOut previousOut
-            Console.SetError previousErr
-            let stdout = capturedOut.ToString()
-            if code <> 0 then failwithf "exit=%d; stderr=%s; log=%A" code (capturedErr.ToString()) transport.Log
-            use document = JsonDocument.Parse stdout
-            let evidence = document.RootElement.GetProperty("reviewEvidence").GetInt32()
-            if evidence <> expectedEvidence then
-                failwithf
-                    "occurrences=%d expected evidence=%d got %d; stdout=%s; log=%A"
-                    occurrences expectedEvidence evidence stdout transport.Log
-            // The engine had to read both blobs to reach an occurrence count at all — the file count
-            // alone can never distinguish these two runs.
-            Assert.True(transport.Logged $"get FS-GG/.github contents/%s{path}", $"log: %A{transport.Log}")
-        finally
-            Console.SetOut previousOut
-            Console.SetError previousErr
-            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
-            try Directory.Delete(cache, true) with _ -> ()
-
-    /// The driver read set for a one-file, one-PR board, parameterised by the file's base/head content,
-    /// the extra comments on the PR, and what the `contents` reads do.  Shared by the two theories below
-    /// so they differ only in the fact under test.
-    let private auditWorldWith (auditRequired: bool) (path: string) (before: string) (after: string) (extraComments: string list) (contentsResult: string -> Errors.IoResult<Response>) =
-        let head = "2144-audit-head"
-        let baseSha = "2144-audit-base"
-        let encode (text: string) = Convert.ToBase64String(Text.Encoding.UTF8.GetBytes text)
-        let contents (text: string) = $$"""{"encoding":"base64","content":"{{encode text}}"}"""
-        let boardItem =
-            """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"Issue","number":2144,"title":"diff audit","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
-        let graph (query: string) =
-            if query.Contains "projectsV2" then
-                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
-            elif query.Contains "fields(first" then
-                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
-            else
-                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardItem}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-        let requiredField = if auditRequired then "true" else "false"
-        let initial =
-            $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-2144\nreviewed-head: %s{head}\nverdict: pass\ndiff-audit-required: %s{requiredField}\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: no runtime-route comparison subject"
-        let accepted =
-            $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
-        let comments =
-            [ {| id = 1; html_url = "https://reviews/1"; body = initial |}
-              {| id = 2; html_url = "https://reviews/2"; body = (accepted :: extraComments) |> String.concat "\n" |} ]
-        head,
-        Fake.Recorder(fun (req: Request) ->
-            let ref' = req.Query |> List.tryFind (fun (k, _) -> k = "ref") |> Option.map snd
-            match req.Method, req.Path.Trim '/' with
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(query, _) -> ok (graph query)
-                | _ -> Error(Errors.NotFound "graphql without a query")
-            | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-            | "GET", "repos/FS-GG/.github/issues/2144" ->
-                ok $"""{{"number":2144,"state":"open","body":"Paths: %s{path}"}}"""
-            | "GET", "repos/FS-GG/.github/issues/2144/comments" -> ok "[]"
-            | "GET", "repos/FS-GG/.github/pulls" ->
-                ok """[{"number":2149,"head":{"ref":"item/2144-quoted-diff-inventory"}}]"""
-            | "GET", "repos/FS-GG/.github/pulls/2149" ->
-                ok $"""{{"number":2149,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2144-quoted-diff-inventory","sha":"%s{head}"}},"base":{{"ref":"main","sha":"%s{baseSha}"}}}}"""
-            | "GET", "repos/FS-GG/.github/pulls/2149/files" -> ok $"""[{{"filename":"%s{path}"}}]"""
-            | "GET", p when p = $"repos/FS-GG/.github/commits/%s{head}" ->
-                ok """{"commit":{"message":"ordinary rename"}}"""
-            | "GET", p when p.StartsWith "repos/FS-GG/.github/contents/" ->
-                match ref' with
-                | Some r when r = baseSha -> contentsResult (contents before)
-                | Some r when r = head -> contentsResult (contents after)
-                | _ -> Error(Errors.NotFound $"unexpected contents ref: %A{ref'}")
-            | "GET", "repos/FS-GG/.github/actions/runs" ->
-                ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2144-quoted-diff-inventory","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2149}]}]}"""
-            | "GET", p when p.StartsWith "repos/FS-GG/.github/commits/" && p.EndsWith "/check-runs" ->
-                ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
-            | "GET", "repos/FS-GG/.github/issues/2149/comments" -> ok (JsonSerializer.Serialize comments)
-            | method', p -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{p}")),
-        baseSha
-
-    let private auditWorld path before after extraComments contentsResult =
-        auditWorldWith false path before after extraComments contentsResult
-
-    /// Runs the real `Client.driver` over one of those worlds and returns its `reviewEvidence`.
-    let private driverEvidence (transport: Fake.Recorder) =
-        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
-        let cache = Path.Combine(Path.GetTempPath(), "fsgg-2144-driver-" + Guid.NewGuid().ToString "n")
-        let previousOut, previousErr = Console.Out, Console.Error
-        try
-            Directory.CreateDirectory cache |> ignore
-            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
-            use capturedOut = new StringWriter()
-            use capturedErr = new StringWriter()
-            Console.SetOut capturedOut
-            Console.SetError capturedErr
-            let code =
-                Client.driver (context transport) (options [ "driver"; "--repo"; ".github"; "--json"; "--worker"; "host-2144" ])
-            Console.Out.Flush()
-            Console.Error.Flush()
-            Console.SetOut previousOut
-            Console.SetError previousErr
-            let stdout = capturedOut.ToString()
-            if code <> 0 then failwithf "exit=%d; stderr=%s; log=%A" code (capturedErr.ToString()) transport.Log
-            use document = JsonDocument.Parse stdout
-            document.RootElement.GetProperty("reviewEvidence").GetInt32(), stdout
-        finally
-            Console.SetOut previousOut
-            Console.SetError previousErr
-            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
-            try Directory.Delete(cache, true) with _ -> ()
-
-    /// .github#2144 repair-phase round 1, finding 2 — a NARROW receipt must not be weaker than none.
-    ///
-    /// The two arms of the receipt branch used to feed different quantities into the same threshold: the
-    /// no-receipt arm counted whole-diff discovery, the receipt arm counted only the recomputation of the
-    /// ONE token pair the author submitted.  On the identical diff that made "no receipt" report 7
-    /// occurrences and require the audit, while a receipt naming the narrowest rename in the same diff
-    /// reported 1, fell under the threshold, and let the same `diff-audit-required: false` chain be
-    /// accepted.  The author therefore chose whether the gate applied — the escalated defect again,
-    /// reached through the one gesture the protocol actively encourages.
-    ///
-    /// Both rows below drive the real `Client.driver` over the IDENTICAL diff. The only difference is
-    /// whether a valid receipt for the narrow pair is attached, and neither may be accepted.
-    [<Theory>]
-    [<InlineData(false)>]
-    [<InlineData(true)>]
-    let ``#2144 a narrow receipt cannot lower the threshold below whole-diff discovery`` (attachReceipt: bool) =
-        let path = "src/Rogue3/Protocol.fs"
-        // Six occurrences of one rename, plus one occurrence of a second, narrower rename.
-        let before =
-            [ for index in 1..6 -> $"let wide%d{index} = \"oldWide\"" ] @ [ "let narrow = \"oldNarrow\"" ]
-            |> String.concat "\n"
-        let after = before.Replace("oldWide", "newWide").Replace("oldNarrow", "newNarrow")
-
-        let extra =
-            if not attachReceipt then
-                []
-            else
-                // An honest, non-stale receipt — for the narrow pair only.
-                let occurrences = SemanticDiff.inventory path before after "oldNarrow" "newNarrow"
-                let receipt =
-                    SemanticDiff.receipt "FS-GG/.github" "2144-audit-base" "2144-audit-head" "oldNarrow" "newNarrow" [ path ] true occurrences
-                Assert.Equal(1, List.length occurrences)
-                [ $"diff-audit-receipt-v1: %s{SemanticDiff.toBase64 receipt}" ]
-
-        let _, transport, _ = auditWorld path before after extra ok
-        let evidence, stdout = driverEvidence transport
-
-        // Whole-diff discovery is 7, over the default threshold of 5, so the audit is mechanically
-        // required and the chain's `diff-audit-required: false` contradicts the live facts — with or
-        // without the narrow receipt.
-        if evidence <> 0 then
-            failwithf "attachReceipt=%b expected evidence=0 got %d; stdout=%s; log=%A" attachReceipt evidence stdout transport.Log
-
-    /// .github#2144 repair-phase round 2 — a receipt covering PART of the diff must not open the gate.
-    ///
-    /// Round 1 stopped the author turning the gate OFF by submitting narrow evidence. This is the other
-    /// half: with the gate ON, a receipt that is entirely honest about the one rename it names still let
-    /// a two-rename diff through, because the engine only ever checked it against a recomputation of its
-    /// own pair. The author chose how much of the diff the audit applied to.
-    ///
-    /// Both rows drive the real `Client.driver` over an IDENTICAL diff carrying two distinct renames,
-    /// six quoted occurrences each. The only difference is whether the submitted receipts cover one of
-    /// them or both. Subset must red; the covering union must go green.
-    [<Theory>]
-    [<InlineData(false, 0)>]
-    [<InlineData(true, 1)>]
-    let ``#2144 receipts covering a strict subset of the discovered set are refused`` (coverBoth: bool) (expectedEvidence: int) =
-        let path = "src/Rogue3/Protocol.fs"
-        let head = "2144-audit-head"
-        let baseSha = "2144-audit-base"
-
-        let before =
-            ([ for i in 1..6 -> $"let a%d{i} = \"oldWide\"" ] @ [ for i in 1..6 -> $"let b%d{i} = \"oldOther\"" ])
-            |> String.concat "\n"
-
-        let after = before.Replace("oldWide", "newWide").Replace("oldOther", "newOther")
-
-        let dispositioned =
-            List.map (fun (row: SemanticDiff.Occurrence) ->
-                { row with Disposition = SemanticDiff.IntendedContractChange })
-
-        let receiptLine oldToken newToken =
-            let occurrences = SemanticDiff.inventory path before after oldToken newToken |> dispositioned
-            Assert.Equal(6, List.length occurrences)
-            let receipt = SemanticDiff.receipt "FS-GG/.github" baseSha head oldToken newToken [ path ] true occurrences
-            $"diff-audit-receipt-v1: %s{SemanticDiff.toBase64 receipt}"
-
-        // The engine discovers both renames, so the audit is mechanically required either way; the chain
-        // says so honestly. What is under test is purely whether the receipts ACCOUNT for the whole diff.
-        Assert.Equal(12, (SemanticDiff.discoveredOccurrences [ path, before, after ]).Length)
-
-        let receipts =
-            if coverBoth then
-                [ receiptLine "oldWide" "newWide"; receiptLine "oldOther" "newOther" ]
-            else
-                [ receiptLine "oldWide" "newWide" ]
-
-        let _, transport, _ = auditWorldWith true path before after receipts ok
-        let evidence, stdout = driverEvidence transport
-
-        if evidence <> expectedEvidence then
-            failwithf "coverBoth=%b expected evidence=%d got %d; stdout=%s; log=%A" coverBoth expectedEvidence evidence stdout transport.Log
-
-    /// .github#2144 repair-phase round 1, finding 3 — the fail-closed arm must be executable.
-    ///
-    /// `Client.fs` turns an unreadable blob into "required", because threshold satisfaction could not be
-    /// DISPROVED — half of the objective the escalation set.  Inverting that line used to leave Core 604,
-    /// Cli 585 and GitHub 457 all green: the mutant survived, so a regression reopening the escalated
-    /// bypass through a failed blob read would have been invisible.
-    ///
-    /// A 404 is NOT this case and must stay an honest empty read: the server saying the path is absent at
-    /// that ref is a file this PR added or deleted.
-    [<Theory>]
-    [<InlineData("unreadable", 0)>]
-    [<InlineData("absent", 1)>]
-    let ``#2144 an unreadable blob requires the audit while a 404 stays an honest empty read`` (mode: string) (expectedEvidence: int) =
-        let path = "src/Rogue3/Protocol.fs"
-        let before = "let a = \"oldName\""
-        let after = "let a = \"newName\""
-
-        let contentsResult: string -> Errors.IoResult<Response> =
-            match mode with
-            | "unreadable" -> fun _ -> Error(Errors.Http(500, "upstream failed"))
-            | _ -> fun _ -> Error(Errors.NotFound $"contents/%s{path}")
-
-        let _, transport, _ = auditWorld path before after [] contentsResult
-        let evidence, stdout = driverEvidence transport
-
-        if evidence <> expectedEvidence then
-            failwithf "mode=%s expected evidence=%d got %d; stdout=%s; log=%A" mode expectedEvidence evidence stdout transport.Log
-
     [<Fact>]
     let ``followup audit apply disposes an abandoned queue's ref even when another worker holds the open issue`` () =
         let transport = world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) false
@@ -2650,6 +2316,7 @@ module ApplicationServiceTests =
             // exists only to keep an unexpected REST call loud rather than silently empty.
             | "GET", path when path.EndsWith "/comments" ->
                 ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
+            | "POST", path when path.EndsWith "/comments" -> ok """{"id":9001}"""
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
@@ -2664,7 +2331,7 @@ module ApplicationServiceTests =
         let items () =
             let status = if mutationAccepted then "Ready" else "Blocked"
 
-            [ boardItemIn status 47 "blocked item" (Some staleBlocker) "OPEN"
+            [ boardItemInWithBody status 47 "blocked item" (Some staleBlocker) "OPEN" "Paths: src/A.fs"
               boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
             |> String.concat ","
 
@@ -2707,6 +2374,7 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok """{"number":47,"body":"Paths: src/A.fs"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
@@ -2727,7 +2395,7 @@ module ApplicationServiceTests =
         let mutable blockedBy = "FS-GG/FS.GG.SDD#45"
 
         let items () =
-            [ boardItemIn status 47 "a decision item" (if blockedBy = "" then None else Some blockedBy) "OPEN"
+            [ boardItemInWithBody status 47 "a decision item" (if blockedBy = "" then None else Some blockedBy) "OPEN" "Paths: none"
               boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
             |> String.concat ","
 
@@ -2771,6 +2439,7 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok """{"number":47,"body":"Paths: none"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
@@ -2836,13 +2505,14 @@ module ApplicationServiceTests =
                 ok """{"number":301,"body":"Paths: src/Real/**\n\nClass: defect"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
+            | "POST", path when path.EndsWith "/comments" -> ok """{"id":9047}"""
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     /// .github#2394 — a coherent `Blocked on: human/...` park must not be projected away by
     /// `LIFECYCLE-PROJECTION-LAG`. One OPEN item, `Status=Blocked`, with NO recorded `Blocked by` ref at
     /// all — deliberately, so `Blockers.cleared` is `false` and `BLOCKER-CLEARED` (and the
     /// `humanHoldAllowsFlip` gate it already carried before this fix) is never even the rule in play. No
-    /// claim, no PR, no delivery obligation. Every mechanical fact `LifecycleProjection.project` reads
+    /// claim, no PR, no delivery obligation. Every mechanical fact the lifecycle reducer reads
     /// computes straight through to its final `Ready` fallthrough — exactly the reproduction recorded on
     /// the issue three times on one row — so only the body sentinel `sentinel` toggles stands between that
     /// computed destination and a board write.
@@ -2858,12 +2528,12 @@ module ApplicationServiceTests =
 
         let body =
             if sentinel then
-                """{"number":47,"body":"Paths: src/A.fs\n\nBlocked on: human/action"}"""
+                "Paths: src/A.fs\n\nBlocked on: human/action"
             else
-                """{"number":47,"body":"Paths: src/A.fs"}"""
+                "Paths: src/A.fs"
 
         let items () =
-            [ boardItemIn status 47 "a human-parked item" None "OPEN" ] |> String.concat ","
+            [ boardItemInWithBody status 47 "a human-parked item" None "OPEN" body ] |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
@@ -2906,7 +2576,8 @@ module ApplicationServiceTests =
                     else
                         Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" -> ok body
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                ok (System.Text.Json.JsonSerializer.Serialize {| number = 47; body = body |})
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
@@ -3032,10 +2703,10 @@ module ApplicationServiceTests =
 
         let items () =
             let blocker =
-                """{"status":{"name":"Done"},"blockedBy":null,"content":{"__typename":"Issue","number":2155,"title":"resolved blocker","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
+                """{"status":{"name":"Done"},"blockedBy":null,"content":{"__typename":"Issue","number":2155,"title":"resolved blocker","body":"","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
 
             let external =
-                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{if blockedBy = "" then "null" else $"{{\"text\":\"%s{blockedBy}\"}}"},"content":{{"__typename":"Issue","number":96,"title":"external target","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}"""
+                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{if blockedBy = "" then "null" else $"{{\"text\":\"%s{blockedBy}\"}}"},"content":{{"__typename":"Issue","number":96,"title":"external target","body":"Paths: src/A.fs","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}"""
 
             String.concat "," [ external; blocker ]
 
@@ -3086,6 +2757,7 @@ module ApplicationServiceTests =
             | "GET", "repos/EHotwagner/rogue3/issues/96" ->
                 ok """{"number":96,"state":"open","body":"Paths: src/A.fs"}"""
             | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok "[]"
+            | "POST", "repos/EHotwagner/rogue3/issues/96/comments" -> ok """{"id":9096}"""
             | "GET", "repos/EHotwagner/rogue3/pulls" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
@@ -3155,7 +2827,7 @@ module ApplicationServiceTests =
     /// .github#2382: a board whose rows are all SETTLED — closed, and already `Done`.
     ///
     /// `commentReads` records every issue-comment thread the pass actually fetches, because that is the
-    /// whole subject. A settled row's thread can change no reconcile outcome (`LifecycleProjection.project`
+    /// whole subject. A settled row's thread can change no reconcile outcome (the lifecycle reducer
     /// answers `Project(Done)`, which `Chore.lifecycleProjection` drops on `item.Status = destination`, or
     /// `Withheld`), so every one of those reads is pure budget — and they are the population that GROWS,
     /// one row per item the fleet ever completes.
@@ -3268,7 +2940,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         if code <> 0 then failwithf ".github#2220 reconcile failed: %s" err
 
-        Assert.Equal("BLOCKER-CLEARED", str "rule" row)
+        Assert.Equal("LIFECYCLE-PROJECTION-LAG", str "rule" row)
         Assert.Equal("written", str "outcome" row)
 
         // The RECEIPT names Backlog...
@@ -3323,7 +2995,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Equal("Done", str "value" queued)
 
         // The finding fields are still there — `--apply` ADDS to the dry-run row, it does not replace it.
-        Assert.Equal("CLOSED-ISSUE-NOT-DONE", str "rule" queued)
+        Assert.Equal("LIFECYCLE-PROJECTION-LAG", str "rule" queued)
         Assert.Equal("quick", str "size" queued)
 
         // Exit code UNCHANGED. A deferred write is not a failure — it is a promise the queue keeps.
@@ -3374,8 +3046,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         let expected =
             "applying (2 mechanical finding(s))" + nl
-            + "  CLOSED-ISSUE-NOT-DONE    FS.GG.SDD#101            Status=Done" + nl
-            + "  CLOSED-ISSUE-NOT-DONE    FS.GG.SDD#102            Status=Done" + nl
+            + "  LIFECYCLE-PROJECTION-LAG FS.GG.SDD#101            Status=Done" + nl
+            + "  LIFECYCLE-PROJECTION-LAG FS.GG.SDD#102            Status=Done" + nl
             + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
             + "applied  FS.GG.SDD#101  Status=Done" + nl
             + "queued   FS.GG.SDD#102  Status=Done (run scripts/fsgg-coord flush)" + nl
@@ -3468,7 +3140,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let mutable status = "Blocked"
 
         let items () =
-            [ boardItemIn status 47 "a human-parked item" None "OPEN" ] |> String.concat ","
+            [ boardItemInWithBody status 47 "a human-parked item" None "OPEN" "Paths: src/A.fs\n\nBlocked on: human/decision" ]
+            |> String.concat ","
 
         let transport =
             Fake.Recorder(fun (req: Request) ->
@@ -3573,12 +3246,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // The em dash in `Chore.Statement` is NOT emitted raw: the default encoder escapes every
         // non-ASCII character, and it does so identically for the old `JsonSerializer` and the new
         // `Utf8JsonWriter`. Spelled from ASCII so the assertion says which bytes it means.
-        let escapedEmDash = "\\u2014"
-
         let expected =
-            """[{"id":"CLOSED-ISSUE-NOT-DONE:FS-GG/FS.GG.SDD#101","remedy":"Status=Done","rule":"CLOSED-ISSUE-NOT-DONE","size":"quick","statement":"FS.GG.SDD#101: the issue is CLOSED but the board says In progress """
-            + escapedEmDash
-            + """ set Status to Done.","subject":"FS.GG.SDD#101"}]"""
+            """[{"id":"LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#101","remedy":"Status=Done","rule":"LIFECYCLE-PROJECTION-LAG","size":"quick","statement":"FS.GG.SDD#101: fresh lifecycle facts project Status=Done; repair the stale board projection.","subject":"FS.GG.SDD#101"}]"""
 
         Assert.Equal(expected, out.Trim())
         Assert.Equal(0, code)
@@ -4138,6 +3807,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
           "`Client.intakeCmd` is private; audited by transaction tests. Its validate arm emits one typed zero-write receipt, while apply emits one receipt-bound issue/projection result; malformed drafts and unreadable receipts fail on stderr before a POST."
           Options.RouteCmd,
           "`Client.deliveryRouteCmd` is private; audited by reading pending its recording-transport fixture. Its show arm emits one typed current receipt only after reading both the body and append-only comment ledger; record validates the source-bound receipt before its sole comment POST, and malformed or unreadable evidence fails on stderr."
+          Options.GraphQlOps,
+          "`Client.graphQlOps` is the JSON-only operational facade over `OperationalGraphQl`; the typed boundary fault, pagination, duplicate, repeated-cursor and partial-mutation cases are driven in GraphQlBoundaryTests, while every migrated shell/Python consumer has an executable integration fixture."
           Options.DiffAudit,
           "`SemanticDiffApplication.run` is a local git-object command; planted base/head, unresolved, resolved, stale, malformed, threshold and declaration arms are covered by SemanticDiffTests plus the executable engine fixture" ]
 

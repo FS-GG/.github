@@ -46,38 +46,6 @@ module DeliveryRouteApplication =
         | true, _ -> Error "route must be lightweight, sdd-required, or null"
         | false, _ -> Error "route is required"
 
-    let decode (raw: string) =
-        try
-            use document = JsonDocument.Parse raw
-            let root = document.RootElement
-            if root.ValueKind <> JsonValueKind.Object then Error "receipt must be a JSON object" else
-            let schema = requiredString root "schema"
-            let subject = requiredString root "subject"
-            let revision = requiredString root "subjectRevision"
-            let selectedRoute = route root
-            let agent = requiredString root "agent"
-            let timestamp = requiredString root "timestamp"
-            let reasons = strings root "reasonCodes"
-            let rationale = requiredString root "rationale"
-            let impacts = strings root "declaredImpacts"
-            let facts = strings root "observedFacts"
-            let work = optionalString root "sddWorkId"
-            let spec = optionalString root "specHome"
-            let gates = strings root "requiredGates"
-            match schema, subject, revision, selectedRoute, agent, timestamp, reasons, rationale, impacts, facts, work, spec, gates with
-            | Ok schema, Ok subject, Ok revision, Ok selectedRoute, Ok agent, Ok timestamp, Ok reasons, Ok rationale,
-              Ok impacts, Ok facts, Ok work, Ok spec, Ok gates ->
-                Ok ({ Schema = schema; Subject = subject; SubjectRevision = revision; Route = selectedRoute;
-                     Agent = agent; Timestamp = timestamp; ReasonCodes = reasons; Rationale = rationale;
-                     DeclaredImpacts = impacts; ObservedFacts = facts; SddWorkId = work; SpecHome = spec; RequiredGates = gates }: DeliveryRoute.Receipt)
-            | _ ->
-                let error = function Error value -> [ value ] | Ok _ -> []
-                [ yield! error schema; yield! error subject; yield! error revision; yield! error selectedRoute
-                  yield! error agent; yield! error timestamp; yield! error reasons; yield! error rationale
-                  yield! error impacts; yield! error facts; yield! error work; yield! error spec; yield! error gates ]
-                |> String.concat "; " |> Error
-        with :? JsonException as error -> Error $"receipt is not valid JSON: {error.Message}"
-
     let decodeStructured (raw: string) =
         try
             use document = JsonDocument.Parse raw
@@ -122,19 +90,19 @@ module DeliveryRouteApplication =
 
     let private render kind errors =
         let detail = errors |> String.concat "; "
-        printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = kind; errors = errors; detail = detail |})
+        printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = kind; errors = errors; detail = detail |})
 
     let run opts =
         match opts.Args with
-        | [ "validate"; subject; revision; path ] ->
-            match File.ReadAllText path |> decode with
+        | [ "validate"; subject; path ] ->
+            match File.ReadAllText path |> decodeStructured with
             | Error error -> render "refusal" [ error ]; ExitCode.toInt ExitCode.Error
-            | Ok receipt ->
-                match DeliveryRoute.validate subject revision receipt with
+            | Ok record ->
+                match StructuredDecision.validateRouteLedger subject [ record ] with
                 | Ok _ -> render "current" []; ExitCode.toInt ExitCode.Green
                 | Error errors -> render "refusal" errors; ExitCode.toInt ExitCode.Error
         | [ "record"; _ ]
         | [ "show"; _ ] ->
             render "refusal" [ "route record/show require the live GitHub receipt boundary" ]; ExitCode.toInt ExitCode.Error
         | _ ->
-            render "refusal" [ "usage: route validate <subject> <subject-revision> <receipt.json>" ]; ExitCode.toInt ExitCode.Error
+            render "refusal" [ "usage: route validate <subject> <record.json>" ]; ExitCode.toInt ExitCode.Error

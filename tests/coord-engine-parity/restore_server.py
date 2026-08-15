@@ -45,6 +45,10 @@ import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from route_decision_fixture import route_comment
 
 RATE = {"cost": 1, "remaining": 4980}
 
@@ -270,8 +274,15 @@ class H(BaseHTTPRequestHandler):
                                         "last": _WRITES[-1] if _WRITES else None})
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p)
         if m:
+            n = int(m.group(1))
+            route = {
+                "id": 700000 + n,
+                "body": route_comment(f"FS-GG/FS.GG.SDD#{n}", ""),
+                "user": {"login": "fixture-route"},
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
             with LOCK:
-                return self._send(200, list(_STORE.get(int(m.group(1)), [])))
+                return self._send(200, [route] + list(_STORE.get(n, [])))
         # The open-issue LIST — the set `reap`'s claim scan runs over (#581). Every issue the store knows
         # about, which is exactly the seeded markers' issues. Must precede the single-issue regex below:
         # `/issues` and `/issues/<n>` are one token apart.

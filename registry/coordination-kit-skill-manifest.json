@@ -110,7 +110,7 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "3a17af49cfc68a4d25956bfdd32ff138a85c7765377194d63f73ef4eb340c563",
+      "tree-sha256": "100d31ab71e10e81ec8214eb644ec6907335f58180b10ec6506ed65bf4cbcd38",
       "files": [
         {
           "path": "SKILL.md",
@@ -124,7 +124,7 @@
         },
         {
           "path": "references/command-contracts.md",
-          "sha256": "0da5070d147fd65691dd9de3009437bec991f64e0231163fce7a3ddc1b8b0113",
+          "sha256": "d54062fbe47b63ad4a77880dde07bd38ac05385b51b888dfe7060de948c74bb8",
           "executable": false
         },
         {
@@ -134,7 +134,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "141a04567a37eefc4138701688fb1ef19043864c2ed305a4d519de8e2b399f21",
+          "sha256": "e3aa48e4f010564c06bd164122733e8588500014e39843545322738bfb8cf194",
           "executable": false
         },
         {
@@ -144,7 +144,7 @@
         },
         {
           "path": "references/independent-review.md",
-          "sha256": "7372013b91ac98fc04a9a440962ffda6eb7220edf97800021f7dddd1cf0e4a77",
+          "sha256": "c87b63701f07a5857513615e7ae2625cdda3941309508302dc5b5268bc6b90d7",
           "executable": false
         },
         {

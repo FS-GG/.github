@@ -218,7 +218,7 @@
        reviewer protocol boundary, not a correction to an existing description; the engine and
        drivers move only because all three packages are one coherent set. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.57.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.58.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

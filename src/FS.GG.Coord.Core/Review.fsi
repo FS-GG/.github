@@ -174,7 +174,6 @@ module Review =
           NextAction: NextAction
           FreshnessToken: string
           ActionKey: string
-          EvidenceClassification: string
           /// Every chain this verdict excluded from its evidence because a host acceptance already
           /// settled it at a head the pull request has since moved off (.github#2527) — the fact that
           /// explains why a pull request visibly carrying two initial markers is being classified against

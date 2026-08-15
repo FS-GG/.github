@@ -58,14 +58,13 @@ module Reads =
                 // why this is an error and not an empty list.
                 Error(Malformed(subject, $"the response is not JSON: %s{e.Message}"))
 
-    /// Compatibility decoder retained until M6 removes the legacy JsonElement domain decoders. The
-    /// envelope itself is owned by `GraphQl`; this function never sees raw `data`/`errors`.
+    /// The envelope itself is owned by `GraphQl`; consumers never see raw `data`/`errors`.
     /// announced its own incompleteness.
     ///
     /// **THE ORDER IS THE CONTRACT, AND THIS FUNCTION IS WHAT MAKES IT STRUCTURAL** (`.github#2534`).
     /// GitHub reports an exhausted GraphQL budget — and any other partial field failure — as an HTTP
     /// **200 carrying BOTH `data` and `errors`**, byte-indistinguishable at the transport layer from a
-    /// complete answer. `Board.graphQlData` has carried this shape from the start and `Scan.fs`/`Done.fs`
+    /// complete answer. `GraphQl.decode` carries this shape and `Scan.fs`/`Done.fs`
     /// each re-implemented it correctly, but nothing made a read that SKIPPED it fail — so three reads in
     /// this module drifted: `recentCommentBodies` and `subIssues` accepted a partially populated `nodes`
     /// array as a complete one, and `prClosingRef` turned a rate-limited response into `Ok None`, the
@@ -73,12 +72,9 @@ module Reads =
     /// enforced. A function every read must call to reach `data` is, and
     /// `GraphQlErrorsFirstTests` fails the build if any read in this layer reaches `data` around it.
     ///
-    /// RATE LIMIT FIRST, for the reason `Board.graphQlData` states: test the generic partial arm first and
+    /// RATE LIMIT FIRST: test the generic partial arm first and
     /// an exhausted budget is misreported as a malformed response, destroying the one fact — that this
     /// condition is temporary — the caller needs in order to back off rather than refuse the subject.
-    let private graphQlData (subject: string) (body: string) : IoResult<JsonElement> =
-        GraphQl.decode subject body Ok
-
     let private str (e: JsonElement) (name: string) =
         match e.TryGetProperty name with
         | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
@@ -842,7 +838,7 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
-                match graphQlData subject response.Body with
+                match GraphQl.decode subject response.Body Ok with
                 | Error e -> Error e
                 | Ok data ->
 
@@ -1230,7 +1226,7 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
-                match graphQlData subject response.Body with
+                match GraphQl.decode subject response.Body Ok with
                 | Error e -> Error e
                 | Ok data ->
 
@@ -1409,11 +1405,11 @@ module Reads =
             | Ok doc ->
                 use doc = doc
 
-                // THE ORDER IS THE CONTRACT — now enforced by `graphQlData` rather than restated here.
+                // THE ORDER IS THE CONTRACT — enforced by `GraphQl.decode` rather than restated here.
                 // The non-object guard, the `errors`-before-`data` ordering and the rate-limit-first
                 // dispatch all moved into that one function (`.github#2534`), so this read cannot reach
                 // `data` around them and neither can any read added after it.
-                match graphQlData subject response.Body with
+                match GraphQl.decode subject response.Body Ok with
                 | Error e -> Error e
                 | Ok data ->
 
@@ -2655,7 +2651,7 @@ module Reads =
                 // on a PR nobody checked. `Reads.fsi` has always documented the correct contract —
                 // *"distinct from a failed read, which is an `Error`"* — and the implementation did not
                 // hold it.
-                match graphQlData subject response.Body with
+                match GraphQl.decode subject response.Body Ok with
                 | Error e -> Error e
                 | Ok data ->
 

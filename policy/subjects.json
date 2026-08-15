@@ -19,12 +19,12 @@
       "command": ["bash", "tests/evidence-manifest/run.sh"]
     },
     {
-      "id": "coordination-retirement-readiness-fixture",
-      "command": ["bash", "tests/coordination-retirement-readiness/run.sh"]
+      "id": "historical-evidence-fixture",
+      "command": ["bash", "tests/historical-evidence/run.sh"]
     },
     {
-      "id": "coordination-health-collector-fixture",
-      "command": ["bash", "tests/coordination-health-collector/run.sh"]
+      "id": "m6-cutover-acceptance-fixture",
+      "command": ["bash", "tests/m6-cutover-acceptance/run.sh"]
     }
   ]
 }

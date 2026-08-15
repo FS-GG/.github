@@ -30,7 +30,6 @@ module BlockerLintTests =
         Assert.Equal<string list>(
           [ "add --status Blocked";
               "intake apply Status=Blocked";
-              "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked";
               "release --status Blocked";
               "set-field --batch Status=Blocked";
               "set-field Status Blocked" ],
@@ -61,18 +60,10 @@ module BlockerLintTests =
         Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
-        Assert.Equal(6, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
-        Assert.Contains("StatusNotBlocked", chore)
-        // `ChoreKind.Write` owns the indirect reconcile write.  It deliberately renders the
-        // discriminated union through `statusWireName`, so pin the actual production mapping rather
-        // than a source spelling that only existed in an earlier draft of this test.
-        Assert.Contains("StatusNotBlocked _ -> Some(\"Status\", statusWireName Blocked)", chore)
-
-        // .github#2220: BLOCKER-CLEARED's remedy column is the DESTINATION's, chosen from the row's
-        // touch-set — not a literal `Ready`. `.github#1858` declares `Paths: none`, which `Types.fsi`
-        // documents as unschedulable BY DESIGN, and the old unconditional `Ready` would have advertised it
-        // to every reader while `batch`/`take` declined it forever.
-        Assert.Contains("BlockerCleared(_, destination) -> Some(\"Status\", statusWireName destination.Status)", chore)
+        Assert.Equal(1, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
+        Assert.Contains("LifecycleProjectionLag destination -> Some(\"Status\", statusWireName destination)", chore)
+        for retired in [ "StatusNotBlocked"; "BlockerCleared"; "ClosedIssueNotDone"; "ClaimStatusLag"; "ClaimReviewLag" ] do
+            Assert.DoesNotContain(retired, chore)
 
         // ...AND THE CLI MAY NOT SPELL THAT COLUMN A SECOND TIME. `writesFor` builds BLOCKER-CLEARED's
         // two-field batch and used to hardcode `statusWireName FS.GG.Coord.Types.Ready` for the Status
@@ -738,7 +729,7 @@ module BlockerLintTests =
                   ETag = None
                   NextLink = None; Headers = Map.empty }
 
-        let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) =
+        let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) (body: string option) =
             // `Scan.parseRow` reads `nested node "blockedBy" "text"` — the TEXT field's value is a
             // nested `{"text": "..."}` object on the wire, exactly as every other field is, NOT a bare
             // string. `null` (no value at all) is the shape an empty field takes.
@@ -747,12 +738,13 @@ module BlockerLintTests =
                 | Some b -> $"""{{"text":"%s{b}"}}"""
                 | None -> "null"
 
-            $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blockedByJson},"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+            let bodyJson = body |> Option.map System.Text.Json.JsonSerializer.Serialize |> Option.defaultValue "null"
+            $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blockedByJson},"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":%s{bodyJson},"state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
         /// `#42` is `Blocked` with field = `FS-GG/FS.GG.SDD#8`; `#8` is CLOSED, on-board — so the field
         /// alone is a satisfied `BLOCKER-CLEARED` precondition. `body42` is the only thing that varies.
         let transport (body42: string) =
-            let items = [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN"; itemJson 8 "Done" None "CLOSED" ] |> String.concat ","
+            let items = [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42); itemJson 8 "Done" None "CLOSED" None ] |> String.concat ","
 
             Fake.Recorder(fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
@@ -833,21 +825,22 @@ module BlockerLintTests =
                     ()
 
     [<Fact>]
-    let ``reconcile proposes BLOCKER-CLEARED when the body agrees with the field (or says nothing)`` () =
+    let ``reconcile routes a cleared blocker through the sole lifecycle reducer`` () =
         // A REAL touch-set. This was `Paths: none` as filler — the subject is the #2079 withhold control,
         // not the touch-set — and since .github#2220 that body puts the row on the `Backlog` path. The
         // assertion below still held there, so nothing failed; it had simply stopped being the ORDINARY
         // cleared row this control is the positive half of.
         let _, out, _ = ReconcileWithholdFixture.run "Paths: src/A.fs"
-        Assert.Contains("BLOCKER-CLEARED", out)
+        Assert.Contains("LIFECYCLE-PROJECTION-LAG", out)
+        Assert.DoesNotContain("BLOCKER-CLEARED", out)
 
     [<Fact>]
-    let ``reconcile WITHHOLDS BLOCKER-CLEARED on the FS.GG.Templates#348 shape — a body line the field lacks`` () =
+    let ``an inert body blocker never resurrects the retired reducer`` () =
         let _, out, err = ReconcileWithholdFixture.run "Blocked by: FS-GG/FS.GG.SDD#9"
 
         Assert.DoesNotContain("BLOCKER-CLEARED", out)
-        Assert.Contains("withheld BLOCKER-CLEARED", err)
-        Assert.Contains("FS-GG/FS.GG.SDD#9", err)
+        Assert.Contains("LIFECYCLE-PROJECTION-LAG", out)
+        Assert.True(System.String.IsNullOrWhiteSpace err, err)
 
     // ---- `release --blocked-by` end to end (.github#2079 round-1 review, finding 2) -----------------
     //

@@ -22,7 +22,7 @@ module StructuredDecision =
           Rationale: string; SddWorkId: string option; SpecHome: string option; RequiredGates: string list
           Digest: string }
 
-    type ReviewKind = Initial | Confirmation | Acceptance
+    type ReviewKind = Initial | Confirmation | Escalation | RepairPhase | Acceptance
     type ReviewVerdict = Pass | ChangesRequired | Accepted
 
     type ReviewRecord =
@@ -30,9 +30,8 @@ module StructuredDecision =
           HeadSha: string; Critic: string; Verdict: ReviewVerdict; AcceptedExceptions: string list
           RouteApplicability: string; RouteEvidence: string list; PolicyVersion: string
           Kind: ReviewKind; Round: int; InitialReview: string option
-          PrecedingReview: string option; Timestamp: string; Digest: string }
-
-    type RouteReadClassification = StructuredOnly | LegacyOnly | Equivalent | Divergent
+          PrecedingReview: string option; DiffAuditRequired: bool; DiffAuditReceipts: string list
+          Timestamp: string; Digest: string }
 
     let private frame (value: string) = $"%d{Encoding.UTF8.GetByteCount value}:%s{value}"
     let private scalar value = value |> Option.defaultValue "" |> frame
@@ -57,7 +56,12 @@ module StructuredDecision =
               frame (routeName record.Route); frame record.Agent; frame record.Timestamp; strings record.ReasonCodes
               frame record.Rationale; scalar record.SddWorkId; scalar record.SpecHome; strings record.RequiredGates ]
 
-    let private kindName = function Initial -> "initial" | Confirmation -> "confirmation" | Acceptance -> "acceptance"
+    let private kindName = function
+        | Initial -> "initial"
+        | Confirmation -> "confirmation"
+        | Escalation -> "escalation"
+        | RepairPhase -> "repair-phase"
+        | Acceptance -> "acceptance"
     let private verdictName = function Pass -> "pass" | ChangesRequired -> "changes-required" | Accepted -> "accepted"
 
     let reviewDigest (record: ReviewRecord) =
@@ -66,7 +70,8 @@ module StructuredDecision =
               frame record.HeadSha; frame record.Critic; frame (verdictName record.Verdict)
               strings record.AcceptedExceptions; frame record.RouteApplicability; strings record.RouteEvidence
               frame record.PolicyVersion; frame (kindName record.Kind)
-              string record.Round; scalar record.InitialReview; scalar record.PrecedingReview; frame record.Timestamp ]
+              string record.Round; scalar record.InitialReview; scalar record.PrecedingReview
+              string record.DiffAuditRequired; strings record.DiffAuditReceipts; frame record.Timestamp ]
 
     let private blank field value = if String.IsNullOrWhiteSpace value then [ $"%s{field} is required" ] else []
     let private values field items =
@@ -141,13 +146,13 @@ module StructuredDecision =
                           yield "a new review generation requires head movement after host acceptance"
                   | Initial, Some _ ->
                       yield "a new initial review is allowed only after host acceptance"
-                  | (Confirmation | Acceptance), Some prior when prior.Kind = Acceptance ->
+                  | (Confirmation | Escalation | RepairPhase | Acceptance), Some prior when prior.Kind = Acceptance ->
                       yield "host acceptance may be followed only by a new initial review generation"
                   | Confirmation, _ ->
                       expectedConfirmationRound <- expectedConfirmationRound + 1
                       if record.Round <> expectedConfirmationRound then
                           yield $"confirmation round must be contiguous within its generation: expected %d{expectedConfirmationRound}"
-                  | Acceptance, _ -> ()
+                  | (Escalation | RepairPhase | Acceptance), _ -> ()
                   | _, _ -> ()
                   if record.Kind <> Initial && generationCritic <> Some record.Critic then
                       yield "every record in one review generation must bind the same critic"
@@ -171,6 +176,7 @@ module StructuredDecision =
                   | Acceptance, Accepted -> ()
                   | Acceptance, _ -> yield "acceptance records must carry verdict accepted"
                   | (Initial | Confirmation), (Pass | ChangesRequired) -> ()
+                  | (Escalation | RepairPhase), ChangesRequired -> ()
                   | _ -> yield "review records must carry pass or changes-required"
                   if record.Kind = Initial && record.Round <> 0 then yield "initial review round must be zero"
                   if record.Kind = Confirmation && record.Round < 1 then yield "confirmation round must be positive"
@@ -179,34 +185,23 @@ module StructuredDecision =
                   if record.Kind <> Initial && record.InitialReview |> Option.exists String.IsNullOrWhiteSpace then
                       yield "initialReview must be non-empty when present"
                   if record.Kind <> Initial && record.InitialReview.IsNone then
-                      yield "confirmation and acceptance records must bind the initial review"
+                      yield "non-initial review records must bind the initial review"
                   if record.Kind <> Initial && record.PrecedingReview.IsNone then
-                      yield "confirmation and acceptance records must bind the preceding review"
+                      yield "non-initial review records must bind the preceding review"
                   if record.Kind = Acceptance && not (List.isEmpty record.AcceptedExceptions) then
                       yield "accepted exceptions belong to critic review records, not host acceptance"
+                  if record.Kind <> Initial && record.DiffAuditRequired then
+                      yield "diffAuditRequired belongs to the initial review record"
+                  if record.Kind <> Acceptance && not (List.isEmpty record.DiffAuditReceipts) then
+                      yield "diffAuditReceipts belong to the acceptance record"
+                  if record.DiffAuditReceipts |> List.exists String.IsNullOrWhiteSpace then
+                      yield "diffAuditReceipts must contain only non-empty encoded receipts"
                   if record.AcceptedExceptions |> List.exists String.IsNullOrWhiteSpace then
                       yield "acceptedExceptions must contain only non-empty identifiers"
               yield! chainErrors (fun (record: ReviewRecord) -> record.Revision) _.PreviousDigest _.Digest reviewDigest records ]
         if List.isEmpty errors then Ok records else Error errors
 
-    let classifyRoute (legacy: DeliveryRoute.Receipt option) (structured: RouteRecord option) =
-        match legacy, structured with
-        | None, Some _ -> StructuredOnly
-        | Some _, None -> LegacyOnly
-        | Some old, Some fresh ->
-            if old.Route = fresh.Route
-               && old.SddWorkId = fresh.SddWorkId
-               && old.SpecHome = fresh.SpecHome
-               && old.RequiredGates = fresh.RequiredGates then Equivalent else Divergent
-        | None, None -> Divergent
-
-    let routeClassificationName = function
-        | StructuredOnly -> "structured-only"
-        | LegacyOnly -> "legacy-only"
-        | Equivalent -> "equivalent"
-        | Divergent -> "divergent"
-
-    let toLegacyReceipt (record: RouteRecord) : DeliveryRoute.Receipt =
+    let toEffectiveRoute (record: RouteRecord) : DeliveryRoute.Receipt =
         { Schema = DeliveryRoute.Schema; Subject = record.Subject; SubjectRevision = record.Digest
           Route = record.Route; Agent = record.Agent; Timestamp = record.Timestamp
           ReasonCodes = record.ReasonCodes; Rationale = record.Rationale

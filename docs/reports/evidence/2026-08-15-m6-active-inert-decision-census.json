@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "schema": "fsgg.coord.m6-active-inert-decision-census/1",
+  "measured_at": "2026-08-15T01:08:07Z",
+  "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf",
+  "collected_with_sha": "b84423e7f8c28e08efd3697d7fd62d13b2f90527",
+  "binding_note": "The complete live census was collected at b84423e7. Subsequent commits changed lifecycle routing and test fixtures, not structured decision decoding or authority; the comprehensive e41a762f source absence and decision suites revalidated this census against the frozen implementation.",
+  "query": "complete Coordination board ready --all joined to issue/PR state, board Status, and every comments page",
+  "pagination": "all 108 board rows and all 13 open pull requests; every comments connection drained and deduplicated",
+  "pagination_complete": true,
+  "board_rows": 108,
+  "open_pull_requests": 13,
+  "active_definition": "open, schedulable issue routes and open pull-request reviews",
+  "inert_definition": "closed or Done issue routes and closed/merged pull-request reviews; comments remain immutable history but have no runtime authority",
+  "active_route_v1": 17,
+  "active_route_v2": 17,
+  "active_route_legacy_only": 0,
+  "active_review_v1": 0,
+  "active_review_v2": 0,
+  "active_review_legacy_only": 0,
+  "inert_route_v1": 81,
+  "inert_route_v2": 5,
+  "inert_route_legacy_only": 76,
+  "preserve_inert_comments": true,
+  "migration_writes": [
+    {
+      "ref": "FS-GG/.github#1858",
+      "url": "https://github.com/FS-GG/.github/issues/1858#issuecomment-5299702800",
+      "revision": 1,
+      "digest": "7f531113b876a02d60cd2b51aa0ef082ca04cbaa81449f8ae6f4e54ebe74fd06",
+      "second_read_identical_and_current": true
+    }
+  ],
+  "raw_observation_digests": {
+    "board_join_tsv_sha256": "bdad3c9aa7bea15c2392f3f5a261ccae6816eee5f26897b3f607df6306b5554d",
+    "open_pr_tsv_sha256": "521fea29d0522ab7c3055c4a576201390423f2d9a210d0abc3bb8be4367244e6"
+  },
+  "invariant": "Historical prose-shaped comments cannot authorize because production contains only the validated structured v2 boundary."
+}

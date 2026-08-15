@@ -76,20 +76,13 @@ belong on the initial or confirmation record. Every acceptance is preflighted th
 retirement and terminal-chain parser; successful output reports `effectiveChainValidated: true`. The
 command rejects legacy v1 input before any write.
 
-`review --json` emits `evidenceClassification` on every verdict so dual-read `equivalent` and
-`divergent` states are observable during M4–M5.
+## New-only authority
 
-## Migration and removal
+M6 removed v1 body hashes, locator/subsequence matching, evidence classifications, and prose review-marker
+authority. Every active route has a validated structured record; the complete active/inert census records
+zero active legacy-only route or review authority. The 76 inert historical comments remain untouched, but
+the runtime cannot interpret them as authorization. Missing or invalid v2 evidence fails closed.
 
-Reads are dual during M4–M5: `legacy-only`, `structured-only`, `equivalent`, and `divergent` are explicit
-classifications. Migration appends revision 1; it never edits or deletes an old comment. Active records
-copy the explicit route, scope, dependency, and touch-set facts into v2, and every divergent classification
-is reviewed before the v2 record becomes effective. New and revised decisions use only v2.
-
-M6 may remove v1 body hashes, locator/subsequence matching, and prose review-marker authority only after
-three consecutive operating cycles have zero unexplained dual-read difference, no active `legacy-only`
-decision, and a rollback rehearsal proves the v2 ledger can be read from retained comments. Until that
-explicit trigger, v1 is read-only compatibility—not an alternate write path.
-
-Rollback before M6 is a code revert: append-only comments remain intact. Never rewrite or delete a v2
-record to repair it; append the next correctly linked revision.
+Never rewrite or delete a structured record to repair it; append the next correctly linked revision.
+Rollback is a reviewed higher-version code release and preserves the structured ledgers—it does not restore
+the retired prose authority.

@@ -1,4 +1,11 @@
-# M6 compatibility-retirement readiness
+# M6 compatibility-retirement readiness (superseded historical gate)
+
+> Historical record: this gate correctly did **not** pass. On 2026-08-15 the owner explicitly
+> superseded the elapsed-time condition; no weekly period is reinterpreted or fabricated. The replacement
+> is the comprehensive, exact-SHA cutover acceptance in
+> [`evidence/2026-08-15-m6-cutover-acceptance.json`](evidence/2026-08-15-m6-cutover-acceptance.json),
+> validated by `scripts/m6-cutover-acceptance.py`. This document remains evidence of the earlier blocked
+> state and has no current authorization role.
 
 M6 is not ready. M3, M4, and M5 are milestone delivery windows, not three weekly operating
 measurement periods. Each lasted less than one day, and each has zero issue creations and zero issue
@@ -7,11 +14,13 @@ No evidence was invented for the remaining measures after that blocking result.
 
 The machine-readable census is
 [`evidence/2026-08-14-m6-retirement-readiness.json`](evidence/2026-08-14-m6-retirement-readiness.json).
-It is intentionally rejected by:
+It was intentionally rejected by the now-retired calendar validator. Its exact bytes remain bound by
+the replacement evidence rather than being rewritten into a pass:
 
 ```sh
-python3 scripts/coordination-retirement-readiness.py \
-  docs/reports/evidence/2026-08-14-m6-retirement-readiness.json
+sha256sum docs/reports/evidence/2026-08-14-m6-retirement-readiness.json
+python3 scripts/m6-cutover-acceptance.py \
+  docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json
 ```
 
 The validator requires exactly seven-day consecutive periods, issue closures greater than creations,
@@ -50,7 +59,7 @@ retirement remains blocked by `.github#2569`: `Board.fs`/`Reads.fs` still carry 
 compatibility shims it names. Their continued presence is evidence against retirement, not permission
 to delete them early.
 
-## Earliest honest continuation
+## Historical continuation that was superseded
 
 Because the roadmap says these measures are weekly, the first possible new three-period run begins
 2026-08-17T00:00:00Z and ends 2026-09-07T00:00:00Z. That date is not a forecast or automatic approval.
@@ -60,6 +69,6 @@ with `--live-github` *after the canonical collector and production acceptance sw
 authorizes removal of the reducer rollback switch, GraphQL shims, v1 decision readers, pre-saga release
 paths, or the recoverable TRX history.
 
-The user-authorized Chainsaw cut bypasses unavailable kit-source SDD/feedback/cycle machinery only.
-It does not convert short milestone windows into weekly measurements, fabricate feedback, weaken release
-security, or permit irreversible evidence deletion before the gate passes.
+The owner decision does not convert short milestone windows into weekly measurements. It replaces that
+criterion with named comprehensive tests, required red mutations, immutable evidence verification,
+new-only live smoke, coherent release adoption, exact-main binding, and an empty successor census.

@@ -96,7 +96,7 @@ let private blocker n state =
 /// condition `BLOCKER-CLEARED` names, and it is why the wiring is worth having: the rule was written,
 /// tested, and unreachable while the item it would have freed sat invisible to every scheduler path.
 let private blockerClearedBoard =
-    [ item 733 Blocked Open [ blocker 979 BlockerClosed ] None ]
+    [ { item 733 Ready Open [] None with Class = Some Hardening; BoardClass = None } ]
 
 [<Fact>]
 let ``an idle worker on a board with a cleared blocker is offered the chore, and HOLDS the lock`` () =
@@ -112,7 +112,7 @@ let ``an idle worker on a board with a cleared blocker is offered the chore, and
         // would hand a worker a remedy pointed at the lock issue.
         Assert.Equal(ref' 733, chore.Subject)
         Assert.Equal(lockRef, got)
-        Assert.Equal("BLOCKER-CLEARED:FS-GG/.github#733", chore.Id)
+        Assert.Equal("CLASS-PROJECTION-LAG:FS-GG/.github#733", chore.Id)
 
 [<Fact>]
 let ``a worker holding a live claim is offered NOTHING, and no lock is attempted`` () =
@@ -157,11 +157,13 @@ let ``a repo with no chore lock offers nothing, and never asks the network`` () 
 /// The same cleared-blocker condition, on a row belonging to a DIFFERENT repo. The org board is one board
 /// for seven repos, so this is what a bare `next` (no `--repo`, hence `Scan.scope None`) actually hands us.
 let private otherRepoBoard =
-    [ { item 733 Blocked Open [ blocker 979 BlockerClosed ] None with
+    [ { item 733 Ready Open [] None with
           Ref =
             { Owner = "FS-GG"
               Repo = "FS.GG.Rendering"
-              Number = 640 } } ]
+              Number = 640 }
+          Class = Some Hardening
+          BoardClass = None } ]
 
 [<Fact>]
 let ``a chore is NEVER offered under another repo's lock — the subject and the lock must name one repo`` () =
@@ -649,7 +651,8 @@ let private closedDoneRowJson (boardClass: string option) =
         | None -> "null"
         | Some c -> $"""{{"name":"%s{c}"}}"""
 
-    $"""{{"status":{{"name":"Done"}},"blockedBy":null,"class":%s{classField},"phase":null,"content":{{"__typename":"Issue","number":398,"title":"a Done row declaring its own class","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
+    let body = System.Text.Json.JsonSerializer.Serialize classedBody
+    $"""{{"status":{{"name":"Done"}},"blockedBy":null,"class":%s{classField},"phase":null,"content":{{"__typename":"Issue","number":398,"title":"a Done row declaring its own class","body":%s{body},"state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
 
 /// `.github`'s board, ONE closed-and-Done row (`#398`), the `Class` column under `boardClass`'s control —
 /// `None` is .github#2254's AC1 shape (empty column). `bodyReads` counts every `GET .../issues/398` (the
@@ -690,7 +693,7 @@ let private closedDoneBoard (boardClass: string option) (bodyReads: int ref) =
     Fake.Recorder(closedDoneBoardRoute boardClass bodyReads)
 
 [<Fact>]
-let ``#2254 reconcile PAYS the census read and reports the row - the critic's reconcile half`` () =
+let ``#2254 reconcile consumes the typed census body and reports the row without a REST fallback`` () =
     // `withCache` (.github#2525 repair 1): `reconcileIds` runs the REAL `Client.reconcile`, which reaches
     // `Scan.scanFresh` → `Cache.putScan`. Unisolated, that wrote this fixture's four rows into the
     // DEVELOPER'S OWN scan cache, where the next live `batch`/`driver` read served them as the board.
@@ -701,7 +704,7 @@ let ``#2254 reconcile PAYS the census read and reports the row - the critic's re
         let ids = reconcileIds transport
 
         Assert.Equal<string list>([ "CLASS-PROJECTION-LAG:FS-GG/.github#398" ], ids)
-        Assert.Equal(1, bodyReads.Value)) // read ONCE — never re-read on a retry, never skipped
+        Assert.Equal(0, bodyReads.Value)) // the complete GraphQL row is the sole body authority
 
 [<Fact>]
 let ``#2254 batch does NOT pay the census read - the critic's measured regression, closed`` () =
@@ -751,7 +754,7 @@ let ``#2254 an ALREADY-CLASSED Done row costs reconcile nothing either - the bou
 
 // ---- .github#2394 round 1 — the SAME defect through the RESERVED branch's second door -------------------
 //
-// Round 1 of independent review found the initial fix incomplete: `LifecycleProjection.project` has TWO
+// Round 1 of independent review found the initial fix incomplete: the lifecycle reducer has TWO
 // live call sites in `Chore.fs` (`choresFor`'s CLAIM-REVIEW-LAG arm, and the separate `lifecycleProjection`
 // function `ChoresTests`/`ApplicationServiceTests` already cover for the UNCLAIMED path), and only the
 // unclaimed one was gated. A live claim plus an open `item/<n>-*` PR on a coherently human-parked `Blocked`
@@ -786,18 +789,6 @@ let private claimedParkedRow (humanBlock: HumanBlock option) =
         HumanBlock = humanBlock }
 
 [<Fact>]
-let ``.github#2394 round 1 — CLAIM-REVIEW-LAG does not flip a human-parked Blocked row under a live claim with an open PR`` () =
-    Assert.Empty(Chore.derive [ claimedParkedRow (Some AwaitingHumanAction) ])
-
-[<Fact>]
-let ``.github#2394 round 1 — the human/decision sentinel gates the claimed path too, not only human/action`` () =
-    Assert.Empty(Chore.derive [ claimedParkedRow (Some AwaitingHumanDecision) ])
-
-[<Fact>]
-let ``.github#2394 round 1 AC3 — the SAME claimed row without the sentinel still derives CLAIM-REVIEW-LAG`` () =
-    // The release half: the round-1 guard must not have been written as "never flip a claimed Blocked row"
-    // — it must key on the sentinel exactly as the unclaimed path's guard does.
-    Assert.Equal<string list>(
-        [ "CLAIM-REVIEW-LAG" ],
-        Chore.derive [ claimedParkedRow None ] |> List.map (fun c -> c.Kind.RuleId)
-    )
+let ``claimed rows never reach a second lifecycle reducer regardless of prose facts`` () =
+    for humanBlock in [ None; Some AwaitingHumanAction; Some AwaitingHumanDecision ] do
+        Assert.Empty(Chore.derive [ claimedParkedRow humanBlock ])

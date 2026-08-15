@@ -265,6 +265,16 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
 
 ### M6 retirement-readiness evidence (blocked; M6 remains unchecked)
 
+> **Superseded, not passed:** On 2026-08-15 the owner explicitly directed that the three-week elapsed-time
+> criterion be replaced by comprehensive load-bearing tests followed by immediate new-only go-live and
+> deletion of the old paths. The facts below remain accurate historical evidence: the short M3–M5 windows
+> were not weeks and `0 < 0` was false. Nothing below is reclassified as passing. The replacement
+> fail-closed acceptance is `scripts/m6-cutover-acceptance.py` over
+> `docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json`; it requires the exact implementation SHA,
+> empty removal inventory, complete active/inert decision census, idempotent live intent seed, immutable
+> TRX archive, named comprehensive suites and red mutations, coherent 0.58 feed promotion/adoption,
+> exact-main new-only smoke, closed #2569, and zero same-class successors.
+
 - **The three-cycle prerequisite is not met:** M3, M4, and M5 completed in three short windows on
   2026-08-14, not three weekly operating measurement periods. GitHub's complete day census has zero
   issue creations and zero closures inside each exact window, so the strict `creation < closure`
@@ -290,6 +300,76 @@ Durations are sequencing estimates, not calendar commitments. Each milestone has
 - **Lifecycle exception:** The user-authorized Chainsaw path still bypasses only unavailable kit-source
   SDD, feedback, and cycle machinery. This readiness audit fabricates none of those artifacts and does
   not weaken review, release security, evidence recovery, or the roadmap's time-based gate.
+
+### M6 comprehensive-cutover progress (in flight; M6 remains unchecked)
+
+> **Owner decision — the calendar gate is superseded, not passed.** On 2026-08-15 the owner authorized
+> immediate new-only cutover after a comprehensive, load-bearing test/replay/live acceptance suite. No
+> three-week interval elapsed and the earlier `0 < 0` observations remain false. The blocked readiness
+> JSON and prose above are preserved as history; they are not rewritten into success. The replacement
+> gate is `scripts/m6-cutover-acceptance.py`, and M6 remains unchecked until its terminal release/live
+> bindings pass on exact `main`.
+
+- **New-only implementation and deletion design:** The frozen first-green implementation
+  `e41a762fcba15a4fe64da38f6d2bbd216f8db6cf` removes the lifecycle legacy/shadow reducer, rollback
+  environment switch, status-derived intent migration, and competing Status chores. Reconciliation,
+  claim, and offer paths now consume the one typed intent reducer and v2 watermark. The GraphQL Python
+  frontend, private `graphQlData` wrappers, raw/fallback readers, and their exemptions are deleted; one
+  typed F# boundary owns complete reads, paging, rate/error classification, and partial-mutation aliases.
+  Route and review authorization now consumes structured v2 ledgers only, including typed escalation,
+  repair phase, backlinks, head movement, critic succession, and acceptance; v1 prose and whole-body hash
+  evidence is inert. Package workflows consume prepared manifest bytes only; dry-run/local-pack arms and
+  the superseded release-train scripts/workflow are gone. The live PR reconciliation additionally exposed
+  and repaired one last integration seam: a typed `HumanPark` watermark is now the complete lifecycle
+  reason for a `Blocked` projection, while blocker-derived and manual `Blocked` writes retain their live
+  coherence guard. Verification: the focused lifecycle suite passes 10/10, the decision cutover map
+  contains 15 named inversions, and the hermetic write suite passes 152/152.
+- **Historical evidence removed recoverably:** All 29 tracked TRX files (27,532,297 source bytes) were
+  archived once as a 4,779,502-byte asset on immutable release
+  [`evidence/m6-trx-a8207eb1`](https://github.com/FS-GG/.github/releases/tag/evidence/m6-trx-a8207eb1),
+  downloaded again, and verified member-by-member before deletion. The committed manifest
+  `docs/reports/evidence/2026-08-15-m6-historical-trx-archive.json` binds source commit, every path,
+  size, SHA-256 and Git blob, canonical-row digest
+  `fc7295a20ac4c28b6f01c189eb946509fd2b36b0f3defef52e03c2043c90cee7`, archive digest
+  `d89b4d20068aac3df6ba3c6a5e7d5d90237243d4ed2dbba1a46d45e7dc56679c`, immutable setting, asset ID,
+  public URL, verification, and Git-history restore procedure.
+- **Live intent and authority census:** The authenticated seed records 24 v2 lifecycle-intent comments;
+  its replay binds all 24 unique URLs, actors, immutable timestamps and marker digests, a complete typed
+  `ready --all` read of 108/108 unique rows, and an idempotent second pass of zero posts, 24 exact matches,
+  and zero conflicts. The complete-pagination active/inert census at
+  `docs/reports/evidence/2026-08-15-m6-active-inert-decision-census.json` found 17 active route subjects
+  with v2 authority and zero active route legacy-only subjects; active review legacy-only is also zero.
+  Seventy-six legacy-only route comments are inert closed/Done history and remain immutable comments;
+  new-only tests prove they cannot authorize. The one reachable stale route on `.github#1858` received a
+  structured record and an identical second read.
+- **Fail-closed acceptance architecture:**
+  `docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json` binds the exact implementation and base,
+  negative compatibility inventories, census, lifecycle seed plus authenticated replay, immutable TRX
+  archive, named test families, executable conceptual inversions, full engine mutations, and release/live
+  preconditions. Repository-relative inputs are realpath-contained and reject every symlink. Seven
+  conceptual removal mutations each carry executable setup, restore, command, non-zero result, and unique
+  output hash. Missing, byte-drifted, incomplete-pagination, non-idempotent, non-red, or SHA-unbound
+  evidence fails closed. Calendar collector/readiness scripts no longer authorize retirement; their prior
+  evidence is retained only as superseded history.
+- **Comprehensive verification:** At exact first-green `e41a762f`, `python3 scripts/test --all` passed
+  91/91 suites in 1,271 seconds with stdout SHA-256
+  `3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf`. The full engine mutation command
+  passed 11/11 justified legs, zero decorative or unmeasured legs; every 2,053-test control was green and
+  every mutant red, with result SHA-256
+  `9ca09c8af0ee16805723583d05f1bbe62da0ed04b782abada8bdf8a08affbe33`. Compact reproducible bindings are
+  in `2026-08-15-m6-comprehensive-test-results.json` and `2026-08-15-m6-mutation-results.json`. After the
+  round-9 repairs, the derived selector passed 27/27 in 149 seconds with log SHA-256
+  `ed129fcf262d5d92904c7d75823fee289775165b1559ee973af0fbeac337670c`.
+- **Independent review and remaining terminal gates:** Round 9 recorded four truthful majors. The same
+  critic has independently rechecked the repaired heads and found 001 realpath/symlink containment, 002
+  executable mutation evidence, and 003 authenticated seed/census binding structurally resolved; the
+  critique artifact remains at round 9, changes-required, so no pass is fabricated. Finding 004 remains
+  open by design. Preparatory PR [#2636](https://github.com/FS-GG/.github/pull/2636) must merge through
+  normal green protection; then exact-main new-only smoke and lifecycle repair must pass, coherent set
+  `0.58.0` must be prepared once, published byte-identically to both feeds, promoted, adopted and pinned,
+  issue `2569` must be resolved with no open same-class successor, and the same critic must record the
+  reserved terminal round-10 PASS. Only then may the acceptance JSON become terminal and this M6 checkbox
+  be checked.
 
 ### M0 stabilization evidence
 

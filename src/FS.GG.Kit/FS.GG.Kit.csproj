@@ -493,10 +493,9 @@
          diagnostic, which is receiver-visible; under the coherent-set scheme (#2402) that bump belongs
          to $(FsggCoherentSetVersion) in Directory.Build.props, not a literal here, and is scheduled by
          `kit-auto-publish` rather than authored by this PR. -->
-    <!-- 0.56.0 -> 0.57.0, a MINOR (.github#2587): packed pnext-item independent-review guidance now
-         rejects issue/PR body path, count, and suite-verdict claims as acceptance evidence unless
-         they carry repository/revision (or stable-URL) and command/check provenance. That is a new
-         receiver-visible reviewer protocol boundary. The engine and drivers move only because the
+    <!-- 0.57.0 -> 0.58.0, a MINOR (M6): packed coordination guidance now authors only typed v2
+         route/review decisions and the manifest-bound release/cutover contract. The engine and drivers
+         ship the same new-only authority boundary because the
          packages share $(FsggCoherentSetVersion). -->
     <Version>$(FsggCoherentSetVersion)</Version>
 

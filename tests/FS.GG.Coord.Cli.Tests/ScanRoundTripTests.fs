@@ -1,8 +1,6 @@
 module FS.GG.Coord.Cli.Tests.ScanRoundTripTests
 
 open System
-open System.Security.Cryptography
-open System.Text
 open System.Text.Json
 open Xunit
 open FS.GG.Coord
@@ -52,11 +50,8 @@ let private aRow: Scan.Row =
 /// A transport that answers by ENDPOINT, so one fake can serve a body read and a marker read differently —
 /// which is what the snapshot assembler actually does. The off-board open-issue scan (case 25) rides on the
 /// bare `/issues` list; these worlds have no off-board claim, so it answers empty — the honest scan result.
-let private currentRouteComment (subject: string) (body: string) =
-    let revision = SHA256.HashData(Encoding.UTF8.GetBytes body) |> Convert.ToHexString |> _.ToLowerInvariant()
-    let receipt =
-        $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"%s{subject}","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-42","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
-    "<!-- fsgg:delivery-route/v1 -->\n" + receipt
+let private currentRouteComment (subject: string) (_body: string) =
+    StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-42" None
 
 let private routed (body: string) (comments: string) =
     // Success fixtures must carry the same source-bound receipt production reads.  A missing receipt is
@@ -1101,7 +1096,7 @@ let ``#1738 a BLOCKED row whose blockers ALL resolved IS probed - its open item 
     Assert.Empty(Chore.derive [ item ])
 
 [<Fact>]
-let ``#1738 the SAME blocked row with NO open item PR still derives BLOCKER-CLEARED - #620 intact end to end`` () =
+let ``a scanned cleared blocker cannot invoke the retired Status reducer`` () =
     // The mate, over the real writer: without it, "the probe reaches the gate" is satisfied by a scan that
     // holds every blocked row, and #620's remedy would be deleted at the impure edge rather than in the rule.
     let transport, _ = blockedRowTransport """{"number":7,"state":"closed"}""" "[]"
@@ -1117,9 +1112,7 @@ let ``#1738 the SAME blocked row with NO open item PR still derives BLOCKER-CLEA
     let item = request.Candidates.[0].Item
     Assert.Equal(None, item.ItemPr)
 
-    match Chore.derive [ item ] |> List.map (fun c -> c.Kind.RuleId) with
-    | [ "BLOCKER-CLEARED" ] -> ()
-    | other -> failwith $"a cleared Blocked row with no in-flight PR must still promote — got %A{other}"
+    Assert.Empty(Chore.derive [ item ])
 
 [<Fact>]
 let ``#1738 a BLOCKED row with an OPEN blocker is NOT probed - the widened probe buys no request it need not`` () =

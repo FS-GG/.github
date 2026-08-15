@@ -108,8 +108,8 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/review-succession-wire.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 # ---- snapshot construction --------------------------------------------------------------------------
-# The binding is fixed: head `head2`, implementer `impl-worker`, ordinary phase, round 1. The marker
-# carries `verdict: changes-required` at `reviewed-head: head1`, so the classifier reaches the
+# The binding is fixed: head `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`, implementer `impl-worker`, ordinary phase, round 1. The marker
+# carries `verdict: changes-required` at `reviewed-head: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, so the classifier reaches the
 # `Some _ ->` arm at `Review.fs` `classify` that consults `criticSuccessionValid` — the ONE branch pair
 # (ordinary and repair-phase) where a grant is ever looked at. Change any of that and the legs below
 # stop testing succession without stopping passing, which is the trap section 2's third assertion
@@ -126,18 +126,47 @@ grant() {
 # different fact on the wire from an explicit null and is tested as one.
 snapshot() {
   python3 - "$1" "$2" "$3" <<'PY'
-import json, sys
+import hashlib, json, sys
 
 out, critic, granted = sys.argv[1], sys.argv[2], sys.argv[3]
+def frame(value):
+    raw = value.encode()
+    return f"{len(raw)}:{value}"
+
+record = {
+    "schema": "fsgg.coord.review-decision/v2",
+    "subject": "FS-GG/.github#2537/pr/2554",
+    "revision": 1,
+    "previousDigest": None,
+    "headSha": "a" * 40,
+    "critic": critic,
+    "verdict": "changes-required",
+    "acceptedExceptions": [],
+    "routeApplicability": "not-meaningful",
+    "routeEvidence": ["pure review succession state"],
+    "policyVersion": "structured-decisions/1",
+    "kind": "initial",
+    "round": 0,
+    "initialReview": None,
+    "precedingReview": None,
+    "diffAuditRequired": False,
+    "diffAuditReceipts": [],
+    "timestamp": "2026-08-15T00:00:00Z",
+}
+fields = [
+    frame(record["schema"]), frame(record["subject"]), str(record["revision"]), frame(""),
+    frame(record["headSha"]), frame(record["critic"]), frame(record["verdict"]), "",
+    frame(record["routeApplicability"]), "".join(map(frame, record["routeEvidence"])),
+    frame(record["policyVersion"]), frame(record["kind"]), str(record["round"]), frame(""),
+    frame(""), str(record["diffAuditRequired"]), "", frame(record["timestamp"]),
+]
+record["digest"] = hashlib.sha256("|".join(fields).encode()).hexdigest()
 facts = {
     "comments": [
         {
             "id": 1,
             "url": "https://reviews/1",
-            "body": (
-                "<!-- fsgg:independent-review:v1 -->\n"
-                f"critic: {critic}\nreviewed-head: head1\nverdict: changes-required"
-            ),
+            "body": "<!-- fsgg:review-decision/v2 -->\n" + json.dumps(record, separators=(",", ":")),
         }
     ],
     "checks": "pending",
@@ -152,7 +181,7 @@ json.dump(
         "binding": {
             "itemRef": "FS-GG/.github#2537",
             "pr": 2554,
-            "headSha": "head2",
+            "headSha": "b" * 40,
             "claimGeneration": "gen-1",
             "implementerIdentity": "impl-worker",
             "phase": "ordinary",
@@ -212,7 +241,7 @@ fi
 # VALID: the ACCEPTED grant. Every refusal snapshot in section 2 is this one with a single field
 # changed, so this leg is also what makes those legs single-variable comparisons rather than anecdotes.
 VALID="$WORK/valid.json"
-snapshot "$VALID" kite "$(grant kite fresh-critic host-9b63 head2)"
+snapshot "$VALID" kite "$(grant kite fresh-critic host-9b63 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)"
 out="$(run_engine "$VALID")"; rc=$?
 if [ "$rc" -ne 0 ]; then
   bad "VALID: a well-formed grant must be exit 0" "$out"
@@ -244,8 +273,8 @@ fi
 # the property is actually enforced, and .github#2557 is where the duplicate Core conjuncts are decided.
 for blank in successorCriticIdentity grantedBy; do
   case "$blank" in
-    successorCriticIdentity) g="$(grant kite "" host-9b63 head2)"; what="a grant naming no successor" ;;
-    *)                       g="$(grant kite fresh-critic "" head2)"; what="a grant nobody accountable issued" ;;
+    successorCriticIdentity) g="$(grant kite "" host-9b63 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)"; what="a grant naming no successor" ;;
+    *)                       g="$(grant kite fresh-critic "" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)"; what="a grant nobody accountable issued" ;;
   esac
   BLANKED="$WORK/blank-$blank.json"
   snapshot "$BLANKED" kite "$g"
@@ -265,11 +294,11 @@ echo "── 2. REFUSALS: one reachable conjunct of criticSuccessionValid per le
 # The five REACHABLE refusals, in the order their conjuncts appear in `Review.criticSuccessionValid`.
 # Fields are name|marker-critic|original|successor|granted-by|candidate-head|description.
 REFUSALS=(
-  "exact-critic|kite|kite-OTHER|fresh-critic|host-9b63|head2|a grant naming a DIFFERENT critic than the one this round is stuck on"
-  "generic-identity|fsgg-critic-best|fsgg-critic-best|fresh-critic|host-9b63|head2|a grant whose critic is the bare agent-type string every critic at that route shares (#2451)"
-  "exact-head|kite|kite|fresh-critic|host-9b63|head1|a stale grant left over from an EARLIER head"
-  "self-grant-successor|kite|kite|impl-worker|host-9b63|head2|an implementer manufacturing ITSELF as the successor critic"
-  "self-grant-granter|kite|kite|fresh-critic|impl-worker|head2|an implementer manufacturing its OWN succession"
+  "exact-critic|kite|kite-OTHER|fresh-critic|host-9b63|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|a grant naming a DIFFERENT critic than the one this round is stuck on"
+  "generic-identity|fsgg-critic-best|fsgg-critic-best|fresh-critic|host-9b63|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|a grant whose critic is the bare agent-type string every critic at that route shares (#2451)"
+  "exact-head|kite|kite|fresh-critic|host-9b63|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|a stale grant left over from an EARLIER head"
+  "self-grant-successor|kite|kite|impl-worker|host-9b63|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|an implementer manufacturing ITSELF as the successor critic"
+  "self-grant-granter|kite|kite|fresh-critic|impl-worker|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|an implementer manufacturing its OWN succession"
 )
 
 # refusal_snapshot <name> -- writes $WORK/<name>.json from the REFUSALS row and echoes its path.

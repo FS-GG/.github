@@ -90,10 +90,9 @@ split three ways:
 Nothing here auto-exempts archived or forked repos: "archived" would be a one-click hole in the
 gate. Exemption is always an explicit, reviewed row.
 
-Pure-stdlib + PyYAML (already a coherence-gate dependency) for directions A and B. Direction C shells
-out to the `gh` CLI's `api graphql` (already a repo-wide dependency — `scripts/project-field-options`
-uses the identical subprocess pattern) rather than adding an HTTP/GraphQL library; there is no
-REST enumeration of Projects v2 item content, so unlike A/B this direction cannot be `urllib`-only.
+Pure-stdlib + PyYAML (already a coherence-gate dependency) for directions A and B. Direction C invokes
+the engine's typed `graphql roster-board` operation, so pagination, errors, metering, and node decoding
+remain behind the canonical F# boundary.
 
 Usage:
   scripts/check-roster-closure.py [--roster registry/repos.yml] [--deps registry/dependencies.yml]
@@ -112,9 +111,6 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from graphql_complete_read import drain
-
 import yaml
 
 API = "https://api.github.com"
@@ -126,38 +122,6 @@ DEFAULT_BOARD_TITLE = "Coordination"
 # board can carry one directly). A DraftIssue — the third possible `content` — has no `repository`
 # and is intentionally NOT queried here: it names no repository, so it is not this direction's
 # subject and is skipped rather than treated as an error.
-_BOARD_ITEMS_QUERY = r"""
-query RosterClosureBoardItems($owner:String!,$number:Int!,$after:String){
-  organization(login:$owner){projectV2(number:$number){
-    id number title
-    items(first:100,after:$after){
-      totalCount
-      pageInfo{hasNextPage endCursor}
-      nodes{
-        id
-        status: fieldValueByName(name:"Status"){
-          ... on ProjectV2ItemFieldSingleSelectValue{name}
-        }
-        content{
-          __typename
-          ... on Issue{number repository{owner{login} name}}
-          ... on PullRequest{number repository{owner{login} name}}
-        }
-      }
-    }
-  }}
-  rateLimit{cost remaining}
-}
-"""
-
-_BOARD_PROJECT_LOOKUP_QUERY = r"""
-query RosterClosureBoardProject($owner:String!,$cursor:String){
-  organization(login:$owner){projectsV2(first:50,after:$cursor){totalCount pageInfo{hasNextPage endCursor} nodes{id number title}}}
-  rateLimit{cost remaining}
-}
-"""
-
-
 def _full(owner: str, name: str) -> str:
     """Canonicalize a repo reference to `owner/name`.
 
@@ -302,25 +266,6 @@ def _fetch_org_meta(org: str) -> tuple[int, int | None]:
     return public, (int(private) if private is not None else None)
 
 
-def _resolve_board_project_number(owner: str, title: str) -> int:
-    """The Projects v2 `number` for `owner`'s project named `title`. Raises if 0 or >1 match.
-
-    Read by TITLE, not hardcoded, so a project renumbering does not silently point this gate at the
-    wrong board — the same title-verification discipline `project-field-options.project_field` uses.
-    """
-    result = drain(_BOARD_PROJECT_LOOKUP_QUERY, {"owner": owner},
-                   lambda d: d["organization"]["projectsV2"], lambda n: n,
-                   lambda n: str(n.get("id") or n["number"]), max_pages=20, max_items=1000,
-                   underfull_window=50)
-    nodes = result.items
-    matches = [n for n in nodes if isinstance(n, dict) and n.get("title") == title]
-    if len(matches) != 1:
-        raise RuntimeError(
-            f"expected exactly one Projects v2 board named {title!r} under {owner!r}, found "
-            f"{len(matches)} (of {len(nodes)} project(s) readable at all)")
-    return int(matches[0]["number"])
-
-
 def _fetch_board_items(owner: str, title: str) -> list[dict]:
     """Every item on `owner`'s `title` Projects v2 board, normalized to `{owner, repo, number,
     status}` per row. Raises on any transport/shape failure or a page-count disagreement.
@@ -329,46 +274,13 @@ def _fetch_board_items(owner: str, title: str) -> list[dict]:
     "which repository does this row name", so a `DraftIssue` (no repository) is silently skipped
     rather than treated as unreadable; it names no repository to close over.
     """
-    number = _resolve_board_project_number(owner, title)
-    def decode(raw: dict) -> dict | None:
-            content = (raw or {}).get("content") or {}
-            repo = content.get("repository")
-            if not repo:
-                # LEGITIMATE skip only for content this direction's subject genuinely excludes: a
-                # DraftIssue (no repository field exists at all) or a node GraphQL returned nothing
-                # for at all (no `content`, no `__typename`) — both name no repository to close over.
-                # An Issue/PullRequest with a MISSING `repository` is different: GitHub's schema makes
-                # that field non-nullable for those two types, so seeing it absent means this specific
-                # node came back only PARTIALLY resolved (a per-item GraphQL error, not a whole-request
-                # failure `_gh_graphql`'s error/transport checks already catch). Treating that the same
-                # as a draft would silently drop a row that might be exactly the `.github#2206`
-                # violation this direction exists to catch — so it is a no-verdict instead, the same
-                # "could not read" answer a whole-response failure already gets.
-                if content.get("__typename") in ("Issue", "PullRequest"):
-                    raise RuntimeError(
-                        f"board item #{raw.get('id') if isinstance(raw, dict) else '?'} is an "
-                        f"{content.get('__typename')} with no `repository` in the reply — a partially "
-                        f"resolved node, not a legitimate no-repository row. Cannot trust this page as "
-                        f"complete.")
-                return {"itemId": str(raw["id"]), "_skip": True}
-            status = ((raw.get("status") or {}).get("name")) or ""
-            return {
-                "itemId": str(raw["id"]),
-                "owner": str(((repo.get("owner") or {}).get("login")) or ""),
-                "repo": str(repo.get("name") or ""),
-                "number": content.get("number"),
-                "status": str(status),
-            }
-    def connection(data: dict) -> dict:
-        project = (data.get("organization") or {}).get("projectV2")
-        if not project:
-            raise RuntimeError(f"board {owner}/{number} was not readable while paging items")
-        return project["items"]
-    result = drain(_BOARD_ITEMS_QUERY, {"owner": owner, "number": number},
-                   connection, decode,
-                   lambda row: row["itemId"],
-                   max_pages=100, max_items=10000, cursor_name="after")
-    return [{k: v for k, v in row.items() if k != "itemId"} for row in result.items if not row.get("_skip")]
+    coord = os.environ.get("FSGG_COORD_BIN") or str(Path(__file__).resolve().parent / "fsgg-coord")
+    proc = subprocess.run([coord, "graphql", "roster-board", owner, title], capture_output=True,
+                          text=True, timeout=120, check=False)
+    if proc.returncode:
+        raise RuntimeError(proc.stderr.strip() or f"typed board read failed ({proc.returncode})")
+    raw = json.loads(proc.stdout)
+    return _validate_board_items(raw)
 
 
 def _validate_board_items(raw: object) -> list[dict]:

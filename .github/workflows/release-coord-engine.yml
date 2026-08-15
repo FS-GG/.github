@@ -25,8 +25,8 @@ name: release-coord-engine
 # Version is the EVALUATED fsproj <Version> (msbuild -getProperty), never a grep and never a value
 # pinned in this header. A tag is a COHERENCE CHECK against it, never the source of truth.
 #
-# Release by pushing a tag `coord-engine/v<version>` matching the fsproj <Version>; or run manually
-# (workflow_dispatch) with publish=true. A manual run with publish=false is a pack-only dry run.
+# Release by pushing a tag `coord-engine/v<version>` matching the fsproj <Version>. Manual dispatch is
+# exact-source recovery from an existing prepared manifest.
 #
 # THIS RELEASE DOES NOT `repository_dispatch`, AND THAT PART IS DECIDED (.github#1776). This workflow
 # does not call `dispatch-sender.yml`, and should not: no receiver has an `on: repository_dispatch`
@@ -49,14 +49,10 @@ on:
     tags: ['coord-engine/v*']
   workflow_dispatch:
     inputs:
-      publish:
-        description: "Push to the org feed (false = pack-only dry run)"
-        type: boolean
-        default: false
       source_sha:
-        description: "Immutable prepared source SHA (required when resuming a publish from main)"
+        description: "Exact prepared source SHA for manifest-bound recovery"
         type: string
-        required: false
+        required: true
 
 permissions:
   contents: read
@@ -88,12 +84,11 @@ jobs:
           cache: true
           cache-dependency-path: "**/packages.lock.json"
 
-      - name: Resolve version + publish decision
+      - name: Resolve version and prepared source
         id: v
         env:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref_name }}
-          DISPATCH_PUBLISH: ${{ inputs.publish }}
           DISPATCH_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
@@ -106,7 +101,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
           source_sha="$GITHUB_SHA"
-          if [ "$EVENT" = workflow_dispatch ] && [ "$DISPATCH_PUBLISH" = true ]; then
+          if [ "$EVENT" = workflow_dispatch ]; then
             [[ "$DISPATCH_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::manual publish recovery requires an exact 40-character lowercase source_sha."; exit 1; }
             source_sha="$DISPATCH_SOURCE_SHA"
           fi
@@ -156,11 +151,8 @@ jobs:
               echo "::error::tag $REF ($tag_version) does not match fsproj <Version> ($version)."
               exit 1
             fi
-            echo "push=true" >> "$GITHUB_OUTPUT"
-          elif [ "$DISPATCH_PUBLISH" = "true" ]; then
-            echo "push=true" >> "$GITHUB_OUTPUT"
           else
-            echo "push=false" >> "$GITHUB_OUTPUT"
+            check_sibling_tag "coord-engine/v$version"
           fi
 
       # #1762 — 0.13.0 moved Version and shipped 0.12.0's notes. Evaluate both properties through
@@ -190,23 +182,19 @@ jobs:
           dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release
           dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release
 
-      - name: Use saga-prepared package (publish) or pack locally (dry run)
+      - name: Use the saga-prepared package
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.v.outputs.version }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/packages
-          if [ "${{ steps.v.outputs.push }}" = true ]; then
-            gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
-              --pattern "*.nupkg" --pattern release-manifest.json --dir artifacts/packages
-            bash scripts/release-saga-ci.sh init FS.GG.Coord.Cli "$VERSION" "${{ steps.v.outputs.source_sha }}"
-          else
-            dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release -o artifacts/packages
-          fi
+          gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern "*.nupkg" --pattern release-manifest.json --dir artifacts/packages
+          bash scripts/release-saga-ci.sh init FS.GG.Coord.Cli "$VERSION" "${{ steps.v.outputs.source_sha }}"
 
       # A TOOL THAT PACKS BUT DOES NOT RUN IS THE FAILURE MODE HERE — the payload is a private
-      # ProjectReference (FS.GG.Coord.Core) plus FSharp.Core, and `dotnet pack` succeeding says nothing
+      # ProjectReference (FS.GG.Coord.Core) plus FSharp.Core, and package creation succeeding says nothing
       # about whether the installed tool can actually resolve them. So install the real .nupkg into a
       # throwaway tool-path and drive it end to end, exactly as a receiver will.
       - name: Smoke — install the real package and DECIDE with it
@@ -215,8 +203,8 @@ jobs:
           # ABSOLUTE, and it has to be: a NuGet source path in a config file resolves RELATIVE TO THAT
           # FILE. This config lives in /tmp, so `./artifacts/packages` would resolve to
           # /tmp/artifacts/packages — which does not exist, and the install fails with a "not found in
-          # NuGet feeds" that reads exactly like a broken package. (The dry run caught this. It is the
-          # reason to dry-run.)
+          # NuGet feeds" that reads exactly like a broken package. Prepared-package smoke catches it
+          # before any irreversible write.
           cat > /tmp/isolated.config <<CFG
           <?xml version="1.0" encoding="utf-8"?>
           <configuration>
@@ -244,13 +232,12 @@ jobs:
       # RECORDED-BOARD REPLAY, BEFORE EVERY CUT (.github#2401 AC5). Same leg `coord-engine.yml` runs on
       # every PR, run here against the freshly-built engine one more time before it ships: a cut cannot
       # proceed on a projection whose recorded verdicts moved unexplained. Runs against the just-built
-      # `dotnet pack` output (Release), not the installed tool-path package, since it drives the raw
+      # prepared Release package output, not the installed tool-path package, since it drives the raw
       # executable exactly as tests/coord-engine-e2e/run.sh already does in the PR gate.
       - name: Recorded-board replay — the engine reproduces facts it was actually asked, not invented ones
         run: bash tests/coord-engine-replay/run.sh
 
       - name: Resume manifest-bound org push and await the complete org set
-        if: steps.v.outputs.push == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/release-saga-ci.sh github FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
@@ -279,34 +266,32 @@ jobs:
       # `vars.NUGET_ORG_PUBLISH=true`. Renaming either afterwards invalidates the token exchange.
       # See .github#624.
       - name: Observe public feed before any push
-        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
         id: public
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/release-saga-ci.sh nuget-probe FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       - name: NuGet login (OIDC → short-lived key)
-        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true' && steps.public.outputs.push == 'true'
+        if: steps.public.outputs.push == 'true'
         id: login
         uses: NuGet/login@v1
         with:
           user: ${{ secrets.NUGET_USER }}
 
       - name: Push byte-identical package to nuget.org
-        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true' && steps.public.outputs.push == 'true'
+        if: steps.public.outputs.push == 'true'
         run: |
           dotnet nuget push "artifacts/packages/FS.GG.Coord.Cli.${{ steps.v.outputs.version }}.nupkg" \
             --source https://api.nuget.org/v3/index.json \
             --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
 
       - name: Record externally served public package
-        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/release-saga-ci.sh nuget-record FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       - name: Persist failed release step for exact resume
-        if: failure() && steps.v.outputs.push == 'true'
+        if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/release-saga-ci.sh failure FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
@@ -318,7 +303,6 @@ jobs:
       # reaches zero receivers must go RED (#1923 AC4, from #1776 AC4).
       - name: Mint the cross-repo token the push half writes with
         id: tick-token
-        if: steps.v.outputs.push == 'true'
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
@@ -334,7 +318,6 @@ jobs:
       # stopped distributing it. Thus `receives: coordination-kit` + `kit-delivery: package` is exactly
       # who needs the release notification, while .github#2249 verifies their pins.
       - name: Tell every engine receiver the release exists
-        if: steps.v.outputs.push == 'true'
         env:
           DASHBOARD_TICK_TOKEN: ${{ steps.tick-token.outputs.token }}
           VERSION: ${{ steps.v.outputs.version }}
@@ -361,9 +344,5 @@ jobs:
         run: |
           {
             echo "### fsgg-coord-engine ${{ steps.v.outputs.version }}"
-            if [ "${{ steps.v.outputs.push }}" = "true" ]; then
-              echo "Published \`FS.GG.Coord.Cli\` **${{ steps.v.outputs.version }}** to the org feed."
-            else
-              echo "Pack-only dry run — nothing pushed."
-            fi
+            echo "Published the manifest-bound \`FS.GG.Coord.Cli\` **${{ steps.v.outputs.version }}** payload through the release saga."
           } >> "$GITHUB_STEP_SUMMARY"

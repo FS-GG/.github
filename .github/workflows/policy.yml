@@ -10,15 +10,16 @@ on:
       - "scripts/policy-*"
       - "scripts/policy-runner.py"
       - "scripts/evidence-manifest.py"
-      - "scripts/coordination-retirement-readiness.py"
-      - "scripts/coordination-health-collector.py"
+      - "scripts/verify-historical-evidence.py"
+      - "scripts/m6-cutover-acceptance.py"
+      - "scripts/verify-m6-live-intent-seed.py"
       - "registry/dependencies.yml"
       - "docs/registry/compatibility.md"
       - "tests/projection/**"
       - "tests/policy-runner/**"
       - "tests/evidence-manifest/**"
-      - "tests/coordination-retirement-readiness/**"
-      - "tests/coordination-health-collector/**"
+      - "tests/historical-evidence/**"
+      - "tests/m6-cutover-acceptance/**"
       - "docs/reports/evidence/**"
   push:
     branches: [main]
@@ -30,15 +31,16 @@ on:
       - "scripts/policy-*"
       - "scripts/policy-runner.py"
       - "scripts/evidence-manifest.py"
-      - "scripts/coordination-retirement-readiness.py"
-      - "scripts/coordination-health-collector.py"
+      - "scripts/verify-historical-evidence.py"
+      - "scripts/m6-cutover-acceptance.py"
+      - "scripts/verify-m6-live-intent-seed.py"
       - "registry/dependencies.yml"
       - "docs/registry/compatibility.md"
       - "tests/projection/**"
       - "tests/policy-runner/**"
       - "tests/evidence-manifest/**"
-      - "tests/coordination-retirement-readiness/**"
-      - "tests/coordination-health-collector/**"
+      - "tests/historical-evidence/**"
+      - "tests/m6-cutover-acceptance/**"
       - "docs/reports/evidence/**"
   workflow_dispatch:
 
@@ -55,6 +57,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Historical-evidence verification resolves the exact pre-deletion
+          # source commit and its bound blobs, which a one-commit PR checkout
+          # cannot contain.
+          fetch-depth: 0
       - uses: ./.github/actions/setup-policy-python
       - name: Discover and exercise every declared policy subject
         run: |

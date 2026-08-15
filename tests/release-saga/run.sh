@@ -158,12 +158,29 @@ for name, package in subjects.items():
     assert all(position >= 0 for position in positions), (name, ordered, positions)
     assert positions == sorted(positions), (name, positions)
     assert "--skip-duplicate" not in text, name
+    for retired in (
+        "DISPATCH_PUBLISH",
+        "inputs.publish",
+        "steps.v.outputs.push",
+        "pack locally",
+        "Pack-only dry run",
+        "dotnet pack",
+    ):
+        assert retired not in text, (name, retired)
+    dispatch = text.split("workflow_dispatch:", 1)[1].split("permissions:", 1)[0]
+    assert "source_sha:" in dispatch and "required: true" in dispatch, name
+    assert "Use the saga-prepared package" in text, name
+    assert "gh release download" in text, name
+    assert "release-manifest.json" in text, name
     assert "source_sha:" in text, name
     assert 'echo "source_sha=$source_sha"' in text, name
     assert 'steps.v.outputs.source_sha' in text, name
     assert 'tagged" != "$GITHUB_SHA' not in text, name
-    if name == "release-coord-engine.yml":
-        assert '[[ "$DISPATCH_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]' in text, name
+    exact_sha_checks = (
+        '[[ "$DISPATCH_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        'case "$DISPATCH_SOURCE_SHA" in',
+    )
+    assert any(check in text for check in exact_sha_checks), name
 adapter = (root / "scripts/release-saga-ci.sh").read_text()
 assert "github_base | sed 's:/*$::'" in adapter
 assert "printf '%s/%s/%s/%s.%s.nupkg'" in adapter

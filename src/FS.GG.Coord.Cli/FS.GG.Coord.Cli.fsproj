@@ -167,13 +167,20 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.57.0 — body-level path, count, and suite claims now require verifiable provenance.
+    <PackageReleaseNotes>0.58.0 — M6 removes the old coordination authorities and cuts over to the structured, typed, manifest-bound implementation.
 
-WHAT MOVED, AND WHY IT IS A MINOR. The packed pnext-item independent-review guidance now requires
-issue and pull-request body path/count/suite claims to identify repository and revision (or use a
-stable URL), and count or suite-verdict claims to cite the reproducing command or check URL. Claims
-without that provenance cannot serve as acceptance evidence. This is a new receiver-visible review
-protocol boundary, so a patch would understate the behavioural change.
+WHAT MOVED, AND WHY IT IS A MINOR. Lifecycle reconciliation now has one intent reducer and v2 watermark;
+GraphQL has one typed errors-first boundary; route and review authorization use only digest-chained v2
+records; package publishers consume only prepared saga bytes; historical TRX evidence is retained by an
+immutable content-addressed release. Removed rollback, raw-envelope, prose-marker, body-hash, dry-run,
+and pre-saga paths cannot be selected. These are receiver-visible protocol and operational changes, so a
+minor bump is required.
+
+ACCEPTANCE. The owner explicitly replaced the unelapsed three-week gate with a fail-closed comprehensive
+cutover: broad Core/CLI/GitHub and engine suites, replay/parity/write/e2e, typed-boundary and decision
+inversions, release-saga failure/resume/byte-drift tests, evidence download verification, exact-main live
+smoke, empty successor census, and coherent-set promotion/adoption. Historical calendar evidence remains
+recorded as blocked and is not reinterpreted.
 
 RELEASE SAGA. The coherent set is packed once at one source SHA into a content-addressed manifest.
 The package-owning workflows retain their trusted-publishing identities but consume those exact

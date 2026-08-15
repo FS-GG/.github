@@ -40,7 +40,7 @@ module Driver =
     /// computes, without waiting for the whole chain to validate — additive to the public surface, not a
     /// second marker parser (.github#2175 acceptance 11; `FS.GG.Coord.Core.Review` is the consumer).
     type ReviewPhaseFacts =
-        { /// Invalid/tampered v2 evidence. Non-empty always fails closed; legacy fallback is forbidden.
+        { /// Invalid or tampered structured evidence. Non-empty always fails closed.
           StructuredErrors: string list
           /// How many comments canonically carry the initial-review marker. `InitialPresent` is
           /// `InitialCount > 0`; a caller that needs to distinguish "absent" from "duplicate/competing"
@@ -93,7 +93,6 @@ module Driver =
           Retired: ChainRetirement list
           Diagnostics: string list
           StructuredSubject: string option
-          EvidenceClassification: string
           StructuredErrors: string list }
 
     /// Partition review comments into the chain that binds `currentHead` and the chains a host acceptance

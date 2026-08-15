@@ -21,14 +21,14 @@ module DeliveryApplicationTests =
               Branch = "item/2131-pnext-item-protocol"
               Worktree = "/tmp/2131"
               PullRequest = Some 2174
-              HeadSha = "head-a"
+              HeadSha = String.replicate 40 "a"
               DeclaredPaths = Delivery.Known [ "src/FS.GG.Coord.Cli" ]
               BoardState = "In review" }
           ItemBranchCanonical = true
           ClosingLinkageCanonical = true
           PathsVerified = true
           InReview = true
-          Review = Some { MarkerValid = true; CriticIdentity = Some "critic"; HeadSha = Some "head-a"; Rounds = [ 1 ]; RepairPhase = false; ChecksGreen = true; HostAccepted = true; RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure adapter test"); DiffAuditRequired = false; DiffAuditHead = None }
+          Review = Some { MarkerValid = true; CriticIdentity = Some "critic"; HeadSha = Some(String.replicate 40 "a"); Rounds = [ 1 ]; RepairPhase = false; ChecksGreen = true; HostAccepted = true; RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure adapter test"); DiffAuditRequired = false; DiffAuditHead = None }
           ReviewProblem = None
           Landable = true
           Merged = false
@@ -47,26 +47,23 @@ module DeliveryApplicationTests =
     [<Fact>]
     let ``#2207 client delivery adapter retains malformed parser diagnostics`` () =
         let malformed =
-            [ review 10L "https://reviews/initial" "<!-- fsgg:independent-review:v1 -->\nreviewed-head: head-a\nverdict: pass\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: adapter test"
-              review 20L "https://reviews/accepted" "<!-- fsgg:review-accepted:v1 -->\naccepted-head: head-a\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/initial" ]
+            [ review 10L "https://reviews/initial" "<!-- fsgg:review-decision/v2 -->\n{}" ]
         let parsed, problem = Client.deliveryReviewEvidence true malformed
         let facts = { guardedLandingFacts "claim-generation-a" with Review = parsed; ReviewProblem = problem }
 
         match Delivery.inspect facts with
         | Delivery.Next transition ->
             match transition.Action with
-            | Delivery.RefreshReview reason -> Assert.Contains("critic", reason)
+            | Delivery.RefreshReview reason -> Assert.Contains("required field is missing", reason)
             | action -> failwithf "expected malformed review refresh, got %A" action
         | Delivery.NoVerdict reason -> failwith reason
 
     [<Fact>]
     let ``#2207 client delivery adapter accepts a real multi-round chain for guarded land`` () =
-        let initialUrl = "https://reviews/initial"
-        let confirmationUrl = "https://reviews/round-1"
         let chain =
-            [ review 10L initialUrl "<!-- fsgg:independent-review:v1 -->\ncritic: kestrel\nreviewed-head: head-a\nverdict: changes-required"
-              review 20L confirmationUrl $"<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: {initialUrl}\ncritic: kestrel\nround: 1\npreceding-review: {initialUrl}\nreviewed-head: head-a\nverdict: pass\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: adapter test"
-              review 30L "https://reviews/accepted" $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: head-a\ninitial-review: {initialUrl}\nlatest-confirmation: {confirmationUrl}" ]
+            StructuredFixtures.acceptedReviewComments
+                "FS-GG/.github#2131/pr/2174" (String.replicate 40 "a") "kestrel-1"
+            |> List.map (fun (id, url, body) -> review id url body)
         let parsed, problem = Client.deliveryReviewEvidence true chain
         let facts = { guardedLandingFacts "claim-generation-a" with Review = parsed; ReviewProblem = problem }
 

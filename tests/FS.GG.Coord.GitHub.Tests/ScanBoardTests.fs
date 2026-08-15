@@ -55,21 +55,32 @@ let private scripted (responses: IoResult<Response> list) =
             queue.Dequeue())
 
 /// One page of the board. `hasNext` drives the cursor loop.
+let private itemized (nodes: string) =
+    if String.IsNullOrWhiteSpace nodes then nodes else
+    use document = System.Text.Json.JsonDocument.Parse("[" + nodes + "]")
+    document.RootElement.EnumerateArray()
+    |> Seq.mapi (fun index node ->
+        match node.TryGetProperty "id" with
+        | true, _ -> node.GetRawText()
+        | _ -> node.GetRawText().Insert(1, $"\"id\":\"fixture-%d{index}\","))
+    |> String.concat ","
+
 let private page (nodes: string) (hasNext: bool) (cursor: string) =
     let hn = if hasNext then "true" else "false"
+    let nodes = itemized nodes
 
     $"""{{"data":{{"organization":{{"projectV2":{{"items":{{
         "pageInfo":{{"hasNextPage":%s{hn},"endCursor":"%s{cursor}"}},
         "nodes":[%s{nodes}]}}}}}}}}}}"""
 
 let private issueNode (number: int) (status: string) (blockedBy: string) (state: string) =
-    $"""{{"status":{{"name":"%s{status}"}},
+    $"""{{"id":"PVTI_%d{number}","status":{{"name":"%s{status}"}},
           "blockedBy":{{"text":"%s{blockedBy}"}},
           "content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}",
                       "state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
 let private scopedIssueNode (number: int) (pathRepo: string) =
-    $"""{{"status":{{"name":"Ready"}},
+    $"""{{"id":"PVTI_%d{number}","status":{{"name":"Ready"}},
           "repoScope":{{"name":"%s{pathRepo}"}},
           "content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}",
                       "state":"OPEN","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
@@ -78,6 +89,7 @@ let private scopedIssueNode (number: int) (pathRepo: string) =
 /// `data.organization`, exactly as GitHub answers a `user(login:)` query (#1344).
 let private userPage (nodes: string) (hasNext: bool) (cursor: string) =
     let hn = if hasNext then "true" else "false"
+    let nodes = itemized nodes
 
     $"""{{"data":{{"user":{{"projectV2":{{"items":{{
         "pageInfo":{{"hasNextPage":%s{hn},"endCursor":"%s{cursor}"}},
@@ -87,6 +99,7 @@ let private userPage (nodes: string) (hasNext: bool) (cursor: string) =
 /// query (#1349): the token's own board, resolved with no login at all.
 let private viewerPage (nodes: string) (hasNext: bool) (cursor: string) =
     let hn = if hasNext then "true" else "false"
+    let nodes = itemized nodes
 
     $"""{{"data":{{"viewer":{{"projectV2":{{"items":{{
         "pageInfo":{{"hasNextPage":%s{hn},"endCursor":"%s{cursor}"}},
@@ -448,19 +461,15 @@ let private closedDoneNode (boardClass: string option) =
         | Some c -> $"""{{"name":"%s{c}"}}"""
 
     $"""{{"status":{{"name":"Done"}},"class":%s{classField},
-          "content":{{"__typename":"Issue","number":398,"title":"a Done row declaring its own class",
+          "content":{{"__typename":"Issue","number":398,"title":"a Done row declaring its own class","body":"Paths: none\n\nClass: hardening\n",
                       "state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
 
 [<Fact>]
-let ``#2254 Cache.Reconciling enriches SweptBody for a closed Done row with an EMPTY Class column`` () =
-    // THE POSITIVE LEG. `scanFresh` pays exactly ONE extra REST read — scripted second, so `scripted`
-    // itself proves nothing more is asked — and the parsed body reaches `Row.SweptBody`.
+let ``#2254 Cache.Reconciling reads SweptBody from the typed board response with an EMPTY Class column`` () =
+    // THE POSITIVE LEG. The selected body reaches `Row.SweptBody` without a secondary REST fallback.
     use sandbox = new Sandbox()
 
-    let transport =
-        scripted
-            [ ok (page (closedDoneNode None) false "")
-              ok """{"number":398,"body":"Paths: none\n\nClass: hardening\n"}""" ]
+    let transport = scripted [ ok (page (closedDoneNode None) false "") ]
 
     match Scan.board transport Cache.Reconciling "FS-GG" "Coordination" 12 with
     | Ok [ row ] ->
@@ -468,6 +477,8 @@ let ``#2254 Cache.Reconciling enriches SweptBody for a closed Done row with an E
         | Some(Ok body) -> Assert.Contains("Class: hardening", body)
         | other -> failwithf "a Reconciling scan of an empty-column closed row must populate SweptBody — got %A" other
     | other -> failwithf "expected one row — got %A" other
+    Assert.Equal(1, transport.GraphQlCalls)
+    Assert.Equal(0, transport.RestCalls)
 
 [<Fact>]
 let ``#2254 Cache.Scheduling never enriches SweptBody, even for the identical empty-column closed row`` () =
@@ -922,7 +933,7 @@ let private rankedNode (number: int) (phase: string) (createdAt: string) =
     let phaseField =
         if phase = "" then "" else $""""phase":{{"name":"%s{phase}"}},"""
 
-    $"""{{"status":{{"name":"Ready"}},
+    $"""{{"id":"PVTI_%d{number}","status":{{"name":"Ready"}},
           "blockedBy":{{"text":""}},
           %s{phaseField}
           "content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}",
@@ -1234,7 +1245,7 @@ let ``#2450 a CLAIMED, OPEN 'Blocked' row is NOT probed by this arm - the widene
 // ---- .github#2384: the MARKERLESS-ROW probe must cover 'In review' too, not just 'Ready'/'Backlog' -----
 //
 // The mate to #2450 above, one column left of it. `LIFECYCLE-PROJECTION-LAG`'s projector
-// (`LifecycleProjection.project` in `Client.fs`) reads `Item.ItemPr` the SAME way whether or not the row
+// (the lifecycle reducer in `Client.fs`) reads `Item.ItemPr` the SAME way whether or not the row
 // is claimed — only `Claim.Value` differs. The probe at `Scan.fs:1334` used to fire only for
 // `Ready`/`Backlog`/cleared-`Blocked`, so an UNCLAIMED row already `In review` never had `ItemPr`
 // populated: the projector then read no claim and no PR fact and fell through to its `Ready` default,
@@ -1435,7 +1446,7 @@ let ``.github#2525 an Issue node whose identity will not parse REFUSES instead o
     use _sandbox = new Sandbox()
 
     let broken =
-        """{"status":{"name":"In progress"},"blockedBy":null,
+        """{"id":"PVTI_broken","status":{"name":"In progress"},"blockedBy":null,
              "content":{"__typename":"Issue","title":"an issue whose number came back unreadable",
                         "state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
 
@@ -1494,7 +1505,7 @@ let ``.github#2525 a DraftIssue card is still skipped, not refused`` () =
     use _sandbox = new Sandbox()
 
     let draft =
-        """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"DraftIssue"}}"""
+        """{"id":"PVTI_draft","status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"DraftIssue"}}"""
 
     let nodes = draft + "," + issueNode 9 "Ready" "" "OPEN"
 

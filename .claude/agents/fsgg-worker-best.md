@@ -17,10 +17,10 @@ human park — the escalation is the fresh attempt and the higher round ceiling,
 **If the host dispatched you into a repair phase, it says so explicitly, and three things change** (see
 `pnext-item/references/independent-review.md` § Repair phase): you open a **separately scoped, fresh**
 PR rather than reviving the exhausted one, whose counter is never rewound or reused; your critic's
-initial review comment carries `<!-- fsgg:independent-review-repair-phase:v1 -->` naming the exhausted
-PR and its `fsgg:independent-review-escalation:v1` marker URL; and the chain restarts at round 1 under
+initial review comment carries a structured `repair-phase` review record naming the exhausted
+PR and its the structured `escalation` review record marker URL; and the chain restarts at round 1 under
 the repair-phase ceiling of 10, a distinct literal that is never conflated with the ordinary ceiling of
-3. Everything else — `fsgg:review-accepted:v1`, `landable`, obligations, the done stamp — is unchanged;
+3. Everything else — `fsgg:review-decision/v2` acceptance, `landable`, obligations, the done stamp — is unchanged;
 the repair phase grants no shortcut around any of it. If the host did not say so, you are an ordinary
 `-best` wave worker and none of this paragraph applies.
 
@@ -76,7 +76,7 @@ Non-negotiables, restated because they are the ones workers most often skip:
   not an efficiency gain, and a correctly-formed self-dispatched chain is indistinguishable from a
   sanctioned one. The one stated exception is a solo `pnext-item` invocation with no host to ask.
   Implement the critic's numbered repairs, and merge only after that same critic confirms the exact
-  head and you observe the host's `fsgg:review-accepted:v1` marker for that SHA.
+  head and you observe the host's `fsgg:review-decision/v2` acceptance marker for that SHA.
 
 - **Never edit your item's issue body's content.** The delivery-route receipt's `subjectRevision` is a
   SHA-256 over the body's canonical *subject*, so a content edit silently invalidates it and the claim

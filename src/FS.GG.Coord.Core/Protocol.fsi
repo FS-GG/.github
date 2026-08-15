@@ -302,30 +302,10 @@ module Protocol =
     val renderMarkerAnchorRule: MarkerAnchor -> string
 
     type ReviewPolicyDoc =
-        { InitialMarker: string
-          ConfirmationMarker: string
-          AcceptanceMarker: string
-          EscalationMarker: string
-          RepairPhaseMarker: string
+        { Schema: string
+          Kinds: string list
           MaxAutomatedRepairRounds: int
-          RepairPhaseMaxRounds: int
-          /// Every marker name field above, paired with the `MarkerAnchor` `occurrences` checks it
-          /// against. Replaces `QuotedMarkerRule`'s hand-projected prose: the rule is `occurrences`,
-          /// and this is its input for the review-protocol family.
-          MarkerAnchors: Marker list }
-
-    /// The plain column-0 fields a marker's own comment must additionally carry (.github#2369) — e.g.
-    /// `fsgg:independent-review:v1` requires `critic`, `reviewed-head`, `verdict`. Read off this value
-    /// as data instead of re-deriving `Driver.fs`'s private `markerFieldGrammar` function by hand. An
-    /// empty list is a marker with NO field grammar (escalation, repair-phase) — not an omission; see
-    /// `Driver.fs`'s own comment on why that omission is deliberate.
-    type MarkerFieldGrammarDoc = { MarkerId: MarkerId; RequiredFields: string list }
-
-    /// The review-protocol family's field grammar, one entry per `ReviewPolicyDoc` marker name field,
-    /// in the same order. `ProtocolTests` pins this against `Driver.parseReviewComments`'s own observed
-    /// enforcement (the source of truth `Driver.fs`'s private function encodes), so it cannot drift
-    /// from what the engine actually requires without a red test.
-    val markerFieldGrammar: MarkerFieldGrammarDoc list
+          RepairPhaseMaxRounds: int }
 
     type LifecyclePolicyDoc =
         { RequiredHousekeeping: string list

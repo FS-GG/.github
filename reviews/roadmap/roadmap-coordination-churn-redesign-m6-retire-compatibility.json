@@ -2,7 +2,7 @@
   "schema_version": 3,
   "cycle_id": "roadmap-coordination-churn-redesign-m6-retire-compatibility",
   "milestone": "M6 — retirement-readiness preparation (M6 remains unchecked)",
-  "critic": "fresh independent critics /root/m6_retire_compat/m6_readiness_critic and /root/m6_health_collector/m6_health_critic",
+  "critic": "fresh independent critics /root/m6_retire_compat/m6_readiness_critic, /root/m6_health_collector/m6_health_critic, and /root/m6_final_retirement/m6_final_critic",
   "initial_reviewed_commit": "835b3e719409a409fd169a7bff218c3ac3f5a256",
   "scope": [
     "requirements",
@@ -12,7 +12,7 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 8,
+  "repair_rounds": 9,
   "reviewed_commits": [
     "835b3e719409a409fd169a7bff218c3ac3f5a256",
     "2a3e65b649788cea0c65f078f50448ad49f8db72",
@@ -22,7 +22,8 @@
     "4f02bc644bf73f83da923431f1ea6a6f0ab0eb08",
     "ab900d50d2d7a49e7c80669860220496d8a4ea45",
     "2d18ef9d8333fd00667aa4ea7758dd77abcafd78",
-    "8d605a8dcf089e88e878f164a78b098bbe0d26f4"
+    "8d605a8dcf089e88e878f164a78b098bbe0d26f4",
+    "4ca72a1461a271cb571077d1ed4b620479aa06b6"
   ],
   "findings": [
     {
@@ -188,12 +189,76 @@
         "Verification: raw observations bind period SHAs, fixed prefix sets, exact unique inventories, byte snapshots, health runs, release rows, and downloaded Actions archive digests; replay validates its produced artifact before semantic comparison.",
         "Verification: commit 2d18ef9d8333fd00667aa4ea7758dd77abcafd78 preserves the canonical reproduction argv independently of temporary replay storage; readiness passed 18/18 and policy runner all passed at the terminal reviewed head."
       ]
+    },
+    {
+      "id": "M6-FINAL-CRIT-001",
+      "severity": "major",
+      "summary": "The replacement acceptance gate follows repository-relative symlinks outside the checkout, so an external JSON file can satisfy a supposedly repository-bound evidence reference.",
+      "evidence": [
+        "Verification: scripts/m6-cutover-acceptance.py:29-42 rejects absolute paths and lexical `..`, but then calls `path.is_file()`, digest(path), and path.read_text() without resolving the candidate and proving it remains below root.resolve().",
+        "Verification: at exact reviewed commit 4ca72a1461a271cb571077d1ed4b620479aa06b6, an independent tempfile probe created `<root>/bound.json` as a symlink to `<outside>/x.json` and called relative_file(root, 'bound.json', 'probe', failures); it returned the symlink path with `failures=[]`, while `got.resolve()` named the outside file.",
+        "Verification: tests/m6-cutover-acceptance/run.sh:49-60 mutates binding hashes but contains no symlink-escape inversion, despite the superseded readiness validator having previously required and tested this exact resolved-path boundary."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Verification: unresolved at round 9; repair must resolve root and every bound artifact with strict existence, require resolved_path.relative_to(resolved_root), reject symlink escape, and add a focused negative fixture."
+      ]
+    },
+    {
+      "id": "M6-FINAL-CRIT-002",
+      "severity": "major",
+      "summary": "The seven required red-mutation records do not bind reproducible mutant executions, and some directly contradict the green records for the same command and tree.",
+      "evidence": [
+        "Verification: docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json records lifecycle-old-reducer with command `dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj`, tree e41a762fcba15a4fe64da38f6d2bbd216f8db6cf, and observed_exit 1, while its core test_results row records the identical argv and tree with observed_exit 0; no mutation preparation, patch, environment, or mutant artifact distinguishes the executions.",
+        "Verification: the route-v1-authority, review-prose-authority, GraphQL, release, and evidence rows likewise name ordinary focused test commands rather than commands that install or select the claimed mutant; rerunning the recorded argv reproduces the green control, not the asserted red mutant.",
+        "Verification: all passing test rows and all red mutation rows reuse stdout_sha256 `3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf`, which docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json identifies as the complete 91-suite selector output rather than any named focused or mutant execution.",
+        "Verification: scripts/m6-cutover-acceptance.py:226-249 checks only caller-authored outcome, exit, counts, hash shape, and a shared JSON binding; it neither replays the argv nor requires a content-addressed mutant definition/output, so the contradictory records are accepted by the synthetic positive fixture."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Verification: unresolved at round 9; repair must bind each required retirement mutation to a reproducible mutation operation or content-addressed mutant plus its exact control/mutant commands, exits, and distinct retained output evidence, and the acceptance validator must reject ordinary green commands presented as red mutations."
+      ]
+    },
+    {
+      "id": "M6-FINAL-CRIT-003",
+      "severity": "major",
+      "summary": "The live intent seed is accepted from self-authored counters without source identity, collection provenance, row validation, or authentication of the claimed GitHub comments.",
+      "evidence": [
+        "Verification: docs/reports/evidence/2026-08-15-m6-live-intent-seed.json has no implementation_sha, collection timestamp, reproduction argv, raw observation digest, or authenticated second-pass response; it contains result counters and 24 caller-authored rows with comment URLs.",
+        "Verification: scripts/m6-cutover-acceptance.py:159-167 accepts the seed when policy_version and four scalar counters equal fixed values and a prose decision contains one sentence; it does not require exactly 24 unique rows, validate marker/ref/status/intent coherence, bind the seed to implementation.sha, or fetch the comment URLs to prove the exact markers exist.",
+        "Verification: tests/m6-cutover-acceptance/run.sh tests only a SHA mismatch for lifecycle_seed; replacing the bound seed with a freshly hashed object carrying the same four counters and prose but no rows would satisfy the production seed checks.",
+        "Verification: the neighboring decision census binds implementation_sha but retains only digests of uncommitted TSV observations; the round-9 gate therefore needs the final exact-main live recensus promised by live_acceptance rather than treating these point-in-time caller summaries as independently authenticated authorization."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Verification: unresolved at round 9; repair must bind seed source/implementation identity, validate a complete unique row population and marker semantics, preserve replayable raw observations, and authenticate or independently re-read the exact GitHub comment evidence before acceptance."
+      ]
+    },
+    {
+      "id": "M6-FINAL-CRIT-004",
+      "severity": "major",
+      "summary": "Exact head 4ca72a14 has not reached the roadmap's go-live exit: coherent 0.58 publication/adoption and exact-main new-only live acceptance remain deliberately unset.",
+      "evidence": [
+        "Verification: running `python3 scripts/m6-cutover-acceptance.py docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json --root .` at exact reviewed commit exits 1 for missing live-new-only-smoke, all six false release fields, and the unset live-acceptance tuple.",
+        "Verification: docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json:87-102 binds release 0.58.0 to e41a762f but sets prepared_manifest_verified, package_bytes_identical, both feed observations, promoted, adopted_and_pinned, and new_only_smoke false; exact_main_sha and same_class_open_issues are null and issue_2569_closed is false.",
+        "Verification: docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json explicitly lists `live-new-only-smoke` under pending_post_merge, while roadmap line 217 keeps M6 unchecked and lines 266-276 require coherent 0.58 promotion/adoption, exact-main smoke, closed #2569, and zero same-class successors.",
+        "Verification: `bash tests/m6-cutover-acceptance/run.sh` passes only because it requires the committed production evidence to remain blocked; its synthetic in-memory candidate substitutes true release/live fields and is not evidence those external outcomes occurred."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Verification: unresolved at round 9 by design; after repaired code is reviewed and merged, completion requires byte-identical coherent 0.58 publication to both feeds, stable promotion and downstream pin adoption, exact-main new-only smoke, complete zero-successor recensus, closure of #2569, bound evidence, and a production acceptance PASS."
+      ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "8d605a8dcf089e88e878f164a78b098bbe0d26f4",
-    "verdict": "pass",
-    "unresolved_blocker_major": []
+    "reviewed_commit": "4ca72a1461a271cb571077d1ed4b620479aa06b6",
+    "verdict": "changes-required",
+    "unresolved_blocker_major": [
+      "M6-FINAL-CRIT-001",
+      "M6-FINAL-CRIT-002",
+      "M6-FINAL-CRIT-003",
+      "M6-FINAL-CRIT-004"
+    ]
   },
   "human_escalation": null,
   "game_functionality": false,

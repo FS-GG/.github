@@ -29,9 +29,9 @@ open FS.GG.Coord.GitHub.Transport
 ///    read, the same fixture minus the `errors` key, still parses normally. A refusal that also refuses
 ///    the good response is not a guard, it is an outage.
 ///
-/// 2. **Structure** — the ordering was a convention enforced by repetition (`Board.graphQlData` was
+/// 2. **Structure** — the ordering was a convention enforced by repetition (`Board.GraphQl.decode` was
 ///    correct; `Scan.fs`, `Done.fs` and `Reads.fs`'s content-edit read each re-implemented it correctly;
-///    nothing made a read that SKIPPED it fail). `graphQlData` in `Reads.fs` makes it a function every
+///    nothing made a read that SKIPPED it fail). `GraphQl.decode` in `Reads.fs` makes it a function every
 ///    read must call to reach `data`, and `the errors check precedes every data extraction` below makes
 ///    the layer-wide property a build failure rather than a fourth comment.
 module private Fixtures =
@@ -211,7 +211,7 @@ let ``.github#2534 prClosingRef refuses a reference it cannot NAME`` () =
 [<Fact>]
 let ``.github#2534 contentEditProvenance keeps refusing a partial 200 through the shared helper`` () =
     // This read was ALREADY correct — `.github#2477` wrote the ordering into it by hand. The repair
-    // hoisted that hand-written block into `graphQlData`, so this leg is the regression proof that the
+    // hoisted that hand-written block into `GraphQl.decode`, so this leg is the regression proof that the
     // hoist preserved it, including the non-object guard `.github#2418` put there.
     let transport = serving (partial ContentEditsData RateLimitMessage)
 
@@ -220,7 +220,7 @@ let ``.github#2534 contentEditProvenance keeps refusing a partial 200 through th
     | other -> failwith $"an exhausted budget must survive the hoist as a rate limit — got %A{other}"
 
 [<Fact>]
-let ``.github#2534 the non-object guard survives the hoist into graphQlData`` () =
+let ``.github#2534 the non-object guard survives the hoist into GraphQl.decode`` () =
     // `[]`, `"text"`, `7`, `true` — valid JSON, not a GraphQL response of any shape. `TryGetProperty` on
     // these THROWS rather than answering false (`.github#2418`/PR #2419), and the throw is outside every
     // caller's `try`. Now guarded once, for every read in the module rather than the one that wrote it.
@@ -262,7 +262,7 @@ module private Ordering =
         Regex(@"(Try)?GetProperty\s*\(?\s*""data""", RegexOptions.Compiled)
 
     /// Either half of the ordering's first step: reading the `errors` array, or handing its messages to
-    /// the classifier. `graphQlData` callers do neither — they do not open `data` either, so they are
+    /// the classifier. `GraphQl.decode` callers do neither — they do not open `data` either, so they are
     /// never sites at all.
     let private errorsInspection =
         Regex(@"(Try)?GetProperty\s*\(?\s*""errors""|ofGraphQlErrors", RegexOptions.Compiled)
@@ -341,7 +341,7 @@ module private Ordering =
 
 [<Fact>]
 let ``.github#2534 the errors check precedes every data extraction in the GitHub layer`` () =
-    // THIS IS AC3, AND IT IS THE HALF THAT OUTLIVES THE THREE REPAIRS. `Board.graphQlData` was correct
+    // THIS IS AC3, AND IT IS THE HALF THAT OUTLIVES THE THREE REPAIRS. `Board.GraphQl.decode` was correct
     // from the start; `Scan.fs`, `Done.fs` and `Reads.fs`'s content-edit read each re-derived it
     // correctly; and three reads still drifted, because a convention that nothing can fail is not
     // enforced. Adding a fourth read that opens `data` first now reds the build here.
@@ -354,7 +354,7 @@ let ``.github#2534 the errors check precedes every data extraction in the GitHub
         offenders.Length = 0,
         "a GraphQL `data` extraction is not preceded by an `errors` inspection in its own function — a "
         + "partial HTTP 200 (how GitHub reports an exhausted budget) would be read as a complete answer "
-        + "there. Route it through `graphQlData` (`Reads.fs`) or `Board.graphQlData`:\n"
+        + "there. Route it through `GraphQl.decode` (`Reads.fs`) or `Board.GraphQl.decode`:\n"
         + (offenders
            |> Array.map (fun s -> $"  {s.File}:{s.Line} in `{s.Fn}` — {s.Text}")
            |> String.concat "\n")
@@ -674,7 +674,7 @@ let ``.github#2542 a non-object 200 at the node-facts read is a typed refusal, n
     //     element of type 'Object', but the target element has type 'Array'.
     //        at FS.GG.Coord.GitHub.Scan.readChunk$cont@865(...) in Scan.fs:line 868
     //
-    // `.github#2534` hoisted this guard into `Reads.graphQlData` "where every read gets it". This site
+    // `.github#2534` hoisted this guard into `Reads.GraphQl.decode` "where every read gets it". This site
     // never routed through it — which is exactly the consolidation the item names as the open question.
     for body in [ "[]"; "\"text\""; "7"; "true"; "null" ] do
         match NodeFacts.scan (NodeFacts.servingNodeFacts body) with
@@ -719,10 +719,10 @@ module private Classification =
         Regex(@"(?<![A-Za-z0-9_])GraphQlErrors(?![A-Za-z0-9_])(?!\s+of\s)(?!\s*_)(?![^\n]*->)", RegexOptions.Compiled)
 
     /// The classifier having run: either the call itself, or one of the two shared helpers that make it
-    /// for you. `Board.setFieldBatch` is the reason the helper form is accepted — `graphQlData` already
+    /// for you. `Board.setFieldBatch` is the reason the helper form is accepted — `GraphQl.decode` already
     /// classified the rate limit before its partial-apply arm rebuilds a `GraphQlErrors` from the failing
     /// aliases, and flagging it would be a false positive repaired by weakening the gate.
-    let private classifier = Regex(@"ofGraphQlErrors|graphQlData", RegexOptions.Compiled)
+    let private classifier = Regex(@"ofGraphQlErrors|GraphQl.decode", RegexOptions.Compiled)
 
     let private topLevelLet =
         Regex(@"^    let\s+(?:private\s+|rec\s+|inline\s+)*([^\s(:]+)", RegexOptions.Compiled)
@@ -731,7 +731,7 @@ module private Classification =
     /// enclosing top-level binding.
     ///
     /// THE BINDING LINE ITSELF GRANTS NO ABSOLUTION, and that asymmetry is the point: a function merely
-    /// NAMED `graphQlData` would otherwise absolve itself on its own `let` line without ever calling the
+    /// NAMED `GraphQl.decode` would otherwise absolve itself on its own `let` line without ever calling the
     /// classifier. The line is still SCANNED for constructions — skipping it entirely would be fail-open
     /// in the other direction.
     let scan (file: string) (text: string) : Site list * Site list =
@@ -777,8 +777,8 @@ let ``.github#2542 every GraphQlErrors construction in the GitHub layer is prece
         offenders.Length = 0,
         "a `GraphQlErrors` is constructed without `Budget.ofGraphQlErrors` running first in its own "
         + "function — an exhausted GraphQL budget arriving there exits 1 (`permanent`) instead of EX_RATE "
-        + "75 (`back off`), and the fleet-wide rate-limit stop never fires. Call `Budget.ofGraphQlErrors` "
-        + "on the messages first, or route the read through `graphQlData`:\n"
+        + "75 (`back off`), and the fleet-wide rate-limit stop never fires. Route the operation through "
+        + "the canonical GraphQl adapter before constructing this error:\n"
         + (offenders
            |> Array.map (fun s -> $"  {s.File}:{s.Line} in `{s.Fn}` — {s.Text}")
            |> String.concat "\n")
@@ -793,7 +793,7 @@ let ``.github#2542 the classification gate is measuring a non-empty corpus`` () 
         |> Array.collect (fun (file, text) -> Classification.scan file text |> fst |> Array.ofList)
 
     Assert.True(
-        classified.Length >= 2,
+        classified.Length >= 1,
         $"the classification gate found only {classified.Length} classified `GraphQlErrors` constructions — "
         + "the corpus it scans has moved or been renamed, and the gate above is passing on an empty set"
     )
@@ -849,7 +849,7 @@ let ``.github#2542 the classification gate ACCEPTS the repaired shape, direct an
             "\n"
             [ "module Board ="
               "    let setFieldBatch (transport: IGitHubTransport) ="
-              "        match graphQlData subject response.Body with"
+              "        match GraphQl.decode subject response.Body with"
               "        | Ok _ -> Ok()"
               "        | Error(RateLimited _ as e) -> Error e"
               "        | Error(GraphQlErrors _) -> Error(GraphQlErrors(failedAliases |> List.map snd))" ]
@@ -860,21 +860,21 @@ let ``.github#2542 the classification gate ACCEPTS the repaired shape, direct an
         Assert.Single classified |> ignore
 
 [<Fact>]
-let ``.github#2542 a function merely NAMED graphQlData does not absolve itself`` () =
+let ``.github#2542 a function merely NAMED GraphQl.decode does not absolve itself`` () =
     // THE SHARP EDGE OF ACCEPTING A HELPER NAME. The absolution token is a CALL, and a call cannot appear
     // on the binding line that introduces the name. Without this asymmetry, renaming any drifted read to
-    // `graphQlData` would silence the gate over it.
+    // `GraphQl.decode` would silence the gate over it.
     let impostor =
         String.concat
             "\n"
             [ "module Reads ="
-              "    let private graphQlData (subject: string) (root: JsonElement) ="
+              "    let private GraphQl.decode (subject: string) (root: JsonElement) ="
               "        match root.TryGetProperty \"errors\" with"
               "        | true, e -> Error(GraphQlErrors (messages e))"
               "        | _ -> Ok(root.GetProperty \"data\")" ]
 
     let _, unclassified = Classification.scan "Impostor.fs" impostor
-    Assert.Equal("graphQlData", (Assert.Single unclassified).Fn)
+    Assert.Equal("GraphQl.decode", (Assert.Single unclassified).Fn)
 
 [<Fact>]
 let ``.github#2542 the helpers the gate TRUSTS actually classify`` () =

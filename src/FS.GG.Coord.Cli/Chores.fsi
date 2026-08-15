@@ -125,6 +125,20 @@ module Chores =
         observed: Chore.Board ->
             (Chore.Chore * Types.Ref) option
 
+    /// Offer reducer-produced lifecycle repairs through the same safe-point and per-repo lock.
+    val offerWithLifecycle:
+        lifecycle: Chore.Chore list ->
+        transport: Transport.IGitHubTransport ->
+        boundary: Chore.Boundary ->
+        worker: Types.WorkerId ->
+        self: Writes.SelfIdentity ->
+        session: Types.SessionId option ->
+        extra: Types.Ref list ->
+        owner: string ->
+        repo: string ->
+        observed: Chore.Board ->
+            (Chore.Chore * Types.Ref) option
+
     /// RENDER AN OFFER for a human worker — the `Statement` the chore already carries, plus what holding
     /// the lock obliges.
     ///

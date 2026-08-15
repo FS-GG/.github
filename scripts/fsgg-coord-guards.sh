@@ -193,6 +193,8 @@ BOARD_WRITES="add adopt child claim done flush heartbeat intake release review r
 #   delivery-route — `validate` and `show` only read evidence; `record` appends the receipt ledger.
 #                     The shim refuses the whole verb on stale code because missing the record arm would
 #                     let a stale engine write an authoritative route decision.
+#   graphql     — complete typed reads except `archive-items`, which executes the archive mutation. The
+#                 verb-level guard cannot infer its subcommand safely, so the write-capable verb is refused.
 #   next        — writes under no flag at all. AFTER printing its answer it makes the #733 chore OFFER
 #                 (`offerChoreAtNext` → `Chores.offer` → `Writes.claim`), which POSTs a claim marker to take
 #                 the repo's chore lock. `.github`'s lock is #1033, so this fires in the repo that owns this
@@ -229,7 +231,7 @@ BOARD_WRITES="add adopt child claim done flush heartbeat intake release review r
 # that reasoning, and `next` cannot be argument-aware at all — its write is gated on board state, not on a
 # flag. Take the refusal. If a permitted stale dry run is ever wanted, the honest way is for the engine to
 # declare per-invocation write-ness, not for this shim to re-implement the parser.
-BOARD_WRITES_CONDITIONAL="delivery delivery-route next reap reconcile"
+BOARD_WRITES_CONDITIONAL="delivery delivery-route graphql next reap reconcile"
 
 # READS — permitted (with a warning) on a stale engine, because a stale read misinforms ONE worker where a
 # stale write corrupts what the fleet shares. This set exists so the partition is total: it is the half that

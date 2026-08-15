@@ -29,7 +29,8 @@ module Chores =
               $"  you hold %s{lockRef.Short}, the chore lock for this repo (%d{LeaseMinutes}m)."
               $"  do it, or hand it back now:  scripts/fsgg-coord release %s{lockRef.Short}" ]
 
-    let offer
+    let private offerCore
+        (lifecycle: Chore.Chore list)
         (transport: Transport.IGitHubTransport)
         (boundary: Chore.Boundary)
         (worker: WorkerId)
@@ -98,7 +99,11 @@ module Chores =
                 // 4. IS THERE ANYTHING TO DO? — pure and free, and asked BEFORE spending a REST
                 //    request: on a healthy board "nothing" is the common case, and the lock lives on
                 //    the budget the item CAS itself lives on (ADR-0034 §3).
-                match Chore.offer at with
+                let lifecycleOurs =
+                    lifecycle
+                    |> List.filter (fun chore ->
+                        String.Equals(chore.Subject.Repo, lockRef.Repo, StringComparison.OrdinalIgnoreCase))
+                match Chore.offerIncluding at lifecycleOurs with
                 | None -> None
                 | Some chore ->
                     // 5. `Writes.claim`, unchanged, on another subject (ADR-0041). The board callback
@@ -132,3 +137,9 @@ module Chores =
                     // (#266). None of them is an error the caller asked about: it asked for `next`.
                     | Ok _
                     | Error _ -> None
+
+    let offer transport boundary worker self session extra owner repo observed =
+        offerCore [] transport boundary worker self session extra owner repo observed
+
+    let offerWithLifecycle lifecycle transport boundary worker self session extra owner repo observed =
+        offerCore lifecycle transport boundary worker self session extra owner repo observed

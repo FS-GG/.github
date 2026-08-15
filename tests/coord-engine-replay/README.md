@@ -62,8 +62,7 @@ This directory does not replace either of those suites and deletes nothing from 
   the FIXED engine actually outputs, not a deliberate override of a bug that is still open.
 - **`m1-backlog-park`** (~48 KB, 9 recorded requests) — one otherwise-ready OPEN row deliberately in
   `Backlog`, with no claim, PR, blocker, or delivery fact to override scheduling intent. Two consecutive
-  reconcile passes remain no-ops, while `expected/reconcile-shadow.json` records the one explained
-  old/new difference: legacy `Ready` versus intended `Backlog`, classified `deliberate-park-preserved`.
+  new-only reconcile passes remain no-ops, proving the persisted intent survives repeated observation.
 
 ## Refreshing a fixture
 

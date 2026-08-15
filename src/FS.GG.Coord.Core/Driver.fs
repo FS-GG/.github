@@ -63,6 +63,22 @@ module Driver =
             match (required name root).TryGetInt32() with
             | true, value -> value
             | _ -> invalidArg name "must be a 32-bit integer"
+        let optionalBool (name: string) (root: JsonElement) =
+            match root.TryGetProperty name with
+            | false, _ -> false
+            | true, value when value.ValueKind = JsonValueKind.True -> true
+            | true, value when value.ValueKind = JsonValueKind.False -> false
+            | _ -> invalidArg name "must be a boolean"
+        let optionalTexts (name: string) (root: JsonElement) =
+            match root.TryGetProperty name with
+            | false, _ -> []
+            | true, value when value.ValueKind = JsonValueKind.Array ->
+                value.EnumerateArray()
+                |> Seq.map (fun entry ->
+                    if entry.ValueKind <> JsonValueKind.String then invalidArg name "must contain strings"
+                    entry.GetString())
+                |> List.ofSeq
+            | _ -> invalidArg name "must be an array"
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
@@ -71,8 +87,10 @@ module Driver =
                 match text "kind" root with
                 | "initial" -> StructuredDecision.Initial
                 | "confirmation" -> StructuredDecision.Confirmation
+                | "escalation" -> StructuredDecision.Escalation
+                | "repair-phase" -> StructuredDecision.RepairPhase
                 | "acceptance" -> StructuredDecision.Acceptance
-                | _ -> invalidArg "kind" "must be initial, confirmation, or acceptance"
+                | _ -> invalidArg "kind" "must be initial, confirmation, escalation, repair-phase, or acceptance"
             let verdict =
                 match text "verdict" root with
                 | "pass" -> StructuredDecision.Pass
@@ -95,6 +113,8 @@ module Driver =
                   Round = number "round" root
                   InitialReview = optionalText "initialReview" root
                   PrecedingReview = optionalText "precedingReview" root
+                  DiffAuditRequired = optionalBool "diffAuditRequired" root
+                  DiffAuditReceipts = optionalTexts "diffAuditReceipts" root
                   Timestamp = text "timestamp" root
                   Digest = text "digest" root }
         with error -> Error error.Message
@@ -104,6 +124,8 @@ module Driver =
             match record.Kind with
             | StructuredDecision.Initial -> "initial"
             | StructuredDecision.Confirmation -> "confirmation"
+            | StructuredDecision.Escalation -> "escalation"
+            | StructuredDecision.RepairPhase -> "repair-phase"
             | StructuredDecision.Acceptance -> "acceptance"
         let verdict =
             match record.Verdict with
@@ -117,227 +139,45 @@ module Driver =
                routeApplicability = record.RouteApplicability; routeEvidence = record.RouteEvidence
                policyVersion = record.PolicyVersion; kind = kind; round = record.Round
                initialReview = record.InitialReview; precedingReview = record.PrecedingReview
+               diffAuditRequired = record.DiffAuditRequired; diffAuditReceipts = record.DiffAuditReceipts
                timestamp = record.Timestamp; digest = record.Digest |}
 
-    let private projectStructuredReview (comment: ReviewComment) (record: StructuredDecision.ReviewRecord) =
-        let verdict =
-            match record.Verdict with
-            | StructuredDecision.Pass -> "pass"
-            | _ -> "changes-required"
-        let initialReview = record.InitialReview |> Option.defaultValue ""
-        let precedingReview = record.PrecedingReview |> Option.defaultValue ""
-        let routeEvidence =
-            match record.RouteApplicability, record.RouteEvidence with
-            | "meaningful", [ built; command; compared; observed ] ->
-                $"route-applicability: meaningful\nbuilt-artifact: %s{built}\nexecuted-command: %s{command}\ncompared-routes: %s{compared}\nobserved-result: %s{observed}"
-            | "not-meaningful", [ reason ] ->
-                $"route-applicability: not-meaningful\nroute-not-meaningful-reason: %s{reason}"
-            | _ -> "route-applicability: unreadable"
-        let body =
-            match record.Kind with
-            | StructuredDecision.Initial ->
-                $"<!-- fsgg:independent-review:v1 -->\ncritic: %s{record.Critic}\nreviewed-head: %s{record.HeadSha}\nverdict: %s{verdict}\n%s{routeEvidence}"
-            | StructuredDecision.Confirmation ->
-                $"<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: %s{initialReview}\ncritic: %s{record.Critic}\nround: %d{record.Round}\npreceding-review: %s{precedingReview}\nreviewed-head: %s{record.HeadSha}\nverdict: %s{verdict}\n%s{routeEvidence}"
-            | StructuredDecision.Acceptance ->
-                $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{record.HeadSha}\ninitial-review: %s{initialReview}\nlatest-confirmation: %s{precedingReview}"
-        { comment with Body = body }
-
-    // ---- HOISTED MARKER PRIMITIVES (.github#2175) ----------------------------------------------------
-    //
-    // These carry NO dependency on `parseReviewCommentsCore`'s parameters (`trustedFacts`, `comments`) —
-    // they are pure text/marker-name utilities — so they are lifted to module scope rather than living
-    // inside that function's closure. This is a pure extraction: `parseReviewCommentsCore` below calls
-    // the SAME functions it always did, byte-for-byte, and every existing `DriverTests.fs` case pins
-    // that. The reason to hoist them is `classifyMarkers`, immediately below: the new typed review
-    // protocol (`Review.fs`) needs the SAME leading-marker-block/quoting-aware classification this
-    // parser already computes, and #2175 acceptance 11 forbids a second marker parser. Hoisting is the
-    // whole of how `reviewPhaseFacts` avoids writing one.
-    let private markerText name = $"<!-- fsgg:%s{name}:v1 -->"
-
-    let private markerNames =
-        [ Protocol.reviewPolicy.InitialMarker
-          Protocol.reviewPolicy.ConfirmationMarker
-          Protocol.reviewPolicy.AcceptanceMarker
-          Protocol.reviewPolicy.EscalationMarker
-          Protocol.reviewPolicy.RepairPhaseMarker ]
-
-    let private knownMarkerTexts = markerNames |> List.map markerText
-
-    let private commentLines (text: string) =
-        text.Replace("\r\n", "\n").Split '\n' |> Array.toList
-
-    let private leadingMarkerBlock (text: string) =
-        commentLines text |> List.takeWhile (fun line -> List.contains line knownMarkerTexts)
-
-    let private canonicalOccurrences name (text: string) =
-        let expected = markerText name
-        leadingMarkerBlock text |> List.filter (fun line -> line = expected) |> List.length
-
-    let private marker name (text: string) = canonicalOccurrences name text = 1
-
-    let private competingMarker name (text: string) = canonicalOccurrences name text > 1
-
-    let private fieldValues key (text: string) =
-        text.Split '\n'
-        |> Array.choose (fun line ->
-            let line = line.Trim()
-            let prefix = key + ":"
-
-            if line.StartsWith prefix then
-                Some(line.Substring(prefix.Length).Trim())
-            else
-                None)
-        |> Array.toList
-
-    let private field key text =
-        fieldValues key text
-        |> function
-            | [ value ] when not (System.String.IsNullOrWhiteSpace value) -> Ok value
-            | _ -> Error $"missing or duplicate %s{key}"
-
-    let private hasField key text =
-        fieldValues key text |> List.isEmpty |> not
-
-    /// A field line whose KEY is wrapped in markdown emphasis — `**verdict:** pass` rather than
-    /// `verdict: pass` — so `field`/`fieldValues` above never see it as a match (.github#2369). This is
-    /// the exact live shape a faithful critic produced: `independent-review.md` shows `**Verdict:**
-    /// pass` nowhere near a warning, so a critic writing ordinary markdown for readability produces a
-    /// marker that LOOKS canonical and PARKS silently, with no signal about what to fix.
-    ///
-    /// Detected, never ACCEPTED: this only powers a more specific refusal message (`nearMissFieldHint`
-    /// below), and must not loosen `field`'s own grammar. Stripping is one layer of leading/trailing
-    /// `**`/`__` off the trimmed line, case-insensitive on the key — the exact decoration markdown
-    /// bold/strong produces, not a general markdown parser.
-    let private stripLeadingEmphasis (line: string) =
-        [ "**"; "__" ]
-        |> List.tryPick (fun m ->
-            if line.StartsWith(m: string) && line.TrimEnd().EndsWith m then
-                let inner = line.Substring(m.Length, line.Length - 2 * m.Length)
-                Some(inner.Trim())
-            else
-                None)
-
-    /// One line of `text`, if any, that names `key` only once markdown emphasis is stripped from a
-    /// leading `**key:**`/`__key:__` span — never when the RAW trimmed line already reads as the field
-    /// (that is a hit, not a near miss, and is `field`'s job to accept).
-    let private nearMissFieldHint (key: string) (text: string) : string option =
-        let prefix = key + ":"
-
-        commentLines text
-        |> List.tryPick (fun rawLine ->
-            let trimmed = rawLine.Trim()
-
-            if trimmed.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase) then
-                None // a genuine (if oddly-cased) field line — `field` itself already refuses that case
-            else
-                // The decoration may wrap only the "Key:" span, e.g. `**Verdict:** pass` — split off
-                // the first whitespace-delimited run and test THAT for the emphasis-stripped key.
-                let firstToken =
-                    match trimmed.IndexOf ' ' with
-                    | -1 -> trimmed
-                    | i -> trimmed.Substring(0, i)
-
-                match stripLeadingEmphasis firstToken with
-                | Some strippedToken when strippedToken.Equals(prefix, System.StringComparison.OrdinalIgnoreCase) ->
-                    Some
-                        $"field '%s{key}' must be a column-0 line '%s{prefix} <value>' — found markdown-emphasised '%s{trimmed}' instead"
-                | _ -> None)
-
-    /// Every near-miss hint `nearMissFieldHint` finds for `keys` in `text`, in declaration order —
-    /// `reviewPhaseFacts` calls this with the ONE marker's own required-field grammar
-    /// (`Protocol.markerFieldGrammar`), so a comment is never scored against a different marker kind's
-    /// fields.
-    let private nearMissFieldHints (keys: string list) (text: string) : string list =
-        keys |> List.choose (fun key -> nearMissFieldHint key text)
-
-    /// One marker id's required fields, straight from `Protocol.markerFieldGrammar` — the SAME list
-    /// `ProtocolTests` pins against this file's own `markerFieldGrammar` (the private function inside
-    /// `parseReviewCommentsCore` below), so a near-miss hint is generated for the same fields the
-    /// canonical parser actually enforces rather than a THIRD hand-copied list (.github#2369).
-    let private requiredFieldsFor (markerId: string) : string list =
-        Protocol.markerFieldGrammar
-        |> List.tryFind (fun g -> g.MarkerId = markerId)
-        |> Option.map (fun g -> g.RequiredFields)
-        |> Option.defaultValue []
-
-    /// One comment sorted into every marker group it canonically carries — the SAME classification
-    /// `parseReviewCommentsCore` has always computed (`ordered`/`initial`/`confirmations`/`escalations`/
-    /// `repairPhases`/`acceptances`), now named and shared so a second caller (`reviewPhaseFacts`) reads
-    /// it rather than re-scanning comment bodies.
-    type private MarkerGroups =
-        { Ordered: ReviewComment list
-          Initial: ReviewComment list
-          Confirmations: ReviewComment list
-          Escalations: ReviewComment list
-          RepairPhases: ReviewComment list
-          Acceptances: ReviewComment list }
-
-    let private classifyMarkers (comments: ReviewComment list) : MarkerGroups =
-        let ordered = comments |> List.sortBy _.Id
-        { Ordered = ordered
-          Initial = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.InitialMarker c.Body)
-          Confirmations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.ConfirmationMarker c.Body)
-          Escalations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.EscalationMarker c.Body)
-          RepairPhases = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.RepairPhaseMarker c.Body)
-          Acceptances = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.AcceptanceMarker c.Body) }
-
-    /// Compare only fields that confer an effective review decision. Chain-link URLs are deliberately
-    /// excluded because a migrated v2 chain is posted in new comments and therefore has different URLs;
-    /// exact head, critic, verdict, round, and runtime-route evidence remain compared.
-    let private effectiveReviewSignature kind (comment: ReviewComment) =
-        let routeFields =
-            [ "route-applicability"; "built-artifact"; "executed-command"; "compared-routes"
-              "observed-result"; "route-not-meaningful-reason" ]
-        let keys =
-            match kind with
-            | "initial" -> [ "critic"; "reviewed-head"; "verdict" ] @ routeFields
-            | "confirmation" -> [ "critic"; "round"; "reviewed-head"; "verdict" ] @ routeFields
-            | _ -> [ "accepted-head" ]
-        keys |> List.map (fun key -> key, fieldValues key comment.Body)
-
-    let private equivalentReviewDecisions (legacy: MarkerGroups) (structured: MarkerGroups) =
-        let signatures kind comments = comments |> List.map (effectiveReviewSignature kind)
-        signatures "initial" legacy.Initial = signatures "initial" structured.Initial
-        && signatures "confirmation" legacy.Confirmations = signatures "confirmation" structured.Confirmations
-        && signatures "acceptance" legacy.Acceptances = signatures "acceptance" structured.Acceptances
-
-    /// Dual-read boundary. Legacy comments remain readable, but the presence of any v2 record makes the
-    /// validated v2 ledger authoritative. Invalid v2 never falls back to legacy. When both forms are
-    /// present, their effective decision fields are classified as equivalent or divergent; either way,
-    /// only v2 is authoritative. M6 may remove the legacy arm only after three stable cycles report no
-    /// unexplained classified difference.
-    let private normalizeStructuredReviews (comments: ReviewComment list) =
+    let private structuredReviewLedger (comments: ReviewComment list) =
         let marked =
             comments
             |> List.choose (fun comment ->
                 if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
                     Some(comment, comment.Body.Substring(StructuredReviewMarker.Length).Trim())
-                else None)
-        if List.isEmpty marked then Ok(comments, "legacy-only", None)
+                else
+                    None)
+
+        if List.isEmpty marked then
+            Error [ "structured review ledger is missing" ]
         else
-            let decoded = marked |> List.map (fun (comment, raw) -> comment, decodeStructuredReview raw)
-            let errors = decoded |> List.choose (fun (_, result) -> match result with Error e -> Some e | Ok _ -> None)
-            if not (List.isEmpty errors) then Error errors
+            let decoded =
+                marked
+                |> List.map (fun (comment, raw) -> comment, decodeStructuredReview raw)
+
+            let errors =
+                decoded
+                |> List.choose (fun (_, result) ->
+                    match result with
+                    | Error error -> Some error
+                    | Ok _ -> None)
+
+            if not (List.isEmpty errors) then
+                Error errors
             else
-                let pairs = decoded |> List.choose (fun (comment, result) -> result |> Result.toOption |> Option.map (fun record -> comment, record))
+                let pairs =
+                    decoded
+                    |> List.choose (fun (comment, result) ->
+                        result |> Result.toOption |> Option.map (fun record -> comment, record))
+
                 let records = pairs |> List.map snd
                 let subject = records.Head.Subject
-                match StructuredDecision.validateReviewLedger subject records with
-                | Error validation -> Error validation
-                | Ok _ ->
-                    let structured = pairs |> List.map (fun (comment, record) -> projectStructuredReview comment record)
-                    let legacy = classifyMarkers comments
-                    let legacyPresent =
-                        not (List.isEmpty legacy.Initial)
-                        || not (List.isEmpty legacy.Confirmations)
-                        || not (List.isEmpty legacy.Acceptances)
-                    let classification =
-                        if not legacyPresent then "structured-only"
-                        elif records |> List.exists (fun record -> not (List.isEmpty record.AcceptedExceptions)) then "divergent"
-                        elif equivalentReviewDecisions legacy (classifyMarkers structured) then "equivalent"
-                        else "divergent"
-                    Ok(structured, classification, Some subject)
+
+                StructuredDecision.validateReviewLedger subject records
+                |> Result.map (fun _ -> subject, pairs)
 
     /// The structural facts `Review.fs` classifies its typed protocol states from — reused, not
     /// re-derived: every field here is read off `classifyMarkers`' groups and the same `field`/
@@ -393,69 +233,67 @@ module Driver =
         && identity.Trim().StartsWith("fsgg-critic-", System.StringComparison.OrdinalIgnoreCase)
 
     let reviewPhaseFacts (comments: ReviewComment list) : ReviewPhaseFacts =
-        let normalized, structuredErrors =
-            match normalizeStructuredReviews comments with
-            | Ok(projected, _, _) -> projected, []
-            | Error errors -> comments, errors
-        let groups = classifyMarkers normalized
+        if List.isEmpty comments then
+            { StructuredErrors = []
+              InitialCount = 0
+              InitialPresent = false
+              InitialHeadSha = None
+              InitialVerdict = None
+              CriticIdentity = None
+              ConfirmationCount = 0
+              LatestVerdict = None
+              LatestVerdictNearMissHints = []
+              LatestReviewedHeadSha = None
+              LatestReviewUrl = None
+              EscalationPresent = false
+              RepairPhasePresent = false
+              AcceptanceCount = 0
+              AcceptancePresent = false }
+        else
+            match structuredReviewLedger comments with
+            | Error errors ->
+                { StructuredErrors = errors
+                  InitialCount = 0
+                  InitialPresent = false
+                  InitialHeadSha = None
+                  InitialVerdict = None
+                  CriticIdentity = None
+                  ConfirmationCount = 0
+                  LatestVerdict = None
+                  LatestVerdictNearMissHints = []
+                  LatestReviewedHeadSha = None
+                  LatestReviewUrl = None
+                  EscalationPresent = false
+                  RepairPhasePresent = false
+                  AcceptanceCount = 0
+                  AcceptancePresent = false }
+            | Ok(_, pairs) ->
+                let ofKind kind = pairs |> List.filter (fun (_, record) -> record.Kind = kind)
+                let initials = ofKind StructuredDecision.Initial
+                let confirmations = ofKind StructuredDecision.Confirmation
+                let acceptances = ofKind StructuredDecision.Acceptance
+                let initial = initials |> List.tryLast
+                let latestReview = confirmations |> List.tryLast |> Option.orElse initial
+                let verdictName = function
+                    | StructuredDecision.Pass -> "pass"
+                    | StructuredDecision.ChangesRequired -> "changes-required"
+                    | StructuredDecision.Accepted -> "accepted"
 
-        // `List.tryHead` reads the FIRST initial-marker comment when there is exactly one — the only
-        // shape a caller should trust. Two or more is a distinct, duplicate-marker fact
-        // (`InitialCount > 1`) that `Review.fs` must classify as malformed rather than silently picking
-        // one and discarding the ambiguity (.github#2175 acceptance 8; mirrors `Driver.parseReviewComments`'s
-        // own `requireOne` refusal of a competing marker, reused here as a count rather than re-derived).
-        let initial = groups.Initial |> List.tryHead
-        let criticIdentity = initial |> Option.bind (fun c -> field "critic" c.Body |> Result.toOption)
-        let initialHeadSha = initial |> Option.bind (fun c -> field "reviewed-head" c.Body |> Result.toOption)
-        let initialVerdict = initial |> Option.bind (fun c -> field "verdict" c.Body |> Result.toOption)
-
-        let latestConfirmation = groups.Confirmations |> List.tryLast
-
-        let latestVerdict =
-            match latestConfirmation with
-            | Some c -> field "verdict" c.Body |> Result.toOption
-            | None -> initialVerdict
-
-        let latestReviewedHeadSha =
-            match latestConfirmation with
-            | Some c -> field "reviewed-head" c.Body |> Result.toOption
-            | None -> initialHeadSha
-
-        // .github#2369: only computed when `latestVerdict` is unreadable, against the SAME comment and
-        // the SAME marker's own required fields `latestVerdict` was read from — so a near-miss reported
-        // for a confirmation is never scored against the initial marker's grammar, or vice-versa.
-        let latestVerdictNearMissHints =
-            if latestVerdict.IsSome then
-                []
-            else
-                match latestConfirmation with
-                | Some c -> nearMissFieldHints (requiredFieldsFor Protocol.reviewPolicy.ConfirmationMarker) c.Body
-                | None ->
-                    initial
-                    |> Option.map (fun c -> nearMissFieldHints (requiredFieldsFor Protocol.reviewPolicy.InitialMarker) c.Body)
-                    |> Option.defaultValue []
-
-        { StructuredErrors = structuredErrors
-          InitialCount = List.length groups.Initial
-          InitialPresent = not (List.isEmpty groups.Initial)
-          InitialHeadSha = initialHeadSha
-          InitialVerdict = initialVerdict
-          CriticIdentity = criticIdentity
-          ConfirmationCount = List.length groups.Confirmations
-          LatestVerdict = latestVerdict
-          LatestVerdictNearMissHints = latestVerdictNearMissHints
-          LatestReviewedHeadSha = latestReviewedHeadSha
-          // .github#2549: the SAME comment `latestVerdict`/`latestReviewedHeadSha` were read from,
-          // chosen by the same `latestConfirmation`-else-`initial` rule immediately above, so the three
-          // can never describe different comments.
-          LatestReviewUrl =
-            match latestConfirmation with
-            | Some c -> Some c.Url
-            | None -> initial |> Option.map _.Url
-          EscalationPresent = not (List.isEmpty groups.Escalations)
-          RepairPhasePresent = not (List.isEmpty groups.RepairPhases)
-          AcceptanceCount = List.length groups.Acceptances
-          AcceptancePresent = not (List.isEmpty groups.Acceptances) }
+                { StructuredErrors = []
+                  InitialCount = List.length initials
+                  InitialPresent = not (List.isEmpty initials)
+                  InitialHeadSha = initial |> Option.map (snd >> _.HeadSha)
+                  InitialVerdict = initial |> Option.map (snd >> _.Verdict >> verdictName)
+                  CriticIdentity = initial |> Option.map (snd >> _.Critic)
+                  ConfirmationCount = List.length confirmations
+                  LatestVerdict = latestReview |> Option.map (snd >> _.Verdict >> verdictName)
+                  LatestVerdictNearMissHints = []
+                  LatestReviewedHeadSha = latestReview |> Option.map (snd >> _.HeadSha)
+                  LatestReviewUrl = latestReview |> Option.map (fst >> _.Url)
+                  EscalationPresent = ofKind StructuredDecision.Escalation |> List.isEmpty |> not
+                  RepairPhasePresent = ofKind StructuredDecision.RepairPhase |> List.isEmpty |> not
+                  AcceptanceCount = List.length acceptances
+                  AcceptancePresent = not (List.isEmpty acceptances) }
 
     /// One review chain that a host-acceptance marker accepted at a head the PR has since moved off
     /// (.github#2527). `InitialReviewUrl` is the chain's initial-review comment URL — the same key
@@ -485,7 +323,6 @@ module Driver =
           Retired: ChainRetirement list
           Diagnostics: string list
           StructuredSubject: string option
-          EvidenceClassification: string
           StructuredErrors: string list }
 
     /// Partition a PR's review comments into the chain that BINDS the current head and the chains that a
@@ -525,549 +362,184 @@ module Driver =
     /// invalidates the prior accepted evidence`) — so this change cannot alter any verdict on a PR that
     /// carries one chain, which is every PR the protocol was already able to describe.
     let liveReviewComments (currentHead: string) (comments: ReviewComment list) : LiveReviewComments =
-        let normalized, classification, structuredSubject, structuredErrors =
-            match normalizeStructuredReviews comments with
-            | Ok(projected, classification, subject) -> projected, classification, subject, []
-            | Error errors -> comments, "divergent", None, errors
-        let groups = classifyMarkers normalized
-        let unchanged =
-            { Live = groups.Ordered; Retired = []; Diagnostics = []; StructuredSubject = structuredSubject
-              EvidenceClassification = classification; StructuredErrors = structuredErrors }
+        let structuredPresent =
+            comments |> List.exists (fun comment -> comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal))
 
-        if List.length groups.Initial <= 1 then
-            unchanged
+        if not structuredPresent then
+            { Live = []
+              Retired = []
+              Diagnostics = []
+              StructuredSubject = None
+              StructuredErrors = [] }
         else
-            let hostFields = Protocol.lifecyclePolicy.HostAcceptanceFields
-            let acceptedHeadKey, initialReviewKey = hostFields[0], hostFields[1]
+            match structuredReviewLedger comments with
+            | Error errors ->
+                { Live = []
+                  Retired = []
+                  Diagnostics = []
+                  StructuredSubject = None
+                  StructuredErrors = errors }
+            | Ok(subject, pairs) ->
+                let indexed = pairs |> List.indexed
+                let initialIndexes =
+                    indexed
+                    |> List.choose (fun (index, (_, record)) ->
+                        if record.Kind = StructuredDecision.Initial then Some index else None)
 
-            // Only an initial comment that CAN be named is a retirement candidate: `initial-review:`
-            // addresses a chain by URL, so a blank URL is unaddressable and never matches.
-            let addressable =
-                groups.Initial |> List.filter (fun c -> not (System.String.IsNullOrWhiteSpace c.Url))
+                let generation start finish = pairs[start .. finish - 1]
+                let generations =
+                    initialIndexes
+                    |> List.mapi (fun index start ->
+                        let finish =
+                            if index + 1 < initialIndexes.Length then initialIndexes[index + 1]
+                            else pairs.Length
+                        generation start finish)
 
-            let readAcceptance (acceptance: ReviewComment) =
-                match field acceptedHeadKey acceptance.Body, field initialReviewKey acceptance.Body with
-                | Ok acceptedHead, Ok initialUrl -> Some(acceptance, acceptedHead, initialUrl)
-                | _ -> None
-
-            let classified = groups.Acceptances |> List.choose readAcceptance
-
-            let retired =
-                classified
-                |> List.choose (fun (acceptance, acceptedHead, initialUrl) ->
-                    if acceptedHead = currentHead then
-                        None
+                let retired =
+                    if generations.Length <= 1 then
+                        []
                     else
-                        addressable
-                        |> List.tryFind (fun initial -> initial.Url = initialUrl)
-                        |> Option.map (fun initial ->
-                            { InitialReviewUrl = initialUrl
-                              InitialReviewCommentId = initial.Id
-                              AcceptedHead = acceptedHead
-                              AcceptanceCommentId = acceptance.Id }))
+                        generations
+                        |> List.take (generations.Length - 1)
+                        |> List.choose (fun entries ->
+                            let initialComment, _ = entries.Head
+                            entries
+                            |> List.tryFind (fun (_, record) -> record.Kind = StructuredDecision.Acceptance)
+                            |> Option.bind (fun (acceptanceComment, acceptance) ->
+                                if acceptance.HeadSha = currentHead then None
+                                else
+                                    Some
+                                        { InitialReviewUrl = initialComment.Url
+                                          InitialReviewCommentId = initialComment.Id
+                                          AcceptedHead = acceptance.HeadSha
+                                          AcceptanceCommentId = acceptanceComment.Id }))
 
-            let diagnostics =
-                classified
-                |> List.choose (fun (_, acceptedHead, initialUrl) ->
-                    if acceptedHead = currentHead then
-                        Some
-                            $"a host-acceptance marker names initial review %s{initialUrl}, but its %s{acceptedHeadKey} is the current head, so that chain still binds and is not retired"
-                    elif addressable |> List.exists (fun initial -> initial.Url = initialUrl) then
-                        None
-                    else
-                        Some
-                            $"a host-acceptance marker's %s{initialReviewKey} %s{initialUrl} names no initial review marker on this pull request, so no chain is retired by it")
+                let live =
+                    match generations with
+                    | [] -> []
+                    | values -> values |> List.last |> List.map fst
 
-            if List.isEmpty retired then
-                { unchanged with Diagnostics = diagnostics }
-            else
-                let retiredUrls = retired |> List.map _.InitialReviewUrl |> Set.ofList
-                let retiredMarkerIds =
-                    retired
-                    |> List.collect (fun r -> [ r.InitialReviewCommentId; r.AcceptanceCommentId ])
-                    |> Set.ofList
+                { Live = live
+                  Retired = retired
+                  Diagnostics = []
+                  StructuredSubject = Some subject
+                  StructuredErrors = [] }
 
-                let confirmationIds = groups.Confirmations |> List.map _.Id |> Set.ofList
-
-                // A confirmation belongs to the chain its OWN `initial-review:` names. The key is spelled
-                // here rather than taken from `HostAcceptanceFields[1]` above: the two grammars happen to
-                // share the string, but they are different markers' required fields, and reading a
-                // confirmation through the acceptance marker's grammar would couple them by accident.
-                // This is the identical back-reference `parseReviewCommentsCore` validates as
-                // `initialUrl = first.Url`, reused rather than reinvented.
-                //
-                // A confirmation whose back-reference is unreadable belongs to no retired chain and
-                // therefore SURVIVES: retirement never removes evidence it cannot positively attribute,
-                // so unreadable evidence keeps failing closed downstream instead of vanishing here.
-                let confirmationInitialReviewKey = "initial-review"
-
-                let belongsToRetiredChain (comment: ReviewComment) =
-                    Set.contains comment.Id retiredMarkerIds
-                    || (Set.contains comment.Id confirmationIds
-                        && (match field confirmationInitialReviewKey comment.Body with
-                            | Ok url -> Set.contains url retiredUrls
-                            | Error _ -> false))
-
-                { unchanged with
-                    Live = groups.Ordered |> List.filter (belongsToRetiredChain >> not)
-                    Retired = retired
-                    Diagnostics = diagnostics }
-
-    let private parseReviewCommentsCore
+    let private parseStructuredComments
         (trustedFacts: (bool * SemanticDiff.TrustedAudit option) option)
         (comments: ReviewComment list)
         =
-        // THE PLACEMENT RULE (.github#2221).  A marker is evidence only as a WHOLE LINE inside the
-        // comment's LEADING MARKER BLOCK — the run of lines, from byte 0, each of which is exactly one
-        // known marker's text.  The block ends at the first line that is anything else.
-        //
-        // WHY A BLOCK AND NOT "the first line".  The predecessor recognised exactly one marker at offset
-        // 0, and then — this is the defect — treated ANY other occurrence of those bytes ANYWHERE on the
-        // PR as a hard error over the SHARED error list.  So a handoff comment whose only sin was naming
-        // a marker in prose, in backticks, made every genuine marker on that PR unparseable, and the
-        // message named a marker kind rather than the comment that carried the bytes: the reader was
-        // sent to the critic's correct marker.  Measured live on PR #2205 at head 6ba838ac.
-        //
-        // "This quotation is not evidence" and "this PR can have no review" are different facts, and only
-        // the first was ever intended.  For a QUOTATION the guard's stated intent is fully served by
-        // `marker` declining to recognise it, so no error is raised.  For a MISPLACED marker it is not —
-        // see `misplacedMarkerKinds`, which is why "delete the guard" was the wrong repair and "replace
-        // it with one that can tell the two apart" is this one.
-        //
-        // The block also makes `independent-review` §"Repair phase" step 3 reachable: it sanctions a
-        // repair-phase designation riding in "the same comment" as the initial review, which the
-        // offset-0 rule could not represent at all (#2221 comment 5179330334).  Two markers, two whole
-        // lines, one comment, and no prose between them: both canonical.
-        //
-        // What stays refused is a COMPETING marker — the same kind twice in one comment's block, which
-        // has one meaning and cannot be given two.  A quotation is inert — never evidence.  A MISPLACED
-        // marker is neither: see `misplacedMarkerKinds` below, which is the half that must still refuse.
-        //
-        // `commentLines`/`leadingMarkerBlock`/`canonicalOccurrences`/`marker`/`competingMarker`/
-        // `fieldValues`/`field`/`hasField` are the module-level hoisted primitives above — reused here
-        // unchanged, not redefined (.github#2175 pure extraction).
-        let meaningfulFields =
-            [ "built-artifact"; "executed-command"; "compared-routes"; "observed-result" ]
+        match structuredReviewLedger comments with
+        | Error errors -> Error errors
+        | Ok(_, pairs) ->
+            let generation =
+                pairs
+                |> List.indexed
+                |> List.choose (fun (index, (_, record)) ->
+                    if record.Kind = StructuredDecision.Initial then Some index else None)
+                |> List.tryLast
+                |> Option.map (fun start -> pairs[start..])
+                |> Option.defaultValue pairs
+            let initial = generation |> List.tryFind (fun (_, record) -> record.Kind = StructuredDecision.Initial)
+            let confirmations = generation |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Confirmation)
+            let escalations = generation |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Escalation)
+            let repairs = generation |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.RepairPhase)
+            let acceptances = generation |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Acceptance)
+            let errors = ResizeArray<string>()
 
-        // MISPLACED IS NOT QUOTED (#2221 review round 1).  Deleting `malformedMarker` outright traded one
-        // #266 shape for its mirror image.  The old rule said "I found bytes I could not interpret, so
-        // NOTHING on this PR is readable"; deleting it said "I found bytes I could not interpret, so I
-        // will pretend I did not see them" — and then the parser emitted `Ok (HostAccepted = true)`.
-        // Measured on the live #2205 corpus: a later confirmation carrying `verdict: changes-required`
-        // whose marker line has ONE LEADING SPACE went from base `Error` to `Ok`. Only `initial` and
-        // `acceptances` are `requireOne`-guarded, so a dropped confirmation, escalation or repair-phase
-        // comment leaves no residue at all. "I could not read this comment" became "I read every comment
-        // and the chain is accepted", which is exactly what .github#266 is about.
-        //
-        // THE DISCRIMINATOR IS TYPOGRAPHIC FIRST, AND STRUCTURAL ONLY WHERE STRUCTURE EXISTS.  A prose
-        // sentence mentioning a marker and a marker preceded by a prose sentence can be byte-identical, so
-        // an occurrence is misplaced when:
-        //
-        //   1. the marker text is the whole of its line modulo surrounding whitespace, outside the leading
-        //      block and outside a QUOTED REGION — a fence or an indented code block.  An inline mention
-        //      and a `> ` blockquote are typographically incapable of being the marker, and a fence or a
-        //      four-space indent is markdown's own way of saying "this is quoted text"; AND
-        //   2. either the kind has NO field grammar in this parser at all, or the same comment writes at
-        //      least one review-protocol field as a whole line outside a quoted region.
-        //
-        // WHY (2) IS A DISJUNCTION, AND WHY THAT IS THE WHOLE OF ROUND-2 REPAIR 3.  The first spelling of
-        // this rule required a protocol field unconditionally, and that made it VACUOUS for exactly the
-        // two kinds `requireOne` does not guard.  Escalation and repair-phase have no fields read anywhere
-        // in this parser — .github#2136's repair-phase fixture carries zero — and the contract gives the
-        // escalation comment no typed field grammar either, so the key under it is chosen ad hoc by
-        // whoever writes it.  The critic measured eight prose-first escalation bodies differing only in
-        // that key; `head:`, `current-head:`, `escalated-head:`, `unresolved:`, `pr:`, `confirmations:`
-        // and no-fields-at-all were all still silently dropped, and only `reviewed-head:` — which happens
-        // to be a protocol key — was caught.  Seven of eight escapes survived a repair that reported them
-        // closed.
-        //
-        // Dropping an escalation removes `review escalation requires a repair-phase marker`; dropping a
-        // repair-phase designation reports a repair-phase landing as an ordinary one AND silently lowers
-        // the confirmation ceiling from 10 to 3.  Both fail OPEN, which is why the waiver goes here rather
-        // than being tuned.
-        //
-        // So the rule reads structure off the parser's own grammar: where a kind HAS one, a comment
-        // genuinely attempting it necessarily exhibits it, and requiring that keeps a critic's quoted
-        // example inert.  Where a kind has NONE, there is no key to look for and the honest answer is to
-        // refuse the ambiguous form by name rather than to guess — .github#266 is answered by a named
-        // refusal, never by a confident silent classification.  If escalation ever acquires a field
-        // grammar, this tightens on its own; nothing here is a second copy of the contract.
-        let markerFieldGrammar name =
-            if name = Protocol.reviewPolicy.InitialMarker then
-                [ "critic"; "reviewed-head"; "verdict" ]
-            elif name = Protocol.reviewPolicy.ConfirmationMarker then
-                [ "initial-review"; "critic"; "round"; "preceding-review"; "reviewed-head"; "verdict" ]
-            elif name = Protocol.reviewPolicy.AcceptanceMarker then
-                Protocol.lifecyclePolicy.HostAcceptanceFields
-            else
-                // Escalation and repair-phase.  Not an omission — this parser reads no field from either.
-                []
+            let routeEvidence (record: StructuredDecision.ReviewRecord) =
+                match record.RouteApplicability, record.RouteEvidence with
+                | "meaningful", [ built; command; compared; observed ] ->
+                    Some(Meaningful(built, command, compared, observed))
+                | "not-meaningful", [ reason ] -> Some(NotMeaningful reason)
+                | _ -> None
 
-        let protocolFieldKeys =
-            (markerNames |> List.collect markerFieldGrammar)
-            @ [ "route-applicability"; "route-not-meaningful-reason"; "diff-audit-required"
-                "diff-audit-receipt-v1" ]
-            @ meaningfulFields
-            |> List.distinct
+            match initial, acceptances with
+            | Some(initialComment, first), [ (acceptanceComment, accepted) ] ->
+                let latestComment, latest = confirmations |> List.tryLast |> Option.defaultValue (initialComment, first)
+                let repairPhase = not (List.isEmpty repairs)
+                let ceiling =
+                    if repairPhase then Protocol.reviewPolicy.RepairPhaseMaxRounds
+                    else Protocol.reviewPolicy.MaxAutomatedRepairRounds
 
-        /// Each line paired with whether markdown itself presents it as quoted text: inside a fence, or
-        /// indented as a code block.  Fence delimiters count as quoted themselves, so an opening ``` is
-        /// never read as protocol content.
-        ///
-        /// The indent test is deliberately the simple one — four spaces or a tab — rather than CommonMark's
-        /// full indented-code-block rule, which also depends on the preceding blank line and on list
-        /// context.  A misplaced marker is indented by one or two spaces, not four; four is somebody
-        /// showing you the marker.  The simplification is stated here because it is a real one.
-        let annotateQuotedRegions (text: string) =
-            let mutable inFence = false
-
-            commentLines text
-            |> List.map (fun line ->
-                let trimmed = line.TrimStart()
-                let isDelimiter = trimmed.StartsWith "```" || trimmed.StartsWith "~~~"
-
-                if isDelimiter then
-                    inFence <- not inFence
-
-                let indentedCodeBlock =
-                    trimmed <> "" && (line.StartsWith "    " || line.StartsWith "\t")
-
-                line, (isDelimiter || inFence || indentedCodeBlock))
-
-        let misplacedMarkerKinds (text: string) =
-            let annotated = annotateQuotedRegions text
-
-            let writesProtocolFields =
-                annotated
-                |> List.exists (fun (line, quoted) ->
-                    not quoted
-                    && protocolFieldKeys |> List.exists (fun key -> line.Trim().StartsWith(key + ":")))
-
-            let blockLength = leadingMarkerBlock text |> List.length
-
-            annotated
-            |> List.indexed
-            |> List.collect (fun (index, (line, quoted)) ->
-                if quoted || index < blockLength then
-                    []
-                else
-                    let trimmed = line.Trim()
-
-                    markerNames
-                    |> List.filter (fun name ->
-                        trimmed = markerText name
-                        && (List.isEmpty (markerFieldGrammar name) || writesProtocolFields)))
-            |> List.distinct
-
-        let routeEvidence (text: string) =
-            match field "route-applicability" text with
-            | Ok "meaningful" when hasField "route-not-meaningful-reason" text ->
-                Error "meaningful route evidence must not carry route-not-meaningful-reason"
-            | Ok "meaningful" ->
-                match
-                    field "built-artifact" text,
-                    field "executed-command" text,
-                    field "compared-routes" text,
-                    field "observed-result" text
-                with
-                | Ok artifact, Ok command, Ok routes, Ok result -> Ok(Meaningful(artifact, command, routes, result))
-                | _ ->
-                    Error
-                        "meaningful route evidence requires one non-empty built-artifact, executed-command, compared-routes, and observed-result field"
-            | Ok "not-meaningful" when meaningfulFields |> List.exists (fun key -> hasField key text) ->
-                Error "not-meaningful route evidence must not carry meaningful comparison fields"
-            | Ok "not-meaningful" ->
-                match field "route-not-meaningful-reason" text with
-                | Ok reason when reason.Length <= 500 -> Ok(NotMeaningful reason)
-                | Ok _ -> Error "route-not-meaningful-reason exceeds 500 characters"
-                | Error _ ->
-                    Error "not-meaningful route evidence requires one non-empty route-not-meaningful-reason field"
-            | Ok value -> Error $"unknown route-applicability '%s{value}'"
-            | Error _ -> Error "a passing review marker requires one route-applicability field"
-
-        // Reuses `classifyMarkers` — the SAME classification `reviewPhaseFacts` reads (.github#2175
-        // acceptance 11); this is a call, not a second computation of it.
-        let groups = classifyMarkers comments
-        let ordered, initial, confirmations, escalations, repairPhases, acceptances =
-            groups.Ordered, groups.Initial, groups.Confirmations, groups.Escalations, groups.RepairPhases, groups.Acceptances
-        let errors = ResizeArray<string>()
-
-        // EVERY marker error names the comment that caused it (#2221 acceptance criterion 3).  The
-        // predecessor named only a marker KIND, so the reader looked at the one correct marker of that
-        // kind and concluded the critic had got it wrong.
-        let locate (comment: ReviewComment) =
-            if System.String.IsNullOrWhiteSpace comment.Url then
-                $"comment %d{comment.Id}"
-            else
-                $"comment %d{comment.Id} (%s{comment.Url})"
-
-        for comment in ordered do
-            for name in markerNames do
-                if competingMarker name comment.Body then
-                    errors.Add
-                        $"%s{name} marker is repeated in the leading marker block of %s{locate comment}; one comment may carry a marker kind once"
-
-            for name in misplacedMarkerKinds comment.Body do
-                if List.isEmpty (markerFieldGrammar name) then
-                    // No field grammar, so a mention and a misplaced marker are byte-identical and no
-                    // reader can classify this.  Refusing by name is the answer; guessing is not.
-                    errors.Add
-                        $"%s{name} marker in %s{locate comment} stands on its own line but is not the comment's leading marker, and this marker kind has no fields to tell a real one from a mention. Move it to the comment's first line if you meant to post it; fence it, indent it, or write it inline if you meant to quote it."
-                else
-                    errors.Add
-                        $"%s{name} marker in %s{locate comment} is not a leading standalone marker, and that comment writes review-protocol fields — so it is a misplaced marker, not a quotation. Move the marker to the comment's first line, or drop the field lines if the comment only quotes it."
-        // The marker designates the one escalated phase; it is not a confirmation round itself.  A
-        // duplicate durable designation still has one boolean meaning and must not silently spend the
-        // phase's confirmation budget.
-        let repairPhase = not (List.isEmpty repairPhases)
-        let confirmationCeiling =
-            if repairPhase then Protocol.reviewPolicy.RepairPhaseMaxRounds
-            else Protocol.reviewPolicy.MaxAutomatedRepairRounds
-        if List.length confirmations > confirmationCeiling then errors.Add "review confirmation round ceiling exceeded"
-        if not (List.isEmpty escalations) && List.isEmpty repairPhases then errors.Add "review escalation requires a repair-phase marker"
-        let requireOne what values =
-            match values with
-            | [ value ] -> Some value
-            | [] ->
-                errors.Add $"exactly one %s{what} marker is required; no comment carries one"
-                None
-            | competing ->
-                let where = competing |> List.map locate |> String.concat ", "
-                errors.Add $"exactly one %s{what} marker is required; it is carried by %s{where}"
-                None
-        let hostFields = Protocol.lifecyclePolicy.HostAcceptanceFields
-        match requireOne Protocol.reviewPolicy.InitialMarker initial, requireOne Protocol.reviewPolicy.AcceptanceMarker acceptances with
-        | Some first, Some accepted ->
-            match field "critic" first.Body, field "reviewed-head" first.Body, field "verdict" first.Body,
-                  field hostFields[0] accepted.Body, field hostFields[1] accepted.Body, field hostFields[2] accepted.Body with
-            | Ok critic, Ok initialHead, Ok initialVerdict, Ok acceptedHead, Ok acceptedInitialUrl, Ok acceptedLatestUrl ->
-                if System.String.IsNullOrWhiteSpace first.Url then
-                    errors.Add "the initial review comment URL is missing"
-
-                if initialVerdict <> "pass" && initialVerdict <> "changes-required" then
-                    errors.Add "the initial independent review verdict must be pass or changes-required"
-
-                if List.isEmpty confirmations && initialVerdict <> "pass" then
-                    errors.Add "an unconfirmed independent review must have verdict pass"
-
-                let mutable latestRouteEvidence = None
-
-                let validateRouteEvidence label verdict body =
-                    if verdict = "pass" || hasField "route-applicability" body then
-                        match routeEvidence body with
-                        | Ok evidence -> latestRouteEvidence <- Some evidence
-                        | Error error -> errors.Add $"%s{label}: %s{error}"
-
-                validateRouteEvidence "initial review" initialVerdict first.Body
-                let mutable previousHead = initialHead
-                let mutable previousReviewUrl = first.Url
-                let mutable previousReviewId = first.Id
-                let mutable valid = true
-
-                for expectedRound, confirmation in confirmations |> List.indexed |> List.map (fun (i, c) -> i + 1, c) do
-                    // .github#2451: the string equality below (`confirmationCritic = critic`) is
-                    // necessary but not SUFFICIENT proof of "the same critic" — every critic ever
-                    // dispatched at one route shares the bare agent-type string, so two DIFFERENT
-                    // critics that both never minted an identity satisfy it trivially. The generic-
-                    // identity arm below is checked FIRST (F# takes the first matching arm) so a
-                    // generic-identity match never falls into the accepting arm; it fails closed with a
-                    // distinct, named reason rather than the generic "does not continue" message, which
-                    // would wrongly suggest the fields themselves disagreed.
-                    match
-                        field "initial-review" confirmation.Body,
-                        field "critic" confirmation.Body,
-                        field "round" confirmation.Body,
-                        field "preceding-review" confirmation.Body,
-                        field "reviewed-head" confirmation.Body,
-                        field "verdict" confirmation.Body
-                    with
-                    | Ok initialUrl, Ok confirmationCritic, Ok round, Ok preceding, Ok reviewedHead, Ok verdict when
-                        initialUrl = first.Url
-                        && confirmationCritic = critic
-                        && isGenericCriticIdentity critic
-                        && round = string expectedRound
-                        && preceding = previousReviewUrl
-                        && not (System.String.IsNullOrWhiteSpace confirmation.Url)
-                        && confirmation.Id > previousReviewId
-                        && (verdict = "pass" || verdict = "changes-required")
-                        ->
-                        valid <- false
-
-                        errors.Add
-                            $"review confirmation round %d{expectedRound} names critic '%s{critic}', the bare agent-type string rather than a minted, distinguishing identity; the same-critic continuity requirement cannot be established from it (.github#2451)"
-                    | Ok initialUrl, Ok confirmationCritic, Ok round, Ok preceding, Ok reviewedHead, Ok verdict when
-                        initialUrl = first.Url
-                        && confirmationCritic = critic
-                        && round = string expectedRound
-                        && preceding = previousReviewUrl
-                        && not (System.String.IsNullOrWhiteSpace confirmation.Url)
-                        && confirmation.Id > previousReviewId
-                        && (verdict = "pass" || verdict = "changes-required")
-                        ->
-                        validateRouteEvidence $"review confirmation round %d{expectedRound}" verdict confirmation.Body
-                        previousHead <- reviewedHead
-                        previousReviewUrl <- confirmation.Url
-                        previousReviewId <- confirmation.Id
-                    | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
-                        valid <- false
-
-                        errors.Add
-                            $"review confirmation round %d{expectedRound} does not continue the initial URL, same critic, round, and preceding comment URL"
-                    | _ ->
-                        valid <- false
-                        errors.Add $"review confirmation round %d{expectedRound} is malformed"
-
-                if not (List.isEmpty confirmations) then
-                    match confirmations |> List.last |> (fun c -> field "verdict" c.Body) with
-                    | Ok "pass" -> ()
-                    | _ -> errors.Add "the latest review confirmation must have verdict pass"
-
-                let auditRequired =
-                    match field "diff-audit-required" first.Body with
-                    | Ok "true" -> true
-                    | Ok "false"
-                    | Error _ -> false
-                    | Ok _ ->
-                        errors.Add "diff-audit-required must be true or false"
-                        false
+                if isGenericCriticIdentity first.Critic then
+                    errors.Add "review critic identity must be minted and distinguishing"
+                if latest.Verdict <> StructuredDecision.Pass then
+                    errors.Add "the latest structured critic decision must have verdict pass"
+                if confirmations.Length > ceiling then
+                    errors.Add "review confirmation round ceiling exceeded"
+                if not (List.isEmpty escalations) && not repairPhase then
+                    errors.Add "structured escalation requires a structured repair-phase record"
+                if String.IsNullOrWhiteSpace initialComment.Url then
+                    errors.Add "the initial structured review comment URL is missing"
+                if String.IsNullOrWhiteSpace latestComment.Url then
+                    errors.Add "the latest structured review comment URL is missing"
+                if accepted.HeadSha <> latest.HeadSha then
+                    errors.Add "acceptance is not bound to the latest reviewed head"
+                if accepted.InitialReview <> Some initialComment.Url then
+                    errors.Add "acceptance is not bound to the initial structured review comment URL"
+                if accepted.PrecedingReview <> Some latestComment.Url then
+                    errors.Add "acceptance is not bound to the latest structured review comment URL"
+                if acceptanceComment.Id <= latestComment.Id then
+                    errors.Add "host acceptance must follow the latest structured review record"
 
                 let mechanicallyRequired = trustedFacts |> Option.exists fst
+                let effectiveAuditRequired = first.DiffAuditRequired || mechanicallyRequired
+                let mutable auditHead = None
 
-                if mechanicallyRequired && not auditRequired then
-                    errors.Add "diff-audit-required:false contradicts trusted live delivery facts"
-
-                let effectiveAuditRequired = auditRequired || mechanicallyRequired
-
-                // A receipt names ONE rename pair, so a chain may carry several and the gate is only
-                // satisfied by their UNION.  `fieldValues`, not `field`: `field` fails closed on a
-                // duplicate key, which is right for a single-valued field and is exactly what made a
-                // second receipt unpostable — and therefore what made a covering receipt impossible to
-                // author for a two-rename diff (.github#2144 repair-phase round 2).
-                //
-                // The outcomes below are deliberately DISTINCT rather than collapsed into one sentence.
-                // "no receipt was submitted", "a receipt is malformed", "a receipt is dishonest about its
-                // own pair" and "the receipts are honest but do not account for the whole diff" are four
-                // different repairs, and .github#2207 is what collapsing them costs: an operator told to
-                // wait for a review that had already happened, because one message stood for every cause.
-                let auditHead =
-                    if not effectiveAuditRequired then
-                        None
+                if effectiveAuditRequired then
+                    if List.isEmpty accepted.DiffAuditReceipts then
+                        errors.Add "a required typed diff-audit receipt was not submitted"
                     else
-                        match fieldValues "diff-audit-receipt-v1" accepted.Body with
-                        | [] ->
-                            errors.Add "a required typed diff-audit receipt was not submitted"
-                            None
-                        | encoded ->
-                            let parsed = encoded |> List.map SemanticDiff.ofBase64
+                        let parsed = accepted.DiffAuditReceipts |> List.map SemanticDiff.ofBase64
+                        if parsed |> List.exists Result.isError then
+                            errors.Add "a submitted typed diff-audit receipt is malformed"
+                        else
+                            let submitted = parsed |> List.choose Result.toOption
+                            match trustedFacts |> Option.bind snd with
+                            | None -> errors.Add "the live delivery facts needed to check a diff-audit receipt are absent"
+                            | Some trusted ->
+                                for receipt in submitted do
+                                    match
+                                        trusted.Expected
+                                        |> List.tryFind (fun expected ->
+                                            expected.OldToken = receipt.OldToken
+                                            && expected.NewToken = receipt.NewToken
+                                            && expected.DeclaredPaths = receipt.DeclaredPaths)
+                                    with
+                                    | Some expected when SemanticDiff.validateAgainst expected receipt |> List.isEmpty -> ()
+                                    | _ -> errors.Add "a submitted typed diff-audit receipt is stale or does not match live delivery facts"
 
-                            if parsed |> List.exists Result.isError then
-                                errors.Add "a submitted typed diff-audit receipt is malformed"
-                                None
-                            else
-                                let submitted = parsed |> List.choose Result.toOption
+                                let accounted = submitted |> List.collect _.Occurrences |> List.map _.Id |> Set.ofList
+                                let uncovered = trusted.Discovered |> List.filter (fun item -> not (accounted.Contains item.Id))
+                                if not (List.isEmpty uncovered) then
+                                    errors.Add
+                                        $"the submitted typed diff-audit receipts account for %d{trusted.Discovered.Length - uncovered.Length} of %d{trusted.Discovered.Length} discovered occurrences"
 
-                                match trustedFacts |> Option.bind snd with
-                                | None ->
-                                    errors.Add "the live delivery facts needed to check a diff-audit receipt are absent"
-                                    None
-                                | Some trusted ->
-                                    // 1. HONESTY. Every submitted receipt must match the engine's own
-                                    //    recomputation of the pair and paths it names.
-                                    for receipt in submitted do
-                                        if not receipt.Required then
-                                            errors.Add "a submitted typed diff-audit receipt does not assert the audit was required"
-                                        else
-                                            match
-                                                trusted.Expected
-                                                |> List.tryFind (fun expected ->
-                                                    expected.OldToken = receipt.OldToken
-                                                    && expected.NewToken = receipt.NewToken
-                                                    && expected.DeclaredPaths = receipt.DeclaredPaths)
-                                            with
-                                            | None ->
-                                                errors.Add
-                                                    "a submitted typed diff-audit receipt names a rename the live delivery facts did not recompute"
-                                            | Some expected ->
-                                                if SemanticDiff.validateAgainst expected receipt |> List.isEmpty |> not then
-                                                    errors.Add
-                                                        "a submitted typed diff-audit receipt is stale, or has unresolved dispositions"
+                                match submitted |> List.map _.HeadSha |> List.distinct with
+                                | [ head ] -> auditHead <- Some head
+                                | _ -> errors.Add "the submitted typed diff-audit receipts are not all bound to one head"
 
-                                    // 2. COVERAGE. Honest receipts still have to account for the WHOLE
-                                    //    diff, or the author narrows the gate by choosing what to submit.
-                                    let accounted =
-                                        submitted
-                                        |> List.collect _.Occurrences
-                                        |> List.map _.Id
-                                        |> Set.ofList
+                if errors.Count = 0 then
+                    let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. confirmations.Length ]
+                    Ok
+                        { MarkerValid = true
+                          CriticIdentity = Some first.Critic
+                          HeadSha = Some latest.HeadSha
+                          Rounds = rounds
+                          RepairPhase = repairPhase
+                          ChecksGreen = false
+                          HostAccepted = true
+                          RuntimeRouteEvidence = routeEvidence latest
+                          DiffAuditRequired = effectiveAuditRequired
+                          DiffAuditHead = auditHead }
+                else
+                    Error(List.ofSeq errors)
+            | None, _ -> Error [ "exactly one structured initial review record is required" ]
+            | _, [] -> Error [ "exactly one structured acceptance record is required" ]
+            | _, _ -> Error [ "exactly one structured acceptance record is required" ]
 
-                                    let uncovered =
-                                        trusted.Discovered
-                                        |> List.filter (fun occurrence -> not (accounted.Contains occurrence.Id))
-
-                                    if not (List.isEmpty uncovered) then
-                                        errors.Add
-                                            $"the submitted typed diff-audit receipts account for %d{trusted.Discovered.Length - uncovered.Length} of %d{trusted.Discovered.Length} discovered occurrences"
-
-                                    match submitted |> List.map _.HeadSha |> List.distinct with
-                                    | [ single ] -> Some single
-                                    | _ ->
-                                        errors.Add "the submitted typed diff-audit receipts are not all bound to one head"
-                                        None
-
-                if accepted.Id <= previousReviewId then
-                    errors.Add "host acceptance must follow the latest review comment"
-
-                if acceptedHead <> previousHead then
-                    errors.Add "acceptance is not bound to the latest reviewed head"
-
-                if acceptedInitialUrl <> first.Url then
-                    errors.Add "acceptance is not bound to the initial review comment URL"
-
-                if acceptedLatestUrl <> previousReviewUrl then
-                    errors.Add "acceptance is not bound to the latest confirmation comment URL"
-
-                if valid && errors.Count = 0 then
-                    let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. List.length confirmations ]
-                    Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some previousHead
-                         Rounds = rounds; RepairPhase = repairPhase; ChecksGreen = false; HostAccepted = true
-                         RuntimeRouteEvidence = latestRouteEvidence
-                         DiffAuditRequired = effectiveAuditRequired; DiffAuditHead = auditHead }
-                else Error(List.ofSeq errors)
-            | _ ->
-                // #2221 review round 1, finding 2.  This arm used to be the single sentence "review
-                // markers are malformed", and it is the LIKELIEST marker error in practice: it fires
-                // whenever any one of the six reads above fails.  It named neither the comment nor the
-                // field nor whether the field was absent or written twice, so acceptance criterion 3 was
-                // met on two message paths out of three.
-                //
-                // It is reachable by this item's OWN condition.  A critic comment that quotes an example
-                // `verdict: pass` line at column 0 inside a fence makes `field "verdict"` see two values
-                // — `fieldValues` is deliberately not fence-aware, because narrowing WHICH LINES COUNT as
-                // a field is a different change with a different blast radius — and the whole chain used
-                // to come back as four anonymous words.
-                let diagnose (comment: ReviewComment) key =
-                    match fieldValues key comment.Body with
-                    | [ value ] when not (System.String.IsNullOrWhiteSpace value) -> None
-                    | [] -> Some $"%s{locate comment} does not carry the required '%s{key}' field"
-                    | [ _ ] -> Some $"%s{locate comment} carries '%s{key}' with an empty value"
-                    | values ->
-                        Some
-                            $"%s{locate comment} carries '%s{key}' %d{List.length values} times; it must be written exactly once (a quoted example counts — `fieldValues` reads every line)"
-
-                [ "critic", first
-                  "reviewed-head", first
-                  "verdict", first
-                  hostFields[0], accepted
-                  hostFields[1], accepted
-                  hostFields[2], accepted ]
-                |> List.choose (fun (key, comment) -> diagnose comment key)
-                |> Error
-        | _ -> Error(List.ofSeq errors)
-
-    let private parseNormalized trusted comments =
-        match normalizeStructuredReviews comments with
-        | Ok(normalized, _, _) -> parseReviewCommentsCore trusted normalized
-        | Error errors -> Error errors
+    let private parseNormalized trusted comments = parseStructuredComments trusted comments
 
     let parseReviewComments comments = parseNormalized None comments
 
@@ -1087,7 +559,7 @@ module Driver =
     let parseEffectiveReviewComments currentHead comments =
         let live = liveReviewComments currentHead comments
         if not (List.isEmpty live.StructuredErrors) then Error live.StructuredErrors
-        else parseReviewComments live.Live
+        else parseReviewComments comments
 
     type Receipt =
         { ObservedAt: int64
