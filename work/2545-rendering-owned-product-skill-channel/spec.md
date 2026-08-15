@@ -41,7 +41,7 @@ stops the decision from having to be rediscovered per class.
 - SB-001: Choose, on the record, the delivery route for the `scope: product, owner: fs-gg-rendering`
   skill class, with the ADR-0063 / ADR-0058 / ADR-0062 consistency argument stated
   (`.github#2545` acceptance criterion 1).
-- SB-002: Add `registry/skill-delivery-channels.yml` — a `.github`-authored declaration binding every
+- SB-002: Add `registry/skills.delivery-channels.yml` — a `.github`-authored declaration binding every
   `(owner, scope)` skill class present in `registry/skills.yml` to exactly one accountable disposition
   (`delivered`, `provider-scoped`, `withheld`, `gap`) with that disposition's required fields.
 - SB-003: Add a `delivery-channel` arm to `scripts/fsgg-skill-registry-check` that **derives** the class
@@ -141,7 +141,7 @@ channel that carries it or the issue that owes it. A fourth instance of ADR-0063
 
 ## The channel declaration and its disposition vocabulary
 
-`registry/skill-delivery-channels.yml` carries one entry per `(owner, scope)` class present in
+`registry/skills.delivery-channels.yml` carries one entry per `(owner, scope)` class present in
 `registry/skills.yml`. Each entry declares **exactly one** disposition:
 
 | disposition | means | required fields |
@@ -205,15 +205,15 @@ embeds, or withholds the bytes. Second, the arm does **not** try to verify a dec
 
 ## Acceptance Scenarios
 
-- AC-001 [US-002] [FR-001]: Given `registry/skill-delivery-channels.yml`, when a reader looks up any
+- AC-001 [US-002] [FR-001]: Given `registry/skills.delivery-channels.yml`, when a reader looks up any
   `(owner, scope)` class present in `registry/skills.yml`, then the file states exactly one of the four
   dispositions — `delivered`, `provider-scoped`, `withheld`, `gap` — with that disposition's required
   fields, and every disposition that leaves a class short of universal reach names either the issue that
   owes closing it or the reason the shortfall is correct.
 - AC-002 [US-001] [FR-002]: Given a `registry/skills.yml` carrying a class with no entry in
-  `registry/skill-delivery-channels.yml`, when `scripts/fsgg-skill-registry-check` runs, then it reports
+  `registry/skills.delivery-channels.yml`, when `scripts/fsgg-skill-registry-check` runs, then it reports
   a `delivery-channel` finding naming that class and the rows in it, and exits non-zero.
-- AC-003 [US-001] [FR-003]: Given an entry in `registry/skill-delivery-channels.yml` matching no row in
+- AC-003 [US-001] [FR-003]: Given an entry in `registry/skills.delivery-channels.yml` matching no row in
   `registry/skills.yml`, when the check runs, then it reports a `delivery-channel` finding naming that
   dead entry, so the declaration cannot rot into a restatement of a class that no longer exists.
 - AC-004 [US-001] [FR-004]: Given an entry missing a field its disposition requires — a `gap` or an
@@ -222,7 +222,7 @@ embeds, or withholds the bytes. Second, the arm does **not** try to verify a dec
   `channel`/`evidence` — when the check runs, then it reports a `delivery-channel` finding, so no
   disposition can be asserted without the fact that makes it accountable.
 - AC-005 [US-001] [FR-005]: Given no producer checkout and no network, when the arm runs, then it
-  reaches a verdict from `registry/skills.yml` and `registry/skill-delivery-channels.yml` alone.
+  reaches a verdict from `registry/skills.yml` and `registry/skills.delivery-channels.yml` alone.
 - AC-006 [US-001] [FR-006]: Given `tests/skill-registry/run.sh`, when the suite runs, then it exercises
   the arm's green case and each red case above, and the recorded gate-inversion evidence shows the exact
   mutation that removes the `fs-gg-rendering` / `product` entry and the red the suite then observed.
@@ -235,13 +235,13 @@ embeds, or withholds the bytes. Second, the arm does **not** try to verify a dec
 - AC-009 [US-003] [FR-009]: Given `.github#2545` acceptance criterion 2, when a reviewer asks where the
   byte channel is actually implemented, then this package names the filed receiver rows at the byte
   owner and the consumer, with the dedupe read that preceded filing.
-- AC-010 [US-001] [FR-010]: Given a pull request that edits `registry/skill-delivery-channels.yml` and
+- AC-010 [US-001] [FR-010]: Given a pull request that edits `registry/skills.delivery-channels.yml` and
   nothing else, when CI selects workflows, then `skill-registry-coherence.yml` runs, so the file cannot
   be edited without the gate that reads it.
 
 ## Functional Requirements
 
-- FR-001: `registry/skill-delivery-channels.yml` declares, for each `(owner, scope)` class, exactly one of the dispositions `delivered`, `provider-scoped`, `withheld`, or `gap`, and any disposition short of universal reach carries either `tracked-by` (an `owner/repo#number` reference) or an `accepted` rationale. (Stories: US-002; Acceptance: AC-001)
+- FR-001: `registry/skills.delivery-channels.yml` declares, for each `(owner, scope)` class, exactly one of the dispositions `delivered`, `provider-scoped`, `withheld`, or `gap`, and any disposition short of universal reach carries either `tracked-by` (an `owner/repo#number` reference) or an `accepted` rationale. (Stories: US-002; Acceptance: AC-001)
 - FR-002: The `delivery-channel` arm reports a finding for every `(owner, scope)` class present in `registry/skills.yml` with no entry in the declaration. (Stories: US-001; Acceptance: AC-002)
 - FR-003: The arm reports a finding for every declaration entry matching no row in `registry/skills.yml`. (Stories: US-001; Acceptance: AC-003)
 - FR-004: The arm reports a finding for an entry that is missing a field its disposition requires, carries a malformed `tracked-by`, declares no disposition, or declares one outside the vocabulary. (Stories: US-001; Acceptance: AC-004)
@@ -250,7 +250,7 @@ embeds, or withholds the bytes. Second, the arm does **not** try to verify a dec
 - FR-007: The route decision and its ADR-0063 / ADR-0058 / ADR-0062 consistency argument are recorded in this package. (Stories: US-003; Acceptance: AC-007)
 - FR-008: The disposition of all 18 Rendering-owned product rows is recorded, each with the measured predicate justifying it. (Stories: US-003; Acceptance: AC-008)
 - FR-009: The receiver rows required by the chosen route are filed at the byte owner and the consumer, deduped over REST, and their numbers recorded here. (Stories: US-003; Acceptance: AC-009)
-- FR-010: `.github/workflows/skill-registry-coherence.yml` selects `registry/skill-delivery-channels.yml` on both `pull_request` and `push: main`. (Stories: US-001; Acceptance: AC-010)
+- FR-010: `.github/workflows/skill-registry-coherence.yml` selects `registry/skills.delivery-channels.yml` on both `pull_request` and `push: main`. (Stories: US-001; Acceptance: AC-010)
 
 ## Disposition of the Rendering-owned product rows
 
@@ -312,14 +312,14 @@ over REST against the **cause** before filing; all three are on the Coordination
 |---|---|---|
 | [FS-GG/FS.GG.Rendering#1240](https://github.com/FS-GG/FS.GG.Rendering/issues/1240) | publishing `FS.GG.Rendering.Skills` — the byte source, and the root of the chain | — |
 | [FS-GG/FS.GG.SDD#864](https://github.com/FS-GG/FS.GG.SDD/issues/864) | the fourth enrollment channel in the scaffold materializer, mirroring `GameSkills.fs` | FS.GG.Rendering#1240 |
-| [.github#2639](https://github.com/FS-GG/.github/issues/2639) | the `rendering-skills` contract row, and the `provider-scoped`→`delivered` flip in `registry/skill-delivery-channels.yml` | FS.GG.Rendering#1240 |
+| [.github#2639](https://github.com/FS-GG/.github/issues/2639) | the `rendering-skills` contract row, and the `provider-scoped`→`delivered` flip in `registry/skills.delivery-channels.yml` | FS.GG.Rendering#1240 |
 
 Dedupe evidence: `gh api search/issues` over `repo:FS-GG/FS.GG.Rendering` for `ADR-0063`,
 `skills package`, `materializer`, `Rendering.Skills`, `product-skills`, `feedback-report`,
 `delivery channel` — the ADR-0063 hits (`#965`, `#970`) retire the *frozen game* copies and are closed;
 that repository had exactly one open issue (`#14`, a Renovate dashboard). `repo:FS-GG/FS.GG.SDD` for
 `materializer`, `GameSkills`, `skill channel`, `feedback-report` — two open issues (`#839`, `#16`),
-neither carrying this cause. `repo:FS-GG/.github` for `rendering-skills`, `skill-delivery-channels`,
+neither carrying this cause. `repo:FS-GG/.github` for `rendering-skills`, `delivery-channels`,
 `owner-sourced`, `game-skills` — `#1299`/`#1300`/`#1308` are the closed driver and game instances.
 
 `Blocked by` is written on the **Projects v2 field**, not as a body line: a `Blocked by:` line in an
@@ -333,7 +333,7 @@ those bodies are prose for a reader; the edges above are the field.
   `work/2380-feedback-report-materialization/clarifications.md` recorded as AMB-002 and deferred to this
   item. Resolved, not carried.
 - AMB-002: **Where the class declaration lives** — a new top-level key in `registry/skills.yml`, or a
-  separate file. Decided: a separate file, `registry/skill-delivery-channels.yml`. `registry/skills.yml`
+  separate file. Decided: a separate file, `registry/skills.delivery-channels.yml`. `registry/skills.yml`
   is the surface of the `registry-schema` contract (owner `sdd`, consumers `[github]`) and is read by
   FS.GG.SDD's typed `Fsgg.Registry` validator; adding an unknown top-level key there is a cross-repo
   schema change this item has no mandate to make, and `skill-registry-autofix.yml` rewrites that file
@@ -346,7 +346,7 @@ those bodies are prose for a reader; the edges above are the field.
 
 ## Public Or Tool-Facing Impact
 
-- Adds one authored `.github`-owned declaration file, `registry/skill-delivery-channels.yml`.
+- Adds one authored `.github`-owned declaration file, `registry/skills.delivery-channels.yml`.
 - Adds one arm to `scripts/fsgg-skill-registry-check`, which is run by
   `.github/workflows/skill-registry-coherence.yml` on pull requests, `push: main`, and a nightly
   schedule. The arm is offline and adds no network or token requirement.

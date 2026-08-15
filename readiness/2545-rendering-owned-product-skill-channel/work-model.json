@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "811855574033f9b8a4b5df78fb5effb0dc2fa826fcaa18373dcfa7b6ad225e61"
+        "value": "21509f554867b43ef765036e9a1f2ff83148ff994f6dc480a65b9521682e03b1"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "de326974d0178940f2b2b351184c4a33cd86df2b3e921107def856ba285e7944"
+        "value": "768db4d522c67d0eaba249842d1a646de13b2c6eee4aed9493045e6c1ca79745"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "8f7d682d4eca6b68e562b87030864755ad1ae2567f8c32da4c86c351156c7faf"
+        "value": "7cf27acd8d137eac1bf859f797bc5d55d97b5fd9a4e0d364de7ad416c53f8595"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "4f9136b8f42dcc9838367afb23088dd66c71f4c900c22aba1217d1e213ef1969"
+        "value": "2b2ce75bd3823a799160ec0825b4166c9e58913c6b7bed29b232984808df80f3"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "845d3a71f7927f829544dd952583e9d7b45f1735e96e0a8d777737dcb0e8fcc1"
+        "value": "838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "6c2c2b63acaa406459092990b83c72b2b8ad2055d4ecf072ba1a58e0d0e623c7"
+        "value": "2a1087f93d2a3aee16ff644387b944da89168a906e12c021bb14dea39a65e9ca"
       }
     }
   ],
@@ -128,8 +128,8 @@
   "requirements": [
     {
       "id": "FR-001",
-      "title": "\u0060registry/skill-delivery-channels.yml\u0060 declares, for each \u0060(owner, scope)\u0060 class, exactly one of the dispositions \u0060delivered\u0060, \u0060provider-scoped\u0060, \u0060withheld\u0060, or \u0060gap\u0060, and any disposition short of universal reach carries either \u0060tracked-by\u0060 (an \u0060owner/repo#number\u0060 reference) or an \u0060accepted\u0060 rationale. (Stories: US-002; Acceptance: AC-001)",
-      "text": "\u0060registry/skill-delivery-channels.yml\u0060 declares, for each \u0060(owner, scope)\u0060 class, exactly one of the dispositions \u0060delivered\u0060, \u0060provider-scoped\u0060, \u0060withheld\u0060, or \u0060gap\u0060, and any disposition short of universal reach carries either \u0060tracked-by\u0060 (an \u0060owner/repo#number\u0060 reference) or an \u0060accepted\u0060 rationale. (Stories: US-002; Acceptance: AC-001)",
+      "title": "\u0060registry/skills.delivery-channels.yml\u0060 declares, for each \u0060(owner, scope)\u0060 class, exactly one of the dispositions \u0060delivered\u0060, \u0060provider-scoped\u0060, \u0060withheld\u0060, or \u0060gap\u0060, and any disposition short of universal reach carries either \u0060tracked-by\u0060 (an \u0060owner/repo#number\u0060 reference) or an \u0060accepted\u0060 rationale. (Stories: US-002; Acceptance: AC-001)",
+      "text": "\u0060registry/skills.delivery-channels.yml\u0060 declares, for each \u0060(owner, scope)\u0060 class, exactly one of the dispositions \u0060delivered\u0060, \u0060provider-scoped\u0060, \u0060withheld\u0060, or \u0060gap\u0060, and any disposition short of universal reach carries either \u0060tracked-by\u0060 (an \u0060owner/repo#number\u0060 reference) or an \u0060accepted\u0060 rationale. (Stories: US-002; Acceptance: AC-001)",
       "acceptanceCriteria": [
         "AC-001"
       ],
@@ -317,8 +317,8 @@
     },
     {
       "id": "FR-010",
-      "title": "\u0060.github/workflows/skill-registry-coherence.yml\u0060 selects \u0060registry/skill-delivery-channels.yml\u0060 on both \u0060pull_request\u0060 and \u0060push: main\u0060. (Stories: US-001; Acceptance: AC-010)",
-      "text": "\u0060.github/workflows/skill-registry-coherence.yml\u0060 selects \u0060registry/skill-delivery-channels.yml\u0060 on both \u0060pull_request\u0060 and \u0060push: main\u0060. (Stories: US-001; Acceptance: AC-010)",
+      "title": "\u0060.github/workflows/skill-registry-coherence.yml\u0060 selects \u0060registry/skills.delivery-channels.yml\u0060 on both \u0060pull_request\u0060 and \u0060push: main\u0060. (Stories: US-001; Acceptance: AC-010)",
+      "text": "\u0060.github/workflows/skill-registry-coherence.yml\u0060 selects \u0060registry/skills.delivery-channels.yml\u0060 on both \u0060pull_request\u0060 and \u0060push: main\u0060. (Stories: US-001; Acceptance: AC-010)",
       "acceptanceCriteria": [
         "AC-010"
       ],
@@ -356,8 +356,8 @@
     },
     {
       "id": "DEC-002",
-      "title": "A separate .github-owned file, registry/skill-delivery-channels.yml, not a new top-level key in registry/skills.yml.",
-      "decision": "A separate .github-owned file, registry/skill-delivery-channels.yml, not a new top-level key in registry/skills.yml.",
+      "title": "A separate .github-owned file, registry/skills.delivery-channels.yml, not a new top-level key in registry/skills.yml.",
+      "decision": "A separate .github-owned file, registry/skills.delivery-channels.yml, not a new top-level key in registry/skills.yml.",
       "requirementRefs": [],
       "storyRefs": [],
       "acceptanceRefs": [],
@@ -1696,7 +1696,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "811855574033f9b8a4b5df78fb5effb0dc2fa826fcaa18373dcfa7b6ad225e61"
+            "value": "21509f554867b43ef765036e9a1f2ff83148ff994f6dc480a65b9521682e03b1"
           },
           "schemaVersion": 1
         },
@@ -1704,7 +1704,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "de326974d0178940f2b2b351184c4a33cd86df2b3e921107def856ba285e7944"
+            "value": "768db4d522c67d0eaba249842d1a646de13b2c6eee4aed9493045e6c1ca79745"
           },
           "schemaVersion": 1
         },
@@ -1712,7 +1712,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "8f7d682d4eca6b68e562b87030864755ad1ae2567f8c32da4c86c351156c7faf"
+            "value": "7cf27acd8d137eac1bf859f797bc5d55d97b5fd9a4e0d364de7ad416c53f8595"
           },
           "schemaVersion": 1
         },
@@ -1720,7 +1720,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "4f9136b8f42dcc9838367afb23088dd66c71f4c900c22aba1217d1e213ef1969"
+            "value": "2b2ce75bd3823a799160ec0825b4166c9e58913c6b7bed29b232984808df80f3"
           },
           "schemaVersion": 1
         },
@@ -1728,7 +1728,7 @@
           "path": "work/2545-rendering-owned-product-skill-channel/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "845d3a71f7927f829544dd952583e9d7b45f1735e96e0a8d777737dcb0e8fcc1"
+            "value": "838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50"
           },
           "schemaVersion": 1
         },
@@ -1736,14 +1736,14 @@
           "path": "work/2545-rendering-owned-product-skill-channel/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "6c2c2b63acaa406459092990b83c72b2b8ad2055d4ecf072ba1a58e0d0e623c7"
+            "value": "2a1087f93d2a3aee16ff644387b944da89168a906e12c021bb14dea39a65e9ca"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "bb26eac886f7ee8b5bdfede0814fbce2f123b47ce16259574953d59690d2e4e9"
+        "value": "114e0bab38e72346077917338fb279d94f0a6c512f163274839da9bed3fa6190"
       },
       "currency": "current"
     }

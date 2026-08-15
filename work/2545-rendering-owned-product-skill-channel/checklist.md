@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2545-rendering-owned-product-skill-channel/clarifications.md
 
 ## Source Snapshot
-- spec: work/2545-rendering-owned-product-skill-channel/spec.md sha256:845d3a71f7927f829544dd952583e9d7b45f1735e96e0a8d777737dcb0e8fcc1 schemaVersion:1
-- clarifications: work/2545-rendering-owned-product-skill-channel/clarifications.md sha256:de326974d0178940f2b2b351184c4a33cd86df2b3e921107def856ba285e7944 schemaVersion:1
+- spec: work/2545-rendering-owned-product-skill-channel/spec.md sha256:838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50 schemaVersion:1
+- clarifications: work/2545-rendering-owned-product-skill-channel/clarifications.md sha256:768db4d522c67d0eaba249842d1a646de13b2c6eee4aed9493045e6c1ca79745 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

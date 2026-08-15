@@ -21,12 +21,12 @@ publicOrToolFacingImpact: true
 
 ## Answers
 - CQ-001 [AMB:AMB-001] decision: Route B — an owner-published, pinned, content-addressed FS.GG.Rendering.Skills package consumed by the FS.GG.SDD scaffold materializer. Route A is refuted, not deprioritised, because .github would need a frozen copy of another repository's SKILL.md bytes.
-- CQ-002 [AMB:AMB-002] decision: A separate .github-owned file, registry/skill-delivery-channels.yml, not a new top-level key in registry/skills.yml.
+- CQ-002 [AMB:AMB-002] decision: A separate .github-owned file, registry/skills.delivery-channels.yml, not a new top-level key in registry/skills.yml.
 - CQ-003 [AMB:AMB-003] decision: No. ADR-0063 builds nothing and delegates transport per class to coordination rows; this item changes no decision it records.
 
 ## Decisions
 - DEC-001 [CQ-001] [AMB:AMB-001]: Route B — an owner-published, pinned, content-addressed FS.GG.Rendering.Skills package consumed by the FS.GG.SDD scaffold materializer. Route A is refuted, not deprioritised, because .github would need a frozen copy of another repository's SKILL.md bytes.
-- DEC-002 [CQ-002] [AMB:AMB-002]: A separate .github-owned file, registry/skill-delivery-channels.yml, not a new top-level key in registry/skills.yml.
+- DEC-002 [CQ-002] [AMB:AMB-002]: A separate .github-owned file, registry/skills.delivery-channels.yml, not a new top-level key in registry/skills.yml.
 - DEC-003 [CQ-003] [AMB:AMB-003]: No. ADR-0063 builds nothing and delegates transport per class to coordination rows; this item changes no decision it records.
 
 ## Accepted Deferrals

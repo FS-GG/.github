@@ -11,27 +11,27 @@ sourceAnalysis: readiness/2545-rendering-owned-product-skill-channel/analysis.js
 sourceSnapshots:
   - label: analysis
     path: readiness/2545-rendering-owned-product-skill-channel/analysis.json
-    digest: ff0f88bfe7b554dc5119c6e006ec26d2fc60910662a4db39606500f5a3404e39
+    digest: 9f89c81eef1f5a17a4474a95c68e35a62159af1d6a18c584cce9b140c4141c7e
     schemaVersion: 1
   - label: checklist
     path: work/2545-rendering-owned-product-skill-channel/checklist.md
-    digest: 811855574033f9b8a4b5df78fb5effb0dc2fa826fcaa18373dcfa7b6ad225e61
+    digest: 21509f554867b43ef765036e9a1f2ff83148ff994f6dc480a65b9521682e03b1
     schemaVersion: 1
   - label: clarifications
     path: work/2545-rendering-owned-product-skill-channel/clarifications.md
-    digest: de326974d0178940f2b2b351184c4a33cd86df2b3e921107def856ba285e7944
+    digest: 768db4d522c67d0eaba249842d1a646de13b2c6eee4aed9493045e6c1ca79745
     schemaVersion: 1
   - label: plan
     path: work/2545-rendering-owned-product-skill-channel/plan.md
-    digest: 4f9136b8f42dcc9838367afb23088dd66c71f4c900c22aba1217d1e213ef1969
+    digest: 2b2ce75bd3823a799160ec0825b4166c9e58913c6b7bed29b232984808df80f3
     schemaVersion: 1
   - label: spec
     path: work/2545-rendering-owned-product-skill-channel/spec.md
-    digest: 845d3a71f7927f829544dd952583e9d7b45f1735e96e0a8d777737dcb0e8fcc1
+    digest: 838cbe3590ae3f867d2c4f85c6d16c4e94a91f51828c98fcb91c4df07054fd50
     schemaVersion: 1
   - label: tasks
     path: work/2545-rendering-owned-product-skill-channel/tasks.yml
-    digest: 6c2c2b63acaa406459092990b83c72b2b8ad2055d4ecf072ba1a58e0d0e623c7
+    digest: 2a1087f93d2a3aee16ff644387b944da89168a906e12c021bb14dea39a65e9ca
     schemaVersion: 1
 evidence:
   - id: EV001
