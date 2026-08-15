@@ -13,6 +13,9 @@
 # declared skill's materializes-when and adds [missing] (declared∧condition-true∧absent — the
 # blind spot that shipped a dropped fs-gg-project) and [unexpected] (present∧condition-false).
 # Without --params it degrades to the superset semantics above exactly — proven here too.
+# `.effectiveParameters` arrives in EITHER of two encodings of the same map — the object form, or the
+# `{key,value}` array FS.GG.SDD.Artifacts actually emits — and the gate must be unable to tell them
+# apart; anything else is a fail-closed exit 2 that names what it got (.github#2546, section 7j-7o).
 #
 # Self-contained: builds throwaway product trees under a temp dir, no network, no other repos.
 
@@ -754,6 +757,139 @@ if [ "$rc" -eq 1 ] && [ -z "$notflagged" ]; then
 else
   echo "FAIL  grammar FALSE direction (want rc=1 + every construct flagged; got rc=$rc, unflagged:$notflagged)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
 fi
+
+# --- 7j-7o. the {key,value}-ARRAY effectiveParameters encoding (.github#2546) -------------------
+# Every leg above feeds `--params` an OBJECT-shaped `effectiveParameters`, and so did `load_params`'
+# only accepted shape: it gated on `.effectiveParameters | type == "object"` and DIED (exit 2) on
+# anything else. "Anything else" is what the real producer writes. `FS.GG.SDD.Artifacts` (provenance
+# `schemaVersion: 1`) emits an ARRAY of `{"key":…,"value":…}` entries — this repo's own
+# `.fsgg/scaffold-provenance.json` carries that shape, as does `EHotwagner/S.I.R.`'s. So check 4, the
+# ONE arm that separates a JUSTIFIED off-profile omission from a genuinely dropped skill, had never
+# executed against any product of that provider family. It was not answering wrongly; it refused to
+# run, and the refusal read as a usage error rather than "this gate does not cover your tree" — while
+# .github#1863 kept `materializes-when` on a measurement taken over object-shaped scaffolds only.
+# With no predicate evaluated at all, ADR-0017's tolerated-absence rule silently applied to EVERY
+# declared skill: a fail-OPEN of the whole condition-aware check for that family (#266).
+#
+# THESE LEGS DO NOT MERELY ASSERT THAT `--params` STOPPED CRASHING, and that distinction is the whole
+# point of the row: a check that has only ever crashed is indistinguishable from one that cannot fail.
+# They drive check 4 THROUGH THE ARRAY ENCODING to a RED verdict on a genuinely non-conforming tree
+# (7j, 7l) and a GREEN one on a conforming tree (7k), and then pin that the two encodings of the SAME
+# map are INDISTINGUISHABLE — identical exit code and byte-identical output (7m, 7n) — so neither
+# branch can quietly acquire behaviour the other lacks.
+#
+# The array files here are AUTHORED, not derived from the object ones by `to_entries`: a derived
+# encoding would only ever prove the gate agrees with whatever produced it. (conformance.sh takes the
+# derived route deliberately and for the opposite purpose — sweeping all 24 grammar vectors through
+# both shapes — so the two fixtures check each other.)
+echo "--- {key,value}-array effectiveParameters (.github#2546) ---"
+
+# The producer's REAL envelope, not just the inner array: `schemaVersion` and `generator` exactly as
+# FS.GG.SDD.Artifacts writes them, so this is the file a live scaffolded product actually carries.
+# The map is the same one $PROV holds — profile=game, lifecycle=spec-kit, feedback=true.
+PROV_ARR="$WORK/prov-game-array.json"
+cat > "$PROV_ARR" <<'EOF'
+{ "schemaVersion": 1,
+  "generator": { "id": "FS.GG.SDD.Artifacts", "version": "1.0.0" },
+  "effectiveParameters": [
+    { "key": "profile",   "value": "game" },
+    { "key": "lifecycle", "value": "spec-kit" },
+    { "key": "feedback",  "value": true }
+  ] }
+EOF
+
+# 7j. RED on a non-conforming tree: the fs-gg-project case (declared ∧ condition TRUE ∧ absent from
+#     every root) must be [missing]/exit 1 when the parameters arrive in the producer's encoding.
+expect_fail "array params: [missing] on a genuinely non-conforming tree (the fs-gg-project case)" \
+  missing "$MISS" --manifest "$MAN_MISS" --params "$PROV_ARR"
+
+# 7k. GREEN on a conforming tree: justified off-profile absence plus a compound-TRUE present skill.
+#     Paired with 7j this is what makes the check falsifiable rather than merely non-crashing.
+expect_pass "array params: green on a conforming tree (justified absence + compound-true present)" \
+  "$JUST" --manifest "$MAN_JUST" --params "$PROV_ARR"
+
+# 7l. RED from the other direction: present ∧ condition FALSE ⇒ [unexpected].
+expect_fail "array params: [unexpected] on a skill materialized off-profile" \
+  unexpected "$UNEXP" --manifest "$MAN_UNEXP" --params "$PROV_ARR"
+
+# 7m/7n. ENCODING EQUIVALENCE. The two shapes denote the same map, so the gate must be unable to tell
+# them apart — same exit code AND the same bytes on stdout+stderr, diagnostics and summary counts
+# included. `want-rc` is asserted too: without it, two runs that both died at exit 2 would agree
+# perfectly and "pass".
+same_verdict() { # <name> <want-rc> <product> <manifest> <params-a> <params-b>
+  local name="$1" want="$2" prod="$3" man="$4" pa="$5" pb="$6"
+  local rc_a=0 rc_b=0
+  bash "$ASSERT" --product "$prod" --roots "$ROOTS" --manifest "$man" --params "$pa" >"$WORK/enc-a" 2>&1 || rc_a=$?
+  bash "$ASSERT" --product "$prod" --roots "$ROOTS" --manifest "$man" --params "$pb" >"$WORK/enc-b" 2>&1 || rc_b=$?
+  if [ "$rc_a" -eq "$want" ] && [ "$rc_b" -eq "$want" ] && cmp -s "$WORK/enc-a" "$WORK/enc-b"; then
+    echo "PASS  (encodings indistinguishable, rc=$want) $name"; pass=$((pass+1))
+  else
+    echo "FAIL  (want both rc=$want and identical output; got a=$rc_a b=$rc_b) $name"
+    { diff "$WORK/enc-a" "$WORK/enc-b" || true; } | sed 's/^/    | /'
+    failcount=$((failcount+1))
+  fi
+}
+
+same_verdict "object vs {key,value}-array params agree on the [missing] tree" \
+  1 "$MISS"  "$MAN_MISS"  "$PROV" "$PROV_ARR"
+same_verdict "object vs {key,value}-array params agree on the conforming tree" \
+  0 "$JUST"  "$MAN_JUST"  "$PROV" "$PROV_ARR"
+same_verdict "object vs {key,value}-array params agree on the [unexpected] tree" \
+  1 "$UNEXP" "$MAN_UNEXP" "$PROV" "$PROV_ARR"
+
+# 7n. The EMPTY map in both encodings. `[]` is not a hypothetical: it is what this repo's own
+# `.fsgg/scaffold-provenance.json` carries, and under the old object-only gate it was an exit 2 —
+# so a scaffold with no effective parameters could not be condition-checked at all. It must mean
+# "every parameter is unset", exactly as `{}` does: against $MAN_MISS that leaves `always` true
+# (alpha, present ⇒ fine), `profile in [app, game]` false on a PRESENT beta ⇒ [unexpected], and
+# `profile == game` false on an absent fs-gg-project ⇒ justified. rc=1, and identical either way —
+# a non-vacuous verdict rather than a pair of empty runs agreeing about nothing.
+PROV_EMPTY_OBJ="$WORK/prov-empty-object.json"
+printf '%s\n' '{ "effectiveParameters": {} }' > "$PROV_EMPTY_OBJ"
+PROV_EMPTY_ARR="$WORK/prov-empty-array.json"
+printf '%s\n' '{ "effectiveParameters": [] }' > "$PROV_EMPTY_ARR"
+same_verdict "an EMPTY object and an EMPTY array both mean 'every parameter unset'" \
+  1 "$MISS" "$MAN_MISS" "$PROV_EMPTY_OBJ" "$PROV_EMPTY_ARR"
+
+# 7o. AN UNRECOGNISED SHAPE STILL FAILS CLOSED — exit 2, the `die` path — but it must now say what it
+# received and what is supported. The old message asserted the file "has no .effectiveParameters
+# object", which was FALSE for the array form and is what sent .github#2366 and .github#2380 to
+# hand-check by inspection what this gate exists to answer; that exact wording is asserted ABSENT so
+# it cannot come back. These run through the REAL gate (--manifest --params), not `--eval-when`, so
+# it is check 4's own param load being exercised.
+bad_shape() { # <name> <provenance-json> <fragment the message must carry>...
+  local name="$1" json="$2"; shift 2
+  printf '%s\n' "$json" > "$WORK/prov-bad.json"
+  local rc=0
+  bash "$ASSERT" --product "$MISS" --roots "$ROOTS" --manifest "$MAN_MISS" --params "$WORK/prov-bad.json" \
+    >"$WORK/out" 2>&1 || rc=$?
+  local miss="" frag
+  for frag in "$@"; do grep -qF -- "$frag" "$WORK/out" || miss="$miss [$frag]"; done
+  if [ "$rc" -eq 2 ] && [ -z "$miss" ] && ! grep -qF 'has no .effectiveParameters object' "$WORK/out"; then
+    echo "PASS  (fail-closed exit 2, shape named) $name"; pass=$((pass+1))
+  else
+    echo "FAIL  (want exit 2 naming the shape received; got rc=$rc, unmentioned:$miss) $name"
+    sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+  fi
+}
+bad_shape "unsupported shape: an array of bare strings" \
+  '{ "effectiveParameters": ["profile", "game"] }' \
+  'entries are not all {key,value} objects' 'supported:'
+bad_shape "unsupported shape: {key,value} entries without a value" \
+  '{ "effectiveParameters": [{ "key": "profile" }] }' \
+  'entries are not all {key,value} objects' 'supported:'
+bad_shape "unsupported shape: a {key,value} array declaring one key twice (no correct answer to guess)" \
+  '{ "effectiveParameters": [{ "key": "profile", "value": "game" }, { "key": "profile", "value": "app" }] }' \
+  'declaring the same key more than once (profile)' 'supported:'
+bad_shape "unsupported shape: .effectiveParameters absent entirely" \
+  '{ "schemaVersion": 1 }' \
+  'is absent or null' 'supported:'
+bad_shape "unsupported shape: .effectiveParameters is a JSON string" \
+  '{ "effectiveParameters": "profile=game" }' \
+  'is a JSON string' 'supported:'
+bad_shape "params that is not valid JSON at all is named as such, not as a shape" \
+  '{ "effectiveParameters": [' \
+  'params is not valid JSON'
 
 # --- root-set resolution: --roots > $AGENT_SKILL_ROOTS > .agent-skill-roots > ADR-0065's two ------
 # (.github#517) A tree can deliberately override the universal default. This fixture keeps proving

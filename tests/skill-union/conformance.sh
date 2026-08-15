@@ -17,7 +17,16 @@
 #   (a) the shell evaluator returns `expected`; and
 #   (b) it STILL returns `expected` after the predicate is round-tripped through normalize_when — i.e.
 #       the Python normalizer never changes the evaluated meaning (the exact quoted-literal leg #292
-#       hit, and the leg #396 fixed on the shell side but did not pin cross-implementation).
+#       hit, and the leg #396 fixed on the shell side but did not pin cross-implementation); and
+#   (c) it returns `expected` when the SAME parameters arrive in the `{key,value}` ARRAY encoding of
+#       `effectiveParameters` rather than the object one (.github#2546). Both encodings denote the
+#       same map and `load_params` accepts both, so a vector may not answer differently through them.
+#       This is not a hypothetical second shape: the object form is what this harness had always
+#       built, and the ARRAY is what `FS.GG.SDD.Artifacts` actually emits — `load_params` used to die
+#       (exit 2) on it, so every vector in this table, and ADR-0017 check 4 itself, had only ever been
+#       measured against an encoding no real scaffolded product carries. `to_entries` IS that array
+#       encoding, which is why deriving it here is exact; run.sh's 7j-7o legs author the array form by
+#       hand instead, for the opposite reason, so the two fixtures check each other.
 # An `unparseable: true` fixture asserts the shell evaluator REJECTS it (exit 2), not a silent false.
 #
 # Self-contained: no network, no other repos. `--normalize-when` is pure-stdlib, so no PyYAML.
@@ -43,6 +52,7 @@ total="$(jq '.fixtures | length' "$FIXTURES")"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mw-conformance.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 PROV="$WORK/prov.json"
+PROV_ARR="$WORK/prov-kv-array.json"
 
 pass=0; failcount=0
 ok()   { echo "PASS  $1"; pass=$((pass+1)); }
@@ -58,6 +68,10 @@ while IFS= read -r fx; do
   # A scaffold-provenance.json the assertion reads via --params, built with the SAME shape the real
   # gate consumes (.effectiveParameters), so the fixture exercises the gate's own param extraction.
   jq -n --argjson p "$params" '{effectiveParameters: $p}' >"$PROV"
+  # ...and the same map in the `{key,value}` ARRAY encoding the producer emits (.github#2546). See
+  # (c) in the header: `to_entries` is exactly that encoding, so this is the identical map, and any
+  # answer that differs between $PROV and $PROV_ARR is a divergence inside `load_params`.
+  jq -n --argjson p "$params" '{effectiveParameters: ($p | to_entries)}' >"$PROV_ARR"
 
   if [ "$unparseable" = "true" ]; then
     rc=0; bash "$ASSERT" --eval-when "$pred" --params "$PROV" >/dev/null 2>&1 || rc=$?
@@ -84,6 +98,16 @@ while IFS= read -r fx; do
     else bad "[$n] normalize CHANGED MEANING: '$pred' -> normalize '$norm' -> $gotn (want $expected)  [$note]"; fi
   else
     bad "[$n] normalize+eval '$norm' died (rc=$?)  [$note]"
+  fi
+
+  # (c) the SAME vector, with the SAME params in the producer's `{key,value}` ARRAY encoding. Before
+  # .github#2546 this leg did not run at all — it exited 2 on every vector, which is how a whole
+  # provider family's provenance went unmeasured while the table looked fully green.
+  if gota="$(bash "$ASSERT" --eval-when "$pred" --params "$PROV_ARR")"; then
+    if [ "$gota" = "$expected" ]; then ok "[$n] kv-array     '$pred' -> $gota"
+    else bad "[$n] kv-array ENCODING DISAGREES: '$pred' -> $gota (want $expected, object form gave $got)  [$note]"; fi
+  else
+    bad "[$n] kv-array     '$pred' died (rc=$?)  [$note]"
   fi
 done < <(jq -c '.fixtures[]' "$FIXTURES")
 
