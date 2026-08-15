@@ -103,13 +103,19 @@ not a remedy; a named owner and a run against the merged tree is.
 numbers that support it. Otherwise the difference between "the analyst looked and the board is fine"
 and "the analyst did not look" is invisible, which is the same defect as a gate that has never been red.
 
-## A worked reading — FS-GG/.github, 2026-08-14T18:00Z to 2026-08-15T18:00Z
+## A worked reading — FS-GG/.github, 2026-08-14T17:00:00Z to 2026-08-15T17:00:00Z
 
-**1. Net delta beside items landed.** 17 rows opened, 24 closed: **net −7**, with 29 open at the close
-of the window.
+**Both endpoints of that window are in the past, and that is not a stylistic preference.** It is the
+rule in part 1 applied to this document: a worked example whose window has not closed cannot be
+re-derived by the next reader, and an exemplar that cannot be re-derived teaches the opposite of what
+this file asks for. Read § *Two windows, one board* below before copying these numbers anywhere.
 
-*Verification:* `scripts/fsgg-coord issues .github --state all`, filtered on `created_at` and
-`closed_at` within the window, excluding entries carrying `pull_request`.
+**1. Net delta beside items landed.** 17 rows opened, 24 closed: **net −7**, with 28 open at the time
+of measurement.
+
+*Verification:* `scripts/fsgg-coord issues .github --state all --refresh`, filtered on `created_at`
+and `closed_at` within the closed interval above, excluding entries carrying `pull_request`. The read
+returns the whole corpus (1147 issues); do not cap it — see § *Two windows, one board*.
 
 **2. Instances of one cause.** `.github#2381` (CLOSED) and `.github#2648` (OPEN) are two rows for one
 cause: *the coord engine is merged and unreleased*. `#2381` carried the count in its title and went
@@ -143,12 +149,28 @@ output.
 
 **5. Remedy, and the pathology verdict.**
 
-The window is **not** pathological on rate: it is net negative, and it closed more than it opened
-against a working fleet. The row that motivated this whole role measured *net +12 in 24 hours against
-25 landed*; twenty-four hours later the same board ran net −7 against 24 landed. **Whatever was
-happening on 2026-08-14 is not happening now, and a reading that reported only the earlier number would
-be describing a board that no longer exists.** That is exactly why this output is required every pass
+This window is **not** pathological on rate: it is net negative, and it closed more than it opened
+against a working fleet. Set it beside the reading that motivated this whole role — *net +12 in 24
+hours against 25 landed*, over the 30 hours to `2026-08-14T05:00:00Z`. Two closed intervals a day
+apart, on the same board, running in opposite directions. **A reading taken once and quoted thereafter
+would be describing a board that no longer exists**, which is why this output is required every pass
 rather than produced once as an argument for a change.
+
+**A closed past window is reproducible forever, and the earlier figure demonstrates both halves of why
+that matters.** Sweeping every hourly 24h window in that era against the live corpus, *net +12* comes
+back exactly — 43 opened, 31 closed — for the 24 hours ending `2026-08-14T05:00:00Z`, the endpoint the
+row's own 30-hour window names. The delta survived a day of further board activity untouched, because
+`created_at` and `closed_at` are timestamps and a later event simply falls outside the interval.
+
+Its companion clause did not survive. *"While 25 items landed"* reproduces **nowhere**: no 24h window
+anywhere in that sweep closed 25 issues, and the value at the matching endpoint is 31. The number is
+not wrong — it is almost certainly counting merged PRs or `Done` transitions rather than issue
+closures — but the row never says which, so it cannot be checked, and a reader re-deriving the reading
+gets a different answer and no way to tell whether the board changed or the definition did.
+
+That is the whole discipline in one example: **the half that named its window and its unit came back
+identical a day later; the half that named neither is unfalsifiable.** State the window, and state
+what "landed" counts.
 
 Two structural pathologies are present and neither is a rate problem:
 
@@ -168,3 +190,43 @@ Two structural pathologies are present and neither is a rate problem:
 
 **Filed as a result of this reading: nothing.** Every remedy above is a disposition of an existing row
 or a sequencing decision, which is the outcome a healthy pass should usually produce.
+
+## Two windows, one board — why part 1 says "state the window"
+
+This is not a cautionary tale about somebody else. Two readers of *this* board, reading *this* corpus
+on 2026-08-15 with correct arithmetic, reported **net −7** and **net −1** and both were right.
+
+| window | opened | closed | net |
+| --- | --- | --- | --- |
+| rolling 24h, `2026-08-14T17:00:00Z` → `2026-08-15T17:00:00Z` | 17 | 24 | **−7** |
+| UTC calendar day so far, `2026-08-15T00:00:00Z` → `2026-08-15T17:00:00Z` | 17 | 18 | **−1** |
+
+Both intervals are closed. Neither reader made an arithmetic error, and neither number is a better
+measurement of the board than the other. **They are answers to different questions**, and both were
+labelled "today".
+
+The entire difference is six closures — `.github#2409`, `#2561`, `#2580`, `#2582`, `#2586`, `#2587` —
+all of which landed on the evening of 2026-08-14, between `18:26Z` and `21:21Z`. The rolling window
+reaches back over that evening; the calendar day starts after it.
+
+**And here is the part that makes this worth a whole section.** The *opened* sets of the two windows
+are **identical** — the same 17 rows, not merely the same count — because **zero issues were created
+in that 08-14 evening tail**. So the two readings differ in exactly one column. That coincidence is
+what made the disagreement look like a closed-count bug in one reader's arithmetic, and it cost real
+time to resolve as what it actually was: a window mismatch, with no bug on either side.
+
+Three rules follow, and they are why part 1 is worded the way it is:
+
+1. **State the window as a closed interval with explicit UTC endpoints.** Not "today", not "the last 24
+   hours", not a window whose end has not happened yet. A reading whose window has not closed cannot be
+   re-derived even by the person who wrote it, five minutes later.
+2. **Two readings that disagree are a window question first, an arithmetic question second.** Diff the
+   *sets*, not the counts — the six numbers above are what a set diff produces immediately and what
+   comparing totals hides.
+3. **Never conclude from agreeing counts that two readings used the same window.** Here the opened
+   counts matched exactly, and the windows were a full seventeen hours apart.
+
+**Do not cap the corpus read.** `--limit`-style truncation on the underlying issue list is the same
+failure in a different dimension: it silently drops the rows outside the cap and produces a confident,
+unfalsifiable count. `scripts/fsgg-coord issues .github --state all --refresh` returns the whole
+corpus; filter it locally.

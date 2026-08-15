@@ -200,14 +200,26 @@ This skill's premise was measured as *"48 rows in 30 hours, every one filed by t
 any worker or any critic."* Two things about that must travel with the skill, or its first reader will
 find them and trust nothing else here.
 
-**The premise's measurement cannot support its conclusion.** It was taken over `author.login`, and the
-whole fleet — host, workers, critics — writes through **one shared GitHub account** (`.github#2666`).
-So `author.login` is constant by construction and can distinguish nothing about who found or filed a
-row. The 48 is real; "zero by any worker or critic" was never measured.
+**The premise's measurement cannot support its conclusion.** It was taken over `author.login`, and
+every agent in this fleet — host, implementers, critics — writes through **one shared GitHub account**
+(`.github#2666`). So `author.login` is constant across every agent identity and can distinguish nothing
+about who found or filed a row. The 48 is real; "zero by any worker or critic" was never measured.
 
-**The bar already operated informally, and often.** On 2026-08-15 alone, ten pull requests carried an
-explicit non-material disposition in their review comments — critics holding observations and filing
-nothing. The board that day ran **net −7**: 17 rows opened, 24 closed.
+Say that precisely, because the loose version is false. Over the **full** 1147-issue corpus there are
+**two** logins, not one: `EHotwagner` on 1146 rows and `renovate[bot]` on exactly one — `.github#54`,
+a dependency dashboard, the only row here no agent authored. It is a real exception and it changes
+nothing about the conclusion. It matters because the original measurement capped its read at 900 rows,
+which **truncated the corpus and hid the exception** — the same unfalsifiable-measurement shape this
+role exists to catch, in the very evidence offered for it. Read the whole corpus; filter locally.
+
+**The bar already operated informally, and often.** Ten pull requests carried an explicit non-material
+disposition in their review comments on 2026-08-15 — critics holding observations and filing nothing.
+Over the closed interval `2026-08-14T17:00:00Z`–`2026-08-15T17:00:00Z` the board ran **net −7**: 17
+rows opened, 24 closed. That figure is a *rolling 24-hour* window and not the calendar day, which over
+`2026-08-15T00:00:00Z`–`2026-08-15T17:00:00Z` ran net −1 on the same corpus. Both are correct; they
+answer different questions. [churn-reading](references/churn-reading.md) § *Two windows, one board*
+works that disagreement through, because it is the sharpest argument this skill has for why a reading
+must name its window.
 
 None of that retires the role, and the row's own analysis already says why: the filing *"was not
 careless — it was ungoverned in rate and granularity."* That is the sentence this skill is built on.

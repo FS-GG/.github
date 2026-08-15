@@ -309,12 +309,12 @@
     {
       "id": "board-analyst",
       "scope": "operator",
-      "sha256": "4856222acb4f29f107fda6608464c5c1bd7d64056e33fd85f9344e1014c1e3a0",
-      "tree-sha256": "a73b3fd3bf3b11d2af36f3b01098115232381590daf0d2c970cd2ccd5ab59b5f",
+      "sha256": "154194b9d17241bff001de1b804ddfc8f8d1751145c368300b0e5eca0a9947f9",
+      "tree-sha256": "b9cac7a2a9877910e120f324594752a047456cf774369a1a15f54bee4733afe9",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "4856222acb4f29f107fda6608464c5c1bd7d64056e33fd85f9344e1014c1e3a0",
+          "sha256": "154194b9d17241bff001de1b804ddfc8f8d1751145c368300b0e5eca0a9947f9",
           "executable": false
         },
         {
@@ -324,12 +324,12 @@
         },
         {
           "path": "references/churn-reading.md",
-          "sha256": "2b5024f473b3af3bcd8c62a374b66a7030f2b07119e6a87447594cdf18dbd0ea",
+          "sha256": "7524af12a8ec1c13f344dee2c62efbb2164b964c7b410e92f0fb76ff57f9b787",
           "executable": false
         },
         {
           "path": "references/the-bar.md",
-          "sha256": "c852097a2f3bffd51e65b6e48dff479e62f2b6cb66360b733b35d49d90e5c8c0",
+          "sha256": "388f8605a8d9308e83625487bd7d94686d06e66a7667af772a1f67a028c04653",
           "executable": false
         }
       ],

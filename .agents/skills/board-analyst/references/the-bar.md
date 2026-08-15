@@ -4,6 +4,17 @@ Three tests. A finding becomes a number only if it passes all three. Each one be
 rejection**, because a bar with no recorded rejection is a bar nobody can check — a reader cannot tell
 a bar that says no from a bar that has never been asked.
 
+**What these three tests govern, stated before the tests themselves, because misapplying them is worse
+than not having them.** They apply to findings routed through
+`pnext-item`'s `findings-and-filing.md` — an implementer's pre-review findings, the host's, and your
+own. **They do not apply to a finding a critic raises about the pull request under review.** Test 1
+asks whether something is red on `main`, and a defect in an unmerged branch is *never* red on `main`;
+reading that as "not red, therefore not a row" would suppress precisely the findings the review gate
+exists to catch, and would do it while appearing to follow this file. A critic's review-round finding
+is governed by `independent-review.md` and its own materiality standard — see § *The seam this creates,
+stated honestly* at the foot of this file, which settles who owns those findings. This paragraph
+settles the prior question of whether these tests reach them at all. They do not.
+
 ---
 
 ## Test 1 — Red today
@@ -16,14 +27,23 @@ The packet's `red-today:` field answers this or it does not. "Latent", "this cou
 **Worked rejection — `author.login` cannot distinguish who filed a row (2026-08-15).**
 
 The finding: this skill's own premise was measured as *"48 rows in 30 hours, one `author.login`, zero
-filed by any worker or critic."* The whole fleet — host, implementers, critics — authenticates through
+filed by any worker or critic."* Every agent here — host, implementers, critics — authenticates through
 **one shared GitHub account**, which is the same property `.github#2666` was filed for. So
-`author.login` is constant by construction, and the "zero by any worker or critic" half of the premise
-was never measured at all. The 48 is real; the attribution is not.
+`author.login` is constant across every agent identity, and the "zero by any worker or critic" half of
+the premise was never measured at all. The 48 is real; the attribution is not.
 
 *Verification:* `.github#2660`, `#2661`, `#2664` and `#2667` were all filed by named implementer and
 critic identities on 2026-08-15 and every one of them reports `author.login: EHotwagner`, identical to
-the rows the host filed the same day.
+the rows the host filed the same day. `#2667`'s own body names its filer — *"critic `wren-aa9f`,
+initial round"* — while its `author.login` is indistinguishable from a host-filed row.
+
+**"Constant" is the accurate word only once it is scoped, and the unscoped version is false.** Read the
+**whole** corpus and there are two logins across 1147 issues: `EHotwagner` ×1146 and `renovate[bot]` ×1
+(`.github#54`, a dependency dashboard — the one row no agent authored). The original measurement capped
+its read at 900 rows and therefore never saw it. That truncation is worth more than the exception it
+hid: **a capped read produces a confident count that cannot be falsified**, which is the same defect
+class as an unstated window, sitting inside the evidence offered for this very role. Read the corpus
+whole; filter locally.
 
 **Verdict: REJECTED.** No command fails on `main`. Nothing is blocked. It is a defect in a *measurement
 written into an issue body* — real, worth knowing, and not a row. It goes to the register (below), and
