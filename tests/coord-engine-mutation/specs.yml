@@ -1,4 +1,4 @@
-# `.github#1794`'s TEN-LEG MUTATION MATRIX, filed as a spec rather than left in a scratch directory.
+# `.github#1794`'s ELEVEN-LEG MUTATION MATRIX, filed as a spec rather than left in a scratch directory.
 #
 # WHAT IT ADJUDICATES. `#1794` closed a fail-open in `Reads.openIssues`: an element with no numeric
 # `number` was DROPPED SILENTLY, and an absent or ill-typed `body` was read as `""` — which parses to
@@ -20,12 +20,12 @@
 # were worth separating. `#1810`'s `tests/gate-mutation/specs.yml` mutates a GATE's subject and asserts a
 # workflow's selftest fires; this mutates ENGINE SOURCE and asserts the unit + parity legs fire. Different
 # subjects, different plumbing, and `#1825`'s dispatcher was right that generalising ACROSS that boundary
-# is more work than running six legs. But the four-point specification, the three-valued verdict, the
+# is more work than running eleven legs. But the four-point specification, the three-valued verdict, the
 # producer-integrity hash and the restore-in-`finally` are exactly the same mechanism, and re-typing them
 # here would have been the fifth harness in three days to ship an anchor check with a defect in it. So:
 # this corpus, that library.
 #
-# THE COMMAND IS `tests/coord-engine-mutation/leg.sh` FOR ALL TEN LEGS, and it is the anchor's producer.
+# THE COMMAND IS `tests/coord-engine-mutation/leg.sh` FOR ALL ELEVEN LEGS, and it is the anchor's producer.
 # It rebuilds the engine (the mutations edit F# source; the parity corpus drives a COMPILED binary), runs
 # both unit projects that carry `#1794` surface, runs the 641-assertion parity corpus, and prints ONE
 # tally. It is never a mutation target, so no mutation here can delete the evidence that it ran —

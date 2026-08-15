@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "schema": "fsgg.coord.m6-comprehensive-test-results/1",
+  "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf",
+  "base_sha": "a8207eb1d493365ce5e1205af18211e8724ce104",
+  "command": [
+    "python3",
+    "scripts/test",
+    "--all"
+  ],
+  "environment": {
+    "shellcheck": "0.11.0, checksum-verified pinned binary",
+    "renovate": "43.281.1, local untracked test runtime removed after execution"
+  },
+  "result": {
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "selected": 91,
+    "passed": 91,
+    "failed": 0,
+    "duration_seconds": 1271,
+    "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf"
+  },
+  "wiring_preflight": {
+    "command": ["python3", "scripts/test", "--assert-wired"],
+    "directories": 95,
+    "wired": 89,
+    "explained": 6,
+    "unexplained": 0,
+    "stale": 0
+  },
+  "named_results": [
+    {"family": "core", "command": ["dotnet", "test", "tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj"], "passed": 696, "failed": 0},
+    {"family": "cli", "command": ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj"], "passed": 787, "failed": 0},
+    {"family": "github", "command": ["dotnet", "test", "tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj"], "passed": 618, "failed": 0},
+    {"family": "engine-e2e", "command": ["bash", "tests/coord-engine-e2e/run.sh"], "passed": 14, "failed": 0},
+    {"family": "engine-writes", "command": ["bash", "tests/coord-engine-e2e/writes.sh"], "passed": 152, "failed": 0},
+    {"family": "engine-parity", "command": ["bash", "tests/coord-engine-parity/run.sh"], "passed": 648, "failed": 0, "not_measured": 0},
+    {"family": "engine-replay", "command": ["bash", "tests/coord-engine-replay/run.sh"], "passed": 30, "failed": 0, "expected_failure_markers": 0},
+    {"family": "graphql-boundary", "command": ["bash", "tests/graphql-boundary/run.sh"], "passed": 1, "failed": 0, "result": "inversion fixture OK"},
+    {"family": "structured-decisions", "command": ["python3", "scripts/test", "--all"], "passed": 1, "failed": 0, "coverage": ["route validation/application/consolidation", "review parse/state/backlinks", "escalation/repair/diff-audit", "head move/critic succession/landability", "legacy-inert refusal"]},
+    {"family": "release-saga", "command": ["bash", "tests/release-saga/run.sh"], "passed": 1, "failed": 0},
+    {"family": "evidence-retention", "command": ["bash", "tests/evidence-manifest/run.sh"], "passed": 1, "failed": 0},
+    {"family": "shellcheck", "command": ["bash", "tests/shell-lint/run.sh"], "passed": 48, "failed": 0},
+    {"family": "policy-projections", "command": ["python3", "scripts/test", "--all"], "passed": 1, "failed": 0},
+    {"family": "wiring-non-vacuity", "command": ["bash", "tests/test-selector/run.sh"], "passed": 50, "failed": 0}
+  ],
+  "pending_post_merge": ["live-new-only-smoke"],
+  "retention": "The large stdout log is intentionally not committed. Its exact SHA-256, command, implementation commit, totals, and duration are retained here; CI will independently reproduce the selector on the reviewed commit."
+}

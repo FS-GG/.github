@@ -52,6 +52,7 @@ mutations = {
     "census-byte-drift": lambda d: d["decision_census"].update(sha256="0" * 64),
     "seed-unbound": lambda d: d["lifecycle_seed"].update(sha256="0" * 64),
     "archive-unbound": lambda d: d["trx_archive"].update(sha256="0" * 64),
+    "engine-mutation-unbound": lambda d: d["engine_mutation_matrix"].update(sha256="0" * 64),
     "test-family-missing": lambda d: d.update(test_results=d["test_results"][1:]),
     "mutation-did-not-red": lambda d: d["mutation_results"][0].update(outcome="pass"),
     "release-not-promoted": lambda d: d["release"].update(promoted=False),

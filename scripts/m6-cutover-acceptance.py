@@ -207,6 +207,28 @@ def validate(document: object, root: Path) -> list[str]:
     if missing_tests:
         failures.append("missing required test families: " + ", ".join(sorted(missing_tests)))
 
+    engine_mutations = bound_json(
+        root, document.get("engine_mutation_matrix"), "engine_mutation_matrix", failures
+    )
+    if engine_mutations is not None:
+        summary = engine_mutations.get("result", {})
+        if engine_mutations.get("implementation_sha") != implementation_sha:
+            failures.append("engine_mutation_matrix does not bind implementation.sha")
+        if summary.get("legs") != 11 or summary.get("justified") != 11:
+            failures.append("engine_mutation_matrix must bind all 11 justified legs")
+        if summary.get("decorative") != 0 or summary.get("not_measured") != 0:
+            failures.append("engine_mutation_matrix contains an unprotected or unmeasured leg")
+        legs = engine_mutations.get("legs")
+        if not isinstance(legs, list) or len(legs) != 11:
+            failures.append("engine_mutation_matrix must retain exactly 11 leg records")
+        elif any(
+            row.get("verdict") != "JUSTIFIED"
+            or row.get("control_rc") != 0
+            or row.get("mutant_rc") == 0
+            for row in legs if isinstance(row, dict)
+        ):
+            failures.append("engine_mutation_matrix contains a non-green control or surviving mutant")
+
     mutations = document.get("mutation_results")
     seen_mutations: set[str] = set()
     if not isinstance(mutations, list):

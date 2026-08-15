@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CAN THE `.github#1794` MATRIX STILL BE RUN? — the cheap gate that keeps the expensive one honest.
 #
-# WHY THIS EXISTS AND WHY IT IS NOT THE MATRIX ITSELF. Running the matrix is ~50 minutes: ten legs, each
+# WHY THIS EXISTS AND WHY IT IS NOT THE MATRIX ITSELF. Running the matrix is about 70 minutes: eleven legs, each
 # an engine rebuild plus 838 unit assertions plus the 641-assertion parity corpus, twice (control, then
 # mutant). That is not a per-PR gate and pretending otherwise would get it disabled within a week.
 #

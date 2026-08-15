@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "schema": "fsgg.coord.m6-engine-mutation-results/1",
+  "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf",
+  "command": ["python3", "scripts/gate-mutate.py", "--specs", "tests/coord-engine-mutation/specs.yml", "--json"],
+  "result": {
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "legs": 11,
+    "justified": 11,
+    "decorative": 0,
+    "not_measured": 0,
+    "stdout_sha256": "9ca09c8af0ee16805723583d05f1bbe62da0ed04b782abada8bdf8a08affbe33",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "legs": [
+    {"id": "M1/element-dropped-again", "target": "src/FS.GG.Coord.GitHub/Reads.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 398, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2049, "failed": 4}},
+    {"id": "M2/absent-body-reads-empty", "target": "src/FS.GG.Coord.GitHub/Reads.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 407, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2045, "failed": 8}},
+    {"id": "M3/illtyped-body-reads-empty", "target": "src/FS.GG.Coord.GitHub/Reads.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 408, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2048, "failed": 5}},
+    {"id": "M4/null-body-becomes-unreadable", "target": "src/FS.GG.Coord.GitHub/Reads.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 408, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2052, "failed": 1}},
+    {"id": "M5/unreadable-row-discarded-by-token-filter", "target": "src/FS.GG.Coord.Cli/Client.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 404, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2043, "failed": 10}},
+    {"id": "M6/held-unreadable-row-skipped-not-refused", "target": "src/FS.GG.Coord.Cli/Client.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 399, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2043, "failed": 10}},
+    {"id": "M7/refuses-on-any-unreadable-row", "target": "src/FS.GG.Coord.Cli/Client.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 399, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2051, "failed": 2}},
+    {"id": "M8/offboard-sweep-reserves-nothing", "target": "src/FS.GG.Coord.GitHub/Scan.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 404, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2052, "failed": 1}},
+    {"id": "M9/pagination-disabled-in-the-engine", "target": "src/FS.GG.Coord.GitHub/Transport.fs", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 406, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2018, "failed": 35}},
+    {"id": "M10/fixture-cannot-bind", "target": "tests/coord-engine-parity/openissuespage_server.py", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 392, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2032, "failed": 21}},
+    {"id": "M11/migrated-refute-has-no-measurement", "target": "tests/coord-engine-parity/run.sh", "verdict": "JUSTIFIED", "control_rc": 0, "mutant_rc": 1, "seconds": 385, "control": {"passed": 2053, "failed": 0}, "mutant": {"passed": 2051, "failed": 2}}
+  ],
+  "retention": "The complete JSON stream is intentionally not committed. This compact record retains every leg, target, verdict, return code, tally, duration, and the exact output hashes."
+}
