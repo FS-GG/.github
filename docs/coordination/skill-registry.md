@@ -114,9 +114,19 @@ canonical source bytes.
 ## The `materializes-when` predicate
 
 A small boolean expression over `parameters`: `==`, `!=`, `in [..]`, `and`, `or`, `true`/`false`,
-and the literal `always`. Evaluated against a scaffold's `scaffold-provenance.json`
-`effectiveParameters`. Kept intentionally tiny — it must be evaluable in both the typed validator
+and the literal `always`. Kept intentionally tiny — it must be evaluable in both the typed validator
 (`Fsgg.Registry`) and the shell gate (`skill-union-assert.sh`) without a real expression engine.
+
+**Evaluated against a scaffold's `scaffold-provenance.json` — its `effectiveParameters`, PLUS the
+facts the gate derives from the same document** ([.github#2576](https://github.com/FS-GG/.github/issues/2576)).
+Today exactly one is derived: **`template`**, read from the document's top-level `.templateRef` (the
+id after the last `#`, less an `fs-gg-` prefix). That is not a shortcut — `effectiveParameters` is
+forwarded verbatim to `dotnet new <templateId>` as `--<key> <value>`, which accepts only declared
+template *symbols*, so a `template` key can never appear there and no producer could have supplied
+one. A parameter that is declared in `parameters:` but reachable through neither channel evaluates
+as unset (empty), which makes `== v` false and `!= v` true. See
+[skill-union-assertion.md](skill-union-assertion.md#the-binding-environment-is-parameters-plus-derived-provenance-facts-2576)
+for the full source table and both boundaries, and ADR-0017's 2026-08-15 amendment for the decision.
 
 ## Condition-aware union gate
 

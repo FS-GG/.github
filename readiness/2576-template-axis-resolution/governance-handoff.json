@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2576-template-axis-resolution/ship.json",
-      "digest": "sha256:b184a31d98089882ed29a8597fac2d6fa149f40b084690aa189f05f49ab81dd7",
+      "digest": "sha256:1ef0af404cfaafda4f433251f0db24e6e065bcab1685279d237d1fef9b1de6cb",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2576-template-axis-resolution/verify.json",
-      "digest": "sha256:dec803e8640642cd6212001cacddd0de1992405d39706cd816a6bd0b076dc534",
+      "digest": "sha256:9a6c9b7fdbe667d9479b9ca3aaba28ab0cbc216ba42f1fc8f07e1e24b283c04d",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2576-template-axis-resolution/work-model.json",
-      "digest": "sha256:1831c51d0441505450c45a789f80470a661772a99cb3478e295b55569fcbb3cb",
+      "digest": "sha256:28747667758c25b02fac41830e0e8860961f39bf542243d2d53c0bf37ac34bb8",
       "schemaVersion": 1
     }
   ],

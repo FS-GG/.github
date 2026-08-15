@@ -9,7 +9,8 @@
 # is the canonical-body digest of the owning repo's SKILL.md (byte-equivalent to `sha256sum
 # SKILL.md`; the `Fsgg.SkillMirror` algorithm, verified .github#120). `materializes-when` is the
 # ADR-0017 predicate the union gate (scripts/skill-union-assert.sh --params) evaluates against a
-# scaffold's `scaffold-provenance.json` effectiveParameters. Absent ⇒ `always`.
+# scaffold's `scaffold-provenance.json` — its effectiveParameters PLUS the facts the gate derives
+# from that same document, today just `template` from `templateRef` (.github#2576). Absent ⇒ `always`.
 #
 # SOURCES OF THIS SNAPSHOT (.github#168, epic #163):
 #   * PRODUCT skills, TEMPLATE FAMILY (6) — RECONCILED from FS.GG.Templates' producer manifest
@@ -21,9 +22,11 @@
 #     producer set those arms run over was whatever `skill-registry-coherence.yml` happened to clone,
 #     which was a hardcoded `FS.GG.SDD FS.GG.Rendering FS.GG.Game`. Both clone loops now derive that
 #     set from `fsgg-skill-registry-check --producers` (registry/repos.yml's roster), and an
-#     unreachable rostered repository is a `declared-completeness` finding rather than silence. See
-#     the TEMPLATE-FAMILY block below for why these six predicates are declared-but-not-yet-answerable
-#     and why that must not be "repaired" here (FS-GG/.github#2576).
+#     unreachable rostered repository is a `declared-completeness` finding rather than silence. These
+#     six predicates were declared-but-not-answerable when they were recorded and ARE answerable as of
+#     FS-GG/.github#2576 — see the TEMPLATE-FAMILY block below for what changed (the EVALUATOR learned
+#     to derive `template` from provenance's `templateRef`; the catalog did not move) and for why the
+#     `materializes-when` values themselves must still never be "repaired" here.
 #   * PRODUCT skills (28) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
 #     (2026-07-06, epic #213/#218): 18 rows owned by `fs-gg-rendering` (reconciled from
 #     FS.GG.Rendering's `template/skill-manifest/skill-manifest.json`) + 10 rows owned by
@@ -104,7 +107,9 @@ schemaVersion: 3
 updated: "2026-08-15"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
-# scaffold-provenance.json → effectiveParameters. ENFORCED since .github#2547 by the
+# scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
+# where no parameter can carry the axis (`template` ← `templateRef`, .github#2576; see below).
+# ENFORCED since .github#2547 by the
 # `parameter-vocabulary` arm of scripts/fsgg-skill-registry-check: a predicate naming a parameter
 # absent from this list is a finding. It was decoration before that — the catalog asserted these
 # four org-wide while a second producer's rows evaluated a fifth, and no gate could say so.
