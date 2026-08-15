@@ -838,14 +838,38 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
   # THE REF IS THE ONE THIS GUARD MEASURED, or none at all. $b is set only by the `behind` arm, and
   # naming a literal `origin/main` on the other arms would print a remedy against a ref the count was
   # never taken over — the same mistake the `merge --ff-only $b` note above refuses.
+  #
+  # AND THE DIRECTORY IS PER-INVOCATION, NEVER A FIXED PATH (.github#2581, review round 0, repair 1).
+  # The first draft of this block named a literal `/tmp/fsgg-engine-current`, and that fails in EXACTLY
+  # the regime the paragraph above it describes. Several workers blocked at once is not an edge case
+  # here — it is the stated premise — and the SECOND of them to run the printed command gets
+  # `fatal: '/tmp/fsgg-engine-current' already exists`, rc 128: a git error with no visible connection to
+  # engine staleness, leaving the refusal standing. That is the failure this module already refuses to
+  # ship three paragraphs above, in the .github#1664 note — a remedy that runs, prints an unrelated error
+  # and changes nothing "is how a fleet learns to route around its own escape hatch".
+  #
+  # WORSE, THE TWO LINES AFTER THE FAILED `worktree add` STILL RAN, so a leftover directory from an
+  # earlier session was silently adoptable as "current": they would build and export whatever ref that
+  # leftover happens to be detached at, and tier 1 then execs it with BOTH guards skipped by design. A
+  # path whose NAME asserts currency it cannot keep is #929/#1507's hazard reintroduced by the remedy
+  # meant to avoid it. `mktemp -d` answers both halves — the directory is fresh and unique per reader, so
+  # there is nothing to collide with and nothing to adopt — and the `&&` chain makes the tail fail closed,
+  # so no reader can end up exporting a bin built from a tree the command did not just create.
   if [ -n "${b:-}" ]; then
     recovery="$recovery
 
             KEEP YOUR CLAIM WITHOUT TOUCHING THAT CHECKOUT. A CURRENT engine you build YOURSELF lifts
             this refusal for every verb, immediately, with no shared-checkout repair and no host:
-              git worktree add --detach /tmp/fsgg-engine-current $b
-              dotnet build /tmp/fsgg-engine-current/src/FS.GG.Coord.Cli -c Release
-              export FSGG_COORD_ENGINE_BIN=/tmp/fsgg-engine-current/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+              eng=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/fsgg-engine-XXXXXX\")\" &&
+                git worktree add --detach \"\$eng\" $b &&
+                dotnet build \"\$eng/src/FS.GG.Coord.Cli\" -c Release &&
+                export FSGG_COORD_ENGINE_BIN=\"\$eng/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine\"
+
+            A FRESH DIRECTORY PER READER IS THE POINT, not tidiness: under host-serialised repair several
+            workers are blocked in the SAME window by construction, so a fixed path would hand the second
+            one a collision instead of an engine, and a leftover one would hand it a stale engine named
+            'current'. The chain is \`&&\` for the same reason — if the checkout fails, nothing after it
+            runs. When you no longer need it: \`git worktree remove --force \"\$eng\"\`."
   else
     recovery="$recovery
 
@@ -857,6 +881,7 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
   fi
 
   recovery="$recovery
+
             BUILD the engine you name. An explicit bin is honoured BEFORE any guard runs, so it will run
             whatever you point it at — stale or dirty — and warn about neither.
             The other route is tier 2a, \`dotnet build\` in your OWN worktree, but only while your head is

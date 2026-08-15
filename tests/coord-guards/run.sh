@@ -199,7 +199,7 @@ done
 # THE REF IN THE ROUTE IS THE ONE THIS GUARD MEASURED, never a hard-coded `origin/main`. A remedy
 # against a different ref than the count was taken over is the mistake the `merge --ff-only $b` note in
 # the module already refuses, and it would name a ref that does not resolve on a `master` checkout.
-if printf '%s' "$HB_ERR" | grep -q 'git worktree add --detach /tmp/fsgg-engine-current refs/remotes/origin/main'; then
+if printf '%s' "$HB_ERR" | grep -qF 'git worktree add --detach "$eng" refs/remotes/origin/main'; then
   ok "the recovery route names the ref the guard MEASURED (refs/remotes/origin/main), not a hard-coded literal"
 else
   bad "the recovery route must be built against the ref upstream_drift resolved" "err=$HB_ERR"
@@ -251,6 +251,107 @@ if [ "$(git -C "$BEHIND/shared" rev-list --count HEAD..refs/remotes/origin/main 
   ok "the shared checkout is still BEHIND after the recovery — the route repaired nothing the host owns"
 else
   bad "the recovery route must not move the shared checkout"
+fi
+
+# ---- 5b. THE PRINTED COMMAND WORKS FOR *N* BLOCKED WORKERS AT ONCE (review round 0, repair 1) ------
+# §5 above proves the ROUTE works; it says nothing about the COMMAND, because it exercises tier 1
+# directly, once, from one worktree. That is exactly the gap the first draft of this change fell into: it
+# composed a fixed `/tmp/fsgg-engine-current`, which is green here and `fatal: … already exists`, rc 128,
+# for the SECOND of N simultaneously-blocked workers — in the very multi-lane, host-serialised regime the
+# refusal's own text names two paragraphs earlier. More than one blocked worker is the stated premise
+# here, not an edge case, so "the command works once" is not the claim this refusal makes.
+#
+# THE COMMAND IS EXTRACTED FROM THE REFUSAL, NEVER RETYPED. A leg that retypes what it believes the guard
+# prints certifies the test author's memory, not the module.
+
+# (a) STRUCTURAL — the `worktree add` target is not a fixed absolute literal.
+ADD_LINE="$(printf '%s\n' "$HB_ERR" | grep -F 'git worktree add --detach' | head -1 | sed 's/^[[:space:]]*//')"
+ADD_TARGET="$(printf '%s' "$ADD_LINE" | awk '{print $5}')"
+case "$ADD_TARGET" in
+  '' | /*)
+    bad "the recovery route must not name a fixed absolute directory: the second blocked worker to run it verbatim gets 'already exists', and a leftover one from an earlier session is adoptable as 'current'" \
+        "target=$ADD_TARGET line=$ADD_LINE" ;;
+  *)
+    ok "the recovery route's worktree target is per-invocation, not a fixed absolute path ($ADD_TARGET)" ;;
+esac
+
+# A FRESH directory, not merely a variable one. `mktemp -d` is what makes adoption impossible: tier 1
+# execs whatever bin it is given with BOTH guards skipped by design, so a directory whose NAME asserts
+# currency it cannot keep would reintroduce #929/#1507's hazard through the remedy meant to avoid it.
+if printf '%s' "$HB_ERR" | grep -qF 'mktemp -d'; then
+  ok "the recovery route creates a FRESH directory (mktemp -d) rather than reusing a named one, so nothing an earlier session left behind can be adopted as 'current' through tier 1"
+else
+  bad "the recovery route must create a fresh directory per invocation" "err=$HB_ERR"
+fi
+
+# (b) BEHAVIOURAL — the printed command, run verbatim, from two linked worktrees of ONE repository.
+# The `dotnet build` line is the only substitution, because this suite is hermetic and builds no engine
+# (see the file header): it becomes `true &&`, so the AND-chain, the `mktemp`, the `git worktree add` and
+# the `export` all still run exactly as the refusal printed them. TMPDIR is redirected under $ROOT so the
+# suite's own trap reclaims what the route creates.
+git -C "$BEHIND/shared" worktree add -q --detach "$BEHIND/wt2" HEAD
+mkdir -p "$ROOT/route-tmp"
+
+ROUTE_SCRIPT="$(printf '%s\n' "$HB_ERR" \
+  | sed -E -n '/(mktemp -d|git worktree add --detach)/,/export FSGG_COORD_ENGINE_BIN/p' \
+  | sed 's/^[[:space:]]*//' \
+  | sed 's|^dotnet build .*|true \&\&|')"
+
+# A BLOCK NAMING AN ABSOLUTE PATH IS NOT EXECUTED, AND THAT REFUSAL *IS* THE RED. Running the pre-repair
+# text verbatim would create `/tmp/fsgg-engine-current` on whatever machine runs this suite — a location
+# shared by every process on it and outside the fixture entirely — and that shared-location property is
+# exactly what is under test. So this shape fails these legs by declining to run, with the reason
+# printed, rather than by leaking outside $ROOT to prove a point leg (a) has already proved.
+ROUTE_BLOCKED=""
+[ -n "$ROUTE_SCRIPT" ] || ROUTE_BLOCKED="the refusal printed no recovery command block to extract"
+case "$ADD_TARGET" in
+  /*) ROUTE_BLOCKED="the printed command names the absolute path $ADD_TARGET — shared by every worker on the machine and outside this fixture, so it is not run verbatim here; that shared path is the defect" ;;
+esac
+
+# WHAT THE READER ACTUALLY ENDS UP WITH is the EXPORTED bin, not an intermediate variable, so that is
+# what is read back — a block that set a private variable correctly and exported something else would
+# otherwise pass.
+run_route() {
+  ( cd "$1" && export TMPDIR="$ROOT/route-tmp" \
+    && eval "$ROUTE_SCRIPT" >/dev/null 2>"$ROOT/.route.err" \
+    && printf '%s' "${FSGG_COORD_ENGINE_BIN%/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}" )
+}
+
+if [ -z "$ROUTE_BLOCKED" ]; then
+  ROUTE_A="$(run_route "$BEHIND/wt")";  ROUTE_A_RC=$?; ROUTE_A_ERR="$(cat "$ROOT/.route.err")"
+  ROUTE_B="$(run_route "$BEHIND/wt2")"; ROUTE_B_RC=$?; ROUTE_B_ERR="$(cat "$ROOT/.route.err")"
+
+  # STDERR MUST CARRY NO FAILURE, not merely exit status zero. The pre-repair block was an UNCHAINED
+  # list, so the second worker's `git worktree add` failed while the two lines after it still ran and
+  # still exported a bin: rc 0, `fatal: … already exists` on stderr, and a directory it did not create.
+  # Emptiness is the wrong test — `git worktree add` writes its ordinary "Preparing worktree …" line
+  # there — so the assertion is the absence of a FAILURE, which is what the reader would have to notice.
+  route_clean() { ! printf '%s' "$1" | grep -qiE 'fatal|error|already exists'; }
+  if [ "$ROUTE_A_RC" -eq 0 ] && [ "$ROUTE_B_RC" -eq 0 ] \
+     && route_clean "$ROUTE_A_ERR" && route_clean "$ROUTE_B_ERR" \
+     && [ -n "$ROUTE_A" ] && [ -n "$ROUTE_B" ] && [ "$ROUTE_A" != "$ROUTE_B" ] \
+     && [ -e "$ROUTE_A/.git" ] && [ -e "$ROUTE_B/.git" ]; then
+    ok "the PRINTED command succeeds silently for TWO workers blocked in the same window, each from its own linked worktree of one repository, and each gets its OWN checkout"
+  else
+    bad "N simultaneously-blocked workers must each get a printed command that works" \
+        "A rc=$ROUTE_A_RC dir=$ROUTE_A err=$ROUTE_A_ERR | B rc=$ROUTE_B_RC dir=$ROUTE_B err=$ROUTE_B_ERR"
+  fi
+
+  # AND WHAT EACH ONE GOT IS THE MEASURED REF — the route's whole promise is a CURRENT engine source
+  # tree. A command that succeeded twice onto the wrong commit would satisfy the leg above and still
+  # leave both workers building the engine they were already refused for.
+  WANT="$(git -C "$BEHIND/shared" rev-parse refs/remotes/origin/main)"
+  if [ -n "$ROUTE_A" ] && [ -n "$ROUTE_B" ] \
+     && [ "$(git -C "$ROUTE_A" rev-parse HEAD 2>/dev/null)" = "$WANT" ] \
+     && [ "$(git -C "$ROUTE_B" rev-parse HEAD 2>/dev/null)" = "$WANT" ]; then
+    ok "both checkouts are at the ref the guard MEASURED ($WANT) — each blocked worker gets a genuinely current engine source tree, not merely a directory"
+  else
+    bad "each worker's checkout must be at the ref upstream_drift resolved" \
+        "want=$WANT A=$ROUTE_A B=$ROUTE_B"
+  fi
+else
+  bad "N simultaneously-blocked workers must each get a printed command that works" "$ROUTE_BLOCKED"
+  bad "each worker's checkout must be at the ref upstream_drift resolved" "$ROUTE_BLOCKED"
 fi
 
 # ---- 6. NO STATE-TRANSITION WRITE IS WEAKENED (.github#2581 acceptance 5) -------------------------

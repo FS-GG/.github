@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2581-lease-survival-under-staleness/ship.json",
-      "digest": "sha256:16ab2aa0b3bf332f0192c3fbbe643a6b3f095f1bda39ef4044d044bf0c8a5c71",
+      "digest": "sha256:3e51ece941d60b186e59ddd99940824d3980b69c54dcc7395e13b9c365e02553",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2581-lease-survival-under-staleness/verify.json",
-      "digest": "sha256:bcffe2edcdbf26ef1807675cf6db736caf1f9fd83a6fd7ae6f30a1d324ee7897",
+      "digest": "sha256:076ac0339ea5617cde4c7f1de1af8a76086bd530393bbf46ca9ecc5b8d084f11",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2581-lease-survival-under-staleness/work-model.json",
-      "digest": "sha256:9d9a9fcbb4ce161d4086f6d420fdaa0cd3294133bfe08de1b2fc6bc45e5acdc6",
+      "digest": "sha256:1da91499c14f2956618ebb0051fa1d45c59c57bb0b9f77d11c54e922c304fb08",
       "schemaVersion": 1
     }
   ],

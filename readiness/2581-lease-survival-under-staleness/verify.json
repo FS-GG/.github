@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "9d9a9fcbb4ce161d4086f6d420fdaa0cd3294133bfe08de1b2fc6bc45e5acdc6"
+        "value": "1da91499c14f2956618ebb0051fa1d45c59c57bb0b9f77d11c54e922c304fb08"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "90d9d4ff17b1b498f09eff817fb57de1ac347187b3cb4dae4ffcdfb7f62c6944"
+        "value": "efb04312033a7dbbc00b7bfd8b90b7268cb9a06b81ab990ebd5a8b24f12ae848"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -1275,10 +1275,24 @@
       "path": "readiness/2581-lease-survival-under-staleness/work-model.json",
       "kind": "workModel",
       "currency": "current",
-      "diagnosticIds": []
+      "diagnosticIds": [
+        "staleGeneratedView"
+      ]
     }
   ],
-  "findings": [],
+  "findings": [
+    {
+      "id": "VF001",
+      "severity": "warning",
+      "category": "warning",
+      "path": "readiness/2581-lease-survival-under-staleness/work-model.json",
+      "relatedIds": [
+        "readiness/2581-lease-survival-under-staleness/work-model.json"
+      ],
+      "message": "Generated view \u0027readiness/2581-lease-survival-under-staleness/work-model.json\u0027 is stale.",
+      "correction": "Regenerate readiness/\u003Cid\u003E/work-model.json from current lifecycle sources."
+    }
+  ],
   "governanceCompatibility": [
     {
       "path": ".fsgg/policy.yml",
@@ -1302,7 +1316,18 @@
       "diagnosticIds": []
     }
   ],
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "id": "staleGeneratedView",
+      "severity": "warning",
+      "artifact": "readiness/2581-lease-survival-under-staleness/work-model.json",
+      "message": "Generated view \u0027readiness/2581-lease-survival-under-staleness/work-model.json\u0027 is stale.",
+      "correction": "Regenerate readiness/\u003Cid\u003E/work-model.json from current lifecycle sources.",
+      "relatedIds": [
+        "readiness/2581-lease-survival-under-staleness/work-model.json"
+      ]
+    }
+  ],
   "readiness": "verificationReady",
   "nextAction": {
     "actionId": "verify.next.ship",
