@@ -103,8 +103,5 @@ jobs:
         run: |
           set -euo pipefail
           tag="coherent-set/v$VERSION"
-          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber \
+          bash scripts/release-saga-promote-release.sh "$GITHUB_REPOSITORY" "$tag" \
             artifacts/packages/release-manifest.json artifacts/packages/stable-channel.json
-          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest \
-            --title "FS.GG coherent set $VERSION" \
-            --notes "Both feeds serve all manifest-bound packages. See release-manifest.json and stable-channel.json for hashes, observations, recovery, and promotion receipt."
