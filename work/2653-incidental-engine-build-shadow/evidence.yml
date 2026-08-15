@@ -1,0 +1,844 @@
+schemaVersion: 1
+workId: 2653-incidental-engine-build-shadow
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2653-incidental-engine-build-shadow/spec.md
+sourceClarifications: work/2653-incidental-engine-build-shadow/clarifications.md
+sourceChecklist: work/2653-incidental-engine-build-shadow/checklist.md
+sourcePlan: work/2653-incidental-engine-build-shadow/plan.md
+sourceTasks: work/2653-incidental-engine-build-shadow/tasks.yml
+sourceAnalysis: readiness/2653-incidental-engine-build-shadow/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2653-incidental-engine-build-shadow/analysis.json
+    digest: 34e93fd6735236c6a2b7502ef73daaeda6c93b1e87622a7a9552e674dc3e8444
+    schemaVersion: 1
+  - label: checklist
+    path: work/2653-incidental-engine-build-shadow/checklist.md
+    digest: 0715593fe65893dc1bd29625be24af93b75689541b7d6188940c724e69884e5b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2653-incidental-engine-build-shadow/clarifications.md
+    digest: 92fa58cc5f423a3fd227bcd525671b7fd839b2edaae19a3a7da6ae8988366cd9
+    schemaVersion: 1
+  - label: plan
+    path: work/2653-incidental-engine-build-shadow/plan.md
+    digest: bee9c0b71e6d4f599eedc70e5e4d770b1e60b2b307b7169085ae195860b40b14
+    schemaVersion: 1
+  - label: spec
+    path: work/2653-incidental-engine-build-shadow/spec.md
+    digest: af14594bae43fddafe1d209ee5094cb7104990087c23b21a3231c0ef5bfa8c6e
+    schemaVersion: 1
+  - label: tasks
+    path: work/2653-incidental-engine-build-shadow/tasks.yml
+    digest: 2a1186c4ae5747e7030a9ab0fde9bce55a6487b58427cba8696f4fae31cbf696
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml", "The defect was reproduced hermetically BEFORE the repair, against the unmodified resolver: a shared checkout at its origin default branch with a current engine, plus a linked worktree cut one engine commit earlier with its own build, authoring nothing. `scripts/fsgg-coord release <ref>` from that worktree exited 69 with 'REFUSED ... the engine is STALE / BEHIND refs/remotes/origin/main by 1 commit(s)'. The same fixture after the repair exits 0 and runs the SHARED engine. That reproduction is leg g1 of section 3g, so it is a standing gate rather than a one-time observation."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml"]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml
+      digest: "sha256:0820abfdf8e444a6fbf12882a828a51b5b516857c8c966b4f25d59fe9906ffcb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [registry/repos.lock, scripts/fsgg-coord]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml
+      digest: "sha256:c369235becb0672e4e81c58681dccc6898a95af1e8faa3176946a206994bc814"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 183
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by `bash scripts/repos.sh relock` followed by tests/repos-registry/run.sh — 182 assertion(s), 0 failed — and `scripts/repos.sh validate` (OK, 9 repo(s), 9 kit item(s)). scripts/fsgg-coord is a `coordination-kit` row (registry/repos.yml:575), so editing it stales the generated digest in registry/repos.lock; the lock is regenerated and declared EXPECTED DRIFT rather than reserved in the touch-set (.github#309, .github#527). Receipt: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml"]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 is discharged by .github#2653's own criterion 4 second limb — 'the run is shown to leave no shadowing build behind'. g1 is that showing: the incidental build is still on disk in the fixture worktree and is no longer resolved as the engine.", "Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml"]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [registry/repos.lock, scripts/fsgg-coord]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml
+      digest: "sha256:c369235becb0672e4e81c58681dccc6898a95af1e8faa3176946a206994bc814"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 183
+      failed: 0
+      skipped: 0
+    notes: ["DEC-005 placed the predicate in scripts/fsgg-coord-guards.sh, which has no `kit:` row, and limited the kit row scripts/fsgg-coord to one guarded branch plus the comment criterion 2 requires. The relock's own diff is the evidence that exactly one kit row moved.", "Discharged by `bash scripts/repos.sh relock` followed by tests/repos-registry/run.sh — 182 assertion(s), 0 failed — and `scripts/repos.sh validate` (OK, 9 repo(s), 9 kit item(s)). scripts/fsgg-coord is a `coordination-kit` row (registry/repos.yml:575), so editing it stales the generated digest in registry/repos.lock; the lock is regenerated and declared EXPECTED DRIFT rather than reserved in the touch-set (.github#309, .github#527). Receipt: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml"]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["DEC-006 added no environment variable. Section 3's tier-1 leg ('an explicit FSGG_COORD_ENGINE_BIN is honoured silently — an instruction, not a hint') is green unchanged, so the documented explicit channel is the only one.", "Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml"]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003]
+    obligationRefs: [EV016]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "PC-001: the receivers' shape is unchanged and is measured, not asserted — sections 3, 3e and 7 drive checkouts with no distinct shared checkout and with tiers 3/4, and are green unchanged. Both new call sites sit inside tier 2a's existing `[ -x ... ]` branch, which a receiver cannot enter."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV017]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml"]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV018]
+    artifacts: [registry/repos.lock, scripts/fsgg-coord]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml
+      digest: "sha256:c369235becb0672e4e81c58681dccc6898a95af1e8faa3176946a206994bc814"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 183
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by `bash scripts/repos.sh relock` followed by tests/repos-registry/run.sh — 182 assertion(s), 0 failed — and `scripts/repos.sh validate` (OK, 9 repo(s), 9 kit item(s)). scripts/fsgg-coord is a `coordination-kit` row (registry/repos.yml:575), so editing it stales the generated digest in registry/repos.lock; the lock is regenerated and declared EXPECTED DRIFT rather than reserved in the touch-set (.github#309, .github#527). Receipt: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml"]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV019]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "PC-004: stale_guard's observable behaviour is unchanged by the stale_detail extraction — sections 3, 3c, 3d and 3e drive every verb in the module's own two write sets and every read verb against stale fixtures, and all are green unchanged."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003]
+    obligationRefs: [EV020]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "The defect was reproduced hermetically BEFORE the repair, against the unmodified resolver: a shared checkout at its origin default branch with a current engine, plus a linked worktree cut one engine commit earlier with its own build, authoring nothing. `scripts/fsgg-coord release <ref>` from that worktree exited 69 with 'REFUSED ... the engine is STALE / BEHIND refs/remotes/origin/main by 1 commit(s)'. The same fixture after the repair exits 0 and runs the SHARED engine. That reproduction is leg g1 of section 3g, so it is a standing gate rather than a one-time observation."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV021]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml"]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV022]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml"]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV023]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml"]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV024]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml"]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV025]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml
+      digest: "sha256:0820abfdf8e444a6fbf12882a828a51b5b516857c8c966b4f25d59fe9906ffcb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: ["GATE INVERSION, subject mutated, observed red — five mutations, one per new leg, each run against a scratch copy of the resolver and the module so no reviewed head moved. M1 removes the tier-2a precondition from scripts/fsgg-coord (the pre-.github#2653 resolver) -> g1 RED, 5 passed 1 failed. M4 deletes the `stale_detail` conjunct from engine_shadows_shared so the swap may land on a stale shared engine -> g5 RED, 5 passed 1 failed. M5 flips authored_engine_source's no-default-branch-ref path from `return 0` to `return 1` (the fail-open direction) -> g6 RED, 5 passed 1 failed. M6 replaces the 'WHY YOUR OWN BUILD WAS PREFERRED' heading -> g4 RED, 5 passed 1 failed. M7 drops the authorship conjunct entirely so the swap is unconditional -> g3, g4 and g6 RED, 3 passed 3 failed. Unmutated control NONE -> 6 passed, 0 failed. Non-vacuity is additionally a standing leg rather than a one-off mutation: g2 empties the fixture's fall-through target and requires g1's condition to stop holding, so 'found a current shared engine' and 'looked at no shared engine' cannot share an exit code. Receipt: work/2653-incidental-engine-build-shadow/test-results/gate-inversion.junit.xml"]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV026]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: scripts/lint-shell.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shell-lint.junit.xml
+      digest: "sha256:8f6d29c44d7a21d3e3163db0b1320ebd2b4f43a95e38c9d66dd60bbafccb0ffc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) — OK over 134 file(s) and 397 workflow-embedded step(s), covering the edited shim, the edited guard module and the edited suite. The two deliberate pathspec word-splits carry explicit `# shellcheck disable=SC2086` directives, as this module's existing occurrence does. Receipt: work/2653-incidental-engine-build-shadow/test-results/shell-lint.junit.xml"]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV027]
+    artifacts: [registry/repos.lock, scripts/fsgg-coord]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml
+      digest: "sha256:c369235becb0672e4e81c58681dccc6898a95af1e8faa3176946a206994bc814"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 183
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by `bash scripts/repos.sh relock` followed by tests/repos-registry/run.sh — 182 assertion(s), 0 failed — and `scripts/repos.sh validate` (OK, 9 repo(s), 9 kit item(s)). scripts/fsgg-coord is a `coordination-kit` row (registry/repos.yml:575), so editing it stales the generated digest in registry/repos.lock; the lock is regenerated and declared EXPECTED DRIFT rather than reserved in the touch-set (.github#309, .github#527). Receipt: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml"]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV028]
+    artifacts: [scripts/fsgg-coord, scripts/fsgg-coord-guards.sh, tests/coord-engine-parity/shim.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/shim.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml
+      digest: "sha256:a0a0ab9b40a7548edac18ca12f710ee654a7ef2fdbf675cc60449c3cd72c0111"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-engine-parity/shim.sh — 85 assertion(s), 0 failed, exit 0, run through the shared checkout's current engine at tier 1 so no build was created in this worktree. Section 3g (six new legs) covers the repair: g1 an incidental stale build writes the board through the SHARED engine; g2 the same leg stops holding once that shared engine is removed; g3 an AUTHORED stale build still keeps tier 2a and is still REFUSED with neither engine reached; g4 the refusal names the worktree, says it is not the shared checkout, and reports the observed reason; g5 a stale shared engine does not attract the swap; g6 an unanswerable authorship probe takes the status-quo branch. The pre-existing 79 assertions are unchanged and green, including the tier-2b legs of section 5 and the receivers'-shape legs of sections 3, 3e and 7. Receipt: work/2653-incidental-engine-build-shadow/test-results/shim-parity.junit.xml", "PM-001: nothing persisted changes shape. The only skew is between a receiver running the previous scripts/fsgg-coord and one running this; neither can enter tier 2a, and sections 3, 3e and 7 measure that both resolve identically."]
+  - id: EV029
+    kind: deferral
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV029]
+    artifacts: [readiness/2653-incidental-engine-build-shadow/work-model.json]
+    sourceRefs:
+      - kind: deferral
+        path: readiness/2653-incidental-engine-build-shadow/work-model.json
+    result: deferred
+    synthetic: false
+    rationale: "GV-001's subject is an SDD-owned GENERATED VIEW, and no test run can discharge it — its discharge IS the durable artifact. FS.GG.SDD#865 is the open row for exactly that gap. A fabricated observedRun receipt would be the self-attestation FS.GG.SDD#350 closed, so this is recorded as an accepted deferral instead."
+    owner: wren-af4b
+    scope: "readiness/2653-incidental-engine-build-shadow/work-model.json only. No functional requirement, contract, or gate is deferred: EV001-EV028 and EV030 are all discharged by observed runs."
+    laterLifecycleVisibility: "Visible at verify and ship as an accepted deferral on this work item, and re-openable through FS.GG.SDD#865 when a record-discharged obligation kind exists. Nothing about this deferral is load-bearing for .github#2653's own acceptance criteria."
+    notes: [G]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV030]
+    artifacts: [registry/repos.lock, scripts/fsgg-coord]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml
+      digest: "sha256:c369235becb0672e4e81c58681dccc6898a95af1e8faa3176946a206994bc814"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 183
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by `bash scripts/repos.sh relock` followed by tests/repos-registry/run.sh — 182 assertion(s), 0 failed — and `scripts/repos.sh validate` (OK, 9 repo(s), 9 kit item(s)). scripts/fsgg-coord is a `coordination-kit` row (registry/repos.yml:575), so editing it stales the generated digest in registry/repos.lock; the lock is regenerated and declared EXPECTED DRIFT rather than reserved in the touch-set (.github#309, .github#527). Receipt: work/2653-incidental-engine-build-shadow/test-results/repos-registry.junit.xml", "GV-002: registry/repos.lock is a GENERATED, CI-gated digest over `kit:` rows. It was regenerated with scripts/repos.sh relock and is declared EXPECTED DRIFT, never reserved in the touch-set."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

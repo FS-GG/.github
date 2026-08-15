@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2653-incidental-engine-build-shadow",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "b4b310e37cfdf3d4dd00b4d9597d8e275f909354455c1d0fe651cff8897fa052"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 29,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 29
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

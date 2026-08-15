@@ -1,0 +1,2122 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2653-incidental-engine-build-shadow",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2653-incidental-engine-build-shadow/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "0715593fe65893dc1bd29625be24af93b75689541b7d6188940c724e69884e5b"
+      }
+    },
+    {
+      "path": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "92fa58cc5f423a3fd227bcd525671b7fd839b2edaae19a3a7da6ae8988366cd9"
+      }
+    },
+    {
+      "path": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "cf622466df05a0dc2e406969124e0d56108880712cfafba44e5c7a3a2b5e3174"
+      }
+    },
+    {
+      "path": "work/2653-incidental-engine-build-shadow/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "bee9c0b71e6d4f599eedc70e5e4d770b1e60b2b307b7169085ae195860b40b14"
+      }
+    },
+    {
+      "path": "work/2653-incidental-engine-build-shadow/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "af14594bae43fddafe1d209ee5094cb7104990087c23b21a3231c0ef5bfa8c6e"
+      }
+    },
+    {
+      "path": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "2a1186c4ae5747e7030a9ab0fde9bce55a6487b58427cba8696f4fae31cbf696"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2653-incidental-engine-build-shadow",
+    "title": "Incidental Engine Build Shadow",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "Tier 2a prefers the caller\u0027s own source build only when that checkout authors engine build inputs of its own; otherwise a distinct shared checkout with a current engine is preferred. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Tier 2a prefers the caller\u0027s own source build only when that checkout authors engine build inputs of its own; otherwise a distinct shared checkout with a current engine is preferred. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 159,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "A checkout that authors engine build inputs \u2014 uncommitted under them, or committed between the merge-base with the default-branch ref and HEAD \u2014 keeps tier 2a\u0027s preference and \u0060stale_guard\u0060\u0027s refusal unchanged. (Stories: US-002; Acceptance: AC-002)",
+      "text": "A checkout that authors engine build inputs \u2014 uncommitted under them, or committed between the merge-base with the default-branch ref and HEAD \u2014 keeps tier 2a\u0027s preference and \u0060stale_guard\u0060\u0027s refusal unchanged. (Stories: US-002; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 160,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "The swap happens only toward a distinct shared checkout whose engine exists and returns an empty staleness verdict, so resolution never moves to a worse engine. (Stories: US-001; Acceptance: AC-003)",
+      "text": "The swap happens only toward a distinct shared checkout whose engine exists and returns an empty staleness verdict, so resolution never moves to a worse engine. (Stories: US-001; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 161,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Every unanswerable probe \u2014 no default-branch ref, no merge-base, a failed git invocation \u2014 resolves to preferring the caller\u0027s own build. (Stories: US-002; Acceptance: AC-004)",
+      "text": "Every unanswerable probe \u2014 no default-branch ref, no merge-base, a failed git invocation \u2014 resolves to preferring the caller\u0027s own build. (Stories: US-002; Acceptance: AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 162,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "A refusal raised over a build under the caller\u0027s own toplevel states why that build was preferred and names a remedy runnable in the checkout it names, and no longer instructs a merge into a branch under review. (Stories: US-003; Acceptance: AC-005)",
+      "text": "A refusal raised over a build under the caller\u0027s own toplevel states why that build was preferred and names a remedy runnable in the checkout it names, and no longer instructs a merge into a branch under review. (Stories: US-003; Acceptance: AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 163,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "The happy path is unchanged \u2014 a current engine produces no warning, no refusal, and no swap. (Stories: US-002; Acceptance: AC-006)",
+      "text": "The happy path is unchanged \u2014 a current engine produces no warning, no refusal, and no swap. (Stories: US-002; Acceptance: AC-006)",
+      "acceptanceCriteria": [
+        "AC-006"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 164,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    },
+    {
+      "id": "FR-007",
+      "title": "The new behaviour is executable in both directions and non-vacuous: inverting the precondition reds the positive leg, and emptying the fixture\u0027s shared engine reds it too. (Stories: US-004; Acceptance: AC-007)",
+      "text": "The new behaviour is executable in both directions and non-vacuous: inverting the precondition reds the positive leg, and emptying the fixture\u0027s shared engine reds it too. (Stories: US-004; Acceptance: AC-007)",
+      "acceptanceCriteria": [
+        "AC-007"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 165,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ],
+      "linkedEvidenceIds": [
+        "EV007"
+      ]
+    },
+    {
+      "id": "FR-008",
+      "title": "\u0060registry/repos.lock\u0060 is regenerated for the edited \u0060fsgg-coord\u0060 kit row and the kit release obligation is named before merge. (Stories: US-001; Acceptance: AC-008)",
+      "text": "\u0060registry/repos.lock\u0060 is regenerated for the edited \u0060fsgg-coord\u0060 kit row and the kit release obligation is named before merge. (Stories: US-001; Acceptance: AC-008)",
+      "acceptanceCriteria": [
+        "AC-008"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 166,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ],
+      "linkedEvidenceIds": [
+        "EV008"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "**THE DISTINGUISHING FACT IS AUTHORSHIP OF ENGINE BUILD INPUTS, READ",
+      "decision": "**THE DISTINGUISHING FACT IS AUTHORSHIP OF ENGINE BUILD INPUTS, READ",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "sourceLocation": {
+        "line": 122,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "**THE PRODUCERS ARE NOT CHANGED; CRITERION 4 IS SATISFIED BY ITS",
+      "decision": "**THE PRODUCERS ARE NOT CHANGED; CRITERION 4 IS SATISFIED BY ITS",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "sourceLocation": {
+        "line": 129,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T010"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "**THE SWAP IS CONDITIONAL AND ONE-DIRECTIONAL.** An incidental build is",
+      "decision": "**THE SWAP IS CONDITIONAL AND ONE-DIRECTIONAL.** An incidental build is",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "sourceLocation": {
+        "line": 133,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T011"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "**THE AUTHORSHIP SUBJECT IS WIDER THAN THE REFUSAL SUBJECT AND",
+      "decision": "**THE AUTHORSHIP SUBJECT IS WIDER THAN THE REFUSAL SUBJECT AND",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "sourceLocation": {
+        "line": 137,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T012"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "**THE PREDICATE IS AUTHORED IN THE NON-KIT GUARD MODULE; THE KIT ROW",
+      "decision": "**THE PREDICATE IS AUTHORED IN THE NON-KIT GUARD MODULE; THE KIT ROW",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "sourceLocation": {
+        "line": 142,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T013"
+      ]
+    },
+    {
+      "id": "DEC-006",
+      "title": "**NO NEW ENVIRONMENT VARIABLE, IN EITHER DIRECTION.** Tier 1 is the",
+      "decision": "**NO NEW ENVIRONMENT VARIABLE, IN EITHER DIRECTION.** Tier 1 is the",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "sourceLocation": {
+        "line": 145,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T014"
+      ]
+    },
+    {
+      "id": "DEC-007",
+      "title": "**THE WORKTREE-LOCAL REFUSAL GAINS ITS REASON AND LOSES ITS",
+      "decision": "**THE WORKTREE-LOCAL REFUSAL GAINS ITS REASON AND LOSES ITS",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "sourceLocation": {
+        "line": 147,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T015"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-006",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement requirement FR-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-007"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-007",
+        "FR-007",
+        "PD-007"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement requirement FR-008",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-008"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-008",
+        "FR-008",
+        "PD-008"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement clarification decision DEC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Implement clarification decision DEC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-002"
+      ],
+      "sourceIds": [
+        "DEC-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Implement clarification decision DEC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-003"
+      ],
+      "sourceIds": [
+        "DEC-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Implement clarification decision DEC-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-004"
+      ],
+      "sourceIds": [
+        "DEC-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Implement clarification decision DEC-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-005"
+      ],
+      "sourceIds": [
+        "DEC-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Implement clarification decision DEC-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-006"
+      ],
+      "sourceIds": [
+        "DEC-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "T015",
+      "title": "Implement clarification decision DEC-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-007"
+      ],
+      "sourceIds": [
+        "DEC-007"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV015"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "T016",
+      "title": "Update contract surface PC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV016"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "T017",
+      "title": "Update contract surface PC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV017"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "T018",
+      "title": "Update contract surface PC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-008"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV018"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "T019",
+      "title": "Update contract surface PC-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV019"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "T020",
+      "title": "Record verification evidence VO-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-003",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV020"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "T021",
+      "title": "Record verification evidence VO-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-002",
+        "VO-002"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV021"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "id": "T022",
+      "title": "Record verification evidence VO-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-003",
+        "VO-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV022"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "id": "T023",
+      "title": "Record verification evidence VO-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-005",
+        "VO-004"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV023"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "id": "T024",
+      "title": "Record verification evidence VO-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-006",
+        "VO-005"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV024"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "T025",
+      "title": "Record verification evidence VO-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-007",
+        "VO-006"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV025"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "T026",
+      "title": "Record verification evidence VO-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-001",
+        "PD-002",
+        "VO-007"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV026"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "T027",
+      "title": "Record verification evidence VO-008",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-008",
+        "VO-008"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV027"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      }
+    },
+    {
+      "id": "T028",
+      "title": "Handle migration posture PM-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PC-003",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV028"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "id": "T029",
+      "title": "Refresh generated view impact GV-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV029"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      }
+    },
+    {
+      "id": "T030",
+      "title": "Refresh generated view impact GV-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-002",
+        "PD-008"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV030"
+      ],
+      "source": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [
+        "FR-007"
+      ],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [
+        "FR-008"
+      ],
+      "artifactRefs": [
+        "registry/repos.lock",
+        "scripts/fsgg-coord"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "registry/repos.lock",
+        "scripts/fsgg-coord"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV015",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T015",
+      "taskRefs": [
+        "T015"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV016",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T016",
+      "taskRefs": [
+        "T016"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV017",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T017",
+      "taskRefs": [
+        "T017"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV018",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T018",
+      "taskRefs": [
+        "T018"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "registry/repos.lock",
+        "scripts/fsgg-coord"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV019",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T019",
+      "taskRefs": [
+        "T019"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV020",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T020",
+      "taskRefs": [
+        "T020"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV021",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T021",
+      "taskRefs": [
+        "T021"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV022",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T022",
+      "taskRefs": [
+        "T022"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV023",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T023",
+      "taskRefs": [
+        "T023"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV024",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T024",
+      "taskRefs": [
+        "T024"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV025",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T025",
+      "taskRefs": [
+        "T025"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV026",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T026",
+      "taskRefs": [
+        "T026"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV027",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T027",
+      "taskRefs": [
+        "T027"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "registry/repos.lock",
+        "scripts/fsgg-coord"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV028",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T028",
+      "taskRefs": [
+        "T028"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/fsgg-coord",
+        "scripts/fsgg-coord-guards.sh",
+        "tests/coord-engine-parity/shim.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV029",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T029",
+      "taskRefs": [
+        "T029"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "readiness/2653-incidental-engine-build-shadow/work-model.json"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "GV-001\u0027s subject is an SDD-owned GENERATED VIEW, and no test run can discharge it \u2014 its discharge IS the durable artifact. FS.GG.SDD#865 is the open row for exactly that gap. A fabricated observedRun receipt would be the self-attestation FS.GG.SDD#350 closed, so this is recorded as an accepted deferral instead.",
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV030",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T030",
+      "taskRefs": [
+        "T030"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "registry/repos.lock",
+        "scripts/fsgg-coord"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2653-incidental-engine-build-shadow/evidence.yml",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2653-incidental-engine-build-shadow/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2653-incidental-engine-build-shadow/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "0715593fe65893dc1bd29625be24af93b75689541b7d6188940c724e69884e5b"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2653-incidental-engine-build-shadow/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "92fa58cc5f423a3fd227bcd525671b7fd839b2edaae19a3a7da6ae8988366cd9"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2653-incidental-engine-build-shadow/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "cf622466df05a0dc2e406969124e0d56108880712cfafba44e5c7a3a2b5e3174"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2653-incidental-engine-build-shadow/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "bee9c0b71e6d4f599eedc70e5e4d770b1e60b2b307b7169085ae195860b40b14"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2653-incidental-engine-build-shadow/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "af14594bae43fddafe1d209ee5094cb7104990087c23b21a3231c0ef5bfa8c6e"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2653-incidental-engine-build-shadow/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "2a1186c4ae5747e7030a9ab0fde9bce55a6487b58427cba8696f4fae31cbf696"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "baab3246dc03ddf367087ab3c2f71ce8fcb057cb0efc06b765e5aa8559007043"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

@@ -308,6 +308,30 @@ BOARD_READS="batch board body-edits bootstrap budget command-contract cycle deci
 # it is committed upstream.
 ENGINE_SOURCE_TREES="src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub"
 
+# WHAT A CHECKOUT WOULD HAVE HAD TO EDIT TO CHANGE THE ENGINE IT BUILDS (.github#2653) — the subject of
+# `authored_engine_source` below, and deliberately NEITHER of the two pathspecs above and below it.
+#
+# WIDER THAN `ENGINE_SOURCE_TREES`, AND THE ASYMMETRY RUNS THE OPPOSITE WAY FROM THAT ONE'S. The note
+# beside those trees narrows them because a wide subject there costs an OUTAGE — every extra path is one
+# more way to refuse the whole fleet. Here every extra path makes the answer "yes, authored", and "yes"
+# is the branch that keeps today's behaviour exactly. The two failure directions are not symmetric: a
+# MISS silently hands a kit author the shared engine and discards the edits they are testing, which is
+# precisely what `scripts/fsgg-coord:209-213` forbids; a FALSE POSITIVE leaves a worker with the
+# resolution they already have. So this question is answered on the side that cannot discard work, and
+# the root props/`global.json` — implicitly imported by every project beneath them, and genuinely
+# compiled into the engine — are in.
+#
+# NARROWER THAN `dirty_guard`'s PATHSPEC BY EXACTLY ONE ENTRY: `scripts/fsgg-coord` is absent. That
+# guard watches the shim because a reader of THIS repo cares whether the coordination tool is committed;
+# but the shim is bash that is `exec`'d, not F# that is compiled, so editing it cannot make a BUILD
+# carry anything. Including it would mean this file's own author — editing the shim, engine untouched —
+# was told their incidental build was deliberate, which is this row's defect wearing the repair's hat.
+#
+# AND NARROWER THAN ALL OF `src/`, WHICH IS THE OTHER OBVIOUS SPELLING. `src/FS.GG.Kit` and
+# `src/FS.GG.Drivers` do not compile into `fsgg-coord-engine`, and counting them would re-refuse exactly
+# the kit-editing workers .github#2642 reported — the population this row exists for.
+ENGINE_BUILD_INPUTS="$ENGINE_SOURCE_TREES Directory.Build.props Directory.Packages.props global.json"
+
 # HAS THE DEFAULT BRANCH MOVED PAST THE COMMIT THIS ENGINE WAS BUILT FROM? (.github#1549)
 #
 # THE REF IS READ, NEVER FETCHED — see the header. A `git fetch` on every invocation is the cost this
@@ -350,13 +374,126 @@ ENGINE_SOURCE_TREES="src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.Gi
 # Prints ONE tab-separated line, or nothing at all:
 #   behind<TAB><n><TAB><ref>   — <ref> carries <n> commits under the engine's source trees that $1 lacks
 #   noverdict<TAB><why>        — the question could not be answered, which is not an answer
-upstream_drift() {
-  local top="$1" ref="" cand c n
+# THE DEFAULT BRANCH, RESOLVED ONCE (.github#2653). This was inline in `upstream_drift` and is now a
+# function because a SECOND caller arrived — `authored_engine_source` below needs the same ref to take a
+# merge-base against. Two copies of this loop would be one edit away from measuring DRIFT against
+# `refs/remotes/origin/HEAD` and AUTHORSHIP against `refs/remotes/origin/main`, which on a repo where
+# those differ is two questions about two different branches reported as one verdict. The file already
+# makes this argument for `engine_path` in the shim ("ONE spelling, used by both tiers below"), and the
+# reason is the same one: a fallback that probes a different thing than the primary resolves a different
+# answer than the one just measured.
+#
+# Prints the resolved ref and returns 0; prints nothing and returns 1 when none of the three candidates
+# resolves to a commit. The BEHAVIOUR is byte-identical to the loop it replaces — each candidate must
+# resolve to a commit before it is believed, because a dangling symref is not a comparison point.
+default_branch_ref() {   # $1 = checkout
+  local top="$1" cand c
   cand="$(git -C "$top" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)"
   for c in "$cand" refs/remotes/origin/main refs/remotes/origin/master; do
     [ -n "$c" ] || continue
-    if git -C "$top" rev-parse --verify -q "$c^{commit}" >/dev/null 2>&1; then ref="$c"; break; fi
+    if git -C "$top" rev-parse --verify -q "$c^{commit}" >/dev/null 2>&1; then printf '%s' "$c"; return 0; fi
   done
+  return 1
+}
+
+# DOES THIS CHECKOUT AUTHOR ENGINE BUILD INPUTS OF ITS OWN? (.github#2653)
+#
+# WHY THE QUESTION EXISTS. `scripts/fsgg-coord`'s tier 2a prefers a source build under the CALLER's own
+# toplevel, and its reasoning is on the record at `:209-213`: *"A worker who builds in their own worktree
+# gets THEIR build — that is the kit author's whole workflow, and preempting it would hand them the
+# shared engine and silently discard the edits they are testing."* That sentence is right, and its
+# unstated premise is that a worktree build EXPRESSES INTENT to use it as the engine. The premise is
+# false for a build nobody asked for: `tests/skill-registry` and `tests/skill-quality` build the engine
+# transitively, and `scripts/generate-driver-manifest --write` REFUSES without one — so a worker whose
+# item touches no engine source is *required* to create the artifact and then poisoned by it, because a
+# feature branch is behind `main` under the engine's source trees by construction the moment any engine
+# commit lands after it was cut. Measured five times across three agents in ONE board-driver run on
+# 2026-08-15 (.github#2653, and its comments): four on .github#2576 — one of them blocking `heartbeat` —
+# one while critiquing .github#2571, and two on .github#2642. Every one self-repaired by deleting
+# `bin`/`obj`; every one first spent a diagnosis the tool does not offer.
+#
+# SO ASK THE CHECKOUT, NOT THE ARTIFACT. Intent lives in the command that ran, which nothing here can
+# see. What IS visible, exactly and cheaply, is whether this checkout holds engine build inputs that
+# exist NOWHERE UPSTREAM — content of its own. Where it does, `:209-213`'s sentence has a subject and its
+# conclusion holds. Where it does not, the build is a faithful rebuild of code the shared checkout also
+# has, there is nothing of the worker's to discard, and the sentence does not reach the case.
+#
+# CONTENT, NEVER MTIMES, AND .github#1572 IS WHY. That incident measured a `dotnet test` in another
+# configuration re-stamping MSBuild-GENERATED `.fs` files and manufacturing a false STALE over a tree
+# with zero edited sources — refusing every board write and citing an assembly-attribute stub no human
+# wrote. Timestamps answer "was something written", never "did somebody mean it". .github#2653's own
+# second criterion asks for this distinction to be explicit rather than inferred from mtimes, in as many
+# words. `git status` and `git diff` answer about CONTENT, and no build can move either.
+#
+# TWO HALVES, BECAUSE ONE MISSES THE CASE THAT MATTERS MOST. Committed work is invisible to `status`,
+# and uncommitted work is invisible to `diff <base> HEAD` — and the kit author mid-edit, whose engine
+# source is dirty and whose branch is otherwise clean, is exactly the reader `:209-213` protects.
+#
+# `-c status.showUntrackedFiles=normal` IS LOAD-BEARING, for `dirty_guard`'s .github#1043 reason
+# repeated here rather than assumed: `--porcelain` is a FORMATTING flag and does not override a `no`
+# inherited from `~/.gitconfig`, so without it a tree full of new, untracked engine sources answers
+# EMPTY — and empty would read as "authored nothing", which silently swaps the engine under the one
+# person who must not have it swapped. `bin/`/`obj/` are gitignored, so the build itself stays invisible
+# to this probe, which is the difference between a question and a permanent "yes".
+#
+# THE BASELINE IS THE MERGE-BASE, NOT THE DEFAULT BRANCH ITSELF, AND THAT IS THE WHOLE POINT. Comparing
+# `HEAD` against `origin/main` directly answers "does this tree differ from main?", which is TRUE for
+# every branch that is merely BEHIND — i.e. for exactly the population this row is about. The merge-base
+# answers the question actually being asked: has THIS BRANCH authored engine content since it was cut?
+# Behind-ness is `upstream_drift`'s subject and is deliberately not re-asked here.
+#
+# EVERY UNANSWERABLE PROBE RETURNS "AUTHORED", i.e. today's resolution. .github#1549's fourth criterion
+# settled that an unanswerable staleness question is not freshness; its counterpart here is that an
+# unanswerable INTENT question is not permission to swap the engine under the caller. No `origin` (the
+# parity fixtures, a `git init` scratch tree, an air-gapped clone), no merge-base (unrelated histories),
+# a `git` that errors: each takes the branch that changes nothing.
+#
+# MEASURED: 3 `git` invocations, ~6 ms on this repo, and paid ONLY inside `scripts/fsgg-coord`'s tier-2a
+# branch — which requires an executable source build under the caller's own toplevel, so no receiver can
+# reach it and no invocation that resolves at tiers 1/3/4 pays anything.
+#
+# Returns 0 (authored — prefer this checkout's build) or 1 (incidental).
+#
+# AND IT RECORDS *WHICH* ANSWER IT GAVE, BECAUSE "YES" AND "COULD NOT TELL" ARE NOT THE SAME SENTENCE.
+# The refusal below reports why the caller's own build was preferred, and a message that told a reader
+# with no `origin` remote that their checkout "authors engine source of its own" would be asserting a
+# fact it never observed — this file's own #266 shape, three guards deep. `AUTHORED_ENGINE_SOURCE_REASON`
+# is therefore an OUT-PARAMETER for the message path only: `dirty`, `committed`, `unanswerable`, `none`.
+# Deliberately not a return code — the four states collapse to two DECISIONS, no caller branches on the
+# distinction, and encoding it in the exit status would invite one to. Re-deriving it at the message
+# site instead would mean a second copy of the predicate, which is what `default_branch_ref` above
+# exists to prevent.
+AUTHORED_ENGINE_SOURCE_REASON=none
+authored_engine_source() {   # $1 = checkout
+  local top="$1" ref base
+  AUTHORED_ENGINE_SOURCE_REASON=none
+  # WORD SPLITTING IS THE POINT — `$ENGINE_BUILD_INPUTS` is a pathspec LIST, and one spelling of it is
+  # what keeps this in step with the comment above it rather than duplicating six literals.
+  # shellcheck disable=SC2086
+  if [ -n "$(git -C "$top" -c status.showUntrackedFiles=normal status --porcelain -- $ENGINE_BUILD_INPUTS 2>/dev/null)" ]; then
+    AUTHORED_ENGINE_SOURCE_REASON=dirty; return 0
+  fi
+  AUTHORED_ENGINE_SOURCE_REASON=unanswerable
+  ref="$(default_branch_ref "$top")" || return 0
+  base="$(git -C "$top" merge-base HEAD "$ref" 2>/dev/null)" || return 0
+  [ -n "$base" ] || return 0
+  # `--quiet` implies `--exit-code`, and its THREE outcomes are read as three: 0 = identical, 1 = the
+  # trees differ, anything else = the question failed. The last two take the same DECISION — leave the
+  # caller's own build in place — and are still recorded apart, because only one of them is an
+  # observation the refusal may quote back to the reader. `if ! git …` would fold them together and
+  # report a difference nobody measured.
+  # shellcheck disable=SC2086
+  git -C "$top" diff --quiet "$base" HEAD -- $ENGINE_BUILD_INPUTS 2>/dev/null
+  case "$?" in
+    0) AUTHORED_ENGINE_SOURCE_REASON=none;         return 1 ;;
+    1) AUTHORED_ENGINE_SOURCE_REASON=committed;    return 0 ;;
+    *) AUTHORED_ENGINE_SOURCE_REASON=unanswerable; return 0 ;;
+  esac
+}
+
+upstream_drift() {
+  local top="$1" ref="" n
+  ref="$(default_branch_ref "$top")"
   if [ -z "$ref" ]; then
     git -C "$top" config --get remote.origin.url >/dev/null 2>&1 || return 0
     printf 'noverdict\tit has an origin remote, but refs/remotes/origin/{HEAD,main,master} all fail to resolve\n'
@@ -388,8 +525,18 @@ upstream_drift() {
 # who is told only the nearer one goes and rebuilds a checkout that is still behind. So `$detail`
 # ACCUMULATES: whichever fired is reported, and if both fired the reader sees both, in the order a fix
 # would be applied.
-stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first argument
-  local top="$1" dll="$2" verb="$3" newer built changed drift kind a b detail=""
+#
+# THE VERDICT IS A FUNCTION NOW, AND THE POLICY IS SEPARATE FROM IT (.github#2653). This body used to be
+# the first half of `stale_guard`. It was split out because a SECOND caller needs the answer without the
+# consequence: `engine_shadows_shared` below must know whether the SHARED checkout's engine is current
+# before tier 2a may fall through to it, and `stale_guard` answers that question only by `die()`ing.
+# Splitting it is the alternative to asking a second, similar-looking question somewhere else — which is
+# how a guard ends up refusing on one measurement and swapping on another. This function decides; it
+# never warns, never refuses, and never reads `$verb`.
+#
+# Prints the accumulated detail, or nothing at all when the engine is current.
+stale_detail() { # $1 = top, $2 = engine .dll
+  local top="$1" dll="$2" newer built changed drift kind a b detail=""
   [ -f "$dll" ] || return 0   # no IL to measure against; the exec below fails honestly on its own
 
   # (1) IS THE ARTIFACT BEHIND THE SOURCE BESIDE IT? The mtime question (#929), over build INPUTS only.
@@ -465,6 +612,54 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
               dotnet build $top/src/FS.GG.Coord.Cli -c Release" ;;
   esac
 
+  printf '%s' "$detail"                        # empty means the engine is current — the caller says nothing
+}
+
+# MAY TIER 2a FALL THROUGH TO TIER 2b? (.github#2653)
+#
+# THE ONE QUESTION `scripts/fsgg-coord`'s TIER 2a ASKS BEFORE PREFERRING THE CALLER'S OWN BUILD, and the
+# whole of this row's repair. It is true — meaning "this build is an incidental artifact that would
+# SHADOW a better engine" — only when all four hold:
+#
+#   1. this checkout authors no engine build inputs of its own, so there is nothing of the worker's own
+#      for the fall-through to discard (`authored_engine_source`, and its long note above);
+#   2. a shared checkout exists and is a DIFFERENT tree than this one, so there is somewhere to fall to;
+#   3. it carries an executable engine; and
+#   4. that engine is CURRENT by the identical `stale_detail` question this file refuses on.
+#
+# (4) IS WHAT MAKES THIS CHANGE MONOTONE, AND IT IS NOT BELT-AND-BRACES. Without it, a worker whose own
+# build is current and whose SHARED checkout is stale would go from working to refused — and that is not
+# a hypothetical population, it is exactly .github#2581's, where the shared checkout's repair is
+# host-serialised and unbounded. Repairing one refusal by manufacturing another in the neighbouring row
+# is not a repair. With it, the property is stateable in one line: RESOLUTION CAN ONLY EVER MOVE TO AN
+# ENGINE THAT ANSWERS "CURRENT" — never to a worse one, never to a missing one, and never at all unless
+# the caller authored nothing.
+#
+# EVERY REFUSAL PATH RETURNS 1, i.e. "keep tier 2a", i.e. today's resolution exactly. There is no branch
+# here whose failure mode is a swap.
+#
+# `shared_toplevel` AND `engine_path` COME FROM THE SHIM, which defines both before it sources this file
+# and which is this file's only caller — the same arrangement the .github#2402 block below already
+# relies on. Their cost is paid only after (1) has already answered "incidental", so the kit author —
+# the reader `scripts/fsgg-coord:209-213` protects — never pays for a `git worktree list` at all.
+engine_shadows_shared() {   # $1 = the caller's own toplevel, $2 = its engine binary
+  local top="$1" shared shared_bin
+  authored_engine_source "$top" && return 1
+  shared="$(shared_toplevel 2>/dev/null)"
+  [ -n "$shared" ] || return 1
+  [ "$shared" != "$top" ] || return 1
+  shared_bin="$(engine_path "$shared")"
+  [ -x "$shared_bin" ] || return 1
+  [ -z "$(stale_detail "$shared" "${shared_bin}.dll")" ] || return 1
+  return 0
+}
+
+# THE POLICY HALF: what to DO about a verdict `stale_detail` returned. Reads warn, writes refuse, and an
+# unclassified verb is refused — unchanged, and unchanged deliberately: .github#2653 changes which
+# checkout tier 2a hands this guard, never what the guard decides once it is asked.
+stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first argument
+  local top="$1" dll="$2" verb="$3" detail
+  detail="$(stale_detail "$top" "$dll")"
   [ -n "$detail" ] || return 0                                       # the engine is current — say nothing
 
   # .github#2402, LIVE: the shared checkout was `Already up to date`, and the refusal still stood,
@@ -477,7 +672,7 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
   # sourced (`guards`, this file's one caller, is invoked after it), and paying its one `git worktree
   # list` here costs nothing extra: this branch runs only when a refusal is ALREADY being composed, the
   # slow path by construction, never on the silent common case measured in the file's header comment.
-  local shared
+  local shared why
   shared="$(shared_toplevel 2>/dev/null)"
   if [ -n "$shared" ] && [ "$shared" != "$top" ]; then
     detail="$detail
@@ -492,6 +687,57 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
             THIS checkout — $top — clears the refusal. Do NOT merge \`origin/main\` into a feature
             branch to fix this either: that moves a head an independent critic may already have
             confirmed, which is authoring, not landing."
+
+    # AND WHY IT WAS PREFERRED, WHICH SINCE .github#2653 IS A DECIDED FACT RATHER THAN AN ACCIDENT.
+    #
+    # Before that row, a tier-2a build won simply by existing, so the block above could say no more
+    # than "most likely a linked worktree where `dotnet build` ran directly" — a guess about how the
+    # artifact got there, offered to a reader who had not run `dotnet build` at all and whose gate
+    # harness had. Now exactly two states reach this point, `engine_shadows_shared` decides between
+    # them, and the reader is told which one they are in — because the two have DIFFERENT remedies and
+    # the generic `merge --ff-only` line above is written for neither of them without qualification.
+    #
+    # THAT LINE IS THE SELF-CONTRADICTION THIS BLOCK NOW SUPERSEDES, and it was measured in this row's
+    # own hermetic reproduction rather than reasoned about: `stale_guard`'s `behind` arm prints
+    # `git -C <worktree> merge --ff-only <ref>` and this very block then forbids it four lines later.
+    # A remedy a message contradicts inside one screen is the failure .github#1664 already refuses here
+    # — it runs, prints something unrelated to engine staleness, changes nothing, and teaches the fleet
+    # to route around its own escape hatch. The wording above is kept (it is correct for a checkout
+    # whose head is free to move, which is most of them) and is qualified here rather than deleted.
+    if authored_engine_source "$top"; then
+      case "$AUTHORED_ENGINE_SOURCE_REASON" in
+        dirty)     why="it has UNCOMMITTED work under them" ;;
+        committed) why="its branch has COMMITTED work under them that the default branch does not" ;;
+        *)         why="that question could NOT be answered here — no default-branch ref, no merge-base,
+            or a git probe that failed — and an unanswerable intent question is not permission to
+            swap the engine under you (.github#1549's fourth criterion, applied to intent)" ;;
+      esac
+      detail="$detail
+
+            WHY YOUR OWN BUILD WAS PREFERRED: this checkout is treated as AUTHORING engine build
+            inputs — $ENGINE_BUILD_INPUTS — because
+            $why.
+            That is the kit author's case, and tier 2a preferred your build DELIBERATELY (.github#2653,
+            and \`scripts/fsgg-coord\`'s note at :209-213): the shared engine would not carry those
+            edits, so falling through to it would discard the very thing you are testing. The remedy is
+            genuinely yours and it is in THIS checkout.
+            IF YOUR HEAD IS STILL FREE TO MOVE, the two commands above are it. IF IT IS NOT — a branch
+            an independent critic may already have confirmed — they are NOT, and this paragraph
+            supersedes them: build a current engine in a checkout you own and name it explicitly with
+            FSGG_COORD_ENGINE_BIN, which is honoured before any guard runs."
+    else
+      detail="$detail
+
+            WHY YOUR OWN BUILD WAS PREFERRED: this checkout authors NO engine build inputs of its own,
+            so since .github#2653 an incidental build here is passed over for the shared checkout's
+            engine — and it was not passed over, which means that engine is absent or is itself stale.
+            You are not being refused for the build in your worktree; you are being refused because
+            there is no current engine anywhere for it to be passed over FOR. Deleting the bin/obj
+            above therefore fixes nothing on its own. Either name a current engine you built in a
+            checkout you own with FSGG_COORD_ENGINE_BIN, which is honoured before any guard runs, or
+            wait for the shared checkout at $shared to be brought current — which, on a board running
+            several lanes, is an action the host serialises rather than one you own."
+    fi
   fi
 
   # `delivery-route` has both evidence reads and a receipt-ledger write.  Its verb remains in the
