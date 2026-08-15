@@ -68,7 +68,8 @@
     {"family": "evidence-retention", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["bash", "tests/evidence-manifest/run.sh"], "expected_exit": 0, "observed_exit": 0, "counts": {"passed": 1, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}},
     {"family": "shellcheck", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["bash", "tests/shell-lint/run.sh"], "expected_exit": 0, "observed_exit": 0, "counts": {"passed": 48, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}},
     {"family": "policy-projections", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["python3", "scripts/test", "--all"], "expected_exit": 0, "observed_exit": 0, "counts": {"selected": 91, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}},
-    {"family": "wiring-non-vacuity", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["bash", "tests/test-selector/run.sh"], "expected_exit": 0, "observed_exit": 0, "counts": {"passed": 50, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}}
+    {"family": "wiring-non-vacuity", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["bash", "tests/test-selector/run.sh"], "expected_exit": 0, "observed_exit": 0, "counts": {"passed": 50, "failed": 0}, "stdout_sha256": "3a465ce7905f02eeef40f59cb2503c840d459c1fece7ac3efac11531406971bf", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-comprehensive-test-results.json", "sha256": "19eceae00aba04a950aeba0649c2976355328748f634c7cf0581943cabb772a1"}},
+    {"family": "live-new-only-smoke", "outcome": "pass", "implementation_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "tree_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf", "command": ["see", "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json"], "expected_exit": 0, "observed_exit": 0, "counts": {"commands": 12, "failed": 0}, "stdout_sha256": "87bca7be823cb7b164a559437d06b59cdab8241432f9ce40e5155406c87b736b", "artifact": {"path": "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json", "sha256": "87bca7be823cb7b164a559437d06b59cdab8241432f9ce40e5155406c87b736b"}}
   ],
   "engine_mutation_matrix": {
     "path": "docs/reports/evidence/2026-08-15-m6-mutation-results.json",
@@ -85,19 +86,34 @@
   ],
   "release": {
     "version": "0.58.0",
-    "source_sha": "e41a762fcba15a4fe64da38f6d2bbd216f8db6cf",
-    "prepared_manifest_verified": false,
-    "package_bytes_identical": false,
-    "github_feed_observed": false,
-    "nuget_feed_observed": false,
-    "promoted": false,
-    "adopted_and_pinned": false
+    "source_sha": "12ec83f8af74d9456577e8f5518e13293e150b88",
+    "tag": "coherent-set/v0.58.0",
+    "immutable": true,
+    "content_id": "sha256:c203408880cfe785f9fd4a5ee8879617c93a1b95d46cd43f57df6d3c05e1fd92",
+    "manifest_sha256": "34cb470e8450a741bcb8f88302c670915397c0412ac510dae40087e97a1933ea",
+    "stable_channel_sha256": "1c467c38f70c85ad1fc206813e7c31c63155e2ea93e8df9fdb01362e72cc2f85",
+    "feeds": ["GitHub Packages", "NuGet.org"],
+    "package_payload_sha256": {
+      "FS.GG.Coord.Cli": "6da2f5e2fad3bb4096f409cfb8a59f935b9854c57add00bd6c0e65d7705961cb",
+      "FS.GG.Drivers": "9d5d0096ddbb4db5310808bbc90e58c7feac9fe0803468de5b207335ab40ac4d",
+      "FS.GG.Kit": "18d133421ab4bd8ca69d9e059aaa9c1b6cbcc25233f785067a3a66953de0df6b"
+    },
+    "prepared_manifest_verified": true,
+    "package_bytes_identical": true,
+    "github_feed_observed": true,
+    "nuget_feed_observed": true,
+    "promoted": true,
+    "adopted_and_pinned": true,
+    "evidence": {"path": "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json", "sha256": "87bca7be823cb7b164a559437d06b59cdab8241432f9ce40e5155406c87b736b"}
   },
   "live_acceptance": {
-    "exact_main_sha": null,
-    "new_only_smoke": false,
-    "same_class_open_issues": null,
-    "issue_2569_closed": false
+    "verified_main_sha": "57211eeb79a89f88170b3cdcfadcc0849858540a",
+    "new_only_smoke": true,
+    "same_class_open_issues": 0,
+    "issue_2569_closed": true,
+    "command_matrix_sha256": "dff46272ec601e2eaeac2dea9d94e26ef47556b7bac258202fa66ad34203ff46",
+    "same_class_searches_sha256": "3c7bf3a97fbffd1eade03a15032378cb6cf88054f872b21242864be6f1200128",
+    "evidence": {"path": "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json", "sha256": "87bca7be823cb7b164a559437d06b59cdab8241432f9ce40e5155406c87b736b"}
   },
-  "status": "pre-release-tests-and-mutations-green-pending-critic-merge-release-live-acceptance"
+  "status": "terminal-new-only-release-live-acceptance-complete"
 }

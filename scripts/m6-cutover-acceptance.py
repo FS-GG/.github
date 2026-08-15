@@ -84,12 +84,28 @@ def bound_json(root: Path, binding: object, where: str, failures: list[str]) -> 
     return value
 
 
+def commit_exists(root: Path, sha: object) -> bool:
+    return isinstance(sha, str) and SHA.fullmatch(sha) is not None and subprocess.run(
+        ["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=root,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+
+
+def is_ancestor(root: Path, older: object, newer: object) -> bool:
+    return isinstance(older, str) and isinstance(newer, str) and subprocess.run(
+        ["git", "merge-base", "--is-ancestor", str(older), str(newer)], cwd=root,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+
+
 def validate(document: object, root: Path) -> list[str]:
     failures: list[str] = []
     if not isinstance(document, dict):
         return ["root must be an object"]
     if document.get("schema_version") != 1:
         failures.append("schema_version must be 1")
+    if document.get("status") != "terminal-new-only-release-live-acceptance-complete":
+        failures.append("status must declare terminal new-only release/live acceptance complete")
 
     decision = document.get("owner_decision")
     if not isinstance(decision, dict) or decision.get("supersedes_calendar_gate") is not True:
@@ -102,16 +118,10 @@ def validate(document: object, root: Path) -> list[str]:
     if not isinstance(implementation_sha, str) or not SHA.fullmatch(implementation_sha):
         failures.append("implementation.sha must be exact lowercase 40-hex")
     else:
-        exists = subprocess.run(
-            ["git", "cat-file", "-e", f"{implementation_sha}^{{commit}}"], cwd=root,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        ).returncode == 0
+        exists = commit_exists(root, implementation_sha)
         if not exists:
             failures.append("implementation.sha is not a commit in this repository")
-        elif subprocess.run(
-            ["git", "merge-base", "--is-ancestor", implementation_sha, "HEAD"], cwd=root,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        ).returncode != 0:
+        elif not is_ancestor(root, implementation_sha, "HEAD"):
             failures.append("implementation.sha is not an ancestor of the validated checkout")
 
     history = document.get("superseded_history")
@@ -321,15 +331,90 @@ def validate(document: object, root: Path) -> list[str]:
     if not isinstance(release, dict):
         failures.append("release must be an object")
     else:
-        if release.get("version") != "0.58.0" or release.get("source_sha") != implementation_sha:
-            failures.append("release must bind coherent set 0.58.0 to implementation.sha")
+        release_sha = release.get("source_sha")
+        if release.get("version") != "0.58.0" or not is_ancestor(root, implementation_sha, release_sha):
+            failures.append("release must bind coherent set 0.58.0 to a descendant of implementation.sha")
+        if release.get("tag") != "coherent-set/v0.58.0" or release.get("immutable") is not True:
+            failures.append("release must bind the immutable coherent-set/v0.58.0 release")
+        if not HASH.fullmatch(str(release.get("manifest_sha256", ""))) or not HASH.fullmatch(str(release.get("stable_channel_sha256", ""))):
+            failures.append("release must bind manifest and stable-channel byte hashes")
         for field in ("prepared_manifest_verified", "package_bytes_identical", "github_feed_observed", "nuget_feed_observed", "promoted", "adopted_and_pinned"):
             if release.get(field) is not True:
                 failures.append(f"release.{field} must be true")
+        release_evidence = bound_json(root, release.get("evidence"), "release.evidence", failures)
+        if release_evidence is not None:
+            observed_release = release_evidence.get("release", {})
+            for field in (
+                "version", "source_sha", "tag", "immutable", "manifest_sha256",
+                "stable_channel_sha256", "prepared_manifest_verified", "package_bytes_identical",
+                "github_feed_observed", "nuget_feed_observed", "promoted", "adopted_and_pinned",
+                "content_id", "feeds", "package_payload_sha256",
+            ):
+                if release.get(field) != observed_release.get(field):
+                    failures.append(f"release.{field} contradicts terminal evidence")
+            if not HASH.fullmatch(str(observed_release.get("content_id", "")).removeprefix("sha256:")):
+                failures.append("release evidence lacks an exact content ID")
+            if observed_release.get("feeds") != ["GitHub Packages", "NuGet.org"]:
+                failures.append("release evidence does not bind both feeds")
+            payloads = observed_release.get("package_payload_sha256", {})
+            if set(payloads) != {"FS.GG.Coord.Cli", "FS.GG.Drivers", "FS.GG.Kit"} or any(
+                not HASH.fullmatch(str(value)) for value in payloads.values()
+            ):
+                failures.append("release evidence does not bind all three package payload hashes")
 
     live = document.get("live_acceptance")
-    if not isinstance(live, dict) or live.get("exact_main_sha") != implementation_sha or live.get("new_only_smoke") is not True or live.get("same_class_open_issues") != 0 or live.get("issue_2569_closed") is not True:
-        failures.append("live_acceptance must bind exact main, new-only smoke, zero successors, and closed #2569")
+    if not isinstance(live, dict):
+        failures.append("live_acceptance must be an object")
+    else:
+        live_sha = live.get("verified_main_sha")
+        release_sha = release.get("source_sha") if isinstance(release, dict) else None
+        if not is_ancestor(root, release_sha, live_sha) or not is_ancestor(root, live_sha, "HEAD"):
+            failures.append("live_acceptance must bind a verified main descendant of release source and ancestor of this checkout")
+        if live.get("new_only_smoke") is not True or live.get("same_class_open_issues") != 0 or live.get("issue_2569_closed") is not True:
+            failures.append("live_acceptance must bind new-only smoke, zero successors, and closed #2569")
+        if "commands" in live:
+            failures.append("live_acceptance commands must come only from its content-addressed terminal evidence")
+        live_evidence = bound_json(root, live.get("evidence"), "live_acceptance.evidence", failures)
+        if live_evidence is not None:
+            observed_live = live_evidence.get("live", {})
+            if observed_live.get("verified_main_sha") != live_sha or observed_live.get("same_class_open_issues") != 0 or observed_live.get("issue_2569", {}).get("state") != "closed":
+                failures.append("live_acceptance contradicts terminal evidence")
+            commands = observed_live.get("commands")
+            required_commands = {
+                "release-build", "ready-complete-pagination", "reconcile-idempotent",
+                "typed-graphql-project-visibility", "typed-graphql-project-id",
+                "typed-graphql-repository-policy", "typed-graphql-meter",
+                "typed-graphql-roster", "typed-graphql-archive-scan",
+                "immutable-promotion-replay", "public-nuget-clean-install", "installed-cli-help",
+            }
+            if not isinstance(commands, list) or len(commands) != 12 or len({row.get("name") for row in commands if isinstance(row, dict)}) != 12 or {row.get("name") for row in commands if isinstance(row, dict)} != required_commands or any(
+                not isinstance(row, dict) or row.get("observed_exit") != 0 or not HASH.fullmatch(str(row.get("stdout_sha256", "")))
+                for row in commands if isinstance(commands, list)
+            ):
+                failures.append("live evidence does not bind the exact successful new-only command matrix")
+            required_counts = {
+                "ready-complete-pagination": {"rows": 108},
+                "reconcile-idempotent": {"chores": 0},
+                "typed-graphql-roster": {"rows": 108},
+                "typed-graphql-archive-scan": {"pages": 2, "items": 108},
+            }
+            observed_counts = {
+                row.get("name"): row.get("counts") for row in commands if isinstance(row, dict) and "counts" in row
+            } if isinstance(commands, list) else {}
+            if observed_counts != required_counts:
+                failures.append("live evidence command counts do not prove 108-row complete reads and zero-chore idempotence")
+            commands_hash = hashlib.sha256(json.dumps(commands, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            if live.get("command_matrix_sha256") != commands_hash:
+                failures.append("live_acceptance command matrix digest contradicts terminal evidence")
+            searches = observed_live.get("same_class_searches")
+            search_prefix = ["gh", "search", "issues", "--repo", "FS-GG/.github", "--state", "open", "--match", "title,body", "--limit", "100", "--json", "number,title,url,updatedAt", "--"]
+            search_terms = ["graphql_complete_read", "raw GraphQL envelope", "GraphQL compatibility decoder"]
+            expected_searches = [{"command": search_prefix + [term], "results": []} for term in search_terms]
+            if searches != expected_searches:
+                failures.append("live evidence does not bind three empty same-class GitHub searches")
+            searches_hash = hashlib.sha256(json.dumps(searches, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            if live.get("same_class_searches_sha256") != searches_hash:
+                failures.append("live_acceptance same-class search digest contradicts terminal evidence")
     return failures
 
 

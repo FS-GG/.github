@@ -39,10 +39,6 @@ def complete_candidate() -> dict:
         "github_feed_observed": True, "nuget_feed_observed": True,
         "promoted": True, "adopted_and_pinned": True,
     })
-    candidate["live_acceptance"] = {
-        "exact_main_sha": sha, "new_only_smoke": True,
-        "same_class_open_issues": 0, "issue_2569_closed": True,
-    }
     return candidate
 
 

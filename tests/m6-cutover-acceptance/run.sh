@@ -6,7 +6,9 @@ python3 - "$ROOT" <<'PY'
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 
@@ -34,13 +36,15 @@ candidate["release"].update({
     "promoted": True,
     "adopted_and_pinned": True,
 })
-candidate["live_acceptance"] = {
-    "exact_main_sha": sha,
-    "new_only_smoke": True,
-    "same_class_open_issues": 0,
-    "issue_2569_closed": True,
-}
 assert module.validate(candidate, root) == [], module.validate(candidate, root)
+
+git_env = dict(os.environ, GIT_AUTHOR_NAME="M6 fixture", GIT_AUTHOR_EMAIL="m6-fixture@example.invalid",
+               GIT_COMMITTER_NAME="M6 fixture", GIT_COMMITTER_EMAIL="m6-fixture@example.invalid",
+               GIT_AUTHOR_DATE="2000-01-01T00:00:00Z", GIT_COMMITTER_DATE="2000-01-01T00:00:00Z")
+empty_tree = subprocess.check_output(["git", "mktree"], cwd=root, input=b"").decode().strip()
+unrelated_sha = subprocess.check_output(
+    ["git", "commit-tree", empty_tree], cwd=root, input=b"M6 unrelated ancestry fixture\n", env=git_env
+).decode().strip()
 
 with tempfile.TemporaryDirectory() as directory:
     temporary = Path(directory)
@@ -72,6 +76,7 @@ for name, mutate in seed_mutations.items():
     print(f"PASS {name}: {seed_failures[0]}")
 
 mutations = {
+    "terminal-status-pending": lambda d: d.update(status="pending"),
     "calendar-history-rewritten": lambda d: d["superseded_history"].update(disposition="passed"),
     "implementation-unbound": lambda d: d["implementation"].update(sha="0" * 40),
     "retired-path-returned": lambda d: d["deletion_inventory"]["absent_paths"].append("src/FS.GG.Coord.Core/StructuredDecision.fs"),
@@ -83,6 +88,11 @@ mutations = {
     "test-family-missing": lambda d: d.update(test_results=d["test_results"][1:]),
     "mutation-did-not-red": lambda d: d["mutation_results"][0].update(outcome="pass"),
     "release-not-promoted": lambda d: d["release"].update(promoted=False),
+    "release-source-unrelated": lambda d: d["release"].update(source_sha=unrelated_sha),
+    "live-main-unrelated": lambda d: d["live_acceptance"].update(verified_main_sha=unrelated_sha),
+    "release-source-wrong-direction": lambda d: d["release"].update(source_sha=d["implementation"]["base_sha"]),
+    "live-main-wrong-direction": lambda d: d["live_acceptance"].update(verified_main_sha=d["implementation"]["sha"]),
+    "live-command-fabricated": lambda d: d["live_acceptance"].update(commands=[{"command": ["fabricated"], "observed_exit": 0, "stdout_sha256": "0" * 64}]),
     "live-successor-open": lambda d: d["live_acceptance"].update(same_class_open_issues=1),
 }
 for name, mutate in mutations.items():
@@ -91,7 +101,37 @@ for name, mutate in mutations.items():
     failures = module.validate(changed, root)
     assert failures, f"{name}: mutation unexpectedly passed"
     print(f"PASS {name}: {failures[0]}")
-print(f"m6-cutover-acceptance fixture: positive plus {len(mutations)} fail-closed inversions passed")
+
+terminal_source = root / "docs/reports/evidence/2026-08-15-m6-terminal-live-release.json"
+terminal_mutations = {
+    "live-count-drift": lambda d: d["live"]["commands"][1]["counts"].update(rows=0),
+    "same-class-definition-drift": lambda d: d["live"]["same_class_searches"][0]["command"].__setitem__(-1, "nonsense"),
+}
+for name, mutate in terminal_mutations.items():
+    changed_terminal = json.loads(terminal_source.read_text())
+    mutate(changed_terminal)
+    changed = copy.deepcopy(candidate)
+    changed["live_acceptance"]["command_matrix_sha256"] = module.hashlib.sha256(
+        json.dumps(changed_terminal["live"]["commands"], sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    changed["live_acceptance"]["same_class_searches_sha256"] = module.hashlib.sha256(
+        json.dumps(changed_terminal["live"]["same_class_searches"], sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    with tempfile.TemporaryDirectory(dir=root / "tests/m6-cutover-acceptance") as directory:
+        path = Path(directory) / "terminal.json"
+        path.write_text(json.dumps(changed_terminal, sort_keys=True), encoding="utf-8")
+        relative = str(path.relative_to(root))
+        terminal_hash = module.digest(path)
+        binding = {"path": relative, "sha256": terminal_hash}
+        changed["release"]["evidence"] = binding
+        changed["live_acceptance"]["evidence"] = binding
+        live_row = next(row for row in changed["test_results"] if row["family"] == "live-new-only-smoke")
+        live_row["artifact"] = binding
+        live_row["stdout_sha256"] = terminal_hash
+        failures = module.validate(changed, root)
+        assert failures, f"{name}: mutation unexpectedly passed"
+        print(f"PASS {name}: {failures[0]}")
+print(f"m6-cutover-acceptance fixture: positive plus {len(mutations) + len(terminal_mutations)} fail-closed inversions passed")
 PY
 
 for inversion in \
@@ -109,9 +149,5 @@ for inversion in \
   printf '%s\n' "$output"
 done
 
-if python3 "$ROOT/scripts/m6-cutover-acceptance.py" \
-  "$ROOT/docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json" --root "$ROOT" >/dev/null 2>&1; then
-  echo "pending production evidence unexpectedly passed" >&2
-  exit 1
-fi
-echo "m6-cutover-acceptance pending evidence: correctly blocked until tests/release/live bindings exist"
+python3 "$ROOT/scripts/m6-cutover-acceptance.py" \
+  "$ROOT/docs/reports/evidence/2026-08-15-m6-cutover-acceptance.json" --root "$ROOT"
