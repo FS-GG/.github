@@ -15,6 +15,13 @@ is governed by `independent-review.md` and its own materiality standard — see 
 stated honestly* at the foot of this file, which settles who owns those findings. This paragraph
 settles the prior question of whether these tests reach them at all. They do not.
 
+**This rule was exercised before it merged, against its own author.** The independent critic reviewing
+the pull request that introduces this file raised a material finding about a paragraph *in this very
+change* — nothing red on `main`, since the change was unmerged. Under the unscoped reading, test 1
+would have answered "not red, therefore not a row" and the finding would have been suppressed. Under
+this paragraph it is out of scope for the tests entirely, so it went where it belonged: into that
+review's repair round. **The artifact governed its own review correctly, one round before it shipped.**
+
 ---
 
 ## Test 1 — Red today

@@ -157,20 +157,42 @@ would be describing a board that no longer exists**, which is why this output is
 rather than produced once as an argument for a change.
 
 **A closed past window is reproducible forever, and the earlier figure demonstrates both halves of why
-that matters.** Sweeping every hourly 24h window in that era against the live corpus, *net +12* comes
-back exactly — 43 opened, 31 closed — for the 24 hours ending `2026-08-14T05:00:00Z`, the endpoint the
-row's own 30-hour window names. The delta survived a day of further board activity untouched, because
-`created_at` and `closed_at` are timestamps and a later event simply falls outside the interval.
+that matters.** Sweeping every on-the-hour 24h window in that era against the live corpus, *net +12*
+comes back exactly — 43 opened, 31 closed — for the 24 hours ending `2026-08-14T05:00:00Z`, the
+endpoint the row's own 30-hour window names. The delta survived a day of further board activity
+untouched, because `created_at` and `closed_at` are timestamps and a later event simply falls outside
+the interval.
 
-Its companion clause did not survive. *"While 25 items landed"* reproduces **nowhere**: no 24h window
-anywhere in that sweep closed 25 issues, and the value at the matching endpoint is 31. The number is
-not wrong — it is almost certainly counting merged PRs or `Done` transitions rather than issue
-closures — but the row never says which, so it cannot be checked, and a reader re-deriving the reading
-gets a different answer and no way to tell whether the board changed or the definition did.
+Its companion clause did not survive. *"While 25 items landed"* names no unit, and at the row's own
+endpoint **no candidate unit produces 25** — on either the 24-hour or the 30-hour framing:
+
+| unit, at endpoint `2026-08-14T05:00:00Z` | 24h | 30h |
+| --- | --- | --- |
+| issues closed | 31 | 38 |
+| pull requests merged | 35 | 41 |
+| pull requests closed | 39 | 45 |
+
+So this is not an ambiguity between two known meanings that a reader could resolve by picking one. It
+is a number whose unit is **unrecoverable**: every quantity the phrase could plausibly denote is
+measured, and none of them is 25. A reader re-deriving the reading gets a different answer under every
+reading of the words and no way to tell whether the board changed or the definition did.
+
+**Bound a negative, or it is the same defect one level up — and this paragraph had to be repaired for
+exactly that.** An earlier draft said "25 reproduces *nowhere*", which is a universal claim over an
+unstated domain, in the section whose first rule is to state your window. Widen the sweep and it is
+false: across on-the-hour endpoints from `2026-08-11` to `2026-08-16` there is exactly one hit,
+`2026-08-15T18:00:00Z` at 17/25, and off-the-hour phases produce more. The claim that survives is the
+bounded one: **across the 66 on-the-hour 24h windows with endpoints from `2026-08-13T00:00:00Z` to
+`2026-08-15T17:00:00Z`, none closes 25 issues.** State the domain you searched, or your negative is
+exactly as unfalsifiable as the number you are criticising.
+
+And do not offer a mechanism you have not measured. That same draft guessed "almost certainly merged
+PRs or `Done` transitions", which the table above disproves on its first disjunct — the guess was the
+paragraph committing the error it was written to name.
 
 That is the whole discipline in one example: **the half that named its window and its unit came back
-identical a day later; the half that named neither is unfalsifiable.** State the window, and state
-what "landed" counts.
+identical a day later; the half that named neither cannot be checked under any reading.** State the
+window, state its bounds, and state what "landed" counts.
 
 Two structural pathologies are present and neither is a rate problem:
 
