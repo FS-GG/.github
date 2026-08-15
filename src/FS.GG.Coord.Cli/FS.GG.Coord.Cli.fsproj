@@ -167,27 +167,23 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.58.0 — M6 removes the old coordination authorities and cuts over to the structured, typed, manifest-bound implementation.
+    <PackageReleaseNotes>0.58.1 — the packed `pnext-item` merge-and-release table stops claiming that every merge performs the coherent-set release.
 
-WHAT MOVED, AND WHY IT IS A MINOR. Lifecycle reconciliation now has one intent reducer and v2 watermark;
-GraphQL has one typed errors-first boundary; route and review authorization use only digest-chained v2
-records; package publishers consume only prepared saga bytes; historical TRX evidence is retained by an
-immutable content-addressed release. Removed rollback, raw-envelope, prose-marker, body-hash, dry-run,
-and pre-saga paths cannot be selected. These are receiver-visible protocol and operational changes, so a
-minor bump is required.
+WHAT MOVED, AND WHY IT IS A PATCH. `merge-and-release.md` row 1 read the AUTOMATION'S TRIGGER and stated
+its ACT: `kit-auto-publish.yml` is `on: push: branches: [main]`, unfiltered, so the release was described
+as something the merge always performs and never something to declare. The program that workflow runs
+admits only a same-line PATCH bump (.github#2442) and terminally refuses a MINOR — which every
+coherent-set release is (.github#2402) — so on exactly the release that needs the most care, the workflow
+fires and cuts nothing. The table now states that distinction, and the CI gate that enforces its other
+half (`check-kit-published-coherence.py --obligation-arm`, not shipped in this package) now asks
+`kit-auto-publish.py` for its decision instead of inferring one from the trigger. This corrects a false
+clause in an existing description rather than opening a new receiver protocol boundary, so it is a patch.
 
-ACCEPTANCE. The owner explicitly replaced the unelapsed three-week gate with a fail-closed comprehensive
-cutover: broad Core/CLI/GitHub and engine suites, replay/parity/write/e2e, typed-boundary and decision
-inversions, release-saga failure/resume/byte-drift tests, evidence download verification, exact-main live
-smoke, empty successor census, and coherent-set promotion/adoption. Historical calendar evidence remains
-recorded as blocked and is not reinterpreted.
-
-RELEASE SAGA. The coherent set is packed once at one source SHA into a content-addressed manifest.
-The package-owning workflows retain their trusted-publishing identities but consume those exact
-prepared bytes, publish GitHub Packages first and nuget.org second, and never re-pack on retry. A
-separate observer records externally served archive and payload hashes, durable retry/recovery state,
-and promotes the stable release only after both feeds serve all three members. A forced failure after
-the first irreversible push proves restart from the same manifest and rejects byte drift.
+WHAT A READER OF THE SKILL SHOULD DO DIFFERENTLY. On a next-patch candidate, nothing: the release is
+automatic and the obligation to declare is still `kind=release-verification`. On a coherent-set MINOR,
+declare the release you are actually performing, with the token that names it — `coherent-set-release`
+and its artifact-specific spellings are accepted there now (.github#2571). The previously-taken third
+option, an unmapped token chosen to get past the gate, was never legitimate and is now unnecessary.
 
 WHY THIS PACKAGE MOVES WITH THE KIT. The three packages resolve one scalar (`FsggCoherentSetVersion`,
 `Directory.Build.props`) by construction (.github#2402), so the coordination engine and drivers ship

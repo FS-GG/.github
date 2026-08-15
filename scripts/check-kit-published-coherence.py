@@ -314,11 +314,56 @@ halves of the join are one contract rather than two lists that can drift. The wo
 restated — the arm opens the workflow file and reads its `on:` block, and a declaration is flagged
 only if that trigger really does fire on a merge into `main`.
 
+A TRIGGER IS NOT AN ACT (.github#2571), AND THAT WAS THIS ARM'S FIRST DEFECT. The paragraph above was
+the whole rule until 2026-08-15, and it is only half of one. `kit-auto-publish.yml` does fire on every
+merge into `main` — and the program it runs, `kit-auto-publish.py`, deliberately admits ONLY a same-line
+PATCH bump (.github#2442) and terminally refuses a MINOR with `candidate-not-next-patch`. Every
+coherent-set release is a minor by design (.github#2402). So on exactly the release that needs the most
+care, the workflow fires and cuts nothing: the release is manual, it is genuinely owed, and this arm
+refused every token that named it. The three ways out were all bad — mislabel the `kind` to an unmapped
+token (which is choosing a word to evade a control, and .github#2527 / PR #2532 shipped that route with
+no row and no disclosure), declare nothing (and red `main` until someone notices), or leave the PR red.
+
+So the arm now asks BOTH halves, and the second half is READ, exactly like the first: it loads
+`kit-auto-publish.py` and calls its own `decide()`. Nothing about .github#2442's rail is restated here,
+so the rail can move with nothing to update in the join table — the same property the workflow half was
+built for.
+
+WHAT IT ASKS `decide()` ABOUT IS A SET OF WORLDS, NOT ONE, and the first draft of this repair got that
+wrong in a way worth recording (round-1 repair on .github#2571). It supplied the `<Version>` this merge
+would publish and the frontier measured NOW, pinned every unknowable post-merge fact to its most
+permissive value, and claimed the resulting verdict held on "any post-merge state of the world". The
+frontier is not a constant: it advances between this gate running and the merge landing, `decide()`'s
+rail is `candidate.patch == frontier.patch + 1`, and a forward move flips `candidate-not-next-patch`
+into `tag`. Candidate `0.58.3` refuses against an observed `0.58.0` and tags against `0.58.2`. A false
+one-directional invariant, inside the fail-closed control guarding an irreversible double-publish, is
+.github#2533's own defect one level down.
+
+The arm therefore ENUMERATES the reachable worlds and takes the disjunction: the act is manual only if
+`decide()` declines in every one of them. `kit_auto_publish_completions` owns that set — the observed
+frontier and, when the current rail has one and the feed has not already passed it, the frontier that
+would admit this candidate — and states why each unvaried fact is uniquely permissive. THAT THE SET IS
+COMPLETE IS MEASURED, NOT CLAIMED: `tests/kit-published-coherence/run.sh` sweeps a grid of candidates and
+observed frontiers, brute-forces over every reachable frontier and over the facts this builder pins, and
+asserts the two agree on every pair — with an inversion leg that re-pins the frontier and proves the
+sweep reds. The sentence this replaced was a claim no test could falsify, which is why it survived.
+
+THE CONTROLLED COUNTERPART OF THE COUNTERPART. A PATCH-line candidate declaring a performance
+obligation is still flagged — the fixture asserts the minor and patch legs side by side against one
+another, because a change that merely stopped flagging things would have disarmed .github#2533 rather
+than corrected it.
+
 FAILS CLOSED, and the map cannot rot in silence. Every mapped workflow is opened and its triggers
 parsed on EVERY run, even when this PR declares nothing: a renamed, deleted, or unparseable workflow
-is a no-verdict RED, not an arm that quietly matches nothing. A comment that opens with the
-declaration marker but does not parse is a no-verdict too, rather than a second opinion about why —
-`DeliveryApplication.fs` owns that diagnosis.
+is a no-verdict RED, not an arm that quietly matches nothing. Every mapped DECISION PROGRAM is loaded
+on every run too, for the identical reason — a renamed or broken `kit-auto-publish.py` must not leave
+the arm silently back on the trigger-only rule. Loading is local and free; the observation the decision
+needs (an MSBuild evaluation and one nuget.org read) is deferred until a mapped kind is actually
+declared, so an unrelated PR pays neither. A candidate whose decision cannot be evaluated — an
+unreadable version, an unreachable feed, a `decide()` that raises or returns an action this file does
+not classify — is a no-verdict RED, never a pass. A comment that opens with the declaration marker but
+does not parse is a no-verdict too, rather than a second opinion about why — `DeliveryApplication.fs`
+owns that diagnosis.
 
 WHAT IT CANNOT ASSERT, stated here rather than discovered later (#266):
 
@@ -330,6 +375,20 @@ WHAT IT CANNOT ASSERT, stated here rather than discovered later (#266):
     diff, and "cannot tell" must not merge. No mapped workflow carries one today.
   * It does not check that a declared obligation is CORRECT, complete, or discharged. That is the
     engine's `delivery` path. Its one question is whether the act named is one the merge performs.
+  * IT DOES NOT PREDICT WHAT `decide()` WILL ANSWER AFTER THE MERGE. It answers the strictly weaker
+    question that is sound in the direction that matters: COULD the merge cut this, on any world still
+    reachable from the one observed. A "not performed" verdict therefore holds whatever happens between
+    now and the merge — including a frontier that advances, which the first draft of this arm's
+    decision half did NOT hold for. A "performed" verdict does not promise the tag will actually be
+    cut, only that this arm cannot rule it out, and flagging is the safe side of that: a candidate that
+    clears the rail here can still be refused later by a fact that moved (someone republishes, a
+    sibling tag appears), and the obligation the author was told to write as VERIFICATION is exactly
+    what surfaces that.
+  * ITS COMPLETENESS IS PROVED AGAINST THE RAIL AS WRITTEN, NOT AGAINST EVERY RAIL. The enumerated set
+    of reachable worlds is exact for the frontier rule `kit-auto-publish.py` implements today, and the
+    fixture's brute-force sweep is what establishes that rather than a comment. Reshape the rail so
+    that some other frontier admits a candidate and the sweep goes RED naming the pair — which is the
+    point of grading it there rather than asserting it here.
   * IT CANNOT TELL "THIS PR HAS NO COMMENTS" FROM "I READ NOTHING", and no arrangement of this file
     can. An empty comment list is a legal state, so `[]` is a legal subject; an unreadable,
     unparsable or non-list payload is a no-verdict RED, but an empty one is a green. The guarantee
@@ -349,7 +408,8 @@ Usage:  scripts/check-kit-published-coherence.py [--lock registry/repos.lock]
 `--fixture-manifest <tsv> --canonical-manifest <tsv>` compares canned manifests and refuses to run
 unless FSGG_KIT_COHERENCE_FIXTURE_OK=1 — which only tests/kit-published-coherence/ sets. A test hook
 that can silently turn the gate into a no-op is the very defect class above. The PR arm's canned
-inputs (`--changed-files`, `--kit-sources`, `--published-version`) are locked behind the same switch,
+inputs (`--changed-files`, `--kit-sources`, `--published-version`) and the obligation arm's
+(`--obligation-candidate-version`, `--obligation-published-version`) are locked behind the same switch,
 for the same reason: each one of them, left open, is a way to make the arm answer without reading its
 subject.
 
@@ -374,6 +434,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 
 # Shared feed reader + NuGet version ordering (.github#263) — one implementation of "what does the
@@ -424,11 +485,145 @@ class MergeAutomation:
     trigger that stops being a merge trigger stops flagging declarations with nothing to update here.
     A workflow that cannot be opened or parsed is a no-verdict RED on every run, which is what stops
     this table rotting silently when a file is renamed or deleted.
+
+    `decision` and `facts` are the SECOND half of that read, and .github#2571 is why they exist. A
+    TRIGGER is not an ACT. `kit-auto-publish.yml` fires on every merge into `main`, but the program it
+    runs admits ONLY a same-line patch bump (.github#2442) and terminally refuses a coherent-set MINOR
+    with `candidate-not-next-patch` — a version line every coherent-set release produces. On such a
+    candidate the workflow fires and cuts nothing: the release is genuinely manual, genuinely owed, and
+    under the trigger-only rule its author had no declarable token for it, because every kind that
+    NAMES the act was flagged. `decision` names the program whose `decide()` answers "does the act
+    HAPPEN", and `completions` turns the two observable candidate facts into the post-merge states of
+    the world to ask it about. Like `workflow`, `decision` is opened on every run and never restated,
+    so .github#2442's rail can move with nothing to update in this table.
     """
 
     workflow: str
     kinds: frozenset[str]
     performs: str
+    decision: str | None = None
+    completions: Callable[[object, str, str], "list[Completion]"] | None = None
+
+
+@dataclass(frozen=True)
+class Completion:
+    """One post-merge state of the world this arm asks the mapped `decide()` about.
+
+    `frontier` is the feed frontier this state assumes and `hypothetical` says whether that is the one
+    measured now or one the feed could still reach before the merge. Carrying both means a finding can
+    say WHICH world it is talking about instead of quoting a number that was never observed.
+    """
+
+    frontier: str
+    hypothetical: bool
+    facts: dict
+
+
+def _kit_auto_publish_facts(candidate: str, frontier: str) -> dict:
+    """The permissive completion of everything EXCEPT the frontier, which the caller varies.
+
+    Only two of `kit-auto-publish.decide()`'s inputs are knowable while the PR is open: the `<Version>`
+    this merge would publish, and the feed frontier it would publish above. Everything else is a POST-
+    merge observation — was the commit merge-reachable, did the PR arm pass, are the feeds absent, does
+    a tag already exist, do the sibling tags agree. A fact set that guessed one of those wrong in the
+    permissive direction would report an automated act as manual, which is the .github#2533 fail-open
+    this arm exists to prevent.
+
+    So it does not guess: each is pinned to the value that MOST FAVOURS "the merge performs the act",
+    and each choice is uniquely permissive rather than merely plausible —
+
+      * `provenance` — the only shape that clears `merged-pr-provenance-missing` and `pr-arm-not-passed`.
+      * `orgFeed`/`nugetFeed` both `absent` — the ONLY equal pair that reaches the frontier comparison
+        and can end in a tag. `present`/`present` ends at `openEvidencePr` or a sticky escalation
+        (nothing is cut), and an unequal pair is `partial-publish-stop-no-retry`.
+      * `tagExists: false` and both `siblingTags` empty — reaches `tag`. (The `tagExists: true` branch
+        with a sibling missing reaches `tagSiblings`, which is also an act; both are permissive, so the
+        choice between them changes no verdict. A NON-empty mismatching sibling would not be.)
+      * `sourceSha` — any non-empty string; the sibling comparison it feeds is vacuous when every
+        sibling is empty. It is deliberately a legible synthetic token rather than a plausible commit,
+        so a reader of a fact dump cannot mistake it for something that was measured.
+
+    `version` is supplied as measured and is NOT varied, because it is not free: it is a property of
+    this PR's own head, and it cannot move without a push that re-runs this gate against the new one.
+    The frontier is the opposite — see `kit_auto_publish_completions`.
+    """
+    return {
+        "version": candidate,
+        "provenance": {
+            "mergedReachable": True,
+            "introducedVersion": candidate,
+            "prArm": "pass",
+        },
+        "orgFeed": "absent",
+        "nugetFeed": "absent",
+        "orgLatest": frontier,
+        "nugetLatest": frontier,
+        "tagExists": False,
+        "siblingTags": {"drivers": "", "coordEngine": ""},
+        "sourceSha": "0000000000000000000000000000000000000000",
+    }
+
+
+def kit_auto_publish_completions(module, candidate: str, observed: str) -> list[Completion]:
+    """Every post-merge world this arm must rule out before it calls an act MANUAL.
+
+    THE FRONTIER IS NOT A CONSTANT, AND PINNING IT TO THE OBSERVED VALUE WAS THIS FUNCTION'S OWN
+    .github#2533 (round-1 repair on .github#2571). The first draft supplied the measured frontier and
+    nothing else, and claimed the resulting verdict held on "ANY post-merge state of the world". It did
+    not. `decide()`'s rail is `candidate.patch == frontier.patch + 1`, the feed frontier moves FORWARD
+    between this gate running and the merge landing, and a forward move can therefore flip a candidate
+    from `candidate-not-next-patch` into `tag`. Measured on this file's own head: candidate `0.58.3`
+    against observed frontier `0.58.0` refuses, and the same candidate against `0.58.2` — which any
+    intervening patch release produces — tags. Over a bounded sweep of monotone-forward completions the
+    observed-only builder was unsound on 78 of 225 (candidate, observed) pairs. A false one-directional
+    invariant inside the control guarding an irreversible double-publish is the exact shape .github#2533
+    measured, one level down.
+
+    So the frontier is not pinned; it is ENUMERATED, and `merge_performs_act` takes the disjunction. A
+    state is included when the feed can still reach it, which for a monotonically-forward frontier means
+    `>= observed`:
+
+      * the OBSERVED frontier — the world as it stands, and deliberately FIRST so that a "not performed"
+        finding quotes the reason an author can check against the live feed rather than a hypothetical.
+      * the ADMITTING frontier `(minor, patch - 1)`, when the current rail has one (a candidate with
+        `patch == 0` — every coherent-set MINOR — has none, which is why the minor line is unperformed
+        on every reachable frontier rather than merely on this one) and when it is still reachable
+        (`>= observed`; a frontier already past it cannot come back).
+
+    THAT SET IS COMPLETE FOR THE RAIL AS WRITTEN, AND THAT COMPLETENESS IS MEASURED RATHER THAN CLAIMED
+    — which is the part that matters, because the sentence this repair replaced was a claim no test
+    could falsify. `tests/kit-published-coherence/run.sh` sweeps a bounded grid of candidates and
+    observed frontiers, computes by BRUTE FORCE over every reachable frontier (and over `tagExists` and
+    both feed-presence states, which this builder pins) whether ANY of them performs, and asserts this
+    function's disjunction agrees on every pair. If .github#2442's rail is ever reshaped so that some
+    OTHER frontier admits a candidate, that sweep reds and names the pair — it does not quietly go on
+    being wrong. Its own inversion leg re-pins the frontier to the observed value and proves the sweep
+    reds when the completion is un-pinned again.
+
+    `patch_tuple` is read from the mapped program rather than restated, for the same reason `decide()`
+    is: the set of reachable frontiers has to be expressed in the rail's OWN notion of a version, or the
+    two could disagree about what "forward" means.
+    """
+    completions = [Completion(observed, False, _kit_auto_publish_facts(candidate, observed))]
+    patch_tuple = getattr(module, "patch_tuple", None)
+    if not callable(patch_tuple):
+        raise GateError(
+            f"the mapped decision program exposes no callable `patch_tuple` — this arm reads it to "
+            f"enumerate the frontiers the feed can still reach, and will not substitute its own copy "
+            f"of the rail's version grammar."
+        )
+    here, there = patch_tuple(candidate), patch_tuple(observed)
+    # A candidate or frontier the rail's own grammar refuses needs no enumeration: `decide()` ends at
+    # `version-not-stable-0x-patch` or `feed-frontier-unknown` on the observed world, and a frontier
+    # that moves FORWARD from an unparsable one stays unparsable, so that refusal is stable.
+    if here and there and here[1] >= 1:
+        admitting = (here[0], here[1] - 1)
+        if admitting > there:
+            frontier = f"0.{admitting[0]}.{admitting[1]}"
+            completions.append(
+                Completion(frontier, True, _kit_auto_publish_facts(candidate, frontier))
+            )
+    return completions
 
 
 MERGE_AUTOMATION: tuple[MergeAutomation, ...] = (
@@ -452,8 +647,22 @@ MERGE_AUTOMATION: tuple[MergeAutomation, ...] = (
             "cuts kit/v<version>, coord-engine/v<version> and drivers/v<version> at the merge commit "
             "and starts release-kit / release-coord-engine / release-drivers"
         ),
+        decision="scripts/kit-auto-publish.py",
+        completions=kit_auto_publish_completions,
     ),
 )
+
+# `kit-auto-publish.decide()`'s actions that CUT NOTHING, listed as an allow-list rather than naming
+# the two that do (.github#2571). The direction is the whole point. Reading an act as PERFORMED when it
+# is not costs a legitimate obligation its declarable token — annoying, visible, and repaired in one
+# edit. Reading it as NOT PERFORMED when it is restores .github#2533's defect: a manual release
+# obligation sails through, a worker discharges it after the automation already ran, and .github#2240's
+# two-of-three sets are the standing cost. So the safe default for an action nobody here anticipated is
+# "the merge performs it", and an action that is neither in this set nor a known act is a NO-VERDICT
+# (see `merge_performs_act`) rather than a silent verdict in either direction.
+_DECISION_CUTS_NOTHING = frozenset({"refuse", "stickyEscalate", "openEvidencePr"})
+# The actions that DO write a tag, and therefore perform the act a declaration must not claim.
+_DECISION_PERFORMS = frozenset({"tag", "tagSiblings"})
 
 # The engine's own filter, restated here because this arm must agree with it rather than hold a
 # second opinion about what a declaration is — and since .github#2563 that agreement is MECHANICAL
@@ -1869,6 +2078,169 @@ def merge_triggers_workflow(triggers: dict, path: str) -> bool:
     return True  # `push:` with no branch filter at all — every branch, `main` included.
 
 
+def _guarded(what: str, call):
+    """Run ONE interaction with a loaded decision program behind this arm's fail-closed boundary.
+
+    EVERY line that reaches into a program this arm loaded goes through here, and that is the whole
+    point of the function existing rather than three `try` blocks (.github#2571 round-2 repair). The
+    guard was applied by discipline at each site instead, and the discipline failed twice in a row for
+    the same reason: `import`ing a program to ask it a question makes ANY touch of it — an import, an
+    attribute lookup, a call — a place its code runs, and a reviewer checking "is this call guarded"
+    must first notice that a line is a call at all. `getattr(module, "decide", None)` does not look
+    like one. Neither does handing `module` to a builder that will call something off it. One named
+    boundary can be audited by grepping for the sites that do NOT use it.
+
+    `BaseException`, not `Exception`, and not defensive breadth: `SystemExit` is a `BaseException`, so
+    a decision program that calls `sys.exit(0)` — at import, from a PEP 562 `__getattr__`, or inside
+    the function being called — propagates straight out of this gate and EXITS IT ZERO, greening the
+    arm on a program it never usefully read. Every measured instance of that here printed NOTHING at
+    all, which is the worst possible shape for a control: a pass that leaves no trace of not having
+    looked. A `GateError` raised INSIDE the guarded region is this file's own typed verdict and passes
+    through unwrapped; everything else becomes one.
+    """
+    try:
+        return call()
+    except GateError:
+        raise
+    except BaseException as e:  # noqa: BLE001 — see the docstring; `SystemExit` is the point.
+        raise GateError(f"{what}: {e!r}") from e
+
+
+def decision_function(path: str):
+    """One mapped automation's decision program, LOADED from its own source file (.github#2571).
+
+    Loaded, never reimplemented, and never summarised in a table here: the rule this arm needs is
+    "would the merge actually cut anything for THIS candidate", and the only correct statement of that
+    rule is the program the workflow runs. `.github#2442`'s frontier rail is a maintainer decision that
+    is expected to be revisited; a copy of it here would be a second opinion that goes stale the day it
+    changes, which is the drift `MERGE_AUTOMATION`'s workflow half already refuses to have.
+
+    The file name carries a hyphen, so it is not importable by module name; it is loaded by path. The
+    module is registered in `sys.modules` before execution because a module object absent from there
+    breaks `dataclasses`' own type resolution on 3.12+ if the loaded file ever grows a dataclass.
+
+    Unreadable, unparsable, or missing a callable `decide` is a GateError — the SAME fail-closed
+    posture, for the same reason, as a mapped workflow that cannot be opened. This half of the map must
+    not be able to rot into silence either.
+    """
+    import importlib.util
+
+    if not os.path.exists(path):
+        raise GateError(
+            f"cannot read the mapped decision program {path!r}: no such file. MERGE_AUTOMATION names "
+            f"it as the program that decides whether the merge actually performs a declarable act, so "
+            f"a program this arm cannot load is a no-verdict — never an arm that assumes the act "
+            f"happens or that it does not (renamed? deleted? update MERGE_AUTOMATION and "
+            f"merge-and-release.md's table together)."
+        )
+    spec = importlib.util.spec_from_file_location(
+        "fsgg_merge_decision_" + re.sub(r"\W", "_", path), path
+    )
+    if spec is None or spec.loader is None:
+        raise GateError(f"cannot load the mapped decision program {path!r} as a Python module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    _guarded(
+        f"the mapped decision program {path!r} failed to load",
+        lambda: spec.loader.exec_module(module),
+    )
+    # THE ATTRIBUTE LOOKUP IS ITSELF A CALL INTO THAT PROGRAM, and it is guarded for that reason
+    # (.github#2571 round-2 repair). A module may define a module-level `__getattr__` (PEP 562), so
+    # `getattr(module, "decide", None)` executes the program's code — and the three-argument form
+    # swallows only `AttributeError`, so a `__getattr__` that calls `sys.exit(0)` propagated straight
+    # out of this gate and EXITED IT ZERO. Measured: with such a program in place the arm printed
+    # NOTHING and returned 0 on every subject, including a PR declaring nothing at all — so the hole
+    # defeated the unconditional map-rot read itself, which is the one thing that read exists to make
+    # impossible.
+    decide = _guarded(
+        f"reading `decide` from the mapped decision program {path!r} failed",
+        lambda: getattr(module, "decide", None),
+    )
+    if not callable(decide):
+        raise GateError(
+            f"{path} exposes no callable `decide` — this arm reads that function to learn whether the "
+            f"merge performs the act, and cannot substitute its own copy of the rule."
+        )
+    return module
+
+
+def merge_performs_act(
+    automation: MergeAutomation, *, candidate: str, frontier: str
+) -> tuple[bool, Completion, dict]:
+    """Can merging this PR CUT the act, on any post-merge world still reachable? (.github#2571)
+
+    Returns (performed, completion, decision) — the world the answer came from and `decide()`'s own
+    verdict in it, carried out so a finding can quote the action, reason and scope note it produced
+    rather than paraphrase them, and can name the frontier it actually scored against.
+
+    THE ANSWER IS A DISJUNCTION, NOT A SINGLE EVALUATION, and that is this function's round-1 repair on
+    .github#2571. "The merge performs this act" has to mean "the merge COULD perform this act", because
+    the world moves between a PR-time gate and a merge: the feed frontier advances, and the rail
+    `decide()` applies is a function of it. Ruling the act manual therefore means ruling out every
+    reachable world, so the first performing completion wins and only an all-declining sweep returns
+    False. `kit_auto_publish_completions` owns which worlds those are and why the set is complete.
+
+    A "not performed" answer is reported from the FIRST completion — the observed world — so the reason
+    an author reads is the one they can check against the live feed.
+
+    An action this file recognises as neither cutting nor not-cutting is a GateError. That is not
+    pedantry: `decide()` gaining a sixth action is exactly when a silent assumption here would be
+    wrong, and 'cannot tell' must not merge (#266).
+    """
+    assert automation.decision and automation.completions  # guarded at load; see `_assert_map`
+    module = decision_function(automation.decision)
+    # Guarded because the builder reaches into the loaded program — it reads and CALLS that program's
+    # own `patch_tuple` (.github#2571 round-2 repair). This call is the one the round-1 repair added,
+    # and it went in outside the boundary: a `patch_tuple` raising `SystemExit(0)` made the whole arm
+    # exit 0 in silence, and one raising anything else printed a raw traceback instead of a verdict.
+    completions = _guarded(
+        f"{automation.decision}'s reachable-world enumeration failed for {PACKAGE} {candidate} "
+        f"against frontier {frontier}",
+        lambda: automation.completions(module, candidate, frontier),
+    )
+    if not completions:
+        raise GateError(
+            f"{automation.decision}'s completion builder produced NO post-merge world to score. An "
+            f"empty sweep declines by vacuity, which is a pass this arm must never reach by accident."
+        )
+    declined: list[tuple[Completion, dict]] = []
+    for completion in completions:
+        decision = _guarded(
+            f"{automation.decision}'s decide() raised on the candidate fact set "
+            f"(frontier {completion.frontier})",
+            lambda: module.decide(completion.facts),
+        )
+        if not isinstance(decision, dict) or not isinstance(decision.get("action"), str):
+            raise GateError(
+                f"{automation.decision}'s decide() returned {decision!r}, which carries no string "
+                f"`action` — this arm cannot tell whether the merge performs the act."
+            )
+        action = decision["action"]
+        if action in _DECISION_PERFORMS:
+            return True, completion, decision
+        if action not in _DECISION_CUTS_NOTHING:
+            raise GateError(
+                f"{automation.decision}'s decide() returned the action {action!r}, which this arm "
+                f"classifies as neither performing the act nor declining to. Add it to "
+                f"_DECISION_CUTS_NOTHING or _DECISION_PERFORMS in this file — deliberately, because "
+                f"guessing in the permissive direction is how .github#2533's defect comes back."
+            )
+        declined.append((completion, decision))
+    return (False, *declined[0])
+
+
+def _assert_map() -> None:
+    """`decision` and `completions` are both-or-neither: a half-declared row would skip the check."""
+    for automation in MERGE_AUTOMATION:
+        if bool(automation.decision) != bool(automation.completions):
+            raise GateError(
+                f"MERGE_AUTOMATION row for {automation.workflow} declares only one of "
+                f"`decision`/`completions`; a row with a decision program but no completion builder "
+                f"(or the reverse) would silently fall back to the trigger-only rule .github#2571 "
+                f"replaced."
+            )
+
+
 @dataclass(frozen=True)
 class Declaration:
     """One parsed `fsgg:delivery-obligation` declaration from this PR's comments."""
@@ -1937,14 +2309,33 @@ def obligation_declarations(comments_path: str) -> tuple[list[Declaration], int]
     return declarations, len(bodies)
 
 
-def run_obligation_arm(*, comments_path: str) -> int:
-    """The .github#2533 rule. Exit 0 = no declared obligation names an act the merge performs."""
+def run_obligation_arm(
+    *,
+    comments_path: str,
+    csproj_path: str,
+    canned_candidate: str | None = None,
+    canned_published: str | None = None,
+) -> int:
+    """The .github#2533 rule as .github#2571 corrected it.
+
+    Exit 0 = no declared obligation names an act that merging THIS PR performs. Two conditions have to
+    hold for an act to be performed, and only the first of them used to be asked: the merge must START
+    the automation (its `on:` block), and the automation must then CUT something for this candidate
+    (its own `decide()`). A coherent-set MINOR fires `kit-auto-publish.yml` and is terminally refused
+    by `kit-auto-publish.py`, so the release is real, manual and owed — and under the trigger-only rule
+    every token naming it was flagged, leaving its author the three bad options .github#2571 lists.
+    """
+    _assert_map()
     # Read the whole map FIRST, on every run, declarations or not: a mapped workflow that has been
     # renamed away is the way this table rots into silence, and silence is the defect. Parsing is
     # unconditional; only the VERDICT on an unanswerable trigger is deferred, so an unrelated PR is
-    # not held on a question it never asked.
+    # not held on a question it never asked. The DECISION half is read unconditionally for exactly the
+    # same reason (.github#2571) — a renamed or broken `kit-auto-publish.py` must be a no-verdict, not
+    # an arm that silently falls back to trusting the trigger. Loading it is local and free; only the
+    # observation it needs (msbuild + the feed) is deferred until a declaration makes it load-bearing.
     parsed: dict[str, dict] = {}
     triggered: dict[str, bool] = {}
+    decided: list[str] = []
     for automation in MERGE_AUTOMATION:
         parsed[automation.workflow] = workflow_triggers(automation.workflow)
         try:
@@ -1953,11 +2344,26 @@ def run_obligation_arm(*, comments_path: str) -> int:
             )
         except GateError:
             triggered[automation.workflow] = True
+        if automation.decision:
+            decision_function(automation.decision)
+            decided.append(automation.decision)
 
     declarations, considered = obligation_declarations(comments_path)
     mapped = {kind: a for a in MERGE_AUTOMATION for kind in a.kinds}
 
+    # The candidate's two observable facts, read AT MOST ONCE and only when a declaration actually
+    # turns on them. `dotnet msbuild` and a nuget.org round-trip are not costs an unrelated PR should
+    # pay, and the pr-arm applies the same discipline ("the feed was not read").
+    observed: dict[str, str] = {}
+
+    def observe() -> tuple[str, str]:
+        if not observed:
+            observed["candidate"] = canned_candidate or declared_kit_version(csproj_path)
+            observed["frontier"] = canned_published or newest_published_stable()
+        return observed["candidate"], observed["frontier"]
+
     findings: list[str] = []
+    declined: list[str] = []
     for declaration in declarations:
         automation = mapped.get(declaration.kind)
         if automation is None:
@@ -1966,13 +2372,50 @@ def run_obligation_arm(*, comments_path: str) -> int:
         # tell" must red rather than pass, so the GateError is deliberately NOT caught here.
         if not merge_triggers_workflow(parsed[automation.workflow], automation.workflow):
             continue
+        decision = None
+        if automation.decision:
+            candidate, frontier = observe()
+            performs, completion, decision = merge_performs_act(
+                automation, candidate=candidate, frontier=frontier
+            )
+            # The world the verdict came from, named exactly. A hypothetical frontier quoted as if it
+            # were measured would send an author to the feed to check a number that is not there.
+            world = (
+                f"feed frontier {completion.frontier}"
+                if not completion.hypothetical
+                else (
+                    f"frontier {completion.frontier} — not the {frontier} on the feed now, but one it "
+                    f"can still reach before this merges, and the feed only moves forward"
+                )
+            )
+            if not performs:
+                note = decision.get("note")
+                declined.append(
+                    f"    obligation id={declaration.id} kind={declaration.kind}\n"
+                    f"      {automation.workflow} IS merge-triggered, but "
+                    f"{automation.decision} decides `{decision['action']}` "
+                    f"({decision.get('reason', '(no reason)')}) for {PACKAGE} {candidate} against "
+                    f"{world} — and against every other frontier the feed can still reach. It fires "
+                    f"and cuts nothing, so this act is yours."
+                    + (f"\n      {note}" if note else "")
+                )
+                continue
         findings.append(
             f"    obligation id={declaration.id} kind={declaration.kind}\n"
             f"      performed by {automation.workflow}, which {automation.performs}"
+            + (
+                ""
+                if decision is None
+                else (
+                    f"\n      {automation.decision} decides `{decision['action']}` "
+                    f"({decision.get('reason', '(no reason)')}) for {PACKAGE} "
+                    f"{observed['candidate']} against {world} — the merge can cut this one."
+                )
+            )
         )
 
     if not findings:
-        return _obligation_ok(declarations, considered, mapped, triggered)
+        return _obligation_ok(declarations, considered, mapped, triggered, decided, declined)
 
     print(
         f"::error::check-kit-published-coherence: this PR declares {len(findings)} post-merge "
@@ -2001,6 +2444,8 @@ def _obligation_ok(
     considered: int,
     mapped: dict[str, MergeAutomation],
     triggered: dict[str, bool],
+    decided: list[str],
+    declined: list[str],
 ) -> int:
     """The green line, which must say what was MEASURED — not merely that nothing was found."""
     automated = sorted(w for w, fires in triggered.items() if fires)
@@ -2014,6 +2459,15 @@ def _obligation_ok(
             f"{DEFAULT_BRANCH} and therefore flag nothing: {', '.join(manual)}."
         )
     )
+    read = (
+        f" {len(triggered)} workflow(s) were opened and their `on:` blocks parsed on this run"
+        + (
+            f", and {len(decided)} decision program(s) ({', '.join(sorted(decided))}) were loaded"
+            if decided
+            else ""
+        )
+        + "."
+    )
     if not declarations:
         print(
             f"ok: this PR's {considered} comment(s) carry no `fsgg:delivery-obligation` declaration, "
@@ -2022,11 +2476,26 @@ def _obligation_ok(
             f"`scripts/fsgg-coord delivery`'s question, not this arm's.{note}"
         )
         return 0
+    # .github#2571's leg, and it is a DIFFERENT green from the one below: the kind DOES name a mapped
+    # act and the workflow IS merge-triggered — the obligation survives because the program that
+    # workflow runs declines to cut anything for this candidate. Saying so is the whole point. An
+    # author who reads "name no act that merging this PR performs" for a `coherent-set-release` would
+    # reasonably conclude the gate had stopped looking.
+    if declined:
+        print(
+            f"ok: {len(declined)} declared obligation(s) name a mapped act that merging this PR "
+            f"does NOT perform for the version it ships, so they are declarable and owed:\n"
+            + "\n".join(declined)
+            + f"\nThis is .github#2571. A TRIGGER IS NOT AN ACT: the workflow fires on every merge "
+            f"into {DEFAULT_BRANCH}, and what it then does is that program's decision, read here "
+            f"rather than assumed.{read}{note}"
+        )
+        return 0
     print(
         f"ok: {len(declarations)} declared obligation(s) "
         f"({', '.join(sorted(d.kind for d in declarations))}) name no act that merging this PR "
-        f"performs. The kinds that WOULD be flagged are: {kinds} — read from MERGE_AUTOMATION, whose "
-        f"{len(triggered)} workflow(s) were opened and their `on:` blocks parsed on this run.{note}"
+        f"performs. The kinds that WOULD be flagged are: {kinds} — read from MERGE_AUTOMATION, whose"
+        f"{read}{note}"
     )
     return 0
 
@@ -2107,6 +2576,16 @@ def main(argv: list[str]) -> int:
         "a fetch that read nothing. Whoever produces this file owes the guarantee that it was "
         "actually read — see the caller's own note in kit-published-coherence.yml.",
     )
+    ap.add_argument(
+        "--obligation-candidate-version",
+        help="the <Version> this PR would publish, canned (tests only). Live, the obligation arm "
+        "evaluates it from --csproj exactly as the PR arm does.",
+    )
+    ap.add_argument(
+        "--obligation-published-version",
+        help="the newest published kit the candidate would publish above, canned (tests only). Live, "
+        "the obligation arm reads nuget.org — and only when a mapped kind is actually declared.",
+    )
     args = ap.parse_args(argv)
 
     # EVERY canned input is locked behind the SAME switch as --fixture-manifest, and for the same
@@ -2124,8 +2603,18 @@ def main(argv: list[str]) -> int:
         "--tag-arm-published": args.tag_arm_published or None,
         "--tag-arm-tags": args.tag_arm_tags or None,
     }
+    # The obligation arm's two canned inputs (.github#2571) are locked by the SAME switch: each
+    # replaces a read of an observed subject — the version this merge would publish, and the frontier
+    # it would publish above — with an answer typed on the command line, and either one left open is a
+    # way to choose the arm's verdict rather than measure it.
+    obligation_arm_canned = {
+        "--obligation-candidate-version": args.obligation_candidate_version,
+        "--obligation-published-version": args.obligation_published_version,
+    }
     supplied = sorted(
-        flag for flag, value in {**pr_arm_canned, **tag_arm_canned}.items() if value
+        flag
+        for flag, value in {**pr_arm_canned, **tag_arm_canned, **obligation_arm_canned}.items()
+        if value
     )
     if supplied and os.environ.get("FSGG_KIT_COHERENCE_FIXTURE_OK") != "1":
         print(
@@ -2187,6 +2676,18 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+    misdirected = (
+        sorted(flag for flag, value in obligation_arm_canned.items() if value)
+        if not args.obligation_arm
+        else []
+    )
+    if misdirected:
+        print(
+            f"::error::check-kit-published-coherence: {', '.join(misdirected)} are --obligation-arm "
+            f"inputs and mean nothing to {selected_name}. Refusing to run rather than ignoring them.",
+            file=sys.stderr,
+        )
+        return 1
 
     if args.obligation_arm:
         if args.fixture_manifest or args.canonical_manifest:
@@ -2207,7 +2708,12 @@ def main(argv: list[str]) -> int:
             )
             return 1
         try:
-            return run_obligation_arm(comments_path=args.obligations)
+            return run_obligation_arm(
+                comments_path=args.obligations,
+                csproj_path=args.csproj,
+                canned_candidate=args.obligation_candidate_version,
+                canned_published=args.obligation_published_version,
+            )
         except GateError as e:
             # Same rule as the other arms: a no-verdict is RED. We cannot tell whether this PR
             # declares a manual obligation for an automated act, and "cannot tell" must not merge.

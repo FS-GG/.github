@@ -216,9 +216,29 @@
        guidance: issue and pull-request body path/count/suite claims now require repository/revision
        and command/check provenance before they can serve as acceptance evidence. This is a new
        reviewer protocol boundary, not a correction to an existing description; the engine and
-       drivers move only because all three packages are one coherent set. -->
+       drivers move only because all three packages are one coherent set.
+
+       0.58.0 -> 0.58.1 is a PATCH, and .github#2571 is the item. The packed change is one correction
+       to `pnext-item`'s `merge-and-release.md`: row 1 read `kit-auto-publish.yml`'s TRIGGER and stated
+       its ACT, so it told every worker that the coherent-set release is something the merge always
+       performs. It is not — `kit-auto-publish.py` admits only a same-line patch bump (.github#2442) and
+       terminally refuses a minor, which every coherent-set release is. That is a FALSE CLAUSE removed
+       from an existing description, not a new receiver protocol boundary, which is the distinction the
+       0.56.0 and 0.57.0 entries above drew when they took minors. The behaviour change proper lives in
+       `scripts/check-kit-published-coherence.py`, a CI gate this repository runs and the kit does not
+       pack (`registry/repos.yml`'s `kit:` block does not name it), so no receiver's behaviour moves
+       with it. .github#2533 — the same shape, a CI-gate change plus a section added to this same
+       document — took a patch at 18af7595 for the same reason.
+
+       CONSEQUENCE TO EXPECT, AND IT IS THE OPPOSITE OF THE 0.52.0 ENTRY ABOVE: 0.58.1 IS the next patch
+       above both feed frontiers, so `kit-auto-publish` will cut all three sibling tags at the merge
+       commit and the release is AUTOMATIC. This item's post-merge obligation is therefore to VERIFY
+       that release against canonical, never to perform it — which is `merge-and-release.md`'s own
+       patch-line rule, the item self-applying rather than exempting itself. Measured, not inferred:
+       the frontier was read from nuget.org and `scripts/kit-auto-publish.py` was run over this
+       candidate's facts, on the same discipline the entries above used. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.58.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.58.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
