@@ -2223,6 +2223,103 @@ out="$(python3 "$BOUNDARY" "$MUT_OBL/scripts/mutant-unguarded-enumeration.py" 2>
 set -e
 must_fail "INVERSION: the boundary check FLAGS the unguarded touch M6 introduces" "UNGUARDED"
 
+# ---- .github#2652: THE CHECKER'S OWN BLIND SPOTS. The version of `guarded-boundary.py` that landed
+#      with the round-2 repair BLESSED five ordinary-looking edits, each of them a shape a future
+#      change would plausibly reach for, and one of them the single mistake `_guarded`'s own API most
+#      invites. A device that certifies the next hole as safe is worse than no device, because the
+#      round it was added to buy is exactly the round it would be trusted in.
+#
+#      The eager-argument shape is a GENUINE silent false green at runtime, so it is proved twice:
+#      once through the arm itself (M8, asserting the same `rc == 0 AND no output` signature as
+#      M6/M7 — the defect's actual shape), and once through the checker that exists to make M8
+#      impossible to write. The other four are proved against the checker, which is where they are
+#      meant to be caught: at authoring time, before anyone runs the arm.
+ANCHOR_COMPLETIONS="    completions = _guarded(
+        f\"{automation.decision}'s reachable-world enumeration failed for {PACKAGE} {candidate} \"
+        f\"against frontier {frontier}\",
+        lambda: automation.completions(module, candidate, frontier),
+    )"
+
+boundary_run() { # $1 mutant stem
+  set +e
+  out="$(python3 "$BOUNDARY" "$MUT_OBL/scripts/$1.py" 2>&1)"
+  rc=$?
+  set -e
+}
+
+blessed_shape() { # $1 leg name; $2 mutant stem; $3 replacement source
+  mutate "$2" "$ANCHOR_COMPLETIONS" "$3"
+  boundary_run "$2"
+  must_fail "$1" "UNGUARDED"
+}
+
+# M8 — `_guarded(what, call)` takes a THUNK. Written with a CALL, the inner call is evaluated BEFORE
+# `_guarded` runs and therefore outside its `try`: the same hole as M6, wearing the boundary's own
+# syntax. The behaviour below is M6's, to the byte.
+mutate mutant-eager-guard "$ANCHOR_COMPLETIONS" \
+  "    completions = _guarded(  # MUTATION: a call, not a thunk — evaluated OUTSIDE the guard
+        \"enumeration failed\",
+        automation.completions(module, candidate, frontier),
+    )"
+printf 'import sys\ndef patch_tuple(v):\n    sys.exit(0)\ndef decide(f):\n    return {"action": "refuse", "reason": "s"}\n' > "$DECIDER"
+silent_green "INVERSION M8: a _guarded call written with a CALL instead of a thunk greens the arm SILENTLY" \
+  "$MUT_OBL/scripts/mutant-eager-guard.py" "$OBL/release-obligation.json"
+
+boundary_run mutant-eager-guard
+must_fail "INVERSION: the boundary check FLAGS the eager _guarded argument M8 introduces" "NOT A THUNK"
+
+# The four remaining blessed shapes. Each is the SAME touch as M6 spelled a way the first checker's
+# argument-and-attribute-chain walk could not see, and each returned `ok` from it (measured).
+blessed_shape "a loaded program handed over as a KEYWORD argument is a touch" \
+  mutant-keyword-touch \
+  "    completions = automation.completions(mod=module, candidate=candidate, observed=frontier)  # MUTATION"
+
+blessed_shape "a loaded program handed over through a STARRED element is a touch" \
+  mutant-starred-touch \
+  "    completions = automation.completions(*[module, candidate, frontier])  # MUTATION"
+
+blessed_shape "a loaded program reached through a SUBSCRIPT is a touch" \
+  mutant-subscript-touch \
+  "    completions = module.__dict__[\"decide\"]({})  # MUTATION"
+
+blessed_shape "a loaded program reached through an ALIAS is a touch" \
+  mutant-alias-touch \
+  "    m = module  # MUTATION: the alias the first checker did not follow
+    completions = m.decide({})"
+
+# ...and NOT everything is flagged. Without this leg, a checker that reported UNGUARDED on every call
+# would pass all four legs above — the shape that makes a gate unkeepable rather than sound. The
+# positive control on the shipped gate is the leg above; this one adds an ordinary new line to it.
+mutate mutant-boundary-noise "$ANCHOR_COMPLETIONS" \
+  "    _noise = str(candidate) + str(frontier)  # MUTATION: an ordinary line reaching no program
+$ANCHOR_COMPLETIONS"
+boundary_run mutant-boundary-noise
+must_pass "the boundary check leaves an ordinary line that reaches no loaded program alone" \
+  "is inside \`_guarded\`"
+
+# THE SUBJECT IS DERIVED, NOT DECLARED. `run_obligation_arm` loads a decision program too and was
+# absent from the hand-written holder set, so a touch added THERE was invisible to the checker. The
+# holders are now derived from the loader calls a function makes, which is why this mutant — a new
+# function nobody has told the checker about — is graded.
+mutate mutant-new-holder "def _assert_map() -> None:" \
+  "def _future_holder(automation):  # MUTATION: a NEW function that loads a decision program
+    program = decision_function(automation.decision)
+    return program.decide({})
+
+
+def _assert_map() -> None:"
+boundary_run mutant-new-holder
+must_fail "a NEW function that loads a decision program is graded without editing the checker" \
+  "UNGUARDED"
+
+# ...and the declared floor cannot rot into naming nothing. A subject that silently narrows to the
+# empty set is the same defect as an unwired gate: it reports `ok` having looked at nothing.
+mutate mutant-holder-rot "def merge_performs_act(" \
+  "def merge_performs_act_renamed(  # MUTATION: a declared holder renamed away"
+boundary_run mutant-holder-rot
+must_fail "a DECLARED holder that no longer exists is MAP ROT, never a quietly smaller subject" \
+  "MAP ROT"
+
 cp "$HERE/../../scripts/kit-auto-publish.py" "$DECIDER"
 
 # ---- THE ARM IS WIRED, ON EVERY PULL REQUEST. An unwired gate is the exact defect .github#2533 is
@@ -2499,7 +2596,19 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   `_guarded`, so the next ordinary-looking line to reach into that program reds at authoring time
 #   instead of in a later review round. Its inversion reuses M6's mutant, which IS a real unguarded
 #   touch, so the checker must flag it. 224 + 2 = 226.
-EXPECTED_LEGS=226
+# + 9 legs for .github#2652, whose subject is that checker rather than the arm. It certified five
+#   ordinary-looking edits as safe, one of them a real silent false green: `_guarded(what, call)`
+#   takes a THUNK, and written with a CALL the inner call is evaluated before the guard runs. 1 is
+#   that hole through the ARM (M8, the same rc==0-and-no-output signature as M6/M7, because the
+#   runtime consequence is what makes this a defect rather than a style note) and 1 is the checker
+#   flagging the same mutant. 4 are the other blessed shapes — a keyword argument, a starred element,
+#   a subscript, an alias — each the SAME touch as M6 spelled a way the first walk could not see. 1 is
+#   the control proving the checker is not simply red on every call, without which those five would
+#   pass on a checker that flagged everything. 2 are the subject itself: the holder set is now derived
+#   from the loader calls a function makes (the hand-written set had already missed `run_obligation_arm`,
+#   a third function that loads a program), so a NEW holder is graded, and a DECLARED holder that has
+#   been renamed away is MAP ROT rather than a quietly smaller subject. 226 + 9 = 235.
+EXPECTED_LEGS=235
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
