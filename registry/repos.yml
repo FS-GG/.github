@@ -251,7 +251,7 @@ repos:
   # have" against "what its own `scaffold-provenance.json` + skill roots actually carry") is a named
   # follow-up, not done here.
   - { id: sir,         full: EHotwagner/S.I.R.,      role: non-participant, receives: [],
-      reason: "user-owned and doing org work — S.I.R.#138 is a child of epic .github#2067 M6 and an open blocker on the .github#2070 release epic; it takes no org fabric" }
+      reason: "user-owned and doing org work — S.I.R.#138 is a child of epic .github#2067 M6 and an open blocker on the .github#2070 release epic; it takes no org fabric; feedback-report bridge decision .github#2548 (consumer PR EHotwagner/S.I.R.#209), with structural delivery tracked by .github#2545" }
 
 # `build-config` was a legal word in `KNOWN_CAPS` that NO repo said (#626).
 #
