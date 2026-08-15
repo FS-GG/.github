@@ -291,7 +291,12 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, [{"number": n, "body": ""} for n in sorted(_STORE)])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
-            return self._send(200, {"number": int(m.group(1)), "body": ""})
+            # `state` is .github#2645's addition. `claim` derives its board destination from this item's
+            # LIVE facts now, and `Reads.issueState` reads exactly this field off exactly this response —
+            # so an issue object without it describes an item whose OPEN/CLOSED state cannot be read, and
+            # the claim then WITHHOLDS its column write rather than inventing one. Every issue this fixture
+            # models is open (the same thing its `/issues` listing above already asserts by including it).
+            return self._send(200, {"number": int(m.group(1)), "state": "open", "body": ""})
         # `reap`'s PROOF-OF-LIFE probe (#581): the item's own `item/<n>-*` PRs. An empty list is "no PR
         # found", the ONLY state in which a lapsed lease is collectable — which is what these legs want.
         if re.match(r"^/repos/[^/]+/[^/]+/pulls$", p):

@@ -732,6 +732,11 @@ module ApplicationServiceTests =
 
                         ok """{"id":9196}"""
                     | "GET", p when p.EndsWith "/pulls" -> ok "[]"
+                    // .github#2645 — `Reads.prAlive`'s SECOND probe. With no open PR it asks whether a
+                    // pushed `item/96-*` branch exists, and an UNREADABLE answer there is `LivenessUnknown`,
+                    // never "no PR" — which `claim` now correctly refuses to project a column from. Neither
+                    // twin has such a branch, so both answer the empty ref list.
+                    | "GET", p when p.Contains "/git/matching-refs/heads/item/96-" -> ok "[]"
                     | method', target -> Error(Errors.NotFound $"unserved twin-owner request: %s{method'} %s{target}"))
 
             { Transport = transport

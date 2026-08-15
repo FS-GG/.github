@@ -66,6 +66,12 @@ module ClaimOverlapTests =
                 // post-claim READBACK must already show the state a successful write would have produced,
                 // or `Converged` reads false over a lock that is, in fact, held.
                 """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"status":{"name":"In progress"},"blockedBy":null,"content":{"__typename":"Issue","number":42,"title":"item 42","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+        elif document.Contains "projectItems(first: 20)" && document.Contains "fieldValueByName(name: \"Blocked by\")" then
+            // .github#2645 — `Board.itemBlockedBy`'s resolver read, the source `claim` now resolves this
+            // item's live blocker edges from (ADR-0045 makes the COLUMN the typed dependency edge). A null
+            // value is the ordinary "#42 has no dependency" answer, and costs zero further reads.
+            Some
+                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
         elif document.Contains "projectItems(first: 20)" && document.Contains "fieldValueByName(name: \"Status\")" then
             // `Board.itemStatus`'s per-item RESOLVER read (`repositoryItemStatus`, `readPreviousStatus`'s
             // pre-claim read AND the post-claim receipt readback both use it) — a SEPARATE query shape from
@@ -207,7 +213,18 @@ module ClaimOverlapTests =
                     | _ -> ""
 
                 ok (sprintf """{"id":%d}""" (thread.Add body))
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok (JsonSerializer.Serialize {| number = 42; body = paths |})
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                // `state` is .github#2645's addition: `claim` now derives its board destination from this
+                // item's LIVE facts (`Reads.issueState` reads exactly this field off exactly this response),
+                // so a fixture that omitted it was describing an item whose OPEN/CLOSED state cannot be read
+                // — which now correctly WITHHOLDS the column write. The body is unchanged.
+                ok (JsonSerializer.Serialize {| number = 42; state = "open"; body = paths |})
+            // .github#2645 — the item's own open-PR probe (`Reads.prAlive`) and, when it finds none, its
+            // pushed-branch probe. #42 has NEITHER, so this fixture's item projects `In progress` exactly as
+            // it did before, but now because the reads SAID so rather than because the observation asserted
+            // it. Both must be served: an unreadable probe is not "no PR", and withholds.
+            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/42-" -> ok "[]"
             | "GET", p when other |> Option.exists (fun (n, _, _) -> p = $"repos/FS-GG/FS.GG.SDD/issues/%d{n}/comments") ->
                 let _, holder, _ = other.Value
                 ok (otherComments holder)

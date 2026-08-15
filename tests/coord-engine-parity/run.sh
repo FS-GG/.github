@@ -1705,12 +1705,20 @@ fi
 #     FSGG_PARITY_BLOCKED_BY seeds a coherent `Blocked by` field (.github#2079): the `set-field ... Status
 #     Blocked` below is now itself gated on a coherent park, and this leg is about #331's PRESERVE
 #     behaviour, not that gate — so the row already carries a real edge before the park is attempted.
+#
+#     THE LEADING WRITE IS `opt_blocked`, NOT `opt_wip`, AND THAT IS .github#2645's DOING — the property
+#     this leg asserts is UNCHANGED. `claim` no longer projects `In progress` from a fabricated "nothing is
+#     blocking this" observation; it resolves the row's LIVE `Blocked by` edges (the very edge this leg
+#     seeds, and #999 is open here), so the lifecycle reducer answers `Blocked` and the claim writes that.
+#     The observable #331 is about is still the ABSENCE of a trailing write: exactly two Status writes land,
+#     both BEFORE `release`, and `release` adds none. Reading `opt_blocked,opt_blocked` as a weakening would
+#     be reading the wrong half of the string — the assertion's content is its LENGTH and its last element.
 rsrv FSGG_PARITY_STATUS=Ready FSGG_PARITY_BLOCKED_BY=FS-GG/FS.GG.SDD#999 --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (i) bound a port"; else
   renv claim FS.GG.SDD#374 --force --worker pika-r01 >/dev/null 2>&1
   renv set-field FS.GG.SDD#374 Status Blocked --worker pika-r01 >/dev/null 2>&1
   iout="$(renv release FS.GG.SDD#374 --worker pika-r01 2>/dev/null)"
-  [ "$(rget "$RS_PORT" /_writes | jq -r '[.writes[].optionId] | join(",")')" = "opt_wip,opt_blocked" ] \
+  [ "$(rget "$RS_PORT" /_writes | jq -r '[.writes[].optionId] | join(",")')" = "opt_blocked,opt_blocked" ] \
     && ok "#331: a column set DURING the lease is PRESERVED — release adds NO Status write (not even a matching one)" \
     || bad "#331: release must not write over a column chosen during the lease" "writes=$(rget "$RS_PORT" /_writes | jq -c '[.writes[].optionId]')"
   printf '%s' "$iout" | grep -q 'column left at Blocked' \
