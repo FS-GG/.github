@@ -111,13 +111,57 @@ jobs:
           set -euo pipefail
           tag="coherent-set/v$VERSION"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # A draft already exists, so an earlier run of this workflow got this far and something
+            # after it did not — a rejected tag push, a failed App-token mint, a runner fault. Resume
+            # against the STORED bytes: they are what the three release workflows download, and once
+            # the release is published they are immutable.
+            #
+            # THIS COMPARISON MAY NOT BE OVER RAW BYTES OR `contentId` (.github#2664). `dotnet pack`
+            # mints a fresh core-properties part per invocation (.github#2240), so a re-pack of an
+            # identical tree yields different archive bytes, a different `artifact.size`, and
+            # therefore a different `contentId` — every time, by construction. This branch used to
+            # assert exactly that, so it could only ever fail, and under `set -e` it failed the job.
+            # Harmless while preparation was `workflow_dispatch`-only; not harmless since
+            # `kit-auto-publish` began calling this workflow on its hourly `schedule`, where a draft
+            # left behind by one partial run reddened every subsequent run until a human deleted it.
+            # `assert-reusable` compares descriptor identity and the PAYLOAD of both archive sets —
+            # the archive with the core-properties part, and the `_rels/.rels` relationship naming
+            # it, normalized out — and names the archive entries that genuinely differ when they do.
+            #
+            # THAT IS NOT "STABLE ACROSS RE-PACKS", AND THIS COMMENT MUST NOT CLAIM IT IS. The
+            # normalization removes the instability that was GUARANTEED on every re-pack. A residual
+            # one remains (.github#2688), in the packed CONTENT rather than in the OPC envelope, and
+            # only in `FS.GG.Coord.Cli`: the F# compiler emits ten closure classes named `contains@1` and
+            # disambiguates them with a numeric suffix, and which class wins which suffix can change
+            # between compiles of one unchanged tree. Two `-1`/`-2` swaps in the `#Strings` heap are
+            # the whole payload — 22 bytes over a 1,079,296-byte assembly — and the MVID and PE
+            # TimeDateStamp then follow, because a deterministic build derives them from content.
+            #
+            # IT IS RARE, AND ABSENCE IS NOT STABILITY. Independent review of .github#2664 measured
+            # two distinct payloads across three clean builds; five further clean builds produced one.
+            # `FS.GG.Kit` and `FS.GG.Drivers` did not reproduce it at all. A green re-prepare is
+            # therefore no evidence that the next one is green.
+            #
+            # So this branch can still refuse, INTERMITTENTLY, naming
+            # `tools/net10.0/any/fsgg-coord-engine.dll`. That is a true statement about the bytes,
+            # diagnosed by name — not the .github#2664 wedge, which asserted a difference that could
+            # never be absent and so could never pass. Removing the residual refusal means build
+            # determinism for that one project, or a reuse policy that tolerates it: a different root
+            # cause, outside .github#2664's declared paths, tracked at .github#2688 against
+            # `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj`. Until that lands, an operator who hits the
+            # intermittent refusal should read the named entry as REAL and check it there, not
+            # re-run this workflow hoping for a different sample.
             mkdir -p /tmp/prior
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir /tmp/prior
-            test "$(jq -r .contentId /tmp/prior/release-manifest.json)" = "$(jq -r .contentId artifacts/packages/release-manifest.json)"
-            for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
-              cmp "/tmp/prior/$package.$VERSION.nupkg" "artifacts/packages/$package.$VERSION.nupkg"
-            done
-            echo "Existing draft contains the identical manifest-bound bytes; no asset was replaced."
+            python3 scripts/release-saga.py assert-reusable \
+              --stored /tmp/prior/release-manifest.json \
+              --candidate artifacts/packages/release-manifest.json
+            # The stored manifest and archives — not this run's throwaway re-pack — are what the tags
+            # will consume, so make them this run's outputs too. Otherwise the uploaded artifact and
+            # the draft would name different `contentId`s for one release, which is the confusion
+            # this branch exists to prevent.
+            cp /tmp/prior/release-manifest.json /tmp/prior/*.nupkg artifacts/packages/
+            echo "Existing draft already holds an equivalent coherent set; no asset was replaced."
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$FSGG_SOURCE_SHA" --draft \
               --title "FS.GG coherent set $VERSION (publishing)" \

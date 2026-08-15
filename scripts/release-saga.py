@@ -72,15 +72,71 @@ def nuspec(path: pathlib.Path) -> tuple[str, str, str, list[dict[str, str]]]:
     return scalar.get("id", ""), scalar.get("version", ""), scalar.get("releaseNotes", ""), dependencies
 
 
+def is_core_properties(name: str) -> bool:
+    return name.lower().endswith(".psmdcp")
+
+
+def is_relationship_part(name: str) -> bool:
+    # OPC relationship parts: `_rels/.rels` at the package root, `<folder>/_rels/<part>.rels` below it.
+    lowered = name.lower()
+    return lowered.endswith(".rels") and (lowered.startswith("_rels/") or "/_rels/" in lowered)
+
+
+def normalized_relationships(raw: bytes) -> bytes:
+    """Drop the relationship that names the per-invocation core-properties part.
+
+    `payload()` has always excluded the `.psmdcp` core-properties entry itself, because `dotnet pack`
+    mints a fresh one — new GUID filename — on every invocation (.github#2240). It did not exclude the
+    relationship POINTING at it, and `_rels/.rels` carries that GUID in `Target` plus an `Id` derived
+    from it. So `payloadSha256`, the field that exists specifically to be re-pack stable, was not
+    (.github#2664): two `dotnet pack` runs over one clean tree differed in exactly this one entry.
+
+    The exclusion is the narrowest that removes the measured instability: only the relationship to the
+    part already outside the payload is dropped. The manifest relationship — Type, Target and `Id`
+    alike — stays under the hash, and was measured stable across those same two runs, so a genuinely
+    different nuspec target still fails closed. Unparseable bytes fall back to a verbatim comparison,
+    which cannot pass on a difference this normalization was never asked to explain.
+
+    This removes the OPC-envelope instability, which was guaranteed on every re-pack; it does NOT make
+    `payloadSha256` re-pack stable in general, and no caller may assume it does. `FS.GG.Coord.Cli` has
+    a residual, rare per-compile instability inside `tools/net10.0/any/fsgg-coord-engine.dll` — the F#
+    compiler emits ten closure classes all named `contains@1` and the numeric suffix it gives each can
+    change between compiles of one unchanged tree. That is a different root cause, tracked at
+    .github#2688, and deliberately NOT normalized away here: it is a real difference in packed
+    content, and hiding it would be the fail-open .github#2240 and .github#2428 exist to prevent.
+    """
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return raw
+    rows = []
+    for node in root:
+        local = node.tag.rsplit("}", 1)[-1]
+        attributes = dict(node.attrib)
+        if local == "Relationship" and is_core_properties(attributes.get("Target", "")):
+            continue
+        rows.append([local, attributes])
+    return canonical(rows)
+
+
+def entry_payload(archive: zipfile.ZipFile, name: str) -> bytes:
+    raw = archive.read(name)
+    return normalized_relationships(raw) if is_relationship_part(name) else raw
+
+
 def payload(path: pathlib.Path) -> dict[str, str]:
     with zipfile.ZipFile(path) as archive:
         return {
-            name: hashlib.sha256(archive.read(name)).hexdigest()
+            name: hashlib.sha256(entry_payload(archive, name)).hexdigest()
             for name in sorted(archive.namelist())
             # Registries may append a signature and regenerate the package-services metadata.
             # Neither is producer payload; every other entry remains byte-bound to the manifest.
-            if name.lower() != ".signature.p7s" and not name.lower().endswith(".psmdcp") and not name.endswith("/")
+            if name.lower() != ".signature.p7s" and not is_core_properties(name) and not name.endswith("/")
         }
+
+
+def payload_id(path: pathlib.Path) -> str:
+    return "sha256:" + hashlib.sha256(canonical(payload(path))).hexdigest()
 
 
 def load(path: pathlib.Path) -> dict:
@@ -137,7 +193,7 @@ def command_prepare(args: argparse.Namespace) -> None:
                 "path": os.path.relpath(path, pathlib.Path(args.output).resolve().parent),
                 "sha256": sha256(path),
                 "size": path.stat().st_size,
-                "payloadSha256": "sha256:" + hashlib.sha256(canonical(payload(path))).hexdigest(),
+                "payloadSha256": payload_id(path),
             },
         })
     found = {row["id"] for row in rows}
@@ -203,6 +259,54 @@ def command_assert(args: argparse.Namespace) -> None:
     data = load(path)
     assert_bound(path, data, set(args.package) if args.package else None)
     print("manifest-bound artifact hashes verified")
+
+
+def command_reusable(args: argparse.Namespace) -> None:
+    """Decide whether an already-stored coherent set can be resumed against freshly packed inputs.
+
+    Preparation is re-run whenever an earlier run created the draft release and something after it
+    did not finish — a rejected tag push, a failed token mint, a runner fault. The stored bytes are
+    the ones every release workflow downloads and, once published, are immutable, so the only two
+    honest outcomes are "reuse them" and "say exactly what differs".
+
+    What may NOT decide that: the raw archive hash, `artifact.size`, or the `contentId` computed over
+    them. `dotnet pack` is not reproducible (.github#2240), so all three differ on every re-pack of an
+    identical tree — an assertion over them can never hold, and the branch it guarded could only fail
+    (.github#2664). Payload is recomputed from BOTH archive sets here rather than read out of the two
+    manifests' `payloadSha256` fields, so the verdict is a statement about bytes on disk and does not
+    depend on which version of this script wrote the stored manifest.
+    """
+    stored_path = pathlib.Path(args.stored).resolve()
+    candidate_path = pathlib.Path(args.candidate).resolve()
+    stored, candidate = load(stored_path), load(candidate_path)
+    # Each side must first be internally coherent: a half-uploaded draft is not a reusable one.
+    assert_bound(stored_path, stored)
+    assert_bound(candidate_path, candidate)
+    problems: list[str] = []
+    for key in ("releaseId", "version", "sourceSha", "policyVersion", "previousStableVersion", "channel", "feedOrder"):
+        if stored["descriptor"].get(key) != candidate["descriptor"].get(key):
+            problems.append(f"descriptor.{key}: stored {stored['descriptor'].get(key)!r} != candidate {candidate['descriptor'].get(key)!r}")
+    stored_packages, candidate_packages = package_map(stored), package_map(candidate)
+    for label, ids in (("missing from the re-packed inputs", set(stored_packages) - set(candidate_packages)),
+                       ("absent from the stored release", set(candidate_packages) - set(stored_packages))):
+        if ids:
+            problems.append(f"package(s) {label}: {', '.join(sorted(ids))}")
+    for package_id in sorted(set(stored_packages) & set(candidate_packages)):
+        stored_row, candidate_row = stored_packages[package_id], candidate_packages[package_id]
+        for key in ("version", "dependencies", "releaseNotesCharacters"):
+            if stored_row.get(key) != candidate_row.get(key):
+                problems.append(f"{package_id}.{key}: stored {stored_row.get(key)!r} != candidate {candidate_row.get(key)!r}")
+        stored_payload = payload(artifact_path(stored_path, stored_row))
+        candidate_payload = payload(artifact_path(candidate_path, candidate_row))
+        differing = sorted(
+            (set(stored_payload) ^ set(candidate_payload))
+            | {name for name in set(stored_payload) & set(candidate_payload) if stored_payload[name] != candidate_payload[name]}
+        )
+        if differing:
+            problems.append(f"{package_id}: payload differs in {len(differing)} archive entr{'y' if len(differing) == 1 else 'ies'}: {', '.join(differing)}")
+    if problems:
+        raise ValueError("stored release cannot be reused for these inputs:\n  - " + "\n  - ".join(problems))
+    print(f"stored release is reusable: {len(stored_packages)} package(s) are payload-identical to the re-packed inputs")
 
 
 def command_identity(args: argparse.Namespace) -> None:
@@ -310,7 +414,7 @@ def command_record(args: argparse.Namespace) -> None:
             raise ValueError(f"externally observed payload differs for {package_id} on {args.feed}")
         row = feed["packages"][package_id]
         external_hash = sha256(observed)
-        external_payload_hash = "sha256:" + hashlib.sha256(canonical(payload(observed))).hexdigest()
+        external_payload_hash = payload_id(observed)
         if row["state"] == "verified" and (row["externalSha256"] != external_hash or row["externalPayloadSha256"] != external_payload_hash):
             raise ValueError(f"non-monotonic external observation for {package_id} on {args.feed}")
         row.update({"state": "verified", "externalSha256": external_hash, "externalPayloadSha256": external_payload_hash, "observedAt": stamp})
@@ -390,6 +494,9 @@ def parser() -> argparse.ArgumentParser:
     preflight.add_argument("--max-release-notes-characters", type=int, default=35_000); preflight.set_defaults(run=command_preflight)
     assertion = commands.add_parser("assert-artifacts")
     assertion.add_argument("--manifest", required=True); assertion.add_argument("--package", action="append"); assertion.set_defaults(run=command_assert)
+    reusable = commands.add_parser("assert-reusable")
+    reusable.add_argument("--stored", required=True); reusable.add_argument("--candidate", required=True)
+    reusable.set_defaults(run=command_reusable)
     identity = commands.add_parser("assert-identity")
     identity.add_argument("--manifest", required=True); identity.add_argument("--release-id", required=True)
     identity.add_argument("--version", required=True); identity.add_argument("--source-sha", required=True)
