@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2653-incidental-engine-build-shadow/ship.json",
-      "digest": "sha256:4bd6b82ecb0bfd33ef7fb8f268390b6cc2f7ad6e591bf9647b588b41e4fe233f",
+      "digest": "sha256:2dae425dd3602422ab06e822ff9c0e548962bf9c2ced50b9e3e7dfbe0e366ba3",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2653-incidental-engine-build-shadow/verify.json",
-      "digest": "sha256:00798ea9f380982736a62c92e5c53460984e0b84febec4fa2e7a4cfe187bffd0",
+      "digest": "sha256:d820cc466c56b833c615e43a8847885f7dee4d97883d3a96fdda07a81a9de653",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2653-incidental-engine-build-shadow/work-model.json",
-      "digest": "sha256:39057938eeaa399db7856fb14585d2d4a4e5f2dedad5949e514b33140e37fcab",
+      "digest": "sha256:1f821cc8edf7b3694fa64fea5ae43c1e1a6cc14eea50b53066469e9792cfccc6",
       "schemaVersion": 1
     }
   ],

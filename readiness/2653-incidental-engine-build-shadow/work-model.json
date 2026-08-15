@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "cf622466df05a0dc2e406969124e0d56108880712cfafba44e5c7a3a2b5e3174"
+        "value": "8774c560870dc9ca7a4d5f6b4f163bbfaff12242d7ab57044da8dc233a09f598"
       }
     },
     {
@@ -2081,7 +2081,7 @@
           "path": "work/2653-incidental-engine-build-shadow/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "cf622466df05a0dc2e406969124e0d56108880712cfafba44e5c7a3a2b5e3174"
+            "value": "8774c560870dc9ca7a4d5f6b4f163bbfaff12242d7ab57044da8dc233a09f598"
           },
           "schemaVersion": 1
         },
@@ -2112,7 +2112,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "baab3246dc03ddf367087ab3c2f71ce8fcb057cb0efc06b765e5aa8559007043"
+        "value": "523cb252a72b443fcbc5c34c702279d50d7979cd19d526f284613bbc5da900f2"
       },
       "currency": "current"
     }
