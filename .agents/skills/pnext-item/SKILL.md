@@ -277,12 +277,48 @@ therefore always safe to make again. Making the call here binds the marker to th
 `landable` is about to score and the one that actually merges — the same property §6 has always
 required, reached one step earlier.
 
-This call's JSON output may report `action: refreshReview, stage: reviewActive` at this point, because
-`claim-generation` and any other still-running checks have not yet reported against the marker this call
-just wrote. **That is not a refusal** — the write happens unconditionally (`.github#2488` removed the
-`--apply` gate), and the reported action is only the engine's own next-step suggestion from a review
-chain it re-inspected before the checks caught up. Do not call it a second time; proceed straight to
-waiting on `landable` below.
+**Two answers here mean carry on, and they are the only two.** `stage: landable, action:
+awaitLandability` is the one to expect: it is what a PR gets when its handoff facts are in order *and*
+its review chain is complete and host-accepted, with checks not yet green — including the
+`claim-generation` window that by design cannot be green until this very call writes
+`fsgg:pr-authorization` (`.github#2504`). It is precisely the next step below: wait on `landable` for
+this exact head. `stage: accepted, action: guardedLand` is the other, and far from being a surprise it is
+the engine's **own merge authorization** — `authorizeGuardedLanding` refuses every other action outright
+(`DeliveryApplication.fs`, `transition.Action <> Delivery.GuardedLand -> MergeRefused`), so this pair is
+what a head that is already fully green looks like at this call site. You meet it whenever the marker was
+current and the checks had settled before this call — typically a second call, after a repair below that
+left the head unchanged. Proceed to the merge.
+
+**Every other answer is a stop**, including any `verdict: noVerdict`, which carries no stage/action pair
+at all. None of it is noise to proceed through. The write happened either way — it is unconditional
+(`.github#2488` removed the `--apply` gate) — so repeating the call cannot conjure a different answer by
+itself; what changes the answer is repairing the fact the stop names. Calling again *after* that repair
+is expected rather than forbidden, and costs nothing: against an already-current marker the call is a
+no-op PATCH-skip (see the bullets below).
+
+`stage: reviewReady` is a stop about the **handoff**, and it is the likeliest one to meet here, because
+`Delivery.inspect` tests these facts *before* it ever reads the review chain. `action:
+repairReviewHandoff` means the item branch is not canonical, the canonical closing linkage is missing,
+the declared paths are not verified, or the post-merge obligations are undeclared; `action: moveToReview`
+means the board row is not `In review`. Two of those reach past this call — closing linkage cannot be
+fixed once merged (`.github#2107`), and an undeclared obligation blocks the item's own completion, because
+after a merge `Delivery.inspect` refuses a verdict outright while obligations are undeclared and holds the
+item at `MergedAwaitingObligations` while any declared one is unverified — so repair the named fact and
+call again rather than merging past it. Like `refreshReview` below, `repairReviewHandoff` renders without
+its problem text, so read the cause off the PR itself.
+
+`action: refreshReview, stage: reviewActive` is a stop about the review **evidence**. `.github#2575`
+stopped folding the liveness clause "review checks are not green" into the review problem list, so a
+still-running check can no longer produce that pair here. At this call site it now means the durable
+review evidence is structurally invalid (`Delivery.reviewProblem` ->
+`Driver.validateReviewChainStructure`) — chiefly a missing or invalid marker, a missing critic identity,
+a missing review head SHA, rounds not ordered from one, an exhausted round ceiling, missing runtime-route
+evidence, an unresolved diff-audit receipt, a missing host acceptance, or a chain recorded against a
+different head SHA; it also carries any error the live adapter hit parsing the review comments at all,
+which is a longer list. **Do not merge on it**, and report the chain to whoever dispatched you.
+`delivery` prints the pair but not which cause it found (`DeliveryApplication.fs` renders `RefreshReview`
+without its problem text), so identify it from the review chain itself rather than from this output. A
+chain carrying no review evidence at all reports the distinct `action: awaitIndependentReview` instead.
 
 - **Once per item, at this exact point — after the host-acceptance marker and all repairs, and before
   `landable`'s check — never after opening the PR, and never on every push.** A call made earlier binds
