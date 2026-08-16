@@ -1,0 +1,615 @@
+# The dispatch broker — slice 5 of the GitHub-native executor fencing design
+# (`docs/reports/2026-08-04-github-native-executor-fencing-design.md` §5.2, §11.2), filed as
+# `.github#2720` under `.github#1858` — "two workers ran one item to completion concurrently under ONE
+# claim marker; six repos got PRs from an unlocked executor", Critical, open since 2026-07-28.
+#
+# WHAT THIS IS. The one workflow in `FS-GG/.github` that calls `dispatch-sender.yml`. Every fenced
+# cross-repo dispatch goes through here, is authorized against GitHub-held facts before it is sent, is
+# serialised per receiver, and is deduplicated on the operation key.
+#
+# THE SINGLE-CALLER PROPERTY IS THE MECHANISM, NOT A TIDINESS PREFERENCE. The per-receiver operation
+# lock (§4.1) only means anything if every dispatch passes a point that checks it. A second caller of
+# `dispatch-sender.yml` inside this repository would not "bypass a rule"; it would reduce the lock from
+# a fence to a suggestion, because `dispatch-sender.yml` itself checks NOTHING — it mints an App token
+# and POSTs. So the property is enforced by `tests/dispatch-broker/single_caller.py`, run on every pull
+# request that touches ANY workflow file, and its assertion is two-sided: exactly one caller, and that
+# caller is this file. Zero callers is a REFUSAL too, because an absence assertion that is satisfied by
+# a matcher finding nothing is not an assertion (this board measured that failure on `.github#2312`'s
+# ordering gate the same day this landed).
+#
+# WHAT THE SINGLE-CALLER CLAIM DOES *NOT* COVER, stated here rather than left to be discovered. It is
+# scoped to `FS-GG/.github`'s own `.github/workflows/`, which is the whole of what this repository can
+# see or gate. Cross-repo callers exist and are NOT removed by this slice: `FS.GG.Rendering`'s
+# `.github/workflows/template-dispatch.yml` carries two SHA-pinned
+# `FS-GG/.github/.github/workflows/dispatch-sender.yml@5fed2838…` job calls, measured live on
+# 2026-08-16. They belong to the auto-update fabric (`docs/coordination/auto-update-fabric.md`) — a
+# producer announcing a release — and carry no operation key, no grant, and no fenced effect, so they
+# are not unfenced coordination dispatches. But they ARE callers, and the design's §5.2 wording ("the
+# only caller of `dispatch-sender.yml`") is broader than what this slice's `Paths:` can reach. The
+# corpus in `tests/dispatch-broker/` therefore treats that exact SHA-pinned spelling as a MUST-MATCH
+# caller form, so the day one of those moves into this repository the gate reds instead of shrugging.
+#
+# WHY THE AUTHORIZATION IS RE-READ HERE RATHER THAN TRUSTED FROM THE REQUEST. Every input below is
+# attacker-controlled text in the same sense §6.3 means it: an executor with write access can type any
+# item, generation, opkey or grant it likes. Three of the four checks below therefore compare the
+# request against a fact the requester did not choose — the live CAS winner on the receiver's operation
+# lock, the live claim winner on the item, and the digest of the components themselves.
+#
+# CONCURRENCY IS SERIALISATION AND IS NOT THE DEDUPE, and that separation is load-bearing (§5.2).
+# GitHub's default `queue: single` keeps at most one PENDING run and CANCELS the earlier one when a
+# newer arrives — last-writer-wins. That is mutual exclusion; it is not idempotence, and it is not
+# "the first authorized operation wins". Dedupe comes from the opkey, below, and again from the
+# receiver (§5.3, slice 6 `.github#2721`).
+#
+# THE RECEIPT IS AUDIT AND AUTHORITY FOR NOTHING (§4.3). It is written AFTER the effect, so its absence
+# understates the record rather than overstating it. `authorize` consults it for idempotence — "has
+# this exact opkey already been applied?" — which is a different question from "is this executor
+# allowed to act", and answering it wrongly costs a duplicate no-op rather than an unauthorized effect.
+# Its absence therefore never authorizes anything: the refusal legs run BEFORE the dedupe read, and
+# `tests/dispatch-broker` pins that order (leg A13).
+name: fsgg-dispatch-broker
+
+on:
+  workflow_dispatch:
+    inputs:
+      item:
+        description: "The board item the effect belongs to, spelled owner/repo#N (never the board's <repo>#N shorthand — .github#2107)."
+        type: string
+        required: true
+      generation:
+        description: "Claim generation: the comment id of the winning fsgg:claim marker on the item (§3.1)."
+        type: string
+        required: true
+      receiver:
+        description: "owner/repo the effect lands in — must be a rostered repository with an operation-lock issue."
+        type: string
+        required: true
+      op:
+        description: "The operation, in Operation.wire spelling. This broker brokers dispatch:<event-type> only."
+        type: string
+        required: true
+      opkey:
+        description: "The operation key the caller believes it is acting under. Recomputed here; a mismatch is a refusal."
+        type: string
+        required: true
+      grant:
+        description: "The executor identity: the comment id of the dispatch grant on the receiver's operation-lock issue (§3.2)."
+        type: string
+        required: true
+      event-type:
+        description: "repository_dispatch event_type the receiver listens for. Must equal the payload of op=dispatch:<event-type>."
+        type: string
+        required: true
+      version:
+        description: "The version to advertise (becomes client_payload.version in dispatch-sender.yml)."
+        type: string
+        required: true
+
+# PER RECEIVER, AND `cancel-in-progress: false` BECAUSE CANCELLING AN IN-FLIGHT DISPATCH IS THE ONE
+# THING THIS MUST NOT DO. A cancelled run may have already POSTed to the receiver and not yet written
+# its receipt — §8.5's partial application, but manufactured deliberately instead of survived. The
+# group is keyed on the receiver alone: two operations against DIFFERENT receivers are independent and
+# serialising them would buy nothing and cost throughput, which is §4.2's argument for why the merge
+# election holds no lock across CI latency, applied to the dispatch path.
+concurrency:
+  group: fsgg-dispatch-${{ inputs.receiver }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write # the fsgg:op-effect receipt is a comment on the item; reads use the same grant.
+
+jobs:
+  # NO `if:` AND NO `continue-on-error` ON THIS JOB, EVER. A skipped job reports GREEN and a
+  # `continue-on-error` job reports SUCCESS while failing — either one turns the fence off while
+  # leaving every line of it in place. `tests/dispatch-broker` asserts both (legs B6a/B6b/B6c).
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      proceed: ${{ steps.authorize.outputs.proceed }}
+      payload: ${{ steps.authorize.outputs.payload }}
+      opkey: ${{ steps.authorize.outputs.opkey }}
+    steps:
+      # A `uses:` step MAY carry continue-on-error; a `run:` step may not. This one does, deliberately:
+      # a mint failure must arrive at the verdict step as an EMPTY token so that step can refuse with
+      # the real reason, rather than dying here with an opaque action error that names neither the App
+      # nor the receiver. `authorize` fails closed on an empty token for any repo it cannot otherwise
+      # reach — the same shape `lockfile-sync.yml`'s preflight uses and `tests/dispatch-preflight`
+      # proves (legs T5/T6 there).
+      #
+      # OWNER-SCOPED, `repositories:` DELIBERATELY ABSENT. A repo-scoped mint simply fails for a repo
+      # outside the selection, and a failed mint cannot distinguish "not in the installation" from "the
+      # App is broken". The App is NOT installed on `FS-GG/.github` at all (§6.1(b)), which is exactly
+      # why the verdict step selects GITHUB_TOKEN for this repository and this token for the others.
+      - name: Mint an installation token for the receiver/item repositories
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+
+      # EVERY UNTRUSTED VALUE ARRIVES THROUGH `env:`, AND THE SCRIPT BODY CONTAINS NO `${{ }}` AT ALL.
+      # `closing-keywords.yml` states the rule and the reason: attacker-controlled text pasted into a
+      # `run:` block is a script-injection sink. Here that is not a theoretical concern — `op`,
+      # `event-type` and `version` are free-form strings a caller chooses. `tests/dispatch-broker` leg
+      # B7 asserts the absence of `${{` in this block, so the property cannot be edited away quietly.
+      #
+      # OP_LOCK_ISSUES IS A SECOND COPY OF `Options.opLockNumbers`, AND IT IS PINNED RATHER THAN
+      # TRUSTED. The engine's table cannot be reached from a runner (there is no CLI verb for it, and
+      # building the engine to answer a table lookup would put a compile on the critical path of every
+      # dispatch), so the table is restated here — and `tests/dispatch-broker` leg B8 parses
+      # `src/FS.GG.Coord.Cli/Options.fs` and refuses on any difference, in either direction. All eight
+      # roster repositories, `FS.GG.Net` included: the chore-lock table's seven-row hole is in exactly
+      # the repository the `.github#1858` incident reached (`FS.GG.Net#58`), and a per-receiver table
+      # built the same way would inherit it.
+      - name: Authorize this dispatch against GitHub-held facts
+        id: authorize
+        env:
+          ITEM: ${{ inputs.item }}
+          GENERATION: ${{ inputs.generation }}
+          RECEIVER: ${{ inputs.receiver }}
+          OP: ${{ inputs.op }}
+          OPKEY: ${{ inputs.opkey }}
+          GRANT: ${{ inputs.grant }}
+          EVENT_TYPE: ${{ inputs.event-type }}
+          GH_TOKEN_LOCAL: ${{ github.token }}
+          GH_TOKEN_APP: ${{ steps.app-token.outputs.token }}
+          SELF_REPO: ${{ github.repository }}
+          OP_LOCK_ISSUES: >-
+            {"FS-GG/.github": 2714,
+             "FS-GG/FS.GG.SDD": 878,
+             "FS-GG/FS.GG.Rendering": 1245,
+             "FS-GG/FS.GG.Governance": 410,
+             "FS-GG/FS.GG.Templates": 413,
+             "FS-GG/FS.GG.Game": 604,
+             "FS-GG/FS.GG.Audio": 259,
+             "FS-GG/FS.GG.Net": 72}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import sys
+          import unicodedata
+          from datetime import datetime, timezone
+
+          # ---------------------------------------------------------------------------------------
+          # Refusals. EVERY arm is a refusal — there is no "proceed anyway", because a fence that
+          # cannot establish it is authorized must not act (#266, #421). `collapse` is the ONE
+          # non-refusal early exit and it is green: a repeat of an opkey that already landed is a
+          # no-op, not a failure.
+          # ---------------------------------------------------------------------------------------
+          def refuse(reason: str) -> "None":
+              print(f"::error::fsgg-dispatch-broker: {reason}", file=sys.stderr)
+              sys.exit(1)
+
+
+          def emit(name: str, value: str) -> None:
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                  fh.write(f"{name}={value}\n")
+
+
+          def collapse(reason: str) -> "None":
+              print(f"::notice::fsgg-dispatch-broker: {reason}")
+              emit("proceed", "false")
+              sys.exit(0)
+
+
+          # ---------------------------------------------------------------------------------------
+          # The operation key's domain, transcribed from `Operation.preimage`
+          # (src/FS.GG.Coord.Core/Operation.fs) rather than approximated. Both of its injectivity
+          # clauses are here, because either one alone admits two distinct pre-images that compose
+          # one key:
+          #   1. no component may carry a control character, so `String.concat "\n"` is injective;
+          #   2. no component may carry an unpaired surrogate, because UTF-8 encoding maps every one
+          #      of them to the same EF BF BD.
+          # In Python a well-formed astral character is a single non-surrogate code point, so ANY
+          # code point in D800-DFFF is by construction unpaired — which is the same domain the F#
+          # `wellFormedUtf16` walk admits, reached by a shorter route.
+          # ---------------------------------------------------------------------------------------
+          def well_formed(part: str, value: str) -> "str | None":
+              if value is None or value.strip() == "":
+                  return f"{part} is blank"
+              # `Cc` is the Unicode C0/C1 control category, which is exactly `Char.IsControl`'s
+              # domain — so tab, line feed and carriage return are refused here by RULE rather
+              # than by a hand-listed set that would leave the boundary at "the characters we
+              # happened to think of". Nothing wider: U+2028/U+2029 are `Zl`/`Zp` and are
+              # admitted by `separatorFree`, so refusing them here would make this domain
+              # NARROWER than the engine's and reject a key the engine would compose.
+              if any(unicodedata.category(ch) == "Cc" for ch in value):
+                  return f"{part} carries a control character, which would forge an ambiguous pre-image"
+              if any(0xD800 <= ord(ch) <= 0xDFFF for ch in value):
+                  return f"{part} carries an unpaired surrogate, which UTF-8 folds onto the replacement character"
+              return None
+
+
+          def server_assigned(value: str) -> bool:
+              # A canonical server-assigned id: ASCII digits, no leading zero. Excludes `0`, excludes
+              # `0012` (one generation keyed two ways), and excludes the engine's `released` sentinel.
+              return len(value) > 0 and value[0] != "0" and all("0" <= ch <= "9" for ch in value)
+
+
+          def qualified_repo(value: str) -> bool:
+              halves = value.split("/")
+              if len(halves) != 2:
+                  return False
+              return all(
+                  len(half) > 0 and not any(ch.isspace() or ch == "#" for ch in half) for half in halves
+              )
+
+
+          def qualified_item(value: str) -> bool:
+              halves = value.split("#")
+              return len(halves) == 2 and qualified_repo(halves[0]) and server_assigned(halves[1])
+
+
+          item = os.environ.get("ITEM", "")
+          generation = os.environ.get("GENERATION", "")
+          receiver = os.environ.get("RECEIVER", "")
+          op = os.environ.get("OP", "")
+          presented_opkey = os.environ.get("OPKEY", "")
+          grant = os.environ.get("GRANT", "")
+          event_type = os.environ.get("EVENT_TYPE", "")
+          self_repo = os.environ.get("SELF_REPO", "")
+
+          # 1. THE COMPONENTS, BEFORE ANY NETWORK. A malformed request is a guaranteed refusal and
+          #    must not cost a round trip — the same cheap-first ordering `Client.OpLock.acquire`
+          #    uses. Refusals accumulate rather than reporting only the first, because a caller that
+          #    fixes one and resubmits to find a second has learned the tool is unhelpful.
+          problems = [
+              p
+              for p in (
+                  well_formed("item", item),
+                  well_formed("generation", generation),
+                  well_formed("receiver", receiver),
+                  well_formed("op", op),
+              )
+              if p
+          ]
+          if not problems:
+              if not qualified_item(item):
+                  problems.append(
+                      f"item {item!r} is not owner/repo#N — the board's <repo>#N shorthand is not GitHub "
+                      "grammar, and .github#2107 records what it costs when it reaches a field GitHub parses"
+                  )
+              if not server_assigned(generation):
+                  problems.append(
+                      f"generation {generation!r} is not a canonical server-assigned comment id — a released "
+                      "claim has no generation, and a leading-zero spelling would key one tenancy two ways"
+                  )
+              if not qualified_repo(receiver):
+                  problems.append(f"receiver {receiver!r} is not owner/repo")
+          if problems:
+              refuse("; ".join(problems))
+
+          # 2. THE CLOSED OPERATION VOCABULARY, AND THIS BROKER'S SLICE OF IT. `Operation.Op` has
+          #    three cases. `merge` is fenced by the lease-free election and the merge gate (§4.2,
+          #    §6) and never travels as a repository_dispatch; `publish:<package>` is a publication
+          #    effect with no dispatch grant. Brokering either here would mean sending an effect
+          #    under a key whose scope says something else, so both are refused BY NAME rather than
+          #    by a silent default.
+          if op == "merge":
+              refuse(
+                  "op=merge is not brokered here: a merge is fenced by the lease-free election and the "
+                  "claim-fence merge gate (design §4.2/§6), not by a repository_dispatch"
+              )
+          if op.startswith("publish:"):
+              refuse("op=publish:<package> is a publication effect and carries no dispatch grant (design §4.1)")
+          if not op.startswith("dispatch:"):
+              refuse(
+                  f"op {op!r} is outside the closed operation vocabulary — this broker brokers "
+                  "dispatch:<event-type> only (Operation.wire)"
+              )
+          op_payload = op[len("dispatch:") :]
+          payload_problem = well_formed("the dispatch:<event-type> payload", op_payload)
+          if payload_problem:
+              refuse(payload_problem)
+          # THE KEY MUST NAME THE OPERATION ACTUALLY PERFORMED. `dispatch-sender.yml` sends
+          # `event-type`; the opkey is composed over `dispatch:<payload>`. If those disagree, every
+          # downstream idempotence answer is about a different operation than the one that landed —
+          # so the receiver would fail to collapse a genuine repeat, which is the one thing the key
+          # exists to do.
+          if op_payload != event_type:
+              refuse(
+                  f"op=dispatch:{op_payload!r} does not name the event-type being dispatched ({event_type!r}) — "
+                  "the operation key would identify a different operation than the one that lands"
+              )
+
+          # 3. RECOMPUTE THE KEY. sha256(UTF8(item \n gen \n receiver \n op)), lowercase hex — §3.3,
+          #    and `Operation.preimage`'s exact composition. The caller PRESENTS a key and we compare;
+          #    a mismatch means the caller's idea of this operation is not ours, and acting on it
+          #    would file the receipt under a key nobody will look up.
+          preimage = "\n".join([item, generation, receiver, op])
+          opkey = hashlib.sha256(preimage.encode("utf-8")).hexdigest()
+          if presented_opkey != opkey:
+              refuse(
+                  f"the presented opkey does not recompute: presented {presented_opkey!r}, "
+                  f"recomputed {opkey!r} from (item, generation, receiver, op)"
+              )
+          if not server_assigned(grant):
+              refuse(f"grant {grant!r} is not a server-assigned comment id")
+
+          # 4. WHOSE LOCK? A receiver with no operation-lock issue is design §4.1's "absent ref =>
+          #    refuse" — the fail-closed arm, and NEVER a licence to dispatch unfenced, which is
+          #    precisely what the `.github#1858` executor did.
+          op_locks = json.loads(os.environ["OP_LOCK_ISSUES"])
+          lock_issue = op_locks.get(receiver)
+          if lock_issue is None:
+              refuse(
+                  f"no operation-lock issue is known for {receiver} — refusing to dispatch unfenced "
+                  "(design §4.1: absent ref => refuse)"
+              )
+
+          # ---------------------------------------------------------------------------------------
+          # Reads. TWO TOKENS, ONE RULE. The App carries `issues: write` on the seven receivers and
+          # is not installed on `FS-GG/.github` at all (§6.1(b)); GITHUB_TOKEN reaches this
+          # repository and nothing else. So the token is a function of the repository being read, and
+          # a repository neither token can reach is a REFUSAL rather than an unauthenticated attempt
+          # — an unauthenticated read of a private repo returns a 404 that reads exactly like "no
+          # marker here", which is a failed read masquerading as a verdict.
+          # ---------------------------------------------------------------------------------------
+          def token_for(repo: str) -> str:
+              if repo == self_repo:
+                  return os.environ.get("GH_TOKEN_LOCAL", "")
+              return os.environ.get("GH_TOKEN_APP", "")
+
+
+          def comments(repo: str, number: int) -> list:
+              tok = token_for(repo)
+              if not tok:
+                  refuse(
+                      f"no credential can read {repo}: the App is not installed on {self_repo} and the "
+                      "installation token for the other repositories did not mint. Refusing rather than "
+                      "reading unauthenticated — a 404 and an empty issue are the same bytes"
+                  )
+              env = dict(os.environ)
+              env["GH_TOKEN"] = tok
+              env.pop("GITHUB_TOKEN", None)
+              proc = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      "--paginate",
+                      f"repos/{repo}/issues/{number}/comments",
+                  ],
+                  capture_output=True,
+                  text=True,
+                  env=env,
+              )
+              if proc.returncode != 0:
+                  refuse(
+                      f"could not read {repo}#{number}: {proc.stderr.strip() or 'the read failed with no diagnostic'}. "
+                      "A read that did not complete is a no-verdict, never a pass"
+                  )
+              try:
+                  # `--paginate` concatenates JSON arrays; ask gh for one array per page and join.
+                  raw = proc.stdout.strip() or "[]"
+                  parsed = json.loads(raw) if raw.startswith("[") else None
+              except json.JSONDecodeError as exc:
+                  refuse(f"the comment read for {repo}#{number} did not parse as JSON: {exc}")
+              if not isinstance(parsed, list):
+                  refuse(f"the comment read for {repo}#{number} did not return a list of comments")
+              return parsed
+
+
+          # THE CAS's WINNER, TRANSCRIBED FROM `Reads.winner`: the lowest-id marker whose lease is
+          # still live. It SORTS rather than trusting the server's order, for `Reads.fs`'s stated
+          # reason — a rule that depends on an invariant it does not enforce fails silently, and this
+          # one's failure is that two racers compute different winners and both believe they hold the
+          # lock.
+          #
+          # AN UNPARSEABLE MARKER REFUSES THE WHOLE SCAN rather than shortening the list
+          # (`Reads.fs:283`, `:473-486`). Dropping one would let a malformed marker — the exact thing
+          # a forger would produce — silently promote the next candidate to winner.
+          def markers(payload: list, where: str) -> list:
+              found = []
+              for comment in payload:
+                  body = comment.get("body") or ""
+                  if "fsgg:claim" not in body:
+                      continue
+                  fields = {}
+                  for token in body.split():
+                      if "=" in token:
+                          key, _, value = token.partition("=")
+                          fields.setdefault(key, value)
+                  if "lease" not in fields or not fields["lease"].isdigit():
+                      refuse(
+                          f"an fsgg:claim marker on {where} carries no readable lease= — refusing the whole "
+                          "scan rather than dropping it, because dropping one promotes the next candidate to winner"
+                      )
+                  cid = comment.get("id")
+                  updated = comment.get("updated_at")
+                  if not isinstance(cid, int) or not isinstance(updated, str):
+                      refuse(f"an fsgg:claim marker on {where} has no readable id/updated_at — no verdict")
+                  try:
+                      at = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                  except ValueError:
+                      refuse(f"an fsgg:claim marker on {where} has an unparseable updated_at ({updated!r}) — no verdict")
+                  age = (datetime.now(timezone.utc) - at).total_seconds()
+                  found.append(
+                      {
+                          "id": cid,
+                          "worker": fields.get("worker", "unparsed-marker"),
+                          "age": age,
+                          "lease": int(fields["lease"]),
+                      }
+                  )
+              return found
+
+
+          def winner(found: list) -> "dict | None":
+              # A NEGATIVE age means we could not establish the marker's age and it is NOT stale:
+              # reading an unreadable age as an expired lease would break a live lock on a field we
+              # failed to parse.
+              live = [m for m in found if not (m["age"] >= 0 and m["age"] > m["lease"] * 60)]
+              return min(live, key=lambda m: m["id"]) if live else None
+
+
+          # 5. THE GRANT MUST BE THE LIVE WINNER ON THE RECEIVER'S OPERATION LOCK (§5.2 step 2).
+          #    This is the one check the requester cannot satisfy by typing: the id is server-assigned
+          #    and the winner is decided by a CAS.
+          lock_comments = comments(receiver, lock_issue)
+          lock_winner = winner(markers(lock_comments, f"{receiver}#{lock_issue}"))
+          if lock_winner is None:
+              refuse(
+                  f"no live grant holds {receiver}'s operation lock ({receiver}#{lock_issue}) — the presented "
+                  f"grant {grant} authorizes nothing"
+              )
+          if str(lock_winner["id"]) != grant:
+              refuse(
+                  f"the presented grant {grant} is not the live winner on {receiver}#{lock_issue}: "
+                  f"comment {lock_winner['id']} (worker '{lock_winner['worker']}') holds that lock"
+              )
+
+          # 6. THE GENERATION MUST STILL BE THE LIVE CLAIM WINNER ON THE ITEM (§5.2 step 2). A
+          #    released or re-claimed item is a different tenancy, and an effect keyed to the old one
+          #    belongs to nobody.
+          item_repo, _, item_number = item.partition("#")
+          item_comments = comments(item_repo, int(item_number))
+          item_winner = winner(markers(item_comments, item))
+          if item_winner is None:
+              refuse(f"no live fsgg:claim marker holds {item} — generation {generation} names a tenancy that has ended")
+          if str(item_winner["id"]) != generation:
+              refuse(
+                  f"generation {generation} is stale for {item}: the live claim is comment {item_winner['id']} "
+                  f"(worker '{item_winner['worker']}')"
+              )
+
+          # 7. DEDUPE, ON THE OPKEY AND ONLY THE OPKEY — and LAST, after every refusal above. Order
+          #    is the property: a receipt present alongside an invalid grant must still REFUSE, never
+          #    collapse, or the receipt would have become an authorization (§4.3).
+          for comment in item_comments:
+              body = comment.get("body") or ""
+              if "fsgg:op-effect" in body and f"opkey={opkey}" in body:
+                  collapse(
+                      f"opkey {opkey} already has an fsgg:op-effect receipt on {item} (comment "
+                      f"{comment.get('id')}) — collapsing this repeat into a no-op rather than dispatching twice"
+                  )
+
+          emit("proceed", "true")
+          emit("opkey", opkey)
+          emit(
+              "payload",
+              json.dumps(
+                  {
+                      "fsgg_opkey": opkey,
+                      "fsgg_grant": grant,
+                      "fsgg_item": item,
+                      "fsgg_gen": generation,
+                  },
+                  separators=(",", ":"),
+                  sort_keys=True,
+              ),
+          )
+          print(f"authorized: {item} gen={generation} -> {receiver} op={op} opkey={opkey} grant={grant}")
+          PY
+
+  # THE ONLY `uses:` OF `dispatch-sender.yml` IN THIS REPOSITORY. `needs:` and `if:` are both
+  # load-bearing: without `needs:` this runs regardless of the verdict, and without the `if:` it runs
+  # even when `authorize` collapsed a duplicate into a no-op. Removing either makes the fence
+  # decorative, which is why `tests/dispatch-broker` legs B5a/B5b pin them.
+  dispatch:
+    needs: authorize
+    if: needs.authorize.outputs.proceed == 'true'
+    uses: ./.github/workflows/dispatch-sender.yml
+    with:
+      target-repo: ${{ inputs.receiver }}
+      event-type: ${{ inputs.event-type }}
+      version: ${{ inputs.version }}
+      # The authorization POINTER, through the existing `payload` input (§5.2 step 4) — so
+      # `dispatch-sender.yml` needs no edit. The receiver must NOT trust it: `client_payload` is
+      # caller-controlled all the way down (§5.1 shows even `source_repo` and `source_sha` are
+      # overridable). GitHub carries the authority; this carries only where to look for it (§5.3).
+      payload: ${{ needs.authorize.outputs.payload }}
+    secrets:
+      app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+      app-private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+
+  # WRITTEN AFTER THE EFFECT, AND RED IF IT FAILS. §8.5 says a landed effect with no receipt is safe
+  # — the record understates, and a re-run recomputes the same opkey and collapses — so this job's
+  # failure never means "the dispatch did not happen". It means the audit trail is incomplete, and
+  # that is worth a red run rather than a warning nobody reads: `.github#1858` AC3 asks for exactly
+  # this trail, and the incident it was filed for is one nobody could reconstruct afterwards.
+  receipt:
+    needs: [authorize, dispatch]
+    if: needs.authorize.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mint an installation token for the item repository
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+
+      - name: Post the fsgg:op-effect receipt on the item
+        env:
+          ITEM: ${{ inputs.item }}
+          RECEIVER: ${{ inputs.receiver }}
+          OP: ${{ inputs.op }}
+          OPKEY: ${{ needs.authorize.outputs.opkey }}
+          GRANT: ${{ inputs.grant }}
+          GH_TOKEN_LOCAL: ${{ github.token }}
+          GH_TOKEN_APP: ${{ steps.app-token.outputs.token }}
+          SELF_REPO: ${{ github.repository }}
+          EVIDENCE: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          item = os.environ["ITEM"]
+          repo, _, number = item.partition("#")
+          self_repo = os.environ["SELF_REPO"]
+          tok = os.environ["GH_TOKEN_LOCAL"] if repo == self_repo else os.environ.get("GH_TOKEN_APP", "")
+          if not tok:
+              print(
+                  f"::error::fsgg-dispatch-broker: the dispatch LANDED but no credential can write the "
+                  f"fsgg:op-effect receipt to {repo}. The effect is real; the audit trail is not.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          body = (
+              "<!-- fsgg:op-effect v=1"
+              f" opkey={os.environ['OPKEY']}"
+              f" grant={os.environ['GRANT']}"
+              f" receiver={os.environ['RECEIVER']}"
+              f" op={os.environ['OP']}"
+              f" evidence={os.environ['EVIDENCE']} -->\n"
+              "The dispatch above landed. This receipt is audit and authority for nothing (design §4.3):"
+              " it is written after the effect, so its absence understates the record and can never"
+              " authorize a second one."
+          )
+          env = dict(os.environ)
+          env["GH_TOKEN"] = tok
+          env.pop("GITHUB_TOKEN", None)
+          proc = subprocess.run(
+              ["gh", "api", "-X", "POST", f"repos/{repo}/issues/{number}/comments", "--input", "-"],
+              input=json.dumps({"body": body}),
+              capture_output=True,
+              text=True,
+              env=env,
+          )
+          if proc.returncode != 0:
+              print(
+                  f"::error::fsgg-dispatch-broker: the dispatch LANDED but the fsgg:op-effect receipt did "
+                  f"not post to {item}: {proc.stderr.strip()}. Re-running the broker recomputes the same "
+                  "opkey and the receiver collapses the repeat (design §8.5), so this is an audit gap, "
+                  "not a duplicate effect.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print(f"receipt posted on {item}")
+          PY
