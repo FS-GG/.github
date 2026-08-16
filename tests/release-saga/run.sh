@@ -264,7 +264,15 @@ PATH="$WORK/promote-bin:$PATH" FAKE_RELEASE_MODE=immutable \
   FAKE_RELEASE_ASSETS="$WORK/promote-assets" FAKE_GH_CALLS="$WORK/promote-calls.log" \
   bash "$ROOT/scripts/release-saga-promote-release.sh" example/repo coherent-set/v9.8.7 \
     "$WORK/manifest.json" "$WORK/stable.json"
-! grep -Eq '^release (upload|edit)' "$WORK/promote-calls.log"
+# Bash exempts a `!`-inverted command from `errexit`, so the bare `! grep -Eq …` this used to be
+# computed the right answer and threw it away: an immutable promotion that DID call `release upload`
+# would have sailed straight past (.github#2689, shellcheck SC2251). Spelled as an `if`, the status
+# is actually consumed.
+if grep -Eq '^release (upload|edit)' "$WORK/promote-calls.log"; then
+  echo "expected NO 'release upload'/'release edit' call in immutable promotion mode" >&2
+  cat "$WORK/promote-calls.log" >&2
+  exit 1
+fi
 cp "$WORK/promote-assets/stable-channel.json" "$WORK/promote-assets/stable-channel.good"
 jq '.contentId = "sha256:drift"' "$WORK/promote-assets/stable-channel.json" > "$WORK/promote-assets/drift"
 mv "$WORK/promote-assets/drift" "$WORK/promote-assets/stable-channel.json"
