@@ -636,78 +636,369 @@ printf '<!-- fsgg:merge-election v=1 opkey=%s item=%s gen=%s receiver=%s op=merg
 gate "$W" --repo "$REPO" --head-ref "$BRANCH" --head-sha "$HEAD" --body "$B_WINNER"
 assert "J5 an election a year old is still the election — it has no lease (design §4.2)" 0 "OK"
 
-echo "=== K. The OBSERVE-ONLY boundary, asserted over the workflow itself ===================="
-# This is slice 4's hard boundary: arming is slice 8's job (.github#2723, design §9.1). Asserted
-# structurally, and in BOTH directions — a mutated copy that enforces its verdict must be caught, or
-# this is one more absence a broken check would satisfy.
+echo "=== K. The OBSERVE-ONLY boundary, asked of the parsed document ========================="
+# This is slice 4's hard boundary: arming is slice 8's job (.github#2723, design §9.1).
+#
+# ROUND-1 REPAIR (.github#2740, critic teal-79dd), AND THE DIAGNOSIS IS SHARPER THAN THE BUG.
+# The first version of this section parsed the workflow with PyYAML and then, for the arming question,
+# ASKED THE PARSED DOCUMENT FOR A SPELLING: it searched the raw text for `^\s*exit\s+([0-9]+)`. Six
+# mutations broke it and four of them genuinely armed the workflow — `[ "$rc" = 0 ] || exit "$rc"`
+# appended to the evaluate step; a one-line `run: exit 1`; a bare `false` appended to the FINDING step,
+# which carries NO `exit` token at all; and `if [ "$rc" != 0 ]; then exit 1; fi`. The remaining two were
+# not `exit` spellings in any sense: `paths-ignore:` is a real trigger filter, and a JOB-level
+# `permissions:` block REPLACES the workflow-level one, so the key the old check read was no longer the
+# key GitHub applies. Filed as `.github#266` INSTANCE 5.
+#
+# THE CLASS IS NOT "REGEXES OVER SOURCE TEXT". It is MATCHERS ENUMERATING SPELLINGS IN ANY MEDIUM. The
+# parse bought structure and the check then threw it away. So each of the three questions below is now
+# asked of the document as the question it actually means:
+#
+#   1. IS THERE A TRIGGER FILTER?  Asked as an ALLOWLIST of the keys each trigger may carry, never as a
+#      denylist of the ones it may not. `paths`, `paths-ignore`, `branches`, `branches-ignore`, and any
+#      filter GitHub adds tomorrow are all refused by one rule that names none of them.
+#
+#   2. WHAT PERMISSIONS APPLY?  Asked as the EFFECTIVE value under GitHub's own replacement semantics —
+#      a job-level block replaces the workflow-level block entirely — so the check reads the value that
+#      actually governs the token rather than a key that may be inert.
+#
+#   3. DOES THIS WORKFLOW ARM?  Not asked of the text at all. Every step's `run:` script is EXECUTED,
+#      with the gate stubbed to return each verdict in turn, and the step's real exit status observed.
+#      "Does this step exit non-zero when the gate finds something" has exactly one honest answer and it
+#      is a measurement, not a pattern. Every spelling of arming — `exit`, `false`, `[ ] || exit`, a
+#      failing command anywhere under `bash -e` — is caught because none of them is being LOOKED for.
+#
+# The steps run in a SANDBOX rather than the repository: a scratch tree whose `tests/claim-fence/run.sh`
+# is a stub that exits 0, so the fixture step is executed verbatim without re-entering this very file,
+# and whose `PATH` carries a `python`/`python3` that exits with the verdict under test. A mutant that
+# points the fixture step at some OTHER path finds nothing there and is caught as a failing step, which
+# is the correct answer rather than a special case.
 
-flow_check() {  # <file> -> prints one line per violation
-  python3 - "$1" <<'PY'
-import re, sys, yaml
-path = sys.argv[1]
-text = open(path, encoding="utf-8").read()
-doc = yaml.safe_load(text)
-# PyYAML 1.1 reads a bare `on:` key as the boolean True.
-on = doc.get("on", doc.get(True))
-problems = []
-if not isinstance(on, dict):
-    problems.append("the `on:` block is not a mapping")
-else:
-    if "merge_group" not in on:
-        problems.append("no `merge_group` trigger (design 6.2: a gate that only runs on pull_request is bypassed by a merge queue)")
-    pr = on.get("pull_request", "__absent__")
-    if pr == "__absent__":
-        problems.append("no `pull_request` trigger")
-    elif isinstance(pr, dict) and "paths" in pr:
-        problems.append("a `paths:` filter (design 6.2: a filtered workflow produces no check run and protection waits forever)")
-perms = doc.get("permissions")
-if perms != {"contents": "read", "issues": "read"}:
-    problems.append(f"permissions are {perms!r}, not exactly contents+issues read")
-jobs = doc.get("jobs") or {}
-if list(jobs) != ["claim-fence"]:
-    problems.append(f"jobs are {list(jobs)!r}, not exactly ['claim-fence']")
-# OBSERVE-ONLY: no step may exit non-zero on a verdict. The fixture step fails by its own exit status,
-# which is the gate on the gate; an explicit `exit <n>` in a verdict step is what arming looks like.
-for m in re.finditer(r"^\s*exit\s+([0-9]+)", text, re.MULTILINE):
-    if m.group(1) != "0":
-        problems.append(f"an explicit `exit {m.group(1)}` — this producer is OBSERVE-ONLY (design 9.1 step 1); arming is slice 8 (.github#2723)")
-for p in problems:
-    print(p)
-PY
+cat > "$WORK/flowcheck.py" <<'FLOWPY'
+"""Ask a workflow document the three questions section K means. One line per violation."""
+import os, re, subprocess, sys, tempfile, yaml
+
+WORKFLOW, ROOT = sys.argv[1], sys.argv[2]
+
+# Question 1 is an ALLOWLIST. A trigger may carry only these keys; everything else — every filter
+# GitHub has and every one it grows — is refused without being named.
+TRIGGER_KEYS = {"pull_request": {"types"}, "merge_group": {"types"}}
+REQUIRED_TRIGGERS = ("pull_request", "merge_group")
+# Question 2's answer.
+REQUIRED_PERMISSIONS = {"contents": "read", "issues": "read"}
+# Structural allowlists, same principle: name what is permitted, never what is forbidden.
+JOB_KEYS = {"runs-on", "timeout-minutes", "steps", "permissions"}
+STEP_KEYS = {"name", "id", "uses", "run", "env", "if"}
+PERMITTED_USES = {"actions/checkout@v7", "./.github/actions/setup-policy-python"}
+# Question 3's axes: every verdict the gate can return, including one this workflow must classify as
+# inconclusive, crossed with both events it triggers on.
+GATE_EXITS = ("0", "1", "2", "3", "7")
+EVENTS = ("pull_request", "merge_group")
+
+EXPR = re.compile(r"\$\{\{(.*?)\}\}", re.DOTALL)
+
+
+def substitute(text, gate_exit, event):
+    """Resolve `${{ }}` expressions to the hostile values under test.
+
+    The verdict output becomes the exit code being simulated, the event name becomes the event being
+    simulated, and everything else becomes an inert placeholder. Substituting rather than evaluating is
+    deliberate: the point is to run each step's script under a verdict, not to reimplement GitHub's
+    expression language.
+    """
+    def one(m):
+        e = m.group(1).strip()
+        if e.endswith("outputs.rc"):
+            return gate_exit
+        if e == "github.event_name":
+            return event
+        return "FIXTURE-PLACEHOLDER"
+    return EXPR.sub(one, text)
+
+
+def build_sandbox(root):
+    box = tempfile.mkdtemp(prefix="flowcheck.")
+    os.makedirs(os.path.join(box, "tests", "claim-fence"))
+    stub = os.path.join(box, "tests", "claim-fence", "run.sh")
+    with open(stub, "w", encoding="utf-8") as fh:
+        fh.write("#!/usr/bin/env bash\n# re-entrancy stop: the real fixture is what is running us\nexit 0\n")
+    os.chmod(stub, 0o755)
+    os.symlink(os.path.join(root, "scripts"), os.path.join(box, "scripts"))
+    os.makedirs(os.path.join(box, "bin"))
+    return box
+
+
+def gate_stub(box, code):
+    for name in ("python", "python3"):
+        path = os.path.join(box, "bin", name)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(f"#!/usr/bin/env bash\nexit {code}\n")
+        os.chmod(path, 0o755)
+
+
+def run_step(box, step, gate_exit, event):
+    """Execute one step's script and return its real exit status, or None if it has no script.
+
+    `bash -e` is GitHub's own default shell for a `run:` step on Linux, so a failing command anywhere
+    in the script fails the step — which is why a bare `false` arms a workflow just as surely as an
+    explicit `exit 1`, and why observing the status catches both without knowing either.
+    """
+    script = step.get("run")
+    if script is None:
+        return None
+    env = {
+        "PATH": os.path.join(box, "bin") + os.pathsep + os.environ.get("PATH", ""),
+        "HOME": box,
+        "GITHUB_OUTPUT": os.path.join(box, "github_output"),
+        "GITHUB_STEP_SUMMARY": os.path.join(box, "github_step_summary"),
+    }
+    for key, value in (step.get("env") or {}).items():
+        env[str(key)] = substitute(str(value), gate_exit, event)
+    path = os.path.join(box, "step.sh")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(substitute(script, gate_exit, event))
+    try:
+        proc = subprocess.run(["bash", "-e", path], cwd=box, env=env,
+                              capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return 124
+    return proc.returncode
+
+
+def main():
+    problems = []
+    document = yaml.safe_load(open(WORKFLOW, encoding="utf-8"))
+
+    # ---- Question 1: is there a trigger filter? (allowlist) ------------------------------------
+    # PyYAML reads a bare `on:` key as the boolean True under its 1.1 schema.
+    triggers = document.get("on", document.get(True))
+    if not isinstance(triggers, dict):
+        problems.append("the `on:` block is not a mapping")
+    else:
+        for required in REQUIRED_TRIGGERS:
+            if required not in triggers:
+                problems.append(
+                    f"no `{required}` trigger — design 6.2 requires both: a gate that only runs on "
+                    "pull_request is bypassed by a merge queue, and one that only runs on merge_group "
+                    "reports on no ordinary pull request at all"
+                )
+        for name, config in triggers.items():
+            if name not in TRIGGER_KEYS:
+                problems.append(f"unexpected trigger `{name}` — only {sorted(TRIGGER_KEYS)} are permitted")
+                continue
+            if config is None:
+                continue
+            if not isinstance(config, dict):
+                problems.append(f"trigger `{name}` is not a mapping")
+                continue
+            extra = sorted(set(config) - TRIGGER_KEYS[name])
+            if extra:
+                problems.append(
+                    f"trigger `{name}` carries filter key(s) {extra} — only "
+                    f"{sorted(TRIGGER_KEYS[name])} is permitted. ANY filter means GitHub may create no "
+                    "check run for some pull requests, and branch protection then waits forever "
+                    "(design 6.2). This is an allowlist on purpose: `paths`, `paths-ignore`, "
+                    "`branches`, `branches-ignore` and anything GitHub adds later are all refused by "
+                    "one rule that names none of them."
+                )
+
+    # ---- Question 2: what permissions apply? (effective, after job-level replacement) -----------
+    jobs = document.get("jobs") or {}
+    if list(jobs) != ["claim-fence"]:
+        problems.append(f"jobs are {list(jobs)!r}, not exactly ['claim-fence']")
+
+    for job_id, job in jobs.items():
+        if not isinstance(job, dict):
+            problems.append(f"job `{job_id}` is not a mapping")
+            continue
+        extra = sorted(set(job) - JOB_KEYS)
+        if extra:
+            problems.append(
+                f"job `{job_id}` carries unexpected job key(s) {extra} — only {sorted(JOB_KEYS)} are "
+                "permitted. A job-level `if:` in particular would let this producer silently not "
+                "report, which is the one thing an arming candidate must never do."
+            )
+        if "permissions" in job:
+            effective, source = job["permissions"], (
+                "the JOB-level block, which REPLACES the workflow-level block entirely rather than "
+                "merging with it"
+            )
+        else:
+            effective, source = document.get("permissions"), "the workflow-level block"
+        if effective != REQUIRED_PERMISSIONS:
+            problems.append(
+                f"job `{job_id}`'s EFFECTIVE permissions are {effective!r}, from {source} — not "
+                f"exactly {REQUIRED_PERMISSIONS}. Design 6.2 fixes the scopes, and 8.2 makes the "
+                "narrowness load-bearing rather than tidy."
+            )
+
+        # ---- Question 3: does this workflow arm? (executed, never matched) ----------------------
+        for index, step in enumerate(job.get("steps") or []):
+            if not isinstance(step, dict):
+                problems.append(f"job `{job_id}` step {index} is not a mapping")
+                continue
+            extra = sorted(set(step) - STEP_KEYS)
+            if extra:
+                problems.append(
+                    f"job `{job_id}` step {index} carries unexpected step key(s) {extra} — only "
+                    f"{sorted(STEP_KEYS)} are permitted. `shell:` and `continue-on-error:` both change "
+                    "what a step's exit status MEANS, so admitting either would make the execution "
+                    "measurement below answer a different question than the one it reports."
+                )
+            uses = step.get("uses")
+            if uses is not None and uses not in PERMITTED_USES:
+                problems.append(
+                    f"job `{job_id}` step {index} uses `{uses}`, which is not one of "
+                    f"{sorted(PERMITTED_USES)} — an action's failure is not a verdict this producer is "
+                    "allowed to enforce, and its script cannot be executed here to check."
+                )
+
+        box = build_sandbox(ROOT)
+        for gate_exit in GATE_EXITS:
+            gate_stub(box, gate_exit)
+            for event in EVENTS:
+                for index, step in enumerate(job.get("steps") or []):
+                    if not isinstance(step, dict):
+                        continue
+                    status = run_step(box, step, gate_exit, event)
+                    if status not in (None, 0):
+                        problems.append(
+                            f"job `{job_id}` step {index} ({step.get('name') or step.get('uses')}) "
+                            f"EXITS {status} when the gate returns {gate_exit} on a {event} event — "
+                            "this producer is OBSERVE-ONLY (design 9.1 step 1), so its verdict must "
+                            "never fail the job; arming is slice 8 (.github#2723). Measured by "
+                            "EXECUTING the step under `bash -e`, GitHub's own default shell, not by "
+                            "matching its text."
+                        )
+
+    for problem in problems:
+        print(problem)
+
+
+main()
+FLOWPY
+
+flow_check() {  # <workflow-file> -> one line per violation
+  python3 "$WORK/flowcheck.py" "$1" "$ROOT"
 }
 
 VIOL="$(flow_check "$FLOW")"
 if [ -z "$VIOL" ]; then
-  ok "K1 the workflow triggers on pull_request AND merge_group, unfiltered, read-only, observe-only"
+  ok "K1 the workflow is unfiltered, read-only by effective permission, and cannot fail on a verdict"
 else
-  bad "K1 the workflow triggers on pull_request AND merge_group, unfiltered, read-only, observe-only" "$VIOL"
+  bad "K1 the workflow is unfiltered, read-only by effective permission, and cannot fail on a verdict" "$VIOL"
 fi
 
-# --- the inversions, so K1 is not an absence that a broken check would satisfy --------------------
-mutate() {  # <name> <sed-expr> <expected-substring>
-  local name="$1" expr="$2" want="$3" f="$WORK/mutant.yml"
-  sed "$expr" "$FLOW" > "$f"
-  if ! cmp -s "$f" "$FLOW"; then
-    local got; got="$(flow_check "$f" || true)"
-    case "$got" in
-      *"$want"*) ok "$name";;
-      *) bad "$name" "the mutation was not caught. flow_check said: ${got:-<nothing>}";;
-    esac
-  else
-    bad "$name" "the sed expression changed nothing, so this inversion tested nothing"
-  fi
-}
+# ------------------------------------------------------------------------------------------------
+# THE INVERSIONS. Each mutant is a real edit to a copy of the workflow, and each must be CAUGHT with
+# the reason named — a mutation caught by the wrong rule is a vacuous pass wearing a red badge, and a
+# mutation that changes nothing has tested nothing. The first six are exactly the six round-1 escapes.
+# ------------------------------------------------------------------------------------------------
+cat > "$WORK/mutants.py" <<'MUTPY'
+"""Write one mutant workflow per inversion, each with the substring its violation must contain."""
+import json, os, sys
 
-mutate "K2 removing the merge_group trigger IS caught" \
-  '/^  merge_group:$/d' "no \`merge_group\` trigger"
-mutate "K3 adding a paths: filter IS caught" \
-  's|^    types: \[opened, synchronize, reopened, edited\]$|    types: [opened]\n    paths: ["scripts/**"]|' \
-  "a \`paths:\` filter"
-mutate "K4 widening permissions IS caught" \
-  's|^  contents: read$|  contents: write|' "not exactly contents+issues read"
-mutate "K5 an enforcing verdict step (exit 1) IS caught — arming is slice 8's" \
-  's|^          echo "::warning title=fsgg-claim-fence: finding (observe-only).*$|&\n          exit 1|' \
-  "OBSERVE-ONLY"
+FLOW, OUT = sys.argv[1], sys.argv[2]
+text = open(FLOW, encoding="utf-8").read()
+os.makedirs(OUT, exist_ok=True)
+
+ARMS = "OBSERVE-ONLY"
+FILTER = "carries filter key(s)"
+PERMS = "EFFECTIVE permissions"
+
+EVALUATE_TAIL = '          echo "rc=$rc" >> "$GITHUB_OUTPUT"\n'
+FINDING_WARNING = (
+    '          echo "::warning title=fsgg-claim-fence: finding (observe-only)::The merge fence would '
+    'refuse this head. See the job summary for which of design §6.3\'s checks failed. Nothing is '
+    'blocked: this context is not armed."\n'
+)
+INCONCLUSIVE_WARNING = (
+    '          echo "::warning title=fsgg-claim-fence: inconclusive (observe-only)::The gate exited '
+    'with a code this workflow does not classify. Nothing is blocked: this context is not armed."\n'
+)
+
+MUTANTS = [
+    # --- the six round-1 escapes ---------------------------------------------------------------
+    ("R1 `[ \"$rc\" = 0 ] || exit \"$rc\"` on the evaluate step arms it",
+     lambda t: t.replace(EVALUATE_TAIL, EVALUATE_TAIL + '          [ "$rc" = 0 ] || exit "$rc"\n', 1), ARMS),
+    ("R2 a one-line `run: exit 1` step arms it",
+     lambda t: t.replace("      - uses: actions/checkout@v7\n",
+                         "      - uses: actions/checkout@v7\n      - name: arm\n        run: exit 1\n", 1), ARMS),
+    ("R3 a bare `false` arms it, and carries NO `exit` token at all",
+     lambda t: t.replace(FINDING_WARNING, FINDING_WARNING + "          false\n", 1), ARMS),
+    ("R4 `if [ \"$RC\" != 0 ]; then exit 1; fi` arms it — #266 Instance 4's own `then ...` spelling",
+     lambda t: t.replace(INCONCLUSIVE_WARNING,
+                         INCONCLUSIVE_WARNING + '          if [ "$RC" != 0 ]; then exit 1; fi\n', 1), ARMS),
+    ("R5 `paths-ignore:` is a real trigger filter, not an `exit` spelling",
+     lambda t: t.replace("    types: [opened, synchronize, reopened, edited]\n",
+                         '    types: [opened, synchronize, reopened, edited]\n    paths-ignore: ["docs/**"]\n', 1), FILTER),
+    ("R6 a JOB-level permissions block REPLACES the workflow-level one",
+     lambda t: t.replace("  claim-fence:\n    runs-on: ubuntu-latest\n",
+                         "  claim-fence:\n    permissions:\n      contents: write\n    runs-on: ubuntu-latest\n", 1), PERMS),
+    # --- dimensions the round-1 escapes did not reach, bound by the same three rules -------------
+    ("R7 `branches:` is a filter too, and the allowlist names it nowhere",
+     lambda t: t.replace("    types: [opened, synchronize, reopened, edited]\n",
+                         "    types: [opened, synchronize, reopened, edited]\n    branches: [main]\n", 1), FILTER),
+    ("R8 `paths:` — the one the round-1 check DID catch — is still caught by the allowlist",
+     lambda t: t.replace("    types: [opened, synchronize, reopened, edited]\n",
+                         '    types: [opened, synchronize, reopened, edited]\n    paths: ["scripts/**"]\n', 1), FILTER),
+    ("R9 removing the merge_group trigger is caught",
+     lambda t: t.replace("  merge_group:\n", "", 1), "no `merge_group` trigger"),
+    ("R10 removing the pull_request trigger is caught",
+     lambda t: t.replace("  pull_request:\n    types: [opened, synchronize, reopened, edited]\n", "", 1),
+     "no `pull_request` trigger"),
+    ("R11 widening the workflow-level permissions is caught",
+     lambda t: t.replace("  contents: read\n", "  contents: write\n", 1), PERMS),
+    ("R12 a job-level `if:` would let the producer silently not report",
+     lambda t: t.replace("  claim-fence:\n    runs-on: ubuntu-latest\n",
+                         "  claim-fence:\n    if: github.actor != 'nobody'\n    runs-on: ubuntu-latest\n", 1),
+     "unexpected job key(s)"),
+    ("R13 `continue-on-error:` changes what an exit status MEANS",
+     lambda t: t.replace("      - name: Run the claim-fence fixture (no network)\n",
+                         "      - name: Run the claim-fence fixture (no network)\n        continue-on-error: true\n", 1),
+     "unexpected step key(s)"),
+    ("R14 a non-default `shell:` changes it too",
+     lambda t: t.replace("      - name: Run the claim-fence fixture (no network)\n",
+                         "      - name: Run the claim-fence fixture (no network)\n        shell: sh\n", 1),
+     "unexpected step key(s)"),
+    ("R15 an unvetted `uses:` cannot be executed, so it cannot be certified",
+     lambda t: t.replace("      - uses: actions/checkout@v7\n",
+                         "      - uses: actions/checkout@v7\n      - uses: some/action@v1\n", 1),
+     "which is not one of"),
+    ("R16 pointing the fixture step at another path is caught, with no special case for it",
+     lambda t: t.replace("        run: bash tests/claim-fence/run.sh\n",
+                         "        run: bash tests/claim-generation/run.sh\n", 1), ARMS),
+    ("R17 arming the OK step — the one verdict a reader would never think to check",
+     lambda t: t.replace('            echo "### fsgg-claim-fence: OK (observe-only)"\n',
+                         '            echo "### fsgg-claim-fence: OK (observe-only)"\n            exit 3\n', 1), ARMS),
+]
+
+index = []
+for number, (name, mutate, expect) in enumerate(MUTANTS, start=1):
+    mutated = mutate(text)
+    slug = f"{number:02d}"
+    open(os.path.join(OUT, slug + ".yml"), "w", encoding="utf-8").write(mutated)
+    index.append({"slug": slug, "name": name, "expect": expect, "changed": mutated != text})
+open(os.path.join(OUT, "index.json"), "w", encoding="utf-8").write(json.dumps(index))
+MUTPY
+
+MUTANTS="$WORK/mutants"
+python3 "$WORK/mutants.py" "$FLOW" "$MUTANTS"
+
+while IFS=$'\t' read -r slug name expect changed; do
+  if [ "$changed" != "True" ]; then
+    bad "$name" "the mutation changed nothing, so this inversion tested nothing"
+    continue
+  fi
+  got="$(flow_check "$MUTANTS/$slug.yml" || true)"
+  case "$got" in
+    *"$expect"*) ok "$name";;
+    *) bad "$name" "NOT CAUGHT — this is the escape shape itself. flow_check said: ${got:-<nothing>}";;
+  esac
+done < <(python3 -c '
+import json, sys
+for row in json.load(open(sys.argv[1])):
+    print("\t".join([row["slug"], row["name"], row["expect"], str(row["changed"])]))
+' "$MUTANTS/index.json")
 
 echo
 echo "----------------------------------------------------------------------"
