@@ -20,6 +20,7 @@ module Operation =
     type Refusal =
         | Blank of part: Part
         | ControlCharacter of part: Part
+        | UnpairedSurrogate of part: Part
         | ItemNotFullyQualified of item: string
         | ReceiverNotFullyQualified of receiver: string
         | GenerationNotServerAssigned of generation: string
@@ -57,6 +58,12 @@ module Operation =
     /// The pre-image field separator. Named once so that the refusal below and the rendering agree by
     /// construction: `separatorFree` is what keeps this character out of the domain, and
     /// `String.concat` is injective over 4-tuples exactly because of it.
+    ///
+    /// That is only HALF of what the key needs, and the other half is `wellFormedUtf16` below. The key
+    /// is not `sha256(concat …)`; it is `sha256(UTF8(concat …))`, and `Encoding.UTF8.GetBytes` uses the
+    /// REPLACEMENT fallback — every unpaired surrogate, high or low, encodes to the same `EF BF BD`.
+    /// So separator-freedom alone gives distinct pre-image STRINGS that can still hash to one key.
+    /// Both refusals together are what make the composition injective end to end.
     [<Literal>]
     let private Separator = "\n"
 
@@ -76,6 +83,34 @@ module Operation =
     /// appended. Stating the guarantee over the DOMAIN rather than over the current field order is what
     /// keeps that future change from being a silent one.
     let private separatorFree (value: string) = value |> Seq.exists Char.IsControl |> not
+
+    /// Well-formed UTF-16: every high surrogate is followed by a low surrogate, and no low surrogate
+    /// stands alone. This is EXACTLY the precondition under which `Encoding.UTF8.GetBytes` is
+    /// injective, which is the property the key needs and which separator-freedom does not supply —
+    /// `Char.IsControl`, `Char.IsWhiteSpace` and the `owner/repo` rules are all false for a surrogate,
+    /// so before this predicate existed `"FS-GG/r\uD800#2311"` and `"FS-GG/r\uDC00#2311"` were two
+    /// admitted, genuinely different pre-images that both encoded to `… 72 EF BF BD …` and composed
+    /// ONE key. Found in independent review of this module's first head and closed here.
+    ///
+    /// It refuses UNPAIRED surrogates rather than all of them, which is narrower than banning
+    /// `Char.IsSurrogate` outright and is the deliberate choice: a well-formed astral character is
+    /// UTF-8-encodable, distinguishable, and harmless, so refusing it would buy nothing and would make
+    /// the admitted domain smaller than the guarantee requires. Note also that component-level
+    /// well-formedness is enough for the CONCATENATION, because the separator is not a surrogate — a
+    /// component ending in a high surrogate is already unpaired within itself and never reaches the
+    /// join.
+    let private wellFormedUtf16 (value: string) =
+        let rec check index =
+            if index >= value.Length then true
+            else
+                let current = value[index]
+
+                if Char.IsHighSurrogate current then
+                    if index + 1 < value.Length && Char.IsLowSurrogate value[index + 1] then check (index + 2) else false
+                elif Char.IsLowSurrogate current then false
+                else check (index + 1)
+
+        check 0
 
     /// A canonical, server-assigned GitHub id: a non-empty run of ASCII digits whose first digit is not
     /// zero. The leading-zero clause is not pedantry — `0012` and `12` are the same generation and would
@@ -111,6 +146,7 @@ module Operation =
     let private wellFormed part (value: string) =
         if isBlank value then [ Blank part ]
         elif not (separatorFree value) then [ ControlCharacter part ]
+        elif not (wellFormedUtf16 value) then [ UnpairedSurrogate part ]
         else []
 
     let wire op =
@@ -162,6 +198,8 @@ module Operation =
         | Blank part -> $"the %s{partName part} component is empty"
         | ControlCharacter part ->
             $"the %s{partName part} component carries a control character, which the operation key's pre-image domain excludes"
+        | UnpairedSurrogate part ->
+            $"the %s{partName part} component carries an unpaired surrogate, which UTF-8 encodes to the replacement character and would let two different components compose one key"
         | ItemNotFullyQualified item ->
             $"the item '%s{item}' is not spelled owner/repo#N — the board's <repo>#N shorthand is not GitHub grammar"
         | ReceiverNotFullyQualified receiver -> $"the receiver '%s{receiver}' is not spelled owner/repo"

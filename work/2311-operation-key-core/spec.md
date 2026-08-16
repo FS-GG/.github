@@ -88,9 +88,14 @@ fences anything on its own.
   values, when their pre-images are rendered, then all pre-images are pairwise distinct and all
   resulting keys are pairwise distinct — the injectivity claim established over the whole set, not over
   a chosen pair.
-- AC-004 [US-004] [FR-003]: Given a component value that itself contains the pre-image's field
-  separator, when it is composed, then it cannot be made to collide with a different tuple whose fields
-  are split differently — separator injection is refused at construction rather than hashed.
+- AC-004 [US-004] [FR-003]: Given a component value that cannot survive the composition's two stages
+  injectively, when it is composed, then it is refused at construction rather than hashed. There are two
+  such classes and the criterion covers both, because the key is `sha256(UTF8(concat …))` and each stage
+  has its own precondition: (i) a component containing the pre-image's field separator, which would let
+  two tuples whose fields split differently render one pre-image; and (ii) a component that is not
+  well-formed UTF-16, since `Encoding.UTF8.GetBytes` maps every unpaired surrogate to the same
+  replacement bytes and would let two distinct pre-images compose one key. A well-formed astral
+  character is admitted — the refusal is exactly as wide as the guarantee requires.
 - AC-005 [US-003] [FR-002]: Given the `Operation` vocabulary, when a total function over it is written
   without a wildcard arm, then every case is named; and when a case is removed from that function, the
   project fails to compile. The vocabulary admits no unknown literal at runtime: there is no
@@ -130,8 +135,9 @@ Each requirement is one physical line, because the checklist coverage scan reads
 - AMB-002: `gen` is defined as *"the comment id of the winning `fsgg:claim` marker"*, and the engine
   substitutes the literal `released` when there is no marker (`Client.fs`). May a key be composed on
   `released`?
-- AMB-003: The pre-image is `item \n gen \n receiver \n op`. What stops a component that itself
-  contains a newline from making two different tuples render one pre-image?
+- AMB-003: The pre-image is `item \n gen \n receiver \n op`, and the key is its SHA-256 over UTF-8.
+  What stops two distinct admitted tuples from composing one key — at the concatenation stage, and at
+  the encoding stage?
 - AMB-004: How is "adding a case is a compile error at every consumer" tested, given a test cannot
   compile a hypothetical fourth case?
 - AMB-005: What exactly does the reference-graph check assert, and what is its inversion?

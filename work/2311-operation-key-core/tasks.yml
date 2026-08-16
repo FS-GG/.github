@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2311-operation-key-core/spec.md
-    digest: 2242ebd16d8a41cedab2fec3369723947adc4087d67e8d482a1dafb737839fe1
+    digest: 5c56c5e80f3165c32e8f7b18a8abe47ae08def5973b533a9b75722c70dec5e65
     schemaVersion: 1
   - label: clarifications
     path: work/2311-operation-key-core/clarifications.md
-    digest: 20b66d39ee950bd2ebbc4075a9553a9bdf7ee85480b8e599f4704f3f6fea1e64
+    digest: 2652aa35e3c5979381bc62ef6862c81998ff079c62c9676f9c7439f231cc8193
     schemaVersion: 1
   - label: checklist
     path: work/2311-operation-key-core/checklist.md
-    digest: 08d37479857e494eed4966fb2d488af81bbf89bce92d3207851a65e2355ea21e
+    digest: 2161320b3e4e99f69c77aaab135dd743145376396d7ec814aa69f714e8af1eec
     schemaVersion: 1
   - label: plan
     path: work/2311-operation-key-core/plan.md
-    digest: f9071ac2bb8d78718b37d69bd89136f103a7a256357ccf1ea1db88f89daf9cfd
+    digest: 70bdb00b98211d3bc2e1720bb3f424b4765802be40f1f7c09b92440579f12897
     schemaVersion: 1
 tasks:
   - id: T001

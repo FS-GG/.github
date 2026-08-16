@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2311-operation-key-core/clarifications.md
 
 ## Source Snapshot
-- spec: work/2311-operation-key-core/spec.md sha256:2242ebd16d8a41cedab2fec3369723947adc4087d67e8d482a1dafb737839fe1 schemaVersion:1
-- clarifications: work/2311-operation-key-core/clarifications.md sha256:20b66d39ee950bd2ebbc4075a9553a9bdf7ee85480b8e599f4704f3f6fea1e64 schemaVersion:1
+- spec: work/2311-operation-key-core/spec.md sha256:5c56c5e80f3165c32e8f7b18a8abe47ae08def5973b533a9b75722c70dec5e65 schemaVersion:1
+- clarifications: work/2311-operation-key-core/clarifications.md sha256:2652aa35e3c5979381bc62ef6862c81998ff079c62c9676f9c7439f231cc8193 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-006] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

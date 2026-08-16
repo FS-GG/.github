@@ -17,7 +17,7 @@ publicOrToolFacingImpact: true
 ## Clarification Questions
 - **CQ-001** (AMB-001): §3.3 says *"Reuse `Delivery.digest` rather than writing a second one"*, but that function is `private` and `Delivery.fs` is outside this slice's touch-set. What does this slice do?
 - **CQ-002** (AMB-002): May a key be composed on the literal generation `released`, which the engine substitutes when no claim marker is held?
-- **CQ-003** (AMB-003): What stops a component containing the pre-image separator from making two different tuples render one pre-image?
+- **CQ-003** (AMB-003): What stops two distinct admitted tuples from composing one key — at the concatenation stage, and at the UTF-8 encoding stage?
 - **CQ-004** (AMB-004): How is *"adding a case is a compile error at every consumer"* tested, given a test cannot compile a hypothetical fourth case?
 - **CQ-005** (AMB-005): What exactly does the reference-graph check assert, and what is its inversion?
 - **CQ-006** (AMB-006): Should `OpKey`'s representation be hidden so `compose` is the only producer?
@@ -62,13 +62,32 @@ forbids — a failed or absent read becoming indistinguishable from a legitimate
 requires the generation to be a non-empty run of decimal digits and refuses anything else, `released`
 included, as a value the caller must handle.
 
-**CQ-003.** Nothing, if the separator is merely *chosen*; so it is not merely chosen. Injectivity of
-`String.concat "\n"` over 4-tuples holds exactly when no field can contain the separator, so the
-domain excludes it: every component is validated to contain no `\n`, no `\r`, and no other control
-character before any hashing happens. That turns *"different tuples give different keys"* from a
-property sampled by examples into a property that follows from the construction — and it is why the
-tests assert distinctness of the **pre-images** as well as of the digests. A component carrying a
-newline is a refusal, not an input that gets hashed into an ambiguous key.
+**CQ-003.** Two clauses, one per stage, and stating only the first is an error this answer originally
+made. The key is `sha256(UTF8(concat …))`, so injectivity has to survive **both** maps.
+
+1. **The concatenation.** Injectivity of `String.concat "\n"` over 4-tuples holds exactly when no field
+   can contain the separator, so the domain excludes it: every component is validated to contain no
+   `\n`, no `\r`, and no other control character before any hashing happens.
+2. **The encoder.** `Encoding.UTF8.GetBytes` is injective only on **well-formed UTF-16**: it uses the
+   REPLACEMENT fallback, so every unpaired surrogate — high or low — encodes to the same `EF BF BD`.
+   Nothing else in the validation chain refuses one (`Char.IsControl`, `Char.IsWhiteSpace` and the
+   `owner/repo` rules are all false for a surrogate), so before this clause existed
+   `"FS-GG/r\uD800#2311"` and `"FS-GG/r\uDC00#2311"` were two admitted, genuinely distinct pre-images
+   that composed **one** key, `57fa828b1c3b83ebc6022180fe5eefa1fec209f23a32dfa356e64f04160e1e3a`. The
+   domain therefore excludes unpaired surrogates too. It excludes only the UNPAIRED ones: a well-formed
+   astral character is UTF-8-encodable and distinguishable, so refusing it would shrink the domain
+   below what the guarantee needs.
+
+Both together turn *"different tuples give different keys"* from a property sampled by examples into a
+property that follows from the construction — and it is why the tests assert distinctness of the
+**pre-images** as well as of the digests, and why each clause carries its own inversion evidence. A
+component carrying a newline or a lone surrogate is a refusal, not an input that gets hashed into an
+ambiguous key.
+
+**Provenance of clause 2, recorded rather than absorbed:** it was missing from this item's first pushed
+head and was found by independent review (critic `kite-3d80`, round 1). It is repaired here, not
+excused: the finding was unreachable from GitHub-shaped input, but the `.fsi` is the contract slices
+2-6 build on, and a guarantee that is false in the interface would be inherited seven more times.
 
 **CQ-004.** In two parts, because neither part alone is honest.
 
@@ -107,7 +126,7 @@ producer.
 
 - **DEC-001** [CQ-001] [AMB:AMB-001] [FR-003]: The SHA-256-hex primitive is implemented privately in `Operation.fs`, matching the seven existing per-module private copies in `FS.GG.Coord.Core`; the operation-key **composition rule** has exactly one home, which is what §3.3 protects. Consolidating the primitive is routed to the board analyst as a finding packet, not absorbed and not filed as a row here.
 - **DEC-002** [CQ-002] [AMB:AMB-002] [FR-006] [AC-009]: `compose` requires the generation to be a non-empty run of decimal digits — a server-assigned comment id — and refuses `released` and every other non-numeric spelling as a typed refusal the caller must handle.
-- **DEC-003** [CQ-003] [AMB:AMB-003] [FR-003] [AC-004]: The pre-image domain excludes the separator: every component is refused if it contains `\n`, `\r`, or any other control character, so `String.concat "\n"` is injective by construction and the distinctness claim rests on that rather than on examples.
+- **DEC-003** [CQ-003] [AMB:AMB-003] [FR-003] [AC-004]: The domain excludes both collision classes, one per composition stage — every component is refused if it contains `\n`, `\r`, or any other control character (so `String.concat "\n"` is injective), and refused if it is not well-formed UTF-16 (so `Encoding.UTF8.GetBytes` is injective); unpaired surrogates only, since a well-formed astral character is encodable and distinguishable. The distinctness claim rests on those two clauses rather than on examples, and each carries its own inversion evidence.
 - **DEC-004** [CQ-004] [AMB:AMB-004] [FR-002] [AC-005]: Closedness is enforced by the compiler — no catch-all arm, no `string -> Op` parse, `TreatWarningsAsErrors` making FS0025 an error — with a reflection-based case-count tripwire described as a tripwire, and a delete-an-arm mutation as its inversion evidence.
 - **DEC-005** [CQ-005] [AMB:AMB-005] [FR-004] [AC-007]: Purity is asserted over `Assembly.GetReferencedAssemblies()` with a rule-shaped `FS.GG.` prefix ban plus a transport-name ban, and its inversion is a real `System.Net.Http.HttpClient` reference added to `Operation.fs`.
 - **DEC-006** [CQ-006] [AMB:AMB-006] [FR-001]: `OpKey` stays a representation-transparent single-case union, consistent with every other type in this core; the `.fsi` states that `compose` is the only sanctioned producer.

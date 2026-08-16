@@ -65,9 +65,16 @@ module Operation =
         /// The component is empty or whitespace.
         | Blank of part: Part
         /// The component carries a control character. This is the refusal that keeps the pre-image
-        /// separator OUT OF THE DOMAIN, which is what makes `preimage` injective by construction rather
-        /// than by sampling — see `preimage`.
+        /// separator OUT OF THE DOMAIN — one of the two clauses that make `compose` injective by
+        /// construction rather than by sampling. See `preimage`.
         | ControlCharacter of part: Part
+        /// The component is not well-formed UTF-16 — it carries a high surrogate with no low surrogate
+        /// after it, or a low surrogate with no high surrogate before it. This is the SECOND clause,
+        /// and it is about the ENCODER rather than the separator: `Encoding.UTF8.GetBytes` uses the
+        /// replacement fallback, so every unpaired surrogate becomes the same three bytes and two
+        /// genuinely different pre-image strings could otherwise compose ONE key. Well-formed astral
+        /// characters are ADMITTED — the refusal is exactly as wide as the guarantee needs and no wider.
+        | UnpairedSurrogate of part: Part
         /// `item` is not `owner/repo#N`. The board's `<repo>#N` shorthand lands here: it is not GitHub
         /// grammar, and `.github#2107` is what it costs when it reaches a field GitHub parses.
         | ItemNotFullyQualified of item: string
@@ -100,18 +107,31 @@ module Operation =
     /// separator-free payloads — the three spellings cannot collide, because `merge` carries no
     /// colon and the other two carry different prefixes.
     ///
-    /// Written with no wildcard arm on purpose: both this project and its test project set
-    /// `TreatWarningsAsErrors` with an empty `WarningsNotAsErrors`, so FS0025 is an ERROR and a fourth
-    /// case cannot be added without visiting every consumer.
+    /// Written with no wildcard arm on purpose, so that FS0025 is an ERROR and a fourth case cannot be
+    /// added without visiting every consumer. The two projects reach that the same way by two slightly
+    /// different routes, and the difference is stated because the earlier wording got it wrong: THIS
+    /// project sets `TreatWarningsAsErrors` and then an EMPTY `WarningsNotAsErrors`, which demotes
+    /// nothing; `tests/FS.GG.Coord.Core.Tests` sets `TreatWarningsAsErrors` and NO demotion list at
+    /// all. Either way nothing demotes FS0025, and it was measured at both consumers rather than read
+    /// off the project files.
     val wire: op: Op -> string
 
     /// The exact bytes that get hashed, or every reason they could not be produced.
     ///
-    /// Exported because it is where this module's distinctness claim is DECIDABLE. `String.concat "\n"`
-    /// is injective over 4-tuples exactly when no field can contain the separator — so the domain
-    /// excludes it: every component is refused for any control character, `\n` and `\r` included,
-    /// BEFORE anything is hashed. "Different inputs give different keys" is therefore a consequence of
-    /// the construction, not a property sampled by a handful of examples.
+    /// Exported because it is where this module's distinctness claim is DECIDABLE. The claim is about
+    /// `compose`, which is `sha256(UTF8(preimage …))`, so it needs TWO clauses and not one — stating
+    /// only the first is the error an independent critic caught on this module's first head:
+    ///
+    ///   1. `String.concat "\n"` is injective over 4-tuples exactly when no field can contain the
+    ///      separator, so the domain excludes it: every component is refused for any control
+    ///      character, `\n` and `\r` included.
+    ///   2. `Encoding.UTF8.GetBytes` is injective exactly on well-formed UTF-16, because its
+    ///      REPLACEMENT fallback maps every unpaired surrogate to the same `EF BF BD`. So the domain
+    ///      excludes those too. Without this clause `"FS-GG/r\uD800#2311"` and `"FS-GG/r\uDC00#2311"`
+    ///      were two admitted, genuinely distinct pre-images composing one key.
+    ///
+    /// Both refusals happen BEFORE anything is hashed, so "different inputs give different keys" is a
+    /// consequence of the construction rather than a property sampled by a handful of examples.
     ///
     /// Answers idempotence (it is the key's pre-image). Refusals accumulate: all of them are reported,
     /// not the first.

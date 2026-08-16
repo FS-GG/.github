@@ -14,8 +14,13 @@ open FS.GG.Coord
 /// from a constant." So the distinctness claim is carried by three things and not by a handful of
 /// pairs: an INDEPENDENT recomputation of the digest from the documented pre-image (a constant would
 /// fail it), a whole-set injectivity check over ninety tuples rather than a chosen pair, and — the
-/// load-bearing one — the demonstration that the two tuples which WOULD render one pre-image under an
-/// admitted separator are both refused before anything is hashed.
+/// load-bearing ones — the demonstrations that the tuples which WOULD collapse are refused before
+/// anything is hashed. There are TWO of those, because the key is `sha256(UTF8(concat …))` and each
+/// stage needs its own clause: the separator clause for `String.concat`, and the well-formed-UTF-16
+/// clause for `Encoding.UTF8.GetBytes`, whose replacement fallback maps every unpaired surrogate to
+/// one byte sequence. The second was missing from this module's first head and was found in
+/// independent review; the test that closes it is
+/// `…an unpaired surrogate is refused, because UTF-8 would collapse it`.
 module OpKeyTests =
 
     let private item = "FS-GG/.github#2311"
@@ -36,6 +41,20 @@ module OpKeyTests =
         match Operation.compose i g r o with
         | Ok key -> failwithf "expected a refusal, composed %s" key.Value
         | Error refusals -> refusals
+
+    /// The whole outcome as one legible line, never throwing. Used where several legs must ALL be
+    /// evaluated before a single assertion compares them: a helper that throws on an unexpected `Ok`
+    /// would abandon the remaining legs exactly when they matter most, which is the gap an independent
+    /// critic found in this file's first evidence.
+    ///
+    /// It renders to STRING rather than returning the typed outcome for a reason that only shows up
+    /// when the assertion fails: xUnit's collection formatter prints a nested
+    /// `Result<string, Refusal list>` as its .NET type name, so the diff of a failing run said nothing
+    /// at all. A gate whose red is unreadable is most of the way back to a gate that cannot fail.
+    let private outcomeOf i g r o =
+        match Operation.compose i g r o with
+        | Ok key -> $"composed %s{key.Value}"
+        | Error refusals -> refusals |> List.map (sprintf "%A") |> String.concat "; "
 
     /// Ninety tuples: every component varied over several values, and every case of the vocabulary
     /// represented. The count is asserted so the set cannot silently shrink under a later edit.
@@ -103,7 +122,10 @@ module OpKeyTests =
 
     [<Fact>]
     let ``#2311 separator injection cannot forge a colliding pre-image, because the domain excludes it`` () =
-        // THE CONSTRUCTION, stated as the two tuples it rules out. These differ, yet
+        // THE FIRST HALF OF THE CONSTRUCTION — the `String.concat` stage. The encoder stage has its own
+        // test, `…an unpaired surrogate is refused…`, and neither clause is sufficient alone.
+        //
+        // Stated as the two tuples it rules out. These differ, yet
         // String.concat "\n" would render ONE pre-image for both if any component could carry the
         // separator:
         //   ("FS-GG/.github#2311\n7", "8",    "FS-GG/FS.GG.Net", Merge)
@@ -123,24 +145,86 @@ module OpKeyTests =
         // but it would the moment a fifth field is appended. The property is therefore stated over the
         // DOMAIN — no admitted component carries the separator — rather than over the field order that
         // happens to hold now.
-        Assert.Equal<Operation.Refusal list>(
-            [ Operation.ControlCharacter Operation.Item ],
-            refusalsOf "FS-GG/.github#2311\n7" "8" receiver Operation.Merge
+        // ALL FOUR LEGS ARE EVALUATED BEFORE THE ASSERT, and that shape is deliberate. Written as four
+        // consecutive `Assert.Equal` calls, xUnit stops at the first failure — so under the mutation
+        // that inverts this gate only the FIRST leg was ever measured, and the payload leg, which is
+        // the one the paragraph above turns on, was reported by nobody. An independent critic caught
+        // exactly that on this module's first head. Collecting the observations first and comparing
+        // once means every leg is computed, and a failure shows the whole list rather than its head.
+        let observed =
+            [ outcomeOf "FS-GG/.github#2311\n7" "8" receiver Operation.Merge
+              outcomeOf item "7\n8" receiver Operation.Merge
+              outcomeOf item generation "FS-GG/FS.GG.Net\r" Operation.Merge
+              outcomeOf item generation receiver (Operation.Dispatch "kit\tmaterialize") ]
+
+        Assert.Equal<string list>(
+            [ "ControlCharacter Item"
+              "ControlCharacter Generation"
+              "ControlCharacter Receiver"
+              "ControlCharacter OperationPayload" ],
+            observed
         )
 
-        Assert.Equal<Operation.Refusal list>(
-            [ Operation.ControlCharacter Operation.Generation ],
-            refusalsOf item "7\n8" receiver Operation.Merge
+    [<Fact>]
+    let ``#2311 an unpaired surrogate is refused, because UTF-8 would collapse it into one key`` () =
+        // THE SECOND HALF OF THE CONSTRUCTION, and the one this module's first head was missing.
+        // `Encoding.UTF8.GetBytes` uses the REPLACEMENT fallback, so UTF8("r\uD800") and
+        // UTF8("r\uDC00") are both `72 EF BF BD`. Nothing else in the chain refuses a surrogate —
+        // Char.IsControl, Char.IsWhiteSpace and the owner/repo rules are all false for one — so these
+        // two items were admitted, rendered genuinely DIFFERENT pre-images, and composed ONE key.
+        // The surrogates are built at RUNTIME, and that is load-bearing rather than stylistic: the F#
+        // compiler folds a lone `\uD800` escape in a string literal to U+FFFD before it ever reaches
+        // the runtime — measured, `"r\uD800" |> Seq.map int` yields `[114; 65533]` — so a test written
+        // with literals would compare two identical replacement characters and pass vacuously while
+        // asserting nothing. `char 0xD800` survives.
+        let highOnly = "FS-GG/r" + string (char 0xD800) + "#2311"
+        let lowOnly = "FS-GG/r" + string (char 0xDC00) + "#2311"
+
+        Assert.NotEqual<string>(highOnly, lowOnly)
+        Assert.Equal(0xD800, int highOnly[7])
+        Assert.Equal(0xDC00, int lowOnly[7])
+
+        // The collapse itself, measured rather than asserted: two different strings, one byte sequence.
+        Assert.Equal<byte[]>(Encoding.UTF8.GetBytes highOnly, Encoding.UTF8.GetBytes lowOnly)
+
+        // Every component, not only the item — a lone surrogate anywhere reaches the same encoder — and
+        // a REVERSED pair (low before high) is unpaired too. All six legs are evaluated before the
+        // single comparison, for the reason the separator test states.
+        let observed =
+            [ outcomeOf highOnly generation receiver Operation.Merge
+              outcomeOf lowOnly generation receiver Operation.Merge
+              outcomeOf item ("530" + string (char 0xD800) + "4654156") receiver Operation.Merge
+              outcomeOf item generation ("FS-GG/FS.GG.Net" + string (char 0xDC00)) Operation.Merge
+              outcomeOf item generation receiver (Operation.Dispatch("kit" + string (char 0xD800) + "materialize"))
+              outcomeOf item generation receiver (Operation.Publish(string (char 0xDC00) + string (char 0xD800))) ]
+
+        Assert.Equal<string list>(
+            [ "UnpairedSurrogate Item"
+              "UnpairedSurrogate Item"
+              "UnpairedSurrogate Generation"
+              "UnpairedSurrogate Receiver"
+              "UnpairedSurrogate OperationPayload"
+              "UnpairedSurrogate OperationPayload" ],
+            observed
         )
 
-        Assert.Equal<Operation.Refusal list>(
-            [ Operation.ControlCharacter Operation.Receiver ],
-            refusalsOf item generation "FS-GG/FS.GG.Net\r" Operation.Merge
-        )
+    [<Fact>]
+    let ``#2311 a WELL-FORMED astral character is admitted, and keys distinctly`` () =
+        // The refusal above is exactly as wide as the guarantee needs and no wider. A well-formed
+        // surrogate PAIR is UTF-8-encodable and distinguishable, so banning `Char.IsSurrogate`
+        // outright would shrink the admitted domain for nothing. This test is what stops the fix
+        // drifting into that blanket ban: it fails if the predicate ever refuses a valid pair.
+        let astral = "🚀" // U+1F680
+        Assert.Equal(2, astral.Length)
 
+        let withAstral = keyOf item generation receiver (Operation.Publish astral)
+        let withoutAstral = keyOf item generation receiver (Operation.Publish "rocket")
+        Assert.NotEqual<string>(withAstral, withoutAstral)
+
+        // And its own high half ALONE is refused, so admission is precision rather than indifference.
         Assert.Equal<Operation.Refusal list>(
-            [ Operation.ControlCharacter Operation.OperationPayload ],
-            refusalsOf item generation receiver (Operation.Dispatch "kit\tmaterialize")
+            [ Operation.UnpairedSurrogate Operation.OperationPayload ],
+            refusalsOf item generation receiver (Operation.Publish(string astral[0]))
         )
 
     [<Fact>]
@@ -242,6 +326,8 @@ module OpKeyTests =
         Assert.Contains("receiver", Operation.describe (Operation.Blank Operation.Receiver))
         Assert.Contains("operation payload", Operation.describe (Operation.Blank Operation.OperationPayload))
         Assert.Contains("control character", Operation.describe (Operation.ControlCharacter Operation.Item))
+        Assert.Contains("receiver", Operation.describe (Operation.UnpairedSurrogate Operation.Receiver))
+        Assert.Contains("unpaired surrogate", Operation.describe (Operation.UnpairedSurrogate Operation.Receiver))
         Assert.Contains(".github#2311", Operation.describe (Operation.ItemNotFullyQualified ".github#2311"))
         Assert.Contains("FS.GG.Net", Operation.describe (Operation.ReceiverNotFullyQualified "FS.GG.Net"))
         Assert.Contains("released", Operation.describe (Operation.GenerationNotServerAssigned "released"))
