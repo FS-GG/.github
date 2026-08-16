@@ -100,10 +100,31 @@ def normalized_relationships(raw: bytes) -> bytes:
     This removes the OPC-envelope instability, which was guaranteed on every re-pack; it does NOT make
     `payloadSha256` re-pack stable in general, and no caller may assume it does. `FS.GG.Coord.Cli` has
     a residual, rare per-compile instability inside `tools/net10.0/any/fsgg-coord-engine.dll` — the F#
-    compiler emits ten closure classes all named `contains@1` and the numeric suffix it gives each can
-    change between compiles of one unchanged tree. That is a different root cause, tracked at
-    .github#2688, and deliberately NOT normalized away here: it is a real difference in packed
-    content, and hiding it would be the fail-open .github#2240 and .github#2428 exist to prevent.
+    compiler disambiguates same-named generated closures with a `-N` suffix drawn from a shared
+    counter, and which of two `contains@1` closures gets `-1` is decided by a race. That is a different
+    root cause, and deliberately NOT normalized away here: it is a real difference in packed content,
+    and hiding it would be the fail-open .github#2240 and .github#2428 exist to prevent.
+
+    .github#2688 CLOSED THAT ROW BY MEASURING IT, AND THE ANSWER CHANGES WHAT THIS PARAGRAPH MAY
+    PROMISE RATHER THAN WHAT IT DOES. Three things are now known instead of suspected:
+
+      * The race is NOT fixable from build configuration on SDK 10.0.302. `ParallelCompilation` is
+        inert (the F# SDK passes it to the Fsc task as an item reference to a property, and fsc refuses
+        the flag as test-only anyway), `test:ParallelOff` does not help (7 of 40 compiles diverged
+        against a 9-of-40 baseline), and turning cross-module optimization off makes it worse. So no
+        future edit here should be written as if the compiler side were about to be repaired.
+      * `contains@1` is one family of roughly eighty carrying a `-N` disambiguator, so the instability
+        is not scoped to that symbol and a normalization keyed to it would be false comfort.
+      * The divergence is BOUNDED: across 144 compiles in five configurations the disambiguated-symbol
+        multiset was identical every time and only the ORDER of two of them moved. A payload difference
+        outside that shape is a genuinely different tree, which is the property this fail-closed
+        comparison exists to keep.
+
+    The OTHER half of .github#2688 — every compiled entry embedding the absolute directory it was built
+    in — WAS fixed, by `DeterministicSourcePaths` on the three coord projects, and is held there by
+    scripts/check-engine-build-determinism.py. Until that landed, `payloadSha256` was not comparable
+    across machines at all, so a re-prepare on a different checkout path differed for a reason that had
+    nothing to do with the compiler.
     """
     try:
         root = ET.fromstring(raw)

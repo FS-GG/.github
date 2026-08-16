@@ -203,6 +203,69 @@ the standing safety advisories carry forward.
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
+    <!-- BUILD REPRODUCIBILITY, AND THE ROUTE DECISION .github#2688 ASKED FOR (its AC1).
+
+         #2688 measured that two clean packs of one unchanged tree produce different
+         `tools/net10.0/any/fsgg-coord-engine.dll` bytes, and offered two routes: make the build
+         reproducible, or make the release saga's payload comparison tolerate the divergence. Taking
+         the measurement further splits the defect in two, and the two halves have OPPOSITE answers.
+         Both are recorded here because this is the file #2688 declared, and because the next person
+         to meet an unstable `payloadSha256` will look for the setting before the reasoning.
+
+         HALF ONE — THE CHECKOUT PATH — IS FIXED HERE, COMPLETELY AND DETERMINISTICALLY.
+         SIX packed entries embedded the absolute directory the package happened to be built in:
+         `FS.GG.Coord.Core`, `FS.GG.Coord.GitHub` and `fsgg-coord-engine`, each as `.dll` and `.pdb`.
+         `DeterministicSourcePaths` maps them to the `/_/` source root, so the packed bytes stop
+         depending on WHERE the tree was checked out. This is not cosmetic: it is the precondition for
+         `payloadSha256` to be comparable ACROSS machines at all, which is what .github#2428 needs to
+         compare a locally packed artifact against what a feed already serves, and what made three
+         agents on #2688 report three different `payload_id` values for one tree. It is set on all
+         three coord projects, not this one alone — fixing only this project would leave two of the six
+         entries still path-bound and the package still not path-independent.
+
+         HALF TWO — THE F# CLOSURE-NAME RACE — CANNOT BE FIXED FROM BUILD CONFIGURATION, AND THAT IS
+         MEASURED RATHER THAN ASSUMED. The compiler disambiguates same-named generated closures with a
+         `-N` suffix from a shared counter, and which of two `contains@1` closures gets `-1` is decided
+         by a race: 12 of 64 clean compiles of one unchanged tree at ONE path diverged, with the rate
+         rising with machine load (0/8, 3/24, 9/40 at compile concurrency 1, 6 and 10). Every lever was
+         tried and every one is refuted, so DO NOT REACH FOR THEM AGAIN. (An XML comment may not contain
+         a double hyphen, so compiler flags are named below without their leading dashes — the same
+         convention the org build config states about itself.)
+
+           * `<ParallelCompilation>` is INERT TWICE OVER. The F# SDK defaults it to `true` and then
+             passes `ParallelCompilation="@(ParallelCompilation)"` — an ITEM reference to a PROPERTY —
+             to the `Fsc` task (`Microsoft.FSharp.Targets:384`, SDK 10.0.302), so nothing reaches the
+             compiler; and fsc refuses the flag it would have emitted anyway, with
+             `FS0075: The command-line option 'parallelcompilation' is for test purposes only`.
+             Setting this property changes nothing and proves nothing.
+           * `test:ParallelOff` IS accepted by fsc and does NOT fix it: 7 of 40 compiles diverged,
+             indistinguishable from the 9 of 40 baseline arm run beside it.
+           * `crossoptimize` turned off makes it WORSE (16 of 40) and grows the closure inventory.
+           * fsc 10.0.302 has NO other lever: its entire public option surface carries no concurrency
+             control, and `ParallelOff`, `ParallelIlxGen` and `ParallelOptimization` are the only
+             `test:` values it accepts in that family.
+           * `<Deterministic>` is already on (`deterministic+` is on the real command line) and is
+             NOT this lever. It is working: the MVID moves only BECAUSE the content moved.
+
+         The only thing measured to suppress the race is `DOTNET_PROCESSOR_COUNT` (0 of 40 divergent
+         at 1 and at 2, under the load where the baseline gave 9 of 40) — a PROCESS ENVIRONMENT
+         VARIABLE that no MSBuild project file can set for the `Fsc` task. It is deliberately NOT
+         wired in here: it would be a suppression rather than a guarantee, it would serialise every
+         build that inherited it, and it cannot travel with the package.
+
+         SO ROUTE TWO IS ALSO REFUSED, AND NOT MERELY DISPREFERRED. `scripts/release-saga.py`'s
+         `normalized_relationships` docstring already states — in code merged and independently
+         reviewed under .github#2664 — that hiding this divergence would be the fail-open
+         .github#2240 and .github#2428 exist to prevent. This item does not reverse that. What it adds
+         is the BOUND: across 144 compiles in five configurations the disambiguated-symbol MULTISET was
+         identical every time (473 symbols, set difference empty) and only the ORDER of two of them
+         moved, so a divergence outside that shape is a genuinely different tree and must still fail
+         closed.
+
+         `scripts/check-engine-build-determinism.py` enforces half one on the packed artifact, and
+         `tests/engine-build-determinism/` shows it red on a build that omits this property. -->
+    <DeterministicSourcePaths>true</DeterministicSourcePaths>
+
     <!-- RestorePackagesWithLockFile, RestoreLockedMode and DisableImplicitLibraryPacksFolder (ADR-0006,
          ADR-0032) are INHERITED from the root Directory.Build.props, which imports the org-shared
          config this repo authors and ships. Every project here used to set them by hand because

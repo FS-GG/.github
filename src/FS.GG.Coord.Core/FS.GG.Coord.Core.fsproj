@@ -22,6 +22,16 @@
          this project the same way they reach every receiver. -->
     <WarningsNotAsErrors></WarningsNotAsErrors>
     <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- `IsPackable` is false, but this assembly and its `.pdb` SHIP: `FS.GG.Coord.Cli` packs its
+         whole output directory into `tools/net10.0/any/`, so both are entries under the
+         `payloadSha256` the release saga compares. Without this property they embed the absolute
+         directory the package happened to be built in, and the package is not path-independent no
+         matter what the CLI project sets. .github#2688 measured six such entries across the three
+         coord projects and fixed all six together; the route decision, the measurements, and the
+         levers that do NOT work live in src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj beside the same
+         property. -->
+    <DeterministicSourcePaths>true</DeterministicSourcePaths>
   </PropertyGroup>
 
   <ItemGroup>
