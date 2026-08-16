@@ -48,6 +48,8 @@ VERDICT (the scan examined nothing, or the matcher failed its own corpus) — wh
 
 from __future__ import annotations
 
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -138,10 +140,52 @@ DECLARED_SITES: dict[str, str | None] = {
 # this defect.
 # ---------------------------------------------------------------------------------------------------
 
-# A `dotnet build` is only an invocation if it stands at a command position. These are the characters a
-# shell command can legally follow.
-_COMMAND_POSITION_TAIL = "|&;({!\n"
-_TERMINATORS = ";|&<>\n)"
+# WHY THIS TOKENISES INSTEAD OF LOOKING BEHIND (.github#2653, review round 0, finding 1).
+#
+# The first two drafts of this matcher asked "what character precedes `dotnet build`?" and compared it
+# against a set of punctuation. That set was widened once during authoring and was STILL wrong, and the
+# critic proved it by building a new harness under `tests/` that genuinely builds the engine in tree and
+# varying only the SPELLING. Five ordinary forms walked straight past a green gate:
+#
+#     env DOTNET_NOLOGO=1 dotnet build …          # prefix command
+#     DOTNET_NOLOGO=1 dotnet build …              # assignment prefix
+#     if [ -n "$X" ]; then dotnet build …; fi     # keyword position
+#     for c in Release; do dotnet build …; done   # keyword position
+#     out=`dotnet build …`                        # backtick substitution
+#
+# A lookbehind pins SPELLINGS; what this gate means to pin is a RULE — *"`dotnet build` is the command
+# word of a simple command"*. Those are not the same statement, and the gap between them is where three
+# separate escapes on this board have lived (`.github#2312`'s ordering gate was evaded twice the same
+# way). Widening the punctuation set a third time would buy the next escape, not close this one, so the
+# question is answered by walking the shell's own grammar for command position instead: separators reset
+# it, reserved words and prefix commands and assignments are TRANSPARENT to it, and the first word that
+# is none of those is the command word. That is a rule with a fixed statement rather than a list that
+# grows by one every time somebody is clever.
+#
+# It is deliberately a SMALL tokeniser, not a shell. It does not expand anything, and everywhere it is
+# unsure it errs toward CANDIDACY — an over-detected build must merely be declared, while an
+# under-detected one is this whole file failing silently.
+
+# Separators after which a new simple command begins. `)` `}` and a backtick are included because what
+# follows them starts a command too, and being generous here can only add candidates.
+_RESETS_COMMAND_POSITION = set(";|&\n(){}`")
+
+# Reserved words are transparent: they occupy a command position without consuming it.
+_RESERVED = {
+    "if", "then", "elif", "else", "fi", "while", "until", "do", "done",
+    "for", "select", "case", "esac", "in", "function", "!", "[[", "]]", "{", "}",
+}
+
+# Prefix commands are transparent for the same reason — each RUNS the command that follows it, so the
+# real command word is further right. `time` is both a reserved word and one of these.
+_PREFIX_COMMANDS = {
+    "env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "ionice",
+    "stdbuf", "timeout", "xargs", "time", "setsid", "unbuffer",
+}
+
+_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+
+_TERMINATORS = ";|&<>\n)`"
 
 CODE, STRING, COMMENT = "c", "s", "#"
 
@@ -190,6 +234,23 @@ def classify(text: str) -> list[str]:
     return kinds
 
 
+def _end_of_word(text: str, kinds: list[str], i: int) -> int:
+    """The index just past the word starting at `i`, with quoted spans swallowed whole."""
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if kinds[i] != CODE:          # inside quotes: part of this word, whatever it contains
+            i += 1
+            continue
+        if c in " \t\n" or c in _RESETS_COMMAND_POSITION or c in "<>":
+            break
+        if c == "\\" and i + 1 < n:
+            i += 2
+            continue
+        i += 1
+    return i
+
+
 def invocations(text: str) -> list[str]:
     """Every `dotnet build …` that is really invoked, as its FULL command text — quotes included.
 
@@ -201,37 +262,87 @@ def invocations(text: str) -> list[str]:
     kinds = classify(text)
     n = len(text)
     found: list[str] = []
-    pos = 0
-    while True:
-        k = text.find("dotnet build", pos)
-        if k < 0:
-            break
-        pos = k + 1
-        if kinds[k] != CODE:
+
+    i = 0
+    at_command_position = True
+    while i < n:
+        c = text[i]
+
+        # Anything the classifier called COMMENT is skipped whole; a comment cannot start a command.
+        if kinds[i] == COMMENT:
+            i += 1
             continue
-        # A word boundary on the right, so `buildsrc/…` is not read as `build`.
-        after = k + len("dotnet build")
-        if after < n and text[after] not in " \t\\\n":
+
+        # Blanks, and a backslash-newline line continuation, carry command position across unchanged.
+        if c in " \t":
+            i += 1
             continue
-        # …and a command position on the left.
-        j = k - 1
-        while j >= 0 and text[j] in " \t":
-            j -= 1
-        if j >= 0 and (kinds[j] != CODE or text[j] not in _COMMAND_POSITION_TAIL):
+        if c == "\\" and i + 1 < n and text[i + 1] == "\n":
+            i += 2
             continue
-        # The command text runs to the first unquoted terminator. Backslash-newline is a line
-        # CONTINUATION, so `dotnet build "$P" \` + `--artifacts-path "$A"` is one invocation and must be
-        # read as one, or every multi-line build reads as un-redirected.
-        e = k
+
+        if kinds[i] == CODE:
+            # A redirection and its target are consumed together, so the FILENAME is never mistaken for
+            # a command word and the `&` inside `2>&1` never reads as a separator.
+            if c in "<>":
+                while i < n and kinds[i] == CODE and text[i] in "<>&-":
+                    i += 1
+                while i < n and text[i] in " \t":
+                    i += 1
+                i = _end_of_word(text, kinds, i)
+                continue
+            if c in _RESETS_COMMAND_POSITION:
+                i += 1
+                at_command_position = True
+                continue
+
+        # A WORD: a maximal run up to the next blank or CODE operator. Quoted spans are part of it, so
+        # `"$ROOT/src/FS.GG.Coord.Cli/x.fsproj"` is one word rather than three fragments.
+        start = i
+        i = _end_of_word(text, kinds, i)
+        word = text[start:i]
+        if not word:
+            i += 1
+            continue
+
+        if not at_command_position:
+            continue
+
+        # Transparent prefixes hold the command position open. A digit-only or flag-shaped word does
+        # too, so `timeout 500 dotnet build …` and `xargs -r dotnet build …` reach their real command.
+        if (
+            _ASSIGNMENT.match(word)
+            or word in _RESERVED
+            or word in _PREFIX_COMMANDS
+            or word.isdigit()
+            or word.startswith("-")
+        ):
+            continue
+
+        # This word is the command word of a simple command. Everything after it is arguments.
+        at_command_position = False
+        if word != "dotnet" and not word.endswith("/dotnet"):
+            continue
+        j = i
+        while j < n and text[j] in " \t":
+            j += 1
+        verb_end = _end_of_word(text, kinds, j)
+        if text[j:verb_end] != "build":
+            continue
+
+        # The command text runs from the command word to the first unquoted terminator. Backslash-newline
+        # is a line CONTINUATION, so `dotnet build "$P" \` + `--artifacts-path "$A"` is one invocation and
+        # must be read as one, or every multi-line build reads as un-redirected.
+        e = start
         while e < n:
             ch = text[e]
             if ch == "\\" and e + 1 < n:
                 e += 2
                 continue
-            if kinds[e] == CODE and ch in _TERMINATORS:
+            if kinds[e] == CODE and ch in _TERMINATORS and e > start:
                 break
             e += 1
-        found.append(text[k:e])
+        found.append(text[start:e])
     return found
 
 
@@ -251,8 +362,11 @@ def is_redirected(cmd: str) -> bool:
 
 
 # ---------------------------------------------------------------------------------------------------
-# THE SELF-TEST CORPUS — mechanism 2. Nine spellings that MUST be seen and nine that MUST NOT, every
-# one of them drawn from a real line in this repo or from the shape that broke a draft of this matcher.
+# THE SELF-TEST CORPUS — mechanism 2. Spellings that MUST be seen and lookalikes that MUST NOT, every
+# one drawn from a real line in this repo, from a shape that broke a draft of this matcher, or from the
+# critic's harness-insertion table in .github#2653's round-0 review. The counts are NOT restated in
+# prose here — an earlier draft said "nine and nine" over ten and ten within one commit of being
+# written. `main()` prints the live lengths instead, so the statement cannot drift from the corpus.
 # ---------------------------------------------------------------------------------------------------
 
 MUST_MATCH: list[tuple[str, str]] = [
@@ -269,6 +383,27 @@ MUST_MATCH: list[tuple[str, str]] = [
     # through a variable, so nothing in the command text says "engine" — and default-deny must make it
     # a candidate anyway. Without this leg the whole gate is one `PROJ=` assignment away from blind.
     ("project named through a variable", 'PROJ="$ROOT/src/FS.GG.Coord.Cli/x.fsproj"\ndotnet build "$PROJ" -c Release\n'),
+    # THE FIVE SPELLINGS THAT WALKED PAST THE SHIPPED GATE (.github#2653 review round 0, finding 1).
+    # Each is transcribed from the critic's harness-insertion table, where each one built the engine into
+    # the checkout for real and the gate still returned 0. A lookbehind over punctuation could not see
+    # any of them; the command-position tokeniser sees all five because each is a command WORD.
+    ("prefix command `env`", 'env DOTNET_NOLOGO=1 dotnet build "$ROOT/src/FS.GG.Coord.Cli/x.fsproj" -c Release\n'),
+    ("assignment prefix", 'DOTNET_NOLOGO=1 dotnet build "$ROOT/src/FS.GG.Coord.Cli/x.fsproj" -c Release\n'),
+    ("keyword position `then`, one-liner", 'if [ -n "$X" ]; then dotnet build "$ROOT/src/FS.GG.Coord.Cli/x.fsproj" -c Release; fi\n'),
+    ("keyword position `do`, one-liner", 'for c in Release; do dotnet build "$ROOT/src/FS.GG.Coord.Cli" -c "$c"; done\n'),
+    ("backtick command substitution", 'out=`dotnet build "$ROOT/src/FS.GG.Coord.Cli/x.fsproj" -c Release`\n'),
+    # The neighbouring positions of the same three classes, so the repair is the RULE and not five
+    # patches. Each of these was independently confirmed MISSED by the shipped matcher.
+    ("keyword position `else`", 'if $x; then true; else dotnet build src/FS.GG.Coord.Cli -c Release; fi\n'),
+    ("keyword position `elif`", 'if $x; then true; elif dotnet build src/FS.GG.Coord.Cli -c Release; then true; fi\n'),
+    ("keyword position `do` after `while`", 'while $x; do dotnet build src/FS.GG.Coord.Core -c Release; done\n'),
+    ("prefix command `time`", 'time dotnet build src/FS.GG.Coord.Cli -c Release\n'),
+    ("prefix command `command`", 'command dotnet build src/FS.GG.Coord.GitHub -c Release\n'),
+    ("prefix command `exec`", 'exec dotnet build src/FS.GG.Coord.Cli -c Release\n'),
+    ("prefix command with its own numeric argument", 'timeout 600 dotnet build src/FS.GG.Coord.Cli -c Release\n'),
+    ("`if` with no `!`", 'if dotnet build src/FS.GG.Coord.Cli -c Release; then true; fi\n'),
+    ("`then` on its own line", 'if $x\nthen\n  dotnet build src/FS.GG.Coord.Cli -c Release\nfi\n'),
+    ("redirection before the next command", 'echo x >"$LOG"; dotnet build src/FS.GG.Coord.Cli -c Release\n'),
 ]
 
 MUST_NOT_MATCH: list[tuple[str, str]] = [
@@ -339,17 +474,35 @@ def main() -> int:
             print(f"  - {p}", file=sys.stderr)
         return 3
 
-    files: list[Path] = []
-    for top in POPULATION:
-        root = REPO / top
-        if not root.is_dir():
-            print(f"::error::engine-build-siting: NO VERDICT — population root missing: {root}", file=sys.stderr)
-            return 3
-        files.extend(p for p in root.rglob("*") if p.is_file() and not p.is_symlink())
+    # THE POPULATION IS WHAT GIT TRACKS, NOT WHAT THE FILESYSTEM HOLDS (.github#2653, round-0 follow-up).
+    #
+    # An `rglob` walk reads gitignored build byproducts too. Measured: three `__pycache__/*.pyc` files
+    # left by earlier suite runs made a working tree report 438 where a clean CI checkout reports 435 —
+    # which is precisely how this gate's own file count came to be quoted two different ways in one
+    # review. A count that depends on what the developer happened to run last is a bad number, but the
+    # real hazard is the other direction: a gitignored scratch file containing a `dotnet build` would
+    # red this gate LOCALLY and pass in CI, and a gate that fails only on one machine teaches people to
+    # stop believing it. Git's index is the population that actually ships and is identical in both
+    # places. The tradeoff is stated rather than hidden: a brand-new harness that has not been `git
+    # add`ed is not scanned locally — and it cannot reach a PR unstaged, so CI still judges it.
+    #
+    # FAILS CLOSED. If `git ls-files` cannot answer, this exits 3 rather than falling back to a walk;
+    # "I could not determine the population" must not be spelled the same way as "the population is
+    # clean", which is this file's whole thesis one level up.
+    try:
+        listed = subprocess.run(
+            ["git", "-C", str(REPO), "ls-files", "-z", "--", *POPULATION],
+            capture_output=True, check=True,
+        ).stdout.decode("utf-8", "surrogateescape")
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"::error::engine-build-siting: NO VERDICT — could not enumerate tracked files: {exc}", file=sys.stderr)
+        return 3
+    files = [REPO / rel for rel in listed.split("\0") if rel]
+    files = [p for p in files if p.is_file() and not p.is_symlink()]
     if len(files) < 50:
         print(
             f"::error::engine-build-siting: NO VERDICT — discovered only {len(files)} candidate files "
-            f"under {POPULATION}; a scan that examines nothing must not report green (#266)",
+            f"tracked under {POPULATION}; a scan that examines nothing must not report green (#266)",
             file=sys.stderr,
         )
         return 3

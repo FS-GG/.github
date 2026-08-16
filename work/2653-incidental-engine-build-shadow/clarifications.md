@@ -157,7 +157,7 @@ publicOrToolFacingImpact: true
   scripts/generate-driver-manifest --check` exits **2** on a checkout with no build. DEC-002 read that as
   "requires the artifact at exactly the probed path", and that step is where it went wrong: the file owns
   no engine resolution at all. At `:710-724` it shells out to `scripts/generate-projections`, which
-  resolves `ENGINE="${FSGG_COORD_ENGINE_BIN:-…/bin/Release/net10.0/fsgg-coord-engine}"` at `:147` — the
+  resolves `ENGINE="${FSGG_COORD_ENGINE_BIN:-…/bin/Release/net10.0/fsgg-coord-engine}"` at `:148` — the
   probed path is a DEFAULT, not a requirement. The counter-example is one command:
   `FSGG_COORD_ENGINE_BIN=<out-of-tree> python3 scripts/generate-driver-manifest --check` exits **0**.
 

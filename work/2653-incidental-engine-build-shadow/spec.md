@@ -113,6 +113,16 @@ an incidental artifact HARMLESS, SB-009…SB-011 stop one being MADE.
   exits 3, never green. It is wired to `coherence.yml`, which carries no `paths:` filter, because the
   population it guards is one no path filter encloses.
 
+  **It decides command position by TOKENISING, not by looking behind (round-0 repair).** The first two
+  drafts asked which punctuation character preceded `dotnet build`; the independent critic defeated the
+  second one with five ordinary shell spellings — `env` prefix, `VAR=` assignment prefix, `then`, `do`,
+  and backticks — each of which built the engine in tree for real while the gate returned 0. A lookbehind
+  pins SPELLINGS; the rule this gate means to pin is *"`dotnet build` is the command word of a simple
+  command"*. Widening the punctuation set a third time buys the next escape rather than closing this one,
+  so the matcher now walks command position properly: separators reset it, and reserved words, prefix
+  commands and assignments are transparent to it. Every one of the five is a `MUST_MATCH` corpus leg, and
+  each transparency clause is independently inversion-covered.
+
 ## Non-Goals
 
 - SB-101: **Does not change the verb partition.** `BOARD_WRITES`, `BOARD_WRITES_CONDITIONAL` and
@@ -132,7 +142,7 @@ an incidental artifact HARMLESS, SB-009…SB-011 stop one being MADE.
   checkout with no build, printing *"no engine at …/bin/Release/net10.0/fsgg-coord-engine"*. But it owns
   no engine resolution of its own: at `:710-724` it shells out to `scripts/generate-projections`, and
   THAT file resolves `ENGINE="${FSGG_COORD_ENGINE_BIN:-$HERE/src/FS.GG.Coord.Cli/bin/Release/net10.0/
-  fsgg-coord-engine}"` at `:147`. The probed path is the DEFAULT, never the requirement. So
+  fsgg-coord-engine}"` at `:148`. The probed path is the DEFAULT, never the requirement. So
   "requires the artifact **at exactly that path**" — the clause the whole non-goal rested on — is false:
   the same command exits **0** when an out-of-tree engine is named, which is the direct counter-example.
 

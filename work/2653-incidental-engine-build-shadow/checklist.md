@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2653-incidental-engine-build-shadow/clarifications.md
 
 ## Source Snapshot
-- spec: work/2653-incidental-engine-build-shadow/spec.md sha256:2803265d826e2498fe60f6bddc6ce2174f4afb8755d07f56e67add62199556ec schemaVersion:1
-- clarifications: work/2653-incidental-engine-build-shadow/clarifications.md sha256:7b634fb2b364fdc10844f198dc5103c4dbcc4d128ab9b190a368af9b16684659 schemaVersion:1
+- spec: work/2653-incidental-engine-build-shadow/spec.md sha256:d975942a795536b779ad29d551719fa8c18fbee2f7e46dfa41a7b03107dcd12a schemaVersion:1
+- clarifications: work/2653-incidental-engine-build-shadow/clarifications.md sha256:bce4eced7289bb3e1dab3c259fcb06e3b113f38d5e90731b732e61d4f978b9d8 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

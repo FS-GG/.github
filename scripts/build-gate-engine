@@ -80,8 +80,22 @@ ART="${FSGG_GATE_ENGINE_ARTIFACTS:-${TMPDIR:-/tmp}/fsgg-gate-engine/$SLUG}"
 # invariant — and a path that lands back under `$ROOT` would rebuild the very defect this script exists
 # to remove, silently and in the one configuration nobody tests. Refuse instead. The comparison is on
 # canonicalised paths so that a symlinked or `..`-bearing spelling cannot walk back in.
-mkdir -p "$ART"
-ART="$(cd "$ART" && pwd -P)"
+#
+# THE CHECK RUNS BEFORE ANY DIRECTORY IS CREATED, and that ordering is the fix for a real defect this
+# script shipped with (.github#2653, review round 0): the first draft ran `mkdir -p "$ART"` first,
+# because `cd … && pwd -P` needs the path to exist — so a REFUSED path had already had an empty
+# directory created inside the checkout by the time the refusal printed. A guard whose own failure path
+# leaves the artifact it is refusing is not a guard. `realpath -m` canonicalises a path that does NOT
+# exist (resolving symlinks for the components that do), which is exactly the primitive needed to decide
+# before creating. It is required rather than optionally used: falling back to the raw string would
+# reinstate the symlink and `..` holes the critic separately confirmed are closed, so a checkout without
+# it gets a refusal instead of a weaker check.
+command -v realpath >/dev/null 2>&1 || {
+  echo "build-gate-engine: realpath is required to prove the artifacts path lies outside $ROOT" >&2
+  echo "                   before creating it; refusing rather than checking a weaker property." >&2
+  exit 2
+}
+ART="$(realpath -m -- "$ART")"
 case "$ART/" in
   "$ROOT"/*)
     echo "build-gate-engine: REFUSED — the artifacts path resolves INSIDE the checkout:" >&2
@@ -94,6 +108,7 @@ case "$ART/" in
     exit 2
     ;;
 esac
+mkdir -p "$ART"
 
 LOG="$(mktemp "${TMPDIR:-/tmp}/build-gate-engine.XXXXXX.log")"
 trap 'rm -f "$LOG"' EXIT

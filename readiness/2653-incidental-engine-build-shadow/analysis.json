@@ -51,7 +51,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "7fe9f04c64ebbbc1935caa6d8ab713e4a70226f890190d81ba64ac78cf3b152e"
+        "value": "6916bfa0e387ba307658a32b43a62dff8b5af5dca930e1a557e3a82746ced971"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "7b634fb2b364fdc10844f198dc5103c4dbcc4d128ab9b190a368af9b16684659"
+        "value": "bce4eced7289bb3e1dab3c259fcb06e3b113f38d5e90731b732e61d4f978b9d8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "bbf2f42c23f65dbaa74cd95ff77f0dde6fa9cc5ca67f28634fc9c2c697d1634d"
+        "value": "8f135bd41972038faf27ce3b2d8c48ceb0ee863b6b20840e60be98ee4c909521"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "2803265d826e2498fe60f6bddc6ce2174f4afb8755d07f56e67add62199556ec"
+        "value": "d975942a795536b779ad29d551719fa8c18fbee2f7e46dfa41a7b03107dcd12a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "360bd26e1e5bbe88d0e6139cff4d767ca9bca681145c33a0a60b45325c86066a"
+        "value": "1ba325530963b3dc8208ba54facc6608fe2293a5c4eec477b1c480be15b0c288"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -540,6 +540,36 @@
     },
     {
       "id": "AR045",
+      "sourcePath": "work/2653-incidental-engine-build-shadow/plan.md",
+      "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceId": "VO-013",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR046",
+      "sourcePath": "work/2653-incidental-engine-build-shadow/plan.md",
+      "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceId": "VO-014",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR047",
+      "sourcePath": "work/2653-incidental-engine-build-shadow/plan.md",
+      "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceId": "VO-015",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR048",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-001",
@@ -549,7 +579,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR046",
+      "id": "AR049",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-002",
@@ -559,7 +589,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR047",
+      "id": "AR050",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-003",
@@ -569,7 +599,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR048",
+      "id": "AR051",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-004",
@@ -579,7 +609,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR049",
+      "id": "AR052",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-005",
@@ -589,7 +619,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR050",
+      "id": "AR053",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-006",
@@ -599,7 +629,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR051",
+      "id": "AR054",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-007",
@@ -609,7 +639,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR052",
+      "id": "AR055",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-008",
@@ -619,7 +649,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR053",
+      "id": "AR056",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-009",
@@ -629,7 +659,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR054",
+      "id": "AR057",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-010",
@@ -639,7 +669,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR055",
+      "id": "AR058",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "AC-011",
@@ -649,7 +679,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR056",
+      "id": "AR059",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/checklist.md",
       "sourceId": null,
@@ -659,7 +689,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR057",
+      "id": "AR060",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/plan.md",
       "sourceId": null,
@@ -669,7 +699,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR058",
+      "id": "AR061",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-001",
@@ -679,7 +709,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR059",
+      "id": "AR062",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-002",
@@ -689,7 +719,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR060",
+      "id": "AR063",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-003",
@@ -699,7 +729,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR061",
+      "id": "AR064",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-004",
@@ -709,7 +739,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR062",
+      "id": "AR065",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-005",
@@ -719,7 +749,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR063",
+      "id": "AR066",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-006",
@@ -729,7 +759,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR064",
+      "id": "AR067",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-007",
@@ -739,7 +769,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR065",
+      "id": "AR068",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-008",
@@ -749,7 +779,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR066",
+      "id": "AR069",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-009",
@@ -759,7 +789,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR067",
+      "id": "AR070",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-010",
@@ -769,7 +799,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR068",
+      "id": "AR071",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "FR-011",
@@ -779,7 +809,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR069",
+      "id": "AR072",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/clarifications.md",
       "sourceId": null,
@@ -789,7 +819,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR070",
+      "id": "AR073",
       "sourcePath": "work/2653-incidental-engine-build-shadow/spec.md",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": null,
@@ -799,7 +829,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR071",
+      "id": "AR074",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T009",
@@ -809,7 +839,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR072",
+      "id": "AR075",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T010",
@@ -819,7 +849,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR073",
+      "id": "AR076",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T011",
@@ -829,7 +859,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR074",
+      "id": "AR077",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T012",
@@ -839,7 +869,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR075",
+      "id": "AR078",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T013",
@@ -849,7 +879,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR076",
+      "id": "AR079",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T014",
@@ -859,7 +889,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR077",
+      "id": "AR080",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T015",
@@ -869,7 +899,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR078",
+      "id": "AR081",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T016",
@@ -879,7 +909,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR079",
+      "id": "AR082",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T017",
@@ -889,7 +919,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR080",
+      "id": "AR083",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T018",
@@ -899,7 +929,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR081",
+      "id": "AR084",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T019",
@@ -909,7 +939,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR082",
+      "id": "AR085",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T020",
@@ -919,7 +949,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR083",
+      "id": "AR086",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T021",
@@ -929,7 +959,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR084",
+      "id": "AR087",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T022",
@@ -939,7 +969,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR085",
+      "id": "AR088",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T023",
@@ -949,7 +979,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR086",
+      "id": "AR089",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T024",
@@ -959,7 +989,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR087",
+      "id": "AR090",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T025",
@@ -969,7 +999,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR088",
+      "id": "AR091",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T026",
@@ -979,7 +1009,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR089",
+      "id": "AR092",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T027",
@@ -989,7 +1019,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR090",
+      "id": "AR093",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T028",
@@ -999,7 +1029,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR091",
+      "id": "AR094",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T029",
@@ -1009,7 +1039,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR092",
+      "id": "AR095",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T030",
@@ -1019,7 +1049,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR093",
+      "id": "AR096",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T034",
@@ -1029,7 +1059,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR094",
+      "id": "AR097",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T035",
@@ -1039,7 +1069,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR095",
+      "id": "AR098",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T036",
@@ -1049,7 +1079,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR096",
+      "id": "AR099",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T037",
@@ -1059,10 +1089,40 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR097",
+      "id": "AR100",
       "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
       "sourceId": "T038",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR101",
+      "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceId": "T039",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR102",
+      "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceId": "T040",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR103",
+      "sourcePath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "targetPath": "work/2653-incidental-engine-build-shadow/tasks.yml",
+      "sourceId": "T041",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -1098,6 +1158,12 @@
         "unknownReference",
         "unknownReference",
         "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "workModelInconsistent",
+        "workModelInconsistent",
+        "workModelInconsistent",
         "workModelInconsistent",
         "workModelInconsistent",
         "workModelInconsistent",
@@ -1174,6 +1240,12 @@
         "unknownReference",
         "unknownReference",
         "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "unknownReference",
+        "workModelInconsistent",
+        "workModelInconsistent",
+        "workModelInconsistent",
         "workModelInconsistent",
         "workModelInconsistent",
         "workModelInconsistent",

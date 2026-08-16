@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2653-incidental-engine-build-shadow/spec.md
-    digest: 2803265d826e2498fe60f6bddc6ce2174f4afb8755d07f56e67add62199556ec
+    digest: d975942a795536b779ad29d551719fa8c18fbee2f7e46dfa41a7b03107dcd12a
     schemaVersion: 1
   - label: clarifications
     path: work/2653-incidental-engine-build-shadow/clarifications.md
-    digest: 7b634fb2b364fdc10844f198dc5103c4dbcc4d128ab9b190a368af9b16684659
+    digest: bce4eced7289bb3e1dab3c259fcb06e3b113f38d5e90731b732e61d4f978b9d8
     schemaVersion: 1
   - label: checklist
     path: work/2653-incidental-engine-build-shadow/checklist.md
-    digest: 7fe9f04c64ebbbc1935caa6d8ab713e4a70226f890190d81ba64ac78cf3b152e
+    digest: 6916bfa0e387ba307658a32b43a62dff8b5af5dca930e1a557e3a82746ced971
     schemaVersion: 1
   - label: plan
     path: work/2653-incidental-engine-build-shadow/plan.md
-    digest: bbf2f42c23f65dbaa74cd95ff77f0dde6fa9cc5ca67f28634fc9c2c697d1634d
+    digest: 8f135bd41972038faf27ce3b2d8c48ceb0ee863b6b20840e60be98ee4c909521
     schemaVersion: 1
 tasks:
   - id: T001
@@ -408,6 +408,36 @@ tasks:
     sourceIds: [PD-011, VO-012]
     requiredSkills: [automated-tests, readiness-evidence]
     requiredEvidence: [EV038]
+  - id: T039
+    title: Record verification evidence VO-013
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-011, VO-013]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV039]
+  - id: T040
+    title: Record verification evidence VO-014
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-011, VO-014]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV040]
+  - id: T041
+    title: Record verification evidence VO-015
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-009, VO-015]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV041]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:
