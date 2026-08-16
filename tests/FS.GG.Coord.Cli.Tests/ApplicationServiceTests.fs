@@ -4724,3 +4724,131 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         Assert.Equal("Blocked", board.Column)
         Assert.Empty(board.Watermarks)
+
+    // ================================================================================================
+    // .github#2712 — THE EXEMPTION THROUGH `reconcile`, WHICH IS THE ONLY THING THAT RUNS IT
+    //
+    // `classWorld`'s own note above states the rule this section obeys: *"A rule exercised only where it
+    // is DERIVED is a rule nobody has watched run."* `LifecycleProjectionTests` proves the reducer answers
+    // `Exempt`; only this proves the CLI then writes neither a `Status` column nor a lifecycle watermark —
+    // and the watermark half is unreachable from Core, because Core never writes one.
+    // ================================================================================================
+
+    /// One OPEN row on the board whose body may or may not declare `Kind: register`, carrying a
+    /// pre-existing lifecycle watermark whose intent WOULD drive a transition, and a claim-free,
+    /// blocker-free, PR-free set of observations that would otherwise project `Ready`.
+    ///
+    /// The `postedComments` sink is what makes the watermark assertion possible at all: `Fake.Recorder`'s
+    /// log summarises requests and does not carry bodies, so "no watermark was written" cannot be read out
+    /// of it. The fixture records the bodies it is asked to post.
+    let private kindReconcileWorld (declareKind: bool) (postedComments: ResizeArray<string>) =
+        let mutable status = "Blocked"
+        let body =
+            if declareKind then "Paths: none\nKind: register\n" else "Paths: none\n"
+
+        // A FROZEN BACKLOG PARK, at an `observedAt` in the past. On a `work` row this is exactly the
+        // .github#2690 shape: `lifecycleSelection` replays the receipt's intent rather than re-deriving
+        // policy, so the row projects `Backlog` and MOVES off its stale `Blocked` column. It is here so
+        // the exempt assertion cannot pass merely because nothing was going to happen anyway.
+        //
+        // `backlog` rather than `auto` DELIBERATELY: promoting a row to `Ready` is separately refused
+        // without a current delivery-route receipt (.github#2698), so an `auto` control would be blocked
+        // by a gate that has nothing to do with this exemption and would prove nothing about it. A park
+        // needs no receipt, so what this control observes is the lifecycle projection itself.
+        let watermark =
+            "<!-- fsgg:lifecycle-watermark v=2 observedAt=1 status=Backlog intent=backlog revision=1 until=none reason=operator%20park -->"
+
+        let items () =
+            [ boardItemInWithBody status 47 "a standing register" None "OPEN" body ] |> String.concat ","
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, variables) ->
+                    if document.Contains "projectItems" then
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+                        let value =
+                            match field with
+                            | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                            | _ -> "null"
+                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
+                    elif document.Contains "updateProjectV2ItemFieldValue" then
+                        // The repair landed: the fresh verification read below observes the park.
+                        status <- "Backlog"
+                        ok """{"data":{"f0":{"clientMutationId":null}}}"""
+                    elif document.Contains "projectsV2" then
+                        ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "fields(first" then
+                        // NO `Kind` FIELD, which is the state of every board in this org today — so the
+                        // `KIND-PROJECTION-LAG` this row would otherwise derive is withheld behind one
+                        // diagnostic, and the only thing left to observe is the lifecycle behaviour.
+                        ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_backlog","name":"Backlog"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "items(first" then
+                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    else
+                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                ok (System.Text.Json.JsonSerializer.Serialize {| number = 47; body = body |})
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                ok (System.Text.Json.JsonSerializer.Serialize [| {| id = 1; body = watermark |} |])
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                postedComments.Add(
+                    match req.Body with
+                    | Json payload -> payload
+                    | _ -> "<non-json comment>")
+                ok """{"id":9047}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    [<Fact>]
+    let ``2712 reconcile --apply writes NO Status and NO watermark for a standing row`` () =
+        let posted = ResizeArray<string>()
+        let world = kindReconcileWorld true posted
+        let code, out, err = runReconcile world (reconcileArgs [ "--apply"; "--json" ])
+
+        if code <> 0 then failwithf ".github#2712 reconcile failed (exit %d): %s\n%s" code err out
+
+        // NO STATUS ON THE WIRE. Read from the transport log — the option ids GitHub would have received
+        // — rather than from the receipt, which is the engine describing itself.
+        Assert.False(world.Logged "opt_ready", $"a standing row was projected to Ready: %A{world.Log}")
+        Assert.False(world.Logged "opt_backlog", $"a standing row was projected to Backlog: %A{world.Log}")
+        Assert.False(world.Logged "opt_blocked", $"a standing row was projected to Blocked: %A{world.Log}")
+        Assert.False(world.Logged "opt_done", $"a standing row was projected to Done: %A{world.Log}")
+
+        // NO WATERMARK — the half AC2 names last and the half Core cannot assert, because Core never
+        // writes one. A receipt here would be a durable ordering fact about a lifecycle the row does not
+        // have, and `tryWatermark` would re-assert it with a fresh `ObservedAt` on every later pass.
+        Assert.DoesNotContain(posted, fun c -> c.Contains "fsgg:lifecycle-watermark")
+
+        // AND NO CHORE WAS EVEN DERIVED. The wire assertions above would also hold if a chore had been
+        // derived and then refused for some unrelated reason; this says the reducer produced nothing.
+        Assert.DoesNotContain("LIFECYCLE-PROJECTION-LAG", out)
+
+    [<Fact>]
+    let ``2712 NON-VACUITY — the identical world WITHOUT the Kind line does write both`` () =
+        // THE LEG THAT MAKES THE TEST ABOVE EVIDENCE. The two fixtures differ in exactly one line of one
+        // issue body. Without this, a world that had simply stopped producing a lifecycle chore — a
+        // broken fixture, a changed reducer, a mis-served route — would pass every assertion above while
+        // observing nothing at all.
+        let posted = ResizeArray<string>()
+        let world = kindReconcileWorld false posted
+        let code, out, err = runReconcile world (reconcileArgs [ "--apply"; "--json" ])
+
+        if code <> 0 then failwithf ".github#2712 control fixture failed (exit %d): %s\n%s" code err out
+
+        Assert.True(
+            world.Logged "opt_ready" || world.Logged "opt_backlog" || world.Logged "opt_blocked" || world.Logged "opt_done",
+            $"the control row projected no Status at all, so the exempt assertion observes nothing: %A{world.Log}")
+
+        // AND THE RECEIPT NAMES THE CHORE the exempt world must not produce, so the two fixtures are
+        // shown to differ in the reducer's own decision and not only in what reached the wire.
+        Assert.Contains("LIFECYCLE-PROJECTION-LAG", out)
+
+        Assert.Contains(posted, fun c -> c.Contains "fsgg:lifecycle-watermark")

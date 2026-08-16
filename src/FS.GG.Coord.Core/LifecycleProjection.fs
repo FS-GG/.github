@@ -265,13 +265,10 @@ module LifecycleProjection =
     // A PARAMETER cannot be frozen. The watermark carries `Intent` and never `Kind`, so there is no
     // receipt in this system that can suppress this test — the exemption is re-decided from the item's own
     // body on every pass, by construction rather than by anybody remembering to re-derive it.
-    let private exemptIfStanding kind =
-        if Kind.isStanding kind then Some(Exempt kind) else None
-
     let reduce policy kind intent observation =
-        match exemptIfStanding kind with
-        | Some exempt -> exempt
-        | None ->
+        if Kind.isStanding kind then
+            Exempt kind
+        else
             match policy with
             | IntentStatusV1 -> projectWithIntent intent observation
 
@@ -279,15 +276,19 @@ module LifecycleProjection =
     /// Equal timestamps are idempotent only when they agree; different values at the same timestamp are
     /// withheld because the ordering source was not strong enough to decide which event won.
     let advance policy kind intent watermark observation =
-        // ABOVE the watermark comparison as well as above `reduce`'s own projection, and stated twice
-        // rather than relied upon through the call: a standing row must not even be able to reach a
-        // verdict ABOUT a watermark, because the two `Withheld` arms below are about ordering and would
-        // read as "we could not decide yet" on a row where the right answer is "there is nothing to
-        // decide, ever".
-        match exemptIfStanding kind with
-        | Some exempt -> exempt
-        | None ->
-
+        // THE EXEMPTION IS ABOVE THE WATERMARK COMPARISON, AND STRUCTURALLY SO RATHER THAN BY A SECOND
+        // COPY OF THE TEST. `reduce` runs first and answers `Exempt` before any observation is read; the
+        // pass-through arm immediately below is above the `Project` arm, and the two ordering refusals
+        // live INSIDE that arm. So a standing row never reaches a verdict ABOUT a watermark — which
+        // matters, because those refusals say "we could not decide yet" where the right answer is "there
+        // is nothing to decide, ever".
+        //
+        // AN EARLIER DRAFT ALSO TESTED `exemptIfStanding` HERE, as defence in depth. It was removed
+        // because its inversion SURVIVED the suite — removing it changed no observable behaviour, so it
+        // was a guard that could not fail, which is `.github#266`'s own class and exactly the thing this
+        // row must not ship. The property it was meant to protect is asserted instead, by the
+        // `advanceOf` legs of `LifecycleProjectionTests`, which drive `advance` directly with every
+        // watermark shape including ones that would otherwise win the ordering comparison.
         match reduce policy kind intent observation with
         | Exempt kind -> Exempt kind
         | Withheld reason -> Withheld reason

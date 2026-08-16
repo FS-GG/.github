@@ -513,3 +513,82 @@ module SchedulabilityTests =
         Assert.Equal(
             Startable,
             schedulable Set.empty false [ Declared [ Matchable "src/Scene/**" ] ] { item 43 with TouchSet = DeclaredChore })
+
+    // ================================================================================================
+    // .github#2712 — NOT A UNIT OF WORK
+    // ================================================================================================
+
+    [<Fact>]
+    let ``2712 a standing row is refused with its KIND, in every column and every state`` () =
+        // THE DEFECT, NAMED: today `batch --explain` answers `Status is Backlog` for `.github#266` — true,
+        // useless, and an instruction to go and adjust a column that is not the reason. The verdict must
+        // say what the ROW IS.
+        //
+        // Driven across every column AND both issue states, because this is a step-0 check and the claim
+        // that it precedes `IssueClosed` and `WrongStatus` is not observable from one happy case.
+        // `.github#266` is OPEN in `Backlog`; `.github#2106` is `Done` in its column while its issue must
+        // stay OPEN; a register nobody has boarded yet has `NoStatus`.
+        for kind in Kind.legalKinds |> List.filter Kind.isStanding do
+            for status in [ Ready; Backlog; InProgress; InReview; Blocked; Done; NoStatus ] do
+                for state in [ Open; Closed ] do
+                    let standing = { item 266 with Kind = Some kind; Status = status; State = state }
+
+                    Assert.Equal(NotAUnitOfWork kind, schedulable Set.empty false [] standing)
+                    // `--include-backlog` must not defeat it either: the opt-in is about a COLUMN, and
+                    // this refusal is not about a column.
+                    Assert.Equal(NotAUnitOfWork kind, schedulable Set.empty true [] standing)
+
+    [<Fact>]
+    let ``2712 the refusal outranks every other reason, including ones that are ALSO true`` () =
+        // A standing row carrying every other refusal at once still reports the kind. Without this the
+        // ordering claim in `schedulable`'s step 0 is a comment rather than a property.
+        let loaded =
+            { item 266 with
+                Kind = Some Anchor
+                State = Closed
+                Status = Backlog
+                TouchSet = Undeclared
+                Blockers = [ { Ref = Some(ref 999); Raw = ".github#999"; State = BlockerOpen } ]
+                HumanBlock = Some AwaitingHumanDecision
+                Class = Some Decision }
+
+        Assert.Equal(NotAUnitOfWork Anchor, schedulable Set.empty true [] loaded)
+
+        // NON-VACUITY: the SAME row with no `Kind:` line reports one of those other reasons, so the test
+        // above is observing the kind check and not an empty scheduler.
+        let unkinded = { loaded with Kind = None }
+        Assert.NotEqual<Schedulability>(NotAUnitOfWork Anchor, schedulable Set.empty true [] unkinded)
+
+    [<Fact>]
+    let ``2712 a work row and an UNDECLARED row are scheduled exactly as before`` () =
+        // THE OVER-APPLICATION LEG. Every row on this board declares no kind, so the second assertion is
+        // the one that covers the live board.
+        Assert.Equal(Startable, schedulable Set.empty false [] (item 1))
+        Assert.Equal(Startable, schedulable Set.empty false [] { item 1 with Kind = Some Work })
+
+    [<Fact>]
+    let ``2712 the BOARD column never decides — only the item's own text`` () =
+        // ADR-0066's direction, and here it also closes a hazard the `Class` axis does not have: were the
+        // column allowed to decide, one dropdown edit would make a real work row permanently
+        // unschedulable with nothing in its body to explain why.
+        let columnSaysRegister = { item 1 with Kind = None; BoardKind = Some Register }
+        Assert.Equal(Startable, schedulable Set.empty false [] columnSaysRegister)
+
+        // And the converse: a body that says `register` is refused even while the column disagrees.
+        let bodySaysRegister = { item 1 with Kind = Some Register; BoardKind = Some Work }
+        Assert.Equal(NotAUnitOfWork Register, schedulable Set.empty false [] bodySaysRegister)
+
+    [<Fact>]
+    let ``2712 explain names the kind and does not report the Status column`` () =
+        let standing = { item 266 with Kind = Some Anchor; Status = Backlog }
+        let text = explain 120 standing (schedulable Set.empty true [] standing)
+
+        Assert.Contains("anchor", text)
+        Assert.Contains("not a unit of work", text)
+        // THE REGRESSION THIS ROW EXISTS TO PREVENT, asserted directly: the sentence must not be the one
+        // `.github#266` gets today.
+        Assert.DoesNotContain("Status is Backlog", text)
+
+    [<Fact>]
+    let ``2712 the verdict's wire kind is the one the docs publish`` () =
+        Assert.Equal<string>("not-a-unit-of-work", kind (NotAUnitOfWork Register))

@@ -263,3 +263,116 @@ module LifecycleProjectionTests =
                 | None -> failwithf "%A must record an intent" status
 
             Assert.Equal(Some minted, LifecycleProjection.tryWatermark [ LifecycleProjection.watermarkMarker minted ])
+
+    // ================================================================================================
+    // .github#2712 — THE STANDING-ITEM EXEMPTION, PROVEN TO **BIND**
+    //
+    // The row this covers is named after `.github#266`'s own defect class: a gate that reports pass while
+    // its subject is absent, wrong, or unexamined. So an exemption that merely EXISTS is not what is being
+    // asserted here. Each test below drives inputs that WOULD have produced a transition and asserts that
+    // none happened — and the `work` wrappers at the top of this module make every other assertion in this
+    // file the matching over-application leg, so the pair fails in both directions.
+    // ================================================================================================
+
+    /// Facts that are ALL individually sufficient to move a `work` row, so an exemption that leaked at any
+    /// one of them would be caught by the corresponding pair below rather than by a single happy case.
+    let private drivingObservations : (string * LifecycleProjection.Observation * BoardStatus) list =
+        let pr : LifecycleProjection.PullRequest = { Number = 12; Open = true; ReviewOrCiActive = true }
+        let blocker = { Ref = Some { Owner = "FS-GG"; Repo = ".github"; Number = 1 }; Raw = "FS-GG/.github#1"; State = BlockerOpen }
+        [ "a done receipt on a closed issue projects Done",
+          { observation with
+              Claim = fact None
+              Delivery = fact { Outstanding = false; DoneStamped = true }
+              Issue = fact Closed },
+          Done
+
+          "a live claim projects In progress", observation, InProgress
+
+          "an open item PR projects In review",
+          { observation with Claim = fact None; PullRequest = fact (Some pr) }, InReview
+
+          "an outstanding delivery obligation projects In review",
+          { observation with Claim = fact None; Delivery = fact { Outstanding = true; DoneStamped = false } }, InReview
+
+          "an unresolved blocker projects Blocked",
+          { observation with Claim = fact None; Blockers = fact [ blocker ] }, Blocked
+
+          "an idle row under Auto projects Ready",
+          { observation with Claim = fact None }, Ready ]
+
+    [<Fact>]
+    let ``2712 the exemption BINDS — every standing kind is untouched by inputs that WOULD have moved a work row`` () =
+        // THE NEGATIVE LEG. Each observation below is independently sufficient to move a `work` row, and
+        // the `work` assertion is made in the SAME loop rather than in a sibling test: a fixture that
+        // quietly stopped driving a transition would then fail on the `work` arm instead of passing
+        // vacuously on the standing one. "Found nothing" and "looked at nothing" do not share an outcome.
+        for label, obs, expected in drivingObservations do
+            Assert.Equal(LifecycleProjection.Project(expected, 1L), reduceOf Work LifecycleProjection.Auto obs)
+
+            for kind in standingKinds do
+                Assert.Equal(LifecycleProjection.Exempt kind, reduceOf kind LifecycleProjection.Auto obs)
+
+                // `advance` too, and not because it delegates: it is asserted separately precisely so a
+                // later change that stops delegating cannot silently drop the exemption from the entry
+                // point every live caller actually uses. See `%s{label}`.
+                Assert.Equal(LifecycleProjection.Exempt kind, advanceOf kind LifecycleProjection.Auto None obs)
+
+    [<Fact>]
+    let ``2712 the exemption is not suppressible by a persisted watermark — the freeze cannot reach it`` () =
+        // THE TEST THIS DESIGN EXISTS FOR. Independent critic `avocet-e644`'s probe 3 on PR #2718 measured
+        // that a `Class`-derived policy arm IS defeated by a pre-existing receipt: a `Class: decision` row
+        // carrying the `Backlog` watermark `add` now mints settles at `Backlog` and never reaches
+        // `Blocked`, while the identical row with NO receipt reaches `Blocked`. Since .github#2690 every
+        // `add`-filed row carries such a receipt, so an exemption expressed as policy intent — or as a
+        // `SchedulingIntent` case — would be inert on the whole live board.
+        //
+        // Every watermark shape is driven, INCLUDING ones whose own `Status` and `Intent` disagree with
+        // the exemption and would otherwise win the ordering comparison.
+        let watermarks : (string * LifecycleProjection.Watermark) list =
+            [ "a frozen human park", { ObservedAt = 5L; Status = Blocked; Intent = LifecycleProjection.HumanPark(AwaitingHumanDecision, { Revision = 5L; Reason = "frozen" }) }
+              "a frozen backlog park", { ObservedAt = 5L; Status = BoardStatus.Backlog; Intent = LifecycleProjection.Backlog { Revision = 5L; Reason = "frozen" } }
+              "an auto receipt every add-filed row now carries", { ObservedAt = 5L; Status = Ready; Intent = LifecycleProjection.Auto }
+              "a receipt from the FUTURE, which would otherwise withhold on ordering", { ObservedAt = 9999L; Status = Done; Intent = LifecycleProjection.Auto }
+              "a receipt at the SAME instant claiming a different column, which would otherwise withhold", { ObservedAt = 1L; Status = Done; Intent = LifecycleProjection.Auto } ]
+
+        for label, watermark in watermarks do
+            for _, obs, _ in drivingObservations do
+                for kind in standingKinds do
+                    Assert.Equal(LifecycleProjection.Exempt kind, advanceOf kind LifecycleProjection.Auto (Some watermark) obs)
+
+                    // The watermark's OWN intent, replayed exactly as `Client.lifecycleSelection` replays
+                    // it — this is the precise shape the freeze takes at `Client.fs:2492`.
+                    Assert.Equal(LifecycleProjection.Exempt kind, advanceOf kind watermark.Intent (Some watermark) obs)
+
+            // NON-VACUITY, and it is the leg that makes the loop above evidence rather than decoration: the
+            // SAME watermark against a `work` row must NOT answer `Exempt`. Without this, a fixture whose
+            // observations had stopped driving anything would pass every assertion above. See `%s{label}`.
+            let workAnswer = advanceOf Work watermark.Intent (Some watermark) observation
+            Assert.False(
+                (match workAnswer with LifecycleProjection.Exempt _ -> true | _ -> false),
+                $"a `work` row must never be exempt — the exemption over-applied under: %s{label}")
+
+    [<Fact>]
+    let ``2712 an unexempted row is exactly what it was — Kind.govern reads no declaration as work`` () =
+        // THE OVER-APPLICATION LEG, stated once as a property rather than only implied by the wrappers:
+        // every row on this board declares no `Kind:` line, so `govern None` must be `Work` and the reducer
+        // must give the identical answer it gave before the exemption existed.
+        Assert.Equal(Work, Kind.govern None)
+        Assert.Equal(Work, Kind.govern (Some Work))
+
+        for _, obs, expected in drivingObservations do
+            Assert.Equal(
+                LifecycleProjection.Project(expected, 1L),
+                reduceOf (Kind.govern None) LifecycleProjection.Auto obs)
+
+    [<Fact>]
+    let ``2712 no watermark is derivable from an exempt result — the receipt half of the exemption`` () =
+        // AC2 says "no park, no promote, no `Done`, no watermark". The first three are the `Project`
+        // absence above; this is the fourth. A `Watermark` is built from a `Project`'s status and
+        // timestamp, so an `Exempt` result carries no material from which one could be constructed — and
+        // that is asserted here rather than left to the reader of `Client.fs`, because the reconcile arm
+        // that must skip the watermark map is the one place a later edit could re-introduce it.
+        for kind in standingKinds do
+            match advanceOf kind LifecycleProjection.Auto None observation with
+            | LifecycleProjection.Exempt k -> Assert.Equal(kind, k)
+            | other -> failwithf "a %A row must be Exempt, not %A" kind other
