@@ -1,0 +1,58 @@
+# coord-guards — `stale_guard`'s UPSTREAM-DRIFT half, at tier 2b (.github#2581).
+#
+# WHY IT IS NOT A STEP ON `coord-engine.yml`. That workflow restores, builds the engine and runs eight
+# suites inside a 20-minute budget, because every one of them needs the compiled binary.
+# `tests/coord-guards/run.sh` needs none of it: its fixture is a `git init` directory, a bare repo
+# standing in for `origin`, and a shell script standing in for the engine, so it answers in seconds with
+# no dotnet, no restore, no network and no token. Attaching it there would have put a seconds-long
+# hermetic gate behind a multi-minute build and made its `paths:` filter the union of two unrelated
+# subjects.
+#
+# WHAT IT MEASURES THAT NOTHING ELSE DOES. `tests/coord-engine-parity/shim.sh` drives the staleness
+# guard hard, but its fixture has no `origin` remote at all, so `upstream_drift` returns silently on it
+# and every staleness leg there is decided by the MTIME half. The shape that cost `.github#2549` and
+# `.github#2563` their leases was the other half — a shared checkout BEHIND `origin/main` under the
+# engine's own source trees, with the caller standing in a linked worktree — and it had no fixture.
+#
+# `scripts/fsgg-coord-guards.sh` IS THE FIRST ENTRY, AND ITS ABSENCE ELSEWHERE IS WHY THIS FILTER EXISTS.
+# Since `.github#1586` moved the verb partition and both guards out of `scripts/fsgg-coord` into that
+# file, it was named by NO workflow `paths:` filter anywhere in this repository — so a pull request
+# editing only the guard module started `coord-engine.yml` on no path, and `shim.sh` §3b/§3c were silent
+# on precisely the pull requests whose subject they are. That is `.github#2551`'s class. This workflow
+# selects on it, and `coord-engine.yml` was given the same entry in the same change.
+name: coord-guards
+
+on:
+  pull_request:
+    paths:
+      - "scripts/fsgg-coord-guards.sh"
+      - "scripts/fsgg-coord"
+      - "tests/coord-guards/**"
+      - ".github/workflows/coord-guards.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fsgg-coord-guards.sh"
+      - "scripts/fsgg-coord"
+      - "tests/coord-guards/**"
+      - ".github/workflows/coord-guards.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coord-guards-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # `git worktree add` is what makes this fixture a TIER-2b caller, so the checkout must be a real
+      # repository rather than a source export. actions/checkout gives one; nothing else is needed.
+      - name: The upstream-drift guard at tier 2b — the shape that cost two leases
+        run: bash tests/coord-guards/run.sh

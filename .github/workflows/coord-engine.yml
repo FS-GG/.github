@@ -44,6 +44,15 @@ on:
       - "tests/coord-engine-replay/**"
       - "tests/review-critic-succession-wire/**"
       - "scripts/fsgg-coord"
+      # THE GUARD MODULE, AND ITS ABSENCE HERE WAS A HOLE (.github#2581). `.github#1586` moved the verb
+      # partition and both guards out of `scripts/fsgg-coord` into `scripts/fsgg-coord-guards.sh` —
+      # and this filter did not follow them. `tests/coord-engine-parity/shim.sh` §3b lifts the three
+      # verb sets out of THAT file and grades their bijection against the engine's own
+      # `command-contract`, and §3c drives every one of them against a stale fixture; so the suites
+      # whose entire subject is that file were started by no path when it changed, on either trigger.
+      # A gate keyed on `paths:` is selectively silent, and quietest on exactly the edits it is for
+      # (.github#2551). Measured: `grep -rn "fsgg-coord-guards" .github/workflows/` returned nothing.
+      - "scripts/fsgg-coord-guards.sh"
       - "scripts/record-board-fixture.py"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
@@ -74,6 +83,10 @@ on:
       - "tests/coord-engine-replay/**"
       - "tests/review-critic-succession-wire/**"
       - "scripts/fsgg-coord"
+      # The guard module, on the push trigger too — see the note on the pull_request filter above
+      # (.github#2581). Present in only one of the two lists, this workflow would report on `main` for
+      # a change it never gated on the pull request that introduced it, or the reverse.
+      - "scripts/fsgg-coord-guards.sh"
       - "scripts/record-board-fixture.py"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"

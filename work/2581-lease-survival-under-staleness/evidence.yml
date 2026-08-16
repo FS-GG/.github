@@ -1,0 +1,740 @@
+schemaVersion: 1
+workId: 2581-lease-survival-under-staleness
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2581-lease-survival-under-staleness/spec.md
+sourceClarifications: work/2581-lease-survival-under-staleness/clarifications.md
+sourceChecklist: work/2581-lease-survival-under-staleness/checklist.md
+sourcePlan: work/2581-lease-survival-under-staleness/plan.md
+sourceTasks: work/2581-lease-survival-under-staleness/tasks.yml
+sourceAnalysis: readiness/2581-lease-survival-under-staleness/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2581-lease-survival-under-staleness/analysis.json
+    digest: 96b391264518019fed7a2f5d2831c10c471748229ec769cc9e748c6f2d82f1e2
+    schemaVersion: 1
+  - label: checklist
+    path: work/2581-lease-survival-under-staleness/checklist.md
+    digest: 9e033c619ef2fedcfecae83b49fa4b77ab6ac503c099b443708850b08a01eda6
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2581-lease-survival-under-staleness/clarifications.md
+    digest: a1ed79528710a2cbae11d78e15d06aac7ea58e3559f33e6ca0edb46795bf41e3
+    schemaVersion: 1
+  - label: plan
+    path: work/2581-lease-survival-under-staleness/plan.md
+    digest: 5b7a4de26827e76a6b195009f62fecc659cc66d961a5749daacdf61719b5d895
+    schemaVersion: 1
+  - label: spec
+    path: work/2581-lease-survival-under-staleness/spec.md
+    digest: a7ce10cb9690fb90e6b9fe1e67efb9ed433ed5fd7fb21549639423cf302d5d49
+    schemaVersion: 1
+  - label: tasks
+    path: work/2581-lease-survival-under-staleness/tasks.yml
+    digest: f7533035fbda697d8891478a2e534f8c9b0153a3770dca10e5c22d06b995200e
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV002]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-006]
+    obligationRefs: [EV003]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV006]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV007]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV008]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV010]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV011]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV012]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV017]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV018]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV019]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV020]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003, PD-004, PD-005]
+    obligationRefs: [EV021]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV022]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006, PD-007]
+    obligationRefs: [EV023]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV024]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV025]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV026]
+    artifacts: [".github/workflows/coord-engine.yml", ".github/workflows/coord-guards.yml", scripts/fsgg-coord-guards.sh, tests/coord-guards/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml
+      digest: "sha256:24d69a23db093e899b52d24f215dd79a18b7394217410fee60dcfb6c96b0a16e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Discharged by tests/coord-guards/run.sh — 27 assertions, exit 0, hermetic (a git init fixture, a bare repo standing in for origin, a shell script standing in for the engine; no dotnet, no network, no token, no board). Receipt: work/2581-lease-survival-under-staleness/test-results/coord-guards-fixture.junit.xml", "GATE INVERSION, observed red — FOUR mutations, re-measured at the settled head after the branch was brought current with origin/main (merge base 2cbe65b3 → febcb5b6), with all four transcripts in the receipt rather than only named in prose. (1) The whole change, against the pre-item module at the current merge base: `FSGG_GUARDS_UNDER_TEST=<merge-base guards> bash tests/coord-guards/run.sh` — exit 1, 12 passed, 15 FAILED (unchanged by the rebase; origin/main carries none of this item's text). (2) Repair 1 alone, against this PR's own pre-repair head a80e1177: the same command with that module — exit 1, 22 passed, 5 FAILED, being the four legs repair 1 adds plus the ref-form leg it reshapes, so the new legs are shown failing on the exact text an independent critic found defective. (3) CI reachability, mutating the workflow tree instead of the module: a scratch REPO_ROOT carrying this PR's shim, module and suite with the current merge-base .github/workflows/coord-engine.yml and no coord-guards.yml — exit 1, 25 passed, 2 failed; still non-vacuous, since origin/main's coord-engine.yml names fsgg-coord-guards.sh 0 times. (4) THE REBASE ITSELF, the one mutation nobody had to construct: .github#2653 made `$b` a `local` of the extracted `stale_detail`, reachable from `stale_guard` only through a `$(...)` subshell, so a clean conflict-free rebase silently made the runnable `mktemp -d` recovery block unreachable — exit 1, 21 passed, 6 FAILED, the six being exactly the recovery-route legs. Receipt: work/2581-lease-survival-under-staleness/test-results/gate-inversion-pre-repair.junit.xml", "Non-regression of the pre-existing gate over the same file, re-run at the settled head: the full tests/coord-engine-parity/shim.sh corpus was re-run against the edited module through the shared checkout's current engine — 86 assertions, 86 passed, 0 failed, with the partition bijection and every per-verb refusal leg green. scripts/lint-shell.sh (shellcheck 0.11.0, severity=warning) is clean over 135 files and 404 workflow-embedded steps, and tests/prose-citations/run.sh is 8 passed, 0 failed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
