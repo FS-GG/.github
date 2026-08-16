@@ -1,0 +1,54 @@
+# The fixture for `fsgg-dispatch-broker.yml` — slice 5 of the GitHub-native executor fencing design
+# (`docs/reports/2026-08-04-github-native-executor-fencing-design.md` §5.2, §11.2), `.github#2720`.
+#
+# Per epic #266's ratified rule — A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE — this drives
+# the broker's real `authorize` and `receipt` scripts, EXTRACTED FROM THE REAL WORKFLOW, across their
+# refusal truth tables, and asserts the reason on every negative leg rather than merely a non-zero
+# exit.
+#
+# THE `paths:` FILTER IS PART OF THE GATE, NOT PACKAGING, AND `.github/workflows/**` IS THE
+# LOAD-BEARING ENTRY. The broker's single-caller property is an assertion about which workflows call
+# `dispatch-sender.yml`, and a caller can only ever live in `.github/workflows/`. So a PR that ADDS a
+# caller must run this fixture — and a narrower filter means it does not, which is the design's own
+# §6.2 warning ("a filtered workflow produces no check run on a PR that misses the filter") arriving
+# from the other side. `tests/dispatch-broker/run.sh` leg B9a parses this file and reds if that entry
+# is removed, so the filter cannot be quietly narrowed back.
+#
+# It needs no secrets, no network and no runner state: `gh` is stubbed inside the fixture.
+name: fsgg-dispatch-broker-selftest
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "tests/dispatch-broker/**"
+      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Cli/Client.fs"
+      - "src/FS.GG.Coord.Core/Operation.fs"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "tests/dispatch-broker/**"
+      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Cli/Client.fs"
+      - "src/FS.GG.Coord.Core/Operation.fs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # The fixture and the single-caller scanner both read workflow STRUCTURE rather than text — a
+      # text scan cannot tell a `uses:` from one of the four live comments in this repository that
+      # mention `dispatch-sender.yml` precisely to say they do not call it.
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Run the dispatch-broker fixture
+        run: bash tests/dispatch-broker/run.sh
