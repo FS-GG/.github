@@ -1,11 +1,17 @@
-<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[== GATE INVERSION (.github#2581 acceptance 4, .github#2551). Three mutations, each with its exact
-== command and its observed red. The suite, the fixture and the shim are identical in all four runs;
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[== GATE INVERSION (.github#2581 acceptance 4, .github#2551). FOUR mutations, each with its exact
+== command and its observed red. The suite, the fixture and the shim are identical in all five runs;
 == only the module (or the workflow tree) under test is mutated.
+==
+== RE-MEASURED AT THE SETTLED HEAD after the branch was brought current with origin/main. The merge
+== base moved from 2cbe65b3 to febcb5b6e2f553dc131c0b5026d6a76fb9fb6499 across that rebase, so every inversion below was taken
+== again rather than carried forward; inversion 4 did not exist before it and is the strongest of the
+== four, because its mutation was not constructed — it is what the rebase itself produced.
 
-== INVERSION 1 of 3 — the WHOLE change, against the pre-item guard module at the merge base:
-==   git show 2cbe65b332223d31563e1209160cf3e0a4f98353:scripts/fsgg-coord-guards.sh > /tmp/pre-item-guards.sh
+== INVERSION 1 of 4 — the WHOLE change, against the pre-item guard module at the CURRENT merge base:
+==   git show febcb5b6e2f553dc131c0b5026d6a76fb9fb6499:scripts/fsgg-coord-guards.sh > /tmp/pre-item-guards.sh
 ==   FSGG_GUARDS_UNDER_TEST=/tmp/pre-item-guards.sh bash tests/coord-guards/run.sh
-== Observed: exit 1, 12 passed, 15 FAILED — every assertion this item adds.
+== Observed: exit 1, 12 passed, 15 FAILED — every assertion this item adds. Unchanged from the
+== pre-rebase measurement: origin/main still carries none of this item's text.
 PASS  harness: the shim under test is byte-identical to scripts/fsgg-coord — the copy changes the module's location, never the resolver
 PASS  the .github#2581 condition reproduces: worktree caller + shared checkout BEHIND on the engine source trees ⇒ 'heartbeat' REFUSED (exit 69), engine never reached
 PASS  the verdict is the UPSTREAM-DRIFT half alone — the mtime half is silent, so this fixture measures the arm nothing else does
@@ -27,20 +33,20 @@ FAIL  the recovery route must be built against the ref upstream_drift resolved
     | err=fsgg-coord: REFUSED — 'heartbeat' writes the board the whole fleet shares, and the engine is STALE.
     |             BEHIND refs/remotes/origin/main by 1 commit(s) under the engine's own source trees — the checkout
     |             this engine was built from does not contain them (.github#1549):
-    |               /tmp/tmp.0KD38mRdED/behind/shared
+    |               /tmp/tmp.tT4g8DXcqW/behind/shared
     |             You can be standing in a CURRENT worktree and still be about to exec an engine
     |             that is not. Update the checkout that OWNS this build, then rebuild it:
-    |               git -C /tmp/tmp.0KD38mRdED/behind/shared merge --ff-only refs/remotes/origin/main
-    |               dotnet build /tmp/tmp.0KD38mRdED/behind/shared/src/FS.GG.Coord.Cli -c Release
+    |               git -C /tmp/tmp.tT4g8DXcqW/behind/shared merge --ff-only refs/remotes/origin/main
+    |               dotnet build /tmp/tmp.tT4g8DXcqW/behind/shared/src/FS.GG.Coord.Cli -c Release
 FAIL  the lease-renewal refusal must say that it can outlive the lease and that an expired lease cannot be renewed in place
     | err=fsgg-coord: REFUSED — 'heartbeat' writes the board the whole fleet shares, and the engine is STALE.
     |             BEHIND refs/remotes/origin/main by 1 commit(s) under the engine's own source trees — the checkout
     |             this engine was built from does not contain them (.github#1549):
-    |               /tmp/tmp.0KD38mRdED/behind/shared
+    |               /tmp/tmp.tT4g8DXcqW/behind/shared
     |             You can be standing in a CURRENT worktree and still be about to exec an engine
     |             that is not. Update the checkout that OWNS this build, then rebuild it:
-    |               git -C /tmp/tmp.0KD38mRdED/behind/shared merge --ff-only refs/remotes/origin/main
-    |               dotnet build /tmp/tmp.0KD38mRdED/behind/shared/src/FS.GG.Coord.Cli -c Release
+    |               git -C /tmp/tmp.tT4g8DXcqW/behind/shared merge --ff-only refs/remotes/origin/main
+    |               dotnet build /tmp/tmp.tT4g8DXcqW/behind/shared/src/FS.GG.Coord.Cli -c Release
 PASS  the lease line is scoped to the renewal verb — 'done' is refused without it, so the message stays about the reader's situation
 PASS  the recovery route WORKS: the same blocked worker renews through a CURRENT engine it built — exit 0, no staleness verdict consulted, shared checkout untouched
 PASS  the shared checkout is still BEHIND after the recovery — the route repaired nothing the host owns
@@ -50,11 +56,11 @@ FAIL  the recovery route must create a fresh directory per invocation
     | err=fsgg-coord: REFUSED — 'heartbeat' writes the board the whole fleet shares, and the engine is STALE.
     |             BEHIND refs/remotes/origin/main by 1 commit(s) under the engine's own source trees — the checkout
     |             this engine was built from does not contain them (.github#1549):
-    |               /tmp/tmp.0KD38mRdED/behind/shared
+    |               /tmp/tmp.tT4g8DXcqW/behind/shared
     |             You can be standing in a CURRENT worktree and still be about to exec an engine
     |             that is not. Update the checkout that OWNS this build, then rebuild it:
-    |               git -C /tmp/tmp.0KD38mRdED/behind/shared merge --ff-only refs/remotes/origin/main
-    |               dotnet build /tmp/tmp.0KD38mRdED/behind/shared/src/FS.GG.Coord.Cli -c Release
+    |               git -C /tmp/tmp.tT4g8DXcqW/behind/shared merge --ff-only refs/remotes/origin/main
+    |               dotnet build /tmp/tmp.tT4g8DXcqW/behind/shared/src/FS.GG.Coord.Cli -c Release
 FAIL  N simultaneously-blocked workers must each get a printed command that works
     | the refusal printed no recovery command block to extract
 FAIL  each worker's checkout must be at the ref upstream_drift resolved
@@ -70,7 +76,7 @@ PASS  coord-engine.yml names scripts/fsgg-coord-guards.sh in both its pull_reque
 PASS  coord-guards.yml runs this suite and is selected by a change to the guard module, the shim, or this suite
 coord-guards: 12 passed, 15 failed
 
-== INVERSION 2 of 3 — repair 1 alone, against this PR own pre-repair head a80e1177:
+== INVERSION 2 of 4 — repair 1 alone, against this PR's own pre-repair head a80e1177:
 ==   git show a80e11776ad42f0d7a4b1101d3f8e7239ae00acb:scripts/fsgg-coord-guards.sh > /tmp/pre-repair1-guards.sh
 ==   FSGG_GUARDS_UNDER_TEST=/tmp/pre-repair1-guards.sh bash tests/coord-guards/run.sh
 == Observed: exit 1, 22 passed, 5 FAILED — the four legs repair 1 adds, plus the ref-form leg
@@ -90,11 +96,11 @@ FAIL  the recovery route must be built against the ref upstream_drift resolved
     | err=fsgg-coord: REFUSED — 'heartbeat' writes the board the whole fleet shares, and the engine is STALE.
     |             BEHIND refs/remotes/origin/main by 1 commit(s) under the engine's own source trees — the checkout
     |             this engine was built from does not contain them (.github#1549):
-    |               /tmp/tmp.KJ2YyvVCbx/behind/shared
+    |               /tmp/tmp.nrs8YCvuoY/behind/shared
     |             You can be standing in a CURRENT worktree and still be about to exec an engine
     |             that is not. Update the checkout that OWNS this build, then rebuild it:
-    |               git -C /tmp/tmp.KJ2YyvVCbx/behind/shared merge --ff-only refs/remotes/origin/main
-    |               dotnet build /tmp/tmp.KJ2YyvVCbx/behind/shared/src/FS.GG.Coord.Cli -c Release
+    |               git -C /tmp/tmp.nrs8YCvuoY/behind/shared merge --ff-only refs/remotes/origin/main
+    |               dotnet build /tmp/tmp.nrs8YCvuoY/behind/shared/src/FS.GG.Coord.Cli -c Release
     | 
     |             THIS *IS* THE SHARED CHECKOUT — the one every OTHER worker's engine resolves through, so
     |             repairing it is a FLEET-WIDE action. On a board running several lanes at once that repair is
@@ -129,11 +135,11 @@ FAIL  the recovery route must create a fresh directory per invocation
     | err=fsgg-coord: REFUSED — 'heartbeat' writes the board the whole fleet shares, and the engine is STALE.
     |             BEHIND refs/remotes/origin/main by 1 commit(s) under the engine's own source trees — the checkout
     |             this engine was built from does not contain them (.github#1549):
-    |               /tmp/tmp.KJ2YyvVCbx/behind/shared
+    |               /tmp/tmp.nrs8YCvuoY/behind/shared
     |             You can be standing in a CURRENT worktree and still be about to exec an engine
     |             that is not. Update the checkout that OWNS this build, then rebuild it:
-    |               git -C /tmp/tmp.KJ2YyvVCbx/behind/shared merge --ff-only refs/remotes/origin/main
-    |               dotnet build /tmp/tmp.KJ2YyvVCbx/behind/shared/src/FS.GG.Coord.Cli -c Release
+    |               git -C /tmp/tmp.nrs8YCvuoY/behind/shared merge --ff-only refs/remotes/origin/main
+    |               dotnet build /tmp/tmp.nrs8YCvuoY/behind/shared/src/FS.GG.Coord.Cli -c Release
     | 
     |             THIS *IS* THE SHARED CHECKOUT — the one every OTHER worker's engine resolves through, so
     |             repairing it is a FLEET-WIDE action. On a board running several lanes at once that repair is
@@ -172,12 +178,12 @@ PASS  coord-engine.yml names scripts/fsgg-coord-guards.sh in both its pull_reque
 PASS  coord-guards.yml runs this suite and is selected by a change to the guard module, the shim, or this suite
 coord-guards: 22 passed, 5 failed
 
-== INVERSION 3 of 3 — CI reachability, mutating the WORKFLOW tree rather than the module:
-==   scratch REPO_ROOT carrying this PR shim, guard module and suite, the merge-base
+== INVERSION 3 of 4 — CI reachability, mutating the WORKFLOW tree rather than the module:
+==   scratch REPO_ROOT carrying this PR's shim, guard module and suite, the CURRENT merge-base
 ==   .github/workflows/coord-engine.yml, and NO .github/workflows/coord-guards.yml
-== Observed: exit 1, 25 passed, 2 FAILED — section 10 legs. (This transcript is committed
-== here because review round 0 observed that the earlier evidence named this mutation in prose
-== while pointing at a receipt that contained only inversion 1.)
+== Observed: exit 1, 25 passed, 2 FAILED — section 10's legs. Non-vacuous at the new merge base
+== too: `git show origin/main:.github/workflows/coord-engine.yml | grep -c fsgg-coord-guards.sh`
+== is 0, so the filter this item adds is still absent from the branch it merges into.
 PASS  harness: the shim under test is byte-identical to scripts/fsgg-coord — the copy changes the module's location, never the resolver
 PASS  the .github#2581 condition reproduces: worktree caller + shared checkout BEHIND on the engine source trees ⇒ 'heartbeat' REFUSED (exit 69), engine never reached
 PASS  the verdict is the UPSTREAM-DRIFT half alone — the mtime half is silent, so this fixture measures the arm nothing else does
@@ -196,7 +202,7 @@ PASS  the shared checkout is still BEHIND after the recovery — the route repai
 PASS  the recovery route's worktree target is per-invocation, not a fixed absolute path ("$eng")
 PASS  the recovery route creates a FRESH directory (mktemp -d) rather than reusing a named one, so nothing an earlier session left behind can be adopted as 'current' through tier 1
 PASS  the PRINTED command succeeds silently for TWO workers blocked in the same window, each from its own linked worktree of one repository, and each gets its OWN checkout
-PASS  both checkouts are at the ref the guard MEASURED (ab325d75ade4d576d3f4f20adb8e594b762405d5) — each blocked worker gets a genuinely current engine source tree, not merely a directory
+PASS  both checkouts are at the ref the guard MEASURED (f3c23323dc6cede5a5e5aa9fc1a2651f4fd3b888) — each blocked worker gets a genuinely current engine source tree, not merely a directory
 PASS  every write verb the module declares is still refused under the .github#2581 condition — add adopt child claim done flush heartbeat intake release review room say set-field set-paths take widen delivery delivery-route graphql next reap reconcile
 PASS  acceptance 5 by name: done, claim, take, widen and set-paths are all still refused — this row does not reopen #1507
 PASS  a READ still warns and still runs, and does NOT carry the recovery route — the refusal-only text stays out of the warning path
@@ -206,10 +212,120 @@ PASS  the cost paragraph names the regime in which the claim is false, so a read
 FAIL  coord-engine.yml must select a change to the guard module in BOTH trigger filters
     | occurrences=0
 FAIL  a workflow must run tests/coord-guards/run.sh and be selected by the paths this suite is about
-    | /tmp/tmp.xsnIw79TOv/.github/workflows/coord-guards.yml
+    | /tmp/claude-1000/-home-developer-projects--github/055fd264-ad77-4e56-91cd-6470a5cb4f48/scratchpad/crake-5bff-ci-inv/.github/workflows/coord-guards.yml
 coord-guards: 25 passed, 2 failed
 
-== The legs that stay green under inversion 1 are named in the suite own section 5 comment and
+== INVERSION 4 of 4 — THE REBASE ITSELF, and the one mutation nobody had to invent. Bringing this
+== branch current with origin/main picked up .github#2653, which split `stale_detail` out of
+== `stale_guard`. `$b` — the ref this guard measured — became a `local` of the extracted function,
+== reached only through a `$(...)` SUBSHELL, so it reads EMPTY in `stale_guard` and the runnable
+== `mktemp -d` recovery block that round 0's finding 1 and round 1's repair 1 are entirely about
+== became unreachable text. Nothing errored; the guard still refused, and still printed a recovery.
+==   git show <rebased-but-unrepaired>:scripts/fsgg-coord-guards.sh > /tmp/rebased-unrepaired-guards.sh
+==   FSGG_GUARDS_UNDER_TEST=/tmp/rebased-unrepaired-guards.sh bash tests/coord-guards/run.sh
+== Observed: exit 1, 21 passed, 6 FAILED — and the six are exactly the recovery-route legs.
+== This is the gate catching a REAL regression introduced by a clean, conflict-free `git rebase`,
+== which is the strongest evidence available that section 5b is not decorative.
+PASS  harness: the shim under test is byte-identical to scripts/fsgg-coord — the copy changes the module's location, never the resolver
+PASS  the .github#2581 condition reproduces: worktree caller + shared checkout BEHIND on the engine source trees ⇒ 'heartbeat' REFUSED (exit 69), engine never reached
+PASS  the verdict is the UPSTREAM-DRIFT half alone — the mtime half is silent, so this fixture measures the arm nothing else does
+PASS  the refusal names the host-owned regime: 'THIS *IS* THE SHARED CHECKOUT'
+PASS  the refusal names the host-owned regime: 'SERIALISED BY THE HOST'
+PASS  the refusal names the host-owned regime: 'NOT YOURS TO RUN'
+PASS  the refusal prints the self-service recovery route: 'KEEP YOUR CLAIM WITHOUT TOUCHING THAT CHECKOUT'
+FAIL  the refusal must name a recovery route that needs neither the shared checkout nor the host
+    | missing: git worktree add --detach
+PASS  the refusal prints the self-service recovery route: 'FSGG_COORD_ENGINE_BIN'
+PASS  the refusal prints the self-service recovery route: 'BUILD the engine you name'
+FAIL  the recovery route must be built against the ref upstream_drift resolved
+    | err=fsgg-coord: REFUSED — 'heartbeat' writes the board the whole fleet shares, and the engine is STALE.
+    |             BEHIND refs/remotes/origin/main by 1 commit(s) under the engine's own source trees — the checkout
+    |             this engine was built from does not contain them (.github#1549):
+    |               /tmp/tmp.8UVwGhfXZf/behind/shared
+    |             You can be standing in a CURRENT worktree and still be about to exec an engine
+    |             that is not. Update the checkout that OWNS this build, then rebuild it:
+    |               git -C /tmp/tmp.8UVwGhfXZf/behind/shared merge --ff-only refs/remotes/origin/main
+    |               dotnet build /tmp/tmp.8UVwGhfXZf/behind/shared/src/FS.GG.Coord.Cli -c Release
+    | 
+    |             THIS *IS* THE SHARED CHECKOUT — the one every OTHER worker's engine resolves through, so
+    |             repairing it is a FLEET-WIDE action. On a board running several lanes at once that repair is
+    |             SERIALISED BY THE HOST, and workers are routinely told to hold the claim, build nothing, and
+    |             report. IF THAT IS YOUR INSTRUCTION, THE REMEDY ABOVE IS NOT YOURS TO RUN — and waiting for
+    |             it is not free, because this guard also refuses the verb that would renew your lease.
+    | 
+    |             KEEP YOUR CLAIM WITHOUT TOUCHING THAT CHECKOUT. A CURRENT engine you build YOURSELF lifts
+    |             this refusal for every verb, immediately, with no shared-checkout repair and no host: check
+    |             out the default branch into a directory you own, build it there, and name it:
+    |               dotnet build <your-own-checkout>/src/FS.GG.Coord.Cli -c Release
+    |               export FSGG_COORD_ENGINE_BIN=<your-own-checkout>/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
+    | 
+    |             BUILD the engine you name. An explicit bin is honoured BEFORE any guard runs, so it will run
+    |             whatever you point it at — stale or dirty — and warn about neither.
+    |             The other route is tier 2a, `dotnet build` in your OWN worktree, but only while your head is
+    |             still free to move: clearing drift there means YOUR HEAD must contain it, and rebasing a
+    |             branch an independent critic may already have confirmed is authoring, not landing.
+    | 
+    |             AND THIS REFUSAL CAN OUTLIVE THE LEASE IT IS STANDING ON (.github#2581). 'heartbeat' is the
+    |             verb that renews your claim, so being refused it spends the very thing you need in order to
+    |             act once you are unblocked. An EXPIRED lease cannot be renewed in place — the holder must
+    |             RE-CLAIM, which changes the claim generation, which reds 'claim-generation' until 'delivery'
+    |             is re-issued. Measured twice in one session: .github#2549 and .github#2563. Waiting is
+    |             therefore the one response that cannot work here. Take the route above.
+PASS  the 'heartbeat' refusal names the lease consequence the generic write refusal hides, citing the two measured incidents
+PASS  the lease line is scoped to the renewal verb — 'done' is refused without it, so the message stays about the reader's situation
+PASS  the recovery route WORKS: the same blocked worker renews through a CURRENT engine it built — exit 0, no staleness verdict consulted, shared checkout untouched
+PASS  the shared checkout is still BEHIND after the recovery — the route repaired nothing the host owns
+FAIL  the recovery route must not name a fixed absolute directory: the second blocked worker to run it verbatim gets 'already exists', and a leftover one from an earlier session is adoptable as 'current'
+    | target= line=
+FAIL  the recovery route must create a fresh directory per invocation
+    | err=fsgg-coord: REFUSED — 'heartbeat' writes the board the whole fleet shares, and the engine is STALE.
+    |             BEHIND refs/remotes/origin/main by 1 commit(s) under the engine's own source trees — the checkout
+    |             this engine was built from does not contain them (.github#1549):
+    |               /tmp/tmp.8UVwGhfXZf/behind/shared
+    |             You can be standing in a CURRENT worktree and still be about to exec an engine
+    |             that is not. Update the checkout that OWNS this build, then rebuild it:
+    |               git -C /tmp/tmp.8UVwGhfXZf/behind/shared merge --ff-only refs/remotes/origin/main
+    |               dotnet build /tmp/tmp.8UVwGhfXZf/behind/shared/src/FS.GG.Coord.Cli -c Release
+    | 
+    |             THIS *IS* THE SHARED CHECKOUT — the one every OTHER worker's engine resolves through, so
+    |             repairing it is a FLEET-WIDE action. On a board running several lanes at once that repair is
+    |             SERIALISED BY THE HOST, and workers are routinely told to hold the claim, build nothing, and
+    |             report. IF THAT IS YOUR INSTRUCTION, THE REMEDY ABOVE IS NOT YOURS TO RUN — and waiting for
+    |             it is not free, because this guard also refuses the verb that would renew your lease.
+    | 
+    |             KEEP YOUR CLAIM WITHOUT TOUCHING THAT CHECKOUT. A CURRENT engine you build YOURSELF lifts
+    |             this refusal for every verb, immediately, with no shared-checkout repair and no host: check
+    |             out the default branch into a directory you own, build it there, and name it:
+    |               dotnet build <your-own-checkout>/src/FS.GG.Coord.Cli -c Release
+    |               export FSGG_COORD_ENGINE_BIN=<your-own-checkout>/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
+    | 
+    |             BUILD the engine you name. An explicit bin is honoured BEFORE any guard runs, so it will run
+    |             whatever you point it at — stale or dirty — and warn about neither.
+    |             The other route is tier 2a, `dotnet build` in your OWN worktree, but only while your head is
+    |             still free to move: clearing drift there means YOUR HEAD must contain it, and rebasing a
+    |             branch an independent critic may already have confirmed is authoring, not landing.
+    | 
+    |             AND THIS REFUSAL CAN OUTLIVE THE LEASE IT IS STANDING ON (.github#2581). 'heartbeat' is the
+    |             verb that renews your claim, so being refused it spends the very thing you need in order to
+    |             act once you are unblocked. An EXPIRED lease cannot be renewed in place — the holder must
+    |             RE-CLAIM, which changes the claim generation, which reds 'claim-generation' until 'delivery'
+    |             is re-issued. Measured twice in one session: .github#2549 and .github#2563. Waiting is
+    |             therefore the one response that cannot work here. Take the route above.
+FAIL  N simultaneously-blocked workers must each get a printed command that works
+    | the refusal printed no recovery command block to extract
+FAIL  each worker's checkout must be at the ref upstream_drift resolved
+    | the refusal printed no recovery command block to extract
+PASS  every write verb the module declares is still refused under the .github#2581 condition — add adopt child claim done flush heartbeat intake release review room say set-field set-paths take widen delivery delivery-route graphql next reap reconcile
+PASS  acceptance 5 by name: done, claim, take, widen and set-paths are all still refused — this row does not reopen #1507
+PASS  a READ still warns and still runs, and does NOT carry the recovery route — the refusal-only text stays out of the warning path
+PASS  a checkout that is NOT behind, with an engine newer than its source, is wholly silent — the new text manufactures no refusal and no warning
+PASS  the unqualified 'local, cheap and theirs' cost claim is no longer asserted — it survives only as a quoted, retired wording
+PASS  the cost paragraph names the regime in which the claim is false, so a reader auditing this guard is not told the cost is bounded when it is not
+PASS  coord-engine.yml names scripts/fsgg-coord-guards.sh in both its pull_request and push paths filters (2 occurrences) — the parity gate now runs on the PRs whose subject it is
+PASS  coord-guards.yml runs this suite and is selected by a change to the guard module, the shim, or this suite
+coord-guards: 21 passed, 6 failed
+
+== The legs that stay green under inversion 1 are named in the suite's own section 5 comment and
 == are regression guards on properties that already held (tier 1 always worked), not vacuous
 == passes.
 ]]></system-out></testcase></testsuite>

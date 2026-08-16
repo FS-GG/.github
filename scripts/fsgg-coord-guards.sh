@@ -835,9 +835,36 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
             it is not free, because this guard also refuses the verb that would renew your lease."
   fi
 
-  # THE REF IS THE ONE THIS GUARD MEASURED, or none at all. $b is set only by the `behind` arm, and
+  # THE REF IS THE ONE THIS GUARD MEASURED, or none at all. `$b` is set only by the `behind` arm, and
   # naming a literal `origin/main` on the other arms would print a remedy against a ref the count was
   # never taken over — the same mistake the `merge --ff-only $b` note above refuses.
+  #
+  # AND IT IS RE-READ HERE RATHER THAN INHERITED, BECAUSE .github#2653 MOVED THE MEASUREMENT OUT OF THIS
+  # FUNCTION. When this block was first written, `stale_guard` computed the drift itself and `$b` was
+  # simply still in scope. `stale_detail` is now a separate function AND is called through `$(…)` — a
+  # SUBSHELL — so nothing it assigns can reach this scope at all: neither a `local` nor the
+  # `AUTHORED_ENGINE_SOURCE_REASON` out-parameter idiom this file uses two guards above, which works only
+  # because `authored_engine_source` is called directly. Left inheriting, `$b` reads EMPTY here forever
+  # and the `else` arm below wins unconditionally — the runnable command this whole block exists to print
+  # becomes unreachable text, silently, with no error anywhere. The guard would still refuse correctly and
+  # still print a recovery; it would just never print the one that repair 1 was about. This is the same
+  # class as #266 one level down: a message asserting a route it structurally cannot deliver.
+  #
+  # RE-INVOKING `upstream_drift` IS NOT A SECOND COPY OF THE PREDICATE — it is the same function, asked
+  # again, and it is the only thing in this file that can answer. It performs no network I/O (this file's
+  # "no network, ever" rule; it reads `refs/remotes/origin/*` and counts), and it is paid ONLY on the path
+  # where a refusal is already being composed — the slow path by construction, alongside the
+  # `git worktree list` the .github#2402 block above already pays here.
+  #
+  # AND THE `behind` GATE IS KEPT ON THE RE-READ, so the failure direction is the safe one. If this second
+  # read disagrees with the one `stale_detail` took — a ref that moved between them, a probe that stopped
+  # answering — `$b` goes empty and the reader gets the generic `else` arm. A degraded remedy is the
+  # correct outcome; printing a ref this guard did not measure is the outcome that is not.
+  #
+  # shellcheck disable=SC2034   # `a` is the drift COUNT: read to consume the field, reported by `$detail`.
+  local kind a b=""
+  IFS="$(printf '\t')" read -r kind a b <<<"$(upstream_drift "$top")"
+  [ "$kind" = behind ] || b=""
   #
   # AND THE DIRECTORY IS PER-INVOCATION, NEVER A FIXED PATH (.github#2581, review round 0, repair 1).
   # The first draft of this block named a literal `/tmp/fsgg-engine-current`, and that fails in EXACTLY
@@ -855,7 +882,7 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
   # meant to avoid it. `mktemp -d` answers both halves — the directory is fresh and unique per reader, so
   # there is nothing to collide with and nothing to adopt — and the `&&` chain makes the tail fail closed,
   # so no reader can end up exporting a bin built from a tree the command did not just create.
-  if [ -n "${b:-}" ]; then
+  if [ -n "$b" ]; then
     recovery="$recovery
 
             KEEP YOUR CLAIM WITHOUT TOUCHING THAT CHECKOUT. A CURRENT engine you build YOURSELF lifts
