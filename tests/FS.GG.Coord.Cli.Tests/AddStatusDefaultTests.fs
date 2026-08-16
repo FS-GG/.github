@@ -646,7 +646,13 @@ module AddStatusDefaultTests =
         $"<!-- fsgg:claim worker=vole-418 lease=120 renewed=%d{ClaimedAt} session=ed60050b prev=Backlog pathRepo=FS.GG.SDD -->"
 
     /// The same world, with the receipt ledger read FAILING rather than answering empty (#266).
-    let private worldWithUnreadableLedger (column: Column) =
+    ///
+    /// `failure` is a PARAMETER because `Http 502` and `RateLimited` are not the same finding and the
+    /// fixture could not tell them apart when it served only the first: `Errors.exitCode` maps `Http _`
+    /// to 1, which is the value `ExitError` already carries, so flattening the gate's
+    /// `Error(Errors.exitCode e)` to `Error ExitError` left the whole suite green. The claim about
+    /// EX_RATE was true and ungated — the fixture, not the subject, was what the inversion measured.
+    let private worldWithLedgerFailure (column: Column) (failure: Errors.IoError) =
         let board = Board column
 
         Fake.Recorder(fun (req: Request) ->
@@ -661,10 +667,12 @@ module AddStatusDefaultTests =
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok IssueBody
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
-                Error(Errors.Http(502, "the receipt ledger could not be read"))
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> Error failure
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private worldWithUnreadableLedger (column: Column) =
+        worldWithLedgerFailure column (Errors.Http(502, "the receipt ledger could not be read"))
 
     let private runSetField transport args = runVerbWithStderr Client.setField transport args
     let private runRelease transport args = runVerbWithStderr Client.release transport args
@@ -805,6 +813,29 @@ module AddStatusDefaultTests =
         Assert.Equal(0, transport.Count "item-add")
         Assert.Equal(0, transport.Count "item-edit")
 
+    [<Fact>]
+    let ``.github#2698 a RATE-LIMITED receipt read refuses as EX_RATE, not as a permanent error`` () =
+        // THE CLAIM THE CHANGE MAKES, NOW HELD. `requireCurrentRouteIfReady` returns the underlying read's
+        // OWN exit code rather than a flat `ExitError`, so a rate-limited ledger read keeps its back-off
+        // contract instead of reading to a JSON worker as a permanent refusal it should stop retrying.
+        //
+        // THE FIXTURE HAD TO CHANGE TO SAY THIS. The only failing-ledger world served `Http 502`, and
+        // `Errors.exitCode` maps `Http _` to 1 — the same integer `ExitError` carries — so no assertion
+        // over the exit code could separate the two, and flattening `Error(Errors.exitCode e)` to
+        // `Error ExitError` left the whole suite green. A gate whose inversion survives is not a gate; the
+        // production shape the claim is about was simply absent from the corpus.
+        let transport =
+            worldWithLedgerFailure NotOnBoard (Errors.RateLimited(Errors.RestBudget(Some "core"), None))
+
+        let code, out, _ = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.Equal(Errors.ExRate, code)
+        // And it is still a refusal before any write — the back-off classification must not cost the
+        // fail-closed property it rides on.
+        Assert.Equal("", out.Trim())
+        Assert.Equal(0, transport.Count "item-add")
+        Assert.Equal(0, transport.Count "item-edit")
+
     // ---- DOOR 2: `set-field <ref> Status Ready` (AC5 — COVERED, NOT DEFERRED) -----------------------
 
     [<Fact>]
@@ -829,6 +860,36 @@ module AddStatusDefaultTests =
         Assert.Equal(0, code)
         Assert.Contains("Status", out)
         Assert.True(transport.Logged(statusWrite ItemId "opt_ready"), $"log: %A{transport.Log}")
+
+    [<Fact>]
+    let ``.github#2698 AC5 set-field --batch Status=Ready is REFUSED with no receipt`` () =
+        // THE FIFTH DOOR, AND IT HAD NO RED LEG. The change's own inversion table proved four doors
+        // independently load-bearing and omitted this one, so deleting its gate call left 848/848 green —
+        // `.github#2312`'s exact shape, applied rigorously at four seams and not at the fifth. The two
+        // pre-existing `batch: true` legs in `BlockerLintTests` are PRESENCE legs: they serve a receipt and
+        // expect success, so they pass with the gate and without it.
+        //
+        // BEFORE ANY ALIAS IS EMITTED. `set-field --batch` writes one aliased document, so a refusal that
+        // arrived mid-document would half-write the row — the `Partial` outcome the batch path treats as
+        // its worst answer, reached by a gate meant to prevent a write.
+        let transport = setFieldWorld []
+
+        let code, out, err = runSetField transport [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Status=Ready" ]
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("", out.Trim())
+        Assert.Equal(0, transport.Count "batch-mutation")
+        Assert.Equal(0, transport.Count "item-edit")
+        Assert.Contains("delivery-route record", err)
+
+    [<Fact>]
+    let ``.github#2698 AC5 set-field --batch Status=Ready PROCEEDS on a current receipt`` () =
+        let transport = setFieldWorld [ LightweightReceipt ]
+
+        let code, _, _ = runSetField transport [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Status=Ready" ]
+
+        Assert.Equal(0, code)
+        Assert.True(transport.Logged "opt_ready", $"log: %A{transport.Log}")
 
     [<Fact>]
     let ``.github#2698 AC5 set-field Status Backlog is untouched by the route gate`` () =
@@ -973,8 +1034,18 @@ module AddStatusDefaultTests =
 
     [<Fact>]
     let ``.github#2698 reconcile --apply does NOT promote a receipt-less row it derived Ready for`` () =
-        let transport, _, out, _ = runReconcileApply []
+        let transport, code, out, _ = runReconcileApply []
 
+        // THE EXIT CODE IS PART OF THE ANSWER, and discarding it is what hid a scheduled-workflow red.
+        // `coord-board-reconcile.yml` ends `exit "$rc"` on this exact command, and nothing recurring
+        // authors a receipt — so a refusal classified as a failure would red that workflow until a human
+        // authored receipts by hand. The pass ran to completion and the board is not wrong; ONE derived
+        // remedy was declined as outside this pass's authority, which is `reconcile`'s own stated
+        // report-only boundary and the class `NotAttempted` already carries.
+        Assert.Equal(0, code)
+        Assert.Contains("\"outcome\":\"not-attempted\"", out)
+        // The row is not merely absent from the failures — it names what is owed and how to discharge it.
+        Assert.Contains("delivery-route record", out)
         // The chore IS still derived — the reducer is untouched. What must not happen is the WRITE.
         Assert.Contains("LIFECYCLE-PROJECTION-LAG", out)
         // ANCHORED ON THE OPTION ID THE CONTROL BELOW PRODUCES, deliberately. The lifecycle chore writes
@@ -990,8 +1061,9 @@ module AddStatusDefaultTests =
         // THE CONTROL, and it is what makes the leg above evidence about the gate rather than about the
         // fixture. One input differs — the ledger — and the mutation appears.
         let receipt = StructuredFixtures.routeComment Subject (Some DeliveryRoute.Lightweight) "fixture-rook" None
-        let transport, _, out, err = runReconcileApply [ receipt ]
+        let transport, code, out, err = runReconcileApply [ receipt ]
 
+        Assert.Equal(0, code)
         Assert.Contains("LIFECYCLE-PROJECTION-LAG", out)
         Assert.True(transport.Logged "opt_ready", $"out: %s{out}\nerr: %s{err}\nlog: %A{transport.Log}")
         Assert.Contains("\"outcome\":\"written\"", out)

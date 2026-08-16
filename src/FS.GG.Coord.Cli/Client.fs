@@ -3686,21 +3686,24 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                       // pair is `Status=Blocked`, re-check coherence immediately before the
                                       // transport mutation: the scan that derived this chore is stale by
                                       // definition once another actor can clear `Blocked by`.
+                                      let resolvedStatus = if field = "Status" then Reads.statusOfName value else None
+
+                                      let blockedGate =
+                                          if field = "Status" then
+                                              match resolvedStatus, Map.tryFind chore.Subject lifecycleWatermarks with
+                                              // A typed HumanPark intent is itself the durable reason for
+                                              // this lifecycle write. Requiring the old prose sentinel as
+                                              // well would make the new-only reducer compute Blocked and
+                                              // then let a retired authority veto its own projection.
+                                              // Blocker-derived Auto writes still pass through the live
+                                              // Blocked-by/body coherence boundary below.
+                                              | Some Blocked, Some watermark when LifecycleProjection.isHumanPark watermark.Intent -> Ok()
+                                              | _ -> requireCoherentBlockedWrite ctx chore.Subject resolvedStatus
+                                          else
+                                              Ok()
+
                                       let gate =
                                           if field = "Status" then
-                                              let status = Reads.statusOfName value
-
-                                              let blockedGate =
-                                                  match status, Map.tryFind chore.Subject lifecycleWatermarks with
-                                                  // A typed HumanPark intent is itself the durable reason for
-                                                  // this lifecycle write. Requiring the old prose sentinel as
-                                                  // well would make the new-only reducer compute Blocked and
-                                                  // then let a retired authority veto its own projection.
-                                                  // Blocker-derived Auto writes still pass through the live
-                                                  // Blocked-by/body coherence boundary below.
-                                                  | Some Blocked, Some watermark when LifecycleProjection.isHumanPark watermark.Intent -> Ok()
-                                                  | _ -> requireCoherentBlockedWrite ctx chore.Subject status
-
                                               // .github#2698 — THE SEAM WITH NO OPERATOR IN IT, and the one
                                               // the filed acceptance criterion did not name. A host measured
                                               // `reconcile --apply` reporting `LIFECYCLE-PROJECTION-LAG …
@@ -3714,9 +3717,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                               // This does NOT stop the reducer DERIVING `Ready` — that
                                               // projection has a purpose this row did not study — it stops
                                               // the derived value being WRITTEN onto a row that cannot be
-                                              // scheduled once it lands. A refusal here costs the pass
-                                              // nothing else: the row is reported and the remaining chores
-                                              // continue, exactly as a refused `Status=Blocked` already does.
+                                              // scheduled once it lands.
                                               //
                                               // The receipt read is paid only on a row this pass is ALREADY
                                               // about to write, never per board row — `enrichDeliveryRoutes`'
@@ -3724,9 +3725,50 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                               // rather than at the scan.
                                               match blockedGate with
                                               | Error rc -> Error rc
-                                              | Ok() -> requireCurrentRouteIfReady ctx chore.Subject status
+                                              | Ok() -> requireCurrentRouteIfReady ctx chore.Subject resolvedStatus
                                           else
                                               Ok()
+
+                                      // WHICH CLASS OF OUTCOME IS A ROUTE REFUSAL? .github#2698 REPAIR 1,
+                                      // AND THE CHANGE MUST DECIDE IT RATHER THAN INHERIT IT.
+                                      //
+                                      // `coord-board-reconcile.yml` runs this pass on a SCHEDULE and ends
+                                      // `exit "$rc"` (`:347`, `:362`). It maps two conditions to
+                                      // `::warning:: + exit 0` — an unresolvable board (exit 4) and an
+                                      // exhausted budget (EX_RATE) — under a rule it states in its own
+                                      // words: those are "NO VERDICT, not a pass", and the mapping is
+                                      // "never for a genuine finding". Left in the `Failed` arm below, a
+                                      // route refusal exits 1 and REDS that scheduled workflow; and since
+                                      // nothing recurring authors a receipt, the red cannot self-clear —
+                                      // it would sit red until a human authored receipts by hand, on a
+                                      // `main` this item's own body already describes as wedged.
+                                      //
+                                      // IT IS NEITHER OF THOSE TWO CLASSES, AND IT IS NOT A FAILURE. The
+                                      // pass ran to completion and the board is not wrong; ONE derived
+                                      // remedy was declined because performing it needs a judgement this
+                                      // pass may not make. `reconcile`'s own contract already draws that
+                                      // line — "`--apply` may perform only remedies represented by
+                                      // `ChoreKind`; findings that require judgement remain report-only" —
+                                      // and the vocabulary for it already exists and is already used for a
+                                      // mechanically identical case: `NotAttempted`, which is what the
+                                      // `classFieldMissing` arm above emits for a remedy whose
+                                      // precondition lies outside this pass, WITHOUT failing it.
+                                      //
+                                      // So it is reported, loudly, and not failed. The refusal text (row,
+                                      // reason, and the command that authors a receipt) is already on
+                                      // stderr from the gate itself, the row carries `not-attempted` and
+                                      // its reason in the `--json` receipt, and `$rc` stays 0 for a pass
+                                      // whose only finding is "these rows owe a route decision".
+                                      //
+                                      // THE BLOCKED GATE'S CLASSIFICATION IS UNTOUCHED. It is a different
+                                      // judgement — an incoherent park is the board being wrong — and it
+                                      // keeps its `Failed` arm and its non-zero exit. That is also why
+                                      // these two are told apart here rather than through `gate`, whose
+                                      // `Result.isError` cannot say WHICH boundary refused: before this,
+                                      // a route refusal was reported to the operator as a
+                                      // "Status=Blocked coherence gate" refusal, naming a gate that had
+                                      // returned `Ok`.
+                                      let routeRefused = Result.isError gate && Result.isOk blockedGate
 
                                       let outcome =
                                           match gate with
@@ -3791,6 +3833,19 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                           | Json -> ()
 
                                           reconcileRow chore (Some Deferred)
+                                      // .github#2698 — THE ROUTE REFUSAL, REPORTED AND NOT FAILED. Matched
+                                      // BEFORE the `Result.isError gate` arm below, which is the
+                                      // `Status=Blocked` coherence refusal and keeps its non-zero exit.
+                                      // The reason travels in the receipt so a `--json` reader gets the
+                                      // row, the rule, and what is owed; the gate itself has already put
+                                      // the full refusal and the authoring command on stderr.
+                                      | Ok Board.NotOnBoard when routeRefused ->
+                                          reconcileRow
+                                              chore
+                                              (Some(
+                                                  NotAttempted
+                                                      $"%s{chore.Subject.Short} has no current delivery-route receipt, so Status=Ready was NOT written — a row promoted without one is unschedulable. The route is an agent judgement this pass may not make: scripts/fsgg-coord delivery-route record %s{chore.Subject.Short} <receipt.json>"
+                                              ))
                                       | Ok Board.NotOnBoard when Result.isError gate ->
                                           failed <- true
                                           reconcileRow chore (Some(Failed "Status=Blocked coherence gate refused the stale reconcile write"))
