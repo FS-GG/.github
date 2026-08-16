@@ -333,8 +333,21 @@ module ReviewApplication =
                        freshnessToken = verdict.FreshnessToken
                        actionKey = verdict.ActionKey |}
                 printfn "%s" (JsonSerializer.Serialize payload)
+            // .github#2487 AC3 reaches the TEXT projection too, because "a reader can act without a
+            // manual `git` comparison" is not a property of one render mode. The reason the JSON payload
+            // has always carried as `actionReason` was simply dropped here, so `--text` printed
+            // `passedAwaitingChecks — awaitChecks` for a chain whose only pass bound an abandoned head:
+            // the exact two words that read as "you are clear, finish the cycle", and nothing else.
+            //
+            // Strictly additive: the state and action words, their order and their separator are
+            // byte-for-byte unchanged, and the reason is appended only where one exists — so every
+            // verdict that carried no reason before still renders exactly one line of exactly the same
+            // two words.
             | Text ->
-                printfn "%s — %s" (stateName verdict.State) (actionName verdict.NextAction)
+                match actionReason verdict.NextAction with
+                | Some reason ->
+                    printfn "%s — %s: %s" (stateName verdict.State) (actionName verdict.NextAction) reason
+                | None -> printfn "%s — %s" (stateName verdict.State) (actionName verdict.NextAction)
             ExitCode.toInt ExitCode.Green
 
     /// The live path's entrypoint — always `None` for the succession grant; see `renderVerdict`'s doc

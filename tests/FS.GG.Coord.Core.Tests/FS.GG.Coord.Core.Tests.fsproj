@@ -50,6 +50,10 @@
          vocabulary, and the composition every later fencing slice will share. Like every entry above it
          this one is explicit: the list carries no globs, so an unlisted test file runs nowhere. -->
     <Compile Include="OpKeyTests.fs" />
+    <!-- ReviewHeadDivergenceTests (.github#2487) reuses StructuredDecisionTests' record/comment builders,
+         so it must compile AFTER that entry. Same rule as every line above it: the list carries no globs,
+         and an unlisted file is a suite that runs nowhere. -->
+    <Compile Include="ReviewHeadDivergenceTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -282,18 +282,103 @@ module Review =
         | _ -> None
 
     /// DEC-001 (.github#2417 clarifications): a receipt that was SUPPLIED but failed the guard reads
-    /// differently from no receipt at all — the base reason is unchanged either way (so the pre-#2417
-    /// wording is stable for a caller that never grants succession), but a refused grant appends why, on
-    /// the same near-miss-naming convention `malformedVerdictReason` already uses for #2369.
-    let private resumeSameCriticReason (successionGranted: CriticSuccessionReceipt option) =
-        let baseReason = "a new commit landed after a changes-required verdict; the same critic must confirm it"
-
+    /// differently from no receipt at all, and a refused grant appends why, on the same near-miss-naming
+    /// convention `malformedVerdictReason` already uses for #2369.
+    ///
+    /// Factored out of `resumeSameCriticReason` by .github#2487 so the moved-head reason for a PASS
+    /// verdict carries the identical clause rather than a second, drifting copy of it —
+    /// `tests/review-critic-succession-wire/run.sh` asserts the exact substring "refused, not consumed"
+    /// on five refusal legs and asserts its ABSENCE on the no-grant control, so one home for the wording
+    /// is what keeps that fixture measuring the guard rather than a spelling.
+    let private refusedGrantClause (successionGranted: CriticSuccessionReceipt option) =
         match successionGranted with
         | Some _ ->
-            baseReason
-            + " (a critic-succession receipt was supplied but did not match this round's critic, head, or "
+            " (a critic-succession receipt was supplied but did not match this round's critic, head, or "
             + "guard conditions; it was refused, not consumed)"
-        | None -> baseReason
+        | None -> ""
+
+    /// AC3 of .github#2487, and the row treats it as the point rather than as polish: a verdict ABOUT
+    /// head divergence carries the two heads it was derived from, so a reader acts on one line of output
+    /// instead of re-deriving the comparison with a manual `git` call against a pull request they may not
+    /// have checked out.
+    ///
+    /// All three recorded instances cost at least one round-trip that this clause closes. Instance 3
+    /// (PR #2709) is the sharpest: `passedAwaitingChecks` / `awaitChecks` with `actionReason: null` and
+    /// `stateErrors: null` is indistinguishable, in the output alone, from a chain that really had
+    /// reviewed the current head — two agents had to go and read the chain's records by hand to find that
+    /// the only `pass` bound `48f8e6a5` while the pull request had moved to `bdf2a3e7`.
+    ///
+    /// Deliberately a CLAUSE appended to an existing sentence rather than a new field on `Verdict`. The
+    /// scoped question this row pilots is whether a verdict should carry its derivation at all; answering
+    /// it inside the reason text keeps `fsgg.coord.review/1`'s wire shape unchanged, so a consumer that
+    /// reads `actionReason` today gets the facts with no schema migration, and a later cut can promote
+    /// them to typed fields once the idea has been measured.
+    let private headDivergenceClause (reviewedHead: string) (currentHead: string) =
+        $" (the chain's latest review is bound to head %s{reviewedHead}; the pull request's current head "
+        + $"is %s{currentHead})"
+
+    /// The leading sentence is byte-for-byte what .github#2417 shipped, and the refused-grant clause is
+    /// still appended in exactly the cases it was. What .github#2487 adds is the two heads, for the AC3
+    /// reason above — the change is additive to the message, and the pre-#2417 property DEC-001 protects
+    /// (a supplied-and-refused grant reads differently from no grant at all) is untouched.
+    let private resumeSameCriticReason reviewedHead currentHead (successionGranted: CriticSuccessionReceipt option) =
+        "a new commit landed after a changes-required verdict; the same critic must confirm it"
+        + headDivergenceClause reviewedHead currentHead
+        + refusedGrantClause successionGranted
+
+    /// The reason for .github#2487's own case: the chain's latest verdict IS a pass, but it passed a head
+    /// the pull request has since moved off, so nothing in the chain covers the commit a host is about to
+    /// be told it may accept.
+    ///
+    /// It names what acceptance will actually do, because the whole defect was that `review` and the
+    /// acceptance path answered the same question differently and only the cheaper door was optimistic:
+    /// `acceptanceOutcome` below refuses this exact chain with "the accepted review chain is bound to a
+    /// different head than the current commit", and `Driver.parseStructuredComments` refuses the marker
+    /// with "acceptance is not bound to the latest reviewed head". A host that follows this action never
+    /// authors either refusal.
+    let private movedPassReason reviewedHead currentHead (successionGranted: CriticSuccessionReceipt option) =
+        "the latest review verdict is pass, but it is bound to a head the pull request has moved off, so "
+        + "no critic has reviewed the current head; the same critic must confirm it before a host can "
+        + "author an acceptance the acceptance path would refuse"
+        + headDivergenceClause reviewedHead currentHead
+        + refusedGrantClause successionGranted
+
+    /// Where the head the chain's latest review NAMES stands against the head this binding is being
+    /// decided at — the ONE comparison every verdict arm in both phases consults (.github#2487), never
+    /// four inline copies, on the same rule .github#2417 set for `criticSuccessionValid`.
+    ///
+    /// THE COMPARISON IS NOT NEW; ITS COVERAGE IS. The `changes-required` arms have always made it
+    /// inline, and `acceptanceOutcome` makes the equivalent one against the terminal parser's
+    /// `chain.HeadSha`. What was missing is that the two `pass` arms never read
+    /// `LatestReviewedHeadSha` at all — measured at source: the field had exactly two readers in all of
+    /// `FS.GG.Coord.Core`, both inside `changes-required` arms. So the engine was not generally
+    /// inattentive to head divergence; the check existed, was correct, and was applied to one of two
+    /// sibling branches. A `pass` at an abandoned head therefore reported `PassedAwaitingChecks` or
+    /// `AwaitingHostAcceptance` — terminal-looking answers whose documented next step is to finish the
+    /// cycle.
+    ///
+    /// THERE ARE TWO SITES, NOT ONE, and that is why this is a shared function rather than a fix at the
+    /// branch where the defect was observed. The identical `LatestVerdict`/`LatestReviewedHeadSha` shape
+    /// occurs once per phase; a repair-phase chain would have kept the optimistic answer, and would have
+    /// been far harder to notice because far fewer chains reach it.
+    type private ReviewedHead =
+        /// Unreachable by construction today, and this is inherited rather than invented:
+        /// `Driver.reviewPhaseFacts` derives `LatestVerdict` and `LatestReviewedHeadSha` from the SAME
+        /// `latestReview` option, so a readable verdict implies a readable head, and the
+        /// `changes-required` arms have carried this same arm since #2175. It is not a new guard in
+        /// .github#2557's sense — the match must be total, and the only question is which answer an
+        /// unreadable head gets. Fail-closed is the only defensible one in a row whose entire subject is
+        /// that an unchecked fact must not take the reassuring path.
+        | Unreadable
+        | AtCurrentHead
+        /// The chain's latest review names this head, and the pull request has moved off it.
+        | MovedFrom of reviewedHead: string
+
+    let private reviewedHeadAgainst (binding: Binding) (phaseFacts: Driver.ReviewPhaseFacts) =
+        match phaseFacts.LatestReviewedHeadSha with
+        | None -> Unreadable
+        | Some reviewedHead when reviewedHead = binding.HeadSha -> AtCurrentHead
+        | Some reviewedHead -> MovedFrom reviewedHead
 
     /// The ONE guard both the ordinary and repair-phase unmoved-head branches consult for a
     /// comment-shaped repair (.github#2549) — never two copies, on the same rule `.github#2417` set for
@@ -545,29 +630,43 @@ module Review =
                 else
                     let round = phaseFacts.ConfirmationCount + 1
                     match phaseFacts.LatestVerdict with
+                    // .github#2487 site 1 of 2 — the REPAIR-phase `pass` arm. Structurally identical to
+                    // the ordinary one below and repaired identically; fixing only the branch the defect
+                    // was observed on would have left this one optimistic.
                     | Some "pass" ->
-                        if facts.Checks = PrGreen then
-                            RepairPhaseActive round, RequestHostAcceptance
-                        else
-                            RepairPhaseActive round, AwaitChecks
+                        match reviewedHeadAgainst binding phaseFacts with
+                        | Unreadable ->
+                            let reason = "a pass verdict carries no readable reviewed-head field"
+                            MalformedEvidence [ reason ], Park reason
+                        | AtCurrentHead ->
+                            if facts.Checks = PrGreen then
+                                RepairPhaseActive round, RequestHostAcceptance
+                            else
+                                RepairPhaseActive round, AwaitChecks
+                        | MovedFrom reviewedHead ->
+                            match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
+                            | Some receipt -> RepairPhaseActive round, EnterCriticSuccession receipt
+                            | None ->
+                                RepairPhaseActive round,
+                                ResumeSameCritic(movedPassReason reviewedHead binding.HeadSha successionGranted)
                     | Some "changes-required" ->
-                        match phaseFacts.LatestReviewedHeadSha with
-                        | None ->
+                        match reviewedHeadAgainst binding phaseFacts with
+                        | Unreadable ->
                             let reason = "a changes-required verdict carries no readable reviewed-head field"
                             MalformedEvidence [ reason ], Park reason
-                        | Some reviewedHead when reviewedHead = binding.HeadSha ->
+                        | AtCurrentHead ->
                             match repairAssertionValid binding repairAssertionGranted phaseFacts with
                             | Some receipt ->
                                 RepairPhaseActive round, ResumeSameCritic(commentRepairConfirmationReason receipt)
                             | None ->
                                 RepairPhaseActive round,
                                 ResumeImplementer(resumeImplementerReason repairAssertionGranted)
-                        | Some _ ->
+                        | MovedFrom reviewedHead ->
                             match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
                             | Some receipt -> RepairPhaseActive round, EnterCriticSuccession receipt
                             | None ->
                                 RepairPhaseActive round,
-                                ResumeSameCritic (resumeSameCriticReason successionGranted)
+                                ResumeSameCritic (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
                     | _ ->
                         let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason
@@ -592,17 +691,41 @@ module Review =
                 else
                     let round = phaseFacts.ConfirmationCount + 1
                     match phaseFacts.LatestVerdict with
+                    // .github#2487 site 2 of 2 — the ORDINARY `pass` arm, and the one all three recorded
+                    // instances were measured on. AC1 and AC2 name the two answers it used to give at a
+                    // moved head: `awaitingHostAcceptance`/`requestHostAcceptance` when the checks were
+                    // green, and `passedAwaitingChecks`/`awaitChecks` when they were not. Both are
+                    // terminal-looking, both told a host to finish a cycle over a commit no critic had
+                    // read, and the second is what PR #2709 returned one careful reader away from a merge.
                     | Some "pass" ->
-                        if facts.Checks = PrGreen then
-                            AwaitingHostAcceptance, RequestHostAcceptance
-                        else
-                            PassedAwaitingChecks, AwaitChecks
+                        match reviewedHeadAgainst binding phaseFacts with
+                        | Unreadable ->
+                            let reason = "a pass verdict carries no readable reviewed-head field"
+                            MalformedEvidence [ reason ], Park reason
+                        | AtCurrentHead ->
+                            if facts.Checks = PrGreen then
+                                AwaitingHostAcceptance, RequestHostAcceptance
+                            else
+                                PassedAwaitingChecks, AwaitChecks
+                        // AC1: the state that matches what acceptance ENFORCES — the same-critic
+                        // confirmation the chain actually needs — and NOT a softer variant of the
+                        // optimistic one. It is deliberately the same pair the `changes-required` sibling
+                        // produces for the identical fact, including the succession recovery: a chain
+                        // whose critic despawned after passing an abandoned head is in exactly the
+                        // position .github#2417 built that grant for, and leaving it out would have made
+                        // the pass arm the only place in the protocol where a moved head has no route.
+                        | MovedFrom reviewedHead ->
+                            match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
+                            | Some receipt -> AwaitingSameCriticConfirmation round, EnterCriticSuccession receipt
+                            | None ->
+                                AwaitingSameCriticConfirmation round,
+                                ResumeSameCritic(movedPassReason reviewedHead binding.HeadSha successionGranted)
                     | Some "changes-required" ->
-                        match phaseFacts.LatestReviewedHeadSha with
-                        | None ->
+                        match reviewedHeadAgainst binding phaseFacts with
+                        | Unreadable ->
                             let reason = "a changes-required verdict carries no readable reviewed-head field"
                             MalformedEvidence [ reason ], Park reason
-                        | Some reviewedHead when reviewedHead = binding.HeadSha ->
+                        | AtCurrentHead ->
                             match repairAssertionValid binding repairAssertionGranted phaseFacts with
                             | Some receipt ->
                                 AwaitingSameCriticConfirmation round,
@@ -610,12 +733,12 @@ module Review =
                             | None ->
                                 AwaitingImplementerRepair round,
                                 ResumeImplementer(resumeImplementerReason repairAssertionGranted)
-                        | Some _ ->
+                        | MovedFrom reviewedHead ->
                             match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
                             | Some receipt -> AwaitingSameCriticConfirmation round, EnterCriticSuccession receipt
                             | None ->
                                 AwaitingSameCriticConfirmation round,
-                                ResumeSameCritic (resumeSameCriticReason successionGranted)
+                                ResumeSameCritic (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
                     | _ ->
                         let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason

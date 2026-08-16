@@ -1,0 +1,231 @@
+namespace FS.GG.Coord.Tests
+
+open System
+open Xunit
+open FS.GG.Coord
+
+/// .github#2487 — `review` must not report a terminal-looking state for a chain whose only `pass` binds a
+/// head the pull request has moved off.
+///
+/// THE MEASUREMENT THIS SUITE PINS, and it is the row's AC5. Every moved-head fact below is asserted
+/// against the state the OLD code produced, by name, so a leg cannot pass for a reason unrelated to its
+/// subject: `passedAwaitingChecks` and `awaitingHostAcceptance` are the two answers `.github#2487`
+/// records, and each moved-head test refuses them explicitly rather than only affirming the new answer.
+/// Reverting either comparison in `Review.classify` therefore reds these legs at the exact string a
+/// reader can compare against the row.
+///
+/// The positive controls are the other half and they are load-bearing: with the heads AGREEING, every
+/// pre-existing answer must survive byte-for-byte, in both phases and at both check states. A repair that
+/// reported divergence unconditionally would satisfy every negative leg and be worse than the defect.
+module ReviewHeadDivergenceTests =
+
+    /// Distinct 40-hex heads. `reviewedHead` is what the chain's records bind; `movedHead` is where the
+    /// pull request actually is — the `48f8e6a5` -> `bdf2a3e7` shape instance 3 measured on PR #2709.
+    let private reviewedHead = String.replicate 40 "a"
+    let private movedHead = String.replicate 40 "b"
+    let private implementer = "impl-worker"
+
+    let private seal (record: StructuredDecision.ReviewRecord) =
+        StructuredDecisionTests.reseal { record with Digest = "" }
+
+    let private initial verdict head =
+        seal
+            { StructuredDecisionTests.review 1 None StructuredDecision.Initial verdict 0 None None with
+                HeadSha = head }
+
+    /// `revision`/`previousDigest` chain the ledger; `initialReview`/`precedingReview` are the
+    /// back-references `validateReviewLedger` requires of every non-initial record.
+    let private following revision previous kind verdict round head preceding =
+        seal
+            { StructuredDecisionTests.review revision (Some previous) kind verdict round
+                (Some "https://review/1") (Some preceding) with
+                HeadSha = head }
+
+    let private facts comments checks : Review.Facts =
+        { Comments = comments
+          Checks = checks
+          RepairPhaseGranted = None
+          RepairRouteAvailable = true
+          DiffAuditTrusted = None }
+
+    let private binding phase head : Review.Binding =
+        { ItemRef = "FS-GG/.github#42"
+          Pr = 77
+          HeadSha = head
+          ClaimGeneration = "claim-1"
+          // Never the chain's critic `tern-42`: `inspect` fails closed when the two are equal, and a leg
+          // that tripped that guard would measure the guard instead of this row's subject.
+          ImplementerIdentity = implementer
+          Phase = phase
+          Round = 1 }
+
+    let private verdictOf phase head comments checks =
+        match Review.inspect (binding phase head) (facts comments checks) None None with
+        | Error errors -> failwithf "review refused a well-formed binding: %A" errors
+        | Ok verdict -> verdict
+
+    /// The ORDINARY chain of instance 3, to the record: an initial `changes-required`, then the same
+    /// critic's round-1 `pass` — and nothing binding the head the pull request later moved to.
+    let private ordinaryChain () =
+        let first = initial StructuredDecision.ChangesRequired reviewedHead
+        let pass =
+            following 2 first.Digest StructuredDecision.Confirmation StructuredDecision.Pass 1 reviewedHead
+                "https://review/1"
+        [ StructuredDecisionTests.reviewComment 1L first
+          StructuredDecisionTests.reviewComment 2L pass ]
+
+    /// The REPAIR-phase chain. `RepairPhasePresent` is what puts `classify` down the repair branch, and
+    /// the ledger requires a repair-phase record to carry `changes-required`; the round-1 confirmation
+    /// then supplies the `pass` whose head the binding has moved off.
+    let private repairChain () =
+        let first = initial StructuredDecision.ChangesRequired reviewedHead
+        let entered =
+            following 2 first.Digest StructuredDecision.RepairPhase StructuredDecision.ChangesRequired 0
+                reviewedHead "https://review/1"
+        let pass =
+            following 3 entered.Digest StructuredDecision.Confirmation StructuredDecision.Pass 1 reviewedHead
+                "https://review/2"
+        [ StructuredDecisionTests.reviewComment 1L first
+          StructuredDecisionTests.reviewComment 2L entered
+          StructuredDecisionTests.reviewComment 3L pass ]
+
+    /// Both heads, in the text a host reads (AC3).
+    let private assertNamesBothHeads (verdict: Review.Verdict) =
+        match verdict.NextAction with
+        | Review.ResumeSameCritic reason ->
+            Assert.Contains(reviewedHead, reason)
+            Assert.Contains(movedHead, reason)
+        | other -> failwithf "expected resumeSameCritic carrying the head divergence, got %A" other
+
+    /// The state names the old code produced. Asserted as a REFUSAL on every moved-head leg, because
+    /// "the new answer appeared" and "the optimistic answer is gone" are different claims and this row
+    /// was filed for the second.
+    let private assertNotOptimistic (verdict: Review.Verdict) =
+        match verdict.State with
+        | Review.PassedAwaitingChecks ->
+            failwith "AC2: a pass bound to a superseded head was still reported as terminal (passedAwaitingChecks)"
+        | Review.AwaitingHostAcceptance ->
+            failwith "AC1: a pass bound to a superseded head still told the host to author an acceptance"
+        | _ -> ()
+
+        match verdict.NextAction with
+        | Review.AwaitChecks -> failwith "AC2: the moved head still produced awaitChecks"
+        | Review.RequestHostAcceptance -> failwith "AC1: the moved head still produced requestHostAcceptance"
+        | _ -> ()
+
+    // ── AC1/AC2/AC3 — the ordinary phase, both check states ────────────────────────────────────────
+
+    /// AC2, and instance 3 exactly: checks not green, so the old code answered
+    /// `passedAwaitingChecks`/`awaitChecks` with `actionReason: null` — the shape a worker whose only
+    /// remaining red is the by-construction `claim-generation` reads as "you are clear, finish the cycle".
+    [<Fact>]
+    let ``2487 an ordinary pass at a moved head is not terminal and names both heads`` () =
+        let verdict = verdictOf Review.Ordinary movedHead (ordinaryChain ()) Types.PrPending
+        assertNotOptimistic verdict
+        Assert.Equal(Review.AwaitingSameCriticConfirmation 2, verdict.State)
+        assertNamesBothHeads verdict
+
+    /// AC1: the same chain with GREEN checks. This is the leg that produced the durable, refused
+    /// acceptance markers of instance 1 — the host was told `requestHostAcceptance`, authored the marker,
+    /// and the engine then refused it.
+    [<Fact>]
+    let ``2487 an ordinary pass at a moved head does not request host acceptance`` () =
+        let verdict = verdictOf Review.Ordinary movedHead (ordinaryChain ()) Types.PrGreen
+        assertNotOptimistic verdict
+        Assert.Equal(Review.AwaitingSameCriticConfirmation 2, verdict.State)
+        assertNamesBothHeads verdict
+
+    // ── AC1/AC2/AC3 — the repair phase, the second site ────────────────────────────────────────────
+
+    /// THE SECOND SITE. The identical `LatestVerdict`/`LatestReviewedHeadSha` shape occurs once per
+    /// phase, and a fix applied only to the ordinary branch would leave this one optimistic — the harder
+    /// case to notice precisely because far fewer chains reach it.
+    [<Fact>]
+    let ``2487 a repair-phase pass at a moved head is not terminal and names both heads`` () =
+        let verdict = verdictOf Review.Repair movedHead (repairChain ()) Types.PrPending
+        assertNotOptimistic verdict
+        Assert.Equal(Review.RepairPhaseActive 2, verdict.State)
+        assertNamesBothHeads verdict
+
+    [<Fact>]
+    let ``2487 a repair-phase pass at a moved head does not request host acceptance`` () =
+        let verdict = verdictOf Review.Repair movedHead (repairChain ()) Types.PrGreen
+        assertNotOptimistic verdict
+        Assert.Equal(Review.RepairPhaseActive 2, verdict.State)
+        assertNamesBothHeads verdict
+
+    // ── The positive controls: an unmoved head keeps every pre-existing answer ──────────────────────
+
+    /// Without these four, a repair that flagged divergence unconditionally would pass every leg above.
+    [<Fact>]
+    let ``2487 an unmoved ordinary pass keeps both of its pre-existing answers`` () =
+        let pending = verdictOf Review.Ordinary reviewedHead (ordinaryChain ()) Types.PrPending
+        Assert.Equal(Review.PassedAwaitingChecks, pending.State)
+        Assert.Equal(Review.AwaitChecks, pending.NextAction)
+
+        let green = verdictOf Review.Ordinary reviewedHead (ordinaryChain ()) Types.PrGreen
+        Assert.Equal(Review.AwaitingHostAcceptance, green.State)
+        Assert.Equal(Review.RequestHostAcceptance, green.NextAction)
+
+    [<Fact>]
+    let ``2487 an unmoved repair-phase pass keeps both of its pre-existing answers`` () =
+        let pending = verdictOf Review.Repair reviewedHead (repairChain ()) Types.PrPending
+        Assert.Equal(Review.RepairPhaseActive 2, pending.State)
+        Assert.Equal(Review.AwaitChecks, pending.NextAction)
+
+        let green = verdictOf Review.Repair reviewedHead (repairChain ()) Types.PrGreen
+        Assert.Equal(Review.RepairPhaseActive 2, green.State)
+        Assert.Equal(Review.RequestHostAcceptance, green.NextAction)
+
+    // ── The recovery route, and the row's Outcome ──────────────────────────────────────────────────
+
+    /// A chain whose critic despawned after passing a head the tree then moved off is in exactly the
+    /// position .github#2417 built the succession grant for. The `changes-required` sibling has always
+    /// offered it; leaving it out of the `pass` arm would have made this the one place in the protocol
+    /// where a moved head has no route at all.
+    [<Fact>]
+    let ``2487 a valid succession grant still reaches the moved-head pass`` () =
+        let granted: Review.CriticSuccessionReceipt =
+            { OriginalCriticIdentity = "tern-42"
+              SuccessorCriticIdentity = "fresh-critic-9b63"
+              GrantedBy = "host-9b63"
+              Reason = "the reviewing critic despawned"
+              CandidateHeadSha = movedHead }
+
+        match Review.inspect (binding Review.Ordinary movedHead) (facts (ordinaryChain ()) Types.PrPending) (Some granted) None with
+        | Error errors -> failwithf "review refused a well-formed binding: %A" errors
+        | Ok verdict ->
+            Assert.Equal(Review.AwaitingSameCriticConfirmation 2, verdict.State)
+            Assert.Equal(Review.EnterCriticSuccession granted, verdict.NextAction)
+
+    /// THE ROW'S OUTCOME, as one test: the same engine no longer gives two different answers about the
+    /// same state depending on which door you knock on.
+    ///
+    /// The left half is what a host was told before it acted. The right half is what the ACCEPTANCE path
+    /// says about the identical chain once the host has authored the marker `review` invited — the
+    /// durable, permanently-fenced marker instance 1 records. They now agree, and the cheap door is no
+    /// longer the optimistic one.
+    [<Fact>]
+    let ``2487 the inspect answer and the acceptance answer agree about a moved head`` () =
+        let first = initial StructuredDecision.Pass reviewedHead
+        let accepted =
+            following 2 first.Digest StructuredDecision.Acceptance StructuredDecision.Accepted 0 reviewedHead
+                "https://review/1"
+
+        let beforeAcceptance = verdictOf Review.Ordinary movedHead [ StructuredDecisionTests.reviewComment 1L first ] Types.PrPending
+        assertNotOptimistic beforeAcceptance
+        Assert.Equal(Review.AwaitingSameCriticConfirmation 1, beforeAcceptance.State)
+
+        let afterAcceptance =
+            verdictOf Review.Ordinary movedHead
+                [ StructuredDecisionTests.reviewComment 1L first
+                  StructuredDecisionTests.reviewComment 2L accepted ]
+                Types.PrPending
+
+        match afterAcceptance.State with
+        | Review.MalformedEvidence errors ->
+            Assert.Contains(
+                errors,
+                fun (problem: string) -> problem.Contains "bound to a different head than the current commit")
+        | other ->
+            failwithf "the acceptance path stopped refusing a chain bound to a superseded head: %A" other
