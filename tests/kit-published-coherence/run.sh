@@ -178,6 +178,22 @@ csproj() { printf '<Project>\n  <PropertyGroup>\n    <Version>%s</Version>\n  </
 
 CHANGED="$WORK/changed.txt"
 
+# .github#2661. The cut `kit/v*` tags, as literal `git ls-remote` output — the same wire shape the tag
+# arm's canned input takes, so these legs exercise the SHIPPED parser rather than a mirror of it
+# (#1780). `sha1sum` gives a deterministic 40-hex object id per version, which is what the parser
+# requires; the fixture never needs these to be real commits except in the ancestry legs far below,
+# which build a real repository for exactly that reason.
+TAGS="$WORK/kit-tags.txt"
+sha40() { printf '%s' "$1" | sha1sum | cut -d' ' -f1; }
+kit_tags() { # each argument is a version whose kit/v tag is CUT
+  : > "$TAGS"
+  local v
+  for v in "$@"; do printf '%s\trefs/tags/kit/v%s\n' "$(sha40 "tag-$v")" "$v" >> "$TAGS"; done
+}
+# The healthy default the incident-table rows below assume: the frontier is tagged, nothing ahead of
+# it is. A version tagged AHEAD of the frontier is the .github#2661 state and each leg opts into it.
+kit_tags 0.7.0 0.8.0
+
 prarm() { # $1 published version; rest: extra args
   local published="$1"; shift
   set +e
@@ -185,6 +201,7 @@ prarm() { # $1 published version; rest: extra args
     --csproj "$CSPROJ" \
     --kit-sources "$SRC" \
     --changed-files "$CHANGED" \
+    --pr-arm-tags "$TAGS" \
     --published-version "$published" "$@" 2>&1)"
   rc=$?
   set -e
@@ -226,11 +243,15 @@ prarm 0.8.1
 must_pass "a non-kit PR is not evaluated" "none of them a staging-owned package input"
 
 # The bump-is-landed-release-is-pending window: legitimately ahead of the feed, and a second
-# kit-touching PR rides into the pending release rather than owing a second bump.
+# kit-touching PR rides into the pending release rather than owing a second bump. The tag for the
+# pending version is NOT cut — which is what makes the release genuinely pending, and is the fact
+# .github#2661's legs below vary.
 printf 'scripts/fsgg-coord\n' > "$CHANGED"
 csproj 0.9.0
+kit_tags 0.7.0 0.8.0 0.8.1
 prarm 0.8.1
 must_pass "a second kit PR inside the pending-release window is green" "is ahead of the newest published"
+kit_tags 0.7.0 0.8.0
 
 # A LOWER version is red for the same reason an equal one is — the rule is strictly greater, not
 # merely different.
@@ -358,6 +379,143 @@ set -e
 must_fail "the resolved-base arm stays red when the PR itself touches a kit source" \
   ".claude/skills/check-board/SKILL.md"
 
+# .github#2661: THE VERSION'S TAG, NOT ONLY THE PUBLISHED FRONTIER.
+#
+# The frontier comparison answers "has this version been RELEASED", and the legs above are all about
+# that. The question that decides whether merging can ever ship these bytes is "is this version's TAG
+# still uncut". A tag is immutable (.github#1772) and release-kit.yml publishes from ITS commit, so
+# once `kit/v<declared>` exists the package's contents are already fixed — and on the live repository
+# `kit/v0.58.1` peeled to `a415652f` while the newest published kit was still `0.58.0`, so every kit PR
+# was told `0.58.1` "rides into a release that has not happened yet" while being unshippable.
+#
+# THESE LEGS USE A REAL REPOSITORY, not a canned ancestry answer, for the reason the #1910 block above
+# uses one: the subject is a git ancestry relation between a tagged commit and a checked-out merge ref,
+# and a fixture that cans the relation would measure the can. Only the `ls-remote` READ is canned, and
+# it is canned in the wire shape, so `parse_ls_remote_tags` is the code under test on the way in.
+csproj 0.58.1
+CUT_REPO="$WORK/cut-tag"
+git init -q -b main "$CUT_REPO"
+git -C "$CUT_REPO" config user.name fixture
+git -C "$CUT_REPO" config user.email fixture@example.invalid
+mkdir -p "$CUT_REPO/scripts" "$CUT_REPO/docs" "$CUT_REPO/.claude/skills/check-board"
+cp "$GATE" "$CUT_REPO/scripts/check-kit-published-coherence.py"
+cp "$HERE/../../scripts/kit-auto-publish.py" "$CUT_REPO/scripts/kit-auto-publish.py"
+cp "$HERE/../../scripts/fsgg_feed.py" "$CUT_REPO/scripts/fsgg_feed.py"
+mkdir -p "$CUT_REPO/.github/workflows"
+cp "$HERE/../../.github/workflows/kit-auto-publish.yml" "$CUT_REPO/.github/workflows/kit-auto-publish.yml"
+printf 'initial\n' > "$CUT_REPO/scripts/fsgg-coord"
+printf 'initial\n' > "$CUT_REPO/docs/note.md"
+printf 'initial\n' > "$CUT_REPO/.claude/skills/check-board/SKILL.md"
+git -C "$CUT_REPO" add .
+git -C "$CUT_REPO" commit -q -m initial
+# The commit `kit/v0.58.1` was cut at: the release point, already on main and already in this PR's
+# history — which is exactly why the PR's own bytes are NOT in it.
+git -C "$CUT_REPO" commit -q --allow-empty -m "release 0.58.1"
+RELEASE_COMMIT="$(git -C "$CUT_REPO" rev-parse HEAD)"
+git -C "$CUT_REPO" branch pr-head
+git -C "$CUT_REPO" switch -q pr-head
+printf 'PR-owned kit change\n' >> "$CUT_REPO/.claude/skills/check-board/SKILL.md"
+git -C "$CUT_REPO" commit -qam "PR changes kit after the tag was cut"
+git -C "$CUT_REPO" switch -q main
+git -C "$CUT_REPO" update-ref refs/remotes/origin/main HEAD
+git -C "$CUT_REPO" switch -q -c merge-ref
+git -C "$CUT_REPO" merge -q --no-edit --no-ff pr-head
+MERGE_HEAD="$(git -C "$CUT_REPO" rev-parse HEAD)"
+
+cut_run() { # $1 tags file
+  set +e
+  out="$(python3 "$CUT_REPO/scripts/check-kit-published-coherence.py" --pr-arm \
+    --base refs/remotes/origin/main --csproj "$CSPROJ" --kit-sources "$SRC" \
+    --pr-arm-tags "$1" --published-version 0.58.0 2>&1)"
+  rc=$?
+  set -e
+}
+
+CUT_TAGS="$WORK/cut-tags.txt"
+{
+  printf '%s\trefs/tags/kit/v0.58.0\n' "$(sha40 tag-0.58.0)"
+  printf '%s\trefs/tags/kit/v0.58.1\n' "$RELEASE_COMMIT"
+} > "$CUT_TAGS"
+cut_run "$CUT_TAGS"
+must_fail "a kit edit at a version whose tag is ALREADY CUT is red" "IS ALREADY CUT"
+if grep -q -- "$RELEASE_COMMIT" <<<"$out"; then
+  ok "the refusal names the commit the tag is stuck at"
+else
+  bad "the refusal names the commit the tag is stuck at" "$out"
+fi
+# AC3: the remedy is READ from the release rail, not asserted. On this state the obvious bump is the
+# one kit-auto-publish TERMINALLY refuses, and an author told only "bump it" would be sent to a red.
+if grep -q "0.58.2" <<<"$out" && grep -q "candidate-not-next-patch" <<<"$out"; then
+  ok "the refusal quotes kit-auto-publish's own verdict on the next patch above both frontiers"
+else
+  bad "the refusal quotes kit-auto-publish's own verdict on the next patch above both frontiers" "$out"
+fi
+if grep -q ".github#2106" <<<"$out"; then
+  ok "the refusal names the stopped release rail rather than proposing an unreachable bump"
+else
+  bad "the refusal names the stopped release rail rather than proposing an unreachable bump" "$out"
+fi
+
+# THE SUBJECT MUTATION. Everything above is held fixed — same repository, same head, same diff, same
+# declared version, same frontier — and ONLY the tag inventory changes: `kit/v0.58.1` is not cut. If
+# this greened while the leg above also greened, the arm would be measuring something other than the
+# tag; if it red here too, the arm would just be refusing every kit PR.
+NOCUT_TAGS="$WORK/nocut-tags.txt"
+printf '%s\trefs/tags/kit/v0.58.0\n' "$(sha40 tag-0.58.0)" > "$NOCUT_TAGS"
+cut_run "$NOCUT_TAGS"
+must_pass "the same head with the tag UNCUT rides into the pending release" "No kit/v0.58.1 tag is cut"
+
+# The ancestry read is load-bearing, not decoration: a tag whose commit CONTAINS this head publishes
+# these exact bytes, so the version is reachable and the obligation is met. Without this leg "the tag
+# exists" and "the tag cannot carry this content" would be indistinguishable, and the ancestry branch
+# could be deleted with every other leg still green.
+CONTAINS_TAGS="$WORK/contains-tags.txt"
+{
+  printf '%s\trefs/tags/kit/v0.58.0\n' "$(sha40 tag-0.58.0)"
+  printf '%s\trefs/tags/kit/v0.58.1\n' "$MERGE_HEAD"
+} > "$CONTAINS_TAGS"
+cut_run "$CONTAINS_TAGS"
+must_pass "a cut tag whose commit contains this head is green" "CONTAINS this head"
+
+# An ancestry this checkout cannot resolve — an unfetched tag object, a tag pushed since checkout — is
+# a RED, never the narrow green above. The fail-closed direction is the whole reason that read returns
+# a three-valued answer instead of raising.
+UNKNOWN_TAGS="$WORK/unknown-tags.txt"
+{
+  printf '%s\trefs/tags/kit/v0.58.0\n' "$(sha40 tag-0.58.0)"
+  printf '%s\trefs/tags/kit/v0.58.1\n' "$(sha40 not-in-this-repository)"
+} > "$UNKNOWN_TAGS"
+cut_run "$UNKNOWN_TAGS"
+must_fail "a tag commit this checkout cannot resolve stays red, not green" "IS ALREADY CUT"
+
+# THE NON-VACUITY LEG (.github#2534, and #2661 AC4). A tag-inventory read is a verdict over a
+# COLLECTION, so "found no tag for this version" and "read no tags at all" are one exit code apart
+# unless something separates them. An EMPTY namespace alongside a served frontier is impossible —
+# a published version has a tag (.github#1772) — so it is a read that saw nothing, and a no-verdict.
+: > "$WORK/empty-tags.txt"
+cut_run "$WORK/empty-tags.txt"
+must_fail "an EMPTY tag namespace beside a served frontier is a no-verdict, not a green" "read back EMPTY"
+
+cut_run "$WORK/no-such-tags.txt"
+must_fail "an unreadable tag list is a no-verdict" "cannot read the canned kit tag list"
+
+# ...and the same read, non-empty and carrying a genuine offender, is RED — so the two outcomes the
+# leg above collapses are visibly distinct, which is the whole point of a non-vacuity leg.
+cut_run "$CUT_TAGS"
+must_fail "the same reader reds on a NON-EMPTY inventory holding the cut tag" "IS ALREADY CUT"
+
+# A tag row outside this namespace's grammar is skipped by the shared parser exactly as the live
+# ls-remote refspec would never return it — and skipping every row is then the empty read above, not a
+# silent green.
+GRAMMAR_TAGS="$WORK/grammar-tags.txt"
+{
+  printf '%s\trefs/tags/kit/v0.58.0\n' "$(sha40 tag-0.58.0)"
+  printf '%s\trefs/tags/coord-engine/v0.58.1\n' "$RELEASE_COMMIT"
+  printf '%s\trefs/tags/kit/v0.58.1-preview.1\n' "$RELEASE_COMMIT"
+} > "$GRAMMAR_TAGS"
+cut_run "$GRAMMAR_TAGS"
+must_pass "a sibling namespace's tag at the same version is not this version's tag" "No kit/v0.58.1 tag is cut"
+
 # THE ROSTER READER (AC2): the kit-source list is READ from registry/repos.yml, never restated.
 ROSTER="$WORK/repos.yml"
 printf 'scripts/fsgg-coord\n' > "$CHANGED"
@@ -434,7 +592,7 @@ must_fail "an unreadable roster is a no-verdict" "cannot read the kit roster"
 
 # The canned inputs are LOCKED, exactly like --fixture-manifest. Each one, left open, is a way to make
 # the arm answer without reading its subject.
-for flag_pair in "--changed-files=$CHANGED" "--kit-sources=$SRC" "--published-version=0.8.1"; do
+for flag_pair in "--changed-files=$CHANGED" "--kit-sources=$SRC" "--published-version=0.8.1" "--pr-arm-tags=$TAGS"; do
   flag="${flag_pair%%=*}"
   value="${flag_pair#*=}"
   set +e
@@ -450,6 +608,11 @@ out="$(python3 "$GATE" --kit-sources "$SRC" --lock "$LOCK" --fixture-manifest "$
   --canonical-manifest "$CANON" 2>&1)"; rc=$?
 set -e
 must_fail "a pr-arm input on the published arm is refused, not ignored" "mean nothing to the published-package arm"
+
+set +e
+out="$(python3 "$GATE" --tag-arm --pr-arm-tags "$TAGS" 2>&1)"; rc=$?
+set -e
+must_fail "the pr-arm's tag input on the tag arm is refused, not ignored" "mean nothing to the tag arm"
 
 set +e
 out="$(python3 "$GATE" --pr-arm --fixture-manifest "$CANON" --canonical-manifest "$CANON" 2>&1)"; rc=$?
@@ -2814,7 +2977,82 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 #   rest: the other three are consumptions of a checked value, while a lift spelled without a call
 #   leaves the touch accounting entirely, which is how the arm's own guard could be deleted with this
 #   checker still reporting `ok:`. 235 + 19 = 254.
-EXPECTED_LEGS=254
+# .github#2661 adds 13 legs to the pr-arm block and the 3 gate-inversion mutations below. The 13 are:
+# the cut-tag refusal and its three message obligations (the commit, the rail's own verdict on the next
+# patch, the stopped-rail pointer); the subject mutation that greens it by uncutting the tag alone; the
+# ancestry-contains green; the unresolvable-ancestry red; the non-vacuity pair (an empty inventory is a
+# no-verdict, and the same reader reds on a non-empty one) plus the unreadable-inventory read; the
+# sibling namespace's tag at the same version; and the two flag-locking legs. 254 + 13 + 3 = 270.
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# GATE-INVERSION EVIDENCE FOR .github#2661 (pnext-item §3). Three mutations of the SHIPPED gate, run
+# against the real repository built for the cut-tag legs, each deleting one half of the new detection.
+# The mutants live in that repository so the ancestry they measure stays a real git relation.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+mutate_cut() { # $1 destination stem; $2 exact source line; $3 replacement
+  cp "$GATE" "$CUT_REPO/scripts/$1.py"
+  python3 - "$CUT_REPO/scripts/$1.py" "$2" "$3" <<'PY'
+import sys
+path, old, new = sys.argv[1:4]
+text = open(path, encoding="utf-8").read()
+if text.count(old) != 1:
+    sys.exit(f"mutation anchor appears {text.count(old)} times, not once: {old!r}")
+open(path, "w", encoding="utf-8").write(text.replace(old, new))
+PY
+}
+
+# `$CSPROJ` and `$SRC` are shared scratch files that later blocks rewrite, so the mutants re-pin the
+# exact inputs the legs they invert ran on. A mutation leg that silently drifted onto another block's
+# inputs would measure a different arm's verdict and call it an inversion.
+csproj 0.58.1
+{
+  printf '.claude/skills/check-board\n'
+  printf '.claude/skills/pnext-item\n'
+  printf 'scripts/fsgg-coord\n'
+  printf 'dist/dotnet/.config/dotnet-tools.json\n'
+} > "$SRC"
+
+cut_mutant_run() { # $1 mutant stem; $2 tags file
+  set +e
+  out="$(python3 "$CUT_REPO/scripts/$1.py" --pr-arm \
+    --base refs/remotes/origin/main --csproj "$CSPROJ" --kit-sources "$SRC" \
+    --pr-arm-tags "$2" --published-version 0.58.0 2>&1)"
+  rc=$?
+  set -e
+}
+
+# M11 — DELETE THE TAG LOOKUP: never ask whether this version's tag is already cut, which is the whole
+# of .github#2661. The frontier comparison alone then reports the live, unshippable state as green,
+# word for word the sentence the row was filed about.
+mutate_cut mutant-no-tag-lookup \
+  "        cut_at = tags.get(declared)" \
+  "        cut_at = None  # MUTATION: the .github#2661 tag lookup deleted"
+cut_mutant_run mutant-no-tag-lookup "$CUT_TAGS"
+must_pass "INVERSION M11: with the tag lookup deleted, the ALREADY-CUT head goes GREEN" \
+  "rides into a release that has not happened yet"
+
+# M12 — INVERT THE ANCESTRY DIRECTION, the one substitution that looks like a typo and is not. Asking
+# "does this head contain the tag" instead of "does the tag contain this head" is TRUE of every tag
+# already on main, so the narrow green swallows the refusal entirely. This is the mutation that proves
+# the direction is load-bearing rather than incidental.
+mutate_cut mutant-ancestry-reversed \
+  '            ["git", "merge-base", "--is-ancestor", "HEAD", commit],' \
+  '            ["git", "merge-base", "--is-ancestor", commit, "HEAD"],  # MUTATION: reversed'
+cut_mutant_run mutant-ancestry-reversed "$CUT_TAGS"
+must_pass "INVERSION M12: with the ancestry direction reversed, the ALREADY-CUT head goes GREEN" \
+  "CONTAINS this head"
+
+# M13 — DELETE THE NON-VACUITY REFUSAL: accept an empty tag inventory as an answer. "No tag is cut for
+# this version" and "no tags were read at all" then share an exit code AND a sentence, which is the
+# vacuous pass .github#2534 measured one layer down.
+mutate_cut mutant-vacuous-inventory \
+  "        if not tags:" \
+  "        if False:  # MUTATION: the empty-inventory no-verdict deleted"
+cut_mutant_run mutant-vacuous-inventory "$WORK/empty-tags.txt"
+must_pass "INVERSION M13: with the empty-inventory refusal deleted, a read of NOTHING greens the arm" \
+  "No kit/v0.58.1 tag is cut"
+
+EXPECTED_LEGS=270
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

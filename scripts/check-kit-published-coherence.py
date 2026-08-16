@@ -99,10 +99,40 @@ COMPARAND IS THE FEED, NOT THIS TREE"):
     simply rides into the pending release. The naive rule would demand a pointless second bump.
   * a PR touching no kit source -> NOT EVALUATED, and it never reads the network.
 
+AND THE FEED IS NOT THE ONLY COMPARAND — .github#2661. The rule above compares the declared version to
+the published FRONTIER, which answers "has this version been RELEASED yet". The question that decides
+whether merging can ever ship these bytes is a different one: "is this version's TAG still uncut, so
+this branch's content can still reach it". Those coincide on a healthy rail and come apart the instant
+a tag is cut without a successful publish — the state `main` was in for 60 consecutive `kit-auto-publish`
+runs, with `kit/v0.58.1` peeling to `a415652f` while the newest published kit stayed `0.58.0`. Every kit
+PR was told `0.58.1` "rides into a release that has not happened yet". Tags are immutable (.github#1772)
+and `release-kit.yml` publishes from the TAG's commit, so what `0.58.1` would publish was already fixed
+at `a415652f`, and no PR merged after it could appear in that package. The gate was measuring something
+ADJACENT to what fails — .github#2551's class, and #2579's before it.
+
+So the frontier comparison is now the FIRST of two, and the second reads the cut tags:
+
+  * no `kit/v<declared>` tag -> the release is genuinely pending and this content can still ride it.
+    GREEN, and the line says how many tags were read, so "no tag for this version" cannot be confused
+    with "no tags were read".
+  * `kit/v<declared>` cut at a commit that CONTAINS this head -> those are the bytes it publishes. GREEN.
+  * `kit/v<declared>` cut anywhere else -> RED, naming the commit, because the version is spoken for.
+    The refusal then asks `kit-auto-publish.py`'s own `decide()` what the next patch above both
+    frontiers would do, because on exactly this state the obvious bump is one the rail TERMINALLY
+    refuses (`candidate-not-next-patch`), and a remedy an author cannot take is not a remedy.
+
+The tag inventory is read through the tag arm's OWN reader (`remote_release_tags` /
+`parse_ls_remote_tags`) and the rail's answer through the obligation arm's OWN loader
+(`decision_function`) — three arms, one notion of what a `kit/v*` tag is and one notion of what the
+release rail does, for the reason this file's second paragraph already gives about the feed reader
+(#263). An empty tag inventory alongside a served frontier is a NO-VERDICT, never a green: a published
+version always has a tag, so zero of them is a read that saw nothing.
+
 WHAT THIS ARM DELIBERATELY DOES NOT DO: pick the version. `0e1c5d0` was receiver-visible BEHAVIOUR, so
 `0.9.0` was the right answer and `0.8.2` was not, and no gate can tell those apart. The arithmetic
 stays human (#1597 review). This says only "the number you are shipping is not ahead of the one the
-fleet can already restore", which is a fact, not a judgement.
+fleet can already restore, and is not one already spoken for", which is a fact, not a judgement — the
+remedy paragraph quotes what the rail ANSWERED for a candidate rather than choosing one for you.
 
 THE KIT-SOURCE LIST IS READ FROM registry/repos.yml, NEVER RESTATED — not here, and not in the
 workflow's trigger. A restated list is stale the day a `kit:` row lands, and this workflow's PR
@@ -1904,14 +1934,264 @@ def declared_kit_version(csproj_path: str) -> str:
     return version
 
 
+def kit_tag_namespace() -> TagNamespace:
+    """The `kit/v*` row of `RELEASE_NAMESPACES`, READ rather than restated (.github#2661 AC2).
+
+    The PR arm and the tag arm now ask the same remote the same question about the same prefix, and a
+    second spelling of `kit/v` — or a second grammar for what counts as a version in it — is how two
+    arms of ONE file end up disagreeing about which tags exist (#263, and this file's own header says
+    so about the feed reader it already shares). Selected by the anchoring package rather than by index
+    or by literal prefix: `RELEASE_NAMESPACES[0]` is a positional assumption that a reordering breaks
+    silently, which is exactly the footgun `parse_ls_remote_tags` removed when it made `ns` required.
+    """
+    matches = [ns for ns in RELEASE_NAMESPACES if ns.package == PACKAGE]
+    if len(matches) != 1:
+        raise GateError(
+            f"RELEASE_NAMESPACES declares {len(matches)} namespace(s) anchored by {PACKAGE}; this arm "
+            f"needs exactly one to know which tag would publish the version this PR ships."
+        )
+    return matches[0]
+
+
+def cut_kit_tags(*, remote: str, canned: str | None) -> tuple[dict[str, str], str]:
+    """`version -> peeled commit` for every cut `kit/v*` tag, and the source it was read from.
+
+    Read through `remote_release_tags`/`parse_ls_remote_tags` — the tag arm's own reader, not a second
+    `ls-remote` (.github#2661 AC2). The canned form takes literal `git ls-remote` output for the same
+    reason the tag arm's does: a fixture that mirrors its subject proves only the mirror (#1780), so the
+    canned legs exercise the shipped parser on the shipped wire shape.
+    """
+    ns = kit_tag_namespace()
+    if canned:
+        return parse_ls_remote_tags(_read_canned(canned, "kit tag list"), ns), canned
+    repository = _repository_slug()
+    if _repository_origin(remote) != (FORGE_HOST, repository.lower()):
+        raise GateError(
+            f"--remote {remote!r} is not {FORGE_HOST}/{repository}; refusing tags from a different "
+            f"repository — a `kit/v*` tag in someone else's history says nothing about whether THIS "
+            f"PR's version has already been cut."
+        )
+    return remote_release_tags(remote, ns), remote
+
+
+def head_is_contained_in(commit: str) -> bool | None:
+    """Does `commit` contain this checkout's HEAD? True / False / None = could not be resolved.
+
+    This is the question .github#2661 turns on, and its DIRECTION is the whole point. The tag's commit
+    is fixed and `release-kit.yml` publishes from it, so the version ships this PR's bytes only if the
+    tagged commit already CONTAINS them. `--is-ancestor HEAD <commit>` asks exactly that. The reverse
+    test — is the tag an ancestor of HEAD — is the live symptom rather than the rule: it is true of
+    every tag already on `main`, including ones cut for versions this PR is not shipping.
+
+    `None` rather than a raise, deliberately, and it is a fail-CLOSED None. This function is only ever
+    consulted once the tag for the declared version is known to exist, and at that point the verdict is
+    already red; the only thing an ancestry answer can do is turn that red into the narrow green where
+    the tag genuinely carries this head. A commit git cannot resolve (an unfetched tag object on a
+    shallow clone, a tag pushed after this checkout) therefore fails to a red, never to a green — so an
+    unreadable ancestry can never be the reason something merges, and this arm needs no new jam of its
+    own to stay honest (#266).
+    """
+    try:
+        run = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", "HEAD", commit],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    # git documents exactly two verdict codes here — 0 ancestor, 1 not — and reserves everything else
+    # (128 on an unknown object) for "I could not answer that", which must not be folded into "no".
+    return {0: True, 1: False}.get(run.returncode)
+
+
+@dataclass(frozen=True)
+class Remedy:
+    """What `kit-auto-publish.py` would do with the version an author would bump to (.github#2661 AC3).
+
+    `candidate` is `None` when the rail's own grammar cannot express one, in which case there is no
+    decision to quote either. `performs` is `decide()`'s verdict on the frontier the feed serves NOW;
+    `admitting` is the first still-reachable frontier that WOULD admit the candidate, or `None`.
+    """
+
+    candidate: str | None
+    decision: dict | None
+    performs: bool
+    admitting: Completion | None
+
+
+def _kit_release_automation() -> MergeAutomation:
+    """The MERGE_AUTOMATION row that publishes the kit, found by its decision program.
+
+    One row owns the release rail; this arm asks THAT row's program rather than naming
+    `scripts/kit-auto-publish.py` a second time, so a rename updates one table and not two call sites.
+    """
+    rows = [a for a in MERGE_AUTOMATION if a.decision and a.completions and "kit-release" in a.kinds]
+    if len(rows) != 1:
+        raise GateError(
+            f"MERGE_AUTOMATION declares {len(rows)} decision-bearing automation(s) for `kit-release`; "
+            f"this arm reads exactly one to say what a bumped version would actually do."
+        )
+    return rows[0]
+
+
+def kit_release_remedy(*, frontier: str, tags: dict[str, str]) -> Remedy:
+    """The next patch above BOTH frontiers, and what the release rail does with it (.github#2661 AC3).
+
+    A refusal that stops at "this version is already cut" leaves the author to guess the next move, and
+    on this repository the obvious guess is the wrong one: the feed frontier and the newest CUT tag have
+    come apart, so the next patch above both is two above the frontier, and `.github#2442`'s rail admits
+    only a same-line patch bump. Saying that requires knowing what the rail does — so this asks the
+    mapped program, exactly as `merge_performs_act` does, and never restates the rule. That is the same
+    discipline the obligation arm states about itself (.github#2571) and the reason `decision_function`
+    exists at all.
+
+    The version arithmetic is the rail's own, for the same reason: `patch_tuple` is read from the loaded
+    module rather than reimplemented here. Rendering a tuple BACK into a literal is the one direction
+    that function does not offer, so the literal this builds is fed back through `patch_tuple` and
+    checked to round-trip — a restatement that is verified against its source rather than trusted.
+    """
+    automation = _kit_release_automation()
+    assert automation.decision and automation.completions  # both-or-neither; see `_assert_map`
+    module = decision_function(automation.decision)
+    patch_tuple = _guarded(
+        f"reading `patch_tuple` from {automation.decision!r} failed",
+        lambda: getattr(module, "patch_tuple", None),
+    )
+    if not callable(patch_tuple):
+        raise GateError(
+            f"{automation.decision} exposes no callable `patch_tuple` — this arm reads it to express "
+            f"the next admissible version in the RAIL's own grammar, and will not substitute a copy."
+        )
+    ceiling = _guarded(
+        f"{automation.decision}'s version grammar raised while ranking the feed frontier {frontier!r} "
+        f"against {len(tags)} cut {PACKAGE} tag(s)",
+        lambda: max(
+            (parsed for parsed in (patch_tuple(v) for v in (frontier, *sorted(tags))) if parsed),
+            default=None,
+        ),
+    )
+    if ceiling is None:
+        # Neither the frontier nor any cut tag parses as a version this rail can act on. There is no
+        # candidate to propose and no decision to quote; the refusal above still stands on the tag fact.
+        return Remedy(None, None, False, None)
+    candidate = f"0.{ceiling[0]}.{ceiling[1] + 1}"
+    if _guarded(
+        f"{automation.decision}'s version grammar raised on the proposed candidate {candidate!r}",
+        lambda: patch_tuple(candidate),
+    ) != (ceiling[0], ceiling[1] + 1):
+        raise GateError(
+            f"the next-patch literal this arm built ({candidate!r}) does not read back as "
+            f"{(ceiling[0], ceiling[1] + 1)!r} through {automation.decision}'s own `patch_tuple` — the "
+            f"rail's version grammar has moved and this arm would be proposing a version it cannot "
+            f"express. That is a no-verdict, not a remedy offered on a guess."
+        )
+    proposed = _guarded(
+        f"{automation.decision}'s reachable-world enumeration failed for the PROPOSED {PACKAGE} "
+        f"{candidate} against frontier {frontier}",
+        lambda: automation.completions(module, candidate, frontier),
+    )
+    completions = list(proposed or ())
+    if not completions:
+        raise GateError(
+            f"{automation.decision}'s completion builder produced NO post-merge world to score for the "
+            f"proposed {PACKAGE} {candidate}; an empty sweep would let this arm claim a remedy it never "
+            f"asked about."
+        )
+    if completions[0].hypothetical or completions[0].frontier != frontier:
+        raise GateError(
+            f"{automation.decision}'s completion builder no longer reports the OBSERVED frontier "
+            f"({frontier}) first — it reported {completions[0].frontier!r} "
+            f"(hypothetical={completions[0].hypothetical}). This arm quotes the observed world as the "
+            f"one an author can check against the live feed, and cannot tell which world it is holding "
+            f"if that order is not the documented one."
+        )
+    scored: list[tuple[Completion, dict]] = []
+    for completion in completions:
+        decision = _guarded(
+            f"{automation.decision}'s decide() raised on the proposed {PACKAGE} {candidate} "
+            f"(frontier {completion.frontier})",
+            lambda c=completion: module.decide(c.facts),
+        )
+        if not isinstance(decision, dict) or not isinstance(decision.get("action"), str):
+            raise GateError(
+                f"{automation.decision}'s decide() returned {decision!r} for the proposed "
+                f"{PACKAGE} {candidate}, which carries no string `action`."
+            )
+        action = decision["action"]
+        if action not in _DECISION_PERFORMS and action not in _DECISION_CUTS_NOTHING:
+            # Same rule, same direction, same reason as `merge_performs_act`: an unclassified action
+            # would be rendered as "the automation will not cut this", and telling an author to release
+            # by hand something the automation also releases is .github#2240's two-of-three cost.
+            raise GateError(
+                f"{automation.decision}'s decide() returned the action {action!r} for the proposed "
+                f"{PACKAGE} {candidate}, which this file classifies as neither performing the release "
+                f"nor declining to. Add it to _DECISION_CUTS_NOTHING or _DECISION_PERFORMS."
+            )
+        scored.append((completion, decision))
+    observed = scored[0][1]
+    admitting = next(
+        (c for c, d in scored[1:] if d["action"] in _DECISION_PERFORMS), None
+    )
+    return Remedy(candidate, observed, observed["action"] in _DECISION_PERFORMS, admitting)
+
+
+def _remedy_text(remedy: Remedy, frontier: str) -> str:
+    """The remedy paragraph, rendered from what the rail ANSWERED — never from what it usually says."""
+    if remedy.candidate is None or remedy.decision is None:
+        return (
+            f"REMEDY. Neither the feed frontier ({frontier}) nor any cut {PACKAGE} tag parses as a "
+            f"version {_kit_release_automation().decision} can act on, so this arm has no next-patch "
+            f"candidate to offer. Settle the version line by hand before bumping."
+        )
+    decision = remedy.decision
+    verdict = (
+        f"decides `{decision['action']}` ({decision.get('reason', '(no reason)')}"
+        + (", terminal" if decision.get("terminal") else "")
+        + ")"
+    )
+    outcome = (
+        "so bumping to it hands the release back to the automation: the merge itself cuts the tags and "
+        "starts the publish."
+        if remedy.performs
+        else "so bumping to it does NOT hand the release back to the automation — the merge would fire "
+        "kit-auto-publish and cut nothing."
+    )
+    text = (
+        f"REMEDY. The next patch above BOTH the feed frontier and the newest cut {PACKAGE} tag is "
+        f"{remedy.candidate}. {_kit_release_automation().decision} — read here, not restated — "
+        f"{verdict} for {PACKAGE} {remedy.candidate} against the {frontier} frontier the feed serves "
+        f"now, {outcome}"
+        f"\n    THIS ARM IS SATISFIED BY ANY VERSION WHOSE {kit_tag_namespace().prefix} TAG IS STILL "
+        f"UNCUT — it does not pick one for you (#1597), and a version the rail declines to cut is a "
+        f"MANUAL release rather than an absent one."
+    )
+    if note := decision.get("note"):
+        # Attributed, because it is the RAIL's note on that reason code rather than a sentence written
+        # for this state — `SCOPE_NOTES` explains the reason in general, and a reader who took it for
+        # this arm's own reading of their PR would be reading the wrong thing.
+        text += f"\n    {_kit_release_automation().decision}'s own note on that reason: {note}"
+    if remedy.admitting is not None:
+        text += (
+            f"\n    It becomes cuttable once the feed reaches {remedy.admitting.frontier} — not the "
+            f"{frontier} on the feed now, but one it can still reach, and the feed only moves forward. "
+            f"That is the publication of the version already tagged: this state is a release rail that "
+            f"has stopped, and the repair is to publish, not to bump. See .github#2106."
+        )
+    return text
+
+
 def run_pr_arm(
     *,
     roster_path: str,
     csproj_path: str,
     base: str,
+    remote: str,
     canned_changed: str | None,
     canned_sources: str | None,
     canned_published: str | None,
+    canned_tags: str | None,
 ) -> int:
     """The .github#1597 rule. Exit 0 = no unmet republish obligation; 1 = RED (including no-verdict)."""
 
@@ -1955,13 +2235,79 @@ def run_pr_arm(
         f"    {path}  (kit source: {source})" for path, source in sorted(hits)
     )
     if parse_version(declared) > parse_version(published):
+        # .github#2661. BEING AHEAD OF THE FEED IS NOT THE SAME AS BEING ABLE TO REACH THE RELEASE, and
+        # the two come apart the moment a tag is cut without a successful publish. `kit/v<version>` is
+        # immutable (.github#1772) and `release-kit.yml` publishes from THAT COMMIT, so once the tag
+        # exists the bytes that version will ship are already decided. A PR whose kit edits are not in
+        # that commit is not "riding into a pending release": its content can never appear under this
+        # version at all, and the sentence below used to tell its author the opposite.
+        #
+        # The tag inventory is read HERE and nowhere earlier: a PR that touches no kit source, or one
+        # already red for shipping a version the fleet can restore, must not pay for a network read it
+        # cannot be helped by — the same "the feed was not read" discipline this arm already applies.
+        tags, tag_source = cut_kit_tags(remote=remote, canned=canned_tags)
+        if not tags:
+            # An EMPTY inventory and a failed read are indistinguishable to everything downstream, and
+            # the feed has already told us they cannot both be honest: the frontier `published` is a
+            # version somebody released, and .github#1772 makes its tag the anchor a receiver resolves
+            # the kit-bump rule from. So zero `kit/v*` tags alongside a served version is a read that
+            # saw nothing, not a namespace with nothing in it — and greening on it is precisely the
+            # vacuous pass where "found no cut tag" and "looked at no tags" share an exit code
+            # (.github#2534, and #266 one layer in). The tag arm owns the verdict on a genuinely empty
+            # namespace; this arm only refuses to answer over one.
+            raise GateError(
+                f"the `{kit_tag_namespace().prefix}*` tag namespace read back EMPTY from {tag_source} "
+                f"while the feed serves {PACKAGE} {published}. A published version whose release tag "
+                f"does not exist contradicts .github#1772's trust anchor, so this arm cannot tell "
+                f"'no tag is cut for {declared}' from 'no tags were read at all' — and a green on the "
+                f"second would be a pass that measured nothing."
+            )
+        # `default` so this line is not itself a second, accidental refusal of the empty inventory: the
+        # no-verdict above is the ONE place that state is decided, and a `max()` that raised underneath
+        # it would make deleting that refusal produce a traceback rather than the vacuous green it
+        # actually causes — which is the difference between evidence and a coincidence.
+        newest_tag = max(tags, key=parse_version, default="(none)")
+        cut_at = tags.get(declared)
+        if cut_at is None:
+            print(
+                f"ok: this PR touches {len(hits)} staging-owned package input file(s), and "
+                f"{csproj_path} <Version> {declared} is ahead of the newest published {PACKAGE} "
+                f"({published}) — merging it rides into a release that has not happened yet. No "
+                f"{kit_tag_namespace().prefix}{declared} tag is cut, so that release can still carry "
+                f"these bytes ({len(tags)} {kit_tag_namespace().prefix}* tag(s) read from "
+                f"{tag_source}; newest {newest_tag}).\n"
+                f"{touched_list}"
+            )
+            return 0
+        if head_is_contained_in(cut_at):
+            # The narrow green, and the reason the ancestry read exists rather than a bare "the tag is
+            # cut" rule: a tag whose commit already CONTAINS this head publishes these exact bytes, so
+            # the version is reachable and the obligation is met.
+            print(
+                f"ok: this PR touches {len(hits)} staging-owned package input file(s), and "
+                f"{csproj_path} <Version> {declared} is ahead of the newest published {PACKAGE} "
+                f"({published}). {kit_tag_namespace().prefix}{declared} is already cut, at {cut_at} — "
+                f"but that commit CONTAINS this head, so it is these bytes the release publishes "
+                f"({len(tags)} {kit_tag_namespace().prefix}* tag(s) read from {tag_source}).\n"
+                f"{touched_list}"
+            )
+            return 0
+        remedy = kit_release_remedy(frontier=published, tags=tags)
         print(
-            f"ok: this PR touches {len(hits)} staging-owned package input file(s), and "
-            f"{csproj_path} <Version> {declared} is ahead of the newest published {PACKAGE} "
-            f"({published}) — merging it rides into a release that has not happened yet.\n"
-            f"{touched_list}"
+            f"::error::check-kit-published-coherence: this PR edits the coordination kit and ships "
+            f"<Version> {declared}, but {kit_tag_namespace().prefix}{declared} IS ALREADY CUT — at "
+            f"{cut_at}, a commit that does not contain this head. Release tags are immutable "
+            f"(.github#1772) and release-kit.yml publishes from the TAG's commit, so these bytes can "
+            f"never ship as {PACKAGE} {declared}, whatever the feed does next.\n{touched_list}\n"
+            f"THE FRONTIER COMPARISON ALONE WOULD HAVE CALLED THIS GREEN: {declared} really is ahead "
+            f"of the newest published {PACKAGE} ({published}), which is what 'merging it rides into a "
+            f"release that has not happened yet' measures. That release has indeed not happened — and "
+            f"for this content it can no longer happen, which is a different fact and the one that "
+            f"decides shippability (.github#2661).\n"
+            f"{_remedy_text(remedy, published)}",
+            file=sys.stderr,
         )
-        return 0
+        return 1
 
     print(
         f"::error::check-kit-published-coherence: this PR edits the coordination kit but ships a "
@@ -2525,6 +2871,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--kit-sources", help="read the kit-source list from a file (tests only)")
     ap.add_argument("--published-version", help="the newest published kit, canned (tests only)")
     ap.add_argument(
+        "--pr-arm-tags",
+        help="read canned `git ls-remote` output for the kit release namespace instead of the remote "
+        "(tests only). Locked behind the same fixture switch as every other canned input: it replaces "
+        "the read of whether this PR's version has already been cut.",
+    )
+    ap.add_argument(
         "--tag-arm",
         action="store_true",
         help="the tag-integrity rule (.github#1784, every release namespace since #1790): does every "
@@ -2595,6 +2947,7 @@ def main(argv: list[str]) -> int:
         "--changed-files": args.changed_files,
         "--kit-sources": args.kit_sources,
         "--published-version": args.published_version,
+        "--pr-arm-tags": args.pr_arm_tags,
     }
     # The tag arm's canned inputs are locked by the SAME switch, for the same reason: each replaces a
     # read of the arm's subject (the feed's nuspecs, the remote's refs) with an answer supplied on the
@@ -2762,9 +3115,14 @@ def main(argv: list[str]) -> int:
                 roster_path=args.roster,
                 csproj_path=args.csproj,
                 base=args.base,
+                # Defaulted exactly as the tag arm defaults it, and validated by the same
+                # `_repository_origin` identity check: both arms resolve `kit/v*` on the repository
+                # whose tags a receiver actually resolves against (.github#2661 AC2).
+                remote=args.remote.strip() or f"https://github.com/{_repository_slug()}.git",
                 canned_changed=args.changed_files,
                 canned_sources=args.kit_sources,
                 canned_published=args.published_version,
+                canned_tags=args.pr_arm_tags,
             )
         except GateError as e:
             # AC3: a no-verdict is RED. We cannot tell whether the bump is sufficient, and "cannot
