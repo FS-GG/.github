@@ -639,90 +639,149 @@ assert "J5 an election a year old is still the election — it has no lease (des
 echo "=== K. The OBSERVE-ONLY boundary, asked of the parsed document ========================="
 # This is slice 4's hard boundary: arming is slice 8's job (.github#2723, design §9.1).
 #
-# ROUND-1 REPAIR (.github#2740, critic teal-79dd), AND THE DIAGNOSIS IS SHARPER THAN THE BUG.
-# The first version of this section parsed the workflow with PyYAML and then, for the arming question,
-# ASKED THE PARSED DOCUMENT FOR A SPELLING: it searched the raw text for `^\s*exit\s+([0-9]+)`. Six
-# mutations broke it and four of them genuinely armed the workflow — `[ "$rc" = 0 ] || exit "$rc"`
-# appended to the evaluate step; a one-line `run: exit 1`; a bare `false` appended to the FINDING step,
-# which carries NO `exit` token at all; and `if [ "$rc" != 0 ]; then exit 1; fi`. The remaining two were
-# not `exit` spellings in any sense: `paths-ignore:` is a real trigger filter, and a JOB-level
-# `permissions:` block REPLACES the workflow-level one, so the key the old check read was no longer the
-# key GitHub applies. Filed as `.github#266` INSTANCE 5.
+# ROUND-1 REPAIR (critic teal-79dd on #2740). The first version of this section parsed the workflow and
+# then ASKED THE PARSED DOCUMENT FOR A SPELLING: it searched the raw text for `^\s*exit\s+([0-9]+)`.
+# Six mutations broke it and four genuinely armed the workflow — `[ "$rc" = 0 ] || exit "$rc"`; a
+# one-line `run: exit 1`; a bare `false`, which carries NO `exit` token at all; and
+# `if [ "$rc" != 0 ]; then exit 1; fi`. The other two were not `exit` spellings in any sense:
+# `paths-ignore:` is a trigger filter, and a JOB-level `permissions:` block REPLACES the workflow-level
+# one, so the key the old check read was no longer the key GitHub applies. `.github#266` Instance 5.
 #
-# THE CLASS IS NOT "REGEXES OVER SOURCE TEXT". It is MATCHERS ENUMERATING SPELLINGS IN ANY MEDIUM. The
-# parse bought structure and the check then threw it away. So each of the three questions below is now
-# asked of the document as the question it actually means:
+# ROUND-2 REPAIR (same critic, same instance). The three questions became rules; THE ENVIRONMENT THEY
+# ARE MEASURED IN DID NOT. `substitute()` recognised two `${{ }}` spellings and mapped everything else
+# to a placeholder, so `env: ARMED: ${{ steps.fence.outputs.rc != '0' }}` plus
+# `if [ "$ARMED" = "true" ]; then exit 1; fi` read CLEAN — and the comparison form is what this
+# workflow's own `if:` blocks already use, so it is the MORE likely arming spelling, not an exotic one.
+# `shell:` was refused at the step level and ignored at the top level, where `defaults: {run: {shell:
+# bash}}` changes the shell EVERY step runs under. And the sandbox SYMLINKED the real `scripts/`, so an
+# executed `run:` could write the working tree. Same shape, moved from the subject into the harness.
 #
-#   1. IS THERE A TRIGGER FILTER?  Asked as an ALLOWLIST of the keys each trigger may carry, never as a
-#      denylist of the ones it may not. `paths`, `paths-ignore`, `branches`, `branches-ignore`, and any
-#      filter GitHub adds tomorrow are all refused by one rule that names none of them.
+# THE CLASS IS MATCHERS ENUMERATING SPELLINGS IN ANY MEDIUM — INCLUDING THE MEASURING INSTRUMENT. The
+# repair is never a longer list. It is the pattern this file now applies in SEVEN places: permit a
+# named set and refuse the rest.
 #
-#   2. WHAT PERMISSIONS APPLY?  Asked as the EFFECTIVE value under GitHub's own replacement semantics —
-#      a job-level block replaces the workflow-level block entirely — so the check reads the value that
-#      actually governs the token rather than a key that may be inert.
+#   1. IS THERE A TRIGGER FILTER?  An ALLOWLIST of the keys each trigger may carry. `paths`,
+#      `paths-ignore`, `branches`, `branches-ignore` and anything GitHub adds tomorrow are refused by
+#      one rule that names none of them.
 #
-#   3. DOES THIS WORKFLOW ARM?  Not asked of the text at all. Every step's `run:` script is EXECUTED,
-#      with the gate stubbed to return each verdict in turn, and the step's real exit status observed.
-#      "Does this step exit non-zero when the gate finds something" has exactly one honest answer and it
-#      is a measurement, not a pattern. Every spelling of arming — `exit`, `false`, `[ ] || exit`, a
-#      failing command anywhere under `bash -e` — is caught because none of them is being LOOKED for.
+#   2. WHAT PERMISSIONS APPLY?  The EFFECTIVE value under GitHub's replacement semantics — a job-level
+#      block replaces the workflow-level block entirely — so the check reads the value that actually
+#      governs the token rather than a key that may be inert.
 #
-# The steps run in a SANDBOX rather than the repository: a scratch tree whose `tests/claim-fence/run.sh`
-# is a stub that exits 0, so the fixture step is executed verbatim without re-entering this very file,
-# and whose `PATH` carries a `python`/`python3` that exits with the verdict under test. A mutant that
-# points the fixture step at some OTHER path finds nothing there and is caught as a failing step, which
-# is the correct answer rather than a special case.
+#   3. DOES THIS WORKFLOW ARM?  Not asked of the text at all. Every step's `run:` is EXECUTED with the
+#      gate stubbed to return each verdict in turn, under BOTH shells GitHub can give a step that
+#      declares none, and the real exit status observed.
+#
+#   4. WHAT IS THE MEASUREMENT ALLOWED TO ASSUME?  An ALLOWLIST of the `${{ }}` expressions this
+#      harness knows how to resolve. Anything else is NOT MEASURED and is reported as a violation —
+#      never silently placeholdered into a green. `#266`: "I could not evaluate this" is never
+#      "I evaluated it and it passed."
+#
+#   5/6/7. KEY ALLOWLISTS AT ALL THREE LEVELS — top, job, step. A subject closed at one level and open
+#      at another is round-0's E6 in a different key, and it is exactly how `defaults:` escaped.
+#
+# THE SANDBOX IS A COPY, NEVER A LINK. Steps run in a scratch tree holding a COPY of `scripts/` and a
+# stub `tests/claim-fence/run.sh` that exits 0 — so the fixture step is executed verbatim without
+# re-entering this file, and an executed `run:` that writes cannot reach the working tree. Leg R20
+# proves that with a probe, and the meta-inversion below shows the leg reds if the copy becomes a link.
 
 cat > "$WORK/flowcheck.py" <<'FLOWPY'
-"""Ask a workflow document the three questions section K means. One line per violation."""
-import os, re, subprocess, sys, tempfile, yaml
+"""Ask a workflow document the questions section K means. One line per violation."""
+import os, re, shutil, subprocess, sys, tempfile, yaml
 
 WORKFLOW, ROOT = sys.argv[1], sys.argv[2]
 
-# Question 1 is an ALLOWLIST. A trigger may carry only these keys; everything else — every filter
-# GitHub has and every one it grows — is refused without being named.
+# --- The seven allowlists. Each names what is PERMITTED; nothing anywhere names what is forbidden. ---
+
+# 1. A trigger may carry only these keys.
 TRIGGER_KEYS = {"pull_request": {"types"}, "merge_group": {"types"}}
 REQUIRED_TRIGGERS = ("pull_request", "merge_group")
-# Question 2's answer.
+# 2. The effective permissions this producer must run under (design §6.2, §8.2).
 REQUIRED_PERMISSIONS = {"contents": "read", "issues": "read"}
-# Structural allowlists, same principle: name what is permitted, never what is forbidden.
+# 5/6/7. Keys permitted at each level. `defaults:` is refused at the top precisely because
+# `defaults.run.shell` changes the shell EVERY step runs under, which is the premise question 3 rests
+# on; `shell:` and `continue-on-error:` are refused at the step level for the same reason.
+TOP_KEYS = {"name", "on", "permissions", "jobs"}
 JOB_KEYS = {"runs-on", "timeout-minutes", "steps", "permissions"}
 STEP_KEYS = {"name", "id", "uses", "run", "env", "if"}
 PERMITTED_USES = {"actions/checkout@v7", "./.github/actions/setup-policy-python"}
-# Question 3's axes: every verdict the gate can return, including one this workflow must classify as
-# inconclusive, crossed with both events it triggers on.
+
+# 4. The `${{ }}` expressions this harness knows how to resolve, and nothing else. Extending this map
+# is a deliberate act by an author who has thought about what the new expression means for the
+# measurement; falling back to a placeholder is the confident wrong answer round 2 was filed for.
+def resolvable(gate_exit, event):
+    return {
+        "steps.fence.outputs.rc": gate_exit,
+        "steps.fence.outputs.verdict": "FIXTURE-VERDICT",
+        "github.event_name": event,
+        "github.repository": "FS-GG/.github",
+        "github.event.pull_request.body": "FIXTURE-PR-BODY",
+        "github.event.pull_request.head.ref": "item/2719-fixture",
+        "github.event.pull_request.head.sha": "1" * 40,
+        "github.event.merge_group.head_ref":
+            "refs/heads/gh-readonly-queue/main/pr-1-" + "1" * 40,
+        "secrets.GITHUB_TOKEN": "FIXTURE-TOKEN",
+    }
+
+# 3. Both shells GitHub can give a step that declares no `shell:`. The bare default on Linux is
+# `bash -e {0}`; the explicit `bash` spelling — which `defaults.run.shell` or a step-level `shell:`
+# could impose — is `bash --noprofile --norc -eo pipefail {0}`, adding `-o pipefail`.
+#
+# THIS SECOND AXIS IS MEASURED NOT TO BE LOAD-BEARING TODAY, AND IT IS KEPT ANYWAY — the same
+# defence-in-depth disposition, and the same honesty about it, that the `^`/`.match` anchoring pair
+# gets in `scripts/check-claim-fence.py`. Dropping the axis SURVIVES the fixture: no step in this
+# workflow carries a pipe whose left-hand failure `-o pipefail` would surface, and the top-level and
+# step-level key allowlists now refuse both spellings that could impose the stricter shell, so the
+# premise is ENFORCED rather than assumed. The axis is what stops the measurement from depending on
+# that enforcement — one rule failing would otherwise silently change what every execution below
+# means. Recorded rather than asserted so a later reader does not mistake a redundant axis for a
+# firing one, and does not delete it believing it was load-bearing.
+SHELLS = (
+    ("bash -e (GitHub's bare default)", ["bash", "-e"]),
+    ("bash -eo pipefail (GitHub's `shell: bash`)", ["bash", "--noprofile", "--norc", "-eo", "pipefail"]),
+)
 GATE_EXITS = ("0", "1", "2", "3", "7")
 EVENTS = ("pull_request", "merge_group")
 
 EXPR = re.compile(r"\$\{\{(.*?)\}\}", re.DOTALL)
 
 
-def substitute(text, gate_exit, event):
-    """Resolve `${{ }}` expressions to the hostile values under test.
+def substitute(text, gate_exit, event, unresolved):
+    """Resolve `${{ }}` expressions from the allowlist; record every one that is not in it.
 
-    The verdict output becomes the exit code being simulated, the event name becomes the event being
-    simulated, and everything else becomes an inert placeholder. Substituting rather than evaluating is
-    deliberate: the point is to run each step's script under a verdict, not to reimplement GitHub's
-    expression language.
+    Recording rather than placeholdering is the whole of round 2's F2a. An unrecognised expression
+    means this harness cannot say what the step does under a real verdict — which is a NO-VERDICT about
+    that step, not a clean bill.
     """
-    def one(m):
-        e = m.group(1).strip()
-        if e.endswith("outputs.rc"):
-            return gate_exit
-        if e == "github.event_name":
-            return event
-        return "FIXTURE-PLACEHOLDER"
+    table = resolvable(gate_exit, event)
+
+    def one(match):
+        expression = match.group(1).strip()
+        if expression in table:
+            return table[expression]
+        unresolved.append(expression)
+        return "UNRESOLVED"
+
     return EXPR.sub(one, text)
 
 
 def build_sandbox(root):
+    """A scratch tree the executed steps cannot escape.
+
+    COPIED, never symlinked (round 2's F2c): `build_sandbox` used to link the real `scripts/`, so a
+    `run:` that wrote a file reached the working tree — measured by the critic with a probe that landed
+    in their checkout. Execution buys correctness and creates a surface; this is the surface being
+    closed. `tests/` holds ONLY a stub `claim-fence/run.sh`, so the fixture step executes verbatim
+    without re-entering this file, and a step redirected at any other suite finds nothing and is caught
+    as a failing step rather than special-cased.
+    """
     box = tempfile.mkdtemp(prefix="flowcheck.")
     os.makedirs(os.path.join(box, "tests", "claim-fence"))
     stub = os.path.join(box, "tests", "claim-fence", "run.sh")
-    with open(stub, "w", encoding="utf-8") as fh:
-        fh.write("#!/usr/bin/env bash\n# re-entrancy stop: the real fixture is what is running us\nexit 0\n")
+    with open(stub, "w", encoding="utf-8") as handle:
+        handle.write("#!/usr/bin/env bash\n# stub: the real fixture is what is running us\nexit 0\n")
     os.chmod(stub, 0o755)
-    os.symlink(os.path.join(root, "scripts"), os.path.join(box, "scripts"))
+    shutil.copytree(os.path.join(root, "scripts"), os.path.join(box, "scripts"))
     os.makedirs(os.path.join(box, "bin"))
     return box
 
@@ -730,34 +789,30 @@ def build_sandbox(root):
 def gate_stub(box, code):
     for name in ("python", "python3"):
         path = os.path.join(box, "bin", name)
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write(f"#!/usr/bin/env bash\nexit {code}\n")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"#!/usr/bin/env bash\nexit {code}\n")
         os.chmod(path, 0o755)
 
 
-def run_step(box, step, gate_exit, event):
-    """Execute one step's script and return its real exit status, or None if it has no script.
-
-    `bash -e` is GitHub's own default shell for a `run:` step on Linux, so a failing command anywhere
-    in the script fails the step — which is why a bare `false` arms a workflow just as surely as an
-    explicit `exit 1`, and why observing the status catches both without knowing either.
-    """
+def run_step(box, step, gate_exit, event, shell):
+    """Execute one step's script and return its real exit status, or None if it has no script."""
     script = step.get("run")
     if script is None:
         return None
-    env = {
+    discard = []
+    environment = {
         "PATH": os.path.join(box, "bin") + os.pathsep + os.environ.get("PATH", ""),
         "HOME": box,
         "GITHUB_OUTPUT": os.path.join(box, "github_output"),
         "GITHUB_STEP_SUMMARY": os.path.join(box, "github_step_summary"),
     }
     for key, value in (step.get("env") or {}).items():
-        env[str(key)] = substitute(str(value), gate_exit, event)
+        environment[str(key)] = substitute(str(value), gate_exit, event, discard)
     path = os.path.join(box, "step.sh")
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(substitute(script, gate_exit, event))
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(substitute(script, gate_exit, event, discard))
     try:
-        proc = subprocess.run(["bash", "-e", path], cwd=box, env=env,
+        proc = subprocess.run(shell + [path], cwd=box, env=environment,
                               capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
         return 124
@@ -768,8 +823,20 @@ def main():
     problems = []
     document = yaml.safe_load(open(WORKFLOW, encoding="utf-8"))
 
-    # ---- Question 1: is there a trigger filter? (allowlist) ------------------------------------
+    # ---- Top-level key allowlist (round 2, F2b) ------------------------------------------------
     # PyYAML reads a bare `on:` key as the boolean True under its 1.1 schema.
+    top = {("on" if key is True else key) for key in document}
+    extra = sorted(top - TOP_KEYS)
+    if extra:
+        problems.append(
+            f"the workflow carries unexpected top-level key(s) {extra} — only {sorted(TOP_KEYS)} are "
+            "permitted. `defaults:` in particular sets `defaults.run.shell`, which changes the shell "
+            "EVERY step runs under and so changes what the execution measurement below MEANS. A "
+            "subject closed at the job and step levels and open at the top is the same escape in a "
+            "different key."
+        )
+
+    # ---- Question 1: is there a trigger filter? (allowlist) ------------------------------------
     triggers = document.get("on", document.get(True))
     if not isinstance(triggers, dict):
         problems.append("the `on:` block is not a mapping")
@@ -831,7 +898,8 @@ def main():
                 "narrowness load-bearing rather than tidy."
             )
 
-        # ---- Question 3: does this workflow arm? (executed, never matched) ----------------------
+        # ---- Structural pass, once per step: keys, uses, and what the harness may assume --------
+        measurable = []
         for index, step in enumerate(job.get("steps") or []):
             if not isinstance(step, dict):
                 problems.append(f"job `{job_id}` step {index} is not a mapping")
@@ -852,23 +920,45 @@ def main():
                     "allowed to enforce, and its script cannot be executed here to check."
                 )
 
+            # Question 4. Probe every expression this step carries against the allowlist ONCE,
+            # before any execution, so an unrecognised one is reported as a NO-VERDICT about the step
+            # rather than repeated per axis or — as in round 1 — silently placeholdered into a green.
+            unresolved = []
+            substitute(str(step.get("run") or ""), "0", "pull_request", unresolved)
+            for value in (step.get("env") or {}).values():
+                substitute(str(value), "0", "pull_request", unresolved)
+            if unresolved:
+                problems.append(
+                    f"job `{job_id}` step {index} carries `${{{{ }}}}` expression(s) "
+                    f"{sorted(set(unresolved))} that this harness does not know how to resolve, so its "
+                    "exit status under a real verdict is NOT MEASURED — which is not the same as "
+                    "clean (#266). The comparison form `steps.fence.outputs.rc != '0'` is exactly how "
+                    "a step arms itself without an `exit` token in sight. Extend the `resolvable` "
+                    "allowlist deliberately if the expression is legitimate; do not placeholder it."
+                )
+                continue
+            measurable.append((index, step))
+
+        # ---- Question 3: does this workflow arm? (executed, never matched) ----------------------
         box = build_sandbox(ROOT)
-        for gate_exit in GATE_EXITS:
-            gate_stub(box, gate_exit)
-            for event in EVENTS:
-                for index, step in enumerate(job.get("steps") or []):
-                    if not isinstance(step, dict):
-                        continue
-                    status = run_step(box, step, gate_exit, event)
-                    if status not in (None, 0):
-                        problems.append(
-                            f"job `{job_id}` step {index} ({step.get('name') or step.get('uses')}) "
-                            f"EXITS {status} when the gate returns {gate_exit} on a {event} event — "
-                            "this producer is OBSERVE-ONLY (design 9.1 step 1), so its verdict must "
-                            "never fail the job; arming is slice 8 (.github#2723). Measured by "
-                            "EXECUTING the step under `bash -e`, GitHub's own default shell, not by "
-                            "matching its text."
-                        )
+        try:
+            for gate_exit in GATE_EXITS:
+                gate_stub(box, gate_exit)
+                for event in EVENTS:
+                    for label, shell in SHELLS:
+                        for index, step in measurable:
+                            status = run_step(box, step, gate_exit, event, shell)
+                            if status not in (None, 0):
+                                problems.append(
+                                    f"job `{job_id}` step {index} "
+                                    f"({step.get('name') or step.get('uses')}) EXITS {status} when the "
+                                    f"gate returns {gate_exit} on a {event} event under {label} — this "
+                                    "producer is OBSERVE-ONLY (design 9.1 step 1), so its verdict must "
+                                    "never fail the job; arming is slice 8 (.github#2723). Measured by "
+                                    "EXECUTING the step, not by matching its text."
+                                )
+        finally:
+            shutil.rmtree(box, ignore_errors=True)
 
     for problem in problems:
         print(problem)
@@ -883,27 +973,33 @@ flow_check() {  # <workflow-file> -> one line per violation
 
 VIOL="$(flow_check "$FLOW")"
 if [ -z "$VIOL" ]; then
-  ok "K1 the workflow is unfiltered, read-only by effective permission, and cannot fail on a verdict"
+  ok "K1 unfiltered, read-only by effective permission, and incapable of failing on a verdict"
 else
-  bad "K1 the workflow is unfiltered, read-only by effective permission, and cannot fail on a verdict" "$VIOL"
+  bad "K1 unfiltered, read-only by effective permission, and incapable of failing on a verdict" "$VIOL"
 fi
 
 # ------------------------------------------------------------------------------------------------
 # THE INVERSIONS. Each mutant is a real edit to a copy of the workflow, and each must be CAUGHT with
 # the reason named — a mutation caught by the wrong rule is a vacuous pass wearing a red badge, and a
-# mutation that changes nothing has tested nothing. The first six are exactly the six round-1 escapes.
+# mutation that changes nothing has tested nothing. R1-R6 are the six round-1 escapes; R18-R19 are the
+# two round-2 escapes that this section can express as a violation, and R20 is the third, which is
+# about where a write LANDS rather than about a verdict.
 # ------------------------------------------------------------------------------------------------
+PROBE="PROBE-$$-$(date +%s)"
+
 cat > "$WORK/mutants.py" <<'MUTPY'
 """Write one mutant workflow per inversion, each with the substring its violation must contain."""
 import json, os, sys
 
-FLOW, OUT = sys.argv[1], sys.argv[2]
+FLOW, OUT, PROBE = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(FLOW, encoding="utf-8").read()
 os.makedirs(OUT, exist_ok=True)
 
 ARMS = "OBSERVE-ONLY"
 FILTER = "carries filter key(s)"
 PERMS = "EFFECTIVE permissions"
+UNRESOLVED = "NOT MEASURED"
+TOPKEY = "unexpected top-level key(s)"
 
 EVALUATE_TAIL = '          echo "rc=$rc" >> "$GITHUB_OUTPUT"\n'
 FINDING_WARNING = (
@@ -915,6 +1011,7 @@ INCONCLUSIVE_WARNING = (
     '          echo "::warning title=fsgg-claim-fence: inconclusive (observe-only)::The gate exited '
     'with a code this workflow does not classify. Nothing is blocked: this context is not armed."\n'
 )
+INCONCLUSIVE_ENV = "          RC: ${{ steps.fence.outputs.rc }}\n"
 
 MUTANTS = [
     # --- the six round-1 escapes ---------------------------------------------------------------
@@ -934,7 +1031,7 @@ MUTANTS = [
     ("R6 a JOB-level permissions block REPLACES the workflow-level one",
      lambda t: t.replace("  claim-fence:\n    runs-on: ubuntu-latest\n",
                          "  claim-fence:\n    permissions:\n      contents: write\n    runs-on: ubuntu-latest\n", 1), PERMS),
-    # --- dimensions the round-1 escapes did not reach, bound by the same three rules -------------
+    # --- dimensions the round-1 escapes did not reach, bound by the same rules -------------------
     ("R7 `branches:` is a filter too, and the allowlist names it nowhere",
      lambda t: t.replace("    types: [opened, synchronize, reopened, edited]\n",
                          "    types: [opened, synchronize, reopened, edited]\n    branches: [main]\n", 1), FILTER),
@@ -956,7 +1053,7 @@ MUTANTS = [
      lambda t: t.replace("      - name: Run the claim-fence fixture (no network)\n",
                          "      - name: Run the claim-fence fixture (no network)\n        continue-on-error: true\n", 1),
      "unexpected step key(s)"),
-    ("R14 a non-default `shell:` changes it too",
+    ("R14 a step-level `shell:` changes it too",
      lambda t: t.replace("      - name: Run the claim-fence fixture (no network)\n",
                          "      - name: Run the claim-fence fixture (no network)\n        shell: sh\n", 1),
      "unexpected step key(s)"),
@@ -970,6 +1067,22 @@ MUTANTS = [
     ("R17 arming the OK step — the one verdict a reader would never think to check",
      lambda t: t.replace('            echo "### fsgg-claim-fence: OK (observe-only)"\n',
                          '            echo "### fsgg-claim-fence: OK (observe-only)"\n            exit 3\n', 1), ARMS),
+    # --- the two round-2 escapes this section expresses as a violation ---------------------------
+    ("R18 F2a: `${{ ... != '0' }}` in env plus a plain string test arms it, with no `exit` in the run",
+     lambda t: t.replace(
+         INCONCLUSIVE_ENV,
+         INCONCLUSIVE_ENV + "          ARMED: ${{ steps.fence.outputs.rc != '0' }}\n", 1
+     ).replace(
+         INCONCLUSIVE_WARNING,
+         INCONCLUSIVE_WARNING + '          if [ "$ARMED" = "true" ]; then exit 1; fi\n', 1
+     ), UNRESOLVED),
+    ("R19 F2b: `defaults: {run: {shell: bash}}` changes the shell EVERY step runs under",
+     lambda t: t.replace("\njobs:\n", "\ndefaults:\n  run:\n    shell: bash\n\njobs:\n", 1), TOPKEY),
+    # R20 (F2c) is asserted separately: it is about where a write LANDS, not about a verdict.
+    (f"R20 F2c: a step that writes `scripts/` must not reach the working tree",
+     lambda t: t.replace("      - uses: actions/checkout@v7\n",
+                         f"      - uses: actions/checkout@v7\n      - name: probe\n        run: ': > scripts/{PROBE}'\n", 1),
+     "__PROBE__"),
 ]
 
 index = []
@@ -982,7 +1095,7 @@ open(os.path.join(OUT, "index.json"), "w", encoding="utf-8").write(json.dumps(in
 MUTPY
 
 MUTANTS="$WORK/mutants"
-python3 "$WORK/mutants.py" "$FLOW" "$MUTANTS"
+python3 "$WORK/mutants.py" "$FLOW" "$MUTANTS" "$PROBE"
 
 while IFS=$'\t' read -r slug name expect changed; do
   if [ "$changed" != "True" ]; then
@@ -990,6 +1103,27 @@ while IFS=$'\t' read -r slug name expect changed; do
     continue
   fi
   got="$(flow_check "$MUTANTS/$slug.yml" || true)"
+  if [ "$expect" = "__PROBE__" ]; then
+    # R20 is the ONE leg whose subject is the harness's own blast radius rather than the workflow's
+    # verdict. Two assertions, and BOTH are needed: the probe must not exist in the working tree, and
+    # the step must have exited 0 — because a sandbox with no `scripts/` at all would make the write
+    # FAIL, which would look like a pass here for entirely the wrong reason.
+    # `case`, not `printf | grep -q`: this repo's own `pipefail-assertions` gate refuses a pipeline
+    # whose status is tested, because an early-exiting right-hand side masks the left's. It caught
+    # this very line, which is the gate working.
+    probe_failed=0
+    case "$got" in *EXITS*) probe_failed=1;; esac
+    if [ "$probe_failed" = 1 ]; then
+      bad "$name" "the probe step failed inside the sandbox, so this leg proves nothing about escape:
+$got"
+    elif [ -e "$ROOT/scripts/$PROBE" ]; then
+      rm -f "$ROOT/scripts/$PROBE"
+      bad "$name" "THE WRITE ESCAPED into the working tree — the sandbox is linking, not copying"
+    else
+      ok "$name"
+    fi
+    continue
+  fi
   case "$got" in
     *"$expect"*) ok "$name";;
     *) bad "$name" "NOT CAUGHT — this is the escape shape itself. flow_check said: ${got:-<nothing>}";;
