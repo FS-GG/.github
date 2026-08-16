@@ -21,6 +21,33 @@ eval "$(scripts/fsgg-coord whoami --mint)"
 
 Keep `FSGG_WORKER` for the entire item. Never invent or copy a worker id.
 
+**Under agent worktree isolation that line does not run, and the fallback is where identity is lost.**
+Every `fsgg-worker-*` and `fsgg-critic-*` agent is dispatched worktree-isolated, and that harness
+refuses `eval "$(…)"` as too complex to verify it stays inside the worktree. Do **not** improvise a
+second way to conjure an id — there is no second way, and reaching for one is #419 from the other end.
+Consume the **same** sanctioned command isolation-safely instead: run it as a plain single command,
+read the id it prints, and carry that id by prefix.
+
+```bash
+scripts/fsgg-coord whoami --mint        # plain, single command; prints: export FSGG_WORKER=<id>
+FSGG_WORKER=<id> scripts/fsgg-coord take --repo <repo> --json    # the FIRST board write — prefix it
+```
+
+Shell state does not survive between an agent's tool calls, so even where the `eval` is permitted it
+sets `FSGG_WORKER` for exactly one command. The prefix is the only thing carrying your identity
+forward, and it belongs on **every** later invocation.
+
+**`take` is the invocation the prefix is missed on** (#2684). It is the first board write, it happens
+before the prefix is a habit, and an unprefixed `take` does not fail: the engine falls back to the
+agent harness's session id — which every subagent of one Claude Code session shares — warns that it
+did, and then writes the claim under it anyway and returns **0**. A warning on a completed write is not a guard. Measured
+in one wave: a converged claim marker on the right item under a session-derived id, and a sibling
+worker that had done nothing wrong denied its item with exit 6.
+
+So after `take` — and after any `claim` — **read the marker back and confirm it names the id you
+minted.** If it names a session-derived id, stop and report it rather than working the item: you are
+holding a lock that cannot separate you from any other agent in your session.
+
 ## 1. Take one item
 
 Before `take`, claim, or a Ready-to-In-progress transition, inspect the item's current typed

@@ -49,6 +49,26 @@ eval "$(scripts/fsgg-coord whoami --mint)"    # sets FSGG_WORKER in THIS shell; 
 This is the **one** mint idiom. It is what `whoami`'s own warning prints, it needs no shell trivia,
 and it is the only one that can change its scheme without a migration across every doc that quotes it.
 
+**Under agent worktree isolation that line does not run — consume the same command isolation-safely.**
+A worktree-isolated agent's harness refuses `eval "$(…)"` as too complex to verify it stays inside the
+worktree, and every `fsgg-worker-*` / `fsgg-critic-*` agent is dispatched into exactly that
+environment. There is still no second idiom to reach for. Run the sanctioned command as a plain single
+command, read the id it prints, and carry it by prefix:
+
+```sh
+scripts/fsgg-coord whoami --mint                            # prints: export FSGG_WORKER=<id>
+FSGG_WORKER=<id> scripts/fsgg-coord take --repo <r> --json  # the FIRST board write — prefix it
+```
+
+Shell state does not survive between an agent's tool calls, so even where the `eval` is permitted it
+sets `FSGG_WORKER` for exactly one command; the prefix is what carries identity onto every later
+invocation. **`take` is the one it is missed on** — the first board write, before the prefix is a
+habit — and an unprefixed `take` does not fail: rule 3 below warns, the claim is then written under
+the session-derived id, and `take` returns **0**. A warning on a completed write is not a guard, so
+**read the claim marker back and confirm it names your minted id**
+([#2684](https://github.com/FS-GG/.github/issues/2684): a converged claim under a session-shared id,
+and a compliant sibling worker denied its item with exit 6 as the direct consequence).
+
 **Do not invent an id, and do not copy one from a document — including this one.** That is why no
 literal id appears anywhere in these protocol docs as something you could paste. Agents asked to name
 themselves *converge*: [#419](https://github.com/FS-GG/.github/issues/419) found **four `finch-*`
@@ -843,6 +863,9 @@ scripts/fsgg-coord batch --repo <r> -n 4
 # each worker, independently — named, isolated, and safe against a lost race:
 eval "$(scripts/fsgg-coord whoami --mint)"    # MINT one; never invent or copy one (§0). There is no
                                               # second way: no mint, no id (the engine REFUSES).
+                                              # WORKTREE-ISOLATED AGENT? This eval is REFUSED: mint
+                                              # plainly, then prefix FSGG_WORKER=<id> on every line
+                                              # below — take first of all (§0, #2684).
 scripts/fsgg-coord take --repo <r>            # pick + claim the next SCHEDULABLE item, retrying on a lost race
 git fetch origin                              # NOTHING else does — the base is otherwise the PAST (§2)
 git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main   # name the base: HEAD is not `main` (§2)
