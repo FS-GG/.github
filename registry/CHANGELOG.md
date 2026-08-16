@@ -19,6 +19,31 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-16** — **coherent set `github:0.59.0` published; `coord-engine` flipped `0.58.0` → `0.59.0`
+  and the burned `0.58.1` abandoned** (github; [.github#2648](https://github.com/FS-GG/.github/issues/2648),
+  PR [#2706](https://github.com/FS-GG/.github/pull/2706), [.github#2654](https://github.com/FS-GG/.github/issues/2654),
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772)): `FS.GG.Kit`, `FS.GG.Drivers` and
+  `FS.GG.Coord.Cli` all serve `0.59.0` on the org feed and nuget.org, cut from
+  `41199bd27055cd37e850c720e330cbe5f3c69b95`, content `sha256:a2740da4961ca491c9cf052ff17738a5823d30226bfba9fa3406ceaad44050d8`.
+  **A MINOR by the written rule**, and the reason is reachability rather than size: five
+  receiver-visible engine defect fixes plus a new reviewer protocol boundary in the packed
+  `pnext-item` skill. The 290 lines of new `.fsi` surface are corroboration only — `Operation` is
+  `IsPackable=false` and unreferenced by the CLI, so it reaches no receiver; the wire surface
+  (`Protocol.fs`) is byte-identical across the span. That correction was a round-1 material finding
+  from independent critic `heron-d444`; the version never moved.
+  **`0.58.1` is abandoned, not superseded.** Its three tags at `a415652f` published nothing on
+  either feed, because `release-saga-prepare.yml` was `workflow_dispatch`-only and the draft they
+  consume was never prepared. Tags are immutable, so they are left exactly where they are and
+  `0.58.1` gets **no** standing advisory — there are no bytes on any feed for a consumer to adopt.
+  **Two release-mechanics defects were measured during this cut and are packeted, not fixed here:**
+  all three publishers pushed successfully and then reported `failure` because
+  `release-saga-ci.sh`'s post-push observation budget (24×5s) is shorter than nuget.org's indexing
+  (~5.5 min observed); and on resume, after promotion sealed the release, `release-kit` and
+  `release-coord-engine` can never go green because their journal write hits
+  `HTTP 422 Cannot delete asset from an immutable release` — which permanently skips their
+  receiver-tick step, so kit receivers were **not** told and fall back to Renovate. Both feeds and
+  the byte comparison, not any run conclusion, are the evidence that the release itself is complete.
+
 - **2026-08-15** — **`skill-registry` contract description: `materializes-when`'s binding environment
   is `effectiveParameters` PLUS derived provenance facts** (owner `github`; .github#2576, ADR-0017's
   2026-08-15 amendment). DESCRIPTION ONLY — no `version`, `schemaVersion`, pin, validator, consumer,
