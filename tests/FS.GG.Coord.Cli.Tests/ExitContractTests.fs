@@ -310,3 +310,426 @@ module ExitContractTests =
         // And the word, not merely the digit: AC2's distinguishability has to survive into `--help`.
         Assert.Contains("merged", usage)
         Assert.Contains("closed", usage)
+
+/// WHEN `EX_CONTENDED` FIRES — THE OTHER HALF OF `take`'S EXIT CONTRACT (.github#2683).
+///
+/// Everything above this line pins what the documented codes MEAN. This module pins WHEN one of them is
+/// returned, because that is the half that was wrong: `take` asked the scheduler for exactly one
+/// candidate and, on a lost claim CAS, returned `EX_CONTENDED` with no item — discarding a ranking it had
+/// already computed and already paid a board scan for. Three times in one 2026-08-15/16
+/// `drive-board-best` session that turned a lost race into a permanently idle implementer slot, the third
+/// time with SIX free disjoint lanes and only two workers.
+///
+/// The remedy the engine named was a retry BY THE CALLER — the stderr line said "Pick another", the code
+/// comment said "the caller retries" — and the caller is a disposable worker whose brief forbids exactly
+/// that, because a second `take` against a live one is how two workers land on one item. So the retry had
+/// no owner, and only a watching host ever recovered the slot.
+///
+/// **THE FIXTURE IS THE RACE, NOT A MOCK OF IT.** A candidate already carrying a live marker when the scan
+/// reads it is never CHOSEN (`Schedulability.HeldBy`), so it could not reproduce this: the defect needs an
+/// item that is free at scan time and held by the time our own CAS re-reads it. That window is what these
+/// fixtures serve — the rival's marker appears on the read AFTER the scan's — and it is the same window
+/// #418's cache and every real fan-out produce.
+///
+/// Both directions are pinned, because only the pair is a gate: the fallthrough must CLAIM the next lane,
+/// and `EX_CONTENDED` must still fire — bounded, and only once every candidate the ranking offered has
+/// been attempted and lost.
+module TakeFallthroughTests =
+
+    open System
+    open System.Collections.Generic
+    open System.IO
+    open System.Text.Json
+    open FS.GG.Coord.GitHub.Transport
+
+    let private ok (body: string) : Errors.IoResult<Response> =
+        Ok
+            { Status = 200
+              Body = body
+              ETag = None
+              NextLink = None
+              Headers = Map.empty }
+
+    /// The lanes the fixture board offers: disjoint touch-sets, so the scheduler admits all of them and
+    /// the fallthrough has somewhere to go. Disjointness is not decoration — see
+    /// `Client.takeCandidateBound`: losing candidate 1 means a rival now holds candidate 1's files, so a
+    /// fallback that OVERLAPPED it would be a lane we must not take. FOUR of them, one more than the
+    /// bound, so the bound itself is measurable rather than merely declared.
+    let private lanes = [ 9001; 9002; 9003; 9004 ]
+
+    let private routeFor (n: int) =
+        StructuredFixtures.routeComment $"FS-GG/.github#%d{n}" (Some DeliveryRoute.Lightweight) "fixture-2683" None
+
+    /// A live claim marker by somebody else — the rival that won the race we lost.
+    let private rivalMarker (n: int) = $"<!-- fsgg:claim worker=rival-%d{n} lease=120 -->\nheld"
+
+    /// HOW MANY TIMES ONE `take`'S SCAN READS A LANE'S COMMENT THREAD BEFORE ANY CLAIM RUNS. MEASURED,
+    /// not assumed: `Scan.snapshot`'s marker read, then the delivery-route read `enrichDeliveryRoutes`
+    /// makes. The rival appears on the read after those — the first one a claim's own CAS makes.
+    ///
+    /// **THE NUMBER IS SELF-CHECKING, WHICH IS WHY IT IS SAFE TO PIN.** Read it one too high and the
+    /// rival lands after the CAS as well, so nothing is ever lost and the first leg's `is already held`
+    /// assertion fails. Read it one too low and the rival lands INSIDE the scan, the scheduler sees the
+    /// lane `HeldBy` and never chooses it — so `take` claims a later lane, exits 0 with the head never
+    /// attempted, and that same assertion fails. The premise cannot rot silently in either direction.
+    let private scanReadsPerLane = 2
+
+    /// One lane's comment thread, mutated by the requests the way GitHub would mutate it: a POST appends
+    /// with the next id, a DELETE removes. A CANNED list will not do — `Writes.claim`'s CAS posts its
+    /// marker and then RE-READS to confirm it survived, so a thread that could not show the marker it was
+    /// just given reports every win as "our marker vanished from the re-read", and the fixture would
+    /// measure its own inertness rather than the engine.
+    type private Lane(n: int) =
+        let comments = ResizeArray<int64 * string>()
+        let mutable nextId = int64 (10000 + n)
+        let mutable reads = 0
+
+        do comments.Add(int64 (7000 + n), routeFor n)
+
+        member _.Reads = reads
+        member _.CountRead() = reads <- reads + 1
+
+        /// The rival's marker, added once. Idempotent: the CAS re-reads more than once and a thread that
+        /// grew a second rival marker per read would be testing marker-scan de-duplication instead.
+        member _.EnsureRival() =
+            if not (comments |> Seq.exists (fun (_, b) -> b.Contains $"worker=rival-%d{n}") ) then
+                nextId <- nextId + 1L
+                comments.Add(nextId, rivalMarker n)
+
+        member _.Add(body: string) =
+            nextId <- nextId + 1L
+            comments.Add(nextId, body)
+            nextId
+
+        member _.Remove(id: int64) =
+            comments.RemoveAll(fun (i, _) -> i = id) |> ignore
+
+        member _.Json() =
+            let ts = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+
+            comments
+            |> Seq.map (fun (id, body) ->
+                JsonSerializer.Serialize
+                    {| id = id
+                       body = body
+                       user = {| login = "EHotwagner" |}
+                       created_at = ts
+                       updated_at = ts |})
+            |> String.concat ","
+            |> fun inner -> "[" + inner + "]"
+
+    let private boardRow (n: int) =
+        $"""{{"status":{{"name":"Ready"}},"blockedBy":null,"class":null,"phase":null,"content":{{"__typename":"Issue","number":%d{n},"title":"lane %d{n}","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
+
+    let private graphqlAnswer (document: string) : string option =
+        if document.Contains "projectsV2" then
+            Some
+                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+        elif document.Contains "fields(first" then
+            Some
+                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+        elif document.Contains "items(first" then
+            let nodes = lanes |> List.map boardRow |> String.concat ","
+
+            Some
+                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{nodes}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+        else
+            None
+
+    /// How a lane behaves on the reads AFTER the scan's.
+    type private Rival =
+        /// Free the whole way through — the lane a fallthrough must land on.
+        | StaysFree
+        /// A rival's marker appears in the window between the scan's read and our CAS's re-read.
+        | WinsTheRace
+        /// The budget dies in that same window (acceptance 4's short-circuit).
+        | ExhaustsTheBudget
+
+    /// The board, served live. A lane behaves as its leg declared only once `scanReadsPerLane` reads have
+    /// gone by — everything before that is the scan, and the scan must see every lane FREE or there is no
+    /// race to lose.
+    let private world (behaviour: Map<int, Rival>) (threads: Dictionary<int, Lane>) =
+        Fake.Recorder(fun (req: Request) ->
+            let path = req.Path.Trim '/'
+
+            match req.Method, path with
+            | "POST", "graphql" when
+                (match req.Body with
+                 | Query(document, _) -> document.Contains "comments(last:"
+                 | _ -> false)
+                ->
+                match req.Body with
+                | Query(_, variables) ->
+                    let number =
+                        variables
+                        |> List.tryPick (fun (k, v) ->
+                            match k, v with
+                            | "number", VNumber n -> Some(int n)
+                            | _ -> None)
+
+                    match number with
+                    | Some n ->
+                        let nodes = [ {| body = routeFor n |} ] |> JsonSerializer.Serialize
+
+                        ok
+                            ("{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                             + nodes
+                             + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
+                    | None -> Error(Errors.NotFound "the recent-comments query names no issue number")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) ->
+                    match graphqlAnswer document with
+                    | Some answer -> ok answer
+                    | None ->
+                        Error(Errors.NotFound "the fixture serves no board WRITE — the LOCK is what is under test")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+            | _ ->
+
+            let threadOf (n: int) =
+                match threads.TryGetValue n with
+                | true, lane -> lane
+                | _ ->
+                    let lane = Lane n
+                    threads.[n] <- lane
+                    lane
+
+            let lane =
+                lanes
+                |> List.tryFind (fun n ->
+                    path = $"repos/FS-GG/.github/issues/%d{n}"
+                    || path = $"repos/FS-GG/.github/issues/%d{n}/comments")
+
+            let deleted =
+                if req.Method <> "DELETE" then
+                    None
+                elif not (path.StartsWith "repos/FS-GG/.github/issues/comments/") then
+                    None
+                else
+                    match Int64.TryParse(path.Substring(path.LastIndexOf '/' + 1)) with
+                    | true, id -> Some id
+                    | _ -> None
+
+            match lane, req.Method, deleted with
+            | _, _, Some id ->
+                for n in lanes do
+                    (threadOf n).Remove id
+
+                ok ""
+            | Some n, "GET", _ when path.EndsWith "/comments" ->
+                let thread = threadOf n
+                thread.CountRead()
+
+                // THE WINDOW. The first `scanReadsPerLane` reads are the scan's, so every lane is free
+                // and every lane is a candidate the scheduler may choose. Every read after them belongs
+                // to a claim's own CAS, and that is where the leg's declared behaviour begins.
+                let behaving =
+                    thread.Reads > scanReadsPerLane
+                    && (behaviour |> Map.tryFind n |> Option.defaultValue StaysFree) <> StaysFree
+
+                match behaving, behaviour |> Map.tryFind n with
+                | true, Some ExhaustsTheBudget -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
+                | true, Some WinsTheRace ->
+                    thread.EnsureRival()
+                    ok (thread.Json())
+                | _ -> ok (thread.Json())
+            | Some n, "GET", _ -> ok $"""{{"number":%d{n},"body":"Paths: src/lane%d{n}.fs"}}"""
+            | Some n, "POST", _ ->
+                let body =
+                    match req.Body with
+                    | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
+                    | _ -> ""
+
+                ok $"""{{"id":%d{(threadOf n).Add body}}}"""
+            | _ -> Error(Errors.NotFound $"the fixture serves no %s{req.Method} %s{path}"))
+
+    let private context (transport: Fake.Recorder) : Client.Context =
+        { Transport = transport
+          Owner = "FS-GG"
+          Title = "Coordination"
+          DefaultRepo = Some ".github"
+          ChoreLocks = [] }
+
+    let private sessionVars =
+        [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+
+    /// Drive the REAL `Client.take` against a throwaway cache and a pinned identity, on the same licence
+    /// `ForceStealTests.runClaim` takes: `AssemblyInfo.fs` disables cross-class parallelism, so the
+    /// process-global `FSGG_COORD_CACHE`/`FSGG_KIT_ROOT`/identity variables are safe to point somewhere
+    /// private per call. The identity is pinned for #1646's reason — `claim` measures the named worker
+    /// against the derived one, so an unpinned `$FSGG_WORKER` would make every leg an impersonation.
+    let private runTake (transport: Fake.Recorder) : int * string =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2683-" + Guid.NewGuid().ToString "n")
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+        let stdout = Console.Out
+        let stderr = Console.Error
+        use captured = new StringWriter()
+        use capturedError = new StringWriter()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
+            Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
+            Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", "ed60050b")
+            Environment.SetEnvironmentVariable("FSGG_WORKER", "vole-418")
+            Console.SetOut captured
+            Console.SetError capturedError
+
+            let opts =
+                match Options.parse [ "take"; "--repo"; ".github"; "--worker"; "vole-418" ] with
+                | Ok o -> o
+                | Error e -> failwithf "the fixture's own argv did not parse: %s" e
+
+            let code = Client.take (context transport) opts
+            Console.Out.Flush()
+            Console.Error.Flush()
+            code, capturedError.ToString()
+        finally
+            Console.SetOut stdout
+            Console.SetError stderr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+            for name, value in previousSessions do
+                Environment.SetEnvironmentVariable(name, value)
+
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    /// A lane was ATTEMPTED AND LOST iff the ENGINE said so about that exact lane. Read off the engine's
+    /// own stderr rather than off a request count, because only a claim CAS can produce this sentence:
+    /// the scheduler cannot have refused the lane (it would never have been claimed), and the scan cannot
+    /// have emitted it (it does not run a CAS). It is also the fixture's premise in one observation — a
+    /// lane the scan had seen held would never have been chosen, so this line could not exist.
+    let private attemptedAndLost (said: string) (n: int) =
+        said.Contains $".github#%d{n} is already held by rival-%d{n}"
+
+    let private claimed (transport: Fake.Recorder) (n: int) =
+        transport.Logged $"comment-post FS-GG/.github %d{n}"
+
+    /// THE FIXTURE'S OWN NON-VACUITY (#266). Every leg reasons from "the scan offered all four lanes". If
+    /// the scan never read a lane's thread, "we chose not to attempt it" and "it was never on offer"
+    /// become one observation, and a leg asserting the former would be passing over the latter.
+    let private assertEveryLaneWasOffered (threads: Dictionary<int, Lane>) =
+        for n in lanes do
+            Assert.True(
+                (match threads.TryGetValue n with
+                 | true, lane -> lane.Reads >= scanReadsPerLane
+                 | _ -> false),
+                $"the scan did not read lane %d{n}'s comment thread %d{scanReadsPerLane} time(s) — this leg measured a board that offered fewer lanes than it claims to")
+
+    // ---- THE PAIR, PLUS THE TWO SHORT-CIRCUITS ------------------------------------------------------
+
+    /// ACCEPTANCE 1. The head of the ranking is lost; the next candidate is CLAIMED, in the same call,
+    /// off the same scan.
+    [<Fact>]
+    let ``.github#2683 a lost claim CAS advances to the next ranked candidate instead of idling the slot``
+        ()
+        =
+        let threads = Dictionary<int, Lane>()
+        let transport = world (Map.ofList [ 9001, WinsTheRace ]) threads
+
+        let code, said = runTake transport
+
+        assertEveryLaneWasOffered threads
+
+        Assert.True(
+            attemptedAndLost said 9001,
+            "the engine never reported losing lane 9001 — the head of the ranking was not attempted, so this leg is not measuring a LOST race (see `scanReadsPerLane`)")
+
+        Assert.Equal(Client.ExitGreen, code)
+
+        Assert.False(
+            claimed transport 9001,
+            "a marker was posted to the lane a rival had already won — the CAS did not refuse it")
+
+        Assert.True(
+            claimed transport 9002,
+            "the next ranked candidate was free and was never claimed: `take` discarded the remainder of a ranking it had already paid a board scan for, and the implementer slot idles (.github#2683)")
+
+    /// ACCEPTANCE 3 AND ACCEPTANCE 2, IN ONE LEG. `EX_CONTENDED` still fires — but only after every
+    /// candidate the ranking offered has been attempted and lost, and the ranking is BOUNDED: four lanes
+    /// are free at scan time, three are attempted, the fourth is not. A fallthrough with no bound would
+    /// attempt all four.
+    [<Fact>]
+    let ``.github#2683 EX_CONTENDED fires only when every candidate in the BOUNDED ranking has been lost``
+        ()
+        =
+        let threads = Dictionary<int, Lane>()
+
+        let transport =
+            world (lanes |> List.map (fun n -> n, WinsTheRace) |> Map.ofList) threads
+
+        let code, said = runTake transport
+
+        assertEveryLaneWasOffered threads
+
+        Assert.Equal(Client.ExitContended, code)
+
+        for n in lanes do
+            Assert.False(claimed transport n, $"lane %d{n} was claimed, and a rival held every one of them")
+
+        Assert.Equal<int list>([ 9001; 9002; 9003 ], lanes |> List.filter (attemptedAndLost said))
+
+    /// ACCEPTANCE 4. An exhausted budget is SYSTEMIC — it will not be less exhausted for the next
+    /// candidate — so it short-circuits on the spot rather than spending two further claim attempts
+    /// against it. This is the one verdict the fallthrough must NOT walk past.
+    ///
+    /// **THE LEG DISCRIMINATES BY CONSTRUCTION, WITHOUT COUNTING REQUESTS.** Only the head exhausts the
+    /// budget; the three lanes behind it stay FREE the whole way through. A `take` that walked past
+    /// `EX_RATE` would therefore CLAIM lane 9002 and exit 0. So "exit 75, and nothing was claimed
+    /// anywhere" is the whole of the short-circuit — there is no third outcome that satisfies both.
+    [<Fact>]
+    let ``.github#2683 EX_RATE short-circuits immediately and is never retried against further candidates``
+        ()
+        =
+        let threads = Dictionary<int, Lane>()
+        let transport = world (Map.ofList [ 9001, ExhaustsTheBudget ]) threads
+
+        let code, _ = runTake transport
+
+        assertEveryLaneWasOffered threads
+
+        Assert.Equal(Errors.ExRate, code)
+
+        for n in lanes do
+            Assert.False(
+                claimed transport n,
+                $"lane %d{n} was claimed after the head exhausted the budget — EX_RATE must short-circuit, not walk the ranking (.github#2683 acceptance 4)")
+
+    /// ACCEPTANCE 6, AS A GATE RATHER THAN A READING. The engine must not tell a caller to perform the
+    /// retry every worker brief in this org forbids. `Client.claim`'s lost-race line used to end "Pick
+    /// another, or wait for the lease." — and from inside `take`'s own walk, "pick another" reads as "run
+    /// `take` again", which is how two workers land on one item.
+    ///
+    /// The subject here is the message the ENGINE emits, so this drives the engine and reads its stderr
+    /// rather than grepping the source: a source-text check would pass over a file that no longer emits
+    /// the line at all.
+    [<Fact>]
+    let ``.github#2683 no engine message instructs the caller to perform the forbidden retry`` () =
+        let threads = Dictionary<int, Lane>()
+
+        let code, said =
+            runTake (world (lanes |> List.map (fun n -> n, WinsTheRace) |> Map.ofList) threads)
+
+        Assert.Equal(Client.ExitContended, code)
+
+        // NON-VACUITY. If nothing was said at all, "it instructs no retry" is true of silence, and silence
+        // is not what a worker that just lost every lane needs. This is the corpus the leg below scans;
+        // an empty one would make its `DoesNotContain` a gate over nothing.
+        Assert.Contains("is already held by", said)
+
+        Assert.DoesNotContain("Pick another", said)
+
+        // And the positive half: the engine names who does the advancing, so a reader of this line cannot
+        // conclude that re-running `take` is the remedy.
+        Assert.Contains("no caller re-runs it to retry", said)
