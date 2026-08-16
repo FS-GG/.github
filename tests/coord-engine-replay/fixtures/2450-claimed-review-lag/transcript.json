@@ -131,11 +131,7 @@
                   "number": 12,
                   "title": "Coordination"
                 }
-              ],
-              "pageInfo": {
-                "endCursor": null,
-                "hasNextPage": false
-              }
+              ]
             }
           }
         },
@@ -234,8 +230,7 @@
                     "id": "PVTF_blocked",
                     "name": "Blocked by"
                   }
-                ],
-                "totalCount": 5
+                ]
               }
             }
           },
@@ -254,7 +249,7 @@
       "method": "POST",
       "path": "/graphql",
       "requestBody": {
-        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt body repository { nameWithOwner } } ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } } id } totalCount } } } rateLimit { cost remaining } }",
+        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } kind: fieldValueByName(name: \"Kind\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt body comments { totalCount } repository { nameWithOwner } } ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } } id } totalCount } } } rateLimit { cost remaining } }",
         "variables": {
           "number": 12,
           "owner": "FS-GG"
@@ -271,6 +266,9 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "comments": {
+                        "totalCount": 2
+                      },
                       "number": 600,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -278,6 +276,7 @@
                       "state": "OPEN",
                       "title": "item 600"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In review"
                     }
@@ -305,7 +304,7 @@
       "method": "POST",
       "path": "/graphql",
       "requestBody": {
-        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt repository { nameWithOwner } } ... on PullRequest { id number title state createdAt repository { nameWithOwner } } } id } totalCount } } } rateLimit { cost remaining } }",
+        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } kind: fieldValueByName(name: \"Kind\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt comments { totalCount } repository { nameWithOwner } } ... on PullRequest { id number title state createdAt repository { nameWithOwner } } } id } totalCount } } } rateLimit { cost remaining } }",
         "variables": {
           "number": 12,
           "owner": "FS-GG"
@@ -322,6 +321,9 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "comments": {
+                        "totalCount": 2
+                      },
                       "number": 600,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -329,6 +331,7 @@
                       "state": "OPEN",
                       "title": "item 600"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In review"
                     }

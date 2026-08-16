@@ -32,6 +32,7 @@ class Refused(RuntimeError):
 SCHEMA_MARKERS = {
     "Repo Scope": "repo-scope-options",
     "Class": "class-options",
+    "Kind": "kind-options",
     "Severity": "severity-options",
     "Phase": "phase-options",
 }
@@ -49,6 +50,14 @@ SCHEMA_MARKERS = {
 # `paths:` trigger, which is a reminder rather than a proof.  Claiming more than that here would
 # be the gate-that-reports-more-than-it-checked shape (#266) inside a gate.
 CLASS_VOCABULARY = ("defect", "hardening", "decision")
+
+# The `Kind` vocabulary, CLOSED at exactly four values (.github#2712) — whether a row has a lifecycle
+# at all, as distinct from Class's how-bad.  Transcribed by hand from the engine's `ItemKind` union
+# (src/FS.GG.Coord.Core/Types.fs) on `CLASS_VOCABULARY`'s exact terms and with its exact caveat: this
+# gates board-schema.md against the list BELOW, and does NOT compare either to `Types.fs`.  The
+# engine-side pin is `TypesTests`' exact-spelling assertions, which are what make this cross-tool
+# check mean anything; between the two, a rename cannot pass unobserved in either place.
+KIND_VOCABULARY = ("work", "anchor", "register", "directive")
 SEVERITY_VOCABULARY = ("Critical", "High", "Medium", "Low", "Unset")
 
 # `Phase` is different from Class and Severity: the engine already owns both the closed union and
@@ -585,6 +594,25 @@ def check_class(args: argparse.Namespace) -> None:
     print(f"Class matches the closed ItemClass vocabulary ({', '.join(CLASS_VOCABULARY)})")
 
 
+def check_kind(args: argparse.Namespace) -> None:
+    """Gate the `Kind` options against the closed `ItemKind` vocabulary (.github#2712).
+
+    `check_class`'s shape exactly, including what it deliberately does NOT do: no roster comparison,
+    no `--allow-extra`.  A closed vocabulary has no tolerated extra, and on this axis a tolerated
+    extra would be worse than on `Class` — an option the engine cannot parse would be written onto a
+    row's `Kind` column, read back as `None`, and the row would silently return to the lifecycle
+    reducer it was supposed to be exempt from.
+    """
+    options = check_options(args, SCHEMA_MARKERS["Kind"])
+    actual = {o["name"] for o in options}
+    expected = set(KIND_VOCABULARY)
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected)
+    if missing or unexpected:
+        raise Refused(f"Kind drift: missing={missing}; unexpected={unexpected}")
+    print(f"Kind matches the closed ItemKind vocabulary ({', '.join(KIND_VOCABULARY)})")
+
+
 def check_severity(args: argparse.Namespace) -> None:
     """Gate `Severity` against the operator-decided closed order (.github#1901)."""
     options = check_options(args, SCHEMA_MARKERS["Severity"])
@@ -618,6 +646,8 @@ def cmd_check(args: argparse.Namespace) -> None:
         check_repo_scope(args)
     elif args.field == "Class":
         check_class(args)
+    elif args.field == "Kind":
+        check_kind(args)
     elif args.field == "Severity":
         check_severity(args)
     elif args.field == "Phase":

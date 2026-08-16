@@ -1,6 +1,8 @@
 [
   {
     "class": null,
+    "commentCount": 2,
+    "kind": null,
     "number": 600,
     "repo": "FS-GG/FS.GG.SDD",
     "severity": "Unset",

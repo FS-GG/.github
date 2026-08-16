@@ -133,12 +133,18 @@ def board_items():
                             {
                                 "status": {"name": "In review"},
                                 "class": None,
+                                # .github#2712 — no `Kind` column on this board, which is the state of
+                                # every live board until an operator creates the field.
+                                "kind": None,
                                 "blockedBy": None,
                                 "content": {
                                     "__typename": "Issue",
                                     "number": ITEM,
                                     "title": f"item {ITEM}",
                                     "state": "OPEN",
+                                    # Register depth (.github#2712) — served from this scenario's own
+                                    # comment thread, so the count cannot contradict the data.
+                                    "comments": {"totalCount": len([route_receipt_comment()])},
                                     "repository": {"nameWithOwner": f"{OWNER}/{REPO}"},
                                 },
                             }

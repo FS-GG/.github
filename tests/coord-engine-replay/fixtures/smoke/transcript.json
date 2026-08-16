@@ -84,49 +84,9 @@
     },
     {
       "method": "GET",
-      "path": "/repos/FS-GG/FS.GG.SDD/issues/42",
-      "requestBody": null,
-      "responseBody": {
-        "body": "A schedulable item.\n\nPaths: src/Thing/**",
-        "id": 1042,
-        "number": 42,
-        "state": "open"
-      },
-      "responseHeaders": {
-        "Content-Type": "application/json"
-      },
-      "status": 200
-    },
-    {
-      "method": "GET",
       "path": "/repos/FS-GG/FS.GG.SDD/issues/42/comments",
       "requestBody": null,
-      "responseBody": [
-        {
-          "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Thing/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"1e9b9ae4439e9ee502054a5c1878c803da6177b2cbd945afc76e3bc99cd2d039\"}",
-          "created_at": "2026-01-01T00:00:00Z",
-          "id": 700042,
-          "updated_at": "2026-01-01T00:00:00Z",
-          "user": {
-            "login": "fixture"
-          }
-        }
-      ],
-      "responseHeaders": {
-        "Content-Type": "application/json"
-      },
-      "status": 200
-    },
-    {
-      "method": "GET",
-      "path": "/repos/FS-GG/FS.GG.SDD/issues/43",
-      "requestBody": null,
-      "responseBody": {
-        "body": "Another item.\n\nPaths: src/Other/**",
-        "id": 1043,
-        "number": 43,
-        "state": "open"
-      },
+      "responseBody": [],
       "responseHeaders": {
         "Content-Type": "application/json"
       },
@@ -140,6 +100,7 @@
         {
           "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#43\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Other/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"d7dd8e6758ef8b37912ad86e89cf0221d6d259ca9ce7a6dba7dcd7332fd89a1c\"}",
           "created_at": "2026-01-01T00:00:00Z",
+          "html_url": "https://fixture.invalid/issues/43#issuecomment-700043",
           "id": 700043,
           "updated_at": "2026-01-01T00:00:00Z",
           "user": {
@@ -154,27 +115,13 @@
     },
     {
       "method": "GET",
-      "path": "/repos/FS-GG/FS.GG.SDD/issues/44",
-      "requestBody": null,
-      "responseBody": {
-        "body": "A verify-paths subject.\n\nPaths: src/Verify/**",
-        "id": 1044,
-        "number": 44,
-        "state": "open"
-      },
-      "responseHeaders": {
-        "Content-Type": "application/json"
-      },
-      "status": 200
-    },
-    {
-      "method": "GET",
       "path": "/repos/FS-GG/FS.GG.SDD/issues/44/comments",
       "requestBody": null,
       "responseBody": [
         {
           "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#44\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Verify/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"9cea04e17f9a014a76be943c483e8809ef76b3c8a9f345d3e2019b7eb88e86c7\"}",
           "created_at": "2026-01-01T00:00:00Z",
+          "html_url": "https://fixture.invalid/issues/44#issuecomment-700044",
           "id": 700044,
           "updated_at": "2026-01-01T00:00:00Z",
           "user": {
@@ -189,27 +136,13 @@
     },
     {
       "method": "GET",
-      "path": "/repos/FS-GG/FS.GG.SDD/issues/45",
-      "requestBody": null,
-      "responseBody": {
-        "body": "A closed SDD item the board still calls Ready.\n\nPaths: src/Z/**",
-        "id": 1045,
-        "number": 45,
-        "state": "closed"
-      },
-      "responseHeaders": {
-        "Content-Type": "application/json"
-      },
-      "status": 200
-    },
-    {
-      "method": "GET",
       "path": "/repos/FS-GG/FS.GG.SDD/issues/45/comments",
       "requestBody": null,
       "responseBody": [
         {
           "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#45\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Z/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"6397bc9a5ed9f1b62e2b0db332a0b838456ddef1b8241de8670bb21c72fba52e\"}",
           "created_at": "2026-01-01T00:00:00Z",
+          "html_url": "https://fixture.invalid/issues/45#issuecomment-700045",
           "id": 700045,
           "updated_at": "2026-01-01T00:00:00Z",
           "user": {
@@ -236,6 +169,7 @@
         {
           "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#46\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Verify/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"aa7f94a0e0b40b0e44e0d69a0faa5f5c19d0533badf06bd71e0872aa63b0bab5\"}",
           "created_at": "2026-01-01T00:00:00Z",
+          "html_url": "https://fixture.invalid/issues/46#issuecomment-700046",
           "id": 700046,
           "updated_at": "2026-01-01T00:00:00Z",
           "user": {
@@ -250,27 +184,13 @@
     },
     {
       "method": "GET",
-      "path": "/repos/FS-GG/FS.GG.SDD/issues/47",
-      "requestBody": null,
-      "responseBody": {
-        "body": "A formerly blocked SDD item.\n\nPaths: src/Blocked/**",
-        "id": 1047,
-        "number": 47,
-        "state": "open"
-      },
-      "responseHeaders": {
-        "Content-Type": "application/json"
-      },
-      "status": 200
-    },
-    {
-      "method": "GET",
       "path": "/repos/FS-GG/FS.GG.SDD/issues/47/comments",
       "requestBody": null,
       "responseBody": [
         {
           "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#47\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"src/Blocked/**\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"fc1c1ef1c3e28cdbad7be77e75e4430512986f9e645813a47c4a1f61535530b0\"}",
           "created_at": "2026-01-01T00:00:00Z",
+          "html_url": "https://fixture.invalid/issues/47#issuecomment-700047",
           "id": 700047,
           "updated_at": "2026-01-01T00:00:00Z",
           "user": {
@@ -285,27 +205,13 @@
     },
     {
       "method": "GET",
-      "path": "/repos/FS-GG/FS.GG.SDD/issues/99",
-      "requestBody": null,
-      "responseBody": {
-        "body": "A parent epic.\n\nPaths: none",
-        "id": 1099,
-        "number": 99,
-        "state": "open"
-      },
-      "responseHeaders": {
-        "Content-Type": "application/json"
-      },
-      "status": 200
-    },
-    {
-      "method": "GET",
       "path": "/repos/FS-GG/FS.GG.SDD/issues/99/comments",
       "requestBody": null,
       "responseBody": [
         {
           "body": "<!-- fsgg:route-decision/v2 -->\n{\"schema\":\"fsgg.coord.route-decision/v2\",\"subject\":\"FS-GG/FS.GG.SDD#99\",\"revision\":1,\"previousDigest\":null,\"scope\":[\"exercise the coordination engine integration fixture\"],\"dependencies\":[\"none\"],\"touchSet\":[\"none\"],\"policyVersion\":\"structured-decisions/1\",\"route\":\"lightweight\",\"agent\":\"fixture-route\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful fixture route receipt.\",\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[],\"digest\":\"e8d7588f18e27497b7ce38e2bee043f32b85238bde4262e4b7af88653f50a7b5\"}",
           "created_at": "2026-01-01T00:00:00Z",
+          "html_url": "https://fixture.invalid/issues/99#issuecomment-700099",
           "id": 700099,
           "updated_at": "2026-01-01T00:00:00Z",
           "user": {
@@ -332,6 +238,75 @@
       "method": "POST",
       "path": "/graphql",
       "requestBody": {
+        "query": "query($id0: ID!, $id1: ID!, $id2: ID!, $id3: ID!, $id4: ID!, $id5: ID!) { n0: node(id: $id0) { ... on Issue { id body comments(first: 1) { totalCount } } } n1: node(id: $id1) { ... on Issue { id body comments(first: 1) { totalCount } } } n2: node(id: $id2) { ... on Issue { id body comments(first: 1) { totalCount } } } n3: node(id: $id3) { ... on Issue { id body comments(first: 1) { totalCount } } } n4: node(id: $id4) { ... on Issue { id body comments(first: 1) { totalCount } } } n5: node(id: $id5) { ... on Issue { id body comments(first: 1) { totalCount } } } }",
+        "variables": {
+          "id0": "ISSUE_42",
+          "id1": "ISSUE_43",
+          "id2": "ISSUE_44",
+          "id3": "ISSUE_45",
+          "id4": "ISSUE_47",
+          "id5": "ISSUE_99"
+        }
+      },
+      "responseBody": {
+        "data": {
+          "n0": {
+            "body": "A schedulable item.\n\nPaths: src/Thing/**",
+            "comments": {
+              "totalCount": 0
+            },
+            "id": "ISSUE_42"
+          },
+          "n1": {
+            "body": "Another item.\n\nPaths: src/Other/**",
+            "comments": {
+              "totalCount": 1
+            },
+            "id": "ISSUE_43"
+          },
+          "n2": {
+            "body": "A verify-paths subject.\n\nPaths: src/Verify/**",
+            "comments": {
+              "totalCount": 1
+            },
+            "id": "ISSUE_44"
+          },
+          "n3": {
+            "body": "A closed SDD item the board still calls Ready.\n\nPaths: src/Z/**",
+            "comments": {
+              "totalCount": 2
+            },
+            "id": "ISSUE_45"
+          },
+          "n4": {
+            "body": "A formerly blocked SDD item.\n\nPaths: src/Blocked/**",
+            "comments": {
+              "totalCount": 1
+            },
+            "id": "ISSUE_47"
+          },
+          "n5": {
+            "body": "A parent epic.\n\nPaths: none",
+            "comments": {
+              "totalCount": 1
+            },
+            "id": "ISSUE_99"
+          },
+          "rateLimit": {
+            "cost": 1,
+            "remaining": 4999
+          }
+        }
+      },
+      "responseHeaders": {
+        "Content-Type": "application/json"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/graphql",
+      "requestBody": {
         "query": "query($owner: String!, $cursor: String) { organization(login: $owner) { projectsV2(first: 50, after: $cursor) { pageInfo { hasNextPage endCursor } totalCount nodes { number title id } } } rateLimit { cost remaining } }",
         "variables": {
           "owner": "FS-GG"
@@ -347,11 +322,7 @@
                   "number": 12,
                   "title": "Coordination"
                 }
-              ],
-              "pageInfo": {
-                "endCursor": null,
-                "hasNextPage": false
-              }
+              ]
             }
           },
           "rateLimit": {
@@ -450,8 +421,7 @@
                     "id": "PVTF_blocked",
                     "name": "Blocked by"
                   }
-                ],
-                "totalCount": 5
+                ]
               }
             }
           },
@@ -470,7 +440,7 @@
       "method": "POST",
       "path": "/graphql",
       "requestBody": {
-        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt body repository { nameWithOwner } } ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } } id } totalCount } } } rateLimit { cost remaining } }",
+        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } kind: fieldValueByName(name: \"Kind\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt body comments { totalCount } repository { nameWithOwner } } ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } } id } totalCount } } } rateLimit { cost remaining } }",
         "variables": {
           "number": 12,
           "owner": "FS-GG"
@@ -487,6 +457,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A schedulable item.\n\nPaths: src/Thing/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_42",
                       "number": 42,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -494,6 +470,7 @@
                       "state": "OPEN",
                       "title": "item 42"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Ready"
                     }
@@ -503,6 +480,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "Another item.\n\nPaths: src/Other/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_43",
                       "number": 43,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -510,6 +493,7 @@
                       "state": "OPEN",
                       "title": "item 43"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Ready"
                     }
@@ -519,6 +503,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A verify-paths subject.\n\nPaths: src/Verify/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_44",
                       "number": 44,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -526,6 +516,7 @@
                       "state": "OPEN",
                       "title": "item 44"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In progress"
                     }
@@ -535,6 +526,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A closed SDD item the board still calls Ready.\n\nPaths: src/Z/**",
+                      "comments": {
+                        "totalCount": 1
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_45",
                       "number": 45,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -542,6 +539,7 @@
                       "state": "CLOSED",
                       "title": "item 45"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Ready"
                     }
@@ -553,6 +551,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A formerly blocked SDD item.\n\nPaths: src/Blocked/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_47",
                       "number": 47,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -560,6 +564,7 @@
                       "state": "OPEN",
                       "title": "item 47"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Blocked"
                     }
@@ -569,6 +574,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A closed .github item the board still calls Ready.\n\nPaths: src/X/**",
+                      "comments": {
+                        "totalCount": 1
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_50",
                       "number": 50,
                       "repository": {
                         "nameWithOwner": "FS-GG/.github"
@@ -576,6 +587,7 @@
                       "state": "CLOSED",
                       "title": "item 50"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Ready"
                     }
@@ -585,6 +597,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A finished .github item.\n\nPaths: src/Y/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_51",
                       "number": 51,
                       "repository": {
                         "nameWithOwner": "FS-GG/.github"
@@ -592,6 +610,7 @@
                       "state": "CLOSED",
                       "title": "item 51"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In review"
                     }
@@ -601,6 +620,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A finished item in a repo with no chore lock.\n\nPaths: src/Q/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_60",
                       "number": 60,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.Legacy"
@@ -608,6 +633,7 @@
                       "state": "CLOSED",
                       "title": "item 60"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In review"
                     }
@@ -617,6 +643,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A cross-owner Coordination row.\n\nPaths: src/External/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_96",
                       "number": 96,
                       "repository": {
                         "nameWithOwner": "EHotwagner/rogue3"
@@ -624,6 +656,7 @@
                       "state": "OPEN",
                       "title": "item 96"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Backlog"
                     }
@@ -633,6 +666,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A parent epic.\n\nPaths: none",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_99",
                       "number": 99,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -640,6 +679,7 @@
                       "state": "OPEN",
                       "title": "item 99"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In progress"
                     }
@@ -667,7 +707,7 @@
       "method": "POST",
       "path": "/graphql",
       "requestBody": {
-        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt repository { nameWithOwner } } ... on PullRequest { id number title state createdAt repository { nameWithOwner } } } id } totalCount } } } rateLimit { cost remaining } }",
+        "query": "query($owner: String!, $number: Int!, $cursor: String) { organization(login: $owner) { projectV2(number: $number) { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } kind: fieldValueByName(name: \"Kind\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } content { __typename ... on Issue { id number title state createdAt comments { totalCount } repository { nameWithOwner } } ... on PullRequest { id number title state createdAt repository { nameWithOwner } } } id } totalCount } } } rateLimit { cost remaining } }",
         "variables": {
           "number": 12,
           "owner": "FS-GG"
@@ -684,6 +724,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A schedulable item.\n\nPaths: src/Thing/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_42",
                       "number": 42,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -691,6 +737,7 @@
                       "state": "OPEN",
                       "title": "item 42"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Ready"
                     }
@@ -700,6 +747,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "Another item.\n\nPaths: src/Other/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_43",
                       "number": 43,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -707,6 +760,7 @@
                       "state": "OPEN",
                       "title": "item 43"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Ready"
                     }
@@ -716,6 +770,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A verify-paths subject.\n\nPaths: src/Verify/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_44",
                       "number": 44,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -723,6 +783,7 @@
                       "state": "OPEN",
                       "title": "item 44"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In progress"
                     }
@@ -732,6 +793,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A closed SDD item the board still calls Ready.\n\nPaths: src/Z/**",
+                      "comments": {
+                        "totalCount": 1
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_45",
                       "number": 45,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -739,6 +806,7 @@
                       "state": "CLOSED",
                       "title": "item 45"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Ready"
                     }
@@ -750,6 +818,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A formerly blocked SDD item.\n\nPaths: src/Blocked/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_47",
                       "number": 47,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -757,6 +831,7 @@
                       "state": "OPEN",
                       "title": "item 47"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Blocked"
                     }
@@ -766,6 +841,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A closed .github item the board still calls Ready.\n\nPaths: src/X/**",
+                      "comments": {
+                        "totalCount": 1
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_50",
                       "number": 50,
                       "repository": {
                         "nameWithOwner": "FS-GG/.github"
@@ -773,6 +854,7 @@
                       "state": "CLOSED",
                       "title": "item 50"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Ready"
                     }
@@ -782,6 +864,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A finished .github item.\n\nPaths: src/Y/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_51",
                       "number": 51,
                       "repository": {
                         "nameWithOwner": "FS-GG/.github"
@@ -789,6 +877,7 @@
                       "state": "CLOSED",
                       "title": "item 51"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In review"
                     }
@@ -798,6 +887,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A finished item in a repo with no chore lock.\n\nPaths: src/Q/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_60",
                       "number": 60,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.Legacy"
@@ -805,6 +900,7 @@
                       "state": "CLOSED",
                       "title": "item 60"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In review"
                     }
@@ -814,6 +910,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A cross-owner Coordination row.\n\nPaths: src/External/**",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_96",
                       "number": 96,
                       "repository": {
                         "nameWithOwner": "EHotwagner/rogue3"
@@ -821,6 +923,7 @@
                       "state": "OPEN",
                       "title": "item 96"
                     },
+                    "kind": null,
                     "status": {
                       "name": "Backlog"
                     }
@@ -830,6 +933,12 @@
                     "class": null,
                     "content": {
                       "__typename": "Issue",
+                      "body": "A parent epic.\n\nPaths: none",
+                      "comments": {
+                        "totalCount": 0
+                      },
+                      "createdAt": "2026-01-01T00:00:00Z",
+                      "id": "ISSUE_99",
                       "number": 99,
                       "repository": {
                         "nameWithOwner": "FS-GG/FS.GG.SDD"
@@ -837,6 +946,7 @@
                       "state": "OPEN",
                       "title": "item 99"
                     },
+                    "kind": null,
                     "status": {
                       "name": "In progress"
                     }

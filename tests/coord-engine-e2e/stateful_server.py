@@ -242,6 +242,9 @@ def board_items():
             {
                 "status": {"name": issue["status"]} if issue["status"] else None,
                 "class": {"name": issue.get("class")} if issue.get("class") else None,
+                # .github#2712 — the `Kind` board column. `None` unless the fixture sets one, which is
+                # the state of every live board until an operator creates the field.
+                "kind": {"name": issue.get("kind")} if issue.get("kind") else None,
                 "blockedBy": {"text": issue["blocked_by"]} if issue.get("blocked_by") else None,
                 "content": {
                     "__typename": "Issue",
@@ -251,6 +254,10 @@ def board_items():
                     "state": issue["state"],
                     "createdAt": "2026-01-01T00:00:00Z",
                     "body": issue["body"],
+                    # REGISTER DEPTH (.github#2712). Served from the SAME comment list this server
+                    # already keeps, so the count and the thread cannot disagree — a hand-written
+                    # constant here would be a fixture asserting a depth its own data contradicts.
+                    "comments": {"totalCount": len(COMMENTS.get(n, []))},
                     "repository": {"nameWithOwner": f"{owner_of(n)}/{repo_of(n)}"},
                 },
             }
