@@ -1,0 +1,72 @@
+# Keep the packed coordination engine independent of WHERE it was built (.github#2688).
+#
+# scripts/check-engine-build-determinism.py packs FS.GG.Coord.Cli from a clean obj/ and bin/ and
+# refuses any of the six coord entries in `tools/net10.0/any/` — three assemblies and their three
+# portable PDBs — that embeds the absolute checkout directory, or that carries no `/_/` mapped source
+# root. Before .github#2688 all six embedded it, which is why `payload_id` for one unchanged tree
+# differed between agents and why a locally packed artifact could never match a published one.
+#
+# THE SUBJECT IS THE ARTIFACT, NOT THE PROJECT FILES, and that is deliberate. Reading
+# `DeterministicSourcePaths` out of three `.fsproj` files would pass on a tree where the property is
+# set somewhere MSBuild ignores — the exact shape .github#2688 measured in the F# SDK itself, which
+# defaults `ParallelCompilation` to true and then hands the Fsc task `@(ParallelCompilation)`, an item
+# reference to a property, so the value never reaches the compiler.
+#
+# WHAT THIS GATE DOES NOT CLAIM. It says nothing about the F# closure-name race that is .github#2688's
+# other half. That one is a compiler race no build setting on SDK 10.0.302 can reach; it is bounded
+# and recorded in src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, and a gate over it would have to sample
+# dozens of clean compiles to be worth anything and would still be a probabilistic green.
+#
+# No schedule: every input is a git-tracked file in this repository, so nothing external can stale the
+# verdict between pushes — the same reasoning coherent-set-version.yml gives for the same shape.
+#
+# The `paths:` lists on pull_request and push are IDENTICAL, and must stay so — check-paths-coherence.py
+# (.github#899) fails this workflow if they drift. They name FILES, never a project directory, so
+# rule (b)'s ProjectReference-closure obligation does not attach: this gate's subject is the build
+# CONFIGURATION that could switch the property off, not the sources that happen to be compiled under it.
+name: engine-build-determinism
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      - "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
+      - "src/FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "scripts/check-engine-build-determinism.py"
+      - "tests/engine-build-determinism/**"
+      - ".github/workflows/engine-build-determinism.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      - "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
+      - "src/FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "scripts/check-engine-build-determinism.py"
+      - "tests/engine-build-determinism/**"
+      - ".github/workflows/engine-build-determinism.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engine-build-determinism-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  determinism:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Prove the gate reds without DeterministicSourcePaths, and on a package it can grade nothing in
+        run: bash tests/engine-build-determinism/run.sh
+      - name: Require every packed coord entry to be independent of the checkout path
+        run: python3 scripts/check-engine-build-determinism.py
