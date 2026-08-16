@@ -505,11 +505,35 @@ module Reads =
     /// hold the lock, which is the precise outcome the CAS exists to make impossible. Sorting here costs
     /// nothing on a list that is already sorted, and it closes the hole for every caller that is not
     /// `markers`.
+    /// THE ORDERING RULE ITSELF, LEASE-FREE AND EXPORTED: the lowest-id marker in the CAS's total order.
+    ///
+    /// This is "lowest id wins" and nothing else. It applies no lease filter, makes no liveness judgement,
+    /// and decides no arm — every caller below keeps its own, because the shared thing is the ORDERING and
+    /// not any one caller's semantics (design §4.2). That distinction is load-bearing rather than pedantic:
+    /// `reserver` returns the LIVE winner when one exists, so a site that wanted "lowest id, lease
+    /// irrespective" and reached for `reserver` instead would be handed a live holder — wrong everywhere,
+    /// and dangerous in `reap` and `adopt`, the two paths that BREAK locks.
+    ///
+    /// WHY IT IS EXPORTED, WHICH IS THE WHOLE POINT OF ITS EXISTENCE. The expression used to live inline in
+    /// one branch of `reserver` and nowhere a caller could reach, so every caller that needed it wrote it
+    /// again: `who`'s Held/Stale classification, `reap`'s stale-lock candidate, and `adopt`'s expired-claim
+    /// selection each hand-rolled `List.sortBy (fun m -> m.Id) |> List.tryHead`. That is #485's defect
+    /// reappearing for the lease-free variant, under the two highest-stakes lock paths in the engine — and
+    /// it is exactly what `winner`'s own doc comment says a function exists to prevent. The merge election
+    /// (design §4.2) needed the same rule again and would have made a fifth copy.
+    ///
+    /// IT SORTS, for `winner`'s reason and not a weaker one. It does not assume its input arrives in id
+    /// order even though `markerScan` returns it that way: a rule that depends on an invariant it does not
+    /// enforce has a silent failure mode, and this one's is two racers computing two different winners and
+    /// both believing they hold the lock. Sorting an already-sorted list costs nothing.
+    ///
+    /// `winner` is `lowestId` composed with the staleness filter, which is the honest statement of their
+    /// relationship: they are ONE rule with ONE parameter, not two rules that happen to agree today.
+    let lowestId (markers: Marker list) : Marker option =
+        markers |> List.sortBy (fun m -> m.Id) |> List.tryHead
+
     let winner (leaseMinutes: int) (markers: Marker list) =
-        markers
-        |> List.filter (isStale leaseMinutes >> not)
-        |> List.sortBy (fun m -> m.Id)
-        |> List.tryHead
+        markers |> List.filter (isStale leaseMinutes >> not) |> lowestId
 
     /// THE MARKER THAT HOLDS THE LOCK, REGARDLESS OF LEASE — the live CAS `winner` if there is one, else
     /// the lowest-id marker whose lease has lapsed.
@@ -524,7 +548,7 @@ module Reads =
     let reserver (leaseMinutes: int) (markers: Marker list) : Marker option =
         match winner leaseMinutes markers with
         | Some m -> Some m
-        | None -> markers |> List.sortBy (fun m -> m.Id) |> List.tryHead
+        | None -> lowestId markers
 
     let markerScan (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<MarkerScan> =
 

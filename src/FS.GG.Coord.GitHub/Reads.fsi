@@ -163,6 +163,25 @@ module Reads =
     /// parse.
     val isStale: leaseMinutes: int -> marker: Marker -> bool
 
+    /// THE LEASE-FREE ORDERING RULE: the lowest-id marker, with no liveness judgement applied.
+    ///
+    /// "Lowest id wins" expressed ONCE, where callers can reach it. It filters nothing, decides no arm, and
+    /// is not a lock: comment ids come from a single server-side sequence, so this is a total order every
+    /// reader — including a CI job minutes later — computes identically.
+    ///
+    /// **IT IS NOT `reserver`, AND SUBSTITUTING ONE FOR THE OTHER IS A DEFECT.** `reserver` answers "who
+    /// holds this lock", and returns the LIVE winner when there is one. This answers only "which marker is
+    /// first". `reap` and `adopt` act exclusively when no live winner exists, so handing either of them a
+    /// live holder would break a lock its owner is still standing in (design §4.2).
+    ///
+    /// It sorts rather than trusting its input's order, for the same reason `winner` does: a rule that
+    /// depends on an unenforced invariant fails silently, and this one's failure is two racers computing two
+    /// different winners.
+    ///
+    /// `winner` is this function composed with the staleness filter — one rule with one parameter, which is
+    /// why re-deriving either from the other is never necessary.
+    val lowestId: markers: Marker list -> Marker option
+
     /// THE CAS's WINNER: the lowest-id marker whose lease is still live.
     ///
     /// One function, in one place, because #485 is what happens otherwise — "who holds this?" computed in

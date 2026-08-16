@@ -1,6 +1,6 @@
 # ADR-0041: A chore takes the item CAS, unchanged, on a closed per-repo lock issue — the refactor it seemed to need was the reason it never shipped
 
-- **Status:** Accepted (2026-07-17) — **configuration clause amended by [ADR-0042](0042-the-chore-lock-ref-is-embedded-beside-the-roster.md) (2026-07-17).** The substrate decision below stands unchanged; only *where the lock's number is recorded* moved, from `registry/repos.yml` to `Options.choreLockRef`. See the dated note at "The lock issue is CLOSED".
+- **Status:** Accepted (2026-07-17) — **configuration clause amended by [ADR-0042](0042-the-chore-lock-ref-is-embedded-beside-the-roster.md) (2026-07-17); the substrate finding EXTENDED to a third subject by [ADR-0075](0075-per-receiver-operation-lock-and-lease-free-election.md) §2 (2026-08-16).** The substrate decision below stands unchanged; only *where the lock's number is recorded* moved, from `registry/repos.yml` to `Options.choreLockRef`. See the dated note at "The lock issue is CLOSED".
 - **Date:** 2026-07-17
 - **Affects:** `.github` (the chore queue: `Chore.fs`, `Writes.claim`, `Options.fs`), and every repo where chores are offered — sdd, rendering, governance, templates, game, audio
 - **Decides:** [#873](https://github.com/FS-GG/.github/issues/873) — Phase 4.3 condition 1. Unblocks [#733](https://github.com/FS-GG/.github/issues/733) (the wiring), which this record does **not** do.
@@ -40,6 +40,18 @@ that reusing it meant **factoring** it and not reusing it meant a **second** CAS
 **That premise is wrong on its load-bearing point, and everything else follows from that.**
 
 ## The finding
+
+> **Extended 2026-08-16 by [ADR-0075](0075-per-receiver-operation-lock-and-lease-free-election.md) §2
+> ([.github#2312](https://github.com/FS-GG/.github/issues/2312)).** Nothing below went stale — the note is
+> here because this is the section that got applied again. The finding held a *third* time, unchanged: a
+> per-receiver **operation-lock** issue takes `Writes.claimScoped` with a lock ref and stub callbacks, and
+> the CAS write path gained no code, no prefix, no field and no parameter. The chore lock is untouched and
+> stays a **separate subject** — sharing one issue would make a chore drain and a dispatch operation
+> serialise against each other, which is two independent questions answered in one colour. ADR-0042's
+> embedded-ref clause is inherited for its original reason (the shim ships to receivers without the roster).
+> One difference is deliberate and is ADR-0075's own subject: the chore-lock table below lists **seven**
+> repositories and omits `FS.GG.Net`; the operation-lock table covers all **eight**, and proves it against
+> `registry/repos.yml` rather than by review.
 
 Measured on `main` @ `9c67b5e` (2026-07-17), reading `claim`'s body:
 

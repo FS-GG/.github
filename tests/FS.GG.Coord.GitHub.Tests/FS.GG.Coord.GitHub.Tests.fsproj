@@ -26,6 +26,7 @@
     <Compile Include="BudgetTests.fs" />
     <Compile Include="CacheTests.fs" />
     <Compile Include="ReadTests.fs" />
+    <Compile Include="LeaseFreeOrderingTests.fs" />
     <Compile Include="WriteTests.fs" />
     <Compile Include="BoardTests.fs" />
     <Compile Include="DoneTests.fs" />

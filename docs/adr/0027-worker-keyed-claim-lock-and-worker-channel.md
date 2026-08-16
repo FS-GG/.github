@@ -15,6 +15,16 @@
     scanning*, not in the lock.
   - [ADR-0038](0038-the-corpus-is-the-cut-over-gate.md) §2 — **blockers are now checked BEFORE the
     touch-set**, which changes how §6's `batch`/`take` evaluate schedulability. See §6.
+  - [ADR-0075](0075-per-receiver-operation-lock-and-lease-free-election.md) §1 (2026-08-16) — **§1's
+    identity model gains a THIRD identity, and one prohibition.** Worker-keying was the right answer to
+    #255 (N agents, one account) and it stands for what it decides: addressing, provenance, and the
+    ordinary one-worker-per-item case. It cannot, however, separate two *executors of one session* — they
+    share a worker id, a session, and a claim, so `twinSession` reads them as one and is structurally
+    incapable of doing otherwise. That is `.github#1858`: two executors ran one item to completion under
+    ONE marker and six repos got pull requests from an unlocked executor. ADR-0075 adds **executor
+    identity** — the grant's comment id, issued by GitHub, not by the process — and rules that **a worker
+    id may never be an input to an authorization decision**. The comment-order CAS (§2), the marker format,
+    the lease, the channel (§5) and everything else here are untouched.
   - [ADR-0051](0051-coordination-rooms-derive-from-referencing-items.md) — **the channel (§5) gains a
     second, derived subject.** `inbox`'s subject set widens from "items I claim" to "items I claim ∪
     rooms those items reference" (a `Rooms: #R` body line), for the deadlock/negotiation tail the

@@ -371,3 +371,37 @@ module WhoLivenessTests =
         // item is the ORDINARY end of the lifecycle, not a violation.
         Assert.DoesNotContain("FS.GG.SDD#42", out)
         Assert.DoesNotContain("UNCLAIMED", out)
+
+    // ---- .github#2312: `who`'s Stale pick IS the exported lease-free ordering rule --------------------
+
+    /// TWO LAPSED markers, posted in the order GitHub would have issued them.
+    ///
+    /// The higher id is served FIRST, so a reader that trusted its input's order rather than sorting would
+    /// answer `late-9105`. Both are 10 hours old against the 120-minute default lease, so neither is live
+    /// and `who` reaches the `Stale` arm — the one arm that consults the lease-free rule.
+    let private twoLapsedMarkers =
+        let old = DateTimeOffset.UtcNow.AddHours(-10.0).ToString "yyyy-MM-ddTHH:mm:ssZ"
+
+        $"""[{{"id":9105,"body":"<!-- fsgg:claim worker=late-9105 lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{old}","updated_at":"%s{old}"}},{{"id":9101,"body":"<!-- fsgg:claim worker=first-9101 lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{old}","updated_at":"%s{old}"}}]"""
+
+    [<Fact>]
+    let ``.github#2312 who's STALE holder is the LOWEST-id marker - the rule it no longer re-implements`` () =
+        // `who` used to hand-roll `List.sortBy (fun m -> m.Id) |> List.tryHead` for this arm; it now calls
+        // `Reads.lowestId`. That is a source fact, and `OpLockTests` gates it as one — but a source gate
+        // cannot show that the ANSWER still comes out right, and slice 2's acceptance asks for the
+        // consumer's BEHAVIOUR to follow the exported rule rather than merely to import it.
+        //
+        // So this leg is the behavioural half: break `Reads.lowestId` and this reds, which is what "every
+        // consumer's behaviour changes when the subject changes" means for `who` specifically.
+        let transport = world twoLapsedMarkers
+
+        let code, out, _ = runWho transport [ "who"; "--repo"; "FS.GG.SDD" ]
+
+        Assert.Equal(0, code)
+        Assert.Contains("STALE", out)
+
+        // The CAS's total order names the FIRST-posted marker as the holder, whatever order the read
+        // returned them in. Naming `late-9105` here would be the engine reporting the wrong worker as the
+        // lock's owner — the row a human reads immediately before `reap`.
+        Assert.Contains("first-9101", out)
+        Assert.DoesNotContain("late-9105", out)
