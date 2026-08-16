@@ -126,11 +126,20 @@ module Batch =
 
     /// Project a scheduler snapshot's candidates and reservations onto the implementer-slot question.
     ///
-    /// Occupancy is the claim marker, live or lapsed (#461/#581/#1792) — the same population
-    /// `driver --events` calls active and `who` reports as held. A `BatchMember` is excluded on purpose:
-    /// it is an item this run has chosen and not dispatched, already counted as `schedulableItems` by
-    /// `waveShortfallHeadline`, so counting it here would subtract the very dispatch being announced.
-    /// `UnknownHolder` proves neither occupancy nor unclaimed work and appears in neither list.
+    /// Occupancy is the claim marker, live or lapsed (#461/#581/#1792). `driver --events` reads the SAME
+    /// field and `who` classifies the SAME marker, so the three agree on the ordinary in-flight
+    /// population — an open, readable, unparked, claimed row — which is the agreement .github#2678
+    /// restored. They are NOT the same function, and this deliberately does not assert they are (review
+    /// round 1): `DriverEvents.deriveState` lets `ReadOk`, `HumanBlock` and `BoardStatus = Blocked`
+    /// outrank the claim, so a claimed-but-parked row occupies a slot here and is not active there;
+    /// `MergedAwaitingObligations` needs no claim at all, so it is active there and occupies nothing
+    /// here; and `who`'s `held`/`stale` split is joined here into one union, with only its `unclaimed`
+    /// arm left out — reported as `WorkWithoutClaim` instead. `Batch.fs` carries the measured table.
+    ///
+    /// A `BatchMember` is excluded on purpose: it is an item this run has chosen and not dispatched,
+    /// already counted as `schedulableItems` by `waveShortfallHeadline`, so counting it here would
+    /// subtract the very dispatch being announced. `UnknownHolder` proves neither occupancy nor unclaimed
+    /// work and appears in neither list.
     val implementerSlots: candidates: Item list -> reservations: Reservation list -> SlotOccupancy
 
     /// Parse `<!-- fsgg:wave-model:v1 ... -->` from a host-loop document. Missing, duplicate,

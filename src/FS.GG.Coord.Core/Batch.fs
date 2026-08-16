@@ -73,9 +73,36 @@ module Batch =
     ///
     /// THE PREDICATE IS THE CLAIM MARKER, LIVE OR LAPSED. `Item.Claim` is `Reads.reserver`'s answer, and
     /// a lapsed lease is still a lock that only `reap` breaks (#461/#581/#1792) — its holder is a worker
-    /// who has not gone anywhere. That is the same population `driver --events` calls active
-    /// (`DriverEvents.ItemFacts.ClaimWorker` is this exact field) and the same one `who` reports as held,
-    /// which is what makes three projections of one board read agree instead of disagreeing three ways.
+    /// who has not gone anywhere.
+    ///
+    /// WHAT THE THREE PROJECTIONS SHARE IS THAT FIELD, NOT AN EQUALITY OF ANSWERS — and an earlier draft
+    /// of this comment asserted the equality, which is false in BOTH directions (.github#2678 review
+    /// round 1). `driver --events` reads the same `Item.Claim` (`DriverEvents.ItemFacts.ClaimWorker` IS
+    /// this field) and `who` classifies the same marker, so on the ORDINARY IN-FLIGHT POPULATION — an
+    /// open, readable, unparked, claimed row — all three agree, and restoring that agreement is what this
+    /// item did. Beyond that population they are different functions on purpose. Measured through the
+    /// built Release DLLs, one snapshot per row, `Occupying` vs `classify |> isActive`:
+    ///
+    ///   * `DriverEvents.deriveState` tests `ReadOk`, `HumanBlock` and `BoardStatus = Blocked` BEFORE it
+    ///     ever reaches the claim, and each outranks it. A CLAIMED row that is board-`Blocked`
+    ///     (`blocked:board status Blocked`), carries a `Blocked on: human/...` sentinel, or whose
+    ///     item-PR probe was unreadable (`unreadable:*`) is NOT active there — and occupies a slot HERE.
+    ///     This side is the right one for THIS question: a worker parked on a blocked row is still
+    ///     standing in its lane, and only `reap` frees it. These shapes reach the live board — `Scan`
+    ///     admits every non-PR row as a candidate without filtering on status, and `check-board`'s
+    ///     `BLOCKER-CLEARED` rule is conditioned on a `Blocked` row's claim precisely because a
+    ///     claimed-and-`Blocked` row exists.
+    ///   * IT RUNS THE OTHER WAY TOO. `MergedAwaitingObligations` is reached with no claim at all, so a
+    ///     merged, closed row with an unverified obligation and a released claim is ACTIVE to
+    ///     `driver --events` and occupies nothing here — correctly: nobody is holding it.
+    ///   * `who` SPLITS WHAT THIS JOINS. Its `held` is the live winner (`Reads.winner`) and its `stale`
+    ///     is a marker past its lease; `Occupying` is their UNION, because a lock is a lock. Only `who`'s
+    ///     `unclaimed` arm — a markerless `In progress` column — is left out, and that one is not
+    ///     discarded either: it is reported as `WorkWithoutClaim` below.
+    ///
+    /// Occupancy asks "is a worker's slot consumed", which is a narrower question than "what material
+    /// state is this item in". Anyone who finds the two disagreeing on a parked row should change this
+    /// sentence, not the code.
     ///
     /// `BatchMember` IS EXCLUDED, DELIBERATELY, AND THAT IS NOT AN OVERSIGHT. A batch member is an item
     /// THIS run has just chosen and has NOT dispatched — by construction a member of the `Chosen` set the
@@ -87,8 +114,13 @@ module Batch =
     ///
     /// `UnknownHolder` asserts nothing about a worker — the token set and the holder set went out of step
     /// — so it can neither prove a slot occupied nor prove work standing without a claim, and it appears
-    /// in neither list. It is reachable from the wire (`Snapshot.parse`'s `"unknown"` kind, and its
-    /// malformed-`live-claim` fallback), so this is a live arm rather than a defensive one.
+    /// in neither list. It is reachable from the wire through ONE route, `Snapshot.parse`'s `"unknown"`
+    /// holder kind: measured, that document parses and the holder lands in neither list. It is NOT
+    /// reachable through that codec's malformed-`live-claim` fallback, which an earlier draft of this
+    /// comment also claimed (.github#2678 review round 1): the `Result.map (fun _ -> UnknownHolder)` there
+    /// is applied to a COLLECTED ERROR, so a `live-claim` holder missing `worker`/`ageSeconds` refuses the
+    /// whole snapshot instead — measured: `inFlight[0].holder.worker: required field is missing`. One
+    /// reachable route, not two; the conclusion is unchanged, the arm is live rather than defensive.
     let implementerSlots (candidates: Item list) (reservations: Reservation list) : SlotOccupancy =
         let claimed =
             candidates
