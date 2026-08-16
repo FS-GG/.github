@@ -163,6 +163,71 @@ run_gate "$d"
 [ "$RC" = 0 ] && ok "#1719: restoring the pragma greens the same checkout again" \
   || bad "#1719: restored source-path must green" "rc=$RC\n$OUT"
 
+# ---- 6c. SC2251: A BARE `!` STATEMENT SKIPS ERREXIT (.github#2689). ------------------------------
+#      Bash exempts a `!`-inverted command from `errexit`, so a bare `! cmd` statement in a
+#      `set -euo pipefail` fixture computes the right answer and DISCARDS it — the same property as
+#      the SIGPIPE family `scripts/check-pipefail-assertions.py` guards, by a different mechanism.
+#      SC2251 lives at `info`, below this gate's `warning` floor, so `lint-shell.sh` reaches it with
+#      a check-scoped `-i SC2251` pass rather than by lowering SEVERITY (which shell-lint.yml:186
+#      forbids) or by adding an exclusion list.
+#
+#      THE NEGATIVE LEGS ARE THE POINT HERE, not the positive one. The whole reason this is a
+#      linter enablement instead of a hand-written rule is DISCRIMINATION: a naive `^\s*!` regex
+#      is 20% wrong on this repo's corpus, because `find` takes `!` as its own operand. If these
+#      legs ever red, the enablement has started making the #238 false accusation and the remedy is
+#      NOT to suppress it per-file.
+SC2251_BAD='#!/usr/bin/env bash
+set -euo pipefail
+out="hello world"
+! grep -q needle <<<"$out"
+echo "$out"
+'
+# Every spelling .github#2689 requires to stay silent, in one file, under errexit.
+SC2251_OK='#!/usr/bin/env bash
+set -euo pipefail
+out="hello world"
+if ! grep -q needle <<<"$out"; then echo "absent"; fi
+! grep -q needle <<<"$out" && echo "found"
+! grep -q needle <<<"$out" || echo "absent"
+while ! grep -q needle <<<"$out"; do break; done
+[ ! -f /nonexistent ] && echo "nofile"
+find . -maxdepth 1 ! -name "Options.fs" -print
+echo "$out"
+'
+# The identical bare statement WITHOUT errexit: nothing is being skipped, so there is nothing to say.
+SC2251_NO_ERREXIT='#!/usr/bin/env bash
+set -uo pipefail
+out="hello world"
+! grep -q needle <<<"$out"
+echo "$out"
+'
+
+d="$(newrepo sc2251-bad)"
+printf '%s' "$SC2251_BAD" > "$d/bare.sh"; git -C "$d" add -A
+run_gate "$d"
+sc2251_named=0
+case "$OUT" in *SC2251*) sc2251_named=1 ;; esac
+[ "$RC" = 1 ] && [ "$sc2251_named" = 1 ] \
+  && ok ".github#2689: a bare '! cmd' statement under errexit REDS the gate, named as SC2251" \
+  || bad ".github#2689: a bare '! cmd' statement under errexit must red as SC2251" "rc=$RC
+$OUT"
+
+d="$(newrepo sc2251-ok)"
+printf '%s' "$SC2251_OK" > "$d/guarded.sh"; git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 0 ] \
+  && ok ".github#2689: 'if !', '! &&', '! ||', 'while !', '[ ! -f ]' and find's '!' OPERAND are silent" \
+  || bad ".github#2689: the enablement is accusing a safe '!' spelling (#238)" "rc=$RC
+$OUT"
+
+d="$(newrepo sc2251-noerrexit)"
+printf '%s' "$SC2251_NO_ERREXIT" > "$d/bare.sh"; git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 0 ] \
+  && ok ".github#2689: the same bare statement WITHOUT errexit is not a finding" \
+  || bad ".github#2689: SC2251 must be scoped to errexit" "rc=$RC
+$OUT"
+
 # ---- 7. THE REAL TREE. Without this, every leg above is synthetic. --------------------------------
 run_gate "$REPO_ROOT"
 [ "$RC" = 0 ] \

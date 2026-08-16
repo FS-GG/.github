@@ -1,0 +1,92 @@
+# Baseline for scripts/check-pipefail-assertions.py (.github#2689).
+#
+# `<count> <path>` -- how many sites in that file consume the status of a pipeline ending in an
+# early-exiting reader (`grep -q`, `grep -m N`, `head`) while the file sets `pipefail`.
+#
+# THIS FILE ONLY EVER SHRINKS, and the gate is what makes that true. The counts must match the tree
+# EXACTLY, not `<=`:
+#
+#   more than the number here  -> a new site arrived. Repair it. Raising the number is not a remedy.
+#   fewer than the number here -> the baseline is STALE. Lower it in the same commit as the repair.
+#   a file with sites and no line here -> a new offender in a new file.
+#   a line here for a path with no sites -> delete the line.
+#
+# So a repair cannot land without its decrement, and a decrement cannot land without its repair.
+# The file is therefore always a true statement about the tree, which is the property that lets the
+# gate be believed at all.
+#
+# WHY THESE 1186 SITES ARE HERE RATHER THAN REPAIRED. `.github#2681` proposed converting them and
+# was closed under the board's filing bar: the sweep would have declared 34 files spanning most of
+# `tests/` on a board already reporting `CEILING: 0 worker(s) can start right now`, which is
+# `.github#2587`'s lane-starvation failure an order of magnitude larger. `.github#2689` shipped the
+# guard instead, so these convert opportunistically -- each inside whatever touch-set already owns
+# its file, at zero marginal lane cost. Nobody has to reserve `tests/`.
+#
+# They are green TODAY only because the outputs they read are small. That is a property of today's
+# message lengths, not of the assertions: the hole opens past roughly 16 KB (.github#2668).
+#
+# TO CONVERT A SITE, use one of the three spellings the gate prints, then decrement the count here.
+# `tests/coord-engine-e2e/run.sh` is the worked example -- .github#2668 converted nine sites in it
+# and left the helpers (`contains`/`matches`/`matches_i`) that make the safe forms readable.
+#
+# Its own remaining 7 are the guard machinery and the planted offenders that prove the guard can say
+# no; they are quoted shell inside a fixture, not assertions, and they carry `IDIOM-GUARD` for that
+# file's own scanner rather than this gate's pragma.
+#
+# Measured at the tree .github#2689 shipped against: 136 shell files, 130 setting `pipefail`,
+# 54 carrying at least one site, 1186 sites in total.
+
+1 .claude/hooks/block-merge-and-main-push.sh
+4 scripts/coordination-sync
+1 scripts/fsgg-coord
+1 scripts/release-saga-ci.sh
+1 scripts/repos-audit.sh
+3 scripts/repos.sh
+2 scripts/skill-view
+3 scripts/skill-view-parity.sh
+1 scripts/sync-build-config.sh
+1 src/FS.GG.Kit/stage-kit.sh
+1 src/FS.GG.Kit/verify-package.sh
+2 tests/adr-coherence/run.sh
+18 tests/closing-keywords/run.sh
+2 tests/coherent-set-version/run.sh
+7 tests/coord-engine-e2e/run.sh
+80 tests/coord-engine-e2e/writes.sh
+326 tests/coord-engine-parity/run.sh
+110 tests/coord-engine-parity/shim.sh
+20 tests/coord-guards/run.sh
+21 tests/coordination-sync/run.sh
+1 tests/dispatch-preflight/run.sh
+10 tests/engine-flag-narrative/run.sh
+2 tests/engine-release-notes/run.sh
+36 tests/feed-autofix/run.sh
+1 tests/feed-coherence/run.sh
+5 tests/gate-finding-history/run.sh
+10 tests/kit-auto-publish/run.sh
+2 tests/kit-bump-shape/run.sh
+1 tests/kit-package/run.sh
+11 tests/lock-range-coherence/run.sh
+6 tests/lockfile-cold/run.sh
+6 tests/new-sdd-workspace/run.sh
+11 tests/pin-coherence/run.sh
+3 tests/project-field-options/run.sh
+1 tests/publish-flags/run.sh
+7 tests/recipe-followup/run.sh
+10 tests/recipe-landable/run.sh
+10 tests/recipe-pagination/run.sh
+3 tests/registry-changelog/run.sh
+5 tests/registry-predicate/run.sh
+1 tests/release-coherence/run.sh
+372 tests/repos-audit/run.sh
+4 tests/repos-registry/run.sh
+5 tests/rest-budget-preflight/run.sh
+5 tests/retirement-order-coherence/run.sh
+7 tests/review-critic-succession-wire/run.sh
+13 tests/shell-lint/run.sh
+2 tests/skill-registry/run.sh
+3 tests/skill-union/run.sh
+4 tests/skill-view-parity/run.sh
+4 tests/skill-view/run.sh
+5 tests/sparse-checkout-closure/run.sh
+14 tests/sync-build-config/run.sh
+1 work/2380-feedback-report-materialization/verification/run-checks.sh

@@ -234,6 +234,64 @@ trap 'rm -rf "$wf_dir"; rm -f "$wf_manifest" "$log" "$findings_log"' EXIT
 if [ "${#subject[@]}" -gt 0 ]; then
   "$SHELLCHECK" -x -S "$SEVERITY" -f gcc "${subject[@]}" >>"$findings_log" 2>&1 || rc=$?
 fi
+
+# ---- SC2251: TARGETED ENABLEMENT, BELOW THE GLOBAL FLOOR (.github#2689) ---------------------------
+#
+# THE DEFECT. Bash exempts a `!`-inverted command from `errexit`. From the `set -e` description, the
+# shell does not exit when "the command's return status is being inverted with `!`". So in a
+# `set -euo pipefail` script a BARE `! cmd` statement is a no-op assertion: it computes the right
+# answer and then discards it.
+#
+#     $ bash -c 'set -euo pipefail; ! grep -q hello <<<"hello world"; echo "reached rc=$?"'
+#     reached rc=1
+#     $ echo $?
+#     0
+#
+# That is the same property as the SIGPIPE family `scripts/check-pipefail-assertions.py` guards --
+# an assertion in a `set -euo pipefail` fixture whose status is computed and then thrown away --
+# reached by a different bash mechanism. It was found on a live instance: inserting a leak into
+# `scripts/check-board-paths-live.py` made the detector emit exactly the false positive that leg
+# exists to refuse, and the fixture still printed OK and exited 0.
+#
+# WHY HERE AND NOT IN A SECOND DETECTOR. shellcheck's SC2251 is EXACTLY this condition, and this
+# repo already pins it, checksums it, and runs it over every shell file on every PR with no `paths:`
+# filter. `.github#2689` asked for the cheaper route to be settled first; it was, BY EXECUTION,
+# against this repo's own pinned 0.11.0 binary and this repo's own tree:
+#
+#   - the condition. `! grep -q needle <<<"$out"` as a bare statement under `set -euo pipefail`
+#     reports `SC2251` at `note` severity: "This ! is not on a condition and skips errexit."
+#   - it needs errexit. The identical line under `set -uo pipefail` reports NOTHING.
+#   - the discrimination, which is the part a hand-rolled regex gets wrong. Over a probe carrying
+#     all six spellings `.github#2689` requires to stay silent -- `! cmd && ...`, `! cmd || ...`,
+#     `if ! cmd; then`, `[ ! -f x ]`, `while ! cmd; do`, and `!` as a command's OWN OPERAND
+#     (`find . ! -name 'Options.fs'`) -- shellcheck at `-S style`, its LOWEST floor, fired on the
+#     bare statement and on nothing else. A naive `^\s*!` regex is 20% wrong on this repo's corpus
+#     because of the `find` predicate alone; `tests/worker-id-attractor/run.sh` carries it as the
+#     committed counter-example.
+#   - the whole-repo baseline is ONE. `-i SC2251` over all 136 discovered files reported exactly
+#     `tests/release-saga/run.sh:267` -- the single live true positive, now repaired -- and no
+#     false positive anywhere. So this enablement needs no allowlist and no baseline at all: it
+#     ships clean, and the next one to arrive reds.
+#
+# It is also the only shape available. `.github/workflows/shell-lint.yml` forbids lowering `SEVERITY`
+# and forbids per-file exclusion lists, and SC2251 lives at `info`, below the `warning` floor -- so a
+# check-scoped pass is the way to reach it without dropping the floor for everything else.
+#
+# `-i SC2251` means "consider ONLY this code", so this pass cannot re-report anything the pass above
+# already decided, and it cannot quietly widen the gate: adding a code here is a visible edit.
+#
+# THE FILE SUBJECT ONLY, deliberately -- and the reason is MEASURED, not reasoned. Over all 406
+# extracted `run:` steps, `-i SC2251` reports ZERO findings. The tempting explanation is that a
+# `run:` block gets its errexit from GitHub's `bash -e {0}` INVOCATION rather than from any text
+# the linter can see; that is true for most of them but NOT the whole story, because 101 of the 406
+# do carry a literal `set -e` and SC2251 still fires on none of them -- they simply contain no bare
+# `!` statement. So the pass is omitted here on the measurement, and if that ever stops holding the
+# remedy is to add `"${wf_subject[@]}"` to a pass of its own rather than to assume it still holds.
+sc_rc=0
+if [ "${#subject[@]}" -gt 0 ]; then
+  "$SHELLCHECK" -x -S info -i SC2251 -f gcc "${subject[@]}" >>"$findings_log" 2>&1 || sc_rc=$?
+fi
+
 wf_rc=0
 if [ "${#wf_subject[@]}" -gt 0 ]; then
   # NO `-e SC2050` HERE, and no inline pragma written into the materialized files either — both were
@@ -280,14 +338,14 @@ fi
 # Combine: either subject's shellcheck exiting outside {0,1} means "could not check" for the WHOLE
 # gate (#266) — a partial no-verdict silently reported as the other subject's clean is the same failure
 # this exit-code table exists to prevent. Otherwise, either subject reporting 1 makes the gate 1.
-for code in "$rc" "$wf_rc"; do
+for code in "$rc" "$sc_rc" "$wf_rc"; do
   case "$code" in
     0|1) ;;
     *) echo "::error::shellcheck exited $code, which is neither clean (0) nor findings (1) — treating as 'could not check'."
        exit 2 ;;
   esac
 done
-if [ "$rc" -eq 1 ] || [ "$wf_rc" -eq 1 ]; then
+if [ "$rc" -eq 1 ] || [ "$sc_rc" -eq 1 ] || [ "$wf_rc" -eq 1 ]; then
   echo "::error::shellcheck reported findings (see above)."
   exit 1
 fi

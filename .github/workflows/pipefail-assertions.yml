@@ -1,0 +1,151 @@
+# pipefail-assertions — no shell file may consume the status of a pipeline that ends in an
+# early-exiting reader.
+#
+# .github#2689, generalising the single-file source guard .github#2668 shipped in
+# tests/coord-engine-e2e/run.sh. Epic #266 (the rule nothing asserts).
+#
+# Under `set -o pipefail`, `printf '%s' "$out" | grep -q PATTERN` does not answer "does $out contain
+# PATTERN?". `grep -q` exits the instant it matches; if the writer still had bytes to deliver it
+# takes SIGPIPE, the pipeline's status becomes 141, and `if` reads 141 as "the pattern was NOT
+# found" — for output that plainly contains it. The verdict is a buffer-size and scheduling fact,
+# not a fact about the haystack, and the hole opens past roughly 16 KB. `.github#2668` measured it
+# with 30-run repeatability across five haystack sizes.
+#
+# `.github#2681` proposed converting the ~1,200 existing sites and was closed under the board's
+# filing bar: it would have declared most of `tests/` on a board already reporting `CEILING: 0
+# worker(s) can start right now`. The guard is the alternative — every FUTURE site reds on arrival,
+# and the existing ones convert opportunistically inside whatever touch-set already owns each file.
+#
+# NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision, for the same reason, that
+# .github/workflows/shell-lint.yml makes. This gate's subject is EVERY shell file in the repo, and
+# it decides membership by SHEBANG, not by extension: four of this repo's shell files are spelled as
+# commands with no `.sh` on the end, and `scripts/fsgg-coord` is the kit itself. A `paths:` filter
+# over `**.sh` would not match one of them, so the filter would silently shrink the subject to less
+# than the gate scans — which is #648's shape, and #996's, one layer up. A filter is also what would
+# let a new shell file land in a directory nobody thought to list.
+#
+# No `schedule:` — the subject is committed files in this repo, so every change that could falsify
+# the gate arrives as a push or a pull request, and a nightly re-run would prove only that the tree
+# did not change on its own.
+name: pipefail-assertions
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipefail-assertions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO before believing it when it says yes. The
+  # fixture's leg 0 plants an offender against an empty baseline, legs 11-14 prove that an empty
+  # corpus, a corpus with no `pipefail` file, and an unreadable baseline are each NO VERDICT rather
+  # than a pass, and its last legs run the gate over the REAL tree and assert the baseline still
+  # describes a real corpus. A fixture that passed on synthetic strings while the shipped baseline
+  # rotted is not a state this job can reach.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Run the pipefail-assertions fixture (no network)
+        run: bash tests/pipefail-assertions/run.sh
+
+  no-discarded-status:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Assert every shell file matches the discarded-status baseline exactly
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-pipefail-assertions.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network, no
+      # shellcheck — so it has no retryable failure to report. A leg for a verdict the gate can never
+      # mean would be a lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever
+      # appears.
+      - name: 'OK: every file matches its baseline exactly'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "pipefail-assertions: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a new discarded-status site, or a stale baseline'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### pipefail-assertions: an assertion can discard the status it claims to check"
+            echo
+            echo "A shell file setting \`pipefail\` gained a site whose verdict comes from a pipeline"
+            echo "ending in an early-exiting reader (\`grep -q\`, \`grep -m N\`, \`head\`) — or the"
+            echo "baseline still claims sites that are no longer there."
+            echo
+            echo "\`grep -q\` exits the instant it matches. If the writer still had bytes to deliver"
+            echo "it takes SIGPIPE, the pipeline's status becomes **141**, and \`if\` reads that as"
+            echo "*\"not found\"* for output that plainly contains the pattern. It is green today only"
+            echo "because the output is short: the hole opens past roughly **16 KB** (.github#2668)."
+            echo
+            echo "Use a spelling with no live writer to kill. All three run as printed:"
+            echo
+            echo '```sh'
+            echo 'case "$haystack" in *"$needle"*) found=1 ;; *) found=0 ;; esac'
+            echo 'grep -qE -- "$re" <<<"$haystack"'
+            echo 'prefix="${haystack:0:200}"'
+            echo '```'
+            echo
+            echo "If the baseline is **stale**, the gate prints the lower number to write — lower it"
+            echo "in the same commit as the repair. The baseline only ever shrinks, and that is what"
+            echo "makes it a true statement about the tree rather than a list nobody maintains."
+            echo
+            echo "If a site genuinely must keep the pipeline, annotate the line with a **reason**:"
+            echo
+            echo '```sh'
+            echo '... | grep -q PATTERN   # discarded-status-ok: <why this one cannot mislead>'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=pipefail-assertions: an assertion can discard the status it checks::A new site, an unbaselined file, or a stale baseline entry. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the gate could not read a valid subject'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### pipefail-assertions: no verdict"
+            echo
+            echo "The gate discovered **zero** shell files, found **no file setting \`pipefail\`**, or"
+            echo "could not read \`tests/pipefail-assertions/baseline.txt\`."
+            echo
+            echo "This repo demonstrably contains ~140 shell files and ~130 of them set \`pipefail\`,"
+            echo "so this means **discovery or the baseline broke** — not that the tree is clean."
+            echo "Scanning nothing is a failure to scan, and without the baseline the gate cannot"
+            echo "tell a pre-existing site from a new one. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=pipefail-assertions: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=pipefail-assertions: inconclusive::check-pipefail-assertions.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
