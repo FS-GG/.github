@@ -46,6 +46,10 @@
     <Compile Include="IntakeTests.fs" />
     <Compile Include="DeliveryRouteTests.fs" />
     <Compile Include="StructuredDecisionTests.fs" />
+    <!-- OpKeyTests (.github#2311) drives the new pure Operation module — the operation key, its closed
+         vocabulary, and the composition every later fencing slice will share. Like every entry above it
+         this one is explicit: the list carries no globs, so an unlisted test file runs nowhere. -->
+    <Compile Include="OpKeyTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
