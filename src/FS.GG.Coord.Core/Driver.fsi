@@ -108,6 +108,25 @@ module Driver =
     /// already describe can move.
     val liveReviewComments: currentHead: string -> comments: ReviewComment list -> LiveReviewComments
 
+    /// The FACTS-FREE spelling: it supplies no live delivery facts, so it decides everything about a
+    /// review chain EXCEPT whether a submitted diff-audit receipt matches the live diff, which it cannot
+    /// read. Where a diff audit is required it still refuses a receipt that is absent, malformed, or not
+    /// bound to one single head — every refusal that is decidable from the receipts themselves — and
+    /// renders no verdict on the one question it would need the live diff to answer (.github#2694).
+    ///
+    /// A caller that must have that question ANSWERED, rather than merely not answered wrongly, calls
+    /// `parseReviewCommentsWithFacts` and supplies the recomputed inventory; `Review.acceptanceOutcome`
+    /// and the `driver` planner are this repository's two such callers.
+    ///
+    /// WHAT A WEDGED CRITIC IS OWED, stated here because this is the parser whose refusal they will be
+    /// reading (.github#2694 acceptance 4). A generation gains NO fresh-`initial` escape from having been
+    /// refused: retirement applies only to an ACCEPTED generation, so `StructuredDecision`'s "a new
+    /// initial review is allowed only after host acceptance" holds at the same head and after the head
+    /// moves. For a generation that is genuinely terminal — the ordinary and repair-phase ceilings
+    /// exhausted — the accepted answer remains the successor pull request, opened fresh and separately
+    /// scoped, with the exhausted PR closed unmerged and its records preserved. A `diffAuditRequired:
+    /// true` generation is no longer one of those: it was terminal only because of the conflation this
+    /// function's implementation now removes.
     val parseReviewComments: comments: ReviewComment list -> Result<ReviewChain, string list>
 
     /// Parse review evidence while binding any mandatory diff audit to an independently recomputed
@@ -115,6 +134,11 @@ module Driver =
     val parseReviewCommentsWithAudit:
         trustedAudit: SemanticDiff.Receipt -> comments: ReviewComment list -> Result<ReviewChain, string list>
 
+    /// The FACTS-BEARING spelling, and the only one that can check a submitted diff-audit receipt against
+    /// the diff. `trustedAudit = None` here means the caller READ the live diff and independently
+    /// recomputed an empty inventory — an answer, not an absence — so a receipt naming a rename that
+    /// inventory does not contain is reported stale, in those words. It is never conflated with the
+    /// facts-free `parseReviewComments`, which supplied nothing to check against (.github#2694).
     val parseReviewCommentsWithFacts:
         mechanicallyRequired: bool ->
         trustedAudit: SemanticDiff.TrustedAudit option ->
@@ -122,7 +146,10 @@ module Driver =
             Result<ReviewChain, string list>
 
     /// Parse the structured review generation effective at the current PR head after retiring accepted
-    /// generations for older heads.
+    /// generations for older heads. Facts-free: it reaches `parseReviewComments`, so its diff-audit
+    /// contract is that function's (.github#2694). This is the spelling `review record` seals a host
+    /// acceptance through, which is why a verdict rendered here on the ABSENCE of live facts could
+    /// terminally wedge a generation.
     val parseEffectiveReviewComments:
         currentHead: string -> comments: ReviewComment list -> Result<ReviewChain, string list>
 

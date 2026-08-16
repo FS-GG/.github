@@ -530,9 +530,52 @@ module Driver =
                             errors.Add "a submitted typed diff-audit receipt is malformed"
                         else
                             let submitted = parsed |> List.choose Result.toOption
-                            match trustedFacts |> Option.bind snd with
-                            | None -> errors.Add "the live delivery facts needed to check a diff-audit receipt are absent"
-                            | Some trusted ->
+
+                            // RECEIPT-INTRINSIC, so it is decided on EVERY path (.github#2694). Which head
+                            // the submitted receipts bind is a fact about the receipts themselves, and
+                            // `reviewChainProblems` reads the answer back as `DiffAuditRequired &&
+                            // DiffAuditHead <> HeadSha`. Leaving it unresolved on the facts-free path would
+                            // merely MOVE the wedge this item removes out of the parser and into
+                            // `Delivery.reviewProblem`, which is why it is hoisted above the live-facts
+                            // match rather than left inside it.
+                            match submitted |> List.map _.HeadSha |> List.distinct with
+                            | [ head ] -> auditHead <- Some head
+                            | _ -> errors.Add "the submitted typed diff-audit receipts are not all bound to one head"
+
+                            // THE CALLER'S STATE IS NOT A VERDICT ABOUT THE SUBJECT (.github#2694, an
+                            // instance of .github#266 in the `facts` formulation). These are two different
+                            // facts, and `Option.bind snd` used to collapse them into one refusal:
+                            //
+                            //   `None`          — the caller supplied NO live delivery facts at all
+                            //                     (`parseReviewComments`, and `parseEffectiveReviewComments`
+                            //                     through it). Nothing was read, so nothing can be checked,
+                            //                     so this parse renders NO verdict about the receipts. That
+                            //                     is not a pass either: the receipt-decidable refusals above
+                            //                     and around it still stand, and the live check is performed
+                            //                     by the facts-bearing callers — `Review.acceptanceOutcome`
+                            //                     and the `driver` planner — which are the only callers that
+                            //                     can perform it at all.
+                            //   `Some(_, None)` — the caller DID read the live diff and independently
+                            //                     recomputed an EMPTY inventory. An empty answer is an
+                            //                     answer, not an absence, so it is checked against exactly
+                            //                     as any other inventory is: a receipt naming a rename the
+                            //                     engine did not find is stale, and now says so in those
+                            //                     words instead of blaming the facts.
+                            //
+                            // Refusing on `None` made a generation whose initial record sets
+                            // `diffAuditRequired: true` permanently unacceptable: `review record` seals its
+                            // acceptance through `parseEffectiveReviewComments`, the facts-free spelling, and
+                            // both escapes were closed — a second `initial` is refused until a host
+                            // acceptance that could never be written. Every receipt shape, correct or not,
+                            // produced that same one message, so the refusal separated nothing and removing
+                            // it withdraws no detection this parser ever had.
+                            match trustedFacts with
+                            | None -> ()
+                            | Some(_, trustedAudit) ->
+                                let trusted =
+                                    trustedAudit
+                                    |> Option.defaultValue ({ Expected = []; Discovered = [] }: SemanticDiff.TrustedAudit)
+
                                 for receipt in submitted do
                                     match
                                         trusted.Expected
@@ -549,10 +592,6 @@ module Driver =
                                 if not (List.isEmpty uncovered) then
                                     errors.Add
                                         $"the submitted typed diff-audit receipts account for %d{trusted.Discovered.Length - uncovered.Length} of %d{trusted.Discovered.Length} discovered occurrences"
-
-                                match submitted |> List.map _.HeadSha |> List.distinct with
-                                | [ head ] -> auditHead <- Some head
-                                | _ -> errors.Add "the submitted typed diff-audit receipts are not all bound to one head"
 
                 if errors.Count = 0 then
                     let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. confirmations.Length ]
