@@ -49,6 +49,14 @@ module LifecycleProjection =
     /// Reads the newest valid durable receipt from issue comments.
     val tryWatermark: string list -> Watermark option
 
+    /// The operator-writable intent channel (.github#2690): the fresh intent an EXPLICIT status write
+    /// records, so the write survives the next reducer pass instead of being silently recomputed away.
+    /// `None` for every column intent does not decide — `Blocked` (already re-derived from its own durable
+    /// park, and a frozen `HumanPark` here could never be lifted), the three observation-projected columns,
+    /// and `NoStatus`. `observedAt` must be the reducer's own Unix-millisecond clock: `tryWatermark` orders
+    /// by it, and that ordering is what makes a decision recorded now outrank one frozen hours ago.
+    val explicitStatusWatermark: observedAt: int64 -> reason: string -> BoardStatus -> Watermark option
+
     /// Pure lifecycle reducer: observed facts, scheduling intent, and policy version are separate inputs.
     val reduce: PolicyVersion -> SchedulingIntent -> Observation -> Result
 

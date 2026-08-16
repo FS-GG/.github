@@ -153,7 +153,11 @@ module AddStatusDefaultTests =
     /// different rule and a refusal there would stop these legs before they reached the board at all.
     let private IssueBody = """{"number":42,"body":"Paths: src/Thing.fs\n\nClass: defect"}"""
 
-    let private worldWithBodyAndBlockedBy (column: Column) issueBody blockedBy =
+    /// .github#2690: `add`'s Status write now also records a lifecycle intent, and that receipt is a
+    /// comment POST on the row. `posted` is where this fixture keeps it, so a leg can anchor on the
+    /// RECEIPT — the bytes that reach GitHub — rather than on the stderr sentence about it, which is the
+    /// same rule the board-write assertions above already follow.
+    let private worldCapturing (posted: ResizeArray<string>) (column: Column) issueBody blockedBy =
         let board = Board column
 
         Fake.Recorder(fun (req: Request) ->
@@ -170,8 +174,23 @@ module AddStatusDefaultTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok issueBody
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/9" -> ok """{"number":9,"body":"Paths: docs/reports/new-file.md"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/9/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok "[]"
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                match req.Body with
+                | Json payload ->
+                    use doc = System.Text.Json.JsonDocument.Parse payload
+
+                    match doc.RootElement.TryGetProperty "body" with
+                    | true, value -> posted.Add(value.GetString())
+                    | _ -> failwith "the engine posted a comment with no body"
+
+                    ok """{"id":9042}"""
+                | _ -> Error(Errors.NotFound "a comment POST with no JSON payload")
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private worldWithBodyAndBlockedBy (column: Column) issueBody blockedBy =
+        worldCapturing (ResizeArray()) column issueBody blockedBy
 
     let private worldWithBody (column: Column) issueBody = worldWithBodyAndBlockedBy column issueBody None
 
@@ -457,3 +476,69 @@ module AddStatusDefaultTests =
         match Options.parse [ "heartbeat"; "FS.GG.SDD#42"; "--status"; "Ready" ] with
         | Ok _ -> failwith "`heartbeat --status` must still be REFUSED — widening the scope table by one command may not widen it to all"
         | Error e -> Assert.Contains("--status", e)
+
+    // ---- .github#2690 DIRECTION C: THE #1823 DEFAULT HAD TO BE RECORDED, NOT ONLY WRITTEN -------------
+    //
+    // The stderr line this default already printed promised the row was *"VISIBLE to triage, but NOT
+    // startable … promoting it there is a deliberate act"*. That sentence was false for the whole of
+    // #1823's life. `Backlog` records no intent, and the next `reconcile --apply` pass derived `Auto` from
+    // the row's own declared paths and promoted it — with no operator anywhere in the loop, which is why
+    // .github#2690 calls this the direction that needs no deliberate park to go wrong. `#2678`, `#2679`,
+    // `#2683`, `#2684` and `#2688` all read `Ready` within the hour of being filed to `Backlog`.
+    //
+    // THE PAIR IS THE GATE HERE TOO, for this module's own stated reason: the risk is not that the receipt
+    // fails to fire, it is that it fires when `add` did NOT write a column. A receipt on the idempotence
+    // arm would record an intent for a row somebody else's `In progress` claim owns, and `tryWatermark`
+    // takes the NEWEST receipt — so it would outrank the real one.
+
+    let private watermarksIn (posted: ResizeArray<string>) =
+        posted
+        |> Seq.map (fun b -> b.Trim())
+        |> Seq.filter (fun b -> b.StartsWith "<!-- fsgg:lifecycle-watermark" && b.EndsWith "-->")
+        |> List.ofSeq
+
+    [<Fact>]
+    let ``.github#2690 the #1823 default records the Backlog intent that keeps the row parked`` () =
+        let posted = ResizeArray<string>()
+        let transport = worldCapturing posted NotOnBoard IssueBody None
+
+        let code, out = runAdd transport [ "add"; "FS.GG.SDD#42" ]
+
+        Assert.Equal(0, code)
+        Assert.Equal(NewItemId, out.Trim())
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_backlog"), $"%A{transport.Log}")
+
+        // `IssueBody` declares `Paths: src/Thing.fs`, so `lifecyclePolicyIntent` answers `Auto` for this
+        // row and `Auto` projects `Ready`. The receipt below is the only thing that outranks it.
+        let recorded = List.exactlyOne (watermarksIn posted)
+        Assert.Contains("intent=backlog", recorded)
+        Assert.Contains("status=Backlog", recorded)
+
+    [<Fact>]
+    let ``.github#2690 add records NOTHING on the arm where it writes no column`` () =
+        // AC4's row, from the intent side. `add` is idempotent and re-run routinely; a receipt minted here
+        // would assert a scheduling decision nobody made, on a row already claimed and `In progress`.
+        let posted = ResizeArray<string>()
+        let transport = worldCapturing posted (OnBoardSet "In progress") IssueBody None
+
+        let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42" ]
+
+        Assert.Equal(0, code)
+        Assert.False(transport.Logged "single-select-option-id", $"no column may be written here: %A{transport.Log}")
+        Assert.Empty(watermarksIn posted)
+
+    [<Fact>]
+    let ``.github#2690 an explicit add --status Ready records the Auto intent`` () =
+        // `--status` is the caller naming the column — `set-field <ref> Status <S>` reached from `add`
+        // (#1823 AC2) — so it carries the channel for the same reason the default does.
+        let posted = ResizeArray<string>()
+        let transport = worldCapturing posted NotOnBoard IssueBody None
+
+        let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.Equal(0, code)
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_ready"), $"%A{transport.Log}")
+
+        let recorded = List.exactlyOne (watermarksIn posted)
+        Assert.Contains("intent=auto", recorded)
+        Assert.Contains("status=Ready", recorded)

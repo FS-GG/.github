@@ -134,6 +134,70 @@ module LifecycleProjection =
         |> List.sortByDescending (fun receipt -> receipt.ObservedAt)
         |> List.tryHead
 
+    /// THE OPERATOR-WRITABLE INTENT CHANNEL (.github#2690).
+    ///
+    /// `Status` was an OUTPUT of this reducer with no input an operator could write. `set-field <ref>
+    /// Status <value>` wrote the column, recorded nothing, exited green, and the next `reconcile --apply`
+    /// pass recomputed the column from inputs the operator never touched — reverting them, in both
+    /// directions, with no error and no refusal. This is the missing input.
+    ///
+    /// IT IS NOT THE COLUMN READ BACK, AND THE DIFFERENCE IS THE WHOLE DESIGN. `lifecyclePolicyIntent`'s
+    /// refusal to consult `Status` is CORRECT and stays — *"callers at next/claim/reconcile cannot silently
+    /// turn a stale column back into intent"*. A stale column is not evidence of anything; it is this
+    /// reducer's own last output. What this function mints is a FRESH intent at the instant of an explicit
+    /// write, from the value the caller ASKED FOR — a fact that exists nowhere else and cannot be recovered
+    /// from the board afterwards. The caller supplies `observedAt`, and it must be the same
+    /// Unix-milliseconds clock the reducer observes on, because `tryWatermark`'s `sortByDescending` is what
+    /// makes a decision recorded now outrank one frozen hours ago.
+    ///
+    /// ONLY THE TWO COLUMNS INTENT ACTUALLY DECIDES GET ONE, and the `None`s are load-bearing rather than
+    /// unimplemented:
+    ///
+    ///   * `Ready` -> `Auto` and `Backlog` -> `Backlog`. These are the two arms of `projectWithIntent`'s
+    ///     final `match intent`, reached once every observed fact has settled. They are exactly the columns
+    ///     an operator can choose and the reducer can honour.
+    ///   * `Blocked` -> `None`, DELIBERATELY. A `Status Blocked` write is already refused unless the row
+    ///     carries a durable `Blocked by` field or a `Blocked on: human/...` sentinel
+    ///     (`requireCoherentParkIfBlocked`), and BOTH of those are re-derived on every pass — by
+    ///     `lifecyclePolicyIntent`'s `HumanBlock` arm and by the `Blockers` observation. So `Blocked` never
+    ///     had this defect, and minting a `HumanPark` here would INTRODUCE a worse one: `projectWithIntent`
+    ///     tests `isHumanPark` ABOVE the blocker observation precisely so a human hold survives active
+    ///     facts, which means a frozen `HumanPark` could no longer be lifted by closing the blocker that
+    ///     justified it. A park that outlives its own reason is the defect this row is about, wearing the
+    ///     fix's badge.
+    ///   * `In progress` / `In review` / `Done` -> `None`. Intent does not decide these at all: they are
+    ///     projected from claim, PR, delivery and issue facts, every one of them ABOVE the `match intent`.
+    ///     A watermark here would record an intent the reducer never reads for that column, while still
+    ///     suppressing policy re-derivation for the `Ready`/`Backlog` decision later — cost with no effect.
+    ///   * `NoStatus` -> `None`. Not a column anyone can choose; `statusOfName` never yields it.
+    ///
+    /// KNOWN RESIDUE, RECORDED RATHER THAN LOST (.github#2690 acceptance 5). A watermark's mere EXISTENCE
+    /// suppresses policy re-derivation — `Client.lifecycleSelection` defaults to `lifecyclePolicyIntent`
+    /// only when there is no watermark at all — so an intent recorded here is frozen against a LATER move
+    /// in the facts policy reads (`HumanBlock`, `Class`, `TouchSet`). That is the same freeze that produced
+    /// this row's own direction B, and this change does not close it; it makes it latent by putting a
+    /// fresher, correct intent on top, and it BROADENS the set of rows carrying a watermark at all.
+    /// Re-deriving an intent whose generating fact has moved is deliberately NOT attempted here: it would
+    /// have to decide when a recorded human decision may be overruled by a mechanical reclass, which is a
+    /// scheduling-authority question this row did not answer and a channel fix must not answer by accident.
+    /// It is owed as separate work.
+    let explicitStatusWatermark (observedAt: int64) (reason: string) (status: BoardStatus) : Watermark option =
+        let intent =
+            match status with
+            | BoardStatus.Ready -> Some Auto
+            | BoardStatus.Backlog -> Some(SchedulingIntent.Backlog { Revision = observedAt; Reason = reason })
+            | BoardStatus.Blocked
+            | BoardStatus.InProgress
+            | BoardStatus.InReview
+            | BoardStatus.Done
+            | BoardStatus.NoStatus -> None
+
+        intent
+        |> Option.map (fun intent ->
+            { ObservedAt = observedAt
+              Status = status
+              Intent = intent })
+
     let private latest observation =
         [ observation.Claim.ObservedAt; observation.PullRequest.ObservedAt; observation.Blockers.ObservedAt
           observation.Delivery.ObservedAt; observation.Issue.ObservedAt ]

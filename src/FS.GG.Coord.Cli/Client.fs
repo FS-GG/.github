@@ -3201,12 +3201,40 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         // that matters: it does not grow with the board's history.
                         let settledDone = item.State = Closed && item.Status = Done
 
+                        // `Backlog` IS ON THIS LIST, AND ITS ABSENCE WAS THE OTHER HALF OF .github#2690.
+                        //
+                        // This read is the ONLY place a row's lifecycle watermark is recovered — the
+                        // delivery facts and `tryWatermark` come out of the same `commentBodies` call, two
+                        // lines below — so a column excluded here is a column whose recorded intent the
+                        // reducer never sees. `lifecycleSelection` then falls through to
+                        // `lifecyclePolicyIntent`, which answers `Auto` for any row with declared paths, and
+                        // `Auto` projects `Ready`. That is a deliberate park promoted by a pass that did not
+                        // read the park, and no operator-writable intent channel could have survived it: the
+                        // receipt was written, and nothing ever looked.
+                        //
+                        // IT IS ALSO WHY .github#2690's DIRECTION C NEEDED NO OPERATOR AT ALL. `add` files a
+                        // row into an empty column at `Backlog` (#1823) precisely so promotion stays "a
+                        // deliberate act"; the very next pass skipped the read and promoted it anyway.
+                        // `#2678`, `#2679`, `#2683`, `#2684` and `#2688` all read `Ready` within the hour of
+                        // being filed.
+                        //
+                        // THE .github#2300 BOUND IS UNTOUCHED, and this is not a quiet reopening of it. That
+                        // skip's measured subject is CLOSED history — 2,159 of 2,181 rows, 1,847 billed REST
+                        // requests in one pass — and `settledDone` above still names exactly it. `Backlog` is
+                        // not history: it is the live triage queue, bounded by intake rather than by
+                        // everything the fleet has ever completed, and it is the same population as the
+                        // `Ready` rows one line down whose comments this pass already reads unconditionally.
+                        // So the increment is at most the order of the `Ready` cost already being paid, not
+                        // the order of the cost `#2300` removed. (The live Backlog row count is `unverified`
+                        // here: reading it needs a board scan, and a claimed worker gets one scan, spent on
+                        // `take`.)
                         let needsDeliveryRead =
                             not settledDone
                             && (item.State = Closed
                                 || item.Status = InReview
                                 || item.Status = InProgress
                                 || item.Status = Blocked
+                                || item.Status = BoardStatus.Backlog
                                 || item.Status = BoardStatus.Ready)
 
                         let delivery =
@@ -6320,6 +6348,50 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Some Board.Clear -> requireSentinelIfBlockedByCleared ctx ref
             | _ -> requireCoherentParkIfBlocked ctx ref requested
 
+    /// THE OPERATOR-WRITABLE INTENT CHANNEL (.github#2690) — the WRITE half, shared by every verb that
+    /// lands a Status column somebody explicitly named.
+    ///
+    /// `LifecycleProjection.explicitStatusWatermark` owns the rule (which columns record an intent, and why
+    /// the rest deliberately do not); this owns the IO and the failure vocabulary. Callers pass the column
+    /// they actually landed, never the one they hoped to.
+    ///
+    /// CALL IT ONLY AFTER THE COLUMN WRITE LANDED — `Ok Board.Written`, never `Deferred`. That is
+    /// `Writes.lifecycleWatermark`'s own stated contract (*"Persist the ordering receipt only after the
+    /// caller has freshly verified its board mutation"*): a deferred write has not happened, and `flush`
+    /// replays the column, not this.
+    ///
+    /// IT DOES NOT ADD A VERIFICATION READ, and that is a decision rather than an omission. `reconcile`
+    /// re-reads the row before persisting its watermark because the receipt it is about to write could
+    /// SUPPRESS a later event under `advance`'s ordering rule. Here the failure runs the other way and is
+    /// self-correcting: a watermark for a column write that somehow did not land makes the very next
+    /// reconcile pass compute the operator's intended column and WRITE it, which is the outcome the
+    /// operator asked for. Spending a GraphQL point per `set-field` to prevent a self-healing outcome is
+    /// not the trade `#418` asks for.
+    ///
+    /// A FAILURE HERE IS A FAILURE, and the caller must say so rather than exiting green. `reconcile`
+    /// already settled this vocabulary — a verified status whose watermark could not be persisted is
+    /// `Failed "verified status has no durable lifecycle watermark"`, not a warning — and the reason is the
+    /// whole of this row: a column with no intent behind it is reverted on the next pass, silently. The
+    /// caller that swallows this reproduces the defect it is fixing.
+    let private recordExplicitStatusIntent
+        (ctx: Context)
+        (ref: Ref)
+        (landed: BoardStatus)
+        (reason: string)
+        : Result<unit, string> =
+        let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+        match LifecycleProjection.explicitStatusWatermark observedAt reason landed with
+        | None -> Ok()
+        | Some watermark ->
+            Writes.lifecycleWatermark ctx.Transport ref (LifecycleProjection.watermarkMarker watermark)
+            |> Result.mapError Errors.explain
+
+    /// The one sentence every caller of the above prints when it fails, so three verbs cannot drift into
+    /// three different accounts of the same consequence.
+    let private explicitStatusIntentFailure (ref: Ref) (landed: BoardStatus) (why: string) : string =
+        $"fsgg-coord-engine: %s{ref.Short} Status=%s{statusWireName landed} LANDED on the board, but its scheduling intent could NOT be recorded (%s{why}) — so the next `reconcile --apply` pass will recompute this row from inputs you never touched and REVERT it (.github#2690). Nothing is queued and nothing replays it. Re-run this command once the transport recovers."
+
     let release (ctx: Context) (opts: Options) : int =
         match oneArg opts "release: an issue ref", worker opts with
         | Error c, _
@@ -6458,7 +6530,28 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     match
                                         Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
                                     with
-                                    | Ok Board.Written -> true
+                                    | Ok Board.Written ->
+                                        // .github#2690: `release --status <column>` is #867's OTHER door onto
+                                        // the deliberate column — the skill has documented it as the way to
+                                        // abandon an item into one since #331 — so it carries the same intent
+                                        // channel `set-field` does. Only the EXPLICIT flag does: the `None`
+                                        // branch above restores a column off the claim marker, which is this
+                                        // verb undoing its own claim, not an operator choosing anything.
+                                        //
+                                        // REPORTED, NEVER FATAL — #867's rule directly above, and it governs
+                                        // here a fortiori. The lock is already dropped, so this verb may not
+                                        // red; and a missing intent is strictly less damaging than the missing
+                                        // column that rule was written about. stderr carries the consequence.
+                                        match requested with
+                                        | None -> ()
+                                        | Some _ ->
+                                            match
+                                                recordExplicitStatusIntent ctx ref restoreTo $"explicit release --status by %s{w.Id}"
+                                            with
+                                            | Ok() -> ()
+                                            | Error why -> eprint (explicitStatusIntentFailure ref restoreTo why)
+
+                                        true
                                     | Ok Board.Deferred ->
                                         eprint
                                             $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
@@ -6865,7 +6958,20 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             for field, write in writes do
                                 printfn "  %s = %s" field (match write with | Board.Set v -> v | Board.Clear -> "<cleared>")
 
-                            ExitGreen
+                            // .github#2690: the batch door onto the same intent channel. `requestedStatus`
+                            // above is already exactly the landed column — the batch is all-or-nothing at
+                            // this arm (a partial write is `Errors.Partial`, matched before it), so the
+                            // pair this records really did land together.
+                            match requestedStatus with
+                            | None -> ExitGreen
+                            | Some status ->
+                                match
+                                    recordExplicitStatusIntent ctx ref status $"explicit set-field --batch by %s{w.Id}"
+                                with
+                                | Ok() -> ExitGreen
+                                | Error why ->
+                                    eprint (explicitStatusIntentFailure ref status why)
+                                    ExitError
                         | Ok Board.Deferred ->
                             printfn
                                 "set-field --batch %s — QUEUED all %d field(s) (budget exhausted; flush replays the batch)"
@@ -6921,7 +7027,29 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             (match write with
                              | Board.Set v -> v
                              | Board.Clear -> "<cleared>")
-                        ExitGreen
+
+                        // .github#2690: THE COLUMN IS NOT THE DECISION. Read the landed value off `write`
+                        // — the canonical pair `gateField` produced — rather than off raw argv, exactly as
+                        // the batch arm does, so the intent recorded is the one the board actually holds.
+                        // A `Clear` records nothing: an emptied column is the absence of a choice.
+                        let landed =
+                            if field = "Status" then
+                                match write with
+                                | Board.Set v -> Reads.statusOfName v
+                                | Board.Clear -> None
+                            else
+                                None
+
+                        match landed with
+                        | None -> ExitGreen
+                        | Some status ->
+                            match
+                                recordExplicitStatusIntent ctx ref status $"explicit set-field by %s{w.Id}"
+                            with
+                            | Ok() -> ExitGreen
+                            | Error why ->
+                                eprint (explicitStatusIntentFailure ref status why)
+                                ExitError
                     | Ok Board.Deferred ->
                         printfn
                             "set %s %s = %s — QUEUED (budget exhausted; flush replays it)"
@@ -9571,7 +9699,41 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     match writeOutcome with
                     | Ok Board.Written ->
                         eprint $"fsgg-coord-engine: Status=%s{value} on %s{ref.Short} — %s{why}"
-                        ExitGreen
+
+                        // .github#2690 direction C — THE ONE WITH NO OPERATOR IN IT AT ALL, and the reason
+                        // this arm covers the #1823 DEFAULT and not only `--status`. The stderr line
+                        // immediately above promises a freshly filed row is *"VISIBLE to triage, but NOT
+                        // startable … promoting it there is a deliberate act"*. That sentence was false:
+                        // nothing recorded the park, so the next `reconcile --apply` pass derived `Auto`
+                        // from the row's own declared paths and promoted it, with no operator anywhere in
+                        // the loop. `#2678`, `#2679`, `#2683`, `#2684` and `#2688` all read `Ready` within
+                        // the hour of being filed to `Backlog`. Recording the intent is what makes the
+                        // promise above true.
+                        //
+                        // `add`'s verdict stays GREEN for the reason its own `| _ ->` arm gives: the row IS
+                        // boarded, which is what `add` was asked to do, and reddening here would send a
+                        // filer back to re-run `add` rather than to the one write that is owed. The
+                        // consequence is on stderr, named, with the command that finishes it.
+                        // A SHORT, STABLE REASON — never `why`. `why` is the paragraph this verb prints to a
+                        // human; the reason is `Uri.EscapeDataString`d into a wire marker that every later
+                        // reconcile pass re-reads, and splicing four hundred characters of prose into it
+                        // would make the row's own receipt unreadable for no gain.
+                        let intentReason =
+                            match explicitStatus with
+                            | Some _ -> "explicit add --status"
+                            | None -> "add filed this row to Backlog pending triage (#1823)"
+
+                        match Reads.statusOfName value with
+                        | None -> ExitGreen
+                        | Some status ->
+                            match recordExplicitStatusIntent ctx ref status intentReason with
+                            | Ok() -> ExitGreen
+                            | Error reason ->
+                                eprint (explicitStatusIntentFailure ref status reason)
+                                eprint
+                                    $"fsgg-coord-engine: the row IS boarded and its Status IS set, so `add` is green — but re-run the column write to record the intent:  scripts/fsgg-coord set-field %s{ref.Short} Status %s{value}"
+
+                                ExitGreen
                     | _ ->
                         // Deferred / NotOnBoard / a failed mutation. `boardWriteNote` names what did
                         // NOT land and the exact command that finishes it. The verdict stays green:
