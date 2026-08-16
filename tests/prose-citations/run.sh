@@ -24,13 +24,17 @@ fixture() {
   git -C "$root" init -q
   git -C "$root" config user.email fixture@example.invalid
   git -C "$root" config user.name fixture
-  printf '# live\n\nSee `scripts/live.py:1`.\n' > "$root/docs/guide/live.md"
+  # Every fixture carries BOTH corpora, because the gate now refuses on either being empty.
+  printf '# live\n\nSee `scripts/live.py:1` and [the anchor](../target.md#the-anchor).\n' \
+    > "$root/docs/guide/live.md"
+  printf '# target\n\n## The anchor\n\nbody\n' > "$root/docs/target.md"
   printf 'print("live")\n' > "$root/scripts/live.py"
-  git -C "$root" add docs/guide/live.md scripts/live.py
+  git -C "$root" add docs/guide/live.md docs/target.md scripts/live.py
 }
 
 CLEAN="$WORK/clean"; fixture "$CLEAN"
 expect "clean non-empty local citation corpus is green" 0 "1 local citations" "$CLEAN"
+expect "clean non-empty section citation corpus is green" 0 "1 section citations" "$CLEAN"
 
 BROKEN="$WORK/broken"; cp -a "$CLEAN" "$BROKEN"
 printf '\nSee `scripts/removed-check.py:10`.\n' >> "$BROKEN/docs/guide/live.md"
@@ -70,6 +74,86 @@ expect "ADRs and dated reports are historical and exempt" 0 "1 local citations" 
 EMPTY="$WORK/empty"; mkdir -p "$EMPTY/docs"; git -C "$EMPTY" init -q
 printf '# no citation\n' > "$EMPTY/docs/readme.md"; git -C "$EMPTY" add docs/readme.md
 expect "zero extracted local citations is no-verdict, never vacuous green" 3 "zero repository-local" "$EMPTY"
+
+# --- section citations (.github#2660) ------------------------------------------------------------
+# The deletion that motivated this leg kept the target FILE tracked, so every file-existence check
+# above stays green over it. Only the heading is gone.
+DANGLING="$WORK/dangling"; cp -a "$CLEAN" "$DANGLING"
+printf '\nSee [the gone one](../target.md#a-deleted-section).\n' >> "$DANGLING/docs/guide/live.md"
+git -C "$DANGLING" add docs/guide/live.md
+expect "a fragment naming an absent heading in a TRACKED file is red" 1 \
+  "../target.md#a-deleted-section names no heading in docs/target.md" "$DANGLING"
+
+DELETED="$WORK/deleted-heading"; cp -a "$CLEAN" "$DELETED"
+printf '# target\n\n## Some other heading\n\nbody\n' > "$DELETED/docs/target.md"
+git -C "$DELETED" add docs/target.md
+expect "deleting the cited heading while keeping the file reds the gate" 1 \
+  "#the-anchor names no heading in docs/target.md" "$DELETED"
+
+MISSING_MD="$WORK/missing-md"; cp -a "$CLEAN" "$MISSING_MD"
+printf '\nSee [gone file](../removed.md#the-anchor).\n' >> "$MISSING_MD/docs/guide/live.md"
+git -C "$MISSING_MD" add docs/guide/live.md
+expect "a fragment whose target Markdown file is untracked is red" 1 \
+  "../removed.md#the-anchor does not name a tracked file" "$MISSING_MD"
+
+SAME_DOC="$WORK/same-doc"; cp -a "$CLEAN" "$SAME_DOC"
+printf '\n## Local heading\n\nBack to [it](#local-heading), and away to [nowhere](#not-here).\n' \
+  >> "$SAME_DOC/docs/guide/live.md"
+git -C "$SAME_DOC" add docs/guide/live.md
+expect "same-document fragments resolve against the citing file, and a bad one is red" 1 \
+  "#not-here names no heading in docs/guide/live.md" "$SAME_DOC"
+
+FENCED="$WORK/fenced"; cp -a "$CLEAN" "$FENCED"
+printf '# target\n\n```\n## The anchor\n```\n\nbody\n' > "$FENCED/docs/target.md"
+git -C "$FENCED" add docs/target.md
+expect "a heading inside a fenced block is not an anchor, so the extractor parses rather than greps" \
+  1 "#the-anchor names no heading in docs/target.md" "$FENCED"
+
+FOREIGN="$WORK/foreign"; cp -a "$CLEAN" "$FOREIGN"
+cat >> "$FOREIGN/docs/guide/live.md" <<'EOF'
+
+Out of grammar: [remote](https://github.com/FS-GG/.github/blob/main/docs/x.md#h), [prose reference to
+the numbered steps of the target](../target.md), and [a non-Markdown target](../../scripts/live.py#L1).
+EOF
+git -C "$FOREIGN" add docs/guide/live.md
+expect "URLs, plain links, and non-Markdown targets are outside the section grammar" \
+  0 "1 section citations" "$FOREIGN"
+
+# A link written inside code is an ILLUSTRATION of link syntax, not a live citation. Measured on
+# this gate's own PR: its plan documents the grammar as `](dest.md#fragment)` and the first draft
+# flagged its own documentation. Both legs carry a fragment that WOULD be red if it were read.
+QUOTED="$WORK/quoted"; cp -a "$CLEAN" "$QUOTED"
+printf '\nThe grammar is `](dest.md#no-such-heading)`, illustrated.\n' >> "$QUOTED/docs/guide/live.md"
+git -C "$QUOTED" add docs/guide/live.md
+expect "a fragment inside an inline code span is inert, not a citation" 0 "1 section citations" \
+  "$QUOTED"
+
+FENCED_SUBJECT="$WORK/fenced-subject"; cp -a "$CLEAN" "$FENCED_SUBJECT"
+cat >> "$FENCED_SUBJECT/docs/guide/live.md" <<'EOF'
+
+```markdown
+[an example](../target.md#no-such-heading)
+```
+EOF
+git -C "$FENCED_SUBJECT" add docs/guide/live.md
+expect "a fragment inside a fenced block is inert, not a citation" 0 "1 section citations" \
+  "$FENCED_SUBJECT"
+
+# ...and the inertness is bounded: the SAME fragment, unquoted, is still red. Without this leg
+# "quoted is inert" and "the predicate stopped working" would share an exit code.
+UNQUOTED="$WORK/unquoted"; cp -a "$CLEAN" "$UNQUOTED"
+printf '\nThe live one is [here](../target.md#no-such-heading).\n' >> "$UNQUOTED/docs/guide/live.md"
+git -C "$UNQUOTED" add docs/guide/live.md
+expect "the same fragment UNQUOTED is still red, so inertness is bounded" 1 \
+  "#no-such-heading names no heading in docs/target.md" "$UNQUOTED"
+
+NO_SECTIONS="$WORK/no-sections"; mkdir -p "$NO_SECTIONS/docs" "$NO_SECTIONS/scripts"
+git -C "$NO_SECTIONS" init -q
+printf '# live\n\nSee `scripts/live.py:1`.\n' > "$NO_SECTIONS/docs/live.md"
+printf 'print("live")\n' > "$NO_SECTIONS/scripts/live.py"
+git -C "$NO_SECTIONS" add docs/live.md scripts/live.py
+expect "zero extracted section citations is no-verdict, never vacuous green" 3 \
+  "zero Markdown section citations" "$NO_SECTIONS"
 
 expect "the shipped live-document corpus is green" 0 "prose-citations: ok" "$ROOT"
 echo "prose-citations fixture: $pass passed, $fail failed"
