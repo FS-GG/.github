@@ -4492,3 +4492,219 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Contains("FS.GG.SDD#74", out)
         Assert.DoesNotContain("nothing schedulable right now.", out)
         Assert.DoesNotContain("measured count, not an assumption", err)
+
+    // ---- .github#2690: the operator-writable intent channel, end to end -------------------------------
+    //
+    // WHY THESE LEGS ARE A `set-field` FOLLOWED BY A `reconcile`, AND CANNOT BE EITHER ALONE. The defect is
+    // invisible inside one command: `set-field` writes the column, exits 0, and the board is right at that
+    // instant. It is the NEXT reducer pass that recomputes the row from inputs the operator never touched
+    // and reverts it — ten minutes later, on `coord-board-reconcile.yml`'s `17 * * * *`. So the subject
+    // here is the SEAM, and the only thing that crosses it is a comment on the issue. That is why the
+    // fixture's comment list is mutable and is read back: served a canned `[]`, every assertion below
+    // passes identically with the fix reverted, which is `#1772`'s shape — a fixture testing a hand-written
+    // mirror of its subject instead of the subject.
+
+    /// The frozen receipt measured on `.github#2695`, byte for byte, at `2026-08-16T10:22:40Z`.
+    ///
+    /// Copied rather than constructed, because it IS the evidence. Its `observedAt` had advanced from the
+    /// `01:29:57Z` receipt (`1786843796660`) to `1786875759540` while its `revision` had NOT — the reducer
+    /// reuses the prior `IntentRecord` by value — so the bot re-asserted a nine-hour-old
+    /// `decision-class work requires a human decision` against a row whose `Class` had read `hardening` for
+    /// ten minutes. It did not re-judge; it structurally cannot, because a watermark's mere EXISTENCE
+    /// suppresses the policy re-derivation the reclass would have changed (`Client.lifecycleSelection`).
+    let private FrozenDecisionWatermark =
+        "<!-- fsgg:lifecycle-watermark v=2 observedAt=1786875759540 status=Blocked intent=human-decision revision=1786843796660 until=none reason=decision-class%20work%20requires%20a%20human%20decision -->"
+
+    /// One row whose column really changes and whose comments really accumulate.
+    type private IntentBoard(startColumn: string, seeded: string list) =
+        let comments = ResizeArray<string> seeded
+        let mutable column = startColumn
+
+        member _.Column = column
+        member _.SetColumn(value: string) = column <- value
+        member _.Comments = List.ofSeq comments
+        member _.Post(body: string) = comments.Add body
+
+        /// Only whole-body watermark receipts — `tryWatermark`'s own anchored rule, so a comment that
+        /// merely quotes one is not counted here either.
+        member _.Watermarks =
+            comments
+            |> Seq.map (fun b -> b.Trim())
+            |> Seq.filter (fun b -> b.StartsWith "<!-- fsgg:lifecycle-watermark" && b.EndsWith "-->")
+            |> List.ofSeq
+
+    let private StatusOptionNames =
+        Map.ofList
+            [ "opt_backlog", "Backlog"
+              "opt_ready", "Ready"
+              "opt_blocked", "Blocked"
+              "opt_wip", "In progress"
+              "opt_rev", "In review"
+              "opt_done", "Done" ]
+
+    let private intentChannelWorld (board: IntentBoard) (issueBody: string) =
+        let encodedBody = JsonSerializer.Serialize issueBody
+
+        let item () =
+            $"""{{"status":{{"name":"%s{board.Column}"}},"blockedBy":null,"class":{{"name":"hardening"}},"content":{{"__typename":"Issue","number":47,"title":"an operator-parked row","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}},"body":%s{encodedBody}}}}}"""
+
+        let commentsJson () =
+            board.Comments
+            |> List.mapi (fun i body ->
+                $"""{{"id":%d{9000 + i},"html_url":"https://example.invalid/c%d{i}","body":%s{JsonSerializer.Serialize body}}}""")
+            |> String.concat ","
+            |> fun rows -> $"[%s{rows}]"
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, variables) ->
+                    // THE DISPATCH ORDER IS `humanParkReconcileWorld`'S, DELIBERATELY. The board scan's own
+                    // `items(first: 100` document also selects `fieldValueByName`, so keying the per-item
+                    // read on that substring swallows the whole-board read and the pass fails as a
+                    // malformed response rather than as the thing under test.
+                    if document.Contains "projectItems" then
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field =
+                            variables
+                            |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+
+                        let value =
+                            match field with
+                            | Some "Status" -> $"""{{"name":"%s{board.Column}"}}"""
+                            | Some "Class" -> """{"name":"hardening"}"""
+                            | _ -> "null"
+
+                        ok $"""{{"data":{{"node":{{"fieldValueByName":%s{value}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    elif document.Contains "updateProjectV2ItemFieldValue" then
+                        // THE MUTATION MOVES THE FIXTURE'S OWN COLUMN. A board that did not change would
+                        // answer every later read with the pre-write value, and the revert these legs are
+                        // about would be unobservable — the fixture would agree with the defect.
+                        let fieldId =
+                            variables |> List.tryPick (fun (k, v) -> match k, v with | "fieldId", VId id -> Some id | _ -> None)
+
+                        let optionId =
+                            variables |> List.tryPick (fun (k, v) -> match k, v with | "optionId", VString id -> Some id | _ -> None)
+
+                        match fieldId, optionId |> Option.bind (fun id -> Map.tryFind id StatusOptionNames) with
+                        | Some "PVTSSF_status", Some name -> board.SetColumn name
+                        | _ -> ()
+
+                        ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "projectsV2" then
+                        ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "fields(first" then
+                        ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_wip","name":"In progress"},{"id":"opt_rev","name":"In review"},{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_defect","name":"defect"},{"id":"opt_hard","name":"hardening"},{"id":"opt_dec","name":"decision"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "items(first" then
+                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    else
+                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                ok (JsonSerializer.Serialize {| number = 47; body = issueBody |})
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (commentsJson ())
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                match req.Body with
+                | Json payload ->
+                    use doc = JsonDocument.Parse payload
+
+                    match doc.RootElement.TryGetProperty "body" with
+                    | true, value -> board.Post(value.GetString())
+                    | _ -> failwith "the engine posted a comment with no body"
+
+                    ok """{"id":9047}"""
+                | _ -> Error(Errors.NotFound "a comment POST with no JSON payload")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    /// The declaration that makes `lifecyclePolicyIntent` answer `Auto` — declared paths, no human hold.
+    /// It is what makes both legs below adversarial: policy, left to itself, promotes this row to `Ready`.
+    let private SchedulableBody = "Paths: src/A.fs\n\nClass: hardening"
+
+    [<Fact>]
+    let ``.github#2690 direction A: a deliberate Backlog park survives the next reconcile pass`` () =
+        let board = IntentBoard("Ready", [])
+        let world = intentChannelWorld board SchedulableBody
+
+        let setCode, _, setErr =
+            runReconcile world [ "set-field"; "FS.GG.SDD#47"; "Status"; "Backlog"; "--worker"; "rook-2690" ]
+
+        if setCode <> 0 then
+            failwithf "the park write itself failed: %s" setErr
+
+        Assert.Equal("Backlog", board.Column)
+
+        // THE RECEIPT, NOT THE PROSE. `set-field` printed "set … = Backlog" before this change too; what
+        // was missing is the durable intent, so that is what is asserted.
+        Assert.Equal(1, List.length board.Watermarks)
+        Assert.Contains("intent=backlog", List.exactlyOne board.Watermarks)
+        Assert.Contains("status=Backlog", List.exactlyOne board.Watermarks)
+
+        // AND NOW THE PASS THAT USED TO REVERT IT. `Paths: src/A.fs` is a schedulable declaration and the
+        // row carries no human hold, so `lifecyclePolicyIntent` answers `Auto` — which projects `Ready`.
+        // Only the receipt above stands between the operator's park and that promotion.
+        let reconcileCode, _, reconcileErr = runReconcile world (reconcileArgs [ "--apply" ])
+
+        if reconcileCode <> 0 then
+            failwithf "the reconcile pass failed: %s" reconcileErr
+
+        Assert.Equal("Backlog", board.Column)
+
+    [<Fact>]
+    let ``.github#2690 direction B: an explicit Ready outranks the frozen park that was re-parking the row`` () =
+        // `.github#2695`, reproduced. The row is `Blocked` under the frozen `human-decision` receipt
+        // measured on it; its `Class` reads `hardening` and has for ten minutes; and the operator schedules
+        // it. Before this change the next pass read that receipt back — the ONLY intent on the row — and
+        // re-parked it, because `lifecycleSelection` consults policy only when there is no watermark at all.
+        let board = IntentBoard("Blocked", [ FrozenDecisionWatermark ])
+        let world = intentChannelWorld board SchedulableBody
+
+        let setCode, _, setErr =
+            runReconcile world [ "set-field"; "FS.GG.SDD#47"; "Status"; "Ready"; "--worker"; "rook-2690" ]
+
+        if setCode <> 0 then
+            failwithf "the schedule write itself failed: %s" setErr
+
+        Assert.Equal("Ready", board.Column)
+        Assert.Equal(2, List.length board.Watermarks)
+
+        let recorded = board.Watermarks |> List.last
+        Assert.Contains("intent=auto", recorded)
+        Assert.Contains("status=Ready", recorded)
+
+        // THE FROZEN RECEIPT IS STILL THERE, and that is the point: nothing was deleted or rewritten. The
+        // channel wins on ORDER — `tryWatermark` sorts by `observedAt` — so the repair is additive and a
+        // reader can still see what the row used to believe.
+        Assert.Contains(FrozenDecisionWatermark, board.Watermarks)
+
+        let reconcileCode, _, reconcileErr = runReconcile world (reconcileArgs [ "--apply" ])
+
+        if reconcileCode <> 0 then
+            failwithf "the reconcile pass failed: %s" reconcileErr
+
+        Assert.Equal("Ready", board.Column)
+
+    [<Fact>]
+    let ``.github#2690 Blocked records NO intent, so clearing its cause still lifts the park`` () =
+        // THE DELIBERATE `None`, ASSERTED AT THE CLI BOUNDARY rather than only in the pure rule — a wiring
+        // that reached past `explicitStatusWatermark` would satisfy the Core test and still fail here.
+        // `Blocked` never had this defect (its coherent-park gate demands a durable cause that policy
+        // re-derives every pass), and minting a `HumanPark` for it would freeze a park that
+        // `projectWithIntent` deliberately lets outrank live facts — unliftable by closing the very blocker
+        // that justified it.
+        let board = IntentBoard("Ready", [])
+        let world = intentChannelWorld board "Paths: src/A.fs\n\nBlocked on: human/action"
+
+        let code, _, err =
+            runReconcile world [ "set-field"; "FS.GG.SDD#47"; "Status"; "Blocked"; "--worker"; "rook-2690" ]
+
+        if code <> 0 then
+            failwithf "a coherent human park must still be writable: %s" err
+
+        Assert.Equal("Blocked", board.Column)
+        Assert.Empty(board.Watermarks)

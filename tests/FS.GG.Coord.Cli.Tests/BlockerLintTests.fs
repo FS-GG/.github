@@ -680,6 +680,13 @@ module BlockerLintTests =
                         else
                             Error(Errors.NotFound $"the receipt fixture serves no answer for: %s{document}")
                     | _ -> Error(Errors.NotFound "a graphql call with no document")
+                // .github#2690: a landed `Status` write now also records the scheduling intent that keeps
+                // it — a comment on the row. It is served here rather than asserted on: what these legs are
+                // about is WHICH twin the mutation addressed, and the receipt is orthogonal to that. The
+                // channel's own coverage lives in `ApplicationServiceTests` and `LifecycleProjectionTests`,
+                // where the receipt is read back by the reconcile pass that used to revert it.
+                | "POST", "repos/FS-GG/rogue3/issues/96/comments"
+                | "POST", "repos/EHotwagner/rogue3/issues/96/comments" -> ok """{"id":9096}"""
                 | m, p -> Error(Errors.NotFound $"the receipt fixture serves no %s{m} %s{p}"))
 
     [<Theory>]

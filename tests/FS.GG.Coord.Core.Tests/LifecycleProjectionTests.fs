@@ -134,3 +134,114 @@ module LifecycleProjectionTests =
         let intent = LifecycleProjection.Backlog { Revision = 7L; Reason = "park" }
         let receipt : LifecycleProjection.Watermark = { ObservedAt = 1L; Status = Backlog; Intent = intent }
         Assert.Equal(LifecycleProjection.Project(Backlog, 1L), advance intent (Some receipt) idle)
+
+    // ---- .github#2690: the operator-writable intent channel, as a pure rule --------------------------
+
+    [<Fact>]
+    let ``2690 an explicit Ready or Backlog write mints the intent that reproduces it`` () =
+        Assert.Equal(
+            Some
+                ({ ObservedAt = 500L
+                   Status = Ready
+                   Intent = LifecycleProjection.Auto }: LifecycleProjection.Watermark),
+            LifecycleProjection.explicitStatusWatermark 500L "operator said so" Ready
+        )
+
+        Assert.Equal(
+            Some
+                ({ ObservedAt = 500L
+                   Status = Backlog
+                   Intent = LifecycleProjection.Backlog { Revision = 500L; Reason = "operator said so" } }
+                : LifecycleProjection.Watermark),
+            LifecycleProjection.explicitStatusWatermark 500L "operator said so" Backlog
+        )
+
+    [<Fact>]
+    let ``2690 no other column records an intent, and each None has its own reason`` () =
+        // `Blocked` is the one value that never had this defect: `requireCoherentParkIfBlocked` refuses the
+        // write unless the row carries a durable `Blocked by` or a `Blocked on: human/...` sentinel, and
+        // BOTH are re-derived every pass. Minting a `HumanPark` here would be strictly worse than the
+        // defect — `projectWithIntent` tests `isHumanPark` ABOVE the blocker observation, so the park could
+        // never again be lifted by closing the blocker that justified it. The two assertions below are that
+        // argument, executed: the frozen park outranks a cleared blocker, and no intent is minted for it.
+        let openBlocker =
+            { Ref = Some { Owner = "FS-GG"; Repo = ".github"; Number = 1 }
+              Raw = "FS-GG/.github#1"
+              State = BlockerOpen }
+
+        let idle = { observation with Claim = fact None }
+        let blocked = { idle with Blockers = fact [ openBlocker ] }
+        let cleared = { idle with Blockers = fact [ { openBlocker with State = BlockerClosed } ] }
+        let frozenPark = LifecycleProjection.HumanPark(AwaitingHumanDecision, { Revision = 1L; Reason = "frozen" })
+
+        Assert.Equal(LifecycleProjection.Project(Blocked, 1L), reduce LifecycleProjection.Auto blocked)
+        // The blocker is gone and `Auto` lets the row go Ready; the same observation under a frozen park
+        // stays Blocked forever. That is what minting one here would buy.
+        Assert.Equal(LifecycleProjection.Project(Ready, 1L), reduce LifecycleProjection.Auto cleared)
+        Assert.Equal(LifecycleProjection.Project(Blocked, 1L), reduce frozenPark cleared)
+        Assert.Equal(None, LifecycleProjection.explicitStatusWatermark 500L "r" Blocked)
+
+        // The three observation-projected columns. Intent does not decide any of them — every one is
+        // reached ABOVE `projectWithIntent`'s `match intent` — so a watermark here would record something
+        // the reducer never reads for that column while still suppressing policy re-derivation later.
+        for status in [ InProgress; InReview; Done ] do
+            Assert.Equal(None, LifecycleProjection.explicitStatusWatermark 500L "r" status)
+
+        // Not a column anyone can choose: `Reads.statusOfName` never yields it.
+        Assert.Equal(None, LifecycleProjection.explicitStatusWatermark 500L "r" NoStatus)
+
+    [<Fact>]
+    let ``2690 a fresh explicit intent outranks the frozen watermark that was reverting the row`` () =
+        // THE #2695 SHAPE, AS THE PURE CORE SEES IT — the exact pair of markers measured on that row:
+        // `observedAt` advanced from 1786843796660 to 1786875759540 while `revision` stayed frozen at
+        // 1786843796660, replaying a nine-hour-old `decision-class work requires a human decision` against
+        // a row whose Class had read `hardening` for ten minutes. `lifecycleSelection` consults policy ONLY
+        // when there is no watermark at all, so the reclass could not be seen. What repairs it is not a new
+        // policy read — it is a NEWER receipt, which is the whole reason `explicitStatusWatermark` takes the
+        // reducer's own clock.
+        let frozen: LifecycleProjection.Watermark =
+            { ObservedAt = 1786875759540L
+              Status = Blocked
+              Intent =
+                LifecycleProjection.HumanPark(
+                    AwaitingHumanDecision,
+                    { Revision = 1786843796660L
+                      Reason = "decision-class work requires a human decision" }) }
+
+        let operator =
+            match LifecycleProjection.explicitStatusWatermark 1786875800000L "explicit set-field by rook-2cdb" Ready with
+            | Some w -> w
+            | None -> failwith "an explicit Ready write must record an intent"
+
+        let comments =
+            [ LifecycleProjection.watermarkMarker frozen
+              LifecycleProjection.watermarkMarker operator ]
+
+        // BEFORE the operator write, the frozen park is what the next pass reads back, and it re-parks a
+        // row nobody asked to park. This half is the defect, asserted rather than described.
+        Assert.Equal(Some frozen, LifecycleProjection.tryWatermark [ List.head comments ])
+
+        let winner =
+            match LifecycleProjection.tryWatermark comments with
+            | Some w -> w
+            | None -> failwith "two well-formed receipts must parse"
+
+        Assert.Equal(operator, winner)
+
+        // And the reducer honours it: an idle row under the recovered intent projects Ready, where the
+        // frozen park projected Blocked against the identical observation.
+        let idle = { observation with Claim = fact None }
+        Assert.Equal(LifecycleProjection.Project(Ready, 1L), reduce winner.Intent idle)
+        Assert.Equal(LifecycleProjection.Project(Blocked, 1L), reduce frozen.Intent idle)
+
+    [<Fact>]
+    let ``2690 the recorded intent survives its own wire round trip`` () =
+        // The channel is only as good as the marker it writes: a receipt that does not parse back is an
+        // intent that was never recorded. Both minted shapes go out and come back identical.
+        for status in [ Ready; Backlog ] do
+            let minted =
+                match LifecycleProjection.explicitStatusWatermark 4242L "park: nothing is owed yet" status with
+                | Some w -> w
+                | None -> failwithf "%A must record an intent" status
+
+            Assert.Equal(Some minted, LifecycleProjection.tryWatermark [ LifecycleProjection.watermarkMarker minted ])
