@@ -20,6 +20,17 @@ module ApplicationServiceTests =
     let private currentRouteComment (subject: string) (body: string) =
         StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-route" None
 
+    /// .github#2698 — a ledger holding exactly that receipt, as `Reads.commentBodies` reads it.
+    ///
+    /// Every `Status=Ready` write now passes `requireCurrentRouteIfReady`, so a scripted success world
+    /// that PROMOTES a row must model a routed row or it is modelling the defect. These fixtures answered
+    /// their comment endpoint with `[]`, which is precisely the state the new refusal exists to stop, and
+    /// each one below is a leg whose subject is something else entirely (external-owner canonicalisation,
+    /// the partial two-field receipt, the sentinel gate, the intent channel). Overriding the endpoint is
+    /// the convention the doc comment above already prescribes for legs that mean the OTHER answer.
+    let private routedLedger (subject: string) =
+        JsonSerializer.Serialize [| {| id = 7900; body = currentRouteComment subject "" |} |]
+
     [<Fact>]
     let ``#2137 SDD delivery evidence accepts only the current implementationReady work package`` () =
         let current : DeliveryRoute.Receipt =
@@ -2416,7 +2427,7 @@ module ApplicationServiceTests =
             // what it must carry; the `DeclaredNone` path has its own fixture below.
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok """{"number":47,"body":"Paths: src/A.fs"}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (routedLedger "FS-GG/FS.GG.SDD#47")
             | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
@@ -2621,7 +2632,7 @@ module ApplicationServiceTests =
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok (System.Text.Json.JsonSerializer.Serialize {| number = 47; body = body |})
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (routedLedger "FS-GG/FS.GG.SDD#47")
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
@@ -2799,7 +2810,7 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/issues/96" ->
                 ok """{"number":96,"state":"open","body":"Paths: src/A.fs"}"""
-            | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok "[]"
+            | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (routedLedger "EHotwagner/rogue3#96")
             | "POST", "repos/EHotwagner/rogue3/issues/96/comments" -> ok """{"id":9096}"""
             | "GET", "repos/EHotwagner/rogue3/pulls" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
@@ -3225,7 +3236,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                     | _ -> Error(Errors.NotFound "a graphql call with no document")
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                     ok """{"number":47,"body":"Paths: src/A.fs\n\nBlocked on: human/decision"}"""
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (routedLedger "FS-GG/FS.GG.SDD#47")
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
                 | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
                 | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
@@ -4548,8 +4559,11 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let item () =
             $"""{{"status":{{"name":"%s{board.Column}"}},"blockedBy":null,"class":{{"name":"hardening"}},"content":{{"__typename":"Issue","number":47,"title":"an operator-parked row","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}},"body":%s{encodedBody}}}}}"""
 
+        // .github#2698: the row's receipt rides in front of whatever the board has posted. It is prepended
+        // rather than seeded per-test because EVERY leg here drives a lifecycle Status write, and
+        // `board.Watermarks` filters on the watermark marker, so it cannot disturb what these legs assert.
         let commentsJson () =
-            board.Comments
+            (currentRouteComment "FS-GG/FS.GG.SDD#47" "" :: board.Comments)
             |> List.mapi (fun i body ->
                 $"""{{"id":%d{9000 + i},"html_url":"https://example.invalid/c%d{i}","body":%s{JsonSerializer.Serialize body}}}""")
             |> String.concat ","

@@ -3070,6 +3070,62 @@ module Client =
                     | Ok _ -> eprint "fsgg-coord-engine: Status=Blocked refuses an incoherent park (.github#2079)."; Error ExitError
                     | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: body unreadable ({Errors.explain e})"; Error ExitError
 
+    /// THE ONE RESOLVED-STATUS BOUNDARY FOR A `Ready` WRITE (.github#2698) — the deliberate mirror of
+    /// `requireCoherentBlockedWrite` directly above, and placed beside it so the two lifecycle columns
+    /// that carry a precondition carry it in one shape rather than two.
+    ///
+    /// A row boarded `Ready` with no current delivery-route receipt is UNSCHEDULABLE FROM BIRTH and says
+    /// nothing about it. `Schedulability.schedulable` maps a `Stale`/`Unreadable` route to
+    /// `AwaitingDeliveryRouteDecision`, `Batch.scheduleWith` then skips the row and reserves no lane —
+    /// while every board projection keeps reporting it as available work. That is the same shape
+    /// `.github#2220` closed for `Paths: none`, reached through a different missing precondition.
+    ///
+    /// IT IS A REFUSAL, NOT A CORRECTION, and never an authoring path. `DeliveryRoute.fs`'s own validator
+    /// says the route *"is required and must be agent-authored"*: an engine that picked `lightweight`
+    /// here to keep the promotion moving would be minting the one judgement the receipt exists to record.
+    /// So this converts a SILENTLY unschedulable row into a LOUD refusal at the moment the promoting
+    /// agent still holds the context a route decision needs, and names the command that authors one.
+    ///
+    /// IT IS SHARED BECAUSE ONE SEAM WAS NEVER THE WHOLE OF IT. The filed acceptance criterion named
+    /// `add --status Ready` alone; a host then measured seven rows reaching `Ready` on 2026-08-16 and NOT
+    /// ONE of them went through that seam (`.github#2698#issuecomment-5309155317`). `add` with no
+    /// `--status` defaults to `Backlog` (#1823), so the real paths were `set-field Status Ready` and —
+    /// for five of the seven — `reconcile --apply`, which derived `Ready` from policy and promoted rows
+    /// their operator had deliberately parked in `Backlog`, with no operator action at all. A rule
+    /// enforced only where a human types it is a rule a scheduled job walks around, so every caller that
+    /// RESOLVES a `Status=Ready` mutation passes through here, the reducer included.
+    ///
+    /// IT FAILS CLOSED ON AN UNREAD LEDGER (#266): a receipt we could not READ is not a receipt we may
+    /// declare absent — nor one we may declare present. The underlying IO error's own exit code is
+    /// preserved rather than flattened to 1, so a rate-limited read stays EX_RATE and keeps its back-off
+    /// contract instead of reading to a JSON worker as a permanent refusal.
+    let private requireCurrentRouteIfReady (ctx: Context) (ref: Ref) (status: BoardStatus option) : Result<unit, int> =
+        if status <> Some BoardStatus.Ready then Ok()
+        else
+            match readDeliveryRouteComments ctx ref with
+            | Error e ->
+                eprint
+                    $"fsgg-coord-engine: refusing Status=Ready on %s{ref.Short} — its delivery-route receipt ledger could NOT BE READ (%s{Errors.explain e}). That is a failed read, not an absent receipt, and it is not a present one either (#266). Nothing was written."
+
+                Error(Errors.exitCode e)
+            | Ok comments ->
+                match routeEvidence ref.Canonical comments with
+                | DeliveryRoute.Current _ -> Ok()
+                | DeliveryRoute.Stale reasons
+                | DeliveryRoute.Unreadable reasons ->
+                    let why = String.concat "; " reasons
+
+                    eprint
+                        $"fsgg-coord-engine: refusing Status=Ready on %s{ref.Short} — no current delivery-route receipt (%s{why}). Nothing was written."
+
+                    eprint
+                        "fsgg-coord-engine:   A row boarded Ready without one is UNSCHEDULABLE FROM BIRTH: `batch`/`take` pass it over as `awaiting an explicit current delivery-route decision`, while `ready` and every other projection keep reporting it as available work (.github#2698)."
+
+                    eprint
+                        $"fsgg-coord-engine:   The route is an agent judgement and this engine may not mint one. Author it, then re-run:  scripts/fsgg-coord delivery-route record %s{ref.Short} <receipt.json>"
+
+                    Error ExitError
+
     /// True only for the one shape `Board.bootstrap` emits when the configured Projects v2 board itself
     /// could not be resolved — a credential/visibility gap, not a real reconcile finding (round-2 review
     /// repair, .github#2264 PR #2271; the org-level remedy is tracked at .github#2332, not here).
@@ -3630,10 +3686,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                       // pair is `Status=Blocked`, re-check coherence immediately before the
                                       // transport mutation: the scan that derived this chore is stale by
                                       // definition once another actor can clear `Blocked by`.
-                                      let gate =
+                                      let resolvedStatus = if field = "Status" then Reads.statusOfName value else None
+
+                                      let blockedGate =
                                           if field = "Status" then
-                                              let status = Reads.statusOfName value
-                                              match status, Map.tryFind chore.Subject lifecycleWatermarks with
+                                              match resolvedStatus, Map.tryFind chore.Subject lifecycleWatermarks with
                                               // A typed HumanPark intent is itself the durable reason for
                                               // this lifecycle write. Requiring the old prose sentinel as
                                               // well would make the new-only reducer compute Blocked and
@@ -3641,9 +3698,77 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                               // Blocker-derived Auto writes still pass through the live
                                               // Blocked-by/body coherence boundary below.
                                               | Some Blocked, Some watermark when LifecycleProjection.isHumanPark watermark.Intent -> Ok()
-                                              | _ -> requireCoherentBlockedWrite ctx chore.Subject status
+                                              | _ -> requireCoherentBlockedWrite ctx chore.Subject resolvedStatus
                                           else
                                               Ok()
+
+                                      let gate =
+                                          if field = "Status" then
+                                              // .github#2698 — THE SEAM WITH NO OPERATOR IN IT, and the one
+                                              // the filed acceptance criterion did not name. A host measured
+                                              // `reconcile --apply` reporting `LIFECYCLE-PROJECTION-LAG …
+                                              // Status=Ready` for `.github#2721`-`#2723` and PROMOTING all
+                                              // three — rows deliberately set to `Backlog` to honour a
+                                              // design's ordering — with no `add`, no `set-field`, and no
+                                              // human in the loop. Every one landed `Ready` with no receipt
+                                              // and was then found unschedulable by `batch --explain`.
+                                              //
+                                              // So the reducer is gated exactly as the operator doors are.
+                                              // This does NOT stop the reducer DERIVING `Ready` — that
+                                              // projection has a purpose this row did not study — it stops
+                                              // the derived value being WRITTEN onto a row that cannot be
+                                              // scheduled once it lands.
+                                              //
+                                              // The receipt read is paid only on a row this pass is ALREADY
+                                              // about to write, never per board row — `enrichDeliveryRoutes`'
+                                              // own #2300 lesson, kept by placing the gate at the mutation
+                                              // rather than at the scan.
+                                              match blockedGate with
+                                              | Error rc -> Error rc
+                                              | Ok() -> requireCurrentRouteIfReady ctx chore.Subject resolvedStatus
+                                          else
+                                              Ok()
+
+                                      // WHICH CLASS OF OUTCOME IS A ROUTE REFUSAL? .github#2698 REPAIR 1,
+                                      // AND THE CHANGE MUST DECIDE IT RATHER THAN INHERIT IT.
+                                      //
+                                      // `coord-board-reconcile.yml` runs this pass on a SCHEDULE and ends
+                                      // `exit "$rc"` (`:347`, `:362`). It maps two conditions to
+                                      // `::warning:: + exit 0` — an unresolvable board (exit 4) and an
+                                      // exhausted budget (EX_RATE) — under a rule it states in its own
+                                      // words: those are "NO VERDICT, not a pass", and the mapping is
+                                      // "never for a genuine finding". Left in the `Failed` arm below, a
+                                      // route refusal exits 1 and REDS that scheduled workflow; and since
+                                      // nothing recurring authors a receipt, the red cannot self-clear —
+                                      // it would sit red until a human authored receipts by hand, on a
+                                      // `main` this item's own body already describes as wedged.
+                                      //
+                                      // IT IS NEITHER OF THOSE TWO CLASSES, AND IT IS NOT A FAILURE. The
+                                      // pass ran to completion and the board is not wrong; ONE derived
+                                      // remedy was declined because performing it needs a judgement this
+                                      // pass may not make. `reconcile`'s own contract already draws that
+                                      // line — "`--apply` may perform only remedies represented by
+                                      // `ChoreKind`; findings that require judgement remain report-only" —
+                                      // and the vocabulary for it already exists and is already used for a
+                                      // mechanically identical case: `NotAttempted`, which is what the
+                                      // `classFieldMissing` arm above emits for a remedy whose
+                                      // precondition lies outside this pass, WITHOUT failing it.
+                                      //
+                                      // So it is reported, loudly, and not failed. The refusal text (row,
+                                      // reason, and the command that authors a receipt) is already on
+                                      // stderr from the gate itself, the row carries `not-attempted` and
+                                      // its reason in the `--json` receipt, and `$rc` stays 0 for a pass
+                                      // whose only finding is "these rows owe a route decision".
+                                      //
+                                      // THE BLOCKED GATE'S CLASSIFICATION IS UNTOUCHED. It is a different
+                                      // judgement — an incoherent park is the board being wrong — and it
+                                      // keeps its `Failed` arm and its non-zero exit. That is also why
+                                      // these two are told apart here rather than through `gate`, whose
+                                      // `Result.isError` cannot say WHICH boundary refused: before this,
+                                      // a route refusal was reported to the operator as a
+                                      // "Status=Blocked coherence gate" refusal, naming a gate that had
+                                      // returned `Ok`.
+                                      let routeRefused = Result.isError gate && Result.isOk blockedGate
 
                                       let outcome =
                                           match gate with
@@ -3708,6 +3833,19 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                           | Json -> ()
 
                                           reconcileRow chore (Some Deferred)
+                                      // .github#2698 — THE ROUTE REFUSAL, REPORTED AND NOT FAILED. Matched
+                                      // BEFORE the `Result.isError gate` arm below, which is the
+                                      // `Status=Blocked` coherence refusal and keeps its non-zero exit.
+                                      // The reason travels in the receipt so a `--json` reader gets the
+                                      // row, the rule, and what is owed; the gate itself has already put
+                                      // the full refusal and the authoring command on stderr.
+                                      | Ok Board.NotOnBoard when routeRefused ->
+                                          reconcileRow
+                                              chore
+                                              (Some(
+                                                  NotAttempted
+                                                      $"%s{chore.Subject.Short} has no current delivery-route receipt, so Status=Ready was NOT written — a row promoted without one is unschedulable. The route is an agent judgement this pass may not make: scripts/fsgg-coord delivery-route record %s{chore.Subject.Short} <receipt.json>"
+                                              ))
                                       | Ok Board.NotOnBoard when Result.isError gate ->
                                           failed <- true
                                           reconcileRow chore (Some(Failed "Status=Blocked coherence gate refused the stale reconcile write"))
@@ -6441,6 +6579,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | Error c -> c
                 | Ok() ->
 
+                // .github#2698 — `release <ref> --status Ready` is `set-field <ref> Status Ready`'s third
+                // door, and it is gated HERE, BEFORE `Writes.release` drops the lock, for the reason the
+                // #2079 gate directly above is: a refusal that arrives after the marker is deleted leaves
+                // the holder with no lock and no way to retry, which is strictly worse than the row it was
+                // protecting. Refused here, the lease is untouched — author the receipt and re-run.
+                //
+                // ONLY THE EXPLICIT FLAG. The claim-footprint restore below (`unclaimColumn`'s `ResetTo`,
+                // which can restore `Ready`) is deliberately NOT gated, and the reason is upstream rather
+                // than merely pragmatic: `claim` already runs `requireCurrentDeliveryRoute` on EVERY claim
+                // path including `--force`, so a lock cannot be held on a row without a current receipt in
+                // the first place. Restoring that claim's own footprint therefore promotes nothing that
+                // was not already routed — and the residual window (a receipt invalidated DURING the
+                // lease) is a stated, recorded hole rather than a reason to make lock-release refusable.
+                match requireCurrentRouteIfReady ctx ref requested with
+                | Error c -> c
+                | Ok() ->
+
                     match Writes.release ctx.Transport held with
                     | Error e -> fail e
                     | Ok previousStatus ->
@@ -6918,6 +7073,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Error rc -> rc
                     | Ok() ->
 
+                    // .github#2698, reached through the batch door — the same seam `set-field <ref> Status
+                    // Ready` uses, and gated from the same `requestedStatus` the park gate above already
+                    // resolved off the CANONICAL `write` pairs rather than off raw argv. Before any alias
+                    // is emitted, so a refused batch costs nothing and leaves the row exactly as it was.
+                    //
+                    // No batch-local variant is needed the way `Blocked` needed one: a route receipt is a
+                    // comment ledger on the issue, and no `set-field` document can write one, so there is
+                    // no pending-write-in-this-same-document case for the live read to race.
+                    match requireCurrentRouteIfReady ctx ref requestedStatus with
+                    | Error rc -> rc
+                    | Ok() ->
+
                     match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                     | Error e -> fail e
                     | Ok board ->
@@ -7011,6 +7178,26 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // A no-op for every other field/value pair (`requireCoherentParkIfBlocked` itself is a
                 // no-op unless the resolved status is `Blocked`).
                 match requireCoherentParkIfBlocked ctx ref (if field = "Status" then Reads.statusOfName value else None) with
+                | Error rc -> rc
+                | Ok() ->
+
+                // .github#2698 — THE SEAM THE FILED AC MISSED AND THE ONE OPERATORS ACTUALLY USE. `add`
+                // with no `--status` defaults to `Backlog` (#1823), so `set-field <ref> Status Ready` is
+                // how a triaging host promotes a row; three of the seven instances the host measured on
+                // 2026-08-16 came through this exact command. Refused BEFORE any board read or write.
+                //
+                // Resolved off `write` — the canonical pair `gateField` produced — and not off raw argv,
+                // which is `.github#2690`'s own rule for the intent recorded further down this function:
+                // the column the board will actually hold is the one whose precondition must be checked.
+                let promotedStatus =
+                    if field = "Status" then
+                        match write with
+                        | Board.Set v -> Reads.statusOfName v
+                        | Board.Clear -> None
+                    else
+                        None
+
+                match requireCurrentRouteIfReady ctx ref promotedStatus with
                 | Error rc -> rc
                 | Ok() ->
 
@@ -9644,6 +9831,20 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // `Blocked by` field and the human sentinel keep exactly the same meaning as the
                 // other explicit Status=Blocked doors.
                 match requireCoherentParkIfBlocked ctx ref (if explicitStatus = Some "Blocked" then Some BoardStatus.Blocked else None) with
+                | Error c -> c
+                | Ok() ->
+
+                // .github#2698 AC1 — `add --status Ready` is a Status writer, exactly as `--status
+                // Blocked` is directly above, and it establishes its precondition in the same place and
+                // for the same reason: BEFORE item-add, because after it the otherwise-invisible board row
+                // already exists and `add` is documented as green once the row is boarded, so a later
+                // refusal could not undo it.
+                //
+                // AC2 — THE OTHER COLUMNS ARE UNTOUCHED. `explicitStatus` is `None` for a bare `add`, so
+                // the #1823 `Backlog` default below never reaches this gate, and neither does `--status
+                // Backlog` or `--status Blocked`. A row that is deliberately not yet schedulable owes no
+                // route decision; that is the whole point of parking it.
+                match requireCurrentRouteIfReady ctx ref (if explicitStatus = Some "Ready" then Some BoardStatus.Ready else None) with
                 | Error c -> c
                 | Ok() ->
 
