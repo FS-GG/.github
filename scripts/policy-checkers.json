@@ -108,6 +108,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/claim-generation/run.sh",
       "workflow": ".github/workflows/coherence.yml"
+    },
+    {
+      "source": "scripts/check-claim-fence.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/claim-fence/run.sh",
+      "workflow": ".github/workflows/fsgg-claim-fence.yml"
     }
   ]
 }
