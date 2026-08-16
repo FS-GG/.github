@@ -61,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "8051d0ebfaf859f462c283a069b301bbc74ed0acb28d6dc4fde10affea56c839"
+        "value": "77f089001749bd133ed7ddba98b1a836b02c3abb450f80d633f4b163e1670571"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "6512c28aaa93f421c6d598b5071592a656d0af80fa3a463602c61e79a368944f"
+        "value": "b646c615ad271c476e9138193d609e4bf8d6e5b1f8ed5222626644f1b0bc5683"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "31d5837d0e908c91c41198d0939b8ffe586d73d2b4fadc2fd75f5a6163b8f6c3"
+        "value": "75b3fdf024f9dd0a4f251deea75bc76bd1fc4426962c0f6584275c829cb583c7"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"

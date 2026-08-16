@@ -8758,12 +8758,21 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// the operation key is deliberately absent from it: the opkey answers idempotence, which is a
     /// different question asked at a different time (`Operation`, slice 1).
     ///
-    /// **`#516`'s ONE-ITEM-PER-WORKER REFUSAL IS NOT TRIPPED BY TAKING A GRANT WHILE HOLDING AN ITEM**, and
-    /// this is verified rather than assumed: that check scans the target repo's in-flight **board** items
-    /// for a live claim held by this worker on a different item, and the lock issue is off-board by
-    /// construction — closed, never added to the project, exactly as the chore lock is (ADR-0041's own
-    /// "`who` and `reap` do not see the chore lock"). A grant is not a board item, so it is not in the set
-    /// that check examines. `OpLockTests` pins that the lock ref never resolves to a board row.
+    /// **`#516`'s ONE-ITEM-PER-WORKER REFUSAL IS NOT TRIPPED BY TAKING A GRANT WHILE HOLDING AN ITEM.**
+    /// That check (`heldElsewhere`) scans the target repo's in-flight **board** items for a live claim held
+    /// by this worker on a different item, and the lock issue is off-board — closed, never added to the
+    /// project, exactly as the chore lock is (ADR-0041's own "`who` and `reap` do not see the chore lock").
+    /// A grant is not a board item, so it is not in the set that check examines.
+    ///
+    /// **WHAT THE TEST ACTUALLY PROVES, STATED NARROWLY BECAUSE THE OBVIOUS CLAIM OVERREACHES IT.**
+    /// `OpLockTests` asserts that `acquire` bills the GraphQL meter ZERO times, and Projects v2 is
+    /// reachable only over GraphQL — so what is pinned is *"acquiring the lock never reads the board"*.
+    /// That is NOT the same proposition as *"the lock issue is not on the board"*: board membership is a
+    /// fact about GitHub, and no scripted-transport unit test can establish it, because the fixture answers
+    /// whatever it is told to. The membership half was verified out-of-band instead, by reading all eight
+    /// lock issues back from the API (`projectItems` empty on every one), and is maintained by the rule in
+    /// each issue's body that it stays closed and off the board. Two halves, two different kinds of
+    /// evidence; conflating them would let a unit test appear to certify something it cannot see.
     module OpLock =
 
         /// TEN MINUTES, matching the chore lock's, and for the same argument. This bounds how long a DEAD

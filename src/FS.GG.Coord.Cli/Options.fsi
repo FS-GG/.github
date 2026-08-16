@@ -359,7 +359,7 @@ module Options =
     ///
     /// UNLIKE `choreLockRef`, THIS COVERS ALL EIGHT ROSTER REPOSITORIES — `FS.GG.Net` included, which the
     /// chore-lock table omits and which is one of the repositories the `.github#1858` incident reached.
-    /// `OptionsTests` proves that completeness against `registry/repos.yml` rather than against a
+    /// `OpLockTests` proves that completeness against `registry/repos.yml` rather than against a
     /// hand-checked list.
     ///
     /// `extra` is the per-deployment roster a vendored tenant may inject, matched on (owner, repo) under ANY

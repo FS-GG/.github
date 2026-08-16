@@ -33,8 +33,12 @@ Design §3, §4.1, §4.2, §6.3, §11.2, §11.3, §12.5 read in full before any 
 - CR-001 — met. Test derives the roster and reds if the parse finds fewer than eight rows.
 - CR-002 — met. `NoLockRef` arm asserted against an `unreachable` transport (0 REST, 0 GraphQL).
 - CR-003 — met. `Writes.fs`/`Writes.fsi` are absent from the diff; the CAS's own suites pass unmodified.
-- CR-004 — met for all four sites; consumer *behaviour* coverage is partial and named (DEF-001).
-- CR-005 — met. Six inversions run and recorded.
+- CR-004 — met for all four sites. Consumer *behaviour* coverage is partial and named (DEF-001), and the
+  structural gate that stands in for it was found evadable at round-1 review and repaired (CQ-007).
+- CR-005 — met, and STRENGTHENED at round-1 review. Six inversions originally; a seventh (the critic's
+  `_.Id` shorthand evasion) proved the CLI-layer gate did not bind and is now reproduced as evidence, and
+  two further inversions prove the new binding leg fails in both directions — narrowing the regex reds its
+  match half, over-widening it to `sortByDescending` reds its no-match half. Nine in total.
 - CR-006 — met. All eight read back `state=closed locked=false labels=0`, `projectItems` empty.
 - CR-007 — met. `check-adr-coherence.py` OK; fixture 17/17.
 - CR-008 — carried into the PR body and the worker's report.

@@ -92,6 +92,42 @@ models one holder per issue and cannot express two markers on one issue, and wid
 fixture many unrelated items depend on. That limit is stated in the PR body rather than left for a reviewer
 to discover.
 
+**CQ-007 (raised at round-1 review).** *The structural gate pair is what CQ-006 leans on for `reap` and
+`adopt`. Does it actually bind?*
+
+**It did not, and the repair is recorded here rather than absorbed into the diff.** The independent critic
+(`tern-c07c`) added a genuine fourth hand-rolled copy to `Client.fs` in F#'s `_.` shorthand —
+`markers |> List.sortBy _.Id |> List.tryHead` — left all three `Reads.lowestId` call sites intact so the
+companion call-count leg stayed satisfied, and **all 823 Cli tests passed**. A surviving subject-inversion
+is material by the contract's own definition, and this one was load-bearing: CQ-006 offers the gate pair as
+the *only* protection for `reap` and `adopt`, so a gate matching one spelling left those two paths
+effectively ungated.
+
+The cause was that the gate pinned a **spelling** rather than a **rule**. `_.` is not an exotic form —
+it appears 66 times in `src/**/*.fs` — so the evasion was one idiom away from being written by accident,
+and slices 4-8 need this same rule in this same layer, which supplies the motive.
+
+The repair widens the gate to three shapes (`sortBy`+take-first, `minBy`, `sortWith` over a comparison
+mentioning `.Id`) across `List`/`Seq`/`Array` and both selector spellings, and — the part that matters more
+than the widening — adds a **binding leg**: a corpus of nine spellings that must match and four lookalikes
+that must not. The two tree scans assert an ABSENCE, and an absence is equally satisfied by a regex that
+matches nothing, which is precisely how the first cut passed over a real copy. Widening until the tree is
+clean is not evidence that the widened gate binds; the corpus is.
+
+`Seq.sortBy` and `List.sortWith` were recorded by the critic as `unverified` — it did not execute them.
+They are covered anyway rather than fixing only the demonstrated spelling.
+
+**CQ-008 (raised at round-1 review).** *Does "acquire bills zero GraphQL calls" prove the lock issue is
+off-board?*
+
+**No, and the claim is narrowed to what was measured.** Zero GraphQL proves *acquire never reads the
+board* — a proposition about this code path. *The lock issue is not on the board* is a fact about GitHub,
+which no scripted-transport unit test can establish, because the fixture answers whatever it is told to.
+Criterion 7 needs both halves, and they now carry two different kinds of evidence: the first from the
+test, the second from reading all eight lock issues back from the API (`projectItems` empty on every one)
+and from the standing rule in each issue's body. The critic verified the property itself holds by reading
+`heldElsewhere` (`Client.fs:4686-4713`); what was wrong was the reasoning offered for it, not the result.
+
 ## Decisions
 
 - **DEC-001** Adopt §4.2's separable clause; convert all four copies; make the strong claim. *(CQ-001)*
@@ -103,6 +139,11 @@ to discover.
 - **DEC-005** Do not write the election marker; supply only the rule it is read through. *(CQ-005)*
 - **DEC-006** Add a behavioural ordering leg for `who`; state the `reap`/`adopt` behavioural gap explicitly
   and rely on the structural gate pair for them. *(CQ-006)*
+- **DEC-008** Gate the ordering **rule**, not one spelling of it: three shapes across three collection
+  modules and both selector forms, plus a match/no-match corpus that proves the gate binds in both
+  directions. *(CQ-007)*
+- **DEC-009** Scope the criterion-7 claim to "acquire never reads the board", and carry the board-membership
+  half as a live-read verification rather than as a unit-test assertion. *(CQ-008)*
 - **DEC-007** Give `opLockRef` the same injected-roster parameter `choreLockRef` has, but add **no** new
   environment variable in this slice — the shape stays symmetric without widening the deployment surface.
 

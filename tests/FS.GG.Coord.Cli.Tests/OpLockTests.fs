@@ -209,13 +209,22 @@ let ``a vendored deployment may inject its own lock, and it is consulted FIRST``
 
 [<Fact>]
 let ``acquire is the item CAS on the op-lock subject - and NEVER touches the board`` () =
-    // Criterion 7, and it is verified rather than assumed. `#516`'s one-item-per-worker refusal scans BOARD
-    // items for a live claim held by this worker on a different item; the lock issue is off-board by
-    // construction, so taking a grant while holding an item cannot trip it.
+    // Criterion 7, with the claim scoped to what this fixture can actually see.
     //
-    // The board is Projects v2, which this engine reaches ONLY over GraphQL. So "off-board" is not a claim
-    // about intent here — it is the assertion that acquiring the lock bills the GraphQL meter zero times.
-    // A future edit that reached for a board read to resolve, validate or record the grant would red this.
+    // `#516`'s one-item-per-worker refusal (`heldElsewhere`) scans BOARD items for a live claim held by
+    // this worker on a different item. Two facts together mean a grant cannot trip it, and they are
+    // established by two DIFFERENT kinds of evidence:
+    //
+    //   1. ACQUIRING THE LOCK NEVER READS THE BOARD — which is what this test pins. Projects v2 is
+    //      reachable only over GraphQL, so billing that meter zero times is the mechanical form of it. A
+    //      future edit reaching for a board read to resolve, validate or record a grant reds this leg.
+    //   2. THE LOCK ISSUE IS NOT ON THE BOARD — which this test canNOT pin, and must not pretend to. That
+    //      is a fact about GitHub, and a scripted transport answers whatever the fixture tells it to. It
+    //      was verified out-of-band by reading all eight lock issues back from the API (`projectItems`
+    //      empty on every one) and is maintained by the rule in each issue's body.
+    //
+    // Stating them separately is the point: (1) alone does not imply (2), and a green here would otherwise
+    // read as certifying something no unit test can observe.
     let transport =
         scripted
             [ ok "[]" // 1. read: the lock is free
@@ -288,12 +297,88 @@ let private code (relativePath: string) =
     |> String.concat "\n"
 
 /// "Lowest id wins, lease-free", in the spellings F# makes available for it.
+///
+/// **THE FIRST CUT OF THIS GATE MATCHED ONE SPELLING, AND A SPELLING IS NOT A RULE.** It pinned the
+/// explicit-lambda form only, so a genuine fourth copy written in F#'s `_.` shorthand —
+/// `markers |> List.sortBy _.Id |> List.tryHead` — sat in `Client.fs` with all 823 Cli tests green. An
+/// independent critic demonstrated exactly that on this branch, and it is reproduced as an inversion
+/// below rather than merely repaired. The shorthand is not exotic: `_.` appears 66 times in
+/// `src/**/*.fs` alone, so the evasion was one idiom away from being written by accident.
+///
+/// It matters more here than the same hole would elsewhere, for two reasons. This gate pair is the
+/// **sole** protection for `reap` and `adopt` — DEF-001 records that neither has a behavioural leg
+/// discriminating ordering — and slices 4-8 will need this same rule in this same layer, so the next
+/// copy has a reason to be written rather than merely an opportunity.
+///
+/// Three shapes, each across `List`/`Seq`/`Array` and both selector spellings:
+///
+///   1. **sort by id, then take the first** — the canonical form and its shorthand.
+///   2. **`minBy` on id** — the same answer without an intermediate sort.
+///   3. **`sortWith` over a comparison that mentions `.Id`, then take the first** — the hand-rolled
+///      comparator form.
+///
+/// `sortByDescending` is deliberately **absent**: that is a different rule (highest id), not a copy of
+/// this one, and matching it would red legitimate code. Likewise a bare `sortBy _.Id` with no take-first
+/// is legitimate ordering — `Reads.fs` does exactly that when it returns the whole marker list — so the
+/// take-first is required rather than optional. Both exclusions are pinned by the benign corpus below,
+/// because a gate that matched everything would be deleted by the first person it inconvenienced.
 let private orderingIdiom =
+    // (fun m -> m.Id)  |  _.Id
+    let selector = @"(?:\(\s*fun\s+\w+\s*->\s*\w+\.Id\s*\)|_\.Id)"
+    let coll = @"(?:List|Seq|Array)"
+    let takeFirst = coll + @"\.(?:tryHead|head)\b"
+
     Regex(
-        @"List\.sortBy\s*\(\s*fun\s+\w+\s*->\s*\w+\.Id\s*\)\s*\|>\s*List\.tryHead"
-        + @"|List\.minBy\s*\(\s*fun\s+\w+\s*->\s*\w+\.Id\s*\)"
-        + @"|List\.sortBy\s*\(\s*fun\s+\w+\s*->\s*\w+\.Id\s*\)\s*\|>\s*List\.head"
+        // 1. sort by id, then take the first
+        coll + @"\.sortBy\s*" + selector + @"\s*\|>\s*" + takeFirst
+        // 2. minBy on id
+        + "|" + coll + @"\.minBy\s*" + selector
+        // 3. sortWith over a comparison mentioning .Id, then take the first
+        + "|" + coll + @"\.sortWith\s*\([^()]*\.Id[^()]*\)\s*\|>\s*" + takeFirst
     )
+
+/// Spellings that MUST be caught, and lookalikes that must NOT be.
+///
+/// This is the gate's own non-vacuity leg, and it is separate from the tree scans on purpose: those two
+/// assert an ABSENCE, and an absence is equally satisfied by a rule that matches nothing at all. Widening
+/// a regex until the tree is clean is not evidence that the widened regex binds — this is.
+let private mustMatch =
+    [ "the canonical explicit lambda", "markers |> List.sortBy (fun m -> m.Id) |> List.tryHead"
+      // THE DEMONSTRATED EVASION (critic, round 1, head c680145c).
+      "the `_.` shorthand", "markers |> List.sortBy _.Id |> List.tryHead"
+      "shorthand taking head rather than tryHead", "markers |> List.sortBy _.Id |> List.head"
+      "minBy shorthand", "markers |> List.minBy _.Id"
+      "minBy explicit lambda", "markers |> List.minBy (fun m -> m.Id)"
+      "the Seq flavour", "markers |> Seq.sortBy _.Id |> Seq.tryHead"
+      "the Array flavour", "markers |> Array.sortBy _.Id |> Array.tryHead"
+      "a hand-rolled comparator", "markers |> List.sortWith (fun a b -> compare a.Id b.Id) |> List.tryHead"
+      "split across lines, as a formatter would leave it",
+      "markers\n    |> List.sortBy _.Id\n    |> List.tryHead" ]
+
+let private mustNotMatch =
+    [ // `Reads.fs`'s own marker scan: it returns the WHOLE sorted list, which is ordering, not election.
+      "a sort with no take-first", "markers |> List.sortBy _.Id"
+      "Reads.fs's Seq sort into a list", "found |> Seq.sortBy (fun m -> m.Id) |> List.ofSeq"
+      // A different field is a different question entirely.
+      "ordering by another field", "markers |> List.sortBy _.Worker |> List.tryHead"
+      // A different RULE, not a copy of this one.
+      "highest id wins", "markers |> List.sortByDescending _.Id |> List.tryHead" ]
+
+[<Fact>]
+let ``the ordering-idiom gate BINDS - every known spelling matches, and lookalikes do not`` () =
+    // Without this leg the two tree scans below are satisfiable by a regex that matches nothing, which is
+    // exactly how the first cut of this gate passed over a real fourth copy.
+    for label, snippet in mustMatch do
+        Assert.True(
+            orderingIdiom.IsMatch snippet,
+            $"the gate does NOT catch %s{label} — `%s{snippet}` would be an undetectable second copy"
+        )
+
+    for label, snippet in mustNotMatch do
+        Assert.False(
+            orderingIdiom.IsMatch snippet,
+            $"the gate wrongly flags %s{label} — `%s{snippet}` is legitimate, and a gate that reds on it gets deleted"
+        )
 
 [<Fact>]
 let ``the lease-free ordering rule is written EXACTLY ONCE, inside Reads`` () =

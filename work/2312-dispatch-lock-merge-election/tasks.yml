@@ -24,11 +24,11 @@ sources:
     schemaVersion: 1
   - label: clarifications
     path: work/2312-dispatch-lock-merge-election/clarifications.md
-    digest: 8051d0ebfaf859f462c283a069b301bbc74ed0acb28d6dc4fde10affea56c839
+    digest: 77f089001749bd133ed7ddba98b1a836b02c3abb450f80d633f4b163e1670571
     schemaVersion: 1
   - label: checklist
     path: work/2312-dispatch-lock-merge-election/checklist.md
-    digest: 6512c28aaa93f421c6d598b5071592a656d0af80fa3a463602c61e79a368944f
+    digest: b646c615ad271c476e9138193d609e4bf8d6e5b1f8ed5222626644f1b0bc5683
     schemaVersion: 1
   - label: plan
     path: work/2312-dispatch-lock-merge-election/plan.md

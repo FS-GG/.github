@@ -1516,7 +1516,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// omits `FS.GG.Net` — and `FS.GG.Net#58` is one of the two pull requests `.github#1858` measured as
     /// merged by the unlocked executor. A per-receiver table built the same way would inherit that hole in
     /// exactly the repository the incident reached, so the design makes the eighth row part of this slice's
-    /// acceptance and `OptionsTests` proves the completeness MECHANICALLY against `registry/repos.yml`
+    /// acceptance and `OpLockTests` proves the completeness MECHANICALLY against `registry/repos.yml`
     /// rather than against a hand-checked list that would rot the same way the seven-row table did.
     ///
     /// EMBEDDED BESIDE THE ROSTER, for `choreLockNumbers`' reason and not a new one (ADR-0042,
