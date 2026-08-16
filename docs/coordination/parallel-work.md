@@ -298,11 +298,14 @@ report `UNCLAIMED` (a markerless item is otherwise just an issue); only the mark
 **`overlap --active` / `widen` / `set-paths` do not read the column at all**, and that is a stronger
 rule rather than an exception to this one (FS-GG/.github#1779). Those three answer *"may I edit this
 file?"*, and a wrong `DISJOINT` there is **final** — nothing downstream re-decides it, because **there
-is no CAS on a file**. The column can disagree with a live marker in four ways, and `claim` exits green
+is no CAS on a file**. The column can disagree with a live marker in five ways, and `claim` exits green
 on all of them: the write **landed** (and a cached read shows the old value), was **deferred** on an
-exhausted budget, **failed permanently** (never queued, by #510 — so nothing will *ever* write it), or
-reported **not-on-board** (there is no row to write). A candidate set derived from rows misses the last
-two by construction. So the scan lists the repo's **open issues**, compares `Paths:` tokens first, and
+exhausted budget, **failed permanently** (never queued, by #510 — so nothing will *ever* write it),
+reported **not-on-board** (there is no row to write), or was **withheld** (FS-GG/.github#2645 — a fact
+the claim's lifecycle projection needed could not be READ, so no mutation was attempted at all and the
+column is deliberately untouched). A candidate set derived from rows misses the last three by
+construction, and the fifth is the one that is not a lag at all: nothing is queued, nothing is retrying,
+and the row stays as it was until the claim is re-run. So the scan lists the repo's **open issues**, compares `Paths:` tokens first, and
 reads a marker only for a row that actually collides — no board query, no cache tier, no deferral
 queue. It is also **cheaper**: measured live 2026-07-28, 24–31 GraphQL points a call → **0**.
 

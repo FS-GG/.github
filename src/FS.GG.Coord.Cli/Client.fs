@@ -2497,26 +2497,191 @@ module Client =
             watermark
             (lifecycleObservation observedAt item delivery)
 
+    /// The live `Blocked by` edges for ONE item — `Scan.blockersOf`'s per-board question asked at a write
+    /// boundary instead, exactly as `requireCoherentBlockedWrite` below asks the emptiness half of it.
+    ///
+    /// THE BOARD FIELD IS THE SOURCE, NOT THE BODY'S `Blocked by:` LINE. ADR-0045 makes the COLUMN the
+    /// typed dependency edge and `Scan` resolves precisely that (`row.BlockedByRaw`), so reading the body
+    /// here would be a second, disagreeing spelling of one edge — `.github#2079`'s divergence is a finding
+    /// `lint` REPORTS (`blockedByBodyDivergence` above), never a licence to prefer the other side of it.
+    ///
+    /// IT FAILS CLOSED IN BOTH DIRECTIONS, on `Scan.resolveBlocker`'s own terms: a token that is not a ref
+    /// is `BlockerUnparseable`, a lookup that could not be made is `BlockerUnknown` (`Reads.blockerState`'s
+    /// documented answer), and `Blockers.isResolved` clears NEITHER — "I could not look" is not "I looked
+    /// and it is fine" (#266). A transport failure that is not a per-ref verdict propagates, so the caller
+    /// can withhold rather than project a column over a board it only half read.
+    ///
+    /// THE TOKEN GRAMMAR IS ASKED FOR, NOT RESTATED — `Blockers.canonicalizeBlockedBy`, PER TOKEN. It is
+    /// the Core's one definition of what a `Blocked by` token is, and it accepts exactly what
+    /// `Scan.parseBlockerRef` accepts (a URL, `owner/repo#n`, `repo#n`, `#n`) — so this reader and the
+    /// board scan cannot drift about which edges hold. `parseRefIn` alone would have been the drift: it
+    /// also accepts a BARE `123`, which `Scan` calls `BlockerUnparseable` and therefore BLOCKS on, and a
+    /// reader that resolved a token the scan refuses is a fail-OPEN dressed as tolerance. Both refusal
+    /// shapes (`Placeholder`, `NotIssueRefs`) land on `BlockerUnparseable`, which is Scan's answer too.
+    ///
+    /// ZERO REST IS THE COMMON CASE: an item with no `Blocked by` value spends one resolver read (against
+    /// a board the caller has already bootstrapped) and no REST at all.
+    let private liveBlockers (ctx: Context) (board: Board.BoardMap) (ref: Ref) : Errors.IoResult<Blocker list> =
+        let unparseable token = { Ref = None; Raw = token; State = BlockerUnparseable }
+
+        let resolve (token: string) : Errors.IoResult<Blocker> =
+            match Blockers.canonicalizeBlockedBy ref.Owner ref.Repo token with
+            | Error _
+            | Ok None -> Ok(unparseable token)
+            | Ok(Some canonical) ->
+                match parseRefIn ref.Owner (Some ref.Repo) canonical with
+                // Unreachable: `canonicalizeBlockedBy` emits `owner/repo#n`, which `RefParsing.parse`
+                // accepts by construction. Fail closed anyway rather than assert it away (#266).
+                | Error _ -> Ok(unparseable token)
+                | Ok target ->
+                    Reads.blockerState ctx.Transport target.Owner target.Repo target.Number
+                    |> Result.map (fun state -> { Ref = Some target; Raw = target.Short; State = state })
+
+        match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
+        | Error e -> Error e
+        | Ok None -> Ok []
+        | Ok(Some raw) when String.IsNullOrWhiteSpace raw -> Ok []
+        | Ok(Some raw) ->
+            raw.Split ','
+            |> Array.map (fun token -> token.Trim())
+            |> Array.filter (fun token -> token <> "")
+            |> Array.fold
+                (fun acc token ->
+                    match acc with
+                    | Error e -> Error e
+                    | Ok blockers -> resolve token |> Result.map (fun blocker -> blockers @ [ blocker ]))
+                (Ok [])
+
     /// A successful lock is an observed lifecycle fact, not permission for the claim command to invent a
     /// column value. Route it through the same reducer as next/reconcile and fail closed if that reducer can
     /// no longer establish a destination.
-    let private claimLifecycleDestination observedAt (held: Writes.Held) =
+    ///
+    /// **.github#2645 — ROUTING THROUGH THE REDUCER WAS DONE; NOT INVENTING THE VALUE WAS NOT.** The
+    /// invention had simply moved one level down, from the column to the reducer's INPUTS:
+    ///
+    /// ```
+    /// PullRequest = fact None            // "this item has no PR"
+    /// Blockers    = fact []              // "nothing is blocking it"
+    /// Delivery    = fact { false; false }
+    /// Issue       = fact Open
+    /// ```
+    ///
+    /// `PullRequest = fact None` is the one that bit. It asserts *"there is no PR"* to a reducer whose whole
+    /// job is deciding a column from exactly that kind of fact, so the reducer correctly answered
+    /// `In progress` — it had been told the review does not exist. A worker holding an item at `In review`
+    /// who renewed its own lock with a bare `claim` therefore had the column silently reverted to
+    /// `In progress`, and `converged` (which required exactly `In progress`) reported that overwrite as
+    /// SUCCESS. Measured live on `.github#2546`. A reducer fed a fiction is not a projection of live state.
+    ///
+    /// So every fact is now READ, from the same places `lifecycleObservation` above reads them for
+    /// `next`/`reconcile`, and an unreadable one WITHHOLDS the write (`Error`) instead of being defaulted —
+    /// which is what the comment this function has always carried already instructed.
+    ///
+    /// **WHY `Delivery.Outstanding` IS THE ONE FACT STILL PASSED AS `false`, AND WHY THAT IS A PROOF RATHER
+    /// THAN THE OLD FABRICATION.** `lifecycleOfferChores` passes the same constant for the same reason.
+    /// `Outstanding` reaches `project`'s cascade only BELOW the closed-issue arms and ABOVE the PR arm, and
+    /// its own producer (`reconcile`'s `outstandingObligations`) is reached only through `item.ItemPr` —
+    /// which is `Reads.prAlive`'s OPEN-PR answer, the identical read below. So on every path where
+    /// `Outstanding` could be `true` here, an open PR exists, and the PR arm two lines later already
+    /// projects `In review`: the read cannot change this function's answer, and buying it would spend a
+    /// `prHeadSha` plus a whole PR comment thread per claim to re-derive a column already decided. That is
+    /// a reachability proof about THIS caller, not a default about the world — which is exactly the
+    /// distinction `PullRequest = fact None` failed to make.
+    ///
+    /// **THE `intent` ARGUMENT IS NOT AN OBSERVATION AND IS DELIBERATELY NOT DERIVED HERE.** It is the
+    /// human/policy scheduling input, whose one authority is the persisted watermark (reconcile's own
+    /// attributable `IntentRecord`) with `lifecyclePolicyIntent` as the fallback for callers holding a
+    /// scanned `Item`. `claim` holds no `Item` and no title, and re-deriving policy intent from a body
+    /// alone would be a SECOND, WEAKER spelling of that rule — `Class.fromBody` cannot see the `[decision]`
+    /// TITLE prefix `Class.derive` can — i.e. the rule-spelled-twice failure this codebase measures
+    /// everywhere else. So the watermark's intent is used when the row has one, and `Auto` (the value this
+    /// function already used) otherwise; parking a row whose only evidence is its title stays reconcile's.
+    ///
+    /// `advance`, not `reduce`: the persisted watermark is read here anyway (it rides in the same comment
+    /// thread as the done receipt), and honouring it is what stops a claim landing a column that an OLDER
+    /// observation would re-derive — the ordering guarantee `next`/`reconcile` already get for free.
+    let private claimLifecycleDestination
+        (ctx: Context)
+        (board: Board.BoardMap)
+        observedAt
+        (ref: Ref)
+        (held: Writes.Held)
+        : Result<BoardStatus, string> =
+
         let claim : Claim =
             { Worker = held.Worker
               Session = held.Session
               AgeSeconds = 0
               PreviousStatus = held.PreviousStatus }
         let fact value : LifecycleProjection.Fact<_> = { ObservedAt = observedAt; Value = value }
-        let observation : LifecycleProjection.Observation =
-            { Claim = fact (Some(claim, LeaseHeld))
-              PullRequest = fact None
-              Blockers = fact []
-              Delivery = fact ({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery)
-              Issue = fact Open }
-        match LifecycleProjection.reduce LifecycleProjection.IntentStatusV1 LifecycleProjection.Auto observation with
-        | LifecycleProjection.Project(destination, _) -> destination
-        | LifecycleProjection.Withheld reason ->
-            invalidOp $"claim lifecycle projection was withheld: %s{reason}"
+
+        // The item's OWN open `item/<n>-*` PR, constructed exactly as `lifecycleObservation` constructs it
+        // from `item.ItemPr`. `LivenessUnknown` and a propagated transport/rate-limit error are the two
+        // shapes that must NEVER collapse to "no PR" (Reads.prAlive's own contract, and .github#1924's
+        // open fail-open at Scan's call site): here they withhold.
+        let pullRequest =
+            match Reads.prAlive ctx.Transport ref.Owner ref.Repo ref.Number with
+            | Ok(LeaseExpiredPrOpen pr) ->
+                Ok(Some({ Number = pr; Open = true; ReviewOrCiActive = true }: LifecycleProjection.PullRequest))
+            // No open PR: `LeaseExpiredNoPr` and `LeaseExpiredBranchPushed` are both DEFINITE negatives
+            // about a PULL REQUEST (a pushed branch is proof of life, but it is not a PR, and `ItemPr`
+            // carries the same reading at Scan.fs's own probe).
+            | Ok LeaseExpiredNoPr
+            | Ok LeaseExpiredBranchPushed -> Ok None
+            | Ok LivenessUnknown -> Error "the item's open-PR probe could not be completed"
+            // UNREACHABLE — `Reads.prAlive` answers about a PR, never about a lease, so it cannot return
+            // `LeaseHeld`. An answer we did not expect is a read we could not make (#266), never a
+            // confident "no PR": the impossible case fails CLOSED rather than being folded into the
+            // negative arm above, where a future change to `prAlive`'s vocabulary would land silently.
+            | Ok LeaseHeld ->
+                Error "the item's open-PR probe answered `LeaseHeld`, which is not an answer about a pull request"
+            | Error e -> Error $"the item's open-PR probe failed: %s{Errors.explain e}"
+
+        let issue =
+            match Reads.issueState ctx.Transport ref.Owner ref.Repo ref.Number with
+            | Ok state -> Ok state
+            | Error e -> Error $"the issue's OPEN/CLOSED state could not be read: %s{Errors.explain e}"
+
+        // ONE read, TWO facts — the done receipt and the projection watermark are both ISSUE comments, and
+        // `reconcile` reads them off this same thread for the same pair of uses.
+        let comments =
+            match Reads.commentBodies ctx.Transport ref.Owner ref.Repo ref.Number with
+            | Ok bodies -> Ok bodies
+            | Error e -> Error $"the item's comment thread could not be read: %s{Errors.explain e}"
+
+        let blockers =
+            match liveBlockers ctx board ref with
+            | Ok values -> Ok values
+            | Error e -> Error $"the item's `Blocked by` edges could not be resolved: %s{Errors.explain e}"
+
+        // ALL FOUR READS ARE MADE, then judged — deliberately, not as an oversight. Short-circuiting on the
+        // first failure would make this path's cost depend on which read failed, and a claim whose spend
+        // varies with the weather is one no budget assertion can pin (`SchedulingCostTests`' standard, and
+        // the read-cost leg in `ClaimLifecycleDestinationTests`). The reads are independent and none of
+        // them writes, so making all four and reporting the first refusal costs at most three reads on the
+        // rare failing path and keeps the common one exactly measurable.
+        match pullRequest, issue, comments, blockers with
+        | Error reason, _, _, _
+        | _, Error reason, _, _
+        | _, _, Error reason, _
+        | _, _, _, Error reason -> Error reason
+        | Ok pullRequest, Ok issue, Ok comments, Ok blockers ->
+            let watermark = LifecycleProjection.tryWatermark comments
+
+            let observation : LifecycleProjection.Observation =
+                { Claim = fact (Some(claim, LeaseHeld))
+                  PullRequest = fact pullRequest
+                  Blockers = fact blockers
+                  Delivery =
+                    fact ({ Outstanding = false; DoneStamped = Done.hasReceipt comments }: LifecycleProjection.Delivery)
+                  Issue = fact issue }
+
+            let intent =
+                watermark |> Option.map _.Intent |> Option.defaultValue LifecycleProjection.Auto
+
+            match LifecycleProjection.advance LifecycleProjection.IntentStatusV1 intent watermark observation with
+            | LifecycleProjection.Project(destination, _) -> Ok destination
+            | LifecycleProjection.Withheld reason -> Error $"the lifecycle projection was withheld: %s{reason}"
 
     /// Next/AfterDone consume the same reducer as reconcile. Only its verified destination is admitted to
     /// the chore queue; Chore.derive remains unable to manufacture a Status repair.
@@ -5184,7 +5349,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         // the user-visible ledger. A green CAS cannot prove the latter. This receipt re-reads
                         // both AFTER the mutation and keeps every failure/lag explicit, so a worker can gate
                         // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
-                        let emitClaimReceipt (kind: string) (held: Writes.Held) statusOutcome =
+                        let emitClaimReceipt (kind: string) (held: Writes.Held) (projection: Result<BoardStatus * Result<Board.WriteOutcome, Errors.IoError>, string>) =
                             let markerObserved, markerId =
                                 match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
                                 | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
@@ -5217,19 +5382,39 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
                                         None, "failed"
 
+                            // The column the lifecycle reducer established for THIS claim, or `None` when it
+                            // withheld — .github#2645. Everything below that used to spell `In progress`
+                            // reads it from here, because a hard-coded destination in the receipt, the human
+                            // line or the write note is the same invention as a hard-coded observation: it
+                            // reports a column that was never the one at stake.
+                            let destination =
+                                match projection with
+                                | Ok(destination, _) -> Some(statusWireName destination)
+                                | Error _ -> None
+
                             let statusWrite =
-                                match statusOutcome with
-                                | Ok Board.Written -> "written"
-                                | Ok Board.Deferred -> "deferred"
-                                | Ok Board.NotOnBoard -> "not-on-board"
-                                | Error _ -> "failed"
+                                match projection with
+                                // FAIL CLOSED, AND SAY SO. Nothing was written — this is neither a failed
+                                // mutation (`failed`, which asserts one was attempted) nor a queued one
+                                // (`deferred`, which promises `flush` will land it). The lock is unaffected.
+                                | Error _ -> "withheld"
+                                | Ok(_, Ok Board.Written) -> "written"
+                                | Ok(_, Ok Board.Deferred) -> "deferred"
+                                | Ok(_, Ok Board.NotOnBoard) -> "not-on-board"
+                                | Ok(_, Error _) -> "failed"
 
                             let pending =
                                 match Cache.pending () with
                                 | Ok entries -> Some(List.length entries)
                                 | Error _ -> None
 
-                            let converged = markerObserved && status = Some "In progress"
+                            // .github#2645 AC3 — CONVERGENCE IS AGREEMENT WITH THE PROJECTION, NOT WITH ONE
+                            // LITERAL. `status = Some "In progress"` made the only convergent column the one
+                            // the fabricated observation always produced, so a mid-review re-affirm that
+                            // CORRECTLY leaves the row at `In review` would have reported drift, and the
+                            // revert this issue is about reported success. A withheld projection is never
+                            // convergent: there is no destination for the board to agree with.
+                            let converged = markerObserved && destination.IsSome && status = destination
 
                             let receipt: ClaimReceipt =
                                 { Ref = ref
@@ -5265,7 +5450,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
 
                                 if converged then
-                                    printfn "%sboard confirmed: marker=%d, Status=In progress)" humanPrefix held.MarkerId
+                                    printfn "%sboard confirmed: marker=%d, Status=%s)" humanPrefix held.MarkerId (destination |> Option.defaultValue "")
                                 else
                                     let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
                                     printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
@@ -5277,7 +5462,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     eprint
                                         $"fsgg-coord-engine: NOTE — this claim overlaps %d{List.length overlapCollisions} live claim(s); see OVERLAP lines above (or `overlap %s{ref.Short} --active`)."
 
-                            boardWriteNote ref "Status" "In progress" statusOutcome
+                            match projection with
+                            | Ok(destination, outcome) -> boardWriteNote ref "Status" (statusWireName destination) outcome
+                            // .github#2645 — a WITHHELD projection is reported here rather than swallowed: the
+                            // LOCK is held and the exit code is unaffected (`boardWriteNote`'s own rule for a
+                            // non-fatal board write), but the column was deliberately not moved, and a worker
+                            // must be able to tell that from a write that landed.
+                            | Error reason ->
+                                eprint
+                                    $"fsgg-coord-engine: the Status board write for %s{ref.Short} was WITHHELD — %s{reason}. The lock IS held; the column is UNCHANGED, because a column derived from a fact this process could not read would be an invention. Re-run `claim %s{ref.Short} --json` once the read recovers, or repair the column with `reconcile --apply`."
+
                             KitDigest.declaredWarn ctx.Transport ref
                             ExitGreen
 
@@ -5305,18 +5499,32 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     $"your expired claim on %s{ref.Short} was collected — worker '%s{w.Id}' has taken the item. Stop working it."
                                 |> ignore
 
-                        // Move the board column to In progress — the ONE board write, through the queue-aware
-                        // path so an exhausted budget defers rather than drops (#510).
-                        let setClaimLifecycle (held: Writes.Held) =
-                            let destination =
-                                claimLifecycleDestination (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) held
-                            let destinationWire = statusWireName destination
-                            let write b =
-                                Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set destinationWire) w.Id
-
+                        // Move the board column to the destination the lifecycle reducer derives from this
+                        // item's LIVE facts — the ONE board write, through the queue-aware path so an
+                        // exhausted budget defers rather than drops (#510).
+                        //
+                        // .github#2645: the destination is no longer `In progress` by construction, so it is
+                        // carried OUT of here beside the write's outcome. Every consumer below — the receipt,
+                        // its `converged` predicate, the human line, the write note — reports the column that
+                        // was actually at stake instead of a literal that was only ever true by accident.
+                        // `Error reason` is the fail-closed answer the function's own contract demands: a
+                        // fact could not be read, so NOTHING is written and the reason is reported.
+                        let setClaimLifecycle (held: Writes.Held) : Result<BoardStatus * Result<Board.WriteOutcome, Errors.IoError>, string> =
                             match board.Force() with
-                            | Error e -> Error e
-                            | Ok b -> write b
+                            | Error e -> Error $"the board could not be read: %s{Errors.explain e}"
+                            | Ok b ->
+                                claimLifecycleDestination ctx b (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) ref held
+                                |> Result.map (fun destination ->
+                                    destination,
+                                    Board.boardWrite
+                                        ctx.Transport
+                                        b
+                                        ref.Owner
+                                        ref.Repo
+                                        ref.Number
+                                        "Status"
+                                        (Board.Set(statusWireName destination))
+                                        w.Id)
 
                         let force =
                             if opts.Force then

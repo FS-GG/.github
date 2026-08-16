@@ -87,6 +87,12 @@ module Render =
           AssigneeObserved: string option
           Status: string option
           StatusRead: string
+          /// `written` / `deferred` / `not-on-board` / `failed` — `Board.WriteOutcome`'s three cases plus a
+          /// mutation that was attempted and rejected — or `withheld` (.github#2645): the lifecycle reducer
+          /// could not establish a destination from this item's live facts, so NO write was attempted and
+          /// the column is unchanged. `withheld` is deliberately distinct from both neighbours it would
+          /// otherwise be confused with: `failed` asserts a mutation was sent, and `deferred` promises
+          /// `flush` will still land one. Neither is true here, and the lock is unaffected either way.
           StatusWrite: string
           PendingBoardWrites: int option
           /// `claim`'s own #353 collision report (.github#2459) — every live claim THIS item's declared

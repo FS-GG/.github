@@ -338,8 +338,50 @@
 
        NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entries above record — 0.50.1
        and 0.50.5 are permanent partial sets precisely because they did not. -->
+
+  <!-- 0.59.0 to 0.60.0 (.github#2645): a MINOR bump, and it is owed because 0.59.0 PUBLISHED. Unlike
+       the 0.58.1 entry above, this is not a skip past a burned tag: `kit/v0.59.0`, `drivers/v0.59.0`
+       and `coord-engine/v0.59.0` were cut at 41199bd2 and all three packages serve 0.59.0 on
+       nuget.org. `check-kit-published-coherence` requires declared STRICTLY GREATER than published,
+       so a tree that edits a `kit:` source while still declaring 0.59.0 is refused: merging it would
+       leave every `coordination-kit` receiver materializing 0.59.0 whose bytes no longer match
+       canonical. This item edits two kit sources, so the bump is a precondition of landing it at all.
+
+       WHY THIS BUMP BELONGS TO THIS ITEM AND NOT TO A RELEASE ROW. `check-engine-release-notes`
+       requires the notes' first token to equal the evaluated Version, so notes and scalar must move
+       together, and a standalone bump has no content to describe. Placeholder notes for a contentless
+       bump are precisely the failure the engine project's own comment records at its release-notes
+       property: a listing that announces the PREVIOUS release's break and none of its own. Notes and
+       scalar drifting apart is what made 0.50.1 and 0.50.5 permanent two of three sets. .github#2451
+       set the precedent in this exact situation, and this entry follows it: the item that has real
+       receiver-visible content carries the bump that describes it.
+
+       WHY MINOR RATHER THAN PATCH. Two legs, either of which would carry the line on the criterion
+       the 0.56.0, 0.57.0 and 0.59.0 entries above used, and neither of which is a republish.
+
+         * THE `claim` RECEIPT CHANGES WHAT IT REPORTS. `statusWrite` gains a FIFTH value, `withheld`,
+           distinct from `failed` (which asserts a mutation was sent) and from `deferred` (which
+           promises `flush` will land one); and `converged` stops meaning agreement with the literal
+           column `In progress` and starts meaning agreement with the destination the projection
+           derived. A consumer reading that JSON observes both. This is a change in what the tool
+           reports for you, not an internal refactor.
+         * THE PACKED KIT RETIRES A PREDICATE RECEIVERS COPY VERBATIM. The `pnext-item`,
+           `intra-repo-parallel-work` and `drive-board` reference pages carried a start-gate `jq`
+           predicate asserting `.status == "In progress"`, which every worker pastes as written. This
+           release removes it, states that asserting the literal is a bug, and documents the
+           `withheld` versus CLAIM-STATUS-LAG distinction that the fifth value makes necessary. A
+           receiver whose copied predicate silently stops matching has been failed by a patch label.
+
+       WHAT DID NOT MOVE, STATED SO THE LINE IS NOT MIS-READ. The `fsgg-coord-engine` wire surface is
+       unchanged: no verb, flag, help entry, render name, result name or exit code moved. The new
+       value is a new INHABITANT of an existing reported field, and the field's documented vocabulary
+       is what this release widens. Verification: `git diff` with `name-only` over 41199bd2..HEAD
+       matching no file under `src/FS.GG.Coord.Core/*.fsi`, and `Render.fsi`'s change being the added
+       `withheld` case on the existing claim-receipt type.
+
+       NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason every entry above records. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.59.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.60.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

@@ -191,7 +191,9 @@ The host hands each subagent essentially this, with `<REPO>` (a registry short-i
 >    invent or copy an id.
 > 2. **Run [pnext-item](../../pnext-item/SKILL.md) for `<REPO>`**, exactly as written: `take --json` (gate on
 >    the exit code AND require its fresh `.converged == true` receipt), report that receipt to the host,
->    and do not announce or implement before marker + `Status=In progress` are both observed; read the item's **comments**
+>    and do not announce or implement before the marker and a converged column are both observed — the
+>    column being whichever one the claim DERIVED from the item's live facts, never the literal
+>    `In progress` ([.github#2645](https://github.com/FS-GG/.github/issues/2645)); read the item's **comments**
 >    before you start (a prior worker's "do not do this" is the highest-signal thing on the board),
 >    `git fetch` then worktree from `origin/main` by name (#622), implement inside your declared
 >    `Paths:`, push and open the candidate PR, and pause for the host's independent critic. You implement repairs;
@@ -237,10 +239,20 @@ scripts/fsgg-coord ready --repo <r> --all --json   # the always-fresh TRUTH read
 ```
 
 Run the same fresh read **immediately after each worker reports a claim**, before describing that worker
-as active: its row must be `In progress`, and the typed receipt must have `markerObserved=true` and
-`converged=true`. Repeat this for every reported transition (`Blocked`, `In review`, `Done`): a worker
-message is intent; the fresh board row is the ledger. If they disagree, report and reconcile the lag
-instead of narrating the intended state as current.
+as active: its row must match the `.status` its own receipt reports, and that receipt must have
+`markerObserved=true` and `converged=true`. Repeat this for every reported transition (`Blocked`,
+`In review`, `Done`): a worker message is intent; the fresh board row is the ledger. If they disagree,
+report and reconcile the lag instead of narrating the intended state as current.
+
+**Do not require `In progress` here ([.github#2645](https://github.com/FS-GG/.github/issues/2645)).** A
+claim's column is DERIVED from the item's live PR / blockers / delivery / issue facts, so a worker
+adopting a row that is already under review reports — correctly — `In review`, and one claiming a row
+with a live blocker reports `Blocked`. The receipt's own `.status` is the thing the board must agree
+with; a host that re-states one column marks those correct claims as drift and sends a worker to repair
+a board that was right. A receipt whose `statusWrite` is `withheld` is a THIRD case: a fact the claim
+needed could not be read, so no column was written at all. The lock is genuinely held and the row is
+genuinely unchanged — that is not a lagged write, and re-running the claim (not reconciling the row) is
+what clears it.
 
 - The item it claimed to finish is **`Done`** on the board and its issue is **closed** (or the worker
   reported a blocker, in which case it is **`Blocked`** with a `Blocked by` edge). If it says "merged"

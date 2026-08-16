@@ -50,6 +50,7 @@
     <Compile Include="SchedulingCostTests.fs" />
     <Compile Include="AuthorizedMarkerTests.fs" />
     <Compile Include="ClaimOverlapTests.fs" />
+    <Compile Include="ClaimLifecycleDestinationTests.fs" />
     <Compile Include="DoneStderrTests.fs" />
   </ItemGroup>
 
