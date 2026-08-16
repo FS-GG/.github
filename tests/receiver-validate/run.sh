@@ -232,6 +232,12 @@ for c in spec:
     elif kind == "claim-nolease":
         # No `lease=` at all: the gate must fall back rather than crash or treat it as live forever.
         entry["body"] = "<!-- fsgg:claim worker=%s renewed=1 -->" % c.get("worker", "w")
+    elif kind == "claim-rawlease":
+        # An arbitrary `lease=` token, so a leg can feed the parser text a human or a forger can type.
+        # `'²'` is the one that matters: `str.isdigit()` returns True for it and `int()` raises.
+        entry["body"] = "<!-- fsgg:claim worker=%s lease=%s renewed=1 -->" % (
+            c.get("worker", "w"), c["lease_raw"],
+        )
     elif kind == "claim-badtime":
         entry["updated_at"] = "not-a-timestamp"
         entry["body"] = "<!-- fsgg:claim worker=w lease=120 renewed=1 -->"
@@ -262,9 +268,22 @@ reset_world() {
 marker() { printf '<!-- fsgg:pr-authorization v=1 item=%s gen=%s head=%s -->' "${1:-$ITEM}" "${2:-$GEN}" "${3:-$HEAD}"; }
 
 # run_validate <script> [VAR=VALUE ...] -> writes $WORK/out and $WORK/step_output, echoes step exit
+#
+# IT ALSO TALLIES WHETHER THE RUN EXPLAINED ITSELF, and leg H1 at the bottom asserts that EVERY run of
+# the real rule did (round-1 repair). The material finding of review round 1 was that an escaping
+# exception published `verdict=1` — a code this rule's vocabulary defines as FINDING — with NO
+# annotation and NO summary, because every reporting statement lives below the call that crashed. A
+# per-input leg would have caught the two inputs I thought of; this catches the property, on every
+# input any leg ever feeds it. Only runs of the REAL rule are counted: the mutation legs deliberately
+# drive mutants whose whole purpose is to misbehave.
+#
+# Note the tallies are FILES, not shell variables: every call site invokes this inside `$( )`, so a
+# variable increment would happen in a subshell and be discarded — a counter that silently stays zero
+# is the vacuous-pass shape this fixture is about.
 run_validate() {
   local script="$1"; shift
   : > "$WORK/step_output"; : > "$WORK/summary.md"
+  local rc=0
   env -i \
     PATH="$STUB:/usr/bin:/bin" \
     HOME="$HOME" \
@@ -274,7 +293,17 @@ run_validate() {
     PR_BODY="$(marker)" PR_HEAD="$HEAD" PR_BRANCH="item/2721-receiver-validate" \
     PR_NUMBER=99 SELF_REPO="FS-GG/FS.GG.Net" GH_TOKEN="stub-token" \
     "$@" \
-    bash "$script" >"$WORK/out" 2>&1 && echo 0 || echo $?
+    bash "$script" >"$WORK/out" 2>&1 || rc=$?
+  if [ "$script" = "$VALIDATE" ]; then
+    printf 'x' >> "$WORK/runs.tally"
+    if ! grep -qE '::(notice|warning)::receiver-validate: ' "$WORK/out" || [ ! -s "$WORK/summary.md" ]; then
+      printf 'x' >> "$WORK/unreported.tally"
+      { echo "=== a run that published a verdict without explaining it ==="
+        echo "--- env overrides: $* ---"
+        cat "$WORK/out"; } >> "$WORK/unreported.log"
+    fi
+  fi
+  echo "$rc"
 }
 
 out_value() { sed -n "s/^$1=//p" "$WORK/step_output" | tail -1; }
@@ -328,6 +357,26 @@ if out == src:
 open(path, "w", encoding="utf-8").write(out)
 PY
   printf '%s\n' "$dest"
+}
+
+# mutate_more <mutant> <old> <new> — stack a second regression onto an existing mutant, with the same
+# two guards. Needed because THIS CHANGE MADE TWO REPAIRS TO ONE DEFECT, and each is only load-bearing
+# given the other's absence: the ascii-digit guard stops the crash HAPPENING, the catch-all changes
+# what a crash REPORTS. Reverting either one alone leaves the rule well-behaved — which is a real
+# finding about the repair, not a reason to weaken the leg — so reproducing review round 1's measured
+# defect needs both reverted at once.
+mutate_more() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import sys
+path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
+src = open(path, encoding="utf-8").read()
+if old not in src:
+    sys.exit("MUTATION IMPOSSIBLE: %r is not in the mutant. Re-derive this leg." % old)
+out = src.replace(old, new, 1)
+if out == src:
+    sys.exit("MUTATION WAS A NO-OP: the subject is unchanged, so the leg would measure nothing.")
+open(path, "w", encoding="utf-8").write(out)
+PY
 }
 
 echo "== A. structure, asked of the PARSED workflow document =="
@@ -725,6 +774,47 @@ else
   bad "C22 a quoted claim marker does not become the winner" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
 fi
 
+# ==================================================================================================
+# C23-C25 — AN ATTACKER-CONTROLLED FIELD MUST NOT BE ABLE TO CRASH THE RULE (review round 1)
+# ==================================================================================================
+# `merlin-9bb1` measured this against live GitHub: every `int()` in the rule took text straight from a
+# pull-request body or an issue comment, and two of the three sites were reachable with an input that
+# raises. An escaping ValueError exits the interpreter 1, and the wrapper publishes `verdict=1` —
+# which this rule's own vocabulary defines as FINDING. It is not fail-OPEN (it never yields 0), and
+# that is exactly what made it worth repairing rather than shrugging at: it collapses the
+# FINDING/NO-VERDICT distinction C14-C18 spend five legs establishing, in the direction that emits a
+# confident verdict with no reason behind it.
+echo "-- C23: a 5000-digit item number does not crash the rule (CPython refuses int() past 4300) --"
+BIG="$(python3 -c "print('9'*5000)")"
+reset_world
+rc="$(run_validate "$VALIDATE" PR_BODY="$(marker "FS-GG/.github#$BIG")")"
+if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'server-assigned\|owner/repo#N' "$WORK/out"; then
+  ok "C23 an absurdly long item number is reported as MALFORMED, not published as a bare verdict"
+else
+  bad "C23 an absurdly long item number is reported as MALFORMED" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
+fi
+
+echo "-- C24: lease=² — str.isdigit() says True and int() raises (.github#266's shape in a stdlib call) --"
+reset_world
+write_comments "$ITEM_REPO" "$ITEM_NUMBER" \
+  "[{\"id\":$GEN,\"kind\":\"claim-rawlease\",\"age\":60,\"lease_raw\":\"²\",\"worker\":\"curlew-d56f\"}]"
+rc="$(run_validate "$VALIDATE")"
+if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 0 ]; then
+  ok "C24 a Unicode-digit lease= falls back to the default instead of crashing (and the claim stays live)"
+else
+  bad "C24 a Unicode-digit lease= falls back to the default instead of crashing" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
+fi
+
+echo "-- C25: the same, via FSGG_CLAIM_LEASE_MIN, on a marker that declares no lease of its own --"
+reset_world
+write_comments "$ITEM_REPO" "$ITEM_NUMBER" "[{\"id\":$GEN,\"kind\":\"claim-nolease\",\"age\":60,\"worker\":\"curlew-d56f\"}]"
+rc="$(run_validate "$VALIDATE" FSGG_CLAIM_LEASE_MIN="²")"
+if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 0 ]; then
+  ok "C25 a Unicode-digit FSGG_CLAIM_LEASE_MIN falls back to the default instead of crashing"
+else
+  bad "C25 a Unicode-digit FSGG_CLAIM_LEASE_MIN falls back to the default" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
+fi
+
 echo
 echo "== D. observe-only, proven by EXECUTION and inverted =="
 
@@ -749,6 +839,43 @@ if [ "$rc" != 0 ]; then
   ok "D2  MUTATION: propagating the verdict (exit \$rc) makes the step FAIL — so D1 is a real assertion, not a tautology"
 else
   bad "D2  MUTATION: propagating the verdict must make the step fail, but it exited 0" "$(cat "$WORK/out")"
+fi
+
+# D3 — REVIEW ROUND 1's DEFECT, RECONSTRUCTED EXACTLY. Revert BOTH repairs — the id-length guard, so
+# the ValueError happens, and the catch-all, so it escapes — then feed the exact input `merlin-9bb1`
+# used against live GitHub. The result is the shipped defect: `verdict=1`, which this rule's own
+# vocabulary reads as FINDING, and NOTHING anywhere saying why.
+#
+# BOTH HALVES ARE REQUIRED AND THAT IS THE FINDING, NOT A WORKAROUND. Reverting the catch-all alone no
+# longer crashes, because the guard now rejects a 5000-digit id as malformed before any `int()` runs —
+# it reports a clean FINDING with a reason, which is correct behaviour. So this leg would have reported
+# a vacuous pass if it had asserted "no annotation" against a single-mutation mutant.
+MUT="$(mutate 'except Exception as crash:' 'except ZeroDivisionError as crash:')"
+mutate_more "$MUT" 'return ascii_digits(value, MAX_ID_DIGITS) and value[0] != "0"' \
+                   'return len(value) > 0 and value[0] != "0" and all("0" <= ch <= "9" for ch in value)'
+reset_world
+rc="$(run_validate "$MUT" PR_BODY="$(marker "FS-GG/.github#$BIG")")"
+got="$(out_value verdict)"
+if [ "$got" = 1 ] && ! grep -qE '::(notice|warning)::receiver-validate: ' "$WORK/out"; then
+  ok "D3  MUTATION: without the catch-all, a crash publishes verdict=1 (FINDING) with NO annotation — so C23 and H1 are real assertions"
+else
+  bad "D3  MUTATION: without the catch-all a crash must publish an unexplained verdict=1" "$(printf 'verdict %q\n%s' "$got" "$(cat "$WORK/out")")"
+fi
+
+# D4 — AND THE SOURCE-LEVEL FIX IS INDEPENDENTLY LOAD-BEARING. Even WITH the catch-all, reverting the
+# digit guard turns a well-formed pull request into a NO-VERDICT, because the rule stops evaluating.
+# Two repairs, two subjects: the catch-all changes what a crash REPORTS, the guard stops the crash
+# HAPPENING, and neither one alone makes C24 green.
+MUT="$(mutate 'ascii_digits(declared, MAX_LEASE_DIGITS)' 'declared.isdigit()')"
+reset_world
+write_comments "$ITEM_REPO" "$ITEM_NUMBER" \
+  "[{\"id\":$GEN,\"kind\":\"claim-rawlease\",\"age\":60,\"lease_raw\":\"²\",\"worker\":\"curlew-d56f\"}]"
+rc="$(run_validate "$MUT")"
+got="$(out_value verdict)"
+if [ "$got" = 3 ] && grep -q 'CRASHED' "$WORK/out"; then
+  ok "D4  MUTATION: reverting the ascii-digit guard makes lease=² crash — caught by the catch-all as a NO-VERDICT, and C24 goes non-green"
+else
+  bad "D4  MUTATION: reverting the ascii-digit guard must make lease=² crash into a NO-VERDICT" "$(printf 'verdict %q\n%s' "$got" "$(cat "$WORK/out")")"
 fi
 
 echo
@@ -878,6 +1005,82 @@ if not all(k in shared for k in want) or len(inline) != 4:
     sys.exit(1)
 sys.exit(0 if [shared[k] for k in want] == inline else 1)
 PY
+
+echo
+echo "== H. every verdict this fixture ever provoked explained itself =="
+
+# THE GENERALISATION OF REVIEW ROUND 1's MATERIAL FINDING, and the reason it is a whole-fixture
+# invariant rather than another row in the truth table. The defect was not "a 5000-digit item number
+# crashes"; it was "a code can reach `$GITHUB_OUTPUT` with no reason attached". C23-C25 pin the two
+# inputs that were found. THIS pins the property, across every input every leg above feeds the real
+# rule — including inputs added by whoever edits this fixture next, who will not think to re-derive
+# it. `run_validate` tallies as it goes; nothing here re-runs anything.
+runs=0;   [ -f "$WORK/runs.tally" ]       && runs=$(wc -c < "$WORK/runs.tally")
+unrep=0;  [ -f "$WORK/unreported.tally" ] && unrep=$(wc -c < "$WORK/unreported.tally")
+
+# NON-VACUOUS FIRST. A tally of zero satisfies "none were unreported" perfectly, and would do so if
+# `run_validate` stopped counting — the empty-result-set-as-a-negative-finding shape this repository
+# has paid for repeatedly. So the count must be shown large before its zero means anything.
+if [ "$runs" -ge 25 ]; then
+  ok "H0  the tally is non-vacuous: $runs executions of the real rule were observed"
+else
+  bad "H0  the tally is non-vacuous" "only $runs execution(s) counted — H1's zero would assert nothing"
+fi
+
+if [ "$unrep" -eq 0 ]; then
+  ok "H1  all $runs executions emitted an annotation AND wrote a step summary — no verdict was ever published without a reason"
+else
+  bad "H1  $unrep of $runs executions published a verdict with no annotation or no summary" "$(head -60 "$WORK/unreported.log")"
+fi
+
+# H2 — A SUMMARY THAT CANNOT BE WRITTEN LOSES A RENDERING, NEVER A VERDICT. This leg is why the
+# summary write is guarded at all: it was written to test the annotation-before-summary ordering, and
+# in the writing it showed that an `OSError` there escapes the same way review round 1's `ValueError`
+# did — below the try/except, so `verdict=1` again, about a pull request whose answer was already
+# correctly computed AND already announced.
+#
+# Invoked directly rather than through `run_validate`, deliberately: this run is EXPECTED to write no
+# summary, and tallying it would make H1 red for the one input where an empty summary is the subject.
+: > "$WORK/out"
+env -i PATH="$STUB:/usr/bin:/bin" HOME="$HOME" GH_STUB_DIR="$WORK/stub" \
+    GITHUB_OUTPUT="$WORK/step_output" GITHUB_STEP_SUMMARY="$WORK/no-such-dir/summary.md" \
+    PR_BODY="$(marker)" PR_HEAD="$HEAD" PR_BRANCH="item/2721-receiver-validate" \
+    PR_NUMBER=99 SELF_REPO="FS-GG/FS.GG.Net" GH_TOKEN="stub-token" \
+    bash "$VALIDATE" >"$WORK/out" 2>&1
+h2rc=$?
+if [ "$h2rc" = 0 ] && [ "$(out_value verdict)" = 0 ] \
+   && grep -q '::notice::receiver-validate: authorized' "$WORK/out" \
+   && grep -q 'summary could not be written' "$WORK/out"; then
+  ok "H2  an unwritable step summary loses the rendering and NOT the verdict — still verdict=0, still announced, and it says so"
+else
+  bad "H2  an unwritable step summary must lose the rendering and not the verdict" "$(printf 'step %s verdict %q\n%s' "$h2rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
+fi
+
+# H3 — THE INVERSION FOR H2. Unguard the summary write and the OSError escapes: the rule exits
+# non-zero even though it reached OK, and the wrapper would publish that as a FINDING.
+# The target is the `except` CLAUSE, on one line. An earlier draft of this leg matched a two-line
+# `try:`/`with` block copied out of the WORKFLOW — carrying the workflow's 14-space indentation, where
+# the EXTRACTED script has 4, because YAML strips the block scalar's own indent. The mutation silently
+# did not apply and this leg reported that the guard could not be inverted. Same class as the
+# wrong-subject sweep and the comment-line `exit 0`: a mutation that quietly misses.
+MUT="$(mutate 'except OSError as why:' 'except ZeroDivisionError as why:')"
+: > "$WORK/out"
+env -i PATH="$STUB:/usr/bin:/bin" HOME="$HOME" GH_STUB_DIR="$WORK/stub" \
+    GITHUB_OUTPUT="$WORK/step_output" GITHUB_STEP_SUMMARY="$WORK/no-such-dir/summary.md" \
+    PR_BODY="$(marker)" PR_HEAD="$HEAD" PR_BRANCH="item/2721-receiver-validate" \
+    PR_NUMBER=99 SELF_REPO="FS-GG/FS.GG.Net" GH_TOKEN="stub-token" \
+    bash "$MUT" >"$WORK/out" 2>&1
+h3rc=$?
+# THE ASSERTION IS ON THE PUBLISHED VERDICT, NOT ON THE STEP'S EXIT — observe-only pins that at 0 by
+# design, which is exactly why the round-1 defect was publishable in the first place. An earlier draft
+# of this leg asserted the step exit and reported that the guard could not be inverted while the
+# traceback was sitting in the captured output.
+h3got="$(out_value verdict)"
+if [ "$h3rc" = 0 ] && [ "$h3got" = 1 ] && grep -q 'Traceback' "$WORK/out"; then
+  ok "H3  MUTATION: unguarding the summary write publishes verdict=1 (FINDING) for a pull request the rule had already graded OK — so H2 is a real assertion"
+else
+  bad "H3  MUTATION: unguarding the summary write must publish an unearned verdict=1" "$(printf 'step %s verdict %q\n%s' "$h3rc" "$h3got" "$(cat "$WORK/out")")"
+fi
 
 echo
 echo "-------------------------------------------------------------------------------"

@@ -836,6 +836,7 @@ jobs:
           import re
           import subprocess
           import sys
+          import traceback
           from datetime import datetime, timezone
 
           # ---------------------------------------------------------------------------------------
@@ -893,11 +894,28 @@ jobs:
               return out
 
 
+          # EVERY `int()` IN THIS RULE IS GUARDED BY THIS PREDICATE, AND BOTH HALVES OF IT ARE LOAD-
+          # BEARING (round-1 repair). `str.isdigit()` is NOT an ASCII test — `'²'.isdigit()` is True and
+          # `int('²')` raises ValueError — and CPython refuses `int()` on a decimal string longer than
+          # 4300 digits, so an `item=owner/repo#<5000 digits>` also raises. Both inputs are
+          # attacker-controlled text arriving from a pull request body or an issue comment, and an
+          # escaping ValueError used to exit the interpreter 1, which this job's own vocabulary reads as
+          # FINDING — a confident verdict with no reason attached. The catch-all at the bottom is the
+          # backstop; this is the fix at the source, so the crash does not happen in the first place and
+          # a malformed field is reported AS malformed.
+          MAX_ID_DIGITS = 20  # a GitHub server-assigned id is < 2^63, which is 19 digits.
+          MAX_LEASE_DIGITS = 7  # minutes; ~19 years. Anything longer is not a lease anyone declared.
+
+
+          def ascii_digits(value: str, limit: int) -> bool:
+              return 0 < len(value) <= limit and all("0" <= ch <= "9" for ch in value)
+
+
           def server_assigned(value: str) -> bool:
               # A canonical server-assigned comment id: ASCII digits, no leading zero. Excludes `0`,
               # excludes `0012` (one generation keyed two ways), and excludes the engine's `released`
-              # sentinel (`Client.fs:1723`).
-              return len(value) > 0 and value[0] != "0" and all("0" <= ch <= "9" for ch in value)
+              # sentinel (`Client.fs:1723`). The length bound makes the `int()` below it total.
+              return ascii_digits(value, MAX_ID_DIGITS) and value[0] != "0"
 
 
           def qualified_item(value: str) -> "tuple[str, int] | None":
@@ -1164,7 +1182,11 @@ jobs:
               winner.
               """
               env_lease = os.environ.get("FSGG_CLAIM_LEASE_MIN") or ""
-              fallback = int(env_lease) if env_lease.isdigit() and int(env_lease) > 0 else DEFAULT_LEASE_MIN
+              fallback = (
+                  int(env_lease)
+                  if ascii_digits(env_lease, MAX_LEASE_DIGITS) and int(env_lease) > 0
+                  else DEFAULT_LEASE_MIN
+              )
               now = datetime.now(timezone.utc)
               found = []
               for comment in payload:
@@ -1192,7 +1214,11 @@ jobs:
                           "promotes the next candidate to winner" % (where, updated),
                       )
                   declared = fields.get("lease", "")
-                  lease = int(declared) if declared.isdigit() and int(declared) > 0 else fallback
+                  lease = (
+                      int(declared)
+                      if ascii_digits(declared, MAX_LEASE_DIGITS) and int(declared) > 0
+                      else fallback
+                  )
                   age = (now - at).total_seconds()
                   # A NEGATIVE age means the marker's age could not be established and it is NOT
                   # stale: reading an unreadable age as an expired lease would break a live lock on a
@@ -1208,10 +1234,38 @@ jobs:
               return found
 
 
+          # THE CATCH-ALL, AND WHY IT IS A NO-VERDICT RATHER THAN A FINDING (round-1 repair).
+          # Before this, `NoVerdict` was the ONLY exception handled. Anything else escaped, the
+          # interpreter exited 1, and the wrapper below published `verdict=1` — which this rule's own
+          # vocabulary defines as FINDING. Worse, every reporting statement lives BELOW this call, so a
+          # crash emitted no annotation and wrote no summary: a confident verdict with no reason, about
+          # a pull request the rule never finished reading. That collapses exactly the FINDING /
+          # NO-VERDICT distinction the fixture spends five legs establishing, and it does so in the
+          # direction that looks like a real finding.
+          #
+          # An unexpected exception is BY DEFINITION "could not reach a verdict", so it maps to
+          # NO_VERDICT_PERMANENT and names itself. `Exception`, not `BaseException`: a KeyboardInterrupt
+          # or a SystemExit is not this rule reaching a wrong answer, and swallowing those would hide a
+          # cancelled run as a verdict.
           try:
               code, headline, detail = verdict()
           except NoVerdict as refusal:
               code, headline, detail = refusal.code, refusal.headline, []
+          except Exception as crash:
+              code = NO_VERDICT_PERMANENT
+              headline = "this gate CRASHED while evaluating and reached no verdict: %s: %s" % (
+                  type(crash).__name__,
+                  crash,
+              )
+              detail = [
+                  "This is a defect in the gate, not a finding about the pull request. It is reported "
+                  "as a NO-VERDICT because a rule that did not finish running has said nothing about "
+                  "this pull request — reporting it as a FINDING would be a confident answer with no "
+                  "reason behind it (#266).",
+                  "```",
+                  traceback.format_exc().strip(),
+                  "```",
+              ]
           label = {
               OK: "OK",
               FINDING: "FINDING",
@@ -1226,15 +1280,34 @@ jobs:
               "This context is OBSERVE-ONLY (design §9.1 step 1) and is required in no repository, so "
               "this verdict blocks no merge. It reports; it gates nothing."
           )
-          summary = os.environ.get("GITHUB_STEP_SUMMARY")
-          if summary:
-              with open(summary, "a", encoding="utf-8") as fh:
-                  fh.write("\n".join(lines) + "\n")
+          # THE ANNOTATION IS EMITTED BEFORE THE SUMMARY IS WRITTEN, and the order is deliberate. The
+          # annotation is the one place the reason ALWAYS reaches a reader; the summary write touches
+          # the filesystem and can fail. Emitting the reason first means even a failed summary write
+          # leaves a verdict that explains itself, rather than a bare code.
           stream = sys.stdout if code == OK else sys.stderr
           kind = "notice" if code == OK else "warning"
           print("::%s::receiver-validate: %s" % (kind, headline or label), file=stream)
           for extra in list(detail) + notes:
               print(extra, file=stream)
+          # AND THE SUMMARY WRITE IS ITSELF GUARDED, which is the same defect one level out. It sits
+          # BELOW the try/except that wraps `verdict()`, so an `OSError` here — a full disk, a
+          # read-only `RUNNER_TEMP`, an unset-then-stale path — would escape exactly the way a
+          # ValueError used to: the interpreter exits 1 and the wrapper publishes `verdict=1`, FINDING,
+          # about a pull request whose verdict was already correctly computed and already announced.
+          # Found by trying to write the leg that tests the ordering above, which is the honest way to
+          # find this kind of thing. A summary that cannot be written loses a rendering; it must never
+          # change a verdict.
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              try:
+                  with open(summary, "a", encoding="utf-8") as fh:
+                      fh.write("\n".join(lines) + "\n")
+              except OSError as why:
+                  print(
+                      "::warning::receiver-validate: the step summary could not be written (%s). "
+                      "The verdict above stands — this changes the rendering, not the answer." % why,
+                      file=sys.stderr,
+                  )
           sys.exit(code)
           PY
           # THE REAL VERDICT, PUBLISHED. `$rc` is the script's own exit status, captured above and
