@@ -5437,7 +5437,17 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                                 eprint "  Retry to race for it, or leave it: a fresh holder is a working worker, not the dead one you came to recover."
                             else
-                                eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
+                                // .github#2683 — THIS SENTENCE USED TO END "Pick another, or wait for the
+                                // lease.", AND ONE HALF OF THAT WAS AN INSTRUCTION NOBODY MAY FOLLOW.
+                                // `claim` is reached two ways: directly, by a caller who named this item,
+                                // and from inside `take`'s own ranked walk. To the second, "pick another"
+                                // reads as "run `take` again" — the one act every worker brief in this org
+                                // forbids, because a second `take` against a live one is how two workers
+                                // land on one item. So the line states the FACT and the remedies that are
+                                // actually available, and names who does the picking: `take` walks its own
+                                // ranking, so a lost race never needs a caller to re-issue anything.
+                                eprint
+                                    $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value} — you did not get it. Wait for the lease to lapse, or work whatever `take` offers instead; `take` advances through its own ranked candidates on a lost race, so no caller re-runs it to retry (.github#2683)."
 
                             ExitRed
                         | Ok(Writes.Twin theirs) ->
@@ -6332,6 +6342,37 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// context (#2155).
     let claimArgsForSelected (item: Item) = [ item.Ref.Canonical ]
 
+    /// HOW MANY RANKED CANDIDATES ONE `take` MAY ATTEMPT BEFORE IT REPORTS `EX_CONTENDED` (.github#2683).
+    ///
+    /// `take` used to ask the scheduler for exactly ONE candidate and, on a lost claim CAS, return
+    /// `EX_CONTENDED` with no item. The remedy both the engine's own stderr and the code comment named was
+    /// a retry BY THE CALLER — and the caller is a disposable worker whose brief forbids exactly that: a
+    /// second `take` against a live one is how two workers land on one item. So the retry the engine relied
+    /// on had no owner, and every lost race permanently idled an implementer slot. Measured three times in
+    /// one 2026-08-15/16 `drive-board-best` session, the third time with SIX free disjoint lanes and only
+    /// two workers — so the loss rate does not improve as the board gets richer, because every worker ranks
+    /// identically and every worker picks the head.
+    ///
+    /// THE BOUND IS EXPLICIT AND IT IS A CONSTANT, not a loop that runs until the board yields. An
+    /// unbounded fallthrough against a contended board would spend a claim attempt per candidate on every
+    /// worker in the fan-out, which is the opposite of the scarcity this scheduler exists to respect. Three
+    /// is the number the measured waves needed (3 lanes/3 workers, 2/2, 6/2) and it costs at most three
+    /// `claim` CAS attempts — set against the alternative, which is the host paying a fresh ~1,900-request
+    /// board scan plus a fresh agent for a lane that was free the whole time.
+    ///
+    /// **THE FALLBACKS ARE THE SCHEDULER'S OWN DISJOINT LANES, AND THAT IS THE SAFETY PROPERTY, NOT A
+    /// COMPROMISE.** Raising the limit makes `Batch.scheduleWith` walk further down ONE ranking, reserving
+    /// each chosen item's touch-set as it goes — so candidate 2 is disjoint from candidate 1. That is
+    /// exactly what a lost race requires: losing candidate 1 means another worker now holds candidate 1's
+    /// files, and any item overlapping them is unsafe to claim. A "next item by rank, disjointness ignored"
+    /// fallthrough would hand us files a live worker is standing in.
+    ///
+    /// It costs NOTHING extra to read. The limit is applied by the pure fold in `Batch.scheduleWith`; the
+    /// board scan, the body reads, the marker reads and `enrichDeliveryRoutes`' route reads are all made
+    /// over the whole candidate set before the limit is ever consulted (`Scan.snapshot` merely writes the
+    /// number into the document). One `take` is still one board scan.
+    let private takeCandidateBound = 3
+
     let take (ctx: Context) (opts: Options) : int =
         match worker opts with
         | Error c -> c
@@ -6340,7 +6381,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             // one real-resource read that establishes one; admission remains enforced by `claim`
             // immediately before its mutation.  Blocking here on an empty cache would deadlock every
             // fresh session (budget -> take could never produce the observation it requires).
-            match scanAndDecide ctx { opts with Limit = Some 1 } Cache.Scheduling with
+            match scanAndDecide ctx { opts with Limit = Some takeCandidateBound } Cache.Scheduling with
             // #585: a board we could not read is NOT an empty queue — but that distinction is already
             // carried by the code `fail` returns (EX_RATE for a budget, a non-zero read error otherwise),
             // and it is never EX_NONE, so "I could not look" and "I looked, and it is empty" keep
@@ -6350,7 +6391,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Ok(rows, doc, receipt) ->
                 sayRepoAdvisory receipt
 
-                match renderLiveDecision ctx { opts with Limit = Some 1 } rows doc with
+                match renderLiveDecision ctx { opts with Limit = Some takeCandidateBound } rows doc with
                 | Error code -> code
                 | Ok result ->
                     match result.Chosen with
@@ -6395,20 +6436,52 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         | Text -> printChosen opts.LeaseMinutes result
 
                         ExitNone
-                    | item :: _ ->
-                        // Claim the chosen item. `claim` re-reads and runs the CAS, so a stale scan cannot
-                        // cost a double-claim: the loser backs off and the caller retries.
+                    | candidates ->
+                        // Claim a chosen item. `claim` re-reads and runs the CAS, so a stale scan cannot
+                        // cost a double-claim: the loser holds nothing, and THIS FUNCTION — never its
+                        // caller — advances to the next ranked candidate (.github#2683). The old comment
+                        // here said "the loser backs off and the caller retries", and that retry was one no
+                        // compliant worker may issue; see `takeCandidateBound` for the whole measurement.
                         // #585: translate the claim's verdict into `take`'s contract — a win is 0, an
                         // exhausted budget passes through as EX_RATE (back off until reset), and any other
-                        // failure is a LOST RACE (EX_CONTENDED): the item was startable when we picked it,
-                        // so a failure to take it means someone else got there first.
+                        // failure is a LOST RACE: the item was startable when we picked it, so a failure to
+                        // take it means someone else got there first.
+                        //
+                        // EX_CONTENDED NOW FIRES ONLY WHEN EVERY CANDIDATE IN THE BOUNDED RANKING HAS BEEN
+                        // ATTEMPTED AND LOST, which narrows WHEN the code fires without touching WHAT it
+                        // asserts: #585's contract that 0 means "claimed an item" is unchanged, and a
+                        // caller that reads 6 as "lost the race, hold nothing, stop" reads it identically.
+                        // EX_RATE still short-circuits on the spot — an exhausted budget is systemic, so
+                        // spending it against further candidates would turn one refusal into three.
+                        //
                         // Pass the selected typed identity through the mutating path.  `Short` is a display
                         // projection and parsing it here used `ctx.Owner` as a new default, turning an
                         // offered external row into an attempt to claim an unrelated default-owner twin.
-                        match claim ctx { opts with Args = claimArgsForSelected item } with
-                        | code when code = ExitGreen -> ExitGreen
-                        | code when code = Errors.ExRate -> code
-                        | _ -> ExitContended
+                        //
+                        // The walk is over a LIST, so a candidate already lost is never re-attempted: each
+                        // one is dropped from `remaining` before the next attempt is made.
+                        let rec attempt (remaining: Item list) (attempted: int) =
+                            match remaining with
+                            | [] ->
+                                eprint
+                                    $"fsgg-coord-engine: every one of the %d{attempted} ranked candidate(s) this scan offered was lost to another worker — nothing was claimed (EX_CONTENDED)."
+
+                                eprint
+                                    "  Do NOT re-run `take`: this scan has already walked its own ranking (.github#2683). Report the contention to whoever dispatched you, or wait for a lease to lapse."
+
+                                ExitContended
+                            | item :: rest ->
+                                match claim ctx { opts with Args = claimArgsForSelected item } with
+                                | code when code = ExitGreen -> ExitGreen
+                                | code when code = Errors.ExRate -> code
+                                | _ ->
+                                    if not (List.isEmpty rest) then
+                                        eprint
+                                            $"fsgg-coord-engine: %s{item.Ref.Short} was not won — advancing to the next ranked candidate this scan already offered (.github#2683)."
+
+                                    attempt rest (attempted + 1)
+
+                        attempt candidates 0
 
     // ---- the writes ------------------------------------------------------------------------------------
 
