@@ -1,0 +1,257 @@
+# The merge fence producer, OBSERVE-ONLY — slice 4 of the GitHub-native executor fencing design
+# (.github#2719, under .github#1858; docs/reports/2026-08-04-github-native-executor-fencing-design.md
+# §6.2 for this file's shape, §6.3 for the six checks, §9.1 for why it lands unarmed).
+#
+# WHAT IT IS FOR. `.github#1858` is Critical and open since 2026-07-28: two workers ran `.github#1853`
+# to completion concurrently under ONE claim marker, and the second executor — which never called a
+# single coordination verb — MERGED pull requests in six repositories. Every guard inside `fsgg-coord`
+# is unreachable for an executor that never runs it, so the fence has to live where the EFFECT lands.
+# This is that fence. `scripts/check-claim-fence.py` carries the six checks and the reasoning; this
+# file carries only the triggers, the permissions, and the deliberate refusal to enforce.
+#
+# ============================================================================================
+# OBSERVE-ONLY IS A HARD BOUNDARY, NOT A SOFT START
+# ============================================================================================
+#
+# Design doc §9.1 step 1: "Land the producer in observe-only. The fence workflow reports `success`
+# unconditionally and writes its real verdict to the job summary. Required in ZERO repositories."
+# ARMING IT IS SLICE 8's JOB (.github#2723, §9.1 steps 2-5), and the design separates the two so that
+# a half-built gate can never block a merge. Concretely, and checkably:
+#
+#   * No verdict step in this file exits non-zero. A FINDING and both NO-VERDICT codes are reported
+#     as `::warning::` and written to the job summary. `tests/claim-fence/run.sh` asserts this
+#     structurally over this very file, in both directions — a mutated copy that DOES exit on a
+#     finding must be caught — so the boundary is a test rather than a promise.
+#   * Nothing here adds a required status context to any repository. Arming is an administrative
+#     branch-protection edit made outside a merge; a workflow file cannot perform it and this one does
+#     not try.
+#   * The fixture step below IS allowed to fail the job, and that is not a hole in the above: it
+#     reds when THIS GATE is broken, never when a pull request's authorization is. A gate whose own
+#     breakage is unobservable would be #266's shape, and an observe-only verdict path is exactly the
+#     place that could hide it.
+#
+# §9.1 also fixes what must be true before slice 8 arms anything, and neither condition is met yet:
+# the observe-only phase must run at least one full claim-lease window, and arming must confirm zero
+# open `item/<n>-*` pull requests lacking the marker. More immediately: NOTHING WRITES A MERGE
+# ELECTION YET. §11.2 slice 3 was to have `delivery` post the election and name it in the
+# authorization; `.github#2395` landed the authorization half only, so check 4 currently finds no
+# election on any real pull request. That is the honest state, it is why observe-only is the correct
+# landing, and it is packeted rather than silently absorbed.
+#
+# ============================================================================================
+# WHY `merge_group` IS NOT OPTIONAL
+# ============================================================================================
+#
+# A check run is per-SHA, and branch protection consumes the last result reported for that SHA. The
+# `pull_request` triggers fire on HEAD events only, so nothing re-evaluates the fence when the CLAIM
+# changes — a claim released after the final push would leave a green in place through merge.
+# `strict: true` does not help, because it tracks the base branch rather than the claim, and
+# `.github` main is `strict: false` anyway. GitHub's merge queue is the one native mechanism that
+# re-evaluates required checks AT MERGE TIME, and it requires the `merge_group` event to do it
+# (design doc §6.2, citing GitHub's own merge-queue documentation). A fence that ran only on
+# `pull_request` would be bypassed by a merge queue, which is precisely the hole this design exists
+# to close.
+#
+# THE COST IS REAL AND IS RECORDED RATHER THAN HIDDEN: no FS-GG repository has a merge queue today
+# (`required_merge_queue` absent from `FS-GG/.github` and `FS-GG/FS.GG.Game` main protection, verified
+# live 2026-08-04 in the design doc; the other six `unverified`). So this trigger is inert until
+# someone enables one, and §9.1 step 4a makes that a separate, recorded, per-repository decision —
+# because enabling a queue changes how EVERY pull request in that repository merges, not only fenced
+# ones. The trigger belongs here regardless: a producer that cannot report on the event protection
+# will consume is not a producer, and adding it later is exactly the ordering the design forbids.
+#
+# `edited` IS A DELIBERATE ADDITION TO §6.2's LITERAL LIST, AND HERE IS WHY. §6.2 names
+# `[opened, synchronize, reopened]` — GitHub's own default triple. This file adds `edited`, for the
+# measured reason `.github#2488` established after that section was written: the
+# `fsgg:pr-authorization` marker this gate reads is PATCHed into the pull request body from OUTSIDE
+# any workflow, by the worker's own live `delivery <ref> --pr N` call (`pnext-item` §6). A PATCH is an
+# `edited` event, never a push — so without it, nothing ever re-evaluates this gate against a marker
+# such a call just wrote, and every `item/<n>-*` pull request stays fenced on the `opened` event's
+# already-stale body forever. `.github#2488` measured that five for five on real pull requests, and
+# `coherence.yml`'s `on:` block carries the same addition for the same gate-shaped reason. The
+# addition is a strict SUPERSET of §6.2's list: it can only cause more evaluations, never fewer.
+#
+# ============================================================================================
+# NO `paths:` FILTER — A REQUIREMENT, NOT AN OVERSIGHT
+# ============================================================================================
+#
+# Design doc §6.2: "a filtered workflow produces no check run on a PR that misses the filter, and
+# protection then waits forever". GitHub does not SKIP a path-filtered required check; it never
+# creates the check run at all. The org has this written down as an arming precondition
+# (`docs/coordination/reusable-workflow-contract.md`, "The ordering constraint: never arm a context
+# before its producer reports"). Applicability is decided INSIDE the gate, from the branch shape
+# (`item/<n>-*`), so an unrelated pull request gets a real, reported `success` rather than silence.
+#
+# ============================================================================================
+# PERMISSIONS
+# ============================================================================================
+#
+# `contents: read` and `issues: read`, exactly as §6.2 specifies and no more. Design doc §8.2 makes
+# the narrowness load-bearing rather than tidy: this gate "does NOT need `administration`, which is
+# not a valid `permissions:` scope in either direction and whose absence produced a startup validation
+# error that produces no check run at all" (`.github#1575`). It also needs no GitHub App: §6.1 records
+# that this org's App carries neither `checks: write` nor `statuses: write` and is not installed on
+# `.github` at all, so the gate is an ordinary Actions job whose check run GitHub creates for it. That
+# is strictly better than an App-created check run, because it keeps the App off the critical path of
+# every merge — an App outage cannot block merges when the App is not on the merge path (§8.2).
+name: fsgg-claim-fence
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  merge_group:
+
+permissions:
+  contents: read
+  issues: read     # the gate reads `fsgg:claim` and `fsgg:merge-election` marker comments on the item
+                   # the pull request's branch names — both valid `GITHUB_TOKEN` scopes
+
+jobs:
+  # The job id is the check-run name, and therefore the name slice 8 would arm. It is deliberately
+  # NOT `claim-generation`: that is `coherence.yml`'s already-armed, deliberately narrower fence
+  # (`.github#2342`, checks 1-3 only over a four-field marker). Two contexts, two answers, separable —
+  # the same argument §6.4 makes for not folding this verdict into the existing `drift` context, whose
+  # verdict is deliberately non-blocking and whose history of greens would silently change meaning.
+  claim-fence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+
+      # The gate on the gate. This step MAY fail the job — see the header's observe-only note for why
+      # that is not a hole in the boundary: it reds when this gate is broken, never when a pull
+      # request's authorization is.
+      - name: Run the claim-fence fixture (no network)
+        run: bash tests/claim-fence/run.sh
+
+      # Every attacker-controlled value goes through the ENVIRONMENT, never interpolated into a `run:`
+      # block. `closing-keywords.yml` states the rule and the reason: "A PR body is attacker-controlled
+      # text: `${{ github.event.pull_request.body }}` pasted into a `run:` block is a script-injection
+      # sink." A branch name and a merge-group ref carry shell metacharacters just as readily.
+      - name: Evaluate the merge fence
+        id: fence
+        env:
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_GROUP_REF: ${{ github.event.merge_group.head_ref }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          if [ "$EVENT" = "merge_group" ]; then
+            # The merge-group payload carries no pull request, and its own `head_sha` is the queue's
+            # temporary merge commit rather than the pull request's head. The gate resolves the pull
+            # request out of the ref and reads its real head back from the API — see
+            # `scripts/check-claim-fence.py`'s "`merge_group` IS NOT OPTIONAL" section.
+            set -- --repo "$REPO" --merge-group-ref "$MERGE_GROUP_REF"
+          else
+            printf '%s' "$PR_BODY" > pr-body.md
+            set -- --repo "$REPO" --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" --body pr-body.md
+          fi
+          rc=0
+          out="$(python scripts/check-claim-fence.py "$@" 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          {
+            echo "verdict<<FENCE_EOF"
+            printf '%s\n' "$out"
+            echo "FENCE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------------------------------
+      # OBSERVE-ONLY REPORTING. One named step per exit code, because "I could not check" must never
+      # be mistaken for "I checked, and it's fine" (#266) — the distinction is preserved in the
+      # SUMMARY even though none of these steps enforces it. NOT ONE OF THEM EXITS NON-ZERO, and
+      # `tests/claim-fence/run.sh` asserts that structurally over this file.
+      # ------------------------------------------------------------------------------------------
+      - name: 'OK: the authorization is grounded, or this PR does not deliver a board item'
+        if: ${{ !cancelled() && steps.fence.outputs.rc == '0' }}
+        run: |
+          {
+            echo "### fsgg-claim-fence: OK (observe-only)"
+            echo
+            echo '```'
+            printf '%s\n' "$VERDICT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          VERDICT: ${{ steps.fence.outputs.verdict }}
+
+      - name: 'FINDING (observed, NOT enforced): the authorization is not grounded'
+        if: ${{ !cancelled() && steps.fence.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### fsgg-claim-fence: FINDING — observed, NOT enforced"
+            echo
+            echo 'One of the five substantive checks of the fencing design §6.3 failed. The diagnosis'
+            echo 'below names WHICH. This job is deliberately OBSERVE-ONLY (§9.1 step 1): it reports'
+            echo '`success` regardless, and arming this context is slice 8 (.github#2723), not this'
+            echo 'one. So this finding does NOT block the merge, and it is not meant to yet.'
+            echo
+            echo 'Note that `check4` is expected to fail on every real pull request today: nothing'
+            echo 'writes a `fsgg:merge-election` marker, because slice 3 (.github#2395) landed the'
+            echo 'authorization half without the election half. That is a known gap, not a defect in'
+            echo 'this pull request.'
+            echo
+            echo '```'
+            printf '%s\n' "$VERDICT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=fsgg-claim-fence: finding (observe-only)::The merge fence would refuse this head. See the job summary for which of design §6.3's checks failed. Nothing is blocked: this context is not armed."
+        env:
+          VERDICT: ${{ steps.fence.outputs.verdict }}
+
+      - name: 'NO VERDICT (retryable): the item could not be read'
+        if: ${{ !cancelled() && steps.fence.outputs.rc == '2' }}
+        run: |
+          {
+            echo "### fsgg-claim-fence: NO VERDICT (retryable) — observed, NOT enforced"
+            echo
+            echo 'A rate limit, an outage, or a timeout kept this job from reading the item, so it does'
+            echo 'NOT know whether the authorization is grounded. Once this context is armed (slice 8),'
+            echo 'this state is RED: a failed read is never a pass (#266), and design §8.2 accepts the'
+            echo 'bounded blast radius — it blocks merges during a window in which GitHub is unreadable'
+            echo 'and merging is therefore not happening anyway.'
+            echo
+            echo '```'
+            printf '%s\n' "$VERDICT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=fsgg-claim-fence: no verdict, retryable (observe-only)::The live item state could not be read. Nothing is blocked: this context is not armed."
+        env:
+          VERDICT: ${{ steps.fence.outputs.verdict }}
+
+      - name: 'NO VERDICT (permanent): a permission or input failure'
+        if: ${{ !cancelled() && steps.fence.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### fsgg-claim-fence: NO VERDICT (permanent) — observed, NOT enforced"
+            echo
+            echo 'A credential problem, an unusable input, or a bug in the gate kept this job from'
+            echo 'establishing a verdict. Retrying will not help. Once armed this is RED, for the same'
+            echo 'reason as the retryable case above.'
+            echo
+            echo '```'
+            printf '%s\n' "$VERDICT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=fsgg-claim-fence: no verdict, permanent (observe-only)::See the job summary. Nothing is blocked: this context is not armed."
+        env:
+          VERDICT: ${{ steps.fence.outputs.verdict }}
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.fence.outputs.rc) }}
+        run: |
+          {
+            echo "### fsgg-claim-fence: INCONCLUSIVE — observed, NOT enforced"
+            echo
+            echo "\`scripts/check-claim-fence.py\` exited \`$RC\`, which this workflow does not classify."
+            echo 'That is a bug in one of the two, not a fact about this pull request. Once armed, this'
+            echo 'state is RED — an unclassifiable exit code is not a pass.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=fsgg-claim-fence: inconclusive (observe-only)::The gate exited with a code this workflow does not classify. Nothing is blocked: this context is not armed."
+        env:
+          RC: ${{ steps.fence.outputs.rc }}
