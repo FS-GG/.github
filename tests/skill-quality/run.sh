@@ -76,10 +76,17 @@ seed_agents() {
 # The routed-dispatch coverage gate has its own rejection helper because it is a separate entry point
 # with its own `--root`. Same three-part shape as `expect_rejection`: exit 1 and the exact finding
 # text, so a regression that merely changes the message reds here too.
+#
+# The optional third argument names the scanner to run, exactly as `expect_rejection`'s third argument
+# names the contract to run against, and defaults to this checkout's copy. Almost every case wants that
+# default: the subject under mutation is the seeded TREE, and running the pristine scanner against it is
+# what makes the mutation the only variable. One case (.github#2674 leg B) cannot be written that way,
+# because the thing it must break lives in the scanner's own source rather than in any tree it reads;
+# it passes the seeded tree's copy and says so at its call site.
 expect_agent_rejection() {
-  local label="$1" evidence="$2"
+  local label="$1" evidence="$2" gate="${3:-$ROOT/tests/skill-quality/agent-definition-coverage.py}"
   local rc=0
-  python3 "$ROOT/tests/skill-quality/agent-definition-coverage.py" \
+  python3 "$gate" \
     --root "$WORK/tree" >"$WORK/out" 2>&1 || rc=$?
   if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
     echo "PASS  $label"
@@ -702,6 +709,83 @@ path.write_text(text.replace('      - ".claude/agents/**"\n', "", 1))
 PY
 expect_agent_rejection "the gate no longer triggers on its own subject" \
   "does not list '.claude/agents/**' under pull_request.paths"
+
+# --- .github#2674: the analyst role added to ROLES is load-bearing, in both directions -------------
+#
+# `.github#2584` added `"analyst"` to `agent-definition-coverage.py`'s `ROLES` and shipped
+# `.claude/agents/fsgg-analyst-{best,normal}.md`. Every clause that change touched was inverted and
+# observed red during review — from a scratch harness, reported as prose in PR #2672's comments, and
+# committed nowhere. Prose in a merged PR is not a gate: the next person to touch `ROLES` had no case
+# that fails when they get it wrong. These four legs are those mutations, committed.
+
+# Leg A. The role is covered by the SAME closure as `worker` and `critic`: every route needs a
+# definition for it. Deleting one binding must red rather than merge.
+seed_agents
+rm "$WORK/tree/.claude/agents/fsgg-analyst-best.md"
+expect_agent_rejection "an analyst binding missing for a defined route" \
+  "no .claude/agents/fsgg-analyst-best.md, so a 'best'-routed dispatch cannot resolve"
+
+# Leg B, and the one a later reader is least likely to reconstruct. Leg A proves the role addition
+# REQUIRES the definitions; alone that is a one-directional gate, satisfiable by shipping two files.
+# This is the other direction: with both definitions present and the role taken back out of `ROLES`,
+# they become unreachable and the gate must red on THAT. Without this leg, reverting the `ROLES` edit
+# leaves a green board and a gate that has quietly stopped watching the analyst surface.
+#
+# It is the one case here whose mutation is of the scanner rather than of the tree — `ROLES` is a
+# literal in the scanner's own source and appears in no tree it reads — so it runs the seeded tree's
+# copy. That is why `expect_agent_rejection` takes a gate argument at all; every other case leaves it
+# defaulted and mutates only the tree.
+seed_agents
+python3 - "$WORK/tree/tests/skill-quality/agent-definition-coverage.py" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = 'ROLES = ("worker", "critic", "analyst")'
+if needle not in text:
+    raise SystemExit("fixture ROLES tuple missing or reformatted")
+path.write_text(text.replace(needle, 'ROLES = ("worker", "critic")', 1))
+PY
+expect_agent_rejection "taking the analyst role back out of ROLES strands its shipped definitions" \
+  ".claude/agents/fsgg-analyst-best.md defines 'fsgg-analyst-best', which no route and no checked-in skill names" \
+  "$WORK/tree/tests/skill-quality/agent-definition-coverage.py"
+
+# Leg C. Route fidelity reaches the new role too: the silent-downgrade shape, where the definition
+# still resolves but at the wrong tier. Effort is settable only in frontmatter on Claude Code, so a
+# role exempt from this check would be dispatchable at any tier a host defaulted to.
+seed_agents
+python3 - "$WORK/tree/.claude/agents/fsgg-analyst-best.md" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+if "\nmodel: opus\n" not in text:
+    raise SystemExit("fixture model line missing")
+path.write_text(text.replace("\nmodel: opus\n", "\nmodel: sonnet\n", 1))
+PY
+expect_agent_rejection "an analyst definition downgraded below its routing table" \
+  "fsgg-analyst-best.md declares model 'sonnet', but the 'best' routing table mandates 'opus'"
+
+# Leg D, the vacuity leg for the new role. `NAMED_TYPE`'s role alternation is DERIVED from `ROLES`, so
+# adding `analyst` is what made `fsgg-analyst-turbo` matchable at all — and the half of the coverage
+# closure that finds such a type is an argument from absence, which a scan that read nothing satisfies
+# for free. The construction is the ROOT DECLARATION repointed at roots that EXIST and hold nothing,
+# never root deletion: deleting the roots takes the board variants with them, so the gate reds at
+# "routed board variant ... has no SKILL.md" long before it reaches `scanned > 0` — a leg that reds for
+# the wrong reason while claiming the right one. Measured during `.github#2584`'s review.
+#
+# The planted `fsgg-analyst-turbo` is what makes this leg honest rather than circular: it is a genuine
+# offender, it sits under the root the declaration no longer names, and inverting the leg by leaving
+# `.agent-skill-roots` alone reds on "names agent type 'fsgg-analyst-turbo'" instead — which is the
+# proof that the analyst arm of the derived alternation matches, and that this case's green would
+# otherwise have been bought by looking at nothing.
+seed_agents
+mkdir -p "$WORK/tree/.claude/skills-analyst-v2" "$WORK/tree/.agents/skills-analyst-v2"
+printf '.claude/skills-analyst-v2\n.agents/skills-analyst-v2\n' >"$WORK/tree/.agent-skill-roots"
+printf '\nA future round may be dispatched as `fsgg-analyst-turbo`.\n' \
+  >>"$WORK/tree/.claude/skills/board-analyst/SKILL.md"
+expect_agent_rejection "declared skill roots that hold nothing clear a named analyst type by default" \
+  "scanned 0 skill file(s) under .claude/skills-analyst-v2, .agents/skills-analyst-v2"
 
 # --- .github#2666: agent-facing prose must not reach for a recency-based comment edit -----------
 #
