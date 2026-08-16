@@ -44,8 +44,9 @@ no gate behaviour changes — this is purely how humans record the log.
   blanket, and it is the rail working by design, not a defect.
   **The three sibling tags were pushed atomically** and all resolve to one commit; a partial push is
   how `0.50.1`, `0.50.5` and `0.52.0` became permanent two-of-three sets.
-  **The evidence is feed reads, never run conclusions**, and this cut is why that rule exists: all
-  three publisher runs and two of the three recovery runs are **red**, and the release is complete.
+  **The evidence is feed reads, never run conclusions**, and this cut is why that rule exists:
+  **five of the six release runs are red** — all three publishers, plus two of the three
+  manifest-bound recovery runs — and the release is complete and promoted.
   The three packages are byte-identical between the feeds entry by entry — 41 (Kit) / 33 (Coord.Cli)
   / 30 (Drivers) entries, identical modulo nuget.org's added `.signature.p7s` — re-derived
   independently by the worker and agreeing with the saga's own journal; all three published nuspecs
@@ -55,9 +56,13 @@ no gate behaviour changes — this is purely how humans record the log.
   published bytes: the post-push observation budget (24×5s) is still shorter than nuget.org's
   indexing, so a fully successful release reports `failure`; and once promotion seals the release a
   redundant journal re-upload fails on `HTTP 422 Cannot delete asset from an immutable release`.
-  **The receiver-tick step was skipped again**, so the seven kit receivers and the engine receivers
-  were **not** told about `0.60.0` and fall back to Renovate's pull half; `dashboard-tick.py` exits 3
-  for an agent because `DASHBOARD_TICK_TOKEN` is a CI-only App credential.
+  **The receiver-tick step was skipped again**, so **the seven receivers** were **not** told about
+  `0.60.0` and fall back to Renovate's pull half. There is one roster, not two:
+  `dashboard-tick.py:104` holds a single unparameterised `ROSTER_QUERY`
+  (`repos.sh list --receives coordination-kit --kit-delivery package`, shelled out at `:200`), so the
+  kit tick and the engine tick address the **same seven repositories** — `--package` selects which
+  dashboard line is matched, never who is asked. `dashboard-tick.py` exits 3 for an agent because
+  `DASHBOARD_TICK_TOKEN` is a CI-only App credential.
 
 - **2026-08-16** — **coherent set `github:0.59.0` published; `coord-engine` flipped `0.58.0` → `0.59.0`
   and the burned `0.58.1` abandoned** (github; [.github#2648](https://github.com/FS-GG/.github/issues/2648),
