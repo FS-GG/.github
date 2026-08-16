@@ -6,8 +6,49 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/skill-quality-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
+# .github#2653 — THE GATE MUST NOT LEAVE A SHADOWING ENGINE BUILD IN THE CALLER'S CHECKOUT.
+#
+# `scripts/check-skill-quality` builds the coordination engine. Until this row it built it INTO the
+# checkout that invoked it, and `scripts/fsgg-coord`'s tier 2a then preferred that artifact over the
+# shared checkout's engine — so `stale_guard` refused every board write from a worktree whose only
+# distinction was a build its own gate harness had made for it. Five occurrences across three agents in
+# one board-driver run on 2026-08-15, and more after.
+#
+# THE ASSERTION IS BEFORE-AND-AFTER IDENTITY, NOT ABSENCE, AND THE DIFFERENCE IS THE WHOLE CORRECTNESS
+# OF THIS LEG. A kit author who deliberately ran `dotnet build` HAS an in-tree engine, legitimately —
+# that is the reader `scripts/fsgg-coord:209-213` protects — and a leg spelled "no in-tree bin exists"
+# would red on them for a state this row never called a defect. What this row is about is CREATION: the
+# harness must not manufacture an artifact, nor refresh one, in a tree it was merely invoked from. So
+# the state is captured either side of the run and required to be byte-for-byte the same sentence, which
+# holds in both populations and cannot fail open in either.
+engine_artifact_state() {
+  local d p
+  for d in Cli Core GitHub; do
+    for p in "src/FS.GG.Coord.$d/bin" "src/FS.GG.Coord.$d/obj"; do
+      if [ -e "$ROOT/$p" ]; then printf '%s present\n' "$p"; else printf '%s absent\n' "$p"; fi
+    done
+  done
+  # PRESENCE ALONE WOULD MISS A REFRESH. The tier-2a-resolvable binary is the artifact that actually
+  # decides resolution, so when one is already there its mtime and size are part of the sentence: a
+  # harness that rebuilt over a kit author's build would move both, and that is equally this defect.
+  local eng="$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+  if [ -e "$eng" ]; then stat -c 'engine %Y %s' "$eng"; else printf 'engine absent\n'; fi
+}
+ENGINE_STATE_BEFORE="$(engine_artifact_state)"
+
 # Prove the checked-in catalog passes through the exact local/CI entry point first.
 "$ROOT/scripts/check-skill-quality"
+
+ENGINE_STATE_AFTER="$(engine_artifact_state)"
+if [ "$ENGINE_STATE_BEFORE" != "$ENGINE_STATE_AFTER" ]; then
+  echo "skill-quality fixture: .github#2653 — scripts/check-skill-quality changed this checkout's" >&2
+  echo "  in-tree engine build artifacts. A gate harness that leaves a resolvable engine under" >&2
+  echo "  src/FS.GG.Coord.{Cli,Core,GitHub} shadows tier 2b, and stale_guard then refuses every board" >&2
+  echo "  write from this worktree. Build out of tree via scripts/build-gate-engine." >&2
+  diff <(printf '%s\n' "$ENGINE_STATE_BEFORE") <(printf '%s\n' "$ENGINE_STATE_AFTER") >&2 || true
+  exit 1
+fi
+echo "PASS  .github#2653: check-skill-quality left this checkout's in-tree engine artifacts untouched"
 python3 "$ROOT/tests/skill-quality/driver-feedback-delivery.py"
 python3 "$ROOT/tests/skill-quality/review-round-contract.py"
 python3 "$ROOT/tests/skill-quality/roadmap-critique-contract.py"
@@ -27,7 +68,11 @@ for gate in "$ROOT"/tests/skill-quality/*.py; do
   fi
 done
 
-ENGINE="$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+# .github#2653 — ASK FOR THE ANSWER, DO NOT RESTATE THE LAYOUT. `scripts/build-gate-engine` prints the
+# engine it built out of tree; the call above has already built it, so this is an incremental no-op that
+# costs a path lookup. Spelling the artifacts layout again here would be the second copy that disagrees
+# the moment either side moves — this repo's most-filed bug class, and the reason the gate delegates.
+ENGINE="$("$ROOT/scripts/build-gate-engine")"
 "$ENGINE" command-contract --json >"$WORK/contract.json"
 
 pass=0
@@ -43,9 +88,16 @@ seed() {
   cp -a "$ROOT/tests/skill-registry" "$ROOT/tests/skill-quality" "$WORK/tree/tests/"
   cp "$ROOT/scripts/generate-driver-manifest" "$WORK/tree/scripts/"
   cp "$ROOT/scripts/generate-projections" "$WORK/tree/scripts/"
-  mkdir -p "$WORK/tree/src/FS.GG.Coord.Cli/bin/Release"
-  cp -a "$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0" \
-    "$WORK/tree/src/FS.GG.Coord.Cli/bin/Release/"
+  # THE SEEDED TREE STILL CARRIES AN ENGINE WHERE `generate-projections` LOOKS FOR ONE, because several
+  # cases below run `$WORK/tree/scripts/generate-projections` and it resolves
+  # `${FSGG_COORD_ENGINE_BIN:-<root>/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}`. That
+  # in-tree layout is the FIXTURE's, and it is deliberately unchanged by .github#2653: `$WORK/tree` is a
+  # scratch copy under `mktemp -d`, not a git checkout, so nothing resolves an engine through it and it
+  # can shadow nothing. Only the SOURCE of the copy moved — out of this checkout, where an artifact does
+  # get preferred and does refuse board writes.
+  mkdir -p "$WORK/tree/src/FS.GG.Coord.Cli/bin/Release/net10.0"
+  cp -a "$(dirname "$ENGINE")/." \
+    "$WORK/tree/src/FS.GG.Coord.Cli/bin/Release/net10.0/"
 }
 
 expect_rejection() {

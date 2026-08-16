@@ -69,6 +69,16 @@ publicOrToolFacingImpact: true
   future producer and is silent when somebody forgets, which is `#570`'s decay mode; a resolver-side one
   covers producers that do not exist yet.
 
+  **Revision 2 correction (see DEC-008).** The paragraph above is preserved as written, and one step in
+  it is wrong. *"every kit-editing worker is required to create the artifact at exactly the path tier 2a
+  probes"* — the refusal is real, but the path is not. `generate-driver-manifest` shells out to
+  `generate-projections` (`:710-724`), which reads `${FSGG_COORD_ENGINE_BIN:-<in-tree default>}`, so
+  naming an out-of-tree engine satisfies it: measured `rc=2` unnamed, `rc=0` named. The closing argument
+  — that a producer-side fix must be repeated for every future producer and is silent when somebody
+  forgets (`#570`) — is the one part that survives intact, and it is answered rather than waived:
+  `tests/engine-build-siting/run.py` is the gate that makes forgetting loud, which is why SB-011 exists
+  and why it is wired to a workflow carrying no `paths:` filter.
+
 - CQ-003 answer: **Conditional, and the unconditional form is refuted rather than merely riskier.** If
   an incidental build were always passed over, a worker whose own build is CURRENT and whose shared
   checkout is STALE would go from working to refused — and that is not a hypothetical population, it is
@@ -126,10 +136,42 @@ publicOrToolFacingImpact: true
   written by the producer**: it answers only for producers that know to write one and cannot be
   invalidated soundly by a later no-op `dotnet build`. REJECTED — **any mtime comparison**: refuted by
   `.github#1572` and by criterion 2's own wording.
-- DEC-002 [CQ-002] [AMB:AMB-002]: **THE PRODUCERS ARE NOT CHANGED; CRITERION 4 IS SATISFIED BY ITS
+- DEC-002 [CQ-002] [AMB:AMB-002]: ~~**THE PRODUCERS ARE NOT CHANGED; CRITERION 4 IS SATISFIED BY ITS
   SECOND LIMB.** `scripts/generate-driver-manifest --write` requires the artifact at exactly the probed
   path, so "build somewhere the resolver does not look" is unavailable for the population that matters,
-  on the filer's own follow-up evidence. The run still leaves a build; §3g shows it no longer shadows.
+  on the filer's own follow-up evidence. The run still leaves a build; §3g shows it no longer shadows.~~
+  **SUPERSEDED by DEC-008, and its premise was false.** Kept struck through rather than deleted, because
+  the reason a decision was made is evidence about the decision, and a superseding record that hides the
+  refuted premise teaches the next reader nothing.
+- DEC-008 [CQ-002] [AMB:AMB-002]: **THE PRODUCERS *ARE* CHANGED; CRITERION 4's FIRST LIMB IS TAKEN TOO.**
+  Decided by the operator on 2026-08-16 and recorded at `.github#2653#issuecomment-5308188901`:
+  *"redirect incidental builds out of tree"*. Two alternatives are recorded there as REJECTED and are not
+  reopened here — *mark intentional builds* (it changes the kit author's workflow, and an unmarked
+  deliberate build would then silently resolve to the shared engine, which is the harm
+  `scripts/fsgg-coord:209-213` exists to prevent) and *harness cleans up after itself* (fragile: a
+  crashed run leaves the shadow, and a kit author who runs the suite after building deliberately would
+  have that build deleted underneath them).
+
+  **DEC-002's OBSERVATION held; its INFERENCE did not, and the distinction is the whole decision.**
+  `generate-driver-manifest` does refuse without an engine — `env -u FSGG_COORD_ENGINE_BIN python3
+  scripts/generate-driver-manifest --check` exits **2** on a checkout with no build. DEC-002 read that as
+  "requires the artifact at exactly the probed path", and that step is where it went wrong: the file owns
+  no engine resolution at all. At `:710-724` it shells out to `scripts/generate-projections`, which
+  resolves `ENGINE="${FSGG_COORD_ENGINE_BIN:-…/bin/Release/net10.0/fsgg-coord-engine}"` at `:147` — the
+  probed path is a DEFAULT, not a requirement. The counter-example is one command:
+  `FSGG_COORD_ENGINE_BIN=<out-of-tree> python3 scripts/generate-driver-manifest --check` exits **0**.
+
+  So the required-input population DEC-002 identified is real, and it is satisfied by NAMING an engine
+  rather than by siting one where tier 2a probes. `scripts/check-skill-quality` therefore EXPORTS
+  `FSGG_COORD_ENGINE_BIN` rather than prefixing it onto one call — the first draft prefixed it and still
+  failed, because `check-skill-quality.py` reaches `generate-projections` through a grandchild that
+  inherited nothing. With the export in place the full 64-case `tests/skill-quality` suite passes and no
+  `bin` or `obj` is created under `src/FS.GG.Coord.{Cli,Core,GitHub}`.
+
+  **The two limbs are complements, not alternatives, and both are kept.** `engine_shadows_shared`
+  (DEC-001/SB-001) still classifies an incidental artifact as harmless — it must, because a worker who
+  runs `dotnet build` by hand, or a future tool outside this repo, can still create one. The producer
+  change removes the case that was actually biting the fleet. Removing either would leave a live hole.
 - DEC-003 [CQ-003] [AMB:AMB-003]: **THE SWAP IS CONDITIONAL AND ONE-DIRECTIONAL.** An incidental build is
   passed over only for a distinct shared checkout whose engine exists and returns an empty staleness
   verdict. REJECTED — **an unconditional swap**: it would refuse the worker whose own build is current
@@ -155,7 +197,8 @@ publicOrToolFacingImpact: true
 No accepted deferrals recorded.
 
 ## Remaining Ambiguity
-None. All six blocking ambiguities are resolved by DEC-001 through DEC-007 above.
+None. All six blocking ambiguities are resolved by DEC-001 through DEC-007 above; DEC-008 (revision 2)
+supersedes DEC-002 on the operator's 2026-08-16 decision and on measurement that its premise was false.
 
 ## Lifecycle Notes
 - Next lifecycle action: `fsgg-sdd checklist --work 2653-incidental-engine-build-shadow`.

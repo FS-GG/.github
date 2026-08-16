@@ -88,6 +88,31 @@ refused for an artifact they never asked for.
   `coordination-kit` row (`registry/repos.yml:575`), so `registry/repos.lock` is regenerated with
   `scripts/repos.sh relock` and a kit release follows the merge.
 
+### Revision 2 — the second half of criterion 4, on the operator's decision (2026-08-16)
+
+SB-001…SB-008 above shipped in PR #2669 (`490972d7`), which took criterion 4's SECOND limb: the run
+still left a build, and §3g proved it no longer shadowed. The operator then chose criterion 4's FIRST
+limb as well, on the record at `.github#2653#issuecomment-5308188901` — *"redirect incidental builds out
+of tree"* — over two alternatives recorded there as rejected. `.github#2653` stayed OPEN, so this is the
+same row's remaining work rather than a new one, and the two halves are complements: SB-001…SB-008 make
+an incidental artifact HARMLESS, SB-009…SB-011 stop one being MADE.
+
+- SB-009: **The gate harness builds the engine OUT OF TREE.** `scripts/check-skill-quality` — measured
+  as the only harness under `scripts/` or `tests/` that builds the engine into whatever checkout invokes
+  it — delegates to a new `scripts/build-gate-engine`, which builds with `--artifacts-path` to a stable
+  per-checkout directory outside the checkout and prints the resulting engine on stdout. Both `bin/` and
+  `obj/` move, so `src/FS.GG.Coord.{Cli,Core,GitHub}` are left with neither.
+- SB-010: **One answer, not one convention.** The gate and the gate's own fixture
+  (`tests/skill-quality/run.sh`) both ASK `scripts/build-gate-engine` where the engine is, rather than
+  each restating the artifacts layout. A duplicated path suffix is this repo's most-filed bug class.
+- SB-011: **The absence is gated, and the gate can see.** `tests/engine-build-siting/run.py` refuses any
+  `dotnet build` under `scripts/` or `tests/` that could put an engine where tier 2a probes. Candidacy is
+  DEFAULT-DENY (a project named through a variable is in scope, because the gate cannot read it), the
+  declared-site manifest is compared as a SET EQUALITY so a vanished site reds too, and a self-test
+  corpus of must-match/must-not-match spellings runs on every invocation — a matcher that stops matching
+  exits 3, never green. It is wired to `coherence.yml`, which carries no `paths:` filter, because the
+  population it guards is one no path filter encloses.
+
 ## Non-Goals
 
 - SB-101: **Does not change the verb partition.** `BOARD_WRITES`, `BOARD_WRITES_CONDITIONAL` and
@@ -96,12 +121,32 @@ refused for an artifact they never asked for.
 - SB-102: **Does not weaken `stale_guard` for any checkout it is asked about.** Nothing here changes what
   the guard decides once it is asked; it changes only *which* checkout tier 2a hands it, and only toward
   one that answers "current".
-- SB-103: **Does not change the producers.** `scripts/check-skill-quality`, `tests/skill-registry`,
-  `tests/skill-quality`, `scripts/generate-driver-manifest` and every other transitive `dotnet build`
-  caller are untouched. `.github#2653`'s criterion 4 offers "or the run is shown to leave no shadowing
-  build behind", and that is the limb this work satisfies — see DEC-002 for why the other limb is
-  refuted rather than merely not chosen, on the filer's own follow-up evidence that
-  `generate-driver-manifest --write` *requires* the artifact to exist at exactly that path.
+- SB-103: ~~**Does not change the producers.**~~ **SUPERSEDED at revision 2 — and its stated reason was
+  factually wrong, which is recorded here rather than quietly dropped.** The original text refuted the
+  producer-change limb on the ground that "`generate-driver-manifest --write` *requires* the artifact to
+  exist at exactly that path".
+
+  **The OBSERVATION was right; the INFERENCE from it was wrong, and only the inference is retired.**
+  `generate-driver-manifest` really does refuse without an engine — measured here, not assumed:
+  `env -u FSGG_COORD_ENGINE_BIN python3 scripts/generate-driver-manifest --check` exits **2** on a
+  checkout with no build, printing *"no engine at …/bin/Release/net10.0/fsgg-coord-engine"*. But it owns
+  no engine resolution of its own: at `:710-724` it shells out to `scripts/generate-projections`, and
+  THAT file resolves `ENGINE="${FSGG_COORD_ENGINE_BIN:-$HERE/src/FS.GG.Coord.Cli/bin/Release/net10.0/
+  fsgg-coord-engine}"` at `:147`. The probed path is the DEFAULT, never the requirement. So
+  "requires the artifact **at exactly that path**" — the clause the whole non-goal rested on — is false:
+  the same command exits **0** when an out-of-tree engine is named, which is the direct counter-example.
+
+      env -u FSGG_COORD_ENGINE_BIN  … --check   → rc=2, "no engine at <in-tree path>"
+      FSGG_COORD_ENGINE_BIN=<out-of-tree> … --check → rc=0, "…manifests are current."
+
+  Live refutation of the limb as a whole: with the build moved out of tree,
+  `scripts/check-skill-quality` exits 0 and `bash tests/skill-quality/run.sh` passes all 64 rejection
+  cases, while `ls -d src/FS.GG.Coord.*/bin src/FS.GG.Coord.*/obj` finds nothing afterwards. The limb was
+  available the whole time; what it needed was an exported `FSGG_COORD_ENGINE_BIN`, not an in-tree build.
+
+  `tests/skill-registry` is separately retired from the original sentence: it builds no engine at all —
+  `tests/skill-registry/run.sh` invokes `dotnet build` nowhere — so the row's attribution of a shadowing
+  build to that suite was to a `generate-projections` consumer reached from elsewhere, not to it.
 - SB-104: **Does not touch the engine.** No file under `src/` changes.
 - SB-105: **Does not add `scripts/fsgg-coord-guards.sh` to any workflow `paths:` filter.** That gap is
   real and is `.github#2581`'s SB-008, in flight on PR #2651 against the same file; duplicating it here
@@ -125,6 +170,9 @@ refused for an artifact they never asked for.
   an independent critic may already have confirmed.
 - US-004 (P1): As the next person to change this resolution order, an executable leg fails if the
   preference stops distinguishing the two cases, in either direction.
+- US-005 (P1): As a worker whose item touches no engine source, running this repo's gate suite leaves my
+  checkout exactly as it found it, so there is no artifact for tier 2a to prefer and nothing to diagnose
+  — and as the author of the NEXT gate harness, I am told at review time if mine would create one.
 
 ## Acceptance Scenarios
 
@@ -153,6 +201,17 @@ refused for an artifact they never asked for.
   the swap has nothing to look at, then AC-001's leg fails rather than passing over an empty subject.
 - AC-008 [US-001] [FR-008]: Given `registry/repos.lock`, when `scripts/repos.sh relock` is run after the
   shim is edited, then the recorded digest for the `fsgg-coord` kit row matches the file that ships.
+- AC-009 [US-005] [FR-009]: Given a checkout with no engine build, when `scripts/check-skill-quality`
+  runs to completion, then it exits 0 and `src/FS.GG.Coord.{Cli,Core,GitHub}` contain neither `bin` nor
+  `obj` — the engine it used exists, and exists outside the checkout.
+- AC-010 [US-005] [FR-010]: Given a kit author's checkout that ALREADY holds a deliberate in-tree engine
+  build, when the gate suite runs, then that build is neither deleted nor refreshed and the fixture leg
+  passes — the assertion is before-and-after identity, so it cannot red on a legitimate state, and it
+  reds on both creation and refresh.
+- AC-011 [US-005] [FR-011]: Given a new harness that builds the engine into the caller's checkout —
+  whether it names the project literally or through a variable — when `tests/engine-build-siting/run.py`
+  runs, then it exits 1 and names the file; and given a matcher that has stopped matching, it exits 3
+  rather than reporting a green absence.
 
 ## Functional Requirements
 
@@ -164,6 +223,9 @@ refused for an artifact they never asked for.
 - FR-006: The happy path is unchanged — a current engine produces no warning, no refusal, and no swap. (Stories: US-002; Acceptance: AC-006)
 - FR-007: The new behaviour is executable in both directions and non-vacuous: inverting the precondition reds the positive leg, and emptying the fixture's shared engine reds it too. (Stories: US-004; Acceptance: AC-007)
 - FR-008: `registry/repos.lock` is regenerated for the edited `fsgg-coord` kit row and the kit release obligation is named before merge. (Stories: US-001; Acceptance: AC-008)
+- FR-009: The gate harness that builds the engine does so to an explicit output path outside the caller's checkout, leaving no artifact under `src/FS.GG.Coord.{Cli,Core,GitHub}` that `scripts/fsgg-coord`'s tier 2a can resolve. (Stories: US-005; Acceptance: AC-009)
+- FR-010: A build the caller made deliberately is neither removed nor refreshed by any gate run, and the coverage that asserts this measures before-and-after identity rather than absence. (Stories: US-005; Acceptance: AC-010)
+- FR-011: A repo-wide, always-selected gate refuses any `dotnet build` under `scripts/` or `tests/` that could site an engine where tier 2a probes; it is default-deny on unreadable targets, set-equal on its declared-site manifest, and fails to NO VERDICT rather than green when its own matcher corpus does not hold. (Stories: US-005; Acceptance: AC-011)
 
 ## Ambiguities
 

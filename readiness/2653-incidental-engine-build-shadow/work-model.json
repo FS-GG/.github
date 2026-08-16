@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "0715593fe65893dc1bd29625be24af93b75689541b7d6188940c724e69884e5b"
+        "value": "7fe9f04c64ebbbc1935caa6d8ab713e4a70226f890190d81ba64ac78cf3b152e"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "92fa58cc5f423a3fd227bcd525671b7fd839b2edaae19a3a7da6ae8988366cd9"
+        "value": "7b634fb2b364fdc10844f198dc5103c4dbcc4d128ab9b190a368af9b16684659"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bee9c0b71e6d4f599eedc70e5e4d770b1e60b2b307b7169085ae195860b40b14"
+        "value": "d74692142547863b3649194bb630d2b3fbcb0cd281ea33f8cc996f5b87c748cf"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "af14594bae43fddafe1d209ee5094cb7104990087c23b21a3231c0ef5bfa8c6e"
+        "value": "2803265d826e2498fe60f6bddc6ce2174f4afb8755d07f56e67add62199556ec"
       }
     },
     {
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/2653-incidental-engine-build-shadow/spec.md",
       "sourceLocation": {
-        "line": 159,
+        "line": 218,
         "column": 1
       },
       "linkedTaskIds": [
@@ -158,7 +158,7 @@
       "classification": [],
       "source": "work/2653-incidental-engine-build-shadow/spec.md",
       "sourceLocation": {
-        "line": 160,
+        "line": 219,
         "column": 1
       },
       "linkedTaskIds": [
@@ -179,7 +179,7 @@
       "classification": [],
       "source": "work/2653-incidental-engine-build-shadow/spec.md",
       "sourceLocation": {
-        "line": 161,
+        "line": 220,
         "column": 1
       },
       "linkedTaskIds": [
@@ -200,7 +200,7 @@
       "classification": [],
       "source": "work/2653-incidental-engine-build-shadow/spec.md",
       "sourceLocation": {
-        "line": 162,
+        "line": 221,
         "column": 1
       },
       "linkedTaskIds": [
@@ -221,7 +221,7 @@
       "classification": [],
       "source": "work/2653-incidental-engine-build-shadow/spec.md",
       "sourceLocation": {
-        "line": 163,
+        "line": 222,
         "column": 1
       },
       "linkedTaskIds": [
@@ -242,7 +242,7 @@
       "classification": [],
       "source": "work/2653-incidental-engine-build-shadow/spec.md",
       "sourceLocation": {
-        "line": 164,
+        "line": 223,
         "column": 1
       },
       "linkedTaskIds": [
@@ -263,7 +263,7 @@
       "classification": [],
       "source": "work/2653-incidental-engine-build-shadow/spec.md",
       "sourceLocation": {
-        "line": 165,
+        "line": 224,
         "column": 1
       },
       "linkedTaskIds": [
@@ -284,7 +284,7 @@
       "classification": [],
       "source": "work/2653-incidental-engine-build-shadow/spec.md",
       "sourceLocation": {
-        "line": 166,
+        "line": 225,
         "column": 1
       },
       "linkedTaskIds": [
@@ -293,6 +293,57 @@
       "linkedEvidenceIds": [
         "EV008"
       ]
+    },
+    {
+      "id": "FR-009",
+      "title": "The gate harness that builds the engine does so to an explicit output path outside the caller\u0027s checkout, leaving no artifact under \u0060src/FS.GG.Coord.{Cli,Core,GitHub}\u0060 that \u0060scripts/fsgg-coord\u0060\u0027s tier 2a can resolve. (Stories: US-005; Acceptance: AC-009)",
+      "text": "The gate harness that builds the engine does so to an explicit output path outside the caller\u0027s checkout, leaving no artifact under \u0060src/FS.GG.Coord.{Cli,Core,GitHub}\u0060 that \u0060scripts/fsgg-coord\u0060\u0027s tier 2a can resolve. (Stories: US-005; Acceptance: AC-009)",
+      "acceptanceCriteria": [
+        "AC-009"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 226,
+        "column": 1
+      },
+      "linkedTaskIds": [],
+      "linkedEvidenceIds": []
+    },
+    {
+      "id": "FR-010",
+      "title": "A build the caller made deliberately is neither removed nor refreshed by any gate run, and the coverage that asserts this measures before-and-after identity rather than absence. (Stories: US-005; Acceptance: AC-010)",
+      "text": "A build the caller made deliberately is neither removed nor refreshed by any gate run, and the coverage that asserts this measures before-and-after identity rather than absence. (Stories: US-005; Acceptance: AC-010)",
+      "acceptanceCriteria": [
+        "AC-010"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 227,
+        "column": 1
+      },
+      "linkedTaskIds": [],
+      "linkedEvidenceIds": []
+    },
+    {
+      "id": "FR-011",
+      "title": "A repo-wide, always-selected gate refuses any \u0060dotnet build\u0060 under \u0060scripts/\u0060 or \u0060tests/\u0060 that could site an engine where tier 2a probes; it is default-deny on unreadable targets, set-equal on its declared-site manifest, and fails to NO VERDICT rather than green when its own matcher corpus does not hold. (Stories: US-005; Acceptance: AC-011)",
+      "text": "A repo-wide, always-selected gate refuses any \u0060dotnet build\u0060 under \u0060scripts/\u0060 or \u0060tests/\u0060 that could site an engine where tier 2a probes; it is default-deny on unreadable targets, set-equal on its declared-site manifest, and fails to NO VERDICT rather than green when its own matcher corpus does not hold. (Stories: US-005; Acceptance: AC-011)",
+      "acceptanceCriteria": [
+        "AC-011"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2653-incidental-engine-build-shadow/spec.md",
+      "sourceLocation": {
+        "line": 228,
+        "column": 1
+      },
+      "linkedTaskIds": [],
+      "linkedEvidenceIds": []
     }
   ],
   "decisions": [
@@ -305,7 +356,7 @@
       "acceptanceRefs": [],
       "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
       "sourceLocation": {
-        "line": 122,
+        "line": 132,
         "column": 1
       },
       "linkedTaskIds": [
@@ -314,14 +365,14 @@
     },
     {
       "id": "DEC-002",
-      "title": "**THE PRODUCERS ARE NOT CHANGED; CRITERION 4 IS SATISFIED BY ITS",
-      "decision": "**THE PRODUCERS ARE NOT CHANGED; CRITERION 4 IS SATISFIED BY ITS",
+      "title": "~~**THE PRODUCERS ARE NOT CHANGED; CRITERION 4 IS SATISFIED BY ITS",
+      "decision": "~~**THE PRODUCERS ARE NOT CHANGED; CRITERION 4 IS SATISFIED BY ITS",
       "requirementRefs": [],
       "storyRefs": [],
       "acceptanceRefs": [],
       "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
       "sourceLocation": {
-        "line": 129,
+        "line": 139,
         "column": 1
       },
       "linkedTaskIds": [
@@ -337,7 +388,7 @@
       "acceptanceRefs": [],
       "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
       "sourceLocation": {
-        "line": 133,
+        "line": 175,
         "column": 1
       },
       "linkedTaskIds": [
@@ -353,7 +404,7 @@
       "acceptanceRefs": [],
       "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
       "sourceLocation": {
-        "line": 137,
+        "line": 179,
         "column": 1
       },
       "linkedTaskIds": [
@@ -369,7 +420,7 @@
       "acceptanceRefs": [],
       "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
       "sourceLocation": {
-        "line": 142,
+        "line": 184,
         "column": 1
       },
       "linkedTaskIds": [
@@ -385,7 +436,7 @@
       "acceptanceRefs": [],
       "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
       "sourceLocation": {
-        "line": 145,
+        "line": 187,
         "column": 1
       },
       "linkedTaskIds": [
@@ -401,12 +452,26 @@
       "acceptanceRefs": [],
       "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
       "sourceLocation": {
-        "line": 147,
+        "line": 189,
         "column": 1
       },
       "linkedTaskIds": [
         "T015"
       ]
+    },
+    {
+      "id": "DEC-008",
+      "title": "**THE PRODUCERS *ARE* CHANGED; CRITERION 4\u0027s FIRST LIMB IS TAKEN TOO.**",
+      "decision": "**THE PRODUCERS *ARE* CHANGED; CRITERION 4\u0027s FIRST LIMB IS TAKEN TOO.**",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2653-incidental-engine-build-shadow/clarifications.md",
+      "sourceLocation": {
+        "line": 146,
+        "column": 1
+      },
+      "linkedTaskIds": []
     }
   ],
   "tasks": [
@@ -2065,7 +2130,7 @@
           "path": "work/2653-incidental-engine-build-shadow/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "0715593fe65893dc1bd29625be24af93b75689541b7d6188940c724e69884e5b"
+            "value": "7fe9f04c64ebbbc1935caa6d8ab713e4a70226f890190d81ba64ac78cf3b152e"
           },
           "schemaVersion": 1
         },
@@ -2073,7 +2138,7 @@
           "path": "work/2653-incidental-engine-build-shadow/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "92fa58cc5f423a3fd227bcd525671b7fd839b2edaae19a3a7da6ae8988366cd9"
+            "value": "7b634fb2b364fdc10844f198dc5103c4dbcc4d128ab9b190a368af9b16684659"
           },
           "schemaVersion": 1
         },
@@ -2089,7 +2154,7 @@
           "path": "work/2653-incidental-engine-build-shadow/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "bee9c0b71e6d4f599eedc70e5e4d770b1e60b2b307b7169085ae195860b40b14"
+            "value": "d74692142547863b3649194bb630d2b3fbcb0cd281ea33f8cc996f5b87c748cf"
           },
           "schemaVersion": 1
         },
@@ -2097,7 +2162,7 @@
           "path": "work/2653-incidental-engine-build-shadow/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "af14594bae43fddafe1d209ee5094cb7104990087c23b21a3231c0ef5bfa8c6e"
+            "value": "2803265d826e2498fe60f6bddc6ce2174f4afb8755d07f56e67add62199556ec"
           },
           "schemaVersion": 1
         },
@@ -2112,7 +2177,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "523cb252a72b443fcbc5c34c702279d50d7979cd19d526f284613bbc5da900f2"
+        "value": "4642c359d0172ff35187f14d2fd20b738cfc785498a0fc9cf8687e3eb7e1e16a"
       },
       "currency": "current"
     }

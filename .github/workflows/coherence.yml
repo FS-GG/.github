@@ -79,6 +79,28 @@ jobs:
       - name: Assert compatibility.md projects the registry
         run: python scripts/check-projection.py registry/dependencies.yml docs/registry/compatibility.md
 
+  # Engine-build siting gate (.github#2653). No harness a WORKER runs may build the coordination
+  # engine into the worker's own checkout: `scripts/fsgg-coord`'s tier 2a prefers such an artifact
+  # over the shared checkout's engine, and `stale_guard` then fail-closes EVERY board write from that
+  # worktree — for a build the worker never asked for and could not know it had made. Five
+  # occurrences across three agents in one board-driver run on 2026-08-15, and more after.
+  #
+  # NO `paths:` FILTER, AND THAT IS THE WHOLE REASON IT LIVES HERE RATHER THAN IN skill-quality.yml.
+  # This gate's subject is "any harness under scripts/ or tests/ that builds the engine", which is a
+  # population no path filter encloses: the next such harness can land anywhere, and a filter that
+  # fails to match is not a gate that fails — it is a gate that never runs while reporting nothing.
+  # `shell-lint.yml` makes the identical argument for the identical reason. This workflow's own `on:`
+  # above carries no `paths:`, so inheriting it is exactly right; the job is seconds long and
+  # pure-stdlib, and the verdict is f(tree) — hermetic, no world state, nothing to stale.
+  engine-build-siting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Assert no harness builds the coordination engine into the caller's checkout
+        run: python3 tests/engine-build-siting/run.py
+
   # Closed-world gate (#269 / epic #266 instance (c)). Every org fabric iterates registry/repos.yml,
   # so a repo absent from it silently receives nothing — and no other gate can report the absence:
   # coordination-coherence exits 0 for a non-receiver, and repos-audit only iterates repos that are

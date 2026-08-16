@@ -10,8 +10,31 @@ if ! python3 -c 'import yaml' >/dev/null 2>&1; then
   exit 3
 fi
 
-dotnet build "$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" -c Release --nologo >/dev/null
-ENGINE="$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+# THE ENGINE IS BUILT OUT OF TREE, AND THAT IS THIS GATE'S SIDE OF .github#2653. This line used to be
+# `dotnet build "$ROOT/src/FS.GG.Coord.Cli/…"`, which left `bin/` and `obj/` under
+# `src/FS.GG.Coord.{Cli,Core,GitHub}` in whatever checkout invoked the gate. `scripts/fsgg-coord`'s
+# tier 2a then PREFERRED that artifact over the shared checkout's engine, `stale_guard` measured a
+# feature branch that is behind `main` by construction, and every board write from that worktree was
+# refused — for a build the worker never asked for and could not have known it had made. Delegating to
+# `scripts/build-gate-engine` means no resolvable artifact is created here at all; see that file's
+# header for the mechanism, the operator's decision, and the two alternatives it was chosen over.
+ENGINE="$("$ROOT/scripts/build-gate-engine")"
+
+# EXPORTED, NOT PREFIXED ONTO ONE CALL — and that distinction was MEASURED here rather than reasoned
+# about. `generate-projections` resolves its engine as
+# `${FSGG_COORD_ENGINE_BIN:-<root>/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}` and
+# REFUSES when neither exists, so with the build moved out of tree that default is the thing that would
+# reintroduce it one call deeper. Naming it on the explicit invocation below is NOT enough: the FIRST
+# draft of this change did exactly that and still failed, because `check-skill-quality.py` renders the
+# generated process contract by shelling out to `generate-projections` ITSELF, and that grandchild
+# inherited nothing —
+#   ::error::skill-quality: generated process contract is stale or cannot be rendered:
+#   ::error::no engine at <root>/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
+# One export covers every descendant, named or not, which is the only form that cannot be defeated by a
+# consumer nobody enumerated. It is also the variable those consumers ALREADY read, so this adds no
+# protocol — it supplies the answer to the question they were always asking.
+export FSGG_COORD_ENGINE_BIN="$ENGINE"
+
 CONTRACT="$(mktemp "${TMPDIR:-/tmp}/fsgg-command-contract.XXXXXX.json")"
 trap 'rm -f "$CONTRACT"' EXIT
 

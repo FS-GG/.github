@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2653-incidental-engine-build-shadow/clarifications.md
 
 ## Source Snapshot
-- spec: work/2653-incidental-engine-build-shadow/spec.md sha256:af14594bae43fddafe1d209ee5094cb7104990087c23b21a3231c0ef5bfa8c6e schemaVersion:1
-- clarifications: work/2653-incidental-engine-build-shadow/clarifications.md sha256:92fa58cc5f423a3fd227bcd525671b7fd839b2edaae19a3a7da6ae8988366cd9 schemaVersion:1
+- spec: work/2653-incidental-engine-build-shadow/spec.md sha256:2803265d826e2498fe60f6bddc6ce2174f4afb8755d07f56e67add62199556ec schemaVersion:1
+- clarifications: work/2653-incidental-engine-build-shadow/clarifications.md sha256:7b634fb2b364fdc10844f198dc5103c4dbcc4d128ab9b190a368af9b16684659 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.
@@ -33,6 +33,9 @@ Prose status: checklistReady
 - CHK-006 [FR-006] [AC-006] blocking: Requirement FR-006 is testable and linked to acceptance coverage.
 - CHK-007 [FR-007] [AC-007] blocking: Requirement FR-007 is testable and linked to acceptance coverage.
 - CHK-008 [FR-008] [AC-008] blocking: Requirement FR-008 is testable and linked to acceptance coverage.
+- CHK-009 [FR-009] [AC-009] blocking: Requirement FR-009 is testable and linked to acceptance coverage.
+- CHK-010 [FR-010] [AC-010] blocking: Requirement FR-010 is testable and linked to acceptance coverage.
+- CHK-011 [FR-011] [AC-011] blocking: Requirement FR-011 is testable and linked to acceptance coverage.
 
 ## Review Results
 - CR-001 [CHK:CHK-001] [FR-001] [AC-001] pass: Requirement FR-001 is testable and linked to acceptance coverage.
@@ -43,6 +46,9 @@ Prose status: checklistReady
 - CR-006 [CHK:CHK-006] [FR-006] [AC-006] pass: Requirement FR-006 is testable and linked to acceptance coverage.
 - CR-007 [CHK:CHK-007] [FR-007] [AC-007] pass: Requirement FR-007 is testable and linked to acceptance coverage.
 - CR-008 [CHK:CHK-008] [FR-008] [AC-008] pass: Requirement FR-008 is testable and linked to acceptance coverage.
+- CR-009 [CHK:CHK-009] [FR-009] [AC-009] pass: Requirement FR-009 is testable and linked to acceptance coverage.
+- CR-010 [CHK:CHK-010] [FR-010] [AC-010] pass: Requirement FR-010 is testable and linked to acceptance coverage.
+- CR-011 [CHK:CHK-011] [FR-011] [AC-011] pass: Requirement FR-011 is testable and linked to acceptance coverage.
 
 ## Accepted Deferrals
 No accepted checklist deferrals recorded.

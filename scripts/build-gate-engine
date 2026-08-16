@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# THE ONE SANCTIONED WAY A GATE HARNESS GETS A COORDINATION ENGINE (.github#2653).
+#
+# WHAT THIS EXISTS TO STOP. `scripts/fsgg-coord`'s tier 2a prefers a source build under the CALLER's own
+# toplevel, and its reasoning at `scripts/fsgg-coord:209-213` is correct: a worker who builds in their
+# own worktree gets THEIR build, because preempting it would hand them the shared engine and silently
+# discard the edits they are testing. The unstated premise is that a worktree build EXPRESSES INTENT to
+# use it as the engine — and that premise is FALSE for a build a gate harness created transitively.
+# `scripts/check-skill-quality` built the engine into whatever checkout invoked it, so a worker whose
+# item touched no engine source was REQUIRED to create the artifact and was then poisoned by it: a
+# feature branch is behind `main` under the engine's source trees by construction the moment any engine
+# commit lands after it was cut, so `stale_guard` fail-closed every board write from that worktree while
+# the shared checkout was perfectly current one directory up. Five occurrences across three agents in
+# one board-driver run on 2026-08-15, and more after.
+#
+# THE OPERATOR CHOSE THIS MECHANISM, ON THE RECORD, over two rejected alternatives
+# (.github#2653#issuecomment-5308188901):
+#
+#   * MARK INTENTIONAL BUILDS — rejected: it changes the kit author's workflow, and an unmarked
+#     deliberate build would then silently resolve to the shared engine, reintroducing the exact harm
+#     `scripts/fsgg-coord:209-213` exists to prevent.
+#   * HARNESS CLEANS UP AFTER ITSELF — rejected as fragile: a crashed run leaves the shadow, and a kit
+#     author who runs the suite after deliberately building would have that build deleted underneath
+#     them. It repairs the symptom and introduces a new way to lose work.
+#
+# So the artifact is never CREATED in the caller's tree at all. `--artifacts-path` moves BOTH the
+# `bin/` output and the `obj/` intermediates out of the checkout, measured: after a build through this
+# script, `src/FS.GG.Coord.{Cli,Core,GitHub}` contain no `bin` and no `obj` whatsoever. Nothing is asked
+# of workers, tier 2a is untouched for the reader it protects, and it fails safe — an interrupted or
+# crashed run leaves no shadowing artifact behind, because none was ever created here.
+#
+# WHY A SEPARATE COMMAND RATHER THAN A SOURCED LIBRARY. Two callers need the SAME engine — the gate
+# (`scripts/check-skill-quality`) and the gate's own fixture (`tests/skill-quality/run.sh`) — and the
+# thing they must agree on is not a directory convention but an ANSWER. This script prints that answer
+# on stdout, so neither caller restates the artifacts layout and neither can drift from the other. That
+# is this repo's most-filed bug class ("the second copy disagreed": #520, #587/#599, #710, #724), and a
+# path suffix duplicated into a fixture is exactly how it starts. A second invocation is an incremental
+# no-op build, so paying for the answer twice costs approximately nothing.
+#
+# STDOUT IS THE PATH AND NOTHING ELSE — every diagnostic goes to stderr, and the build log is captured
+# rather than streamed so that a caller's `ENGINE="$(scripts/build-gate-engine)"` cannot swallow MSBuild
+# chatter into the path it is about to exec. On failure the whole log is printed to stderr, because "the
+# build broke" and "the build printed nothing" must not look alike (#266).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+PROJ="$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+
+# AN EXPLICIT PATH IS AN INSTRUCTION, NOT A HINT — the same rule `scripts/fsgg-coord` applies at tier 1,
+# repeated here rather than assumed, and for the same reason: if it is set and not runnable, REFUSE
+# instead of quietly building some other engine the caller did not choose. A caller who has already
+# named an engine (a worker escaping a stale shared checkout, or CI reusing one build across steps) gets
+# it back unchanged, and no build runs at all.
+if [ -n "${FSGG_COORD_ENGINE_BIN:-}" ]; then
+  if [ ! -x "${FSGG_COORD_ENGINE_BIN}" ]; then
+    echo "build-gate-engine: FSGG_COORD_ENGINE_BIN is set but not executable: ${FSGG_COORD_ENGINE_BIN}" >&2
+    exit 2
+  fi
+  printf '%s\n' "${FSGG_COORD_ENGINE_BIN}"
+  exit 0
+fi
+
+[ -f "$PROJ" ] || { echo "build-gate-engine: missing engine project $PROJ" >&2; exit 2; }
+
+# THE ARTIFACTS ROOT IS STABLE PER CHECKOUT, AND BOTH HALVES OF THAT MATTER.
+#
+# STABLE, because a fresh `mktemp -d` on every run would make every gate run a full cold build. The
+# whole point of moving the output is that nobody notices it moved.
+#
+# PER CHECKOUT, because two worktrees of this repo run their gates concurrently on this fleet, and one
+# shared artifacts directory would have them writing the same MSBuild outputs at the same time. The slug
+# is the checkout's absolute path with `/` folded to `_`: deterministic, collision-free, and READABLE —
+# a digest here would save characters and cost the one person debugging a stale artifacts tree the
+# ability to tell whose it is.
+SLUG="$(printf '%s' "${ROOT#/}" | tr '/' '_')"
+ART="${FSGG_GATE_ENGINE_ARTIFACTS:-${TMPDIR:-/tmp}/fsgg-gate-engine/$SLUG}"
+
+# AND IT IS PROVED OUT OF TREE RATHER THAN ASSUMED. `$TMPDIR` is inherited from the environment and
+# `FSGG_GATE_ENGINE_ARTIFACTS` is caller-supplied, so "outside the checkout" is an input, not an
+# invariant — and a path that lands back under `$ROOT` would rebuild the very defect this script exists
+# to remove, silently and in the one configuration nobody tests. Refuse instead. The comparison is on
+# canonicalised paths so that a symlinked or `..`-bearing spelling cannot walk back in.
+mkdir -p "$ART"
+ART="$(cd "$ART" && pwd -P)"
+case "$ART/" in
+  "$ROOT"/*)
+    echo "build-gate-engine: REFUSED — the artifacts path resolves INSIDE the checkout:" >&2
+    echo "                   artifacts: $ART" >&2
+    echo "                   checkout:  $ROOT" >&2
+    echo "                   A gate harness that builds the engine into the caller's tree is the" >&2
+    echo "                   .github#2653 defect itself: tier 2a would then prefer that build and" >&2
+    echo "                   stale_guard would refuse every board write from this checkout. Point" >&2
+    echo "                   FSGG_GATE_ENGINE_ARTIFACTS (or TMPDIR) somewhere outside $ROOT." >&2
+    exit 2
+    ;;
+esac
+
+LOG="$(mktemp "${TMPDIR:-/tmp}/build-gate-engine.XXXXXX.log")"
+trap 'rm -f "$LOG"' EXIT
+
+if ! dotnet build "$PROJ" -c Release --nologo --artifacts-path "$ART" >"$LOG" 2>&1; then
+  echo "build-gate-engine: the engine did not build (artifacts path: $ART)" >&2
+  cat "$LOG" >&2
+  exit 2
+fi
+
+# THE LAYOUT IS `--artifacts-path`'s, AND IT IS CHECKED RATHER THAN TRUSTED. `<artifacts>/bin/<project>/
+# <configuration-lowercased>/` is an SDK convention, not a contract this repo owns, so a future SDK that
+# moves it must fail LOUDLY here — with the path it looked at — rather than hand a caller an empty
+# string that only fails several steps later as `: command not found`.
+ENGINE="$ART/bin/FS.GG.Coord.Cli/release/fsgg-coord-engine"
+if [ ! -x "$ENGINE" ]; then
+  echo "build-gate-engine: the build succeeded but produced no engine at the expected path:" >&2
+  echo "                   $ENGINE" >&2
+  echo "                   (\`--artifacts-path\` layout changed?) Found under $ART/bin:" >&2
+  find "$ART/bin" -maxdepth 3 -type f -perm -u+x >&2 2>/dev/null || true
+  exit 2
+fi
+
+printf '%s\n' "$ENGINE"
