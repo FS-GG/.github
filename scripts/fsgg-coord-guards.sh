@@ -447,6 +447,18 @@ default_branch_ref() {   # $1 = checkout
 # one while critiquing .github#2571, and two on .github#2642. Every one self-repaired by deleting
 # `bin`/`obj`; every one first spent a diagnosis the tool does not offer.
 #
+# AND SINCE .github#2653's SECOND HALF, THE ARTIFACT IS NO LONGER CREATED AT ALL — which is where the
+# operator's chosen mechanism landed (`.github#2653#issuecomment-5308188901`), and this function is now
+# the SECOND line of defence rather than the only one. `scripts/build-gate-engine` builds the engine to
+# an explicit `--artifacts-path` OUTSIDE the caller's checkout, `scripts/check-skill-quality` delegates
+# to it, and `tests/engine-build-siting/run.py` refuses any harness under `scripts/` or `tests/` that
+# builds the engine anywhere tier 2a probes. So the incidental build this function classifies should not
+# exist in the first place. It is kept, and kept fail-safe, for the two populations that outlive the
+# harness fix: a worker who ran `dotnet build` by hand while chasing something else, and any future
+# tool — inside this repo or not — that produces the artifact before anyone thinks to declare it. The
+# two repairs are complements, not alternatives: this one makes an incidental artifact HARMLESS, the
+# harness fix stops one being MADE, and the row asked for both (criteria 2 and 4).
+#
 # SO ASK THE CHECKOUT, NOT THE ARTIFACT. Intent lives in the command that ran, which nothing here can
 # see. What IS visible, exactly and cheaply, is whether this checkout holds engine build inputs that
 # exist NOWHERE UPSTREAM — content of its own. Where it does, `:209-213`'s sentence has a subject and its
