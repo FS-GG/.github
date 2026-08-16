@@ -44,6 +44,100 @@ module Batch =
           WaveCapacity: int
           OpenSlots: int }
 
+    /// WHAT OCCUPIES AN IMPLEMENTER SLOT, AND WHAT MERELY LOOKS BUSY (.github#2678).
+    ///
+    /// An implementer slot models A WORKER THAT IS OCCUPIED. `waveOccupancy` below is correct given its
+    /// input and always was; the miscount lived entirely in what the caller handed it — a single flat ref
+    /// list built from a predicate that also admitted a row whose `item/<n>-*` PR is open but whose claim
+    /// is absent, and a reservation whose holder is by name `Unowned`. Measured on `FS-GG/.github` at
+    /// 2026-08-15T19:50Z: three live claims, three PR-only rows, `activeItems: 6`, `openSlots: 0` — while
+    /// three implementer slots were genuinely free and two other projections of the same board read said
+    /// so. `OpenSlots` is `max 0 (capacity - active)` and `waveShortfallHeadline` fires only above zero,
+    /// so once accumulated orphan PRs reach `WaveCapacity` the dispatch signal goes silent permanently —
+    /// silently, which is the failure mode #2096 added that line to prevent.
+    ///
+    /// THE TWO FIELDS ARE TWO FACTS AND THE FIX IS EXACTLY NOT COLLAPSING THEM. A row carrying work that
+    /// nobody holds is real — `.github#2642`, `#2581` and `#2645` were live instances at the moment of
+    /// filing — but it is a disagreement to reconcile, not an occupied slot, and folding it into
+    /// occupancy is precisely what made it invisible. It gets its own name here instead.
+    type SlotOccupancy =
+        { /// The distinct items a worker is holding right now. This, and only this, is the list
+          /// `waveOccupancy` is entitled to count.
+          Occupying: Ref list
+
+          /// The distinct items that show work with nobody holding them. Disjoint from `Occupying` by
+          /// construction below, so a reader may add the two without double-counting a ref.
+          WorkWithoutClaim: Ref list }
+
+    /// Project the scheduler's own inputs onto the implementer-slot question (.github#2678).
+    ///
+    /// THE PREDICATE IS THE CLAIM MARKER, LIVE OR LAPSED. `Item.Claim` is `Reads.reserver`'s answer, and
+    /// a lapsed lease is still a lock that only `reap` breaks (#461/#581/#1792) — its holder is a worker
+    /// who has not gone anywhere. That is the same population `driver --events` calls active
+    /// (`DriverEvents.ItemFacts.ClaimWorker` is this exact field) and the same one `who` reports as held,
+    /// which is what makes three projections of one board read agree instead of disagreeing three ways.
+    ///
+    /// `BatchMember` IS EXCLUDED, DELIBERATELY, AND THAT IS NOT AN OVERSIGHT. A batch member is an item
+    /// THIS run has just chosen and has NOT dispatched — by construction a member of the `Chosen` set the
+    /// caller passes `waveShortfallHeadline` as `schedulableItems`. Counting it as occupied would
+    /// subtract from `OpenSlots` exactly the items that headline exists to tell a host to dispatch INTO
+    /// those slots, double-counting every one of them and shrinking the deficit it is announcing. Nor is
+    /// it `WorkWithoutClaim`: nobody is working it yet, and reporting the scheduler's own answer back as
+    /// an unreconciled disagreement would manufacture an alarm out of a normal run.
+    ///
+    /// `UnknownHolder` asserts nothing about a worker — the token set and the holder set went out of step
+    /// — so it can neither prove a slot occupied nor prove work standing without a claim, and it appears
+    /// in neither list. It is reachable from the wire (`Snapshot.parse`'s `"unknown"` kind, and its
+    /// malformed-`live-claim` fallback), so this is a live arm rather than a defensive one.
+    let implementerSlots (candidates: Item list) (reservations: Reservation list) : SlotOccupancy =
+        let claimed =
+            candidates
+            |> List.choose (fun item -> if item.Claim.IsSome then Some item.Ref else None)
+
+        let heldReservations =
+            reservations
+            |> List.choose (fun r ->
+                match r.Holder with
+                | LiveClaim(_, item, _, _) -> Some item
+                | BatchMember _
+                | Unowned _
+                | UnknownHolder -> None)
+
+        let occupying = claimed @ heldReservations |> List.distinct
+        let occupyingSet = Set.ofList occupying
+
+        // WORK WITH NOBODY HOLDING IT, UNDER ITS OWN NAME. Two shapes reach here and the report loses
+        // neither: a candidate carrying an open `item/<n>-*` PR with no marker on the issue (#651's
+        // duplicate implementation already in flight), and a reservation the assembler minted `Unowned`
+        // off a markerless `In progress` COLUMN. `scripts/fsgg-coord-report` classifies both lanes with
+        // one word — observed work, no claim holder, `work-without-claim` — so they share one name here.
+        let unclaimedWork =
+            candidates
+            |> List.choose (fun item ->
+                if item.Claim.IsNone && item.ItemPr.IsSome then
+                    Some item.Ref
+                else
+                    None)
+
+        let unownedReservations =
+            reservations
+            |> List.choose (fun r ->
+                match r.Holder with
+                | Unowned item -> Some item
+                | LiveClaim _
+                | BatchMember _
+                | UnknownHolder -> None)
+
+        // DISJOINT, ASSERTED HERE RATHER THAN ASSUMED OF THE ASSEMBLER. `Scan.snapshot` cannot emit the
+        // overlap (a marker makes the reservation `RClaim`, never `RUnowned`), but a hand-authored or
+        // offline snapshot can, and a ref counted in both lists is the same double-count this projection
+        // exists to remove.
+        { Occupying = occupying
+          WorkWithoutClaim =
+            unclaimedWork @ unownedReservations
+            |> List.distinct
+            |> List.filter (fun item -> not (Set.contains item occupyingSet)) }
+
     let private waveModelPattern =
         Regex(
             @"<!--\s*fsgg:wave-model:v1\s+waves=(\d+)\s+implementer-slots-per-wave=(\d+)\s+review-slots=(\d+)\s+consolidation-threshold=(\d+)\s*-->",
@@ -84,6 +178,23 @@ module Batch =
 
     let renderWaveOccupancy (occupancy: WaveOccupancy) : string =
         $"wave occupancy: {{\"activeItems\":%d{occupancy.ActiveItems},\"waveCapacity\":%d{occupancy.WaveCapacity},\"openSlots\":%d{occupancy.OpenSlots}}}"
+
+    /// The `work without claim` line, emitted only when the board actually carries one (.github#2678).
+    ///
+    /// ITS OWN LINE, BESIDE `renderWaveOccupancy` RATHER THAN A FOURTH KEY INSIDE IT. #2096 landed that
+    /// three-field object as a machine projection and its readers key on those fields; the new fact is
+    /// additive, so nothing that parses the old line has to change to keep working. Refs are `Canonical`
+    /// for #2155's reason — a machine line may not collapse two accounts' same-numbered rows.
+    let renderWorkWithoutClaim (occupancy: SlotOccupancy) : string option =
+        match occupancy.WorkWithoutClaim with
+        | [] -> None
+        | items ->
+            let refs =
+                items
+                |> List.map (fun item -> "\"" + item.Canonical + "\"")
+                |> String.concat ","
+
+            Some $"work without claim: {{\"items\":%d{List.length items},\"refs\":[%s{refs}]}}"
 
     let waveShortfallHeadline (schedulableItems: int) (occupancy: WaveOccupancy) : string option =
         if occupancy.OpenSlots > 0 && schedulableItems > 0 then

@@ -305,6 +305,12 @@ module ApplicationServiceTests =
         (holders: Map<int, string>)
         (markerAge: Map<int, int>)
         (pathRepos: Map<int, string>)
+        /// issue number → the number of an OPEN `item/<n>-*` PR on it (.github#2678). Empty for every
+        /// pre-existing caller, and empty means the `/pulls` arm below is not served AT ALL rather than
+        /// served as `[]` — `Reads.prAlive` reads those two answers differently (a failed read is
+        /// `LivenessUnknown`, an empty list falls through to the #1055 branch probe), so an empty map has
+        /// to leave every existing world byte-identical to what it was before this parameter existed.
+        (itemPrs: Map<int, int>)
         (offBoard: Set<int>)
         (incomplete: Set<int>)
         (sayFails: bool)
@@ -400,6 +406,18 @@ module ApplicationServiceTests =
                 |> List.map (fun (n, body) -> {| number = n; state = "open"; body = body |})
                 |> JsonSerializer.Serialize
                 |> ok
+            // THE REPO'S OPEN PRs (`Reads.prAlive`, #651/.github#2678). Served ONLY when a fixture asked
+            // for one: this is what makes a markerless row's `itemPr` reach the snapshot, which is the
+            // exact shape — work in flight with no marker on the issue — that used to be counted as an
+            // occupied implementer slot.
+            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" when not (Map.isEmpty itemPrs) ->
+                itemPrs
+                |> Map.toList
+                |> List.map (fun (issue, pr) ->
+                    {| number = pr
+                       head = {| ref = $"item/%d{issue}-fixture" |} |})
+                |> JsonSerializer.Serialize
+                |> ok
             // A DIFFERENT REPO'S issue list, and it is an ERROR rather than an empty array on purpose
             // (.github#1779). `openIssues` is repo-scoped by construction now, so nothing may ask for
             // another repo's issues; serving `[]` would let a cross-repo read pass unnoticed, which is the
@@ -445,9 +463,25 @@ module ApplicationServiceTests =
             holders
             markerAge
             Map.empty
+            Map.empty
             offBoard
             incomplete
             sayFails
+
+    /// `worldOf` plus open `item/<n>-*` PRs, keyed by the issue they belong to (.github#2678). The one
+    /// world in which a MARKERLESS row reaches the snapshot carrying an `itemPr`, which is the row the
+    /// implementer-slot count used to swallow.
+    let private worldOfWithItemPrs statusFor bodies holders itemPrs =
+        worldOfWithScopesAndIncomplete
+            statusFor
+            bodies
+            holders
+            Map.empty
+            Map.empty
+            itemPrs
+            Set.empty
+            Set.empty
+            false
 
     let private worldOf statusFor bodies holders markerAge offBoard sayFails =
         worldOfWithIncomplete statusFor bodies holders markerAge offBoard Set.empty sayFails
@@ -469,6 +503,7 @@ module ApplicationServiceTests =
             holders
             Map.empty
             pathRepos
+            Map.empty
             Set.empty
             Set.empty
             false
@@ -3391,7 +3426,13 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 // streams MERGED — so the verb this fixture refused was the one the fix's blast radius
                 // needed measuring on.
                 | Options.BatchCmd -> Client.batch (context transport) opts
-                | other -> failwithf "this fixture drives take/next/batch only, got %A" other
+                // .github#2678 joined `who` for the reason .github#1562 joined `batch`: the claim this
+                // item makes is that two verbs reading ONE board agree about how many implementer slots
+                // are occupied, and a harness that can only run one of them cannot see the disagreement
+                // at all. `who` needs nothing this fixture does not already serve — the board scan, the
+                // repo's open issues, and each issue's comments are the same three reads `take` makes.
+                | Options.Who -> Client.who (context transport) opts
+                | other -> failwithf "this fixture drives take/next/batch/who only, got %A" other
 
             Console.Out.Flush()
             Console.Error.Flush()
@@ -3661,6 +3702,149 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Contains("must match the typed Protocol.wavePolicy", err)
         Assert.DoesNotContain("WAVE SHORTFALL", err)
         Assert.Equal(0, code)
+
+    // ================================================================================================
+    // .github#2678 — THREE PROJECTIONS OF ONE BOARD READ MUST NOT DISAGREE.
+    // ================================================================================================
+    // The measured event: `FS-GG/.github` at 2026-08-15T19:50Z carried exactly three live claims and
+    // three rows whose `item/*` PR was open with no marker on the issue. `batch` reported
+    // `activeItems: 6, openSlots: 0` with the shortfall headline silent, while `who` reported three held
+    // items and `driver --events` three active ones. The value a host reads AT THE DISPATCH DECISION
+    // POINT was the one that over-counted, and it is monotone: an orphan PR consumes a slot until a
+    // human closes it, so `openSlots` pins at zero permanently once enough accumulate.
+
+    [<Fact>]
+    let ``#2678 an open item PR with no claim holds no slot, and batch and who agree on the count`` () =
+        // #1 and #2 are genuinely held. #11, #12 and #13 are the phantom rows — `In review`, an open
+        // `item/<n>-*` PR, and NO marker on the issue. #20 is ordinary schedulable work.
+        let bodies =
+            [ for n in [ 1; 2; 11; 12; 13; 20 ] -> n, $"Paths: src/%d{n}" ] |> Map.ofList
+
+        let holders = Map.ofList [ 1, "finch-85f3"; 2, "rook-7f26" ]
+        let itemPrs = Map.ofList [ 11, 2655; 12, 2651; 13, 2650 ]
+
+        let statusFor n =
+            if holders.ContainsKey n then "In progress"
+            elif itemPrs.ContainsKey n then "In review"
+            else "Ready"
+
+        let transport = worldOfWithItemPrs statusFor bodies holders itemPrs
+
+        let code, out, err =
+            runQueueWithKit installWaveModel transport [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
+
+        Assert.Equal(0, code)
+
+        // THE STDOUT MACHINE CONTRACT IS UNTOUCHED — this item changes what is counted, never what is
+        // chosen. #20 is the one startable row either way.
+        Assert.Equal("[\"FS-GG/FS.GG.SDD#20\"]" + Environment.NewLine, out)
+
+        // TWO occupied slots out of six, so FOUR are open. Before this change the same board produced
+        // `activeItems: 5, openSlots: 1` — the two claims plus all three orphan PRs.
+        Assert.Contains("wave occupancy: {\"activeItems\":2,\"waveCapacity\":6,\"openSlots\":4}", err)
+
+        // …AND THE SIGNAL #2096 ADDED FIRES. It is conditional on `OpenSlots > 0`, which is exactly what
+        // the over-count suppressed.
+        Assert.Contains("WAVE SHORTFALL", err)
+
+        // ACCEPTANCE 5 — the three rows are not silently dropped either. They are real, and they are said
+        // out loud under the name the reporter already gives them.
+        Assert.Contains(
+            "work without claim: {\"items\":3,\"refs\":[\"FS-GG/FS.GG.SDD#11\",\"FS-GG/FS.GG.SDD#12\",\"FS-GG/FS.GG.SDD#13\"]}",
+            err
+        )
+
+        // ACCEPTANCE 3, HALF ONE — `who` reads the SAME board through a completely different path (the
+        // marker scan, not the scheduler snapshot) and must arrive at the same number of occupied slots.
+        let whoCode, whoOut, _ =
+            runQueueWithKit installWaveModel transport [ "who"; "--repo"; "FS.GG.SDD"; "--json" ]
+
+        Assert.Equal(0, whoCode)
+
+        use whoDoc = JsonDocument.Parse whoOut
+
+        let heldRows =
+            whoDoc.RootElement.EnumerateArray()
+            |> Seq.filter (fun row -> row.GetProperty("state").GetString() = "held")
+            |> Seq.map (fun row -> row.GetProperty("number").GetInt32())
+            |> Seq.sort
+            |> List.ofSeq
+
+        Assert.Equal<int list>([ 1; 2 ], heldRows)
+
+        // Not merely the same COUNT — `who` also does not report the PR-bearing rows as held at all, so
+        // the two verbs agree about which items those are.
+        Assert.DoesNotContain("\"number\":11", whoOut)
+
+    [<Fact>]
+    let ``#2678 batch and driver --events derive the same active set from one snapshot`` () =
+        // ACCEPTANCE 3, THE OTHER HALF, AND THE ONE THAT NEEDS A SHARED SUBJECT. `who` scans markers and
+        // `driver --events` classifies material state; the only way to ask all three about the SAME facts
+        // rather than about three fixtures is to hand two of them one snapshot document and compare.
+        // Both projections below are the production ones: `Client.slotOccupancyOf` is what `batch` and
+        // `driver`'s planner call, and `candidateToItemFacts |> classify |> isActive` is what
+        // `driver --events` calls.
+        let claimed n worker =
+            $"""{{"owner":"FS-GG","repo":"FS.GG.SDD","number":%d{n},"status":"In progress","state":"OPEN","body":"Paths: src/%d{n}","claim":{{"worker":"%s{worker}","ageSeconds":60,"liveness":{{"kind":"lease-held"}}}}}}"""
+
+        let orphanPr n pr =
+            $"""{{"owner":"FS-GG","repo":"FS.GG.SDD","number":%d{n},"status":"In review","state":"OPEN","body":"Paths: src/%d{n}","itemPr":%d{pr}}}"""
+
+        let ready n =
+            $"""{{"owner":"FS-GG","repo":"FS.GG.SDD","number":%d{n},"status":"Ready","state":"OPEN","body":"Paths: src/%d{n}"}}"""
+
+        let items =
+            [ claimed 2664 "finch-85f3"
+              claimed 2667 "rook-7f26"
+              claimed 2668 "wren-a272"
+              orphanPr 2642 2655
+              orphanPr 2581 2651
+              orphanPr 2645 2650
+              ready 2690 ]
+            |> String.concat ","
+
+        // …plus a markerless `In progress` row the assembler reserved as `unowned`. It reserves files and
+        // holds no slot, and it is the reservation arm the old predicate also counted.
+        let inFlight =
+            """{"owner":"FS-GG","repo":"FS.GG.SDD","paths":["src/91"],"holder":{"kind":"unowned","owner":"FS-GG","repo":"FS.GG.SDD","number":91}}"""
+
+        let doc =
+            $"""{{"schema":"fsgg.coord.snapshot/1","allowBacklog":false,"inFlight":[%s{inFlight}],"items":[%s{items}]}}"""
+
+        let slots =
+            Client.slotOccupancyOf doc
+            |> function
+                | Ok s -> s
+                | Error e -> failwithf "the snapshot did not parse: %s" e
+
+        let parsed =
+            Snapshot.parse doc
+            |> function
+                | Ok r -> r
+                | Error e -> failwithf "the snapshot did not parse: %A" e
+
+        let driverActive =
+            parsed.Candidates
+            |> List.map (Client.candidateToItemFacts Map.empty Map.empty 0L "fixture-sha")
+            |> List.map DriverEvents.classify
+            |> List.filter (fun c -> DriverEvents.isActive c.State)
+            |> List.map (fun c -> c.Ref)
+
+        Assert.Equal<string list>(
+            [ "FS-GG/FS.GG.SDD#2664"; "FS-GG/FS.GG.SDD#2667"; "FS-GG/FS.GG.SDD#2668" ],
+            driverActive
+        )
+
+        Assert.Equal<string list>(driverActive, slots.Occupying |> List.map (fun r -> r.Canonical))
+
+        // And the residue is accounted for rather than lost: three orphan PRs and the markerless row.
+        Assert.Equal<string list>(
+            [ "FS-GG/FS.GG.SDD#2642"
+              "FS-GG/FS.GG.SDD#2581"
+              "FS-GG/FS.GG.SDD#2645"
+              "FS-GG/FS.GG.SDD#91" ],
+            slots.WorkWithoutClaim |> List.map (fun r -> r.Canonical)
+        )
 
     [<Fact>]
     let ``the CLAIMED receipt shape is unchanged, byte for byte`` () =

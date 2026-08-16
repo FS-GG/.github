@@ -110,6 +110,29 @@ module Batch =
           WaveCapacity: int
           OpenSlots: int }
 
+    /// What occupies an implementer slot, and what merely looks busy (.github#2678).
+    ///
+    /// An implementer slot models a WORKER THAT IS OCCUPIED. `waveOccupancy` is correct given its input;
+    /// the miscount it was blamed for lived in the flat ref list the caller built for it, which also
+    /// admitted a claim-free row with an open `item/<n>-*` PR and a reservation named `Unowned`. The two
+    /// fields here are two different facts, and keeping them apart is the fix: a row with work and no
+    /// holder is real and worth reporting, but it is a disagreement to reconcile, not a busy worker.
+    type SlotOccupancy =
+        { /// The distinct items a worker is holding right now — the only list `waveOccupancy` may count.
+          Occupying: Ref list
+
+          /// The distinct items showing work that nobody holds. Disjoint from `Occupying`.
+          WorkWithoutClaim: Ref list }
+
+    /// Project a scheduler snapshot's candidates and reservations onto the implementer-slot question.
+    ///
+    /// Occupancy is the claim marker, live or lapsed (#461/#581/#1792) — the same population
+    /// `driver --events` calls active and `who` reports as held. A `BatchMember` is excluded on purpose:
+    /// it is an item this run has chosen and not dispatched, already counted as `schedulableItems` by
+    /// `waveShortfallHeadline`, so counting it here would subtract the very dispatch being announced.
+    /// `UnknownHolder` proves neither occupancy nor unclaimed work and appears in neither list.
+    val implementerSlots: candidates: Item list -> reservations: Reservation list -> SlotOccupancy
+
     /// Parse `<!-- fsgg:wave-model:v1 ... -->` from a host-loop document. Missing, duplicate,
     /// malformed, or non-positive declarations are refused rather than defaulted.
     val parseWaveModel: document: string -> Result<WaveModel, string>
@@ -119,6 +142,11 @@ module Batch =
 
     /// Stable typed projection emitted beside `batch`'s unchanged stdout answer.
     val renderWaveOccupancy: occupancy: WaveOccupancy -> string
+
+    /// The typed `work without claim` line, emitted only when such a row exists (.github#2678). A
+    /// separate line rather than a fourth key on `renderWaveOccupancy`'s landed object, so no existing
+    /// reader of that projection changes.
+    val renderWorkWithoutClaim: occupancy: SlotOccupancy -> string option
 
     /// The explicit advisory emitted only when capacity and schedulable work coexist.
     val waveShortfallHeadline: schedulableItems: int -> occupancy: WaveOccupancy -> string option

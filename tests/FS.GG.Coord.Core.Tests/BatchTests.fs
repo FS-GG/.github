@@ -1171,3 +1171,148 @@ module BatchTests =
         Assert.Contains("dispatch the next wave now", waveShortfallHeadline 1 partial |> Option.get)
         Assert.Equal(None, waveShortfallHeadline 0 partial)
         Assert.Equal(None, waveShortfallHeadline 1 full)
+
+    // ================================================================================================
+    // .github#2678 — WHAT OCCUPIES AN IMPLEMENTER SLOT.
+    // ================================================================================================
+    // `waveOccupancy` above distincts and subtracts; it was never wrong. The miscount was in the ref
+    // list handed to it, and every leg below is a shape that list used to admit. The live measurement
+    // this replays: `FS-GG/.github` at 2026-08-15T19:50Z had exactly three live claims and three rows
+    // whose `item/*` PR was open with no marker on the issue — and `batch` printed `activeItems: 6`,
+    // `openSlots: 0`, with the shortfall headline silent, while `who` and `driver --events` read the
+    // same board and both answered three.
+
+    let private numbersOf (refs: Ref list) = refs |> List.map (fun r -> r.Number)
+
+    let private withItemPr pr it = { it with ItemPr = Some pr }
+
+    [<Fact>]
+    let ``#2678 an open item PR with no claim marker does not occupy an implementer slot`` () =
+        // THE DEFECT, AT ITS SMALLEST. #1 is genuinely held. #2 carries the orphaned PR — the shape the
+        // old `c.Item.Claim.IsSome || c.Item.ItemPr.IsSome` admitted. #3 is a plain Ready row.
+        let slots =
+            implementerSlots
+                [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60
+                  item 2 [ "src/B.fs" ] |> withItemPr 2655
+                  item 3 [ "src/C.fs" ] ]
+                []
+
+        Assert.Equal<int list>([ 1 ], numbersOf slots.Occupying)
+
+        // AND IT IS NOT DISCARDED EITHER — acceptance 5. The row is real; it is simply not a busy worker.
+        Assert.Equal<int list>([ 2 ], numbersOf slots.WorkWithoutClaim)
+
+    [<Fact>]
+    let ``#2678 a claim marker occupies its slot whether the lease is live or lapsed, PR or no PR`` () =
+        // THE OTHER DIRECTION, WHICH THE NARROWING MUST NOT BREAK. A lock is a lock: a lapsed lease is
+        // still held until `reap` breaks it (#461/#581/#1792), and a claimed row whose PR is also open
+        // (the #2450 population — `In review` with a live marker) is ONE occupied slot, not two.
+        let lapsed =
+            { item 2 [ "src/B.fs" ] with
+                Claim =
+                    Some(
+                        { Worker = WorkerId "ghost-222"
+                          Session = None
+                          AgeSeconds = 60 * 60 * 9
+                          PreviousStatus = Some Ready },
+                        LeaseExpiredNoPr
+                    ) }
+
+        let slots =
+            implementerSlots
+                [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60 |> withItemPr 2650
+                  lapsed ]
+                []
+
+        Assert.Equal<int list>([ 1; 2 ], numbersOf slots.Occupying)
+        Assert.Equal<int list>([], numbersOf slots.WorkWithoutClaim)
+
+    [<Fact>]
+    let ``#2678 an Unowned reservation reserves files but occupies no slot, and is reported by name`` () =
+        // `Unowned` is the assembler's markerless `In progress` row: it RESERVES (something is editing
+        // those files) and it is emphatically not a holder — no worker, no lease, nobody to `say` to
+        // (#428). An item nobody owns cannot be consuming an owner's slot.
+        let slots =
+            implementerSlots
+                []
+                [ resv "FS.GG.SDD" [ "src/A.fs" ] (LiveClaim(WorkerId "rook-7f26", ref 1, 60, None))
+                  resv "FS.GG.SDD" [ "src/B.fs" ] (Unowned(ref 91))
+                  resv "FS.GG.SDD" [ "src/C.fs" ] UnknownHolder ]
+
+        Assert.Equal<int list>([ 1 ], numbersOf slots.Occupying)
+
+        // `UnknownHolder` proves NEITHER fact — the token set and the holder set went out of step — so it
+        // may not manufacture a slot, and may not accuse a board of unclaimed work either.
+        Assert.Equal<int list>([ 91 ], numbersOf slots.WorkWithoutClaim)
+
+    [<Fact>]
+    let ``#2678 a batch member is neither occupied nor unclaimed work — it is the dispatch being counted`` () =
+        // ACCEPTANCE 2, DECIDED RATHER THAN LEFT IMPLICIT. A `BatchMember` is an item THIS run chose and
+        // has not dispatched, so it is already the `schedulableItems` argument `waveShortfallHeadline`
+        // receives. Counting it here would subtract from `OpenSlots` the very dispatch the headline is
+        // announcing — the double-count that would replace the one this item removes.
+        let slots =
+            implementerSlots [] [ resv "FS.GG.SDD" [ "src/A.fs" ] (BatchMember(ref 7)) ]
+
+        Assert.Equal<int list>([], numbersOf slots.Occupying)
+        Assert.Equal<int list>([], numbersOf slots.WorkWithoutClaim)
+
+    [<Fact>]
+    let ``#2678 the two lists are distinct and disjoint, so a reader may add them`` () =
+        // A held item that ALSO appears as an `Unowned` reservation (unreachable from `Scan.snapshot`,
+        // representable in a hand-authored snapshot) belongs to occupancy alone. And the same ref
+        // arriving twice is one slot: `waveOccupancy` distincts, but `WorkWithoutClaim` has no such
+        // downstream guard, so it must arrive distinct.
+        let slots =
+            implementerSlots
+                [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60
+                  item 2 [ "src/B.fs" ] |> withItemPr 2655 ]
+                [ resv "FS.GG.SDD" [ "src/A.fs" ] (Unowned(ref 1))
+                  resv "FS.GG.SDD" [ "src/B.fs" ] (Unowned(ref 2))
+                  resv "FS.GG.SDD" [ "src/A.fs" ] (LiveClaim(WorkerId "wren-a272", ref 1, 60, None)) ]
+
+        Assert.Equal<int list>([ 1 ], numbersOf slots.Occupying)
+        Assert.Equal<int list>([ 2 ], numbersOf slots.WorkWithoutClaim)
+
+    [<Fact>]
+    let ``#2678 the live board that was measured: three claims and three orphan PRs leave three slots open`` () =
+        // THE FILED MEASUREMENT, END TO END THROUGH THE PROJECTION AND THE RENDERERS. Six items, three
+        // held, three carrying an open `item/*` PR with no marker. Before this change the first line read
+        // `activeItems: 6, openSlots: 0` and the shortfall headline was absent.
+        let model =
+            parseWaveModel
+                "<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->"
+            |> Result.defaultWith failwith
+
+        let slots =
+            implementerSlots
+                [ item 2664 [ "src/A.fs" ] |> held "finch-85f3" 60
+                  item 2667 [ "src/B.fs" ] |> held "rook-7f26" 60
+                  item 2668 [ "src/C.fs" ] |> held "wren-a272" 60
+                  item 2642 [ "src/D.fs" ] |> withItemPr 2655
+                  item 2581 [ "src/E.fs" ] |> withItemPr 2651
+                  item 2645 [ "src/F.fs" ] |> withItemPr 2650 ]
+                []
+
+        let occupancy = waveOccupancy model slots.Occupying
+
+        Assert.Equal(
+            "wave occupancy: {\"activeItems\":3,\"waveCapacity\":6,\"openSlots\":3}",
+            renderWaveOccupancy occupancy
+        )
+
+        Assert.Equal(
+            Some
+                "work without claim: {\"items\":3,\"refs\":[\"FS-GG/FS.GG.SDD#2642\",\"FS-GG/FS.GG.SDD#2581\",\"FS-GG/FS.GG.SDD#2645\"]}",
+            renderWorkWithoutClaim slots
+        )
+
+        // The signal #2096 added, restored: three open slots and schedulable work, so a host is told.
+        Assert.Contains("dispatch the next wave now", waveShortfallHeadline 1 occupancy |> Option.get)
+
+    [<Fact>]
+    let ``#2678 the work-without-claim line is emitted only when such a row exists`` () =
+        let clean =
+            implementerSlots [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60 ] []
+
+        Assert.Equal(None, renderWorkWithoutClaim clean)
