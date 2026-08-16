@@ -243,21 +243,62 @@
 
        WHY THE LINE IS MINOR. The criterion is the one the 0.56.0 and 0.57.0 entries above apply: a
        patch when no receiver-visible engine verb, flag, help entry, render name, result name, exit
-       code or behaviour moves, and a MINOR when a new receiver protocol boundary appears. Measured
-       against the last commit any receiver actually restores — coord-engine/v0.58.0 at 12ec83f8, the
-       published frontier — this cut adds 290 lines of new PUBLIC SIGNATURE surface across five .fsi
-       files, including an entirely new module: src/FS.GG.Coord.Core/Operation.fsi (154 lines, added
-       by .github#2311's `feat(coord)`, the operation key and its closed vocabulary), plus additions
-       to Batch.fsi (new, 37), Delivery.fsi (26), Driver.fsi (37) and StructuredDecision.fsi (37). A
-       new public module IS a new receiver protocol boundary under that criterion — it is the same
-       thing the 0.52.0 entry took a minor for when it added one render name and one result name, an
-       order of magnitude smaller. The packed kit half agrees independently: the finding-packet
-       contract and the independent-review consolidation are new protocol boundaries in `pnext-item`,
-       not corrections to existing descriptions, which is the distinction the 0.58.1 entry above drew
-       when it took a patch. Verification (flags named without their leading dashes, per this file's
-       own header note — an XML comment may not contain a double hyphen): `git diff` with `stat`, and
-       with `diff-filter=A name-only`, over `12ec83f8..HEAD` restricted to
-       `src/FS.GG.Coord.Core/*.fsi` and to `src/`.
+       code or behaviour moves, and a MINOR when a new receiver protocol boundary appears. The
+       measurement span is the last commit any receiver actually restores — coord-engine/v0.58.0 at
+       12ec83f8, the published frontier — because 0.58.1 reached no feed. Two legs decide it, and BOTH
+       are about reachability rather than size:
+
+         (1) RECEIVER-VISIBLE BEHAVIOUR MOVES, which the 0.50.7 to 0.51.0 entry states as its own rule
+             ("MINOR when the change is receiver-visible behaviour"). Five defect fixes in this span
+             change what a receiver observes from the engine it actually runs: .github#2575 (delivery
+             reports a pending check as a CHECK, not a review problem), .github#2662 (a granted
+             successor critic can record its verdict), .github#2683 (take walks its own ranked
+             candidates after a lost claim CAS instead of giving up), .github#2678 (only LIVE claims
+             count as implementer slots) and .github#2694 (no inventory is not an empty inventory).
+             Verification: those five commits — 25ce038c, 682dc694, febcb5b6, 1624a011, c8e5ac3f — are
+             among the unreleased engine commits `scripts/check-engine-freshness.py` lists at this
+             head, so no receiver has any of them.
+
+         (2) THE PACKED KIT ADDS A NEW RECEIVER PROTOCOL BOUNDARY, which is the 0.57.0 entry's exact
+             shape — that cut took a minor for "a new reviewer protocol boundary, not a correction to
+             an existing description" in packed `pnext-item` content. This span adds the
+             finding-packet contract and the independent-review consolidation to that same skill.
+             `pnext-item` genuinely reaches receivers: `scripts/generate-driver-manifest` asked with
+             `which pnext-item` answers `FS.GG.Kit` at exit 0.
+
+       WHAT THE .fsi COUNT IS, AND WHAT IT IS NOT. This span also adds 290 lines of public signature
+       surface across five .fsi files: a new module, src/FS.GG.Coord.Core/Operation.fsi (154 lines,
+       .github#2311), plus additions to Driver.fsi (37), StructuredDecision.fsi (37), Batch.fsi (37)
+       and Delivery.fsi (26). Read that as CORROBORATION of legs (1) and (2), never as the criterion
+       itself, because on its own it does not meet the criterion:
+
+         * Operation IS NOT YET RECEIVER-REACHABLE. FS.GG.Coord.Core declares IsPackable false (its
+           own fsproj) and ships as no package; FS.GG.Coord.Cli is PackAsTool, and a dotnet tool's
+           payload is INVOKED, not referenced, so no consumer can open this module. Nothing in
+           src/FS.GG.Coord.Cli references it either — it is slice 1 of 6 of .github#2311, and that
+           fsproj says so itself: "Nothing compiled after it references it yet; slices 2 to 6 are its
+           first callers." Public to the F# compiler is not the same fact as reachable by a receiver,
+           and only the second one this criterion asks about.
+         * ONLY Operation.fsi IS NEW. Batch.fsi, Delivery.fsi, Driver.fsi and StructuredDecision.fsi
+           all exist at 12ec83f8 and were WIDENED — Batch.fsi is 264 lines there. An earlier draft of
+           this entry called Batch.fsi new; it was wrong, and independent review caught it.
+         * 26 OF THE 290 ARE ALREADY CLASSIFIED AS A PATCH. All 26 Delivery.fsi lines land in
+           12ec83f8..a415652f, the 0.58.1 span, which the entry above called a false clause removed
+           from an existing description.
+         * THE WIRE SURFACE DID NOT MOVE AT ALL. Protocol.fs is byte-identical across this span, and
+           check-engine-freshness reports 0 of the unreleased commits touching it.
+
+       So do NOT read this entry as licensing "any new public module implies a minor". The 0.52.0
+       entry's minor was for two names ON THE WIRE — `acceptedAwaitingChecks` and `authorizeDelivery`
+       — and comparing a line count against it measures size where the criterion measures reach.
+
+       Verification (flags named without their leading dashes, per this file's own header note — an
+       XML comment may not contain a double hyphen): `git diff` with `stat`, and with
+       `diff-filter=A name-only`, over `12ec83f8..HEAD` restricted to `src/FS.GG.Coord.Core/*.fsi` and
+       to `src/`, the latter returning ONLY Operation.fs and Operation.fsi; `git show` of
+       `12ec83f8:src/FS.GG.Coord.Core/Batch.fsi` piped to `wc -l` giving 264; `git diff` with `numstat`
+       over `12ec83f8..a415652f` for Delivery.fsi giving 26 and over `a415652f..HEAD` giving nothing;
+       `grep` for `Operation.` across src/FS.GG.Coord.Cli source matching no file.
 
        WHY 0.58.1 IS SKIPPED RATHER THAN COMPLETED, AND WHY THAT IS NOT WHAT SETS THE LINE. The
        0.58.1 cut tagged `kit/v0.58.1`, `drivers/v0.58.1` and `coord-engine/v0.58.1` at a415652f and
@@ -266,10 +307,15 @@
        (.github#2654). Tags are immutable (.github#1772), so 0.58.1 cannot be re-cut to carry the
        commits that landed behind it, and the operator recorded the route on .github#2648 on
        2026-08-16: abandon it, bump past it, cut manually. But the line above would be MINOR even if
-       0.58.1 had never been cut — the .fsi surface is what decides it — so this bump is not "the
-       next number after a burned one". Verification: both feeds read directly at 2026-08-16,
-       nuget.org flat-container index and `orgs/FS-GG/packages/nuget/*/versions`; all three packages
-       frontier `0.58.0` and NO `0.58.1` on either feed.
+       0.58.1 had never been cut — legs (1) and (2) are what decide it, and neither one mentions the
+       burned tag — so this bump is not "the next number after a burned one". That independence is
+       measured in both directions rather than argued: all three defect-class fixes 1624a011,
+       c8e5ac3f and febcb5b6 are absent from BOTH 0.58.0 and 0.58.1, so no route to a 0.58.2 patch
+       exists, and the signature span measured from the burned tag instead of the frontier is still
+       264 lines across four files including Operation.fsi. Verification: both feeds read directly at
+       2026-08-16, nuget.org flat-container index and `orgs/FS-GG/packages/nuget/*/versions`; all
+       three packages frontier `0.58.0` and NO `0.58.1` on either feed; `git merge-base` in its
+       ancestor-test form for each of the three commits against `a415652f`.
 
        AND THAT IS WHY 0.58.1 GETS NO STANDING ADVISORY. $(FsggStandingAdvisories) warns consumers
        away from versions that PUBLISHED partially — 0.50.1, 0.50.5 and 0.52.0 each put real bytes on
