@@ -51,10 +51,14 @@ Non-negotiables, restated because they are the ones workers most often skip:
   second `take` also returns 6, stop and report the contention to the host** — never loop. That
   report is the terminal path, not a wasted slot: the host is the only actor that can re-plan a wave,
   and `take` is the dearest verb you have (next bullet), so an unbounded loop spends the fleet's
-  shared REST down to exit **75**, which stops every live wave rather than just you. A repeat exit 6
-  is a **signal in its own right** and not merely a busy board: `pnext-item` §0 records a measured
-  wave where it was the symptom of a sibling holding a session-derived claim id, and there retrying
-  never cleared it. Exit **75** is the opposite case and is never retried.
+  shared REST down to exit **75**, which stops every live wave rather than just you. A second exit 6
+  is worth **reporting rather than routing around**, because contention is not its only cause:
+  `pnext-item` §0 records a measured wave in which an exit 6 was the symptom of a *corrupted lock* —
+  a claim marker written under a shared session-derived id, which cannot separate one agent of a
+  session from another — rather than of a healthy busy board. §0 measures a single refusal and
+  prescribes nothing for the worker that lost the race, so read that as one cause for the host to
+  rule out, not as evidence about what a retry would do. Exit **75** is the opposite case and is
+  never retried.
 
   Local `git`, `dotnet build`,
   `dotnet test` and file reads are free; hermetic scripts under `tests/` that start their own loopback
