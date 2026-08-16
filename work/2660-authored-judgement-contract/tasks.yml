@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2660-authored-judgement-contract/spec.md
-    digest: 7a6ef02863d596fbce6520160160fb61872a78680f515db43f5508aa8aa75f71
+    digest: 29c06b9daa7af9393c5ce70b36be8d367b4fc8165a621b63e4e35c0f08c02205
     schemaVersion: 1
   - label: clarifications
     path: work/2660-authored-judgement-contract/clarifications.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2660-authored-judgement-contract/plan.md
-    digest: b92bb420a1238a31b8ec16b6d9d18ca3c67e14e321fe0a3c190461a53c597255
+    digest: 2e9bc01365b9a79ecef9e9c578dc99eb7ed1bba2bc10decda0dc7ac2ec5860bd
     schemaVersion: 1
 tasks:
   - id: T001
@@ -165,7 +165,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PC-001, PM-001]
+    sourceIds: [PC-001, PC-002, PM-001]
     requiredSkills: [schema-versioning]
     requiredEvidence: [EV014]
   - id: T015
@@ -175,7 +175,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [GV-001, PD-001]
+    sourceIds: [GV-001, PD-001, PD-002]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV015]
 acceptedDeferrals: []

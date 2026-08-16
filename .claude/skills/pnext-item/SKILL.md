@@ -161,6 +161,10 @@ Every checkable assertion you write into the handoff carries `Verification:` or 
 [Handoff-assertion provenance](references/independent-review.md#handoff-assertion-provenance); a claim
 about whether an issue or PR **body** changed is answered by `body-edits` and never by the REST timeline,
 per [Body-edit provenance](references/independent-review.md#body-edit-provenance--the-rest-timeline-does-not-surface-body-edits).
+The body you file is itself evidence someone will act on, so re-derive every checkable `path:line`, count
+and suite-green claim in it before relying on it, per
+[Issue and pull-request body evidence](references/independent-review.md#issue-and-pull-request-body-evidence)
+— the review-time check that owns remote bodies, because a source-only CI checkout cannot read them.
 
 For a bulk rename (or when the critic requires it), produce the typed semantic-diff receipt over the
 exact base/head and declared paths. Classify every changed literal, comment, serialized key, generated
