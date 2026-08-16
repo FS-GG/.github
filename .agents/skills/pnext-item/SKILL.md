@@ -277,24 +277,35 @@ therefore always safe to make again. Making the call here binds the marker to th
 `landable` is about to score and the one that actually merges — the same property §6 has always
 required, reached one step earlier.
 
-**Exactly one answer here means carry on: `stage: landable, action: awaitLandability`.** Everything else
-— any other stage/action pair, and any `verdict: noVerdict` — is a **stop**, and none of it is noise to
-proceed through. That one answer is what a PR gets when its handoff facts are in order *and* its review
-chain is complete and host-accepted, with checks not yet green — including the `claim-generation` window
-that by design cannot be green until this very call writes `fsgg:pr-authorization` (`.github#2504`). It
-is precisely the next step below: wait on `landable` for this exact head. The write happened either way
-— it is unconditional (`.github#2488` removed the `--apply` gate) — so whatever comes back, do not make
-the call a second time.
+**Two answers here mean carry on, and they are the only two.** `stage: landable, action:
+awaitLandability` is the one to expect: it is what a PR gets when its handoff facts are in order *and*
+its review chain is complete and host-accepted, with checks not yet green — including the
+`claim-generation` window that by design cannot be green until this very call writes
+`fsgg:pr-authorization` (`.github#2504`). It is precisely the next step below: wait on `landable` for
+this exact head. `stage: accepted, action: guardedLand` is the other, and far from being a surprise it is
+the engine's **own merge authorization** — `authorizeGuardedLanding` refuses every other action outright
+(`DeliveryApplication.fs`, `transition.Action <> Delivery.GuardedLand -> MergeRefused`), so this pair is
+what a head that is already fully green looks like at this call site. You meet it whenever the marker was
+current and the checks had settled before this call — typically a second call, after a repair below that
+left the head unchanged. Proceed to the merge.
+
+**Every other answer is a stop**, including any `verdict: noVerdict`, which carries no stage/action pair
+at all. None of it is noise to proceed through. The write happened either way — it is unconditional
+(`.github#2488` removed the `--apply` gate) — so repeating the call cannot conjure a different answer by
+itself; what changes the answer is repairing the fact the stop names. Calling again *after* that repair
+is expected rather than forbidden, and costs nothing: against an already-current marker the call is a
+no-op PATCH-skip (see the bullets below).
 
 `stage: reviewReady` is a stop about the **handoff**, and it is the likeliest one to meet here, because
 `Delivery.inspect` tests these facts *before* it ever reads the review chain. `action:
 repairReviewHandoff` means the item branch is not canonical, the canonical closing linkage is missing,
 the declared paths are not verified, or the post-merge obligations are undeclared; `action: moveToReview`
-means the board row is not `In review`. Two of those are failures this same section calls unrepairable or
-obligation-dropping — closing linkage cannot be fixed once merged (`.github#2107`), and an undeclared
-obligation is one nothing downstream will ever chase (`.github#2496`) — so repair the named fact and call
-again rather than merging past it. Like `refreshReview` below, `repairReviewHandoff` renders without its
-problem text, so read the cause off the PR itself.
+means the board row is not `In review`. Two of those reach past this call — closing linkage cannot be
+fixed once merged (`.github#2107`), and an undeclared obligation blocks the item's own completion, because
+after a merge `Delivery.inspect` refuses a verdict outright while obligations are undeclared and holds the
+item at `MergedAwaitingObligations` while any declared one is unverified — so repair the named fact and
+call again rather than merging past it. Like `refreshReview` below, `repairReviewHandoff` renders without
+its problem text, so read the cause off the PR itself.
 
 `action: refreshReview, stage: reviewActive` is a stop about the review **evidence**. `.github#2575`
 stopped folding the liveness clause "review checks are not green" into the review problem list, so a
