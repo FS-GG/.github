@@ -530,8 +530,55 @@ module Driver =
                             errors.Add "a submitted typed diff-audit receipt is malformed"
                         else
                             let submitted = parsed |> List.choose Result.toOption
+
+                            // RECEIPT-INTRINSIC, so it is decided on EVERY path (.github#2694). Which head
+                            // the submitted receipts bind is a fact about the receipts themselves, and
+                            // `reviewChainProblems` reads the answer back as `DiffAuditRequired &&
+                            // DiffAuditHead <> HeadSha`. Leaving it unresolved on the facts-free path would
+                            // merely MOVE the wedge this item removes out of the parser and into
+                            // `Delivery.reviewProblem`, which is why it is hoisted above the live-facts
+                            // match rather than left inside it.
+                            match submitted |> List.map _.HeadSha |> List.distinct with
+                            | [ head ] -> auditHead <- Some head
+                            | _ -> errors.Add "the submitted typed diff-audit receipts are not all bound to one head"
+
+                            // THE CALLER'S STATE IS NOT A VERDICT ABOUT THE SUBJECT (.github#2694, an
+                            // instance of .github#266 in the `facts` formulation). NO INVENTORY WAS
+                            // SUPPLIED is the one fact this arm reads, and it is spelled `None` by BOTH
+                            // routes into it — the facts-free callers, who pass no facts at all, and a
+                            // facts-bearing caller whose `trustedAudit` is `None`. Neither read the diff,
+                            // so neither can be checked against, so this parse renders NO verdict about
+                            // the receipts.
+                            //
+                            // THAT SECOND ROUTE IS NOT HYPOTHETICAL AND IS WHY THIS IS `Option.bind snd`
+                            // RATHER THAN A DEFAULTED EMPTY INVENTORY (round-1 finding M1). Every
+                            // production caller on the `review` path passes `None` here:
+                            // `Review.acceptanceOutcome` derives BOTH of this function's arguments from
+                            // the single field `Facts.DiffAuditTrusted` (`Review.fs:368-369`), and that
+                            // field is hardcoded `None` at both of its constructors — the snapshot route
+                            // (`ReviewApplication.fs:159`, whose own doc comment says "Always `None`
+                            // here") and the live `review <ref>` route (`Client.fs:2133`). Treating that
+                            // `None` as "the engine recomputed an EMPTY inventory" would make every
+                            // correct receipt on the review path "stale or does not match live delivery
+                            // facts" — trading a true statement about the caller for a FALSE accusation
+                            // against the subject, which is this item's own defect one match-arm over and
+                            // in the more damaging direction.
+                            //
+                            // A caller that genuinely recomputed an empty inventory says so by SPELLING
+                            // it: `Some { Expected = []; Discovered = [] }`. That is already expressible
+                            // and is the shape `parseReviewCommentsWithAudit` constructs below, so the
+                            // two facts stay distinguishable in the type without either being inferred
+                            // from an absence.
+                            //
+                            // Refusing on `None` made a generation whose initial record sets
+                            // `diffAuditRequired: true` permanently unacceptable: `review record` seals its
+                            // acceptance through `parseEffectiveReviewComments`, the facts-free spelling, and
+                            // both escapes were closed — a second `initial` is refused until a host
+                            // acceptance that could never be written. Every receipt shape, correct or not,
+                            // produced that same one message, so the refusal separated nothing and removing
+                            // it withdraws no detection this parser ever had.
                             match trustedFacts |> Option.bind snd with
-                            | None -> errors.Add "the live delivery facts needed to check a diff-audit receipt are absent"
+                            | None -> ()
                             | Some trusted ->
                                 for receipt in submitted do
                                     match
@@ -549,10 +596,6 @@ module Driver =
                                 if not (List.isEmpty uncovered) then
                                     errors.Add
                                         $"the submitted typed diff-audit receipts account for %d{trusted.Discovered.Length - uncovered.Length} of %d{trusted.Discovered.Length} discovered occurrences"
-
-                                match submitted |> List.map _.HeadSha |> List.distinct with
-                                | [ head ] -> auditHead <- Some head
-                                | _ -> errors.Add "the submitted typed diff-audit receipts are not all bound to one head"
 
                 if errors.Count = 0 then
                     let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. confirmations.Length ]

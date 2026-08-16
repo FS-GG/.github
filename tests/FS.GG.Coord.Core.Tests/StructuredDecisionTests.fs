@@ -631,6 +631,204 @@ module StructuredDecisionTests =
         let misplaced = { required with DiffAuditReceipts = [ "not-base64" ]; Digest = "" } |> reseal
         Assert.True(StructuredDecision.validateReviewLedger required.Subject [ misplaced ] |> Result.isError)
 
+    /// One well-formed diff-audit receipt bound to `headSha`, honest about the pair it names.
+    let private auditReceipt headSha =
+        let occurrence : SemanticDiff.Occurrence =
+            { Id = "occ-1"
+              Path = "src/FS.GG.Coord.Core/Driver.fs"
+              Line = 1
+              Classification = SemanticDiff.StringLiteral
+              Confidence = 100
+              Before = "OldToken"
+              After = "NewToken"
+              Disposition = SemanticDiff.IntendedContractChange }
+
+        SemanticDiff.receipt
+            "FS-GG/.github"
+            (String.replicate 40 "b")
+            headSha
+            "OldToken"
+            "NewToken"
+            [ "src/FS.GG.Coord.Core/Driver.fs" ]
+            true
+            [ occurrence ]
+        |> SemanticDiff.toBase64
+
+    /// A generation whose INITIAL record sets `diffAuditRequired: true`, with the acceptance carrying a
+    /// well-formed receipt bound to `receiptHead`.
+    let private requiredAuditChain receiptHead =
+        let initial, acceptance, _ = acceptedChain ()
+        let required = { initial with DiffAuditRequired = true; Digest = "" } |> reseal
+        let accepted =
+            { acceptance with
+                PreviousDigest = Some required.Digest
+                DiffAuditReceipts = receiptHead |> Option.map auditReceipt |> Option.toList
+                Digest = "" }
+            |> reseal
+        required, [ reviewComment 1L required; reviewComment 2L accepted ]
+
+    /// .github#2694. The facts-free parser used to answer "the live delivery facts needed to check a
+    /// diff-audit receipt are absent" — a fact about the CALLER — as a refusal of the SUBJECT's receipt.
+    /// `review record` seals a host acceptance through `parseEffectiveReviewComments`, which is that
+    /// spelling, so a generation whose initial record set the flag could never be accepted, and the
+    /// fresh-`initial` escape is closed until an acceptance exists. It cost PR #2682 a whole review chain.
+    [<Fact>]
+    let ``2694 a required diff audit with a correct receipt is acceptable on the facts-free path`` () =
+        let required, comments = requiredAuditChain (Some(String.replicate 40 "a"))
+
+        let chain = Driver.parseReviewComments comments |> expectOk
+        Assert.True chain.HostAccepted
+        Assert.True chain.DiffAuditRequired
+        // Receipt-intrinsic and therefore still decided: which head the receipts bind.
+        Assert.Equal(Some required.HeadSha, chain.DiffAuditHead)
+
+        // The exact spelling `review record` validates a host-acceptance write with.
+        Assert.True(Driver.parseEffectiveReviewComments required.HeadSha comments |> Result.isOk)
+
+        // And the wedge does not merely MOVE into the delivery boundary's structural read.
+        Assert.False(
+            Driver.validateReviewChainStructure 3 { chain with ChecksGreen = true }
+            |> List.exists (fun problem -> problem.Contains "diff-audit"))
+
+    /// The companion non-vacuity leg: the repair withdraws only the verdict the parser could not support,
+    /// never the refusals that are decidable from the receipts themselves. A corpus of REAL offenders,
+    /// each still refused on the same facts-free path the test above now passes on.
+    [<Fact>]
+    let ``2694 the facts-free path still refuses every receipt defect it can decide`` () =
+        let reviewedHead = String.replicate 40 "a"
+        let strayHead = String.replicate 40 "c"
+
+        // Absent, and malformed: both decidable without live facts, both still refused.
+        Assert.True(requiredAuditChain None |> snd |> Driver.parseReviewComments |> Result.isError)
+
+        let required, _ = requiredAuditChain None
+        let _, wellFormed = requiredAuditChain (Some reviewedHead)
+        Assert.Equal(required.HeadSha, reviewedHead)
+
+        let malformedComments =
+            let initial, acceptance, _ = acceptedChain ()
+            let req = { initial with DiffAuditRequired = true; Digest = "" } |> reseal
+            let accepted =
+                { acceptance with
+                    PreviousDigest = Some req.Digest
+                    DiffAuditReceipts = [ "not-base64" ]
+                    Digest = "" }
+                |> reseal
+            [ reviewComment 1L req; reviewComment 2L accepted ]
+
+        Assert.True(Driver.parseReviewComments malformedComments |> Result.isError)
+        Assert.True(Driver.parseReviewComments wellFormed |> Result.isOk)
+
+        // A receipt bound to a head this generation never reviewed is stale, and the structural read that
+        // `Delivery.reviewProblem` and `Review.acceptanceOutcome` consume is where that is refused — the
+        // parser resolves the head, `reviewChainProblems` compares it. Splitting it that way is why the
+        // parser can stop rendering a verdict without any stale receipt becoming acceptable.
+        let stray = requiredAuditChain (Some strayHead) |> snd |> Driver.parseReviewComments |> expectOk
+        Assert.Equal(Some strayHead, stray.DiffAuditHead)
+        Assert.Contains(
+            "required diff-audit receipt is missing, stale, or unresolved",
+            Driver.validateReviewChainStructure 3 { stray with ChecksGreen = true })
+
+    /// .github#2694 acceptance 2, corrected by round-1 finding M1. "I could not obtain what I would check
+    /// against" and "your receipt is wrong" are different facts, and the DIVIDING LINE IS NOT WHICH
+    /// SPELLING THE CALLER USED — it is whether an inventory was supplied at all. `trustedAudit = None`
+    /// is "no inventory", on the facts-bearing spelling exactly as on the facts-free one; an inventory
+    /// that was recomputed and came back empty is spelled `Some { Expected = []; Discovered = [] }`.
+    ///
+    /// The first half of this test is the production shape: `Review.acceptanceOutcome` derives BOTH
+    /// arguments from `Facts.DiffAuditTrusted`, hardcoded `None` at both constructors, so
+    /// `parseReviewCommentsWithFacts false None` is byte-for-byte what the live `review` route passes. An
+    /// earlier revision of this gate asserted that shape MUST be refused as stale, which pinned the
+    /// defect as an invariant — a gate can fire and still defend the wrong thing.
+    [<Fact>]
+    let ``2694 no inventory renders no verdict but a supplied empty inventory refuses a stale receipt`` () =
+        let _, comments = requiredAuditChain (Some(String.replicate 40 "a"))
+
+        // No inventory supplied — the exact argument shape every production `review` caller constructs.
+        // Nothing was read, so nothing is asserted about the receipt.
+        let unchecked = Driver.parseReviewCommentsWithFacts false None comments |> expectOk
+        Assert.True unchecked.HostAccepted
+
+        // An inventory that WAS recomputed and came back empty is an answer, and it is spelled out. A
+        // receipt naming a rename that inventory does not contain is stale, and says so about the RECEIPT.
+        let empty : SemanticDiff.TrustedAudit = { Expected = []; Discovered = [] }
+
+        match Driver.parseReviewCommentsWithFacts false (Some empty) comments with
+        | Ok _ -> failwith "a receipt naming a rename the recomputed inventory does not contain was authorized"
+        | Error errors ->
+            Assert.Contains(errors, fun (problem: string) -> problem.Contains "stale or does not match live delivery facts")
+            Assert.DoesNotContain(errors, fun (problem: string) -> problem.Contains "are absent")
+
+    /// .github#2694 round-1 finding M1, pinned on the PRODUCTION ROUTE rather than on the parser, because
+    /// the parser-level shape is precisely what the previous revision of this suite got wrong.
+    ///
+    /// `Review.Facts.DiffAuditTrusted` is hardcoded `None` at both of its constructors — the snapshot
+    /// route and the live `review <ref>` route — and `Review.acceptanceOutcome` derives both parser
+    /// arguments from that one field. So a generation whose initial record sets `diffAuditRequired: true`,
+    /// carrying a CORRECT receipt bound to the reviewed head, must not be classified `MalformedEvidence`
+    /// or parked: `MalformedEvidence`'s taught recovery is to close the pull request without merging,
+    /// which is the exact cost this item was filed for.
+    [<Fact>]
+    let ``2694 the production review route accepts a correct receipt it never recomputed`` () =
+        let required, comments = requiredAuditChain (Some(String.replicate 40 "a"))
+
+        let binding : Review.Binding =
+            { ItemRef = "FS-GG/.github#42"
+              Pr = 77
+              HeadSha = required.HeadSha
+              ClaimGeneration = "claim-1"
+              // Distinct from the chain's critic `tern-42`; `inspect` fails closed when they are equal.
+              ImplementerIdentity = "crake-d8b3"
+              Phase = Review.Ordinary
+              Round = 1 }
+
+        let facts : Review.Facts =
+            { Comments = comments
+              Checks = Types.PrGreen
+              RepairPhaseGranted = None
+              RepairRouteAvailable = true
+              // THE PRODUCTION VALUE, not a convenience: `ReviewApplication.fs` and `Client.fs` both
+              // hardcode `None` here, and neither reads the live diff.
+              DiffAuditTrusted = None }
+
+        match Review.inspect binding facts None None with
+        | Error errors -> failwithf "the production review route refused a correct receipt: %A" errors
+        | Ok verdict ->
+            match verdict.State with
+            | Review.MalformedEvidence errors ->
+                failwithf
+                    "a correct diff-audit receipt was classified MalformedEvidence, whose taught recovery is to close the PR unmerged: %A"
+                    errors
+            | _ -> ()
+
+            match verdict.NextAction with
+            | Review.Park reason -> failwithf "the production review route parked a correct receipt: %s" reason
+            | _ -> ()
+
+    /// .github#2694 acceptance 4. The refusal a wedged critic is standing in front of must name the route
+    /// out, because `Driver.fsi` is not on any critic's read path and the answer being rediscovered under
+    /// time pressure is what cost PR #2682 its chain.
+    [<Fact>]
+    let ``2694 the refused second initial names the successor pull request route`` () =
+        let initial = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        let second =
+            { review 2 (Some initial.Digest) StructuredDecision.Initial StructuredDecision.Pass 0 None None with
+                Digest = "" }
+            |> reseal
+
+        match StructuredDecision.validateReviewLedger initial.Subject [ initial; second ] with
+        | Ok _ -> failwith "a second initial record was admitted without a host acceptance"
+        | Error errors ->
+            let refusal =
+                errors
+                |> List.tryFind (fun (problem: string) -> problem.Contains "a new initial review is allowed only after host acceptance")
+
+            match refusal with
+            | None -> failwithf "the expected refusal was not produced: %A" errors
+            | Some refusal ->
+                Assert.Contains("successor pull request", refusal.ToLowerInvariant())
+                Assert.Contains("unmerged", refusal.ToLowerInvariant())
+
     [<Fact>]
     let m6_moved_head_parses_only_new_live_generation () =
         let initialA, acceptanceA, _ = acceptedChain ()

@@ -108,6 +108,23 @@ module Driver =
     /// already describe can move.
     val liveReviewComments: currentHead: string -> comments: ReviewComment list -> LiveReviewComments
 
+    /// The FACTS-FREE spelling: it supplies no live delivery facts, so it decides everything about a
+    /// review chain EXCEPT whether a submitted diff-audit receipt matches the live diff, which it cannot
+    /// read. Where a diff audit is required it still refuses a receipt that is absent, malformed, or not
+    /// bound to one single head — every refusal that is decidable from the receipts themselves — and
+    /// renders no verdict on the one question it would need the live diff to answer (.github#2694).
+    ///
+    /// A caller that must have that question ANSWERED, rather than merely not answered wrongly, calls
+    /// `parseReviewCommentsWithFacts` AND supplies a recomputed inventory. Passing `None` there is not
+    /// that: it is this same "no inventory" fact by another spelling, and every production caller on the
+    /// `review` path passes exactly that (.github#2694 round-1 M1).
+    ///
+    /// A generation gains NO fresh-`initial` escape from having been refused: retirement applies only to
+    /// an ACCEPTED generation. A `diffAuditRequired: true` generation is no longer terminal at all — it
+    /// was terminal only because of the conflation this function's implementation now removes. The
+    /// terminal-generation answer itself is stated where a wedged critic actually meets it, which is not
+    /// a signature file: it travels with `StructuredDecision`'s "a new initial review is allowed only
+    /// after host acceptance" refusal, the exact string and moment of the wedge.
     val parseReviewComments: comments: ReviewComment list -> Result<ReviewChain, string list>
 
     /// Parse review evidence while binding any mandatory diff audit to an independently recomputed
@@ -115,6 +132,21 @@ module Driver =
     val parseReviewCommentsWithAudit:
         trustedAudit: SemanticDiff.Receipt -> comments: ReviewComment list -> Result<ReviewChain, string list>
 
+    /// The FACTS-BEARING spelling, and the only one that CAN check a submitted diff-audit receipt against
+    /// the diff — but only when it is actually handed an inventory.
+    ///
+    /// `trustedAudit = None` means NO INVENTORY WAS SUPPLIED, exactly as it does on the facts-free
+    /// spelling, and no verdict is rendered about the receipts. It does NOT mean "the engine recomputed
+    /// and found nothing" (.github#2694 round-1 M1). Reading it that way would be false at every
+    /// production caller on the `review` path: `Review.acceptanceOutcome` derives both of this function's
+    /// arguments from `Review.Facts.DiffAuditTrusted`, which is hardcoded `None` at both of its
+    /// constructors — `ReviewApplication.fs` (snapshot route) and `Client.fs` (live route) — so a correct
+    /// receipt would be accused of being stale on the one route a host actually lands through.
+    ///
+    /// A CALLER THAT GENUINELY RECOMPUTED AN EMPTY INVENTORY SPELLS IT
+    /// `Some { Expected = []; Discovered = [] }`. That distinguishes "I looked and found nothing" from
+    /// "I did not look" in the type rather than by inference, which is the whole of this item: an empty
+    /// result and an absent read are different facts and must not share a spelling.
     val parseReviewCommentsWithFacts:
         mechanicallyRequired: bool ->
         trustedAudit: SemanticDiff.TrustedAudit option ->
@@ -122,7 +154,10 @@ module Driver =
             Result<ReviewChain, string list>
 
     /// Parse the structured review generation effective at the current PR head after retiring accepted
-    /// generations for older heads.
+    /// generations for older heads. Facts-free: it reaches `parseReviewComments`, so its diff-audit
+    /// contract is that function's (.github#2694). This is the spelling `review record` seals a host
+    /// acceptance through, which is why a verdict rendered here on the ABSENCE of live facts could
+    /// terminally wedge a generation.
     val parseEffectiveReviewComments:
         currentHead: string -> comments: ReviewComment list -> Result<ReviewChain, string list>
 
