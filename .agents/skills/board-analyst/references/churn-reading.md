@@ -29,6 +29,12 @@ rather than a count, because five workers and two critics were live in that wind
 `budget` call billed its own request. Read `used` from the `source response-header` line, not from
 `/rate_limit`, which disagrees with the counter these are billed against.
 
+**The method carries one validity precondition, and it is the half easiest to omit: confirm `reset`
+did not advance between the two reads.** The REST window is hourly and rolling, so a delta that
+straddles a reset is not an upper bound at all — it silently *under*-states the cost, which is the
+harmful direction here and the opposite of every other error this section warns about. A measurement
+whose two endpoints sit in different windows is not a measurement; discard it and re-take it.
+
 **Re-measure the same way rather than quoting that 13.** REST is spent on per-row claim markers while
 Projects v2 reads go over GraphQL, so the cost tracks the rows a verb examines — it is a function of
 board size and verb, not a constant, and both change. The reason this correction matters is not

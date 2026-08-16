@@ -46,18 +46,26 @@ Non-negotiables, restated because they are the ones workers most often skip:
   unmetered board. Do not weaken it because the budget looks healthy.
 
   **The hazard is a second `take` against a live or successful one — not a retry after a REFUSAL.**
-  Exit **6** (`EX_CONTENDED`) means the CAS lost every race and you hold nothing; its documented
-  remedy is to back off briefly and retry, because the board is busy rather than empty. Retrying
-  there cannot put two workers on one item, since no claim was made. Stopping there instead spends a
-  dispatch slot on nothing. Exit **75** is the opposite and is never retried. Local `git`,
-  `dotnet build`,
+  Exit **6** (`EX_CONTENDED`) means the claim CAS lost every race *for it* and you hold nothing, so a
+  retry cannot put two workers on one item. **Retry at most once, after a brief back-off. If the
+  second `take` also returns 6, stop and report the contention to the host** — never loop. That
+  report is the terminal path, not a wasted slot: the host is the only actor that can re-plan a wave,
+  and `take` is the dearest verb you have (next bullet), so an unbounded loop spends the fleet's
+  shared REST down to exit **75**, which stops every live wave rather than just you. A repeat exit 6
+  is a **signal in its own right** and not merely a busy board: `pnext-item` §0 records a measured
+  wave where it was the symptom of a sibling holding a session-derived claim id, and there retrying
+  never cleared it. Exit **75** is the opposite case and is never retried.
+
+  Local `git`, `dotnet build`,
   `dotnet test` and file reads are free; hermetic scripts under `tests/` that start their own loopback
   fixture are free; single-item `gh pr view`/`gh issue view`/`gh run view --log-failed` are cheap.
   Any exit 75 is a fleet-wide stop the host owns — stop and report it, never retry.
 
 - **The REST budget is real, but it is not a constant — measure it rather than inherit a figure.**
   Read `scripts/fsgg-coord budget`'s REST `used` (`source response-header`; `/rate_limit` disagrees
-  with the counter these are billed against) either side of one operation. So measured on
+  with the counter these are billed against) either side of one operation, **and confirm `reset` did
+  not advance between the two reads** — the window is hourly and rolling, so a delta that straddles a
+  reset is not a bound at all, and it fails in the direction that under-states cost. So measured on
   `FS-GG/.github` at ~130 rows of an hourly 5,000, each figure an **upper bound** because other
   workers were live across every window: one `scan` **≤13** requests
   (2026-08-15T20:15:32Z→20:17:08Z), one `batch -n 1` **≤85** (2026-08-15T19:46:29Z→19:50:25Z), two
