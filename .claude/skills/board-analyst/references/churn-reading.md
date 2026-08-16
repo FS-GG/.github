@@ -16,10 +16,31 @@ scripts/fsgg-coord issues .github --state all --refresh
 
 That is the whole input for parts 1 and 2. It is REST and ETag-revalidated — a 304 costs nothing — and
 it returns every issue with `created_at`, `closed_at`, `state` and `title`, which is enough to derive
-the window arithmetic locally with `jq` or `python3`. **Do not reach for a board `scan` here.** A scan
-costs on the order of 1,900 REST requests of an hourly 5,000 shared with every live worker, and it
-answers a scheduling question, not a churn question. The single `scan` this role is allowed is the lane
-check after filing.
+the window arithmetic locally with `jq` or `python3`. **Do not reach for a board `scan` here** — it
+answers a scheduling question, not a churn question, and that is the whole reason on its own. The
+single `scan` this role is allowed is the lane check after filing.
+
+Cost is the secondary consideration, and it is **not the constant this paragraph used to assert**. It
+said a scan costs "on the order of 1,900 REST requests of an hourly 5,000" — unsourced, and roughly
+two orders of magnitude high. Measured on this board: one `scan --repo .github` returning 130 items
+moved `scripts/fsgg-coord budget`'s REST `used` from 64 to 77 across
+`2026-08-15T20:15:32Z`→`2026-08-15T20:17:08Z` — a delta of **≤13 requests**, and an upper bound
+rather than a count, because five workers and two critics were live in that window and the second
+`budget` call billed its own request. Read `used` from the `source response-header` line, not from
+`/rate_limit`, which disagrees with the counter these are billed against.
+
+**The method carries one validity precondition, and it is the half easiest to omit: confirm `reset`
+did not advance between the two reads.** The REST window is hourly and rolling, so a delta that
+straddles a reset is not an upper bound at all — it silently *under*-states the cost, which is the
+harmful direction here and the opposite of every other error this section warns about. A measurement
+whose two endpoints sit in different windows is not a measurement; discard it and re-take it.
+
+**Re-measure the same way rather than quoting that 13.** REST is spent on per-row claim markers while
+Projects v2 reads go over GraphQL, so the cost tracks the rows a verb examines — it is a function of
+board size and verb, not a constant, and both change. The reason this correction matters is not
+tidiness: the discarded figure was load-bearing for dispatch, and a host quoting it withheld a whole
+wave against headroom of several hundred scans (`.github#2679`). An over-statement of cost fails in
+the direction that always looks like prudence.
 
 Pull requests share the issue number space; exclude anything carrying `pull_request` before you count,
 or every merged PR inflates both halves and the net delta stays accidentally right for the wrong
@@ -67,6 +88,15 @@ this part of the reading catches the ones already on the board.
 A remedy names a mechanism, not an intention. *"Be more careful about duplicates"* is not a remedy.
 *"Fold #A and #B onto #C and close them; the successors stop because #C's acceptance criteria name the
 class"* is a remedy — someone can do it and someone else can check whether it worked.
+
+**And a remedy naming a live row number carries the instant at which it was correct.** Part 1's rule
+— state the window as a closed interval — governs the *remedies* here, not only the deltas. A
+prescription about `#N` is a claim about `#N`'s state, so it decays exactly like a delta does, and
+faster: rows are re-titled, re-scoped and re-purposed while the reading that prescribed for them
+stands. Either timestamp it, or name the **pattern** instead of the row, which does not decay at all.
+An undated prescription is the same defect as an unsourced figure — a claim the next reader cannot
+check against anything, that silently stops being true — and § *A worked reading* below carries a
+measured instance of it going wrong within seven hours.
 
 ### A sixth shape, which the five parts above will miss unless you look for it
 
@@ -145,7 +175,8 @@ thing this reading exists to supply.
 **4. Rows restating a derived condition.** `.github#2648`, again. `scripts/check-engine-freshness.py`
 derives *"the engine's SOURCE against the version the fleet can actually restore"* and its docstring
 names four prior recurrences (`scripts/check-engine-freshness.py:2-8`). The board is caching a gate's
-output.
+output — **as read at this window's endpoint**. Read part 5's remedy for this row before acting on
+that verdict: it had stopped being the whole picture by the next morning.
 
 **5. Remedy, and the pathology verdict.**
 
@@ -196,10 +227,32 @@ window, state its bounds, and state what "landed" counts.
 
 Two structural pathologies are present and neither is a rate problem:
 
-- *Derived-condition caching.* Remedy: close `.github#2648` as a row and carry the release debt as an
-  **operator decision** instead — the scope limit in `SKILL.md` exempts decisions from test 1, and
+- *Derived-condition caching.* Remedy **as prescribed at this window's endpoint,
+  `2026-08-15T17:00:00Z`**: close `.github#2648` as a row and carry the release debt as an **operator
+  decision** instead — the scope limit in `SKILL.md` exempts decisions from test 1, and
   `scripts/check-engine-freshness.py` already reports the condition continuously. This retires the row
   and loses no tracking.
+
+  **That prescription was falsified within seven hours, and it is kept here with its refutation
+  because that is the more useful exemplar.** By `2026-08-16T00:30:00Z` the first clause — *close the
+  row* — had become the wrong act: `kit/v0.58.1` and `coord-engine/v0.58.1` were cut at a commit
+  neither feed ever published, and tags are immutable (`.github#1772`), so the version is burned and
+  the debt is no longer the continuously-derived one the gate reports. Had the row been closed, the
+  board would carry no owner for a burned coherent-set version. `#2648` was instead re-titled and
+  rewritten to carry exactly the operator decision the prescription's *second* clause called for —
+  which closing the row would have discarded along with the cache.
+
+  *Verification, re-taken at `2026-08-16T08:45:00Z` rather than inherited:* `git rev-list -n1
+  kit/v0.58.1` and `git rev-list -n1 coord-engine/v0.58.1` both → `a415652fc63456b8a3988cbb4228b388d8c84409`;
+  `git rev-list --count a415652f..origin/main` → `43`; nuget.org's `fs.gg.kit` flat-container index
+  serves `0.55.0, 0.56.0, 0.57.0, 0.58.0` — `0.58.1` absent, so the tag exists and the bytes do not.
+  `.github#2648` is OPEN under its rewritten title.
+
+  **The lesson is the one part 5 now states as a rule.** *"Close it — the gate is the tracking"* and
+  *"rewrite it into the decision the gate cannot make"* are different answers, and test 2 does not
+  distinguish them: a derived condition can acquire a residue the gate does not derive, and on that
+  day it did. A prescription that names a live row and no instant cannot be re-checked by the reader
+  who acts on it — which is this file's own subject, one level up.
 - *A three-generation repair chain in `guarded-boundary.py`.* Remedy: name the class on `.github#2667`
   itself — *every touch of a loaded decision program sits behind one fail-closed boundary* — and make
   that the acceptance criterion, so generation four is **evidence on `#2667`** under test 3 rather than

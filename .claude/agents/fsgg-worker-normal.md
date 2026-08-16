@@ -40,12 +40,46 @@ Non-negotiables, restated because they are the ones workers most often skip:
     that to the host rather than starting a second one**. A second `take` against a live one is how
     two workers land on one item.
 
-- **Scans are the scarce resource.** A board scan costs on the order of 1,900 REST requests of an
-  hourly 5,000, shared with every other live worker. Run exactly one `take`, then never scan again:
-  no `batch`, `ready`, `who`, `overlap --active`, or second `take`. Local `git`, `dotnet build`,
+- **Run exactly one `take`, then never scan again**: no `batch`, `ready`, `who`, `overlap --active`,
+  or second `take`. **This is a correctness rule and it does not rest on what a scan costs** — a
+  second `take` against a live one is how two workers land on one item, and that would be true on an
+  unmetered board. Do not weaken it because the budget looks healthy.
+
+  **The hazard is a second `take` against a live or successful one — not a retry after a REFUSAL.**
+  Exit **6** (`EX_CONTENDED`) means the claim CAS lost every race *for it* and you hold nothing, so a
+  retry cannot put two workers on one item. **Retry at most once, after a brief back-off. If the
+  second `take` also returns 6, stop and report the contention to the host** — never loop. That
+  report is the terminal path, not a wasted slot: the host is the only actor that can re-plan a wave,
+  and `take` is the dearest verb you have (next bullet), so an unbounded loop spends the fleet's
+  shared REST down to exit **75**, which stops every live wave rather than just you. A second exit 6
+  is worth **reporting rather than routing around**, because contention is not its only cause:
+  `pnext-item` §0 records a measured wave in which an exit 6 was the symptom of a *corrupted lock* —
+  a claim marker written under a shared session-derived id, which cannot separate one agent of a
+  session from another — rather than of a healthy busy board. §0 measures a single refusal and
+  prescribes nothing for the worker that lost the race, so read that as one cause for the host to
+  rule out, not as evidence about what a retry would do. Exit **75** is the opposite case and is
+  never retried.
+
+  Local `git`, `dotnet build`,
   `dotnet test` and file reads are free; hermetic scripts under `tests/` that start their own loopback
   fixture are free; single-item `gh pr view`/`gh issue view`/`gh run view --log-failed` are cheap.
   Any exit 75 is a fleet-wide stop the host owns — stop and report it, never retry.
+
+- **The REST budget is real, but it is not a constant — measure it rather than inherit a figure.**
+  Read `scripts/fsgg-coord budget`'s REST `used` (`source response-header`; `/rate_limit` disagrees
+  with the counter these are billed against) either side of one operation, **and confirm `reset` did
+  not advance between the two reads** — the window is hourly and rolling, so a delta that straddles a
+  reset is not a bound at all, and it fails in the direction that under-states cost. So measured on
+  `FS-GG/.github` at ~130 rows of an hourly 5,000, each figure an **upper bound** because other
+  workers were live across every window: one `scan` **≤13** requests
+  (2026-08-15T20:15:32Z→20:17:08Z), one `batch -n 1` **≤85** (2026-08-15T19:46:29Z→19:50:25Z), two
+  back-to-back `take` runs **≤379 combined** (2026-08-16T08:40:12Z→08:41:44Z, a window that also held
+  two single-item REST reads and the closing `budget` call). `take` is the dearest
+  verb because REST is spent on per-row claim markers while Projects v2 reads go over GraphQL — so
+  cost tracks the rows a verb examines and is not fixed. Re-measure on your own board; these numbers
+  are an order of magnitude, not a constant to quote onward. They replace an unsourced "~1,900
+  requests per scan" that was roughly two orders of magnitude high and had already converted healthy
+  headroom into a withheld wave (`.github#2679`).
 
 - **Check the shared checkout's engine before your first board write** (`pnext-item` §1). If it is
   behind, do not `take`: report "the shared engine is N commits behind" and stop. The repair belongs
