@@ -175,7 +175,19 @@ module StructuredDecision =
                       if prior.HeadSha = record.HeadSha then
                           yield "a new review generation requires head movement after host acceptance"
                   | Initial, Some _ ->
-                      yield "a new initial review is allowed only after host acceptance"
+                      // THE ANSWER TRAVELS WITH THE REFUSAL (.github#2694 acceptance 4). This is the exact
+                      // string, and the exact moment, at which a wedged critic is standing: they have just
+                      // tried to append a second `initial` to escape a generation that cannot be accepted.
+                      // Saying only "not allowed" leaves them to rediscover the route under time pressure,
+                      // which on 2026-08-15 cost PR #2682 a whole digest-chained review chain before the
+                      // successor PR #2692 was reached by trial. So the refusal names the route.
+                      yield
+                          "a new initial review is allowed only after host acceptance — a REFUSED generation "
+                          + "gains no fresh-initial escape, because retirement applies only to an ACCEPTED one, "
+                          + "at this head and after the head moves. For a generation that is genuinely terminal "
+                          + "(the ordinary and repair-phase confirmation ceilings exhausted), the answer is a "
+                          + "SUCCESSOR PULL REQUEST: open a fresh, separately scoped pull request and close this "
+                          + "one unmerged with its records preserved — never a second initial record here."
                   | (Confirmation | Escalation | RepairPhase | Acceptance), Some prior when prior.Kind = Acceptance ->
                       yield "host acceptance may be followed only by a new initial review generation"
                   | Confirmation, _ ->

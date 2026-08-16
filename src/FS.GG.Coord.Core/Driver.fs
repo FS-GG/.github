@@ -543,24 +543,32 @@ module Driver =
                             | _ -> errors.Add "the submitted typed diff-audit receipts are not all bound to one head"
 
                             // THE CALLER'S STATE IS NOT A VERDICT ABOUT THE SUBJECT (.github#2694, an
-                            // instance of .github#266 in the `facts` formulation). These are two different
-                            // facts, and `Option.bind snd` used to collapse them into one refusal:
+                            // instance of .github#266 in the `facts` formulation). NO INVENTORY WAS
+                            // SUPPLIED is the one fact this arm reads, and it is spelled `None` by BOTH
+                            // routes into it — the facts-free callers, who pass no facts at all, and a
+                            // facts-bearing caller whose `trustedAudit` is `None`. Neither read the diff,
+                            // so neither can be checked against, so this parse renders NO verdict about
+                            // the receipts.
                             //
-                            //   `None`          — the caller supplied NO live delivery facts at all
-                            //                     (`parseReviewComments`, and `parseEffectiveReviewComments`
-                            //                     through it). Nothing was read, so nothing can be checked,
-                            //                     so this parse renders NO verdict about the receipts. That
-                            //                     is not a pass either: the receipt-decidable refusals above
-                            //                     and around it still stand, and the live check is performed
-                            //                     by the facts-bearing callers — `Review.acceptanceOutcome`
-                            //                     and the `driver` planner — which are the only callers that
-                            //                     can perform it at all.
-                            //   `Some(_, None)` — the caller DID read the live diff and independently
-                            //                     recomputed an EMPTY inventory. An empty answer is an
-                            //                     answer, not an absence, so it is checked against exactly
-                            //                     as any other inventory is: a receipt naming a rename the
-                            //                     engine did not find is stale, and now says so in those
-                            //                     words instead of blaming the facts.
+                            // THAT SECOND ROUTE IS NOT HYPOTHETICAL AND IS WHY THIS IS `Option.bind snd`
+                            // RATHER THAN A DEFAULTED EMPTY INVENTORY (round-1 finding M1). Every
+                            // production caller on the `review` path passes `None` here:
+                            // `Review.acceptanceOutcome` derives BOTH of this function's arguments from
+                            // the single field `Facts.DiffAuditTrusted` (`Review.fs:368-369`), and that
+                            // field is hardcoded `None` at both of its constructors — the snapshot route
+                            // (`ReviewApplication.fs:159`, whose own doc comment says "Always `None`
+                            // here") and the live `review <ref>` route (`Client.fs:2133`). Treating that
+                            // `None` as "the engine recomputed an EMPTY inventory" would make every
+                            // correct receipt on the review path "stale or does not match live delivery
+                            // facts" — trading a true statement about the caller for a FALSE accusation
+                            // against the subject, which is this item's own defect one match-arm over and
+                            // in the more damaging direction.
+                            //
+                            // A caller that genuinely recomputed an empty inventory says so by SPELLING
+                            // it: `Some { Expected = []; Discovered = [] }`. That is already expressible
+                            // and is the shape `parseReviewCommentsWithAudit` constructs below, so the
+                            // two facts stay distinguishable in the type without either being inferred
+                            // from an absence.
                             //
                             // Refusing on `None` made a generation whose initial record sets
                             // `diffAuditRequired: true` permanently unacceptable: `review record` seals its
@@ -569,13 +577,9 @@ module Driver =
                             // acceptance that could never be written. Every receipt shape, correct or not,
                             // produced that same one message, so the refusal separated nothing and removing
                             // it withdraws no detection this parser ever had.
-                            match trustedFacts with
+                            match trustedFacts |> Option.bind snd with
                             | None -> ()
-                            | Some(_, trustedAudit) ->
-                                let trusted =
-                                    trustedAudit
-                                    |> Option.defaultValue ({ Expected = []; Discovered = [] }: SemanticDiff.TrustedAudit)
-
+                            | Some trusted ->
                                 for receipt in submitted do
                                     match
                                         trusted.Expected

@@ -729,19 +729,105 @@ module StructuredDecisionTests =
             "required diff-audit receipt is missing, stale, or unresolved",
             Driver.validateReviewChainStructure 3 { stray with ChecksGreen = true })
 
-    /// .github#2694 acceptance 2. "I could not obtain what I would check against" and "your receipt is
-    /// wrong" are different facts and used to be the same refusal. `trustedAudit = None` on the
-    /// FACTS-BEARING spelling is the second of those: the caller read the live diff and recomputed an
-    /// EMPTY inventory, which is an answer, so a receipt naming a rename it does not contain is stale.
+    /// .github#2694 acceptance 2, corrected by round-1 finding M1. "I could not obtain what I would check
+    /// against" and "your receipt is wrong" are different facts, and the DIVIDING LINE IS NOT WHICH
+    /// SPELLING THE CALLER USED — it is whether an inventory was supplied at all. `trustedAudit = None`
+    /// is "no inventory", on the facts-bearing spelling exactly as on the facts-free one; an inventory
+    /// that was recomputed and came back empty is spelled `Some { Expected = []; Discovered = [] }`.
+    ///
+    /// The first half of this test is the production shape: `Review.acceptanceOutcome` derives BOTH
+    /// arguments from `Facts.DiffAuditTrusted`, hardcoded `None` at both constructors, so
+    /// `parseReviewCommentsWithFacts false None` is byte-for-byte what the live `review` route passes. An
+    /// earlier revision of this gate asserted that shape MUST be refused as stale, which pinned the
+    /// defect as an invariant — a gate can fire and still defend the wrong thing.
     [<Fact>]
-    let ``2694 an empty recomputed inventory is a verdict about the receipt not about the facts`` () =
+    let ``2694 no inventory renders no verdict but a supplied empty inventory refuses a stale receipt`` () =
         let _, comments = requiredAuditChain (Some(String.replicate 40 "a"))
 
-        match Driver.parseReviewCommentsWithFacts false None comments with
-        | Ok _ -> failwith "a receipt naming a rename the live diff does not contain was authorized"
+        // No inventory supplied — the exact argument shape every production `review` caller constructs.
+        // Nothing was read, so nothing is asserted about the receipt.
+        let unchecked = Driver.parseReviewCommentsWithFacts false None comments |> expectOk
+        Assert.True unchecked.HostAccepted
+
+        // An inventory that WAS recomputed and came back empty is an answer, and it is spelled out. A
+        // receipt naming a rename that inventory does not contain is stale, and says so about the RECEIPT.
+        let empty : SemanticDiff.TrustedAudit = { Expected = []; Discovered = [] }
+
+        match Driver.parseReviewCommentsWithFacts false (Some empty) comments with
+        | Ok _ -> failwith "a receipt naming a rename the recomputed inventory does not contain was authorized"
         | Error errors ->
             Assert.Contains(errors, fun (problem: string) -> problem.Contains "stale or does not match live delivery facts")
             Assert.DoesNotContain(errors, fun (problem: string) -> problem.Contains "are absent")
+
+    /// .github#2694 round-1 finding M1, pinned on the PRODUCTION ROUTE rather than on the parser, because
+    /// the parser-level shape is precisely what the previous revision of this suite got wrong.
+    ///
+    /// `Review.Facts.DiffAuditTrusted` is hardcoded `None` at both of its constructors — the snapshot
+    /// route and the live `review <ref>` route — and `Review.acceptanceOutcome` derives both parser
+    /// arguments from that one field. So a generation whose initial record sets `diffAuditRequired: true`,
+    /// carrying a CORRECT receipt bound to the reviewed head, must not be classified `MalformedEvidence`
+    /// or parked: `MalformedEvidence`'s taught recovery is to close the pull request without merging,
+    /// which is the exact cost this item was filed for.
+    [<Fact>]
+    let ``2694 the production review route accepts a correct receipt it never recomputed`` () =
+        let required, comments = requiredAuditChain (Some(String.replicate 40 "a"))
+
+        let binding : Review.Binding =
+            { ItemRef = "FS-GG/.github#42"
+              Pr = 77
+              HeadSha = required.HeadSha
+              ClaimGeneration = "claim-1"
+              // Distinct from the chain's critic `tern-42`; `inspect` fails closed when they are equal.
+              ImplementerIdentity = "crake-d8b3"
+              Phase = Review.Ordinary
+              Round = 1 }
+
+        let facts : Review.Facts =
+            { Comments = comments
+              Checks = Types.PrGreen
+              RepairPhaseGranted = None
+              RepairRouteAvailable = true
+              // THE PRODUCTION VALUE, not a convenience: `ReviewApplication.fs` and `Client.fs` both
+              // hardcode `None` here, and neither reads the live diff.
+              DiffAuditTrusted = None }
+
+        match Review.inspect binding facts None None with
+        | Error errors -> failwithf "the production review route refused a correct receipt: %A" errors
+        | Ok verdict ->
+            match verdict.State with
+            | Review.MalformedEvidence errors ->
+                failwithf
+                    "a correct diff-audit receipt was classified MalformedEvidence, whose taught recovery is to close the PR unmerged: %A"
+                    errors
+            | _ -> ()
+
+            match verdict.NextAction with
+            | Review.Park reason -> failwithf "the production review route parked a correct receipt: %s" reason
+            | _ -> ()
+
+    /// .github#2694 acceptance 4. The refusal a wedged critic is standing in front of must name the route
+    /// out, because `Driver.fsi` is not on any critic's read path and the answer being rediscovered under
+    /// time pressure is what cost PR #2682 its chain.
+    [<Fact>]
+    let ``2694 the refused second initial names the successor pull request route`` () =
+        let initial = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        let second =
+            { review 2 (Some initial.Digest) StructuredDecision.Initial StructuredDecision.Pass 0 None None with
+                Digest = "" }
+            |> reseal
+
+        match StructuredDecision.validateReviewLedger initial.Subject [ initial; second ] with
+        | Ok _ -> failwith "a second initial record was admitted without a host acceptance"
+        | Error errors ->
+            let refusal =
+                errors
+                |> List.tryFind (fun (problem: string) -> problem.Contains "a new initial review is allowed only after host acceptance")
+
+            match refusal with
+            | None -> failwithf "the expected refusal was not produced: %A" errors
+            | Some refusal ->
+                Assert.Contains("successor pull request", refusal.ToLowerInvariant())
+                Assert.Contains("unmerged", refusal.ToLowerInvariant())
 
     [<Fact>]
     let m6_moved_head_parses_only_new_live_generation () =
