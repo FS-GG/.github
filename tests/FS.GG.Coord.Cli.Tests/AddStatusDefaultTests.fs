@@ -3,6 +3,7 @@ namespace FS.GG.Coord.Cli.Tests
 open System
 open System.IO
 open Xunit
+open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
@@ -157,7 +158,21 @@ module AddStatusDefaultTests =
     /// comment POST on the row. `posted` is where this fixture keeps it, so a leg can anchor on the
     /// RECEIPT — the bytes that reach GitHub — rather than on the stderr sentence about it, which is the
     /// same rule the board-write assertions above already follow.
-    let private worldCapturing (posted: ResizeArray<string>) (column: Column) issueBody blockedBy =
+    /// The row's own comment ledger, as `Reads.commentBodies` reads it — a JSON array of `{"body": …}`.
+    ///
+    /// .github#2698 needs this to be a PARAMETER rather than the hardcoded `[]` it was, because the
+    /// refusal it adds is a refusal about an ABSENCE, and a gate asserting an absence is satisfied by a
+    /// reader that matches NOTHING. `.github#2312` shipped exactly that: an ordering gate whose check
+    /// never matched, green forever. So every refusal leg below is paired with a PRESENCE leg driven
+    /// through this same seam, and the presence corpus is deliberately more than one spelling.
+    let private commentsJson (bodies: string list) =
+        bodies
+        |> List.mapi (fun i body ->
+            System.Text.Json.JsonSerializer.Serialize {| id = 9000 + i; body = body |})
+        |> String.concat ","
+        |> sprintf "[%s]"
+
+    let private worldCapturingWithComments (posted: ResizeArray<string>) (column: Column) issueBody blockedBy (comments: string list) =
         let board = Board column
 
         Fake.Recorder(fun (req: Request) ->
@@ -174,7 +189,7 @@ module AddStatusDefaultTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok issueBody
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/9" -> ok """{"number":9,"body":"Paths: docs/reports/new-file.md"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/9/comments" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (commentsJson comments)
             | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
                 match req.Body with
                 | Json payload ->
@@ -189,12 +204,55 @@ module AddStatusDefaultTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    let private worldCapturing (posted: ResizeArray<string>) (column: Column) issueBody blockedBy =
+        worldCapturingWithComments posted column issueBody blockedBy []
+
     let private worldWithBodyAndBlockedBy (column: Column) issueBody blockedBy =
         worldCapturing (ResizeArray()) column issueBody blockedBy
 
     let private worldWithBody (column: Column) issueBody = worldWithBodyAndBlockedBy column issueBody None
 
     let private world (column: Column) = worldWithBody column IssueBody
+
+    // ---- .github#2698 — THE ROUTE-RECEIPT CORPUS -----------------------------------------------------
+    //
+    // `.github#2312`'s repair is the pattern being copied: a gate that asserts an absence needs N
+    // spellings that MUST be recognised and M lookalikes that must NOT be, or a reader that recognises
+    // nothing satisfies every refusal leg at once.
+
+    /// The row's canonical subject, which is what `routeEvidence` validates the ledger against.
+    let private Subject = "FS-GG/FS.GG.SDD#42"
+
+    /// SPELLING 1 — an ordinary `lightweight` decision. The overwhelmingly common real receipt.
+    let private LightweightReceipt =
+        StructuredFixtures.routeComment Subject (Some DeliveryRoute.Lightweight) "fixture-rook" None
+
+    /// SPELLING 2 — an `sdd-required` decision, carrying the SDD bindings that route demands. Here so the
+    /// presence path cannot be satisfied by a reader that only ever recognises the word `lightweight`:
+    /// the gate's question is "is there a CURRENT decision", never "which route did it pick".
+    let private SddRequiredReceipt =
+        StructuredFixtures.routeComment Subject (Some DeliveryRoute.SddRequired) "fixture-rook" (Some "2698-route")
+
+    /// LOOKALIKE 1 — a well-formed, valid receipt for a DIFFERENT row. `validateRouteLedger` binds the
+    /// record to its subject, and this is the failure a copy-pasted receipt actually produces.
+    let private OtherSubjectReceipt =
+        StructuredFixtures.routeComment "FS-GG/FS.GG.SDD#43" (Some DeliveryRoute.Lightweight) "fixture-rook" None
+
+    /// LOOKALIKE 2 — the receipt's exact JSON with NO marker. The ledger is found by its marker; naked
+    /// payload is not evidence, and a reader that scanned for `"route"` anywhere in a comment would
+    /// wrongly accept this.
+    let private UnmarkedReceiptJson =
+        StructuredFixtures.routeJson Subject (Some DeliveryRoute.Lightweight) "fixture-rook" None
+
+    /// LOOKALIKE 3 — the marker, verbatim, with prose in front of it. `structuredRouteLedger` requires
+    /// the marker to OPEN the comment; a human quoting the protocol in a discussion must not board a row.
+    let private QuotedMarkerComment =
+        "As discussed, the receipt would read:\n\n" + LightweightReceipt
+
+    /// LOOKALIKE 4 — a different protocol marker entirely, on the same row. The claim lock lives in this
+    /// same ledger, so every real row has one of these beside its receipt.
+    let private ClaimMarkerComment =
+        "<!-- fsgg:claim worker=vole-418 lease=120 renewed=1 session=s prev=Ready pathRepo=FS.GG.SDD -->"
 
     let private context (transport: Fake.Recorder) : Client.Context =
         { Transport = transport
@@ -210,7 +268,13 @@ module AddStatusDefaultTests =
     let private sessionVars =
         [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
 
-    let private runAddWithStderr (transport: Fake.Recorder) (args: string list) : int * string * string =
+    /// Drive ONE CLI verb as a real command line, isolated on its own cache and pinned identity.
+    ///
+    /// `runAddWithStderr` was this function with `Client.addCmd` welded in. .github#2698 needs the same
+    /// scaffolding for `set-field` and `release`, because the refusal it adds is ONE shared gate reached
+    /// through four doors, and a gate proven at one door is a gate a scheduled job walks around — which is
+    /// exactly what the host measured on 2026-08-16, seven times, at doors this module did not drive.
+    let private runVerbWithStderr (invoke: Client.Context -> Options.Options -> int) (transport: Fake.Recorder) (args: string list) : int * string * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1823-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
@@ -236,7 +300,7 @@ module AddStatusDefaultTests =
                 | Ok o -> o
                 | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-            let code = Client.addCmd (context transport) opts
+            let code = invoke (context transport) opts
             Console.Out.Flush()
             Console.Error.Flush()
             code, captured.ToString(), capturedErr.ToString()
@@ -253,6 +317,8 @@ module AddStatusDefaultTests =
                 Directory.Delete(dir, true)
             with _ ->
                 ()
+
+    let private runAddWithStderr (transport: Fake.Recorder) (args: string list) = runVerbWithStderr Client.addCmd transport args
 
     let private runAdd transport args =
         let code, stdout, _ = runAddWithStderr transport args
@@ -357,7 +423,10 @@ module AddStatusDefaultTests =
 
     [<Fact>]
     let ``#1823 AC2 --status names the column instead of the default`` () =
-        let transport = world NotOnBoard
+        // .github#2698: `--status Ready` now requires a current delivery-route receipt, so this leg — and
+        // every other `--status Ready` leg in this module — supplies one. That is not fixture upkeep: it
+        // is the PRESENCE half of the new gate's corpus, and it reds if the receipt reader stops reading.
+        let transport = worldCapturingWithComments (ResizeArray()) NotOnBoard IssueBody None [ LightweightReceipt ]
 
         let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
@@ -407,7 +476,8 @@ module AddStatusDefaultTests =
         // The distinction the item draws: the DEFAULT defers to what is there, an EXPLICIT column does
         // not. `add --status X` is `set-field <ref> Status X` reached from `add`, and a flag accepted and
         // then silently declined is #867's defect on #867's own flag.
-        let transport = world (OnBoardSet "In progress")
+        let transport =
+            worldCapturingWithComments (ResizeArray()) (OnBoardSet "In progress") IssueBody None [ LightweightReceipt ]
 
         let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
@@ -532,7 +602,7 @@ module AddStatusDefaultTests =
         // `--status` is the caller naming the column — `set-field <ref> Status <S>` reached from `add`
         // (#1823 AC2) — so it carries the channel for the same reason the default does.
         let posted = ResizeArray<string>()
-        let transport = worldCapturing posted NotOnBoard IssueBody None
+        let transport = worldCapturingWithComments posted NotOnBoard IssueBody None [ LightweightReceipt ]
 
         let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
@@ -542,3 +612,386 @@ module AddStatusDefaultTests =
         let recorded = List.exactlyOne (watermarksIn posted)
         Assert.Contains("intent=auto", recorded)
         Assert.Contains("status=Ready", recorded)
+
+    // ---- .github#2698 — `Ready` REQUIRES A CURRENT DELIVERY-ROUTE RECEIPT ---------------------------
+    //
+    // A row boarded `Ready` with no receipt is UNSCHEDULABLE FROM BIRTH: `Schedulability` maps a
+    // stale/unreadable route to `AwaitingDeliveryRouteDecision`, `Batch` then skips it and reserves no
+    // lane, and every board projection goes on reporting it as available work. Two rows were in that state
+    // when the item was filed; a re-measurement on 2026-08-16T19:45Z over the live board found 23 of 31
+    // open rows there, so the population is not a backlog — it regenerates at the rate the board files.
+    //
+    // WHY THESE LEGS LIVE IN THIS MODULE. The filed acceptance criterion named `add --status Ready` and
+    // this file. The seam count then changed under it: a host boarded seven rows on 2026-08-16 and NOT ONE
+    // reached `Ready` through `add --status Ready` (`.github#2698#issuecomment-5309155317`). `add` with no
+    // `--status` defaults to `Backlog` (#1823), so the real doors were `set-field Status Ready` and —
+    // for five of the seven — `reconcile --apply`, which derived `Ready` from policy and promoted rows
+    // that had been deliberately parked, with no operator action at all. The refusal is therefore ONE
+    // shared function reached through four doors, and it is proven at each of them here: a gate proven at
+    // one door is a gate a scheduled job walks around.
+    //
+    // AND THE CORPUS IS TWO-SIDED, WHICH IS THE POINT. This gate asserts an ABSENCE, and `.github#2312`
+    // measured what that costs when it is tested from one side only: an ordering gate whose check matched
+    // NOTHING shipped green and evadable, and its repair added a corpus of N spellings that must match and
+    // M lookalikes that must not. So every refusal leg below has a PRESENCE partner driven through the
+    // same seam. A receipt reader that returned "stale" for everything would satisfy every refusal here
+    // and red every presence leg; one that returned "current" for everything does the opposite.
+
+    let private ClaimedAt = DateTimeOffset.UtcNow.UtcTicks
+
+    /// A LIVE claim marker for the identity `runVerbWithStderr` pins, so `release` can reach its own
+    /// `--status` gate. It doubles as lookalike 4: a real row's ledger always has one of these beside the
+    /// receipt, and the route reader must not mistake it for one.
+    let private LiveClaimMarker =
+        $"<!-- fsgg:claim worker=vole-418 lease=120 renewed=%d{ClaimedAt} session=ed60050b prev=Backlog pathRepo=FS.GG.SDD -->"
+
+    /// The same world, with the receipt ledger read FAILING rather than answering empty (#266).
+    let private worldWithUnreadableLedger (column: Column) =
+        let board = Board column
+
+        Fake.Recorder(fun (req: Request) ->
+            let path = req.Path.Trim '/'
+
+            match req.Method, path with
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) when document.Contains "items(first: 100" ->
+                    ok """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                | Query(document, _) -> graphqlAnswer board None document
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok IssueBody
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                Error(Errors.Http(502, "the receipt ledger could not be read"))
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private runSetField transport args = runVerbWithStderr Client.setField transport args
+    let private runRelease transport args = runVerbWithStderr Client.release transport args
+
+    let private addReady (comments: string list) =
+        worldCapturingWithComments (ResizeArray()) NotOnBoard IssueBody None comments
+
+    /// `set-field` writes a column on a row that is ALREADY BOARDED — it never adds one. Driving it
+    /// against `NotOnBoard` would red for "not an item on this board", which is a different refusal, and a
+    /// leg that reds for the wrong reason is not evidence about the gate under test.
+    let private setFieldWorld (comments: string list) =
+        worldCapturingWithComments (ResizeArray()) OnBoardUnset IssueBody None comments
+
+    // ---- DOOR 1: `add --status Ready` (AC1) --------------------------------------------------------
+
+    [<Fact>]
+    let ``.github#2698 AC1 add --status Ready is REFUSED when the row has no route receipt`` () =
+        let transport = addReady []
+
+        let code, out, err = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.NotEqual(0, code)
+        // BEFORE ANY WRITE, exactly as `--status Redy` and `--status Blocked` already refuse: nothing on
+        // stdout, no board item, no column. A refusal that boarded the row first would leave behind the
+        // very thing it is refusing to create.
+        Assert.Equal("", out.Trim())
+        Assert.Equal(0, transport.Count "item-add")
+        Assert.Equal(0, transport.Count "item-edit")
+        // The row cannot be promoted until an AGENT authors the decision, so the refusal has to name the
+        // command that does it — a refusal a reader cannot act on stalls triage where `batch` used to.
+        Assert.Contains("delivery-route record", err)
+
+    [<Fact>]
+    let ``.github#2698 add --status Ready PROCEEDS on a current lightweight receipt`` () =
+        // THE PRESENCE HALF. Without this leg a receipt reader that recognised nothing would satisfy every
+        // refusal in this section and ship the gate evadable — `.github#2312`'s exact failure.
+        let transport = addReady [ LightweightReceipt ]
+
+        let code, out, err = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.Equal(0, code)
+        Assert.Equal(NewItemId, out.Trim())
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_ready"), $"log: %A{transport.Log}")
+        Assert.DoesNotContain("delivery-route record", err)
+
+    [<Fact>]
+    let ``.github#2698 an sdd-required receipt is just as current as a lightweight one`` () =
+        // The gate's question is "is there a CURRENT decision", never "which route did it pick". A reader
+        // that only recognised the word `lightweight` would pass the leg above and fail here.
+        let transport = addReady [ SddRequiredReceipt ]
+
+        let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.Equal(0, code)
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_ready"), $"log: %A{transport.Log}")
+
+    [<Fact>]
+    let ``.github#2698 the receipt is found among the protocol traffic that surrounds it`` () =
+        // A real row's ledger is mostly claim markers, messages and review records. A reader that only
+        // inspected the first (or the last) comment would pass every other presence leg here and fail on
+        // every live row, which is the shape `structuredRouteLedger`'s complete paginated read exists for.
+        let transport = addReady [ ClaimMarkerComment; "an ordinary human comment"; LightweightReceipt; "a later reply" ]
+
+        let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.Equal(0, code)
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_ready"), $"log: %A{transport.Log}")
+
+    // ---- THE LOOKALIKES — M SPELLINGS THAT MUST NOT COUNT AS A RECEIPT -----------------------------
+
+    [<Theory>]
+    [<InlineData("other-subject")>]
+    [<InlineData("unmarked")>]
+    [<InlineData("quoted")>]
+    [<InlineData("claim-marker")>]
+    let ``.github#2698 a lookalike ledger does not authorize the promotion`` (shape: string) =
+        let comment =
+            match shape with
+            // A valid, well-formed receipt — for a DIFFERENT row. What a copy-paste actually produces, and
+            // the one `validateRouteLedger`'s subject binding exists to catch.
+            | "other-subject" -> OtherSubjectReceipt
+            // The receipt payload with no marker. A reader scanning for `"route"` anywhere would take it.
+            | "unmarked" -> UnmarkedReceiptJson
+            // The marker verbatim, with prose in front. Quoting the protocol in a discussion must not board
+            // a row; the marker has to OPEN the comment.
+            | "quoted" -> QuotedMarkerComment
+            // Another protocol marker entirely, on the same row.
+            | "claim-marker" -> ClaimMarkerComment
+            | other -> failwithf "the fixture's own case list does not cover '%s'" other
+
+        let transport = addReady [ comment ]
+
+        let code, out, _ = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("", out.Trim())
+        Assert.Equal(0, transport.Count "item-add")
+        Assert.Equal(0, transport.Count "item-edit")
+
+    // ---- AC2 — THE COLUMNS THAT OWE NO ROUTE DECISION ARE UNTOUCHED --------------------------------
+
+    [<Fact>]
+    let ``.github#2698 AC2 a bare add still defaults to Backlog and never reads the receipt ledger`` () =
+        // A row deliberately not yet schedulable owes no route decision — that is what parking it means.
+        // The read-count assertion is the load-bearing half: it pins that the #1823 default costs no new
+        // REST call, so the gate cannot become a per-filing tax on the one verb #1823 made unconditional.
+        let transport = addReady []
+
+        let code, out = runAdd transport [ "add"; "FS.GG.SDD#42" ]
+
+        Assert.Equal(0, code)
+        Assert.Equal(NewItemId, out.Trim())
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_backlog"), $"log: %A{transport.Log}")
+        Assert.Equal(0, transport.Count "comment-list FS-GG/FS.GG.SDD 42")
+
+    [<Fact>]
+    let ``.github#2698 AC2 an explicit --status Backlog is unaffected by the route gate`` () =
+        let transport = addReady []
+
+        let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Backlog" ]
+
+        Assert.Equal(0, code)
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_backlog"), $"log: %A{transport.Log}")
+
+    // ---- #266 — AN UNREAD LEDGER IS NOT AN ABSENT ONE, AND NOT A PRESENT ONE -----------------------
+
+    [<Fact>]
+    let ``.github#2698 a receipt ledger that could not be READ refuses the promotion, fail-closed`` () =
+        // The direction that would be silent: a transport fault answered as "no receipt, carry on" would
+        // board an unschedulable row on a green exit, and one answered as "receipt present, carry on"
+        // would board it without any decision at all. Neither is an answer this engine may give.
+        let transport = worldWithUnreadableLedger NotOnBoard
+
+        let code, out, _ = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("", out.Trim())
+        Assert.Equal(0, transport.Count "item-add")
+        Assert.Equal(0, transport.Count "item-edit")
+
+    // ---- DOOR 2: `set-field <ref> Status Ready` (AC5 — COVERED, NOT DEFERRED) -----------------------
+
+    [<Fact>]
+    let ``.github#2698 AC5 set-field Status Ready is REFUSED with no receipt`` () =
+        // THE DOOR THE FILED AC DID NOT NAME AND OPERATORS ACTUALLY USE: three of the seven rows the host
+        // measured reached `Ready` through exactly this command.
+        let transport = setFieldWorld []
+
+        let code, out, err = runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Ready" ]
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("", out.Trim())
+        Assert.Equal(0, transport.Count "item-edit")
+        Assert.Contains("delivery-route record", err)
+
+    [<Fact>]
+    let ``.github#2698 AC5 set-field Status Ready PROCEEDS on a current receipt`` () =
+        let transport = setFieldWorld [ LightweightReceipt ]
+
+        let code, out, _ = runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Ready" ]
+
+        Assert.Equal(0, code)
+        Assert.Contains("Status", out)
+        Assert.True(transport.Logged(statusWrite ItemId "opt_ready"), $"log: %A{transport.Log}")
+
+    [<Fact>]
+    let ``.github#2698 AC5 set-field Status Backlog is untouched by the route gate`` () =
+        // The same command, one column over. A gate written as "refuse a Status write without a receipt"
+        // rather than "refuse a READY write without one" would red here — and would make parking a row
+        // require the very decision parking it defers.
+        let transport = setFieldWorld []
+
+        let code, _, _ = runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Backlog" ]
+
+        Assert.Equal(0, code)
+        Assert.True(transport.Logged(statusWrite ItemId "opt_backlog"), $"log: %A{transport.Log}")
+
+    // ---- DOOR 3: `release <ref> --status Ready` -----------------------------------------------------
+
+    [<Fact>]
+    let ``.github#2698 release --status Ready is refused BEFORE the lock is dropped`` () =
+        // THE ORDERING IS THE ASSERTION. A refusal that arrived after `Writes.release` deleted the marker
+        // would leave the holder with no lock and no way to retry — strictly worse than the row it was
+        // protecting. Anchored on the ABSENCE of the marker delete, which is a fact about the lock rather
+        // than about the sentence the CLI printed.
+        let transport =
+            worldCapturingWithComments (ResizeArray()) (OnBoardSet "In progress") IssueBody None [ LiveClaimMarker ]
+
+        let code, _, _ = runRelease transport [ "release"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.NotEqual(0, code)
+        Assert.Equal(0, transport.Count "comment-delete")
+        Assert.Equal(0, transport.Count "item-edit")
+
+    [<Fact>]
+    let ``.github#2698 release --status Ready proceeds, and drops the lock, on a current receipt`` () =
+        let transport =
+            worldCapturingWithComments
+                (ResizeArray())
+                (OnBoardSet "In progress")
+                IssueBody
+                None
+                [ LiveClaimMarker; LightweightReceipt ]
+
+        let code, _, _ = runRelease transport [ "release"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+
+        Assert.Equal(0, code)
+        Assert.True(transport.Logged "comment-delete", $"the lock must actually drop here: %A{transport.Log}")
+        Assert.True(transport.Logged(statusWrite ItemId "opt_ready"), $"log: %A{transport.Log}")
+
+    // ---- DOOR 4: `reconcile --apply` — THE SEAM WITH NO OPERATOR IN IT ------------------------------
+    //
+    // THE PART THE FILED ITEM DID NOT CONTAIN. `.github#2721`, `#2722` and `#2723` were deliberately set
+    // to `Backlog` by a host honouring a design's ordering. The next `reconcile --apply` reported
+    // `LIFECYCLE-PROJECTION-LAG … Status=Ready` for all three and PROMOTED them — no `add`, no
+    // `set-field`, no human in the loop; the reducer derived `Ready` from policy and applied it. Every one
+    // landed with no receipt and was then found unschedulable by `batch --explain`.
+    //
+    // So a refusal that stops at the operator doors is a refusal a scheduled job walks around, and this
+    // pair is what says so. It does NOT assert that the reducer stops DERIVING `Ready` — that projection
+    // has a purpose this row did not study, and `.github#2690` may change its shape — only that a derived
+    // `Ready` is not WRITTEN onto a row that cannot be scheduled once it lands.
+    module private ReducerPromotionFixture =
+
+        /// `#42` is `Blocked`; its `Blocked by` field names `#8`, which is CLOSED. That satisfies the
+        /// reducer's precondition on the field alone, so the lifecycle projection computes `Ready` — the
+        /// exact chore the host watched promote three parked rows.
+        let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) (body: string option) =
+            let blockedByJson =
+                match blockedBy with
+                | Some b -> $"""{{"text":"%s{b}"}}"""
+                | None -> "null"
+
+            let bodyJson =
+                body |> Option.map System.Text.Json.JsonSerializer.Serialize |> Option.defaultValue "null"
+
+            $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blockedByJson},"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":%s{bodyJson},"state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+
+        let transport (comments: string list) =
+            let body42 = "Paths: src/A.fs"
+
+            let items =
+                [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
+                  itemJson 8 "Done" None "CLOSED" None ]
+                |> String.concat ","
+
+            Fake.Recorder(fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        if document.Contains "projectsV2" then
+                            ok ProjectAnswer
+                        elif document.Contains "fields(first" then
+                            // ITS OWN FIELD MAP, not the module's. The lifecycle chore writes BOTH
+                            // `Status=Ready` and an emptied `Blocked by` in one aliased document, so this
+                            // board must carry the text field; the `add` legs' board deliberately does not,
+                            // and widening theirs would change what their own #2109 legs measure.
+                            ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_wip","name":"In progress"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        elif document.Contains "updateProjectV2ItemFieldValue" || document.Contains "clearProjectV2ItemFieldValue" then
+                            if document.Contains "f0:" then
+                                ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            else
+                                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "projectItems" then
+                            ok
+                                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{ItemId}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        elif document.Contains "node(id: $itemId)" then
+                            // `verifyWrites` — the fresh read-back that must prove the mutation LANDED
+                            // before the pass persists its ordering watermark. The board here answers as a
+                            // board that took the write, so a promotion that reaches the wire is reported
+                            // `written` rather than `failed`, and the two legs differ in ONE input.
+                            // PER FIELD, because `verifyWrites` reads back BOTH of them and a board that
+                            // answered `Ready` to the `Blocked by` probe would report the emptied text
+                            // field as unverified and sink the whole row to `failed`.
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "field", VString name -> Some name
+                                    | _ -> None)
+
+                            match field with
+                            | Some "Status" -> ok """{"data":{"node":{"fieldValueByName":{"name":"Ready"}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            | _ -> ok """{"data":{"node":{"fieldValueByName":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        else
+                            Error(Errors.NotFound $"the reducer fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                    ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body42 |})
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (commentsJson comments)
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok """{"id":9042}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/42-" -> ok "[]"
+                | m, p -> Error(Errors.NotFound $"the reducer fixture serves no %s{m} %s{p}"))
+
+    let private runReconcileApply (comments: string list) =
+        let transport = ReducerPromotionFixture.transport comments
+        let code, out, err = runVerbWithStderr Client.reconcile transport [ "reconcile"; "--repo"; "FS.GG.SDD"; "--apply"; "--json" ]
+        transport, code, out, err
+
+    [<Fact>]
+    let ``.github#2698 reconcile --apply does NOT promote a receipt-less row it derived Ready for`` () =
+        let transport, _, out, _ = runReconcileApply []
+
+        // The chore IS still derived — the reducer is untouched. What must not happen is the WRITE.
+        Assert.Contains("LIFECYCLE-PROJECTION-LAG", out)
+        // ANCHORED ON THE OPTION ID THE CONTROL BELOW PRODUCES, deliberately. The lifecycle chore writes
+        // two fields in ONE aliased document, which the recorder logs as `batch-mutation`, not
+        // `item-edit` — so an absence asserted against `item-edit` would be an absence of something this
+        // pass never emits in either direction, and would hold just as well against a gate that did
+        // nothing at all. `opt_ready` is the byte that differs.
+        Assert.False(transport.Logged "opt_ready", $"no Ready promotion may reach the wire: %A{transport.Log}")
+        Assert.DoesNotContain("\"outcome\":\"written\"", out)
+
+    [<Fact>]
+    let ``.github#2698 reconcile --apply promotes the SAME row once it carries a receipt`` () =
+        // THE CONTROL, and it is what makes the leg above evidence about the gate rather than about the
+        // fixture. One input differs — the ledger — and the mutation appears.
+        let receipt = StructuredFixtures.routeComment Subject (Some DeliveryRoute.Lightweight) "fixture-rook" None
+        let transport, _, out, err = runReconcileApply [ receipt ]
+
+        Assert.Contains("LIFECYCLE-PROJECTION-LAG", out)
+        Assert.True(transport.Logged "opt_ready", $"out: %s{out}\nerr: %s{err}\nlog: %A{transport.Log}")
+        Assert.Contains("\"outcome\":\"written\"", out)

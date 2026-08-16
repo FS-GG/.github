@@ -13,6 +13,14 @@ module BlockerLintTests =
 
     let private ref' n : Ref = { Owner = "FS-GG"; Repo = ".github"; Number = n }
 
+    /// .github#2698 — a comment ledger holding one current delivery-route receipt for `subject`, as
+    /// `Reads.commentBodies` reads it. Any fixture whose command RESOLVES a `Status=Ready` write needs
+    /// one now; a `[]` ledger is the unschedulable-from-birth row the refusal exists to stop.
+    let private routedLedger (subject: string) =
+        System.Text.Json.JsonSerializer.Serialize
+            [| {| id = 7900
+                  body = StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-route" None |} |]
+
     [<Fact>]
     let ``#2109 the Status=Blocked writer inventory is exhaustive and classifies every restore`` () =
         let deliberate, other =
@@ -687,6 +695,13 @@ module BlockerLintTests =
                 // where the receipt is read back by the reconcile pass that used to revert it.
                 | "POST", "repos/FS-GG/rogue3/issues/96/comments"
                 | "POST", "repos/EHotwagner/rogue3/issues/96/comments" -> ok """{"id":9096}"""
+                // .github#2698: `set-field <ref> Status Ready` — both spellings these legs drive — now
+                // requires a CURRENT delivery-route receipt on the row it promotes. The subject is bound to
+                // the canonical owner, so each twin gets its OWN receipt: a fixture that served one for
+                // both would quietly agree with a gate that ignored the subject binding, which is the
+                // failure `validateRouteLedger` exists to catch and the one these legs are already about.
+                | "GET", "repos/FS-GG/rogue3/issues/96/comments" -> ok (routedLedger "FS-GG/rogue3#96")
+                | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (routedLedger "EHotwagner/rogue3#96")
                 | m, p -> Error(Errors.NotFound $"the receipt fixture serves no %s{m} %s{p}"))
 
     [<Theory>]
