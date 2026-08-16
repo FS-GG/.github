@@ -19,6 +19,46 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-16** — **coherent set `github:0.60.0` published; `coord-engine` flipped `0.59.0` → `0.60.0`**
+  (github; [.github#2713](https://github.com/FS-GG/.github/issues/2713),
+  [.github#2645](https://github.com/FS-GG/.github/issues/2645),
+  [.github#2409](https://github.com/FS-GG/.github/issues/2409),
+  [.github#2442](https://github.com/FS-GG/.github/issues/2442),
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772)): `FS.GG.Kit`, `FS.GG.Drivers` and
+  `FS.GG.Coord.Cli` all serve `0.60.0` on the org feed and nuget.org, cut from
+  `e365d83d4de4ee211fb885f7c0b63177b0d827d2`, content
+  `sha256:79367f46c71a0f5413e2a68c5907cd2d9bc9209d77b76fbb8e1b5cfab2f9ee8a`.
+  **A MINOR by the written rule.** Two receiver-visible legs from `.github#2645`/PR #2650, either of
+  which carries the line: `claim --json`'s `statusWrite` gains a fifth value `withheld` — distinct
+  from `failed`, which asserts a mutation was sent, and from `deferred`, which promises `flush` — and
+  `converged` now means agreement with the derived destination rather than with the literal column
+  `In progress`; and the packed kit retires a start-gate `jq` predicate asserting
+  `.status == "In progress"` that receivers copy verbatim. The wire surface is unchanged, measured
+  rather than asserted: `check-engine-freshness` reported 0 of the 2 unreleased engine commits
+  touching `src/FS.GG.Coord.Core/Protocol.fs`.
+  **Cut by `.github#2409`'s MANUAL path, because nothing automatic can cut it.**
+  `kit-auto-publish.py:99-100` refuses this candidate `candidate-not-next-patch`: `0.60.0` opens a new
+  minor line against a `0.59.0` frontier, so it fails the first clause and short-circuits before the
+  sibling-tag block at `:101`. That was verified here by driving `decide()` over the live facts, with
+  a `0.59.1` control that clears the same rail — so the refusal is minor-line-specific rather than
+  blanket, and it is the rail working by design, not a defect.
+  **The three sibling tags were pushed atomically** and all resolve to one commit; a partial push is
+  how `0.50.1`, `0.50.5` and `0.52.0` became permanent two-of-three sets.
+  **The evidence is feed reads, never run conclusions**, and this cut is why that rule exists: all
+  three publisher runs and two of the three recovery runs are **red**, and the release is complete.
+  The three packages are byte-identical between the feeds entry by entry — 41 (Kit) / 33 (Coord.Cli)
+  / 30 (Drivers) entries, identical modulo nuget.org's added `.signature.p7s` — re-derived
+  independently by the worker and agreeing with the saga's own journal; all three published nuspecs
+  carry `repository commit="e365d83d…"`, the tagged commit; and the 26 packed kit skill files are
+  byte-identical to canonical at that commit.
+  **`.github#2648`'s two release-mechanics defects both reproduced**, and neither affects the
+  published bytes: the post-push observation budget (24×5s) is still shorter than nuget.org's
+  indexing, so a fully successful release reports `failure`; and once promotion seals the release a
+  redundant journal re-upload fails on `HTTP 422 Cannot delete asset from an immutable release`.
+  **The receiver-tick step was skipped again**, so the seven kit receivers and the engine receivers
+  were **not** told about `0.60.0` and fall back to Renovate's pull half; `dashboard-tick.py` exits 3
+  for an agent because `DASHBOARD_TICK_TOKEN` is a CI-only App credential.
+
 - **2026-08-16** — **coherent set `github:0.59.0` published; `coord-engine` flipped `0.58.0` → `0.59.0`
   and the burned `0.58.1` abandoned** (github; [.github#2648](https://github.com/FS-GG/.github/issues/2648),
   PR [#2706](https://github.com/FS-GG/.github/pull/2706), [.github#2654](https://github.com/FS-GG/.github/issues/2654),
