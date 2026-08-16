@@ -237,8 +237,63 @@
        patch-line rule, the item self-applying rather than exempting itself. Measured, not inferred:
        the frontier was read from nuget.org and `scripts/kit-auto-publish.py` was run over this
        candidate's facts, on the same discipline the entries above used. -->
+  <!-- 0.58.1 to 0.59.0 (.github#2648): a MINOR bump that also SKIPS 0.58.1, and the two facts have
+       different reasons. Read them separately, because collapsing them is how this cut gets
+       mis-derived as "0.58.2, because 0.58.1 is burned".
+
+       WHY THE LINE IS MINOR. The criterion is the one the 0.56.0 and 0.57.0 entries above apply: a
+       patch when no receiver-visible engine verb, flag, help entry, render name, result name, exit
+       code or behaviour moves, and a MINOR when a new receiver protocol boundary appears. Measured
+       against the last commit any receiver actually restores — coord-engine/v0.58.0 at 12ec83f8, the
+       published frontier — this cut adds 290 lines of new PUBLIC SIGNATURE surface across five .fsi
+       files, including an entirely new module: src/FS.GG.Coord.Core/Operation.fsi (154 lines, added
+       by .github#2311's `feat(coord)`, the operation key and its closed vocabulary), plus additions
+       to Batch.fsi (new, 37), Delivery.fsi (26), Driver.fsi (37) and StructuredDecision.fsi (37). A
+       new public module IS a new receiver protocol boundary under that criterion — it is the same
+       thing the 0.52.0 entry took a minor for when it added one render name and one result name, an
+       order of magnitude smaller. The packed kit half agrees independently: the finding-packet
+       contract and the independent-review consolidation are new protocol boundaries in `pnext-item`,
+       not corrections to existing descriptions, which is the distinction the 0.58.1 entry above drew
+       when it took a patch. Verification (flags named without their leading dashes, per this file's
+       own header note — an XML comment may not contain a double hyphen): `git diff` with `stat`, and
+       with `diff-filter=A name-only`, over `12ec83f8..HEAD` restricted to
+       `src/FS.GG.Coord.Core/*.fsi` and to `src/`.
+
+       WHY 0.58.1 IS SKIPPED RATHER THAN COMPLETED, AND WHY THAT IS NOT WHAT SETS THE LINE. The
+       0.58.1 cut tagged `kit/v0.58.1`, `drivers/v0.58.1` and `coord-engine/v0.58.1` at a415652f and
+       published NOTHING: all three release workflows died on `release not found`, because
+       `release-saga-prepare.yml` was `workflow_dispatch`-only and no operator had run it
+       (.github#2654). Tags are immutable (.github#1772), so 0.58.1 cannot be re-cut to carry the
+       commits that landed behind it, and the operator recorded the route on .github#2648 on
+       2026-08-16: abandon it, bump past it, cut manually. But the line above would be MINOR even if
+       0.58.1 had never been cut — the .fsi surface is what decides it — so this bump is not "the
+       next number after a burned one". Verification: both feeds read directly at 2026-08-16,
+       nuget.org flat-container index and `orgs/FS-GG/packages/nuget/*/versions`; all three packages
+       frontier `0.58.0` and NO `0.58.1` on either feed.
+
+       AND THAT IS WHY 0.58.1 GETS NO STANDING ADVISORY. $(FsggStandingAdvisories) warns consumers
+       away from versions that PUBLISHED partially — 0.50.1, 0.50.5 and 0.52.0 each put real bytes on
+       a real feed that a consumer can still resolve today. 0.58.1 put none anywhere, so there is no
+       listing to warn from and nothing a consumer could adopt by accident. It is a three-of-three
+       TAG-only gap, which is a repository fact recorded here, not a feed fact; adding it to the
+       advisories would tell consumers to avoid something that does not exist.
+
+       CONSEQUENCE TO EXPECT, AND IT IS THE 0.52.0 SHAPE, NOT THE 0.58.1 SHAPE. `kit-auto-publish`
+       admits only a same-line PATCH bump (.github#2442), so it REFUSES this candidate and cuts
+       nothing. Measured, not inferred from prose: `scripts/kit-auto-publish.py` was run over this
+       candidate's facts and returned
+       `{"action":"refuse","reason":"candidate-not-next-patch","version":"0.59.0","terminal":true}`.
+       The release is therefore a MANUAL coherent-set publish through .github#2409's path —
+       `release-saga-prepare.yml` by `workflow_dispatch` first, so the bytes exist, THEN the three
+       sibling tags pushed together at one commit. Until that publish happens, `kit-auto-publish`
+       stays red on `main` on its streak bound (.github#2435): that is the frontier rail working on a
+       minor, the same as it did for 0.51.0, 0.52.0, 0.56.0 and 0.57.0, and it is not a regression
+       introduced by this bump.
+
+       NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entries above record — 0.50.1
+       and 0.50.5 are permanent partial sets precisely because they did not. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.58.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.59.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
