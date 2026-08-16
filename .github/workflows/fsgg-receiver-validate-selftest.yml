@@ -1,0 +1,62 @@
+# The fixture for the `receiver-validate` job in `.github/workflows/kit-materialize.yml` — slice 6 of
+# the GitHub-native executor fencing design
+# (`docs/reports/2026-08-04-github-native-executor-fencing-design.md` §5.3, §6.3, §9.1), `.github#2721`.
+#
+# Per epic #266's ratified rule — A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE — this drives
+# the receiver-side validation rule, EXTRACTED FROM THE REAL WORKFLOW, across its whole refusal truth
+# table, and asserts the REASON on every negative leg rather than merely a non-green verdict.
+#
+# THE `paths:` FILTER IS PART OF THE GATE, NOT PACKAGING, AND `src/FS.GG.Coord.Cli/Client.fs` IS THE
+# ENTRY THAT IS EASIEST TO MISS. The fixture's section F parses `authorizationMarker` there and
+# asserts, in both directions, that the field set the gate requires is exactly the field set the
+# production path emits — the leg that would have caught slices 2 and 3 landing inert. A change to
+# that function with this entry missing would land with the cross-check never running, which is the
+# same "a filtered workflow produces no check run" hazard design §6.2 warns about, arriving from the
+# other side. `tests/receiver-validate/run.sh` leg A11 parses THIS file and reds if any of the three
+# load-bearing entries is removed, so the filter cannot be quietly narrowed back.
+#
+# It needs no secrets, no network and no runner state: `gh` is stubbed inside the fixture.
+name: fsgg-receiver-validate-selftest
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/kit-materialize.yml"
+      - ".github/workflows/fsgg-receiver-validate-selftest.yml"
+      - "tests/receiver-validate/**"
+      - "src/FS.GG.Coord.Cli/Client.fs"
+      - "src/FS.GG.Coord.GitHub/Writes.fs"
+      - "scripts/lib/gate.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/kit-materialize.yml"
+      - ".github/workflows/fsgg-receiver-validate-selftest.yml"
+      - "tests/receiver-validate/**"
+      - "src/FS.GG.Coord.Cli/Client.fs"
+      - "src/FS.GG.Coord.GitHub/Writes.fs"
+      - "scripts/lib/gate.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fsgg-receiver-validate-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    name: Prove the receiver-side validation admits a live authorization and refuses a forged one
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # The fixture reads workflow STRUCTURE rather than text — it selects the job and the verdict
+      # step by ID and executes the real `run:` block, so a reordering or a rename is a loud failure
+      # instead of a silently different subject.
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Run the receiver-validate fixture
+        run: bash tests/receiver-validate/run.sh

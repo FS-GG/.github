@@ -684,6 +684,573 @@ jobs:
                exit 1 ;;
           esac
 
+  # ── the receiver-side authorization validation (.github#2721) ─────────────────────────────────
+  # Slice 6 of the GitHub-native executor fencing design
+  # (`docs/reports/2026-08-04-github-native-executor-fencing-design.md` §5.3 for the shape and the
+  # route, §6.3 for the checks, §9.1 for why it lands unarmed), under `.github#1858` — Critical, open
+  # since 2026-07-28: two workers ran `.github#1853` to completion concurrently under ONE claim
+  # marker, and the second executor MERGED pull requests in six repositories.
+  #
+  # WHY IT LIVES HERE, WHICH IS §5.3's WHOLE ARGUMENT. The harm landed in the RECEIVERS —
+  # `FS.GG.Net#58` and `FS.GG.Audio#220` were merged by an executor holding nothing (§8.3) — and
+  # measured on 2026-08-16, NO receiver carries any fence at all: all seven have exactly
+  # `coordination-coherence`, `gate`, `kit-materialize`, `lockfile-sync` and `release`-family
+  # workflows, and none of `fsgg-claim-fence.yml` (slice 4) or `coherence.yml`'s `claim-generation`
+  # (`.github#2342`), both of which are hub-local and run only on `FS-GG/.github`'s own pull requests.
+  # Every route to a receiver but one is forbidden — hand-copying is the defect class #1507/#1510/
+  # #1515/#1528/#1538 closed and ADR-0067 §5 forbids re-opening; the kit cannot ship a workflow FILE
+  # because the App installation token that pushes the materialize commit has `contents: write` and
+  # not `workflows: write`; and a receiver cannot add a step to a `uses:` job. All seven receivers
+  # ALREADY call this workflow, ungated, on `pull_request` into `main`, so a job added here reaches
+  # all seven with ZERO receiver-side edits. That is the same route `bump-shape` above takes and the
+  # same one §5.3 names. ZERO RECEIVER EDITS IS A HARD CONSTRAINT, not a convenience: the design chose
+  # this shape precisely so enrolment cannot drift per repository.
+  #
+  # ============================================================================================
+  # WHAT IT VALIDATES, AND WHY THAT SUBJECT IS REACHABLE RATHER THAN HYPOTHETICAL
+  # ============================================================================================
+  #
+  # This parent has already absorbed TWO fencing readers that landed INERT — slice 3 wrote the
+  # `fsgg:pr-authorization` marker but not the merge election, so slice 4's check 4 has no producer;
+  # and slice 2 landed `Client.OpLock.acquire` with no reachable caller, so no dispatch grant can
+  # exist. Both are CLOSED rows that pass every test written against them, because the tests supply
+  # the subject the production path never will. So the producer here is stated as a MEASUREMENT, not
+  # as an assumption:
+  #
+  #   the marker      `<!-- fsgg:pr-authorization v=1 item=<owner/repo#N> gen=<comment id>
+  #                    head=<40-hex> -->`, in the pull request BODY
+  #   the producer    `Client.ensureAuthorization`, `src/FS.GG.Coord.Cli/Client.fs:1743-1753` — the
+  #                   exact four-field body that function composes
+  #   the caller      the live `delivery <ref> --pr <n>` call `pnext-item` §6 makes MANDATORY for
+  #                   every item in every repository, receivers included (`.github#2488`)
+  #   measured live   2026-08-16, on receiver pull requests and not merely on the hub's:
+  #                   FS-GG/FS.GG.Rendering#1244 and #1241, FS-GG/FS.GG.SDD#882 and #877 each carry
+  #                   one, fully qualified `owner/repo#N`, on an `item/<n>-*` branch.
+  #   the refusable   FS-GG/FS.GG.Net#68 (`item/67-adopt-coord-cli`) and #66 (`item/65-…`) are
+  #   subject         `item/<n>-*` branches carrying NO marker at all — `.github#1858`'s own shape,
+  #                   live, in the very repository the incident reached.
+  #
+  # THE FOUR-FIELD FORM IS DELIBERATE AND IS NOT A NARROWING. `scripts/check-claim-fence.py` requires
+  # SIX (`v item gen opkey grant head`) because §6.3 checks 4 and 5 need the election; nothing writes
+  # those two fields today, which is why that gate is observe-only and says so. This job grades the
+  # form the production path actually emits — checks 1, 2, 3 and 6 of §6.3, the same slice
+  # `coherence.yml`'s already-armed `claim-generation` grades in the hub — so its findings are about
+  # pull requests rather than about a field nobody writes. It also accepts a marker that carries the
+  # future `opkey=`/`grant=` fields, which is `authorizationMarker`'s own stated forward-compatibility
+  # (`Client.fs`): the day slice 3's successor writes them, this gate does not have to change first.
+  #
+  # ============================================================================================
+  # WHAT IT DELIBERATELY DOES **NOT** CHECK, AND WHY THAT IS A REFUSAL RATHER THAN AN OMISSION
+  # ============================================================================================
+  #
+  # §5.3's first sentence asks a receiver to "re-read the grant on its own op-lock issue … and accept
+  # only on an exact live match". THIS JOB DOES NOT DO THAT, and adding it would be a defect the
+  # design already names. The dispatch grant is an ordinary lease-bearing `fsgg:claim` marker (§4.1)
+  # and `release` DELETES it — "Once it is gone the lease is dropped", `src/FS.GG.Coord.GitHub/
+  # Writes.fs:822`. §4.2 states the consequence directly: "a lease-based lock can only be verified by
+  # a reader that runs INSIDE the lease. The broker does. A CI job does not." A `pull_request`-
+  # triggered job re-reading a grant would therefore red every CORRECTLY-behaving worker that released
+  # on schedule — `#463`'s fail-ALWAYS shape, which §8.2 commits against — and would red it hardest on
+  # the dispatches that completed properly. The grant's synchronous re-read belongs to a receiver-side
+  # `repository_dispatch` handler, and adding one to seven receivers is exactly the receiver edit the
+  # hard constraint above forbids. This boundary is REPORTED, not silently absorbed.
+  #
+  # ============================================================================================
+  # OBSERVE-ONLY, AND #1508
+  # ============================================================================================
+  #
+  # §9.1 step 1: "Land the producer in observe-only. The fence workflow reports `success`
+  # unconditionally and writes its real verdict to the job summary. Required in ZERO repositories."
+  # That is exactly where `kit-bump-shape` and `kit-bump-mechanical` above already sit, and arming is
+  # slice 8's job (`.github#2723`), never a workflow file's. Concretely: the verdict step's LAST
+  # statement is `exit 0`, and the real code is published as its `verdict` output. Arming this before
+  # a producer has been observed reporting is the measured outage `#1713` was founded on.
+  #
+  # `if: github.event_name == 'pull_request'` IS A TAUTOLOGY OVER THE EVENT THIS JOB REPORTS ABOUT,
+  # carried for the same reason and with the same property as `bump-shape` and `bump-mechanical`
+  # above (.github#1845): the check run is still created on 100% of pull requests, so the #1508
+  # deadlock stays impossible, and what it excludes is only the on-demand `workflow_dispatch` repair
+  # run, where there is no pull request to grade. NARROWING IT by head ref, base branch, author, label
+  # or `paths:` reintroduces #1508 exactly — applicability is decided INSIDE the job, from the branch
+  # shape and the marker's presence, so an unrelated pull request gets a real, reported abstention
+  # rather than silence. `tests/receiver-validate/run.sh` evaluates this REAL expression against every
+  # pull-request shape its fixture can build, the same semantic assertion `tests/kit-bump-shape/run.sh`
+  # makes about the two jobs above, and is mutation-proven in both directions.
+  #
+  # ============================================================================================
+  # CREDENTIALS: NOTHING BEYOND WHAT THE CALLER ALREADY GRANTS
+  # ============================================================================================
+  #
+  # A reusable workflow can only ever DOWNGRADE its caller's `GITHUB_TOKEN`, never raise it, and every
+  # receiver's caller declares `permissions: contents: read`. So this job cannot ask for `issues:
+  # read` and does not: all eight roster repositories are PUBLIC (measured live 2026-08-16, `gh api
+  # repos/FS-GG/<r>` → `"visibility":"public"` for `.github` and all seven receivers), so the item's
+  # comments are public data that `github.token` can read cross-repo. It mints no App token and reads
+  # no secret — deliberately, for the same reason `bump-shape` does not: a job that runs on any pull
+  # request, a fork head included, must not be the place a credential is handled.
+  #
+  # AND IF THAT READ EVER FAILS, THE ANSWER IS A NO-VERDICT AND NEVER A PASS (§6.3 check 6, §8.2).
+  # That is what makes the credential argument safe to hold rather than something to be right about:
+  # a repository turned private, a rate limit, or an outage produces code 2/3 with the reason named,
+  # not a green. §9.1 step 2 — "observe it REPORT on a real pull request" — is the step that measures
+  # this in production, and observe-only is what makes that measurement free.
+  #
+  # THE VERDICT CONTRACT IS THE ORG'S SHARED ONE, `scripts/lib/gate.py`'s `ExitCode`: 0 OK — the ONLY
+  # green code — 1 FINDING, 2 NO-VERDICT (retryable), 3 NO-VERDICT (permanent). It is restated inline
+  # rather than imported because this job runs in the RECEIVER's checkout, where `scripts/lib/` does
+  # not exist and no checkout of it is taken; `tests/receiver-validate/run.sh` parses `gate.py` and
+  # reds on any divergence, so the two cannot drift.
+  receiver-validate:
+    name: receiver-validate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      verdict: ${{ steps.validate.outputs.verdict }}
+    steps:
+      # NO CHECKOUT. The subject is the pull request's own body and GitHub's live state, neither of
+      # which is in the tree — and a receiver's tree carries no rule for this job to run. Skipping the
+      # checkout also keeps a fork-head pull request from ever materialising untrusted files here.
+      #
+      # EVERY UNTRUSTED VALUE ARRIVES THROUGH `env:` AND THE SCRIPT BODY CONTAINS NO `${{ }}` AT ALL.
+      # `closing-keywords.yml:97-105` states the rule and the reason — "A PR body is attacker-
+      # controlled text: `${{ github.event.pull_request.body }}` pasted into a `run:` block is a
+      # script-injection sink" — and here it is not theoretical: the body IS the input. Design §6.2
+      # carries the same clause. `tests/receiver-validate/run.sh` asserts the absence of `${{` in this
+      # block so the property cannot be edited away quietly.
+      - name: Validate this pull request's coordination authorization against GitHub-held facts
+        id: validate
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SELF_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          rc=0
+          python3 - <<'PY' || rc=$?
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+
+          # ---------------------------------------------------------------------------------------
+          # `scripts/lib/gate.py`'s ExitCode, transcribed. 0 is the ONLY green code; an inability to
+          # establish the answer is a NO-VERDICT and never a pass (#266, #421).
+          # ---------------------------------------------------------------------------------------
+          OK, FINDING, NO_VERDICT_RETRYABLE, NO_VERDICT_PERMANENT = 0, 1, 2, 3
+
+          # THE PR AUTHORIZATION MARKER. Anchored on the OPEN of the HTML comment so a body that merely
+          # QUOTES the marker's text in prose cannot forge one — the discipline
+          # `src/FS.GG.Coord.GitHub/Reads.fs:220-226` applies to `fsgg:claim`, and the reason it gives:
+          # an un-anchored pattern lets a body that quotes a marker "forge a lock on the item it is
+          # posted" on. `\s+` after the prefix is load-bearing on its own: without it,
+          # `fsgg:pr-authorization-note` and every other `fsgg:pr-authorization<suffix>` would be read
+          # as this marker.
+          AUTH_RE = re.compile(r"<!--\s*fsgg:pr-authorization\s+(?P<fields>.*?)-->", re.DOTALL)
+          # The `fsgg:claim` marker on the ITEM. Anchored TWICE and deliberately: `re.match` anchors at
+          # position 0, and the leading `^` anchors at position 0 with no MULTILINE, so each is
+          # individually redundant and jointly they are defence in depth. This is the marker every
+          # verdict below is grounded in, and a comment that merely quotes one — a review note, a
+          # design excerpt — must not be able to hold a lock it never took.
+          CLAIM_RE = re.compile(r"^<!--\s*fsgg:claim\s(?P<fields>.*?)-->", re.DOTALL)
+          FIELD_RE = re.compile(r"(?P<k>[A-Za-z]+)=(?P<v>\S+)")
+          ITEM_BRANCH_RE = re.compile(r"^item/(?P<n>[0-9]+)-")
+          HEAD_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+          REQUIRED = ("v", "item", "gen", "head")
+          SUPPORTED_VERSION = "1"
+          # `Options.fs`'s default claim lease. Only ever a FALLBACK: a marker's own `lease=` wins, so
+          # a worker that took an item with a non-default `--lease` is not declared dead by CI
+          # (`.github#2656`).
+          DEFAULT_LEASE_MIN = 120
+
+          notes: "list[str]" = []
+
+
+          class NoVerdict(Exception):
+              """A definite reason this gate cannot reach a verdict.
+
+              Raised — never returned alongside a real answer — so that no call site can accidentally
+              read a failed read as an empty result. `verdict()`'s caller maps it to the code it
+              carries, which is NEVER `OK`. This is `scripts/lib/gate.py`'s `GateError` discipline,
+              reached without being able to import it.
+              """
+
+              def __init__(self, code: int, headline: str) -> None:
+                  super().__init__(headline)
+                  self.code = code
+                  self.headline = headline
+
+
+          def fields_of(raw: str) -> "dict[str, str]":
+              out: "dict[str, str]" = {}
+              for m in FIELD_RE.finditer(raw):
+                  out.setdefault(m.group("k"), m.group("v"))
+              return out
+
+
+          def server_assigned(value: str) -> bool:
+              # A canonical server-assigned comment id: ASCII digits, no leading zero. Excludes `0`,
+              # excludes `0012` (one generation keyed two ways), and excludes the engine's `released`
+              # sentinel (`Client.fs:1723`).
+              return len(value) > 0 and value[0] != "0" and all("0" <= ch <= "9" for ch in value)
+
+
+          def qualified_item(value: str) -> "tuple[str, int] | None":
+              # `owner/repo#N` and nothing else. The board's `<repo>#N` shorthand is NOT GitHub
+              # grammar (`.github#2107`), and it is refused BY NAME below rather than silently
+              # resolved against this repository's owner — guessing the owner is how a marker naming
+              # somebody else's item would be graded against ours.
+              repo, sep, number = value.partition("#")
+              if not sep or not server_assigned(number):
+                  return None
+              halves = repo.split("/")
+              if len(halves) != 2:
+                  return None
+              if not all(h and not any(c.isspace() or c == "#" for c in h) for h in halves):
+                  return None
+              return repo, int(number)
+
+
+          def verdict() -> "tuple[int, str, list[str]]":
+              body = os.environ.get("PR_BODY") or ""
+              head = os.environ.get("PR_HEAD") or ""
+              branch = os.environ.get("PR_BRANCH") or ""
+              self_repo = os.environ.get("SELF_REPO") or ""
+
+              matches = [fields_of(m.group("fields")) for m in AUTH_RE.finditer(body)]
+              on_item_branch = bool(ITEM_BRANCH_RE.match(branch))
+
+              # APPLICABILITY, DECIDED INSIDE THE JOB. A pull request that is neither on an
+              # `item/<n>-*` branch nor presenting an authorization is not something this gate has an
+              # opinion about — a Renovate bump, a docs change, a fork contribution. It ABSTAINS, and
+              # the abstention says in words that it is not a pass. This is the #1508 property that
+              # makes arming safe later: an unrelated pull request in an armed receiver is never
+              # blocked forever by a guard with nothing to say about it.
+              if not on_item_branch and not matches:
+                  return (
+                      OK,
+                      "abstains — this pull request presents no coordination authorization and is not "
+                      "on an `item/<n>-*` branch, so there is nothing here to fence (this is not a pass)",
+                      [],
+                  )
+
+              if not matches:
+                  return (
+                      FINDING,
+                      "no `fsgg:pr-authorization` marker in the pull request body",
+                      [
+                          "This branch is `%s`, so it claims to deliver a claimed board item — but its "
+                          "body carries no authorization marker at all. That is `.github#1858`'s own "
+                          "shape: an executor that never called a coordination verb holds nothing and "
+                          "so writes nothing." % branch,
+                          "Remedy: the worker holding this item's live claim runs "
+                          "`scripts/fsgg-coord delivery <ref> --pr %s` from its own credentialed shell "
+                          "(`pnext-item` §6). Nothing else in the documented flow writes this marker."
+                          % (os.environ.get("PR_NUMBER") or "<n>"),
+                      ],
+                  )
+              if len(matches) > 1:
+                  return (
+                      FINDING,
+                      "%d `fsgg:pr-authorization` markers in the pull request body — exactly one is "
+                      "required" % len(matches),
+                      [
+                          "Declarations are not append-only: an old marker remains parsed, so adding a "
+                          "second one cannot supersede the first and the gate cannot tell which "
+                          "authorization is meant. Edit the existing marker in place, or delete it "
+                          "before posting a replacement.",
+                      ],
+                  )
+
+              auth = matches[0]
+              missing = [f for f in REQUIRED if f not in auth]
+              if missing:
+                  return (
+                      FINDING,
+                      "the `fsgg:pr-authorization` marker is missing required field(s): %s"
+                      % ", ".join(missing),
+                      [],
+                  )
+              if auth["v"] != SUPPORTED_VERSION:
+                  return (
+                      FINDING,
+                      "the marker names `v=%s`, which this gate does not understand (it grades `v=%s`)"
+                      % (auth["v"], SUPPORTED_VERSION),
+                      [
+                          "A version this gate cannot read is refused rather than graded on the fields "
+                          "it happens to recognise: a newer marker may mean something different by the "
+                          "same field name.",
+                      ],
+                  )
+
+              parsed_item = qualified_item(auth["item"])
+              if parsed_item is None:
+                  return (
+                      FINDING,
+                      "the marker's `item=%s` is not `owner/repo#N`" % auth["item"],
+                      [
+                          "The board's `<repo>#N` shorthand is not GitHub's grammar, and "
+                          "`.github#2107` records what it costs when it reaches a field GitHub parses. "
+                          "This gate refuses it rather than resolving the owner by assumption.",
+                      ],
+                  )
+              item_repo, item_number = parsed_item
+              if not server_assigned(auth["gen"]):
+                  return (
+                      FINDING,
+                      "the marker's `gen=%s` is not a canonical server-assigned comment id" % auth["gen"],
+                      [
+                          "A released claim has no generation, and a leading-zero spelling would key "
+                          "one tenancy two ways.",
+                      ],
+                  )
+              if not HEAD_SHA_RE.match(auth["head"]):
+                  return (
+                      FINDING,
+                      "the marker's `head=%s` is not a 40-character lowercase hex commit id"
+                      % auth["head"],
+                      [],
+                  )
+
+              # CHECK 2 (§6.3). A force-push after authorization means the authorization is for a
+              # DIFFERENT artifact. This is the rule `delivery` already enforces client-side, where a
+              # merge is refused because "the PR is no longer at the inspected head"
+              # (`src/FS.GG.Coord.Cli/Client.fs:1096`).
+              if not head:
+                  return (
+                      NO_VERDICT_PERMANENT,
+                      "this run carries no pull-request head SHA, so the marker's `head=` cannot be "
+                      "compared against anything",
+                      [],
+                  )
+              if auth["head"] != head:
+                  return (
+                      FINDING,
+                      "the marker authorizes head `%s`, but this pull request is now at `%s`"
+                      % (auth["head"], head),
+                      [
+                          "The authorization is bound to the artifact it was written for. A push after "
+                          "it was written leaves it naming a commit that is no longer what would "
+                          "merge. Re-issue `delivery <ref> --pr <n>`; against an already-current "
+                          "marker that call is a no-op PATCH-skip, so it is always safe to repeat.",
+                      ],
+                  )
+
+              # CHECK 3 (§6.3). `gen=` must equal the LIVE winning `fsgg:claim` comment id on `item`,
+              # re-read here rather than trusted from the marker. This is the one field the pull
+              # request cannot satisfy by typing: the id is server-assigned and the winner is decided
+              # by a CAS.
+              comments = read_comments(item_repo, item_number)
+
+              # A QUERY THAT CAN RETURN EMPTY FOR TWO DIFFERENT REASONS IS NOT EVIDENCE. An issue with
+              # NO comments at all is indistinguishable from a read that reached the wrong subject — a
+              # renumbered item, a transferred issue, a 200 with an empty page. A claimed item always
+              # carries at least the claim marker, so zero comments is a NO-VERDICT and never the
+              # finding "this item is unclaimed".
+              if not comments:
+                  return (
+                      NO_VERDICT_PERMANENT,
+                      "%s#%d returned NO comments at all, so this gate cannot tell an unclaimed item "
+                      "from a read that reached the wrong subject" % (item_repo, item_number),
+                      [
+                          "A claimed item carries at least its own `fsgg:claim` marker, so an empty "
+                          "comment list is not the finding 'nobody holds this'. Reporting it as one "
+                          "would be an empty result set read as a negative finding.",
+                      ],
+                  )
+
+              found = claim_markers(comments, "%s#%d" % (item_repo, item_number))
+              if not found:
+                  # The read SUCCEEDED and the item carries comments but no `fsgg:claim` marker at
+                  # all: the claim was released or reaped away, so there is no tenancy for `gen=` to
+                  # name. §8.1 — released => RED.
+                  return (
+                      FINDING,
+                      "%s#%d carries no `fsgg:claim` marker, so generation `%s` names a tenancy that "
+                      "has ended" % (item_repo, item_number, auth["gen"]),
+                      [
+                          "The item was released or reaped since this authorization was written. "
+                          "Recovery is authoring, not retry: re-take the claim and re-authorize, "
+                          "which mints a new generation (design §8.1).",
+                      ],
+                  )
+
+              live = [m for m in found if not m["stale"]]
+              if not live:
+                  # EXPIRED IS NOT EVICTED, and reporting the two as one reads as a lost race
+                  # (`.github#2656`). Nobody stole or reaped anything; the holder stopped renewing.
+                  oldest = min(found, key=lambda m: m["id"])
+                  return (
+                      FINDING,
+                      "every `fsgg:claim` marker on %s#%d has outlived its own declared lease — the "
+                      "lowest is comment %d (worker '%s', lease %d min)"
+                      % (item_repo, item_number, oldest["id"], oldest["worker"], oldest["lease"]),
+                      [
+                          "This is an EXPIRED lease, not an eviction: nothing stole or reaped this "
+                          "item, the holder simply stopped renewing. Repaired by `heartbeat`, or by "
+                          "re-taking the item if the holder is gone — not by re-running this gate.",
+                      ],
+                  )
+
+              winner = min(live, key=lambda m: m["id"])
+              if str(winner["id"]) != auth["gen"]:
+                  return (
+                      FINDING,
+                      "generation `%s` is stale for %s#%d: the live claim is comment %d (worker '%s')"
+                      % (auth["gen"], item_repo, item_number, winner["id"], winner["worker"]),
+                      [
+                          "The item was released, reaped, stolen or re-claimed since this "
+                          "authorization was written, so it belongs to a tenancy that has ended. "
+                          "Comment ids are monotone, so a re-claimed item can never reproduce its old "
+                          "generation. Re-authorize under the current claim (design §8.1).",
+                      ],
+                  )
+
+              return (
+                  OK,
+                  "authorized — `%s` names the live claim on %s#%d (comment %d, worker '%s') and is "
+                  "bound to this pull request's current head `%s`"
+                  % (auth["gen"], item_repo, item_number, winner["id"], winner["worker"], head[:12]),
+                  [],
+              )
+
+
+          def read_comments(repo: str, number: int) -> list:
+              """Every comment on `repo#number`. Raises `NoVerdict`; never returns [] on failure."""
+              proc = subprocess.run(
+                  ["gh", "api", "--paginate", "repos/%s/issues/%d/comments" % (repo, number)],
+                  capture_output=True,
+                  text=True,
+              )
+              if proc.returncode != 0:
+                  detail = (proc.stderr or "").strip() or "the read failed with no diagnostic"
+                  notes.append(
+                      "A read that did not complete is a NO-VERDICT, never a pass (design §6.3 check "
+                      "6, §8.2). All eight roster repositories are public, so this token can normally "
+                      "read them cross-repo; a repository turned private, a rate limit or an outage "
+                      "lands here."
+                  )
+                  raise NoVerdict(
+                      NO_VERDICT_RETRYABLE,
+                      "could not read `repos/%s/issues/%d/comments`: %s" % (repo, number, detail),
+                  )
+              raw = (proc.stdout or "").strip() or "[]"
+              try:
+                  parsed = json.loads(raw) if raw.startswith("[") else None
+              except json.JSONDecodeError as exc:
+                  raise NoVerdict(
+                      NO_VERDICT_PERMANENT,
+                      "the comment read for %s#%d did not parse as JSON: %s" % (repo, number, exc),
+                  )
+              if not isinstance(parsed, list):
+                  raise NoVerdict(
+                      NO_VERDICT_PERMANENT,
+                      "the comment read for %s#%d did not return a list of comments" % (repo, number),
+                  )
+              return parsed
+
+
+          def claim_markers(payload: list, where: str) -> list:
+              """Every anchored `fsgg:claim` marker, with its staleness. Raises `NoVerdict`.
+
+              AN UNPARSEABLE MARKER REFUSES THE WHOLE SCAN rather than shortening the list
+              (`src/FS.GG.Coord.GitHub/Reads.fs:283`, `:473-486`). Dropping one would let a malformed
+              marker — the exact thing a forger would produce — silently promote the next candidate to
+              winner.
+              """
+              env_lease = os.environ.get("FSGG_CLAIM_LEASE_MIN") or ""
+              fallback = int(env_lease) if env_lease.isdigit() and int(env_lease) > 0 else DEFAULT_LEASE_MIN
+              now = datetime.now(timezone.utc)
+              found = []
+              for comment in payload:
+                  body = comment.get("body") or ""
+                  m = CLAIM_RE.match(body)
+                  if not m:
+                      continue
+                  fields = fields_of(m.group("fields"))
+                  cid = comment.get("id")
+                  updated = comment.get("updated_at")
+                  if not isinstance(cid, int) or not isinstance(updated, str):
+                      raise NoVerdict(
+                          NO_VERDICT_PERMANENT,
+                          "an `fsgg:claim` marker on %s has no readable id/updated_at — refusing the "
+                          "whole scan rather than dropping it, because dropping one promotes the next "
+                          "candidate to winner" % where,
+                      )
+                  try:
+                      at = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                  except ValueError:
+                      raise NoVerdict(
+                          NO_VERDICT_PERMANENT,
+                          "an `fsgg:claim` marker on %s carries an unparseable updated_at (%r) — "
+                          "refusing the whole scan rather than dropping it, because dropping one "
+                          "promotes the next candidate to winner" % (where, updated),
+                      )
+                  declared = fields.get("lease", "")
+                  lease = int(declared) if declared.isdigit() and int(declared) > 0 else fallback
+                  age = (now - at).total_seconds()
+                  # A NEGATIVE age means the marker's age could not be established and it is NOT
+                  # stale: reading an unreadable age as an expired lease would break a live lock on a
+                  # field we failed to parse (`Reads.fs`'s own rule).
+                  found.append(
+                      {
+                          "id": cid,
+                          "worker": fields.get("worker", "unparsed-marker"),
+                          "lease": lease,
+                          "stale": age >= 0 and age > lease * 60,
+                      }
+                  )
+              return found
+
+
+          try:
+              code, headline, detail = verdict()
+          except NoVerdict as refusal:
+              code, headline, detail = refusal.code, refusal.headline, []
+          label = {
+              OK: "OK",
+              FINDING: "FINDING",
+              NO_VERDICT_RETRYABLE: "NO VERDICT (retryable)",
+              NO_VERDICT_PERMANENT: "NO VERDICT",
+          }[code]
+          lines = ["### receiver-validate: %s — %s" % (label, headline or "see the annotations"), ""]
+          for extra in list(detail) + notes:
+              lines.append(extra)
+              lines.append("")
+          lines.append(
+              "This context is OBSERVE-ONLY (design §9.1 step 1) and is required in no repository, so "
+              "this verdict blocks no merge. It reports; it gates nothing."
+          )
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines) + "\n")
+          stream = sys.stdout if code == OK else sys.stderr
+          kind = "notice" if code == OK else "warning"
+          print("::%s::receiver-validate: %s" % (kind, headline or label), file=stream)
+          for extra in list(detail) + notes:
+              print(extra, file=stream)
+          sys.exit(code)
+          PY
+          # THE REAL VERDICT, PUBLISHED. `$rc` is the script's own exit status, captured above and
+          # written here before the observe-only `exit 0` below neutralises it — so the code a reader
+          # (and `tests/receiver-validate/run.sh`) sees is the one the rule actually reached, not a
+          # rendering of it.
+          printf 'verdict=%s\n' "$rc" >> "$GITHUB_OUTPUT"
+          # OBSERVE-ONLY IS A HARD BOUNDARY, NOT A SOFT START (design §9.1 step 1, and slice 4's
+          # `fsgg-claim-fence.yml` header). ARMING IS SLICE 8's JOB (`.github#2723`). This job runs in
+          # SEVEN repositories it does not own, so a verdict that failed here would red pull requests
+          # across the fleet on the first push — before anyone has watched the context report once,
+          # which is precisely what §9.1 step 2 exists to do first. `tests/receiver-validate/run.sh`
+          # asserts this line structurally AND by execution, in both directions: a mutated copy that
+          # propagates the finding must be CAUGHT, or the boundary is a promise rather than a test.
+          exit 0
+
   materialize:
     name: Materialize the kit from its pin
     runs-on: ubuntu-latest
