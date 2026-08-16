@@ -69,6 +69,38 @@ module Scan =
           /// unchanged by that: it remains purely the OBSERVED column, never a place this repair writes.
           BoardClass: ItemClass option
 
+          /// The `Kind` column as OBSERVED (.github#2712) — whether the board says this row has a
+          /// lifecycle at all.
+          ///
+          /// It costs nothing, on `BoardClass`'s terms exactly: another `fieldValueByName` resolver field
+          /// on a node already selected, so the 7-point full scan is unchanged. A project with no `Kind`
+          /// field — which is every board today — reads `None` rather than failing the scan.
+          ///
+          /// `None` collapses the same three facts for the same reason, and the collapse is safe for the
+          /// same reason: this value is NEVER a verdict. It is one half of a comparison whose authority is
+          /// the item's own `Kind:` line, and on this axis that direction is not merely tidy — the
+          /// reducer exemption and the scheduler refusal both read `Item.Kind` and never this, so a
+          /// lagging or hand-edited column cannot remove a real work row from its own lifecycle.
+          BoardKind: ItemKind option
+
+          /// **REGISTER DEPTH** — the ISSUE's comment count as observed (.github#2712).
+          ///
+          /// The fact `.github#2712` was filed for: nothing measured how deep a register had got, so
+          /// whether `.github#2691`'s 57 comments were a healthy inbox or a six-week backlog was decided
+          /// by whoever happened to be looking.
+          ///
+          /// It costs nothing, and for a DIFFERENT reason than the resolver fields above: `comments` is a
+          /// CONNECTION, and selecting only its `totalCount` requests no nodes — GraphQL's primary limit
+          /// is metered by nodes REQUESTED, which is the whole reason this query does not nest
+          /// `fieldValues(first: 100)`. Verified before adoption rather than assumed:
+          /// `comments { totalCount }` on `.github#2691` answered `83` at `rateLimit.cost` 1.
+          ///
+          /// `None` means THIS READER DID NOT LOOK — a pull-request node (`comments` is selected only on
+          /// `... on Issue`), or a cache entry written before this field existed. Never "no comments": an
+          /// unread register reading as an empty one is the single reading that would send a host away
+          /// from a full inbox, which is the outcome this field exists to prevent.
+          CommentCount: int option
+
           /// The observed `Severity` column. Missing/unrecognised values are `Unset`.
           Severity: Severity
 

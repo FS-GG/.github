@@ -35,6 +35,9 @@ module ChoreTests =
           HumanBlock = None
           Predicate = None
           Class = None
+          Kind = None
+          BoardKind = None
+          CommentCount = None
           BoardClass = None
           DeliveryRoute =
             DeliveryRoute.Current
@@ -75,6 +78,9 @@ module ChoreTests =
             { item 1 with
                 Claim = Some(claim other, LeaseHeld)
                 Class = Some Decision
+                Kind = None
+                BoardKind = None
+                CommentCount = None
                 BoardClass = None }
         Assert.Empty(derive [ held ])
         Assert.Equal("CLASS-PROJECTION-LAG", (derive [ { held with Claim = None } ]).Head.Kind.RuleId)

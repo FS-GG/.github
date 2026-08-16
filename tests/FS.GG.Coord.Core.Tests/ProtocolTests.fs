@@ -91,7 +91,8 @@ module ProtocolTests =
               Schedulability.HeldByLiveWork(WorkerId "w", 1), "held-by-live-work"
               Schedulability.ItemPrOpen 1, "item-pr-open"
               Schedulability.OverlapsInFlight [], "overlaps-in-flight"
-              Schedulability.Undetermined "r", "undetermined" ]
+              Schedulability.Undetermined "r", "undetermined"
+              Schedulability.NotAUnitOfWork Register, "not-a-unit-of-work" ]
 
         for case, wire in samples do
             Assert.Equal<string>(wire, Schedulability.kind case)
@@ -561,6 +562,9 @@ module ProtocolTests =
           HumanBlock = None
           Predicate = None
           Class = None
+          Kind = None
+          BoardKind = None
+          CommentCount = None
           BoardClass = None
           DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
           Severity = Unset

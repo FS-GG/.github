@@ -127,7 +127,10 @@ module RuleSubsetTests =
                 let row = text.Split('\n') |> Array.filter (fun line -> line.StartsWith("|") && line.Contains($"`{code}`"))
                 Assert.Single row |> ignore
                 Assert.Contains($"{field}=", row[0])
-                let expectedValue = if field = "Class" then "<declared>" else value
+                // `Class` and `Kind` are BODY-DECLARED projections: the remedy is "write whatever the
+                // item declares", so the documented row carries the placeholder rather than one of the
+                // vocabulary's values. Every other writing chore has a single concrete destination.
+                let expectedValue = if field = "Class" || field = "Kind" then "<declared>" else value
                 Assert.Contains(expectedValue, row[0])
 
     /// Every `Rule list` the protocol declares, EXCEPT the canonical `rules` itself.

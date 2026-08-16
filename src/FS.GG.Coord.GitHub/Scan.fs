@@ -30,6 +30,24 @@ module Scan =
           /// which is the authority, so nothing downstream has to guess which of the three this was.
           BoardClass: ItemClass option
 
+          /// The `Kind` column as OBSERVED (.github#2712). `None` covers the same three facts
+          /// `BoardClass` does — unset, a word this engine does not speak, or no such field on the
+          /// project — and they collapse for the same reason: to the only consumer there is no
+          /// projection here to trust, and the ITEM's own `Kind:` line is the authority.
+          BoardKind: ItemKind option
+
+          /// **REGISTER DEPTH** — the ISSUE's comment count as observed (.github#2712).
+          ///
+          /// FREE. `comments { totalCount }` selects no NODES, so it does not multiply the node budget
+          /// GraphQL's primary limit is metered by; the board read stays the 7 points this query's own
+          /// comment measures. Verified directly before adoption: `comments { totalCount }` on
+          /// `.github#2691` answered 83 at `rateLimit.cost` 1.
+          ///
+          /// `None` means this reader did not look — a pull request (which is not an issue and has no
+          /// register semantics), or a cache entry written before this field existed. Never "no
+          /// comments": an unread register must not read as an empty one.
+          CommentCount: int option
+
           /// The `Severity` column as observed. Missing or unrecognised values are explicitly `Unset`,
           /// which ranks last and remains visible to lint.
           Severity: Severity
@@ -171,12 +189,13 @@ module Scan =
                  status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } \
                  class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 kind: fieldValueByName(name: \"Kind\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  content { \
                    __typename \
-                   ... on Issue { id number title state createdAt repository { nameWithOwner } } \
+                   ... on Issue { id number title state createdAt comments { totalCount } repository { nameWithOwner } } \
                    ... on PullRequest { id number title state createdAt repository { nameWithOwner } } \
                  } id \
                } \
@@ -200,12 +219,13 @@ module Scan =
                  status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } \
                  class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 kind: fieldValueByName(name: \"Kind\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  content { \
                    __typename \
-                   ... on Issue { id number title state createdAt body repository { nameWithOwner } } \
+                   ... on Issue { id number title state createdAt body comments { totalCount } repository { nameWithOwner } } \
                    ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } \
                  } id \
                } \
@@ -306,6 +326,20 @@ module Scan =
                       // project with no `Class` field (every board before .github#1588, and every parity
                       // fixture) reads `None` rather than failing the scan.
                       BoardClass = nested node "class" "name" |> Option.bind itemClassOfWireName
+                      // Same resolver-field shape, same cost, same fail-soft as `class` above: a project
+                      // with no `Kind` field — which is every board today, including the live one —
+                      // reads `None` rather than failing the scan.
+                      BoardKind = nested node "kind" "name" |> Option.bind itemKindOfWireName
+                      // A CONNECTION `totalCount`, not a node selection, so it adds no nodes to the page.
+                      // Absent on a pull-request node (`comments` is selected only on `... on Issue`),
+                      // which reads `None` — "this reader did not look", never "no comments".
+                      CommentCount =
+                        match content.TryGetProperty "comments" with
+                        | true, comments ->
+                            match comments.TryGetProperty "totalCount" with
+                            | true, total when total.ValueKind = JsonValueKind.Number -> Some(total.GetInt32())
+                            | _ -> None
+                        | _ -> None
                       Severity =
                         nested node "severity" "name"
                         |> Option.bind severityOfWireName
@@ -399,6 +433,17 @@ module Scan =
             | Some c -> w.WriteString("class", itemClassWireName c)
             | None -> ()
 
+            // OMITTED when absent, on `class`'s terms and for its reason.
+            match r.BoardKind with
+            | Some k -> w.WriteString("kind", itemKindWireName k)
+            | None -> ()
+
+            // OMITTED when this reader did not look. A `0` would be an entry ASSERTING an empty register,
+            // which is the one reading that would send a host away from a full inbox.
+            match r.CommentCount with
+            | Some n -> w.WriteNumber("commentCount", n)
+            | None -> ()
+
             w.WriteString("severity", severityWireName r.Severity)
 
             // OMITTED when absent, on `class`'s terms and for its reason: an empty string would be a
@@ -470,6 +515,16 @@ module Scan =
                               // one idempotent board write; the opposite default would suppress a real
                               // projection because an old cache said nothing.
                               BoardClass = s "class" |> Option.bind itemClassOfWireName
+                              // Absent on every cache entry written before .github#2712, and that reads
+                              // as `None` — the fail-closed direction, exactly as `class` above: a stale
+                              // entry derives a projection chore that rewrites a column it already holds
+                              // (one idempotent write), where the opposite default would suppress a real
+                              // projection because an old cache said nothing.
+                              BoardKind = s "kind" |> Option.bind itemKindOfWireName
+                              CommentCount =
+                                match e.TryGetProperty "commentCount" with
+                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                | _ -> None
                               Severity =
                                 s "severity"
                                 |> Option.bind severityOfWireName

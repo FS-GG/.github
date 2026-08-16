@@ -90,6 +90,8 @@ module ApplicationServiceTests =
           IsPullRequest = isPullRequest
           PathRepo = repo
           BoardClass = None
+          BoardKind = None
+          CommentCount = None
           Severity = Unset
           Phase = None
           CreatedAt = None
@@ -108,7 +110,7 @@ module ApplicationServiceTests =
 
         Assert.Equal(1, List.length selected.Rows)
         Assert.Equal(
-            """[{"number":1,"repo":"FS-GG/.github","title":"quote: \u0022kept\u0022","status":"Ready","class":null,"severity":"Unset","state":"OPEN"}]""",
+            """[{"number":1,"repo":"FS-GG/.github","title":"quote: \u0022kept\u0022","status":"Ready","class":null,"kind":null,"commentCount":null,"severity":"Unset","state":"OPEN"}]""",
             Render.renderReadyJson selected.Rows
         )
 
@@ -129,7 +131,7 @@ module ApplicationServiceTests =
                 BoardClass = Some Defect }
 
         Assert.Equal(
-            """[{"number":1,"repo":"FS-GG/.github","title":"a defect","status":"Ready","class":"defect","severity":"Unset","state":"OPEN"}]""",
+            """[{"number":1,"repo":"FS-GG/.github","title":"a defect","status":"Ready","class":"defect","kind":null,"commentCount":null,"severity":"Unset","state":"OPEN"}]""",
             Render.renderReadyJson [ classed ]
         )
 

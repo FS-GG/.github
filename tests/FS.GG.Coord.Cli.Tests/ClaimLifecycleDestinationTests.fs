@@ -484,7 +484,7 @@ module ClaimLifecycleDestinationTests =
     // ---- The COST of reading those facts, pinned rather than asserted ----------------------------------
 
     [<Fact>]
-    let ``#2645 deriving the destination costs exactly four extra REST reads and one GraphQL read`` () =
+    let ``#2645 deriving the destination costs exactly five extra REST reads and one GraphQL read`` () =
         // `claim` is the hottest write path in the org and rides the budget that dies first under fan-out
         // (#418/#1666), so "read the facts instead of inventing them" is a claim about SPEND as well as
         // about honesty. This leg is the measurement, kept in the tree so a later change that quietly adds
@@ -492,7 +492,7 @@ module ClaimLifecycleDestinationTests =
         //
         // MEASURED, on this exact fixture and its ordinary no-PR/no-blocker row (`world`): the pre-fix
         // engine — `git show origin/main:src/FS.GG.Coord.Cli/Client.fs`, built and run against this same
-        // module — spent 7 REST and 7 GraphQL calls; this one spends 11 REST and 8. The delta is the five
+        // module — spent 7 REST and 7 GraphQL calls; this one spends 12 REST and 8. The delta is the six
         // reads asserted below and nothing else.
         //
         // WHY EACH ONE IS BOUGHT, in the order the reducer's cascade consumes them:
@@ -508,6 +508,20 @@ module ClaimLifecycleDestinationTests =
         //   * `graphql … Blocked by` — `Board.itemBlockedBy`, against the board this call already
         //     bootstrapped. A row with no edge (the common case, and this fixture's) stops there and
         //     resolves no blocker: zero further REST.
+        //   * `issue-get` (body) — `Reads.issueBody`, for the item's `Kind:` line (.github#2712). THE
+        //     FIFTH READ, ADDED DELIBERATELY, and this comment is the "has to say so here" the paragraph
+        //     above demanded rather than an edit that quietly moved the number. It buys the one fact that
+        //     decides whether this row has a lifecycle at all: a class anchor, a register or a directive
+        //     must get NO Status column from the reducer, and the kind is a BODY fact — it cannot be taken
+        //     from the board column (which may lag, and which a dropdown edit could weaponise) nor from
+        //     the watermark (which would freeze the exemption, `Client.fs:2492`).
+        //
+        //     THE BUDGET ARGUMENT, honestly stated: this is one request per CLAIM, not per candidate
+        //     scanned. `take` — measured at roughly 190 REST requests for one run on `FS-GG/.github`,
+        //     2026-08-16 — reaches this function exactly once, for the single item it claims. Contrast
+        //     the #353 collision scan, which `take` deliberately skips precisely because that one WOULD be
+        //     paid per candidate. The thing bought is the difference between a register that the reducer
+        //     leaves alone and one it writes a lifecycle column onto.
         let fixture = build world
         let code, _, _ = runClaim fixture.Transport (claimArgs [])
 
@@ -515,7 +529,7 @@ module ClaimLifecycleDestinationTests =
         Assert.Equal(1, fixture.Transport.Count "pulls-list FS-GG/FS.GG.SDD")
         Assert.Equal(1, fixture.Transport.Count "git/matching-refs/heads/item/42-")
         Assert.Equal(1, fixture.Transport.Count "graphql FS-GG/FS.GG.SDD#42 Blocked by")
-        Assert.Equal(11, fixture.Transport.RestCalls)
+        Assert.Equal(12, fixture.Transport.RestCalls)
         Assert.Equal(8, fixture.Transport.GraphQlCalls)
 
     // ---- GATE-INVERSION EVIDENCE (.github#2645, recorded by hand against the mutated binary) -----------

@@ -15,11 +15,29 @@ module LifecycleProjectionTests =
           Delivery = fact { Outstanding = false; DoneStamped = false }
           Issue = fact Open }
 
+    /// THE `work` WRAPPERS — and pinning `Work` here is not a convenience, it is the OVER-APPLICATION
+    /// LEG of .github#2712 AC6, executed by every assertion already in this file. A `work` row must park
+    /// and promote exactly as it did before the exemption existed; these wrappers make every pre-existing
+    /// test in this module a statement of that, so an exemption that over-applied by one case would red
+    /// the whole suite rather than pass quietly.
     let reduce intent value =
-        LifecycleProjection.reduce LifecycleProjection.IntentStatusV1 intent value
+        LifecycleProjection.reduce LifecycleProjection.IntentStatusV1 Work intent value
 
     let advance intent watermark value =
-        LifecycleProjection.advance LifecycleProjection.IntentStatusV1 intent watermark value
+        LifecycleProjection.advance LifecycleProjection.IntentStatusV1 Work intent watermark value
+
+    /// The same reducer with the kind under test — used only by the exemption tests below.
+    let reduceOf kind intent value =
+        LifecycleProjection.reduce LifecycleProjection.IntentStatusV1 kind intent value
+
+    let advanceOf kind intent watermark value =
+        LifecycleProjection.advance LifecycleProjection.IntentStatusV1 kind intent watermark value
+
+    /// Every STANDING kind, DERIVED from the union rather than listed, so a fifth `ItemKind` reaches
+    /// every assertion below the day it is declared. A hand-written `[ Anchor; Register; Directive ]`
+    /// would pass forever while silently not testing a case somebody added — which is the class
+    /// `.github#266` owns and the one this row must not commit.
+    let standingKinds = Kind.legalKinds |> List.filter Kind.isStanding
 
     [<Fact>]
     let ``M6 Auto reducer covers claim PR delivery blocker and ready states`` () =

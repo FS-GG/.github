@@ -11,6 +11,8 @@ module Schedulability =
 
     type Schedulability =
         | Startable
+        /// The row is a STANDING ITEM and is not a unit of work at all (.github#2712).
+        | NotAUnitOfWork of ItemKind
         | WrongStatus of BoardStatus
         | IssueClosed
         | NoTouchSet
@@ -68,6 +70,28 @@ module Schedulability =
         // ORDER IS PART OF THE SPEC, not an implementation detail. Each check must come before every
         // check whose answer it would make meaningless — and it must come AFTER any check that
         // produces a stronger, more actionable statement about the same item.
+
+        // 0. WHAT THE ROW IS, BEFORE ANY STATE IT IS IN (.github#2712). A class anchor, a register or a
+        //    directive has no lifecycle, so every check below it is a question about a lifecycle this row
+        //    does not have — and ANSWERING one sends the reader to fix something that is not broken. That
+        //    is the defect this step removes, verbatim: `batch --explain` reported `Status is Backlog` for
+        //    `.github#266`, which is true, useless, and points at a column nobody should be adjusting.
+        //
+        //    ABOVE `IssueClosed` deliberately, not merely above the column. `.github#266` has all ten of
+        //    its children closed and MUST NOT close; `.github#2106`'s work is `Done` while its issue must
+        //    stay `OPEN`. On such a row "the issue is closed" and "the issue is open" are equally
+        //    uninformative, and the first would read as a `/check-board` repair instruction.
+        //
+        //    THE AUTHORITY IS THE ITEM'S OWN TEXT (`item.Kind`), NEVER the `Kind` board column
+        //    (`item.BoardKind`) — `Class: decision`'s rule at step 3b exactly, and here it also closes a
+        //    hazard that axis does not have: were the column allowed to decide, one dropdown edit would
+        //    make a real work row permanently unschedulable with nothing in its body to explain why.
+        //
+        //    `Kind.govern` owns the `None`-means-`Work` reading, so a row declaring no kind — which is
+        //    every row on this board today — falls straight through to step 1 unchanged.
+        match Kind.govern item.Kind with
+        | kind when Kind.isStanding kind -> NotAUnitOfWork kind
+        | _ ->
 
         // 1. THE ISSUE BEFORE THE COLUMN (#520). The board column is a projection; the issue is the
         //    work. Asking "is the column Ready?" of a CLOSED issue is asking the wrong question of the
@@ -356,6 +380,7 @@ module Schedulability =
     let kind =
         function
         | Startable -> "startable"
+        | NotAUnitOfWork _ -> "not-a-unit-of-work"
         | WrongStatus _ -> "wrong-status"
         | IssueClosed -> "issue-closed"
         | NoTouchSet -> "no-touch-set"
@@ -385,6 +410,11 @@ module Schedulability =
 
         match result with
         | Startable -> $"%s{id} — startable"
+        // NAMES THE KIND, and says what that means rather than only what it is called. The sentence this
+        // replaces (`Status is Backlog`) was true and useless; a reader acting on it would go and change a
+        // column, which is precisely the wrong repair for a row that has no lifecycle.
+        | NotAUnitOfWork kind ->
+            $"%s{id} — not a unit of work: this row is a %s{itemKindWireName kind} (`Kind: %s{itemKindWireName kind}`), so it has no completion condition and is never scheduled. Its Status column is not the reason and changing it will not help."
         | IssueClosed ->
             $"%s{id} — the issue is closed (the board column says %s{statusText item.Status}; /check-board reconciles it)"
         | WrongStatus NoStatus ->

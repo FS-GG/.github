@@ -246,6 +246,26 @@ module Render =
             | Some c -> w.WriteString("class", itemClassWireName c)
             | None -> w.WriteNull("class")
 
+            // `kind` — the board column as scanned (.github#2712), on `class`'s exact terms and for the
+            // same executability reason: a host reading this document could not otherwise tell a standing
+            // row from a work row without opening the issue.
+            match row.BoardKind with
+            | Some k -> w.WriteString("kind", itemKindWireName k)
+            | None -> w.WriteNull("kind")
+
+            // `commentCount` — REGISTER DEPTH (.github#2712), and it is the fact the row this comes from
+            // was filed for: nothing measured how deep a register had got, so whether `.github#2691`'s 57
+            // comments were a healthy inbox or a six-week backlog was decided by whoever was looking.
+            // Emitted for EVERY row, not only registers: it is the scan's observation, and filtering it to
+            // one kind here would mean the document could not answer the question for a row whose `Kind`
+            // column has not been projected yet.
+            //
+            // `null` when this reader did not look — never `0`, which would report an unread register as
+            // an empty one.
+            match row.CommentCount with
+            | Some n -> w.WriteNumber("commentCount", n)
+            | None -> w.WriteNull("commentCount")
+
             w.WriteString("severity", severityWireName row.Severity)
 
             w.WriteString(

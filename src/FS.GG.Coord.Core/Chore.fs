@@ -18,18 +18,26 @@ module Chore =
         | StaleClaim of holder: WorkerId
         | LifecycleProjectionLag of destination: BoardStatus
         | ClassProjectionLag of declared: ItemClass
+        /// The board's `Kind` column disagrees with the item's own `Kind:` line (.github#2712) — the same
+        /// projection shape as `ClassProjectionLag`, on the same authority direction (ADR-0066).
+        | KindProjectionLag of declared: ItemKind
 
         member this.RuleId =
             match this with
             | StaleClaim _ -> "STALE-CLAIM"
             | LifecycleProjectionLag _ -> "LIFECYCLE-PROJECTION-LAG"
             | ClassProjectionLag _ -> "CLASS-PROJECTION-LAG"
+            | KindProjectionLag _ -> "KIND-PROJECTION-LAG"
 
         member this.Write: (string * string) option =
             match this with
             | StaleClaim _ -> None
             | LifecycleProjectionLag destination -> Some("Status", statusWireName destination)
             | ClassProjectionLag declared -> Some("Class", itemClassWireName declared)
+            // IN CORE, beside its sibling, never in `Client.fs` — the field mapping lives here precisely
+            // so the write target and the vocabulary are one decision (`Client.fs`'s own note at the
+            // reconcile write loop).
+            | KindProjectionLag declared -> Some("Kind", itemKindWireName declared)
 
     [<Sealed>]
     type Chore internal (subject: Ref, kind: ChoreKind, size: ChoreSize) =
@@ -47,6 +55,8 @@ module Chore =
                 $"%s{subject.Short}: fresh lifecycle facts project Status=%s{statusWireName destination}; repair the stale board projection."
             | ClassProjectionLag declared ->
                 $"%s{subject.Short}: the item's own text declares `Class: %s{itemClassWireName declared}` but the board's Class column does not say so — set Class to %s{itemClassWireName declared}."
+            | KindProjectionLag declared ->
+                $"%s{subject.Short}: the item's own text declares `Kind: %s{itemKindWireName declared}` but the board's Kind column does not say so — set Kind to %s{itemKindWireName declared}."
 
     type Boundary =
         | AtNext
@@ -86,10 +96,24 @@ module Chore =
             [ Chore(item.Ref, StaleClaim claim.Worker, Involved) ]
         | Some _ -> []
         | None ->
-            match item.Class, item.BoardClass with
-            | Some declared, board when board <> Some declared ->
-                [ Chore(item.Ref, ClassProjectionLag declared, Quick) ]
-            | _ -> []
+            // BOTH projections, from one pass. `Kind` is derived exactly as `Class` is — declared but not
+            // rendered — and for the same reason: two fields, two facts, and the chore lives in the gap.
+            // A row declaring NO `Kind:` line derives NO chore, so the board is not swept with `work`
+            // writes for every row that simply never said anything (an absent declaration is not a
+            // disagreement).
+            let classLag =
+                match item.Class, item.BoardClass with
+                | Some declared, board when board <> Some declared ->
+                    [ Chore(item.Ref, ClassProjectionLag declared, Quick) ]
+                | _ -> []
+
+            let kindLag =
+                match item.Kind, item.BoardKind with
+                | Some declared, board when board <> Some declared ->
+                    [ Chore(item.Ref, KindProjectionLag declared, Quick) ]
+                | _ -> []
+
+            classLag @ kindLag
 
     let derive items = items |> List.collect choresFor
 
@@ -103,6 +127,7 @@ module Chore =
         | StaleClaim _ -> 0
         | LifecycleProjectionLag _ -> 1
         | ClassProjectionLag _ -> 2
+        | KindProjectionLag _ -> 3
 
     let offerIncluding (at: SafePoint) (lifecycle: Chore list) =
         derive at.Items @ lifecycle

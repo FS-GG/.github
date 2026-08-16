@@ -298,6 +298,18 @@ module Snapshot =
                 | None, Ok Closed, Ok Done -> Ok None
                 | _ -> stringField path "body" el |> Result.map Class.fromBody
 
+        // The `Kind:` body line (.github#2712), read on `itemClass`'s exact terms above and for the same
+        // reasons: body-only, pure, and fail-SAFE — a body this parser could not read yields `None`,
+        // which `Kind.govern` reads as `Work`, so a snapshot-only context reduces exactly as it does
+        // today rather than exempting a row nobody looked at.
+        let itemKind =
+            match optProp "bodyUnreadable" el with
+            | Some _ -> Ok None
+            | None ->
+                match optProp "body" el, state, status with
+                | None, Ok Closed, Ok Done -> Ok None
+                | _ -> stringField path "body" el |> Result.map Kind.fromBody
+
         let blockers =
             match optProp "blockers" el with
             | None -> Ok []
@@ -336,8 +348,8 @@ module Snapshot =
             | None -> Ok false
             | Some v -> asBool $"%s{path}.itemPrUnreadable" v
 
-        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, itemPrUnreadable, humanBlock, declaredPredicate, itemClass with
-        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok ipu, Ok hb, Ok dp, Ok ic ->
+        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, itemPrUnreadable, humanBlock, declaredPredicate, itemClass, itemKind with
+        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok ipu, Ok hb, Ok dp, Ok ic, Ok ik ->
             Ok
                 { Item =
                     { Ref = r
@@ -363,6 +375,15 @@ module Snapshot =
                       // chore reads it as a disagreement — so a context that never enriches writes the
                       // column it already holds, an idempotent write, rather than suppressing a real one.
                       BoardClass = None
+                      Kind = ik
+                      // The board's `Kind` COLUMN is not on this document, on `BoardClass`'s exact terms:
+                      // it is what the scan OBSERVED, and this parser is pure. `None` means "this parser
+                      // did not look", which derives a projection chore that writes the column the row
+                      // already holds — one idempotent write — rather than suppressing a real one.
+                      BoardKind = None
+                      // Register depth is a SCAN fact (a GraphQL `comments { totalCount }`), not a
+                      // document one. `None` is "this reader did not look", never "no comments".
+                      CommentCount = None
                       DeliveryRoute = DeliveryRoute.Unreadable [ "delivery-route receipt was not observed in this snapshot" ]
                       // Severity is a board-column fact and this pure snapshot does not carry it.
                       Severity = Unset
@@ -378,7 +399,7 @@ module Snapshot =
                       AgeDays = None }
                   BashPaths = bp
                   DeclaredPredicate = dp }
-        | a, b, c, d, e, f, g, h, i, j, k, l ->
+        | a, b, c, d, e, f, g, h, i, j, k, l, m ->
             [ a |> Result.map ignore
               b |> Result.map ignore
               c |> Result.map ignore
@@ -390,7 +411,8 @@ module Snapshot =
               i |> Result.map ignore
               j |> Result.map ignore
               k |> Result.map ignore
-              l |> Result.map ignore ]
+              l |> Result.map ignore
+              m |> Result.map ignore ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Candidate>)
 
@@ -607,6 +629,10 @@ module Snapshot =
 
     let private writeDetail (w: Utf8JsonWriter) (result: Schedulability) =
         match result with
+        // The KIND on the wire as DETAIL, on `wrong-status`'s exact terms: the verdict is one case
+        // (`not-a-unit-of-work`), and which of the standing kinds it was rides here — the same edge
+        // `awaiting-human` uses for `humanBlock`.
+        | NotAUnitOfWork k -> w.WriteString("itemKind", itemKindWireName k)
         | WrongStatus s -> w.WriteString("status", statusWireName s)
         | UnusableTouchSet tokens ->
             w.WriteStartArray("tokens")

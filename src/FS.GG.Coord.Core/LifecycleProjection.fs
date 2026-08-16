@@ -38,6 +38,12 @@ module LifecycleProjection =
     type Result =
         | Project of status: BoardStatus * observedAt: int64
         | Withheld of reason: string
+        /// The row is a STANDING ITEM and has no lifecycle to project (.github#2712). A DISTINCT case,
+        /// never folded into `Withheld of reason: string`: `Withheld` is a string a caller may only log,
+        /// so an exempt row folded into it would reach every existing caller as "not this pass" and be
+        /// retried forever. A case the compiler forces every caller to handle is what makes "the reducer
+        /// wrote nothing" a checked property rather than a hoped-for one.
+        | Exempt of kind: ItemKind
 
     /// The durable portion of a projection receipt.  Callers persist this beside the status write and
     /// feed it back on the next event.  Keeping the water-mark in the typed boundary makes an event that
@@ -241,15 +247,49 @@ module LifecycleProjection =
             | Deferred _ -> Project(BoardStatus.Backlog, observedAt)
             | HumanPark _ -> Project(BoardStatus.Blocked, observedAt) // handled above; exhaustive and stable
 
-    let reduce policy intent observation =
-        match policy with
-        | IntentStatusV1 -> projectWithIntent intent observation
+    // THE STANDING-ITEM EXEMPTION (.github#2712), AND ITS POSITION IS THE WHOLE DESIGN.
+    //
+    // It is tested here — FIRST, on `kind`, before `intent` and before `observation` are looked at at all
+    // — rather than as an arm of `lifecyclePolicyIntent` or as a `SchedulingIntent` case, and neither of
+    // those alternatives was rejected on taste. Both were REFUTED by measurement:
+    //
+    //   * As a `SchedulingIntent` it would live on the persisted watermark, and `Client.fs:2492`'s
+    //     freeze — a watermark's mere EXISTENCE suppresses policy re-derivation — means a row whose
+    //     `Kind` later changed could never leave its exemption.
+    //   * Inside `lifecyclePolicyIntent` it is suppressed by ANY pre-existing watermark, and since
+    //     .github#2690 every `add`-filed row has one. Independent critic `avocet-e644` measured exactly
+    //     this for the sibling `Class`-derived arm on PR #2718 (probe 3): a `Class: decision` row
+    //     carrying the `Backlog` receipt `add` now mints settles at `Backlog` and never reaches
+    //     `Blocked`, while the identical row with NO receipt reaches `Blocked`.
+    //
+    // A PARAMETER cannot be frozen. The watermark carries `Intent` and never `Kind`, so there is no
+    // receipt in this system that can suppress this test — the exemption is re-decided from the item's own
+    // body on every pass, by construction rather than by anybody remembering to re-derive it.
+    let private exemptIfStanding kind =
+        if Kind.isStanding kind then Some(Exempt kind) else None
+
+    let reduce policy kind intent observation =
+        match exemptIfStanding kind with
+        | Some exempt -> exempt
+        | None ->
+            match policy with
+            | IntentStatusV1 -> projectWithIntent intent observation
 
     /// Accept a newly projected lifecycle result only when it is newer than the last applied receipt.
     /// Equal timestamps are idempotent only when they agree; different values at the same timestamp are
     /// withheld because the ordering source was not strong enough to decide which event won.
-    let advance policy intent watermark observation =
-        match reduce policy intent observation with
+    let advance policy kind intent watermark observation =
+        // ABOVE the watermark comparison as well as above `reduce`'s own projection, and stated twice
+        // rather than relied upon through the call: a standing row must not even be able to reach a
+        // verdict ABOUT a watermark, because the two `Withheld` arms below are about ordering and would
+        // read as "we could not decide yet" on a row where the right answer is "there is nothing to
+        // decide, ever".
+        match exemptIfStanding kind with
+        | Some exempt -> exempt
+        | None ->
+
+        match reduce policy kind intent observation with
+        | Exempt kind -> Exempt kind
         | Withheld reason -> Withheld reason
         | Project(status, observedAt) ->
             match watermark with

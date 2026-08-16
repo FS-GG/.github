@@ -41,6 +41,23 @@ module Schedulability =
         /// Startable now.
         | Startable
 
+        /// **THE ROW IS NOT A UNIT OF WORK (.github#2712)** — a class anchor, a register or a directive.
+        /// It has no completion condition, so it is never scheduled and no state change can make it
+        /// schedulable short of a reclass.
+        ///
+        /// DECIDED FIRST, above `IssueClosed` and above the column, because every other case is a
+        /// statement about a lifecycle this row does not have. Today `batch --explain` answers `Status is
+        /// Backlog` for `.github#266` — true, useless, and an instruction to go and adjust a column that
+        /// is not the reason. `.github#266` has all ten children closed and must not close;
+        /// `.github#2106`'s work is `Done` while its issue must stay `OPEN`; `IssueClosed` is no more
+        /// informative about either than `WrongStatus` is.
+        ///
+        /// Read from `item.Kind` — the item's own `Kind:` body line — and deliberately NOT from
+        /// `item.BoardKind`, on `Class: decision`'s terms at step 3b. A lagging column must not decide,
+        /// and on this axis a column that decided would let one dropdown edit make a real work row
+        /// permanently unschedulable with nothing in its body to explain it.
+        | NotAUnitOfWork of ItemKind
+
         /// The board column says it is not ready. Carries which column, because `NoStatus` is its own
         /// bug (#437) and must not read as `Backlog`.
         | WrongStatus of BoardStatus

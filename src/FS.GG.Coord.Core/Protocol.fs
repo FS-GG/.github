@@ -310,6 +310,7 @@ module Protocol =
     /// reflection, which does not depend on anybody remembering this list.
     let private everyCase: Schedulability.Schedulability list =
         [ Schedulability.Startable
+          Schedulability.NotAUnitOfWork Anchor
           Schedulability.IssueClosed
           Schedulability.WrongStatus Backlog
           Schedulability.BlockedBy []
@@ -329,6 +330,8 @@ module Protocol =
     let private meaning =
         function
         | Schedulability.Startable -> "Nothing holds it. It can be claimed now."
+        | Schedulability.NotAUnitOfWork _ ->
+            "The row is NOT A UNIT OF WORK (.github#2712) — a class anchor, a register or a directive, declared by its own `Kind:` line. It has no completion condition, so no board column and no state change makes it schedulable; only a reclass does. Its `Status` is not the reason and adjusting it will not help."
         | Schedulability.IssueClosed ->
             "The issue is CLOSED while the board still shows it open. The issue's state is the WORK; the board column is a PROJECTION of it. When they disagree, the issue wins — run /check-board."
         | Schedulability.WrongStatus _ ->
