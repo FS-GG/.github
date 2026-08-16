@@ -964,12 +964,32 @@ module AddStatusDefaultTests =
 
             $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blockedByJson},"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":%s{bodyJson},"state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
-        let transport (comments: string list) =
+        /// Which chore the reducer derives, and therefore which gate is asked.
+        type Mode =
+            /// `#42` is `Blocked`, its one blocker is CLOSED -> the projection computes `Ready`. The
+            /// route gate is the one that answers.
+            | PromoteReady
+            /// `#42` is `Ready`, its `Blocked by` names an OPEN blocker -> the projection computes
+            /// `Blocked`; but the LIVE `Blocked by` read at mutation time comes back EMPTY and the body
+            /// carries no `Blocked on:` sentinel, so the coherence gate refuses.
+            ///
+            /// THIS IS THE RACE `requireCoherentBlockedWrite`'S OWN CALL SITE DESCRIBES — *"the scan that
+            /// derived this chore is stale by definition once another actor can clear `Blocked by`"* — and
+            /// it is the only way that gate refuses inside the reducer. It had no behavioural leg
+            /// anywhere: the sole match was a `Regex.Matches` occurrence count over source text.
+            | StaleBlockedPark
+
+        let transport (comments: string list) (mode: Mode) =
             let body42 = "Paths: src/A.fs"
 
             let items =
-                [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
-                  itemJson 8 "Done" None "CLOSED" None ]
+                match mode with
+                | PromoteReady ->
+                    [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
+                      itemJson 8 "Done" None "CLOSED" None ]
+                | StaleBlockedPark ->
+                    [ itemJson 42 "Ready" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
+                      itemJson 8 "Ready" None "OPEN" None ]
                 |> String.concat ","
 
             Fake.Recorder(fun (req: Request) ->
@@ -994,6 +1014,12 @@ module AddStatusDefaultTests =
                                 ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
                             else
                                 ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "\"Blocked by\"" then
+                            // `Board.itemBlockedBy`, the LIVE re-read the coherence gate makes immediately
+                            // before the mutation. EMPTY in both modes: in `StaleBlockedPark` that is the
+                            // whole point, and in `PromoteReady` the gate never asks (the resolved status
+                            // is not `Blocked`), so one answer serves both without ambiguity.
+                            ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         elif document.Contains "projectItems" then
                             ok
                                 $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{ItemId}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
@@ -1022,15 +1048,23 @@ module AddStatusDefaultTests =
                     ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body42 |})
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (commentsJson comments)
                 | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok """{"id":9042}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/8" ->
+                    ok (System.Text.Json.JsonSerializer.Serialize {| number = 8; body = "Paths: src/B.fs" |})
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/8/comments" -> ok "[]"
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/8/comments" -> ok """{"id":9008}"""
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
                 | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
                 | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/42-" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/8-" -> ok "[]"
                 | m, p -> Error(Errors.NotFound $"the reducer fixture serves no %s{m} %s{p}"))
 
-    let private runReconcileApply (comments: string list) =
-        let transport = ReducerPromotionFixture.transport comments
+    let private runReconcileMode (comments: string list) (mode: ReducerPromotionFixture.Mode) =
+        let transport = ReducerPromotionFixture.transport comments mode
         let code, out, err = runVerbWithStderr Client.reconcile transport [ "reconcile"; "--repo"; "FS.GG.SDD"; "--apply"; "--json" ]
         transport, code, out, err
+
+    let private runReconcileApply (comments: string list) =
+        runReconcileMode comments ReducerPromotionFixture.PromoteReady
 
     [<Fact>]
     let ``.github#2698 reconcile --apply does NOT promote a receipt-less row it derived Ready for`` () =
@@ -1067,3 +1101,44 @@ module AddStatusDefaultTests =
         Assert.Contains("LIFECYCLE-PROJECTION-LAG", out)
         Assert.True(transport.Logged "opt_ready", $"out: %s{out}\nerr: %s{err}\nlog: %A{transport.Log}")
         Assert.Contains("\"outcome\":\"written\"", out)
+
+    [<Fact>]
+    let ``.github#2698 a Status=Blocked coherence refusal still FAILS the reducer pass, and says so`` () =
+        // THE OTHER SIDE OF THE DISCRIMINATOR THIS CHANGE INTRODUCED (round-1 F5).
+        //
+        // `routeRefused` is a NEW two-sided condition, and this change is what makes the `Status=Blocked`
+        // arm reachable only when it is false. The route side is pinned by the two legs above; without
+        // this leg, dropping the `&& Result.isOk blockedGate` conjunct left 851/851 green — and that
+        // mutation is not cosmetic. It routes an INCOHERENT PARK into the `NotAttempted` arm: `#2079`'s
+        // boundary stops failing the pass, `rc` falls 1 -> 0, and the operator is told the row "has no
+        // current delivery-route receipt" when the route gate returned `Ok`. That is exactly the
+        // mis-attribution this round repaired, with the arms swapped.
+        //
+        // THE LESSON, RECORDED WHERE IT COST SOMETHING: when a repair introduces a condition, BOTH arms
+        // are new subjects — including the arm whose behaviour is unchanged. Preserving old behaviour
+        // through a new guard is still a new claim about that behaviour, and this file's own two-sided
+        // discipline ran over the DECISION that had just been made rather than over the BOOLEAN that had
+        // just been written.
+        let transport, code, out, err = runReconcileMode [] ReducerPromotionFixture.StaleBlockedPark
+
+        // The projection really did compute `Blocked` — otherwise this leg would be asserting a refusal
+        // that never happened, and would pass against a fixture that derived nothing at all.
+        Assert.Contains("\"value\":\"Blocked\"", out)
+
+        // THE PASS FAILS. An incoherent park IS the board being wrong, and it keeps the non-zero exit
+        // that `coord-board-reconcile` is meant to see.
+        Assert.NotEqual(0, code)
+        Assert.Contains("\"outcome\":\"failed\"", out)
+
+        // AND THE MESSAGE IS THE BLOCKED ONE. This is the assertion that pins the DISCRIMINATOR rather
+        // than merely the arm: an implementation that reached the right exit code by the wrong branch
+        // would still misname the gate to whoever reads the receipt, which is the defect this round found
+        // in the mirror direction.
+        Assert.Contains("Status=Blocked coherence gate", out)
+        Assert.DoesNotContain("has no current delivery-route receipt", out)
+        Assert.DoesNotContain("\"outcome\":\"not-attempted\"", out)
+
+        // Nothing was written on either field, and the refusal named the park rather than the route.
+        Assert.Equal(0, transport.Count "batch-mutation")
+        Assert.Equal(0, transport.Count "item-edit")
+        Assert.Contains("incoherent park", err)
