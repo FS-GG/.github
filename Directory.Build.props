@@ -237,8 +237,109 @@
        patch-line rule, the item self-applying rather than exempting itself. Measured, not inferred:
        the frontier was read from nuget.org and `scripts/kit-auto-publish.py` was run over this
        candidate's facts, on the same discipline the entries above used. -->
+  <!-- 0.58.1 to 0.59.0 (.github#2648): a MINOR bump that also SKIPS 0.58.1, and the two facts have
+       different reasons. Read them separately, because collapsing them is how this cut gets
+       mis-derived as "0.58.2, because 0.58.1 is burned".
+
+       WHY THE LINE IS MINOR. The criterion is the one the 0.56.0 and 0.57.0 entries above apply: a
+       patch when no receiver-visible engine verb, flag, help entry, render name, result name, exit
+       code or behaviour moves, and a MINOR when a new receiver protocol boundary appears. The
+       measurement span is the last commit any receiver actually restores — coord-engine/v0.58.0 at
+       12ec83f8, the published frontier — because 0.58.1 reached no feed. Two legs decide it, and BOTH
+       are about reachability rather than size:
+
+         (1) RECEIVER-VISIBLE BEHAVIOUR MOVES, which the 0.50.7 to 0.51.0 entry states as its own rule
+             ("MINOR when the change is receiver-visible behaviour"). Five defect fixes in this span
+             change what a receiver observes from the engine it actually runs: .github#2575 (delivery
+             reports a pending check as a CHECK, not a review problem), .github#2662 (a granted
+             successor critic can record its verdict), .github#2683 (take walks its own ranked
+             candidates after a lost claim CAS instead of giving up), .github#2678 (only LIVE claims
+             count as implementer slots) and .github#2694 (no inventory is not an empty inventory).
+             Verification: those five commits — 25ce038c, 682dc694, febcb5b6, 1624a011, c8e5ac3f — are
+             among the unreleased engine commits `scripts/check-engine-freshness.py` lists at this
+             head, so no receiver has any of them.
+
+         (2) THE PACKED KIT ADDS A NEW RECEIVER PROTOCOL BOUNDARY, which is the 0.57.0 entry's exact
+             shape — that cut took a minor for "a new reviewer protocol boundary, not a correction to
+             an existing description" in packed `pnext-item` content. This span adds the
+             finding-packet contract and the independent-review consolidation to that same skill.
+             `pnext-item` genuinely reaches receivers: `scripts/generate-driver-manifest` asked with
+             `which pnext-item` answers `FS.GG.Kit` at exit 0.
+
+       WHAT THE .fsi COUNT IS, AND WHAT IT IS NOT. This span also adds 290 lines of public signature
+       surface across five .fsi files: a new module, src/FS.GG.Coord.Core/Operation.fsi (154 lines,
+       .github#2311), plus additions to Driver.fsi (37), StructuredDecision.fsi (37), Batch.fsi (37)
+       and Delivery.fsi (26). Read that as CORROBORATION of legs (1) and (2), never as the criterion
+       itself, because on its own it does not meet the criterion:
+
+         * Operation IS NOT YET RECEIVER-REACHABLE. FS.GG.Coord.Core declares IsPackable false (its
+           own fsproj) and ships as no package; FS.GG.Coord.Cli is PackAsTool, and a dotnet tool's
+           payload is INVOKED, not referenced, so no consumer can open this module. Nothing in
+           src/FS.GG.Coord.Cli references it either — it is slice 1 of 6 of .github#2311, and that
+           fsproj says so itself: "Nothing compiled after it references it yet; slices 2 to 6 are its
+           first callers." Public to the F# compiler is not the same fact as reachable by a receiver,
+           and only the second one this criterion asks about.
+         * ONLY Operation.fsi IS NEW. Batch.fsi, Delivery.fsi, Driver.fsi and StructuredDecision.fsi
+           all exist at 12ec83f8 and were WIDENED — Batch.fsi is 264 lines there. An earlier draft of
+           this entry called Batch.fsi new; it was wrong, and independent review caught it.
+         * 26 OF THE 290 ARE ALREADY CLASSIFIED AS A PATCH. All 26 Delivery.fsi lines land in
+           12ec83f8..a415652f, the 0.58.1 span, which the entry above called a false clause removed
+           from an existing description.
+         * THE WIRE SURFACE DID NOT MOVE AT ALL. Protocol.fs is byte-identical across this span, and
+           check-engine-freshness reports 0 of the unreleased commits touching it.
+
+       So do NOT read this entry as licensing "any new public module implies a minor". The 0.52.0
+       entry's minor was for two names ON THE WIRE — `acceptedAwaitingChecks` and `authorizeDelivery`
+       — and comparing a line count against it measures size where the criterion measures reach.
+
+       Verification (flags named without their leading dashes, per this file's own header note — an
+       XML comment may not contain a double hyphen): `git diff` with `stat`, and with
+       `diff-filter=A name-only`, over `12ec83f8..HEAD` restricted to `src/FS.GG.Coord.Core/*.fsi` and
+       to `src/`, the latter returning ONLY Operation.fs and Operation.fsi; `git show` of
+       `12ec83f8:src/FS.GG.Coord.Core/Batch.fsi` piped to `wc -l` giving 264; `git diff` with `numstat`
+       over `12ec83f8..a415652f` for Delivery.fsi giving 26 and over `a415652f..HEAD` giving nothing;
+       `grep` for `Operation.` across src/FS.GG.Coord.Cli source matching no file.
+
+       WHY 0.58.1 IS SKIPPED RATHER THAN COMPLETED, AND WHY THAT IS NOT WHAT SETS THE LINE. The
+       0.58.1 cut tagged `kit/v0.58.1`, `drivers/v0.58.1` and `coord-engine/v0.58.1` at a415652f and
+       published NOTHING: all three release workflows died on `release not found`, because
+       `release-saga-prepare.yml` was `workflow_dispatch`-only and no operator had run it
+       (.github#2654). Tags are immutable (.github#1772), so 0.58.1 cannot be re-cut to carry the
+       commits that landed behind it, and the operator recorded the route on .github#2648 on
+       2026-08-16: abandon it, bump past it, cut manually. But the line above would be MINOR even if
+       0.58.1 had never been cut — legs (1) and (2) are what decide it, and neither one mentions the
+       burned tag — so this bump is not "the next number after a burned one". That independence is
+       measured in both directions rather than argued: all three defect-class fixes 1624a011,
+       c8e5ac3f and febcb5b6 are absent from BOTH 0.58.0 and 0.58.1, so no route to a 0.58.2 patch
+       exists, and the signature span measured from the burned tag instead of the frontier is still
+       264 lines across four files including Operation.fsi. Verification: both feeds read directly at
+       2026-08-16, nuget.org flat-container index and `orgs/FS-GG/packages/nuget/*/versions`; all
+       three packages frontier `0.58.0` and NO `0.58.1` on either feed; `git merge-base` in its
+       ancestor-test form for each of the three commits against `a415652f`.
+
+       AND THAT IS WHY 0.58.1 GETS NO STANDING ADVISORY. $(FsggStandingAdvisories) warns consumers
+       away from versions that PUBLISHED partially — 0.50.1, 0.50.5 and 0.52.0 each put real bytes on
+       a real feed that a consumer can still resolve today. 0.58.1 put none anywhere, so there is no
+       listing to warn from and nothing a consumer could adopt by accident. It is a three-of-three
+       TAG-only gap, which is a repository fact recorded here, not a feed fact; adding it to the
+       advisories would tell consumers to avoid something that does not exist.
+
+       CONSEQUENCE TO EXPECT, AND IT IS THE 0.52.0 SHAPE, NOT THE 0.58.1 SHAPE. `kit-auto-publish`
+       admits only a same-line PATCH bump (.github#2442), so it REFUSES this candidate and cuts
+       nothing. Measured, not inferred from prose: `scripts/kit-auto-publish.py` was run over this
+       candidate's facts and returned
+       `{"action":"refuse","reason":"candidate-not-next-patch","version":"0.59.0","terminal":true}`.
+       The release is therefore a MANUAL coherent-set publish through .github#2409's path —
+       `release-saga-prepare.yml` by `workflow_dispatch` first, so the bytes exist, THEN the three
+       sibling tags pushed together at one commit. Until that publish happens, `kit-auto-publish`
+       stays red on `main` on its streak bound (.github#2435): that is the frontier rail working on a
+       minor, the same as it did for 0.51.0, 0.52.0, 0.56.0 and 0.57.0, and it is not a regression
+       introduced by this bump.
+
+       NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason the entries above record — 0.50.1
+       and 0.50.5 are permanent partial sets precisely because they did not. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.58.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.59.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

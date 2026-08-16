@@ -167,27 +167,40 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.58.1 — the packed `pnext-item` merge-and-release table stops claiming that every merge performs the coherent-set release.
+    <PackageReleaseNotes>0.59.0 — five receiver-visible defect fixes, and the packed review/finding contracts that 0.58.1 was tagged for and never shipped.
 
-WHAT MOVED, AND WHY IT IS A PATCH. `merge-and-release.md` row 1 read the AUTOMATION'S TRIGGER and stated
-its ACT: `kit-auto-publish.yml` is `on: push: branches: [main]`, unfiltered, so the release was described
-as something the merge always performs and never something to declare. The program that workflow runs
-admits only a same-line PATCH bump (.github#2442) and terminally refuses a MINOR — which every
-coherent-set release is (.github#2402) — so on exactly the release that needs the most care, the workflow
-fires and cuts nothing. The table now states that distinction, and the CI gate that enforces its other
-half (`check-kit-published-coherence.py --obligation-arm`, not shipped in this package) now asks
-`kit-auto-publish.py` for its decision instead of inferring one from the trigger. This corrects a false
-clause in an existing description rather than opening a new receiver protocol boundary, so it is a patch.
+WHAT MOVED, AND WHY IT IS A MINOR. Measured against 0.58.0, the newest version any consumer can actually
+restore. Two things a receiver can observe move, and either alone would carry the line.
 
-WHAT A READER OF THE SKILL SHOULD DO DIFFERENTLY. On a next-patch candidate, nothing: the release is
-automatic and the obligation to declare is still `kind=release-verification`. On a coherent-set MINOR,
-declare the release you are actually performing, with the token that names it — `coherent-set-release`
-and its artifact-specific spellings are accepted there now (.github#2571). The previously-taken third
-option, an unmapped token chosen to get past the gate, was never legitimate and is now unnecessary.
+First, five defect fixes change what the tool does for you: `delivery` reports a pending check as a CHECK
+rather than a review problem (.github#2575); a granted successor critic can record its verdict
+(.github#2662); `take` walks its own ranked candidates after a lost claim CAS instead of giving up
+(.github#2683); only LIVE claims count as implementer slots (.github#2678); and no inventory is no longer
+treated as an empty inventory on any route (.github#2694).
+
+Second, the packed `pnext-item` skill gains a new reviewer protocol boundary — the finding-packet contract
+and the independent-review consolidation — which is the same shape the 0.57.0 cut took a minor for.
+
+WHAT DID NOT MOVE, STATED SO THE LINE IS NOT MIS-READ. The `fsgg-coord-engine` wire surface is unchanged:
+no verb, flag, help entry, render name, result name or exit code moved, and `Protocol.fs` is byte-identical
+across this span. This release also carries a new core module, `Operation` (.github#2311) — but it is
+INTERNAL TO THE TOOL and reaches no consumer: `FS.GG.Coord.Core` is not a package, this package is a
+dotnet tool whose payload is invoked rather than referenced, and nothing calls that module yet. It is
+recorded here for completeness, and it is not why this is a minor.
+
+WHAT SHIPS IN THE KIT AT THIS VERSION. The finding-packet contract and the independent-review
+consolidation in `pnext-item`, and the delivery-channel and skill-registry projections that moved with
+them. These were tagged as 0.58.1 and never published, so 0.58.0 is the last kit any receiver has.
+
+0.58.1 DOES NOT EXIST ON EITHER FEED AND IS NOT A VERSION TO WAIT FOR. Its three tags were pushed at one
+commit and every release workflow then failed, because the draft release they consume had never been
+prepared (.github#2654). No `FS.GG.Kit`, `FS.GG.Drivers` or `FS.GG.Coord.Cli` 0.58.1 was ever published to
+the org feed or to nuget.org — so unlike 0.50.1, 0.50.5 and 0.52.0 below there is nothing to avoid
+adopting. Tags are immutable (.github#1772), so 0.58.1 is skipped rather than completed, and this is the
+cut that carries its content.
 
 WHY THIS PACKAGE MOVES WITH THE KIT. The three packages resolve one scalar (`FsggCoherentSetVersion`,
-`Directory.Build.props`) by construction (.github#2402), so the coordination engine and drivers ship
-at this same version even though their own payload did not change.
+`Directory.Build.props`) by construction (.github#2402), so all three ship at this same version.
 
 $(FsggStandingAdvisories)
 
