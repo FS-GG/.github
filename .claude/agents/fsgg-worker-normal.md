@@ -43,7 +43,14 @@ Non-negotiables, restated because they are the ones workers most often skip:
 - **Run exactly one `take`, then never scan again**: no `batch`, `ready`, `who`, `overlap --active`,
   or second `take`. **This is a correctness rule and it does not rest on what a scan costs** — a
   second `take` against a live one is how two workers land on one item, and that would be true on an
-  unmetered board. Do not weaken it because the budget looks healthy. Local `git`, `dotnet build`,
+  unmetered board. Do not weaken it because the budget looks healthy.
+
+  **The hazard is a second `take` against a live or successful one — not a retry after a REFUSAL.**
+  Exit **6** (`EX_CONTENDED`) means the CAS lost every race and you hold nothing; its documented
+  remedy is to back off briefly and retry, because the board is busy rather than empty. Retrying
+  there cannot put two workers on one item, since no claim was made. Stopping there instead spends a
+  dispatch slot on nothing. Exit **75** is the opposite and is never retried. Local `git`,
+  `dotnet build`,
   `dotnet test` and file reads are free; hermetic scripts under `tests/` that start their own loopback
   fixture are free; single-item `gh pr view`/`gh issue view`/`gh run view --log-failed` are cheap.
   Any exit 75 is a fleet-wide stop the host owns — stop and report it, never retry.
