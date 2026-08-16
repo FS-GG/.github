@@ -3787,7 +3787,18 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // (#461/#581/#1792). Stating that in `Batch.fsi` without a fixture that can refute it would repeat
         // exactly the mistake this repair is fixing.
         //
-        // #1 is within its lease, #2's marker is 300 minutes old against the default 120-minute lease.
+        // HOW THIS LEG FAILS, MEASURED, BECAUSE IT IS NOT THE OBVIOUS ONE. A marker-backed row reaches
+        // `Occupying` through TWO independent sources — the candidate's own `Item.Claim`, and the
+        // `live-claim` RESERVATION `Scan.snapshot` writes from the same marker via `Reads.reserver` — and
+        // `implementerSlots` unions them. So narrowing only the candidate predicate leaves this leg green
+        // (measured: it survives both `Some(_, LeaseHeld)` and an age-vs-lease candidate mutation), while
+        // the Core leg `a claim marker occupies its slot whether the lease is live or lapsed` reds on
+        // either. Narrowing BOTH sources reds this one: `Not found: "wave occupancy: {"activeItems":2…`.
+        // That redundancy is the point of having the leg at CLI level at all — it pins the END-TO-END
+        // union over a real scan, not one predicate.
+        //
+        // #1 is within its lease, #2's marker is 300 minutes old against the default 120-minute lease;
+        // the snapshot carries `age=18000, liveness=LivenessUnknown` for #2, measured directly.
         let bodies = [ for n in [ 1; 2; 20 ] -> n, $"Paths: src/%d{n}" ] |> Map.ofList
         let holders = Map.ofList [ 1, "finch-85f3"; 2, "ghost-2678" ]
         let markerAge = Map.ofList [ 2, 300 ]
