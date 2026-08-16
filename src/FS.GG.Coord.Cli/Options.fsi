@@ -343,6 +343,30 @@ module Options =
     val choreLockRef:
         extra: FS.GG.Coord.Types.Ref list -> owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
 
+    /// An owner + repo → the CLOSED issue whose comments are that repo's per-receiver OPERATION-LOCK CAS
+    /// subject (executor-fencing design §4.1, extending ADR-0041 onto a third subject), resolved through the
+    /// SAME map as `--repo` and `choreLockRef`.
+    ///
+    /// A DIFFERENT SUBJECT FROM THE CHORE LOCK, DELIBERATELY. Mutual exclusion is answered by the subject —
+    /// one lock issue per receiver — so a chore drain and a dispatch operation do not serialise against each
+    /// other, and no key needs to appear in the marker at all. The CAS write path gains nothing from this:
+    /// callers pass this ref to `Writes.claimScoped` unchanged, with stub callbacks, exactly as the chore
+    /// lock does.
+    ///
+    /// `None` is the FAIL-CLOSED answer and callers must treat it as one: a fence that cannot find its lock
+    /// REFUSES and never proceeds (#266, #421). The embedded FS-GG table stays gated to owner `FS-GG`, so a
+    /// foreign owner is never handed a real-but-unrelated ref.
+    ///
+    /// UNLIKE `choreLockRef`, THIS COVERS ALL EIGHT ROSTER REPOSITORIES — `FS.GG.Net` included, which the
+    /// chore-lock table omits and which is one of the repositories the `.github#1858` incident reached.
+    /// `OpLockTests` proves that completeness against `registry/repos.yml` rather than against a
+    /// hand-checked list.
+    ///
+    /// `extra` is the per-deployment roster a vendored tenant may inject, matched on (owner, repo) under ANY
+    /// owner and consulted BEFORE the embedded table. Pass `[]` for the default FS-GG deployment.
+    val opLockRef:
+        extra: FS.GG.Coord.Types.Ref list -> owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
+
     /// Parse argv. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Options, string>
 

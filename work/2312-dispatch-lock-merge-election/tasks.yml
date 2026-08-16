@@ -1,0 +1,184 @@
+schemaVersion: 1
+work:
+  id: 2312-dispatch-lock-merge-election
+  title: "Per-Receiver Dispatch Lock And Lease-Free Merge Election"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2312-dispatch-lock-merge-election/spec.md
+  sourceClarifications: work/2312-dispatch-lock-merge-election/clarifications.md
+  sourceChecklist: work/2312-dispatch-lock-merge-election/checklist.md
+  sourcePlan: work/2312-dispatch-lock-merge-election/plan.md
+  publicOrToolFacingImpact: false
+
+# PROVENANCE, STATED RATHER THAN IMPLIED. `FS.GG.SDD.Cli` (`fsgg-sdd`) is NOT installed in this
+# repository and no local tool generates or validates this package — the only CI install is an ad-hoc
+# pinned one for the engine's own e2e fixtures. This package is therefore HAND-AUTHORED by the claimed
+# worker, which `pnext-item` §1 makes that worker's own responsibility when the package does not exist.
+# The digests below were computed from the files' actual bytes at authoring time and nothing in this
+# repository re-verifies them, so treat them as a point-in-time record, not as an enforced contract
+# (the same reasoning `.github#2208` applies to ship-verdict provenance).
+sources:
+  - label: spec
+    path: work/2312-dispatch-lock-merge-election/spec.md
+    digest: 3a70e6720b6e8c779589d1f397998c9347d72c876bca603cc5212d3fee81ecf4
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2312-dispatch-lock-merge-election/clarifications.md
+    digest: 77f089001749bd133ed7ddba98b1a836b02c3abb450f80d633f4b163e1670571
+    schemaVersion: 1
+  - label: checklist
+    path: work/2312-dispatch-lock-merge-election/checklist.md
+    digest: b646c615ad271c476e9138193d609e4bf8d6e5b1f8ed5222626644f1b0bc5683
+    schemaVersion: 1
+  - label: plan
+    path: work/2312-dispatch-lock-merge-election/plan.md
+    digest: 64df1ad0fb622acbd1ac59121417f323a644c6727689fc140e057b2cdc13c53b
+    schemaVersion: 1
+
+tasks:
+  - id: T001
+    title: Export the lease-free ordering rule from Reads
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004, FR-005]
+    decisions: [DEC-001]
+    sourceIds: [AC-004, FR-004, PD-001, PD-002, PC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Re-express winner and reserver through the exported rule
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: [FR-005]
+    decisions: [DEC-001]
+    sourceIds: [AC-004, AC-006, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T003
+    title: Convert who, reap and adopt, each keeping its own arm logic
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: [FR-005]
+    decisions: [DEC-001]
+    sourceIds: [AC-004, AC-006, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T004
+    title: Create the eight op-lock issues, closed, unlocked and off-board
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: [DEC-004]
+    sourceIds: [AC-008, VO-004]
+    requiredSkills: [operations]
+    requiredEvidence: [EV003]
+  - id: T005
+    title: Add opLockNumbers and opLockRef beside choreLockRef
+    status: done
+    owner: sdd
+    dependencies: [T004]
+    requirements: [FR-001, FR-002, FR-003]
+    decisions: [DEC-003, DEC-007]
+    sourceIds: [AC-001, AC-002, AC-007, PC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T006
+    title: Compose acquire and release from claimScoped with stub callbacks
+    status: done
+    owner: sdd
+    dependencies: [T005]
+    requirements: [FR-006, FR-007]
+    decisions: [DEC-002, DEC-005]
+    sourceIds: [AC-003, AC-007, AC-009, PD-004, PD-005, PD-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T007
+    title: Prove roster completeness against registry/repos.yml, non-vacuously
+    status: done
+    owner: sdd
+    dependencies: [T005]
+    requirements: [FR-002]
+    decisions: [DEC-003]
+    sourceIds: [AC-001, AC-002, VO-002]
+    requiredSkills: [fsharp, testing]
+    requiredEvidence: [EV004]
+  - id: T008
+    title: Gate that the ordering rule has one implementation and every consumer calls it
+    status: done
+    owner: sdd
+    dependencies: [T003]
+    requirements: [FR-005]
+    decisions: [DEC-001, DEC-006]
+    sourceIds: [AC-004, AC-005, PD-008, VO-002, VO-003]
+    requiredSkills: [fsharp, testing]
+    requiredEvidence: [EV002]
+  - id: T009
+    title: Add the behavioural ordering leg for who
+    status: done
+    owner: sdd
+    dependencies: [T003]
+    requirements: [FR-005]
+    decisions: [DEC-006]
+    sourceIds: [AC-005, VO-003]
+    requiredSkills: [fsharp, testing]
+    requiredEvidence: [EV002]
+  - id: T010
+    title: Write ADR-0075 with both reciprocal ends and the two README tables
+    status: done
+    owner: sdd
+    dependencies: [T006]
+    requirements: []
+    decisions: [DEC-001, DEC-002, DEC-004]
+    sourceIds: [AC-010, VO-005]
+    requiredSkills: [architecture, documentation]
+    requiredEvidence: [EV006]
+  - id: T011
+    title: Record inversion evidence for every added gate
+    status: done
+    owner: sdd
+    dependencies: [T007, T008, T009]
+    requirements: []
+    decisions: [DEC-006]
+    sourceIds: [AC-002, AC-005, VO-002, VO-003]
+    requiredSkills: [testing]
+    requiredEvidence: [EV002, EV004]
+
+deferrals:
+  - id: DEF-001
+    source: work/2312-dispatch-lock-merge-election/clarifications.md
+    disposition: accepted
+    reason: >-
+      A behavioural ordering leg for reap and adopt requires widening the shared ApplicationServiceTests
+      world fixture, which models one holder per issue and is depended on by many unrelated items. The
+      structural gate pair (no second implementation, and at least three call sites consuming the exported
+      rule) covers the routing; the behavioural gap is stated in the PR body rather than left implicit.
+  - id: DEF-002
+    source: work/2312-dispatch-lock-merge-election/clarifications.md
+    disposition: accepted
+    reason: >-
+      FSGG_COORD_OP_LOCKS environment injection is not added until a caller needs it. The opLockRef shape
+      already carries the injected-roster parameter, so adding the variable later is additive.
+
+evidence:
+  - id: EV001
+    kind: suite
+    statement: tests/FS.GG.Coord.GitHub.Tests LeaseFreeOrderingTests, six legs
+  - id: EV002
+    kind: inversion
+    statement: exported rule broken; consumer reds enumerated by test name
+  - id: EV003
+    kind: liveRead
+    statement: eight op-lock issues read back for state, locked, labels and projectItems
+  - id: EV004
+    kind: inversion
+    statement: eighth roster row removed and roster parse broken; both red
+  - id: EV005
+    kind: suite
+    statement: tests/FS.GG.Coord.Cli.Tests OpLockTests, fourteen legs
+  - id: EV006
+    kind: gate
+    statement: scripts/check-adr-coherence.py and tests/adr-coherence/run.sh

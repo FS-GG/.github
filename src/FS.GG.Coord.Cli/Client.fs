@@ -3948,7 +3948,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 match Reads.winner opts.LeaseMinutes markers with
                                 | Some m -> Some(Held m)
                                 | None ->
-                                    match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
+                                    // `Reads.lowestId`, NOT `Reads.reserver`: this arm has already
+                                    // established there is no live winner, and it needs the lease-free
+                                    // ordering alone. `reserver` would re-ask the liveness question this
+                                    // match just answered. The Held/Stale distinction is `who`'s own and
+                                    // stays here (design §4.2's second constraint).
+                                    match Reads.lowestId markers with
                                     | Some m -> Some(Stale m)
                                     // NO MARKER WE COULD READ. Before this may be reported as an ABSENCE,
                                     // the read has to have been COMPLETE (.github#1668). If any comment on
@@ -4352,7 +4357,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         match Reads.winner opts.LeaseMinutes markers with
                         | Some _ -> ()
                         | None ->
-                            match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
+                            // `Reads.lowestId`, NOT `Reads.reserver`. `reap` acts ONLY when no live winner
+                            // exists — the `Some _` arm above does nothing — so substituting `reserver`
+                            // here would hand `reap` the live holder and break a lock somebody is standing
+                            // in. This is design §4.2's second constraint, in the one path where getting it
+                            // wrong is worst.
+                            match Reads.lowestId markers with
                             | None -> ()
                             | Some marker ->
                                 // #581: the lease lapsed — now ask whether the WORK did.
@@ -5732,8 +5742,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                         ExitRed
                     | None ->
-                        // 2. There must be an EXPIRED claim to adopt — the lowest-id marker (`reap`'s rule).
-                        match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
+                        // 2. There must be an EXPIRED claim to adopt — the lowest-id marker (`reap`'s rule,
+                        //    and now literally the same function rather than a second copy of it).
+                        //    `Reads.lowestId`, NOT `Reads.reserver`: arm 1 above has already refused a live
+                        //    claim as a steal, so this arm needs the ordering without the liveness question.
+                        match Reads.lowestId markers with
                         | None ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} carries no expired claim — there is no orphan here to adopt."
@@ -8726,6 +8739,153 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             else
                 None)
         |> Array.toList
+
+    /// THE PER-RECEIVER OPERATION LOCK — the item CAS, unchanged, on a third subject.
+    ///
+    /// This is the `op=dispatch:*` mechanism of the GitHub-native executor fencing design §4.1, filed as
+    /// `.github#2312` under `.github#1858`. It answers ONE question — *"is anyone dispatching against this
+    /// receiver right now?"* — which is per receiver, concurrent, and asked and answered inside one
+    /// synchronous window by the caller that holds the lock. Merge does NOT use it: a lease-based lock is
+    /// verifiable only by a reader running inside the lease, and the merge verifier is a queued CI job, so
+    /// merges are fenced by the lease-free election (§4.2) instead.
+    ///
+    /// **THE CAS WRITE PATH GAINS NO CODE, NO PREFIX, NO FIELD AND NO PARAMETER, AND THAT IS CHECKABLE
+    /// RATHER THAN ASSERTED.** Everything below is composition: `Writes.claimScoped` is already a general
+    /// comment-order CAS over an arbitrary issue ref — "not item-specific; it is *item-configured*, by its
+    /// caller, through a callback" (ADR-0041) — so a new caller supplies a lock ref and stub callbacks and
+    /// is done. This module adds no function to `Writes` and no field to the marker. Mutual exclusion is
+    /// answered by the SUBJECT (one lock issue per receiver), never by anything written in the marker, so
+    /// the operation key is deliberately absent from it: the opkey answers idempotence, which is a
+    /// different question asked at a different time (`Operation`, slice 1).
+    ///
+    /// **`#516`'s ONE-ITEM-PER-WORKER REFUSAL IS NOT TRIPPED BY TAKING A GRANT WHILE HOLDING AN ITEM.**
+    /// That check (`heldElsewhere`) scans the target repo's in-flight **board** items for a live claim held
+    /// by this worker on a different item, and the lock issue is off-board — closed, never added to the
+    /// project, exactly as the chore lock is (ADR-0041's own "`who` and `reap` do not see the chore lock").
+    /// A grant is not a board item, so it is not in the set that check examines.
+    ///
+    /// **WHAT THE TEST ACTUALLY PROVES, STATED NARROWLY BECAUSE THE OBVIOUS CLAIM OVERREACHES IT.**
+    /// `OpLockTests` asserts that `acquire` bills the GraphQL meter ZERO times, and Projects v2 is
+    /// reachable only over GraphQL — so what is pinned is *"acquiring the lock never reads the board"*.
+    /// That is NOT the same proposition as *"the lock issue is not on the board"*: board membership is a
+    /// fact about GitHub, and no scripted-transport unit test can establish it, because the fixture answers
+    /// whatever it is told to. The membership half was verified out-of-band instead, by reading all eight
+    /// lock issues back from the API (`projectItems` empty on every one), and is maintained by the rule in
+    /// each issue's body that it stays closed and off the board. Two halves, two different kinds of
+    /// evidence; conflating them would let a unit test appear to certify something it cannot see.
+    module OpLock =
+
+        /// TEN MINUTES, matching the chore lock's, and for the same argument. This bounds how long a DEAD
+        /// executor stalls one receiver's dispatch queue — not how long a live one may take, because a live
+        /// holder heartbeats. A dispatch is a handful of API calls; a lease long enough to cover a hung
+        /// process is a lease that makes every other executor wait out a corpse.
+        let LeaseMinutes = 10
+
+        /// Why the operation lock was not obtained. A REFUSAL in every arm — there is no "proceed anyway",
+        /// because a fence that cannot establish it holds the lock must not act (#266, #421).
+        ///
+        /// Each arm is separate so a caller can report WHICH fact stopped it rather than re-deriving it from
+        /// the input it already had. Collapsing them into one `None` is what makes an unroutable receiver
+        /// indistinguishable from a busy one, and those two need opposite responses: the first is a
+        /// configuration defect somebody must fix, the second is the lock working correctly.
+        type Refusal =
+            /// NO LOCK REF FOR THIS RECEIVER — design §4.1's "absent ref ⇒ refuse", the fail-closed arm.
+            /// An unrostered repository, or a caller under an owner whose locks the table does not know.
+            /// This is a REFUSAL and never a licence to dispatch unfenced, which is precisely what the
+            /// `.github#1858` executor did.
+            | NoLockRef of owner: string * receiver: string
+            /// ANOTHER EXECUTOR HOLDS THIS RECEIVER'S LOCK, and their lease is live. Their worker id, so the
+            /// caller can address them. This arm is the lock WORKING.
+            | HeldByAnother of holder: WorkerId
+            /// THE MARKER CARRIES OUR WORKER ID UNDER A DIFFERENT SESSION (#419). An id two executors share
+            /// is not a lock, and adopting their live grant as our own is the exact defect `.github#1858`
+            /// measured — two executors, one id, one claim, both acting.
+            | Twin of theirs: SessionId
+            /// WE ASKED TO ACT AS A WORKER WE ARE NOT (#1646).
+            | Impersonates of derived: WorkerId * named: WorkerId
+            /// WE COULD NOT TELL. A failed read, an unparseable marker, or a lost re-read. Never a yes.
+            | Undetermined of detail: string
+
+        /// One human-readable line per refusal, for a caller that must report why it did not dispatch.
+        /// Carries no judgement and decides nothing.
+        let describe (refusal: Refusal) : string =
+            match refusal with
+            | NoLockRef(owner, receiver) ->
+                $"no operation-lock issue is known for %s{owner}/%s{receiver} — refusing to dispatch unfenced"
+            | HeldByAnother holder ->
+                $"worker '%s{holder.Value}' holds this receiver's operation lock and their lease is live"
+            | Twin theirs ->
+                $"the live grant carries our worker id under a different session (%s{theirs.Value}) — two executors sharing one id is not a lock"
+            | Impersonates(derived, named) ->
+                $"refusing to take this receiver's operation lock as '%s{named.Value}' while acting as '%s{derived.Value}'"
+            | Undetermined detail -> $"could not establish who holds this receiver's operation lock: %s{detail}"
+
+        /// ACQUIRE the operation lock for one receiver, or say exactly why not.
+        ///
+        /// `Writes.claimScoped`, unchanged, with the two board callbacks stubbed and nothing admitted — and
+        /// those stubs ARE the configuration (§4.1). `readPreviousStatus` is `None` because `claim` reads a
+        /// previous column only to restore it on release and this issue has no column; `readPathRepo` is
+        /// `None` because an off-board issue has no board path-scope projection; `admitNew` is `Ok()`
+        /// because there is no intake policy on a lock subject.
+        ///
+        /// `RefuseLiveHolder`, with no flag that changes it. The steal is a RECOVERY route for an item whose
+        /// holder died with written work stranded on it; an operation lock holds no work, so a live holder
+        /// simply means another executor is already dispatching against this receiver — which is the one
+        /// thing this lock exists to prevent. Forcing it would put two executors on one receiver, and that
+        /// is the incident, not the remedy.
+        let acquire
+            (transport: Transport.IGitHubTransport)
+            (worker: WorkerId)
+            (self: Writes.SelfIdentity)
+            (session: SessionId option)
+            (extra: Ref list)
+            (owner: string)
+            (receiver: string)
+            : Result<Writes.Held, Refusal> =
+            // 1. WHOSE LOCK? — first, because it is a pure string match that spends nothing, and because a
+            //    receiver with no lock is a guaranteed refusal that must not cost a network round trip.
+            match Options.opLockRef extra owner receiver with
+            | None -> Result.Error(NoLockRef(owner, receiver))
+            | Some lockRef ->
+                match
+                    Writes.claimScoped
+                        transport
+                        LeaseMinutes
+                        Writes.RefuseLiveHolder
+                        ignore
+                        worker
+                        self
+                        session
+                        lockRef
+                        (fun () -> None)
+                        (fun () -> None)
+                        (fun () -> Ok())
+                with
+                // A fresh win and a re-claim are both "we hold it now". They differ in whether the CAS ran,
+                // which matters to a caller whose id may be shared — but not to whether the lock is ours.
+                | Ok(Writes.Won(held, _))
+                | Ok(Writes.Renewed(held, _)) -> Ok held
+                // `Stolen` is unreachable under `RefuseLiveHolder` and is NOT folded into the success arm:
+                // if it ever arrives, the force policy above has changed and this composition's argument for
+                // refusing a live holder has gone with it. Failing closed on it is the honest answer.
+                | Ok(Writes.Stolen _) ->
+                    Result.Error(
+                        Undetermined "the CAS reported a steal under RefuseLiveHolder — the force policy and this fence disagree"
+                    )
+                | Ok(Writes.Lost holder) -> Result.Error(HeldByAnother holder)
+                | Ok(Writes.Twin theirs) -> Result.Error(Twin theirs)
+                | Ok(Writes.Impersonates(derived, named)) -> Result.Error(Impersonates(derived, named))
+                | Ok other -> Result.Error(Undetermined(string other))
+                | Result.Error e -> Result.Error(Undetermined(Errors.explain e))
+
+        /// RELEASE the operation lock. Takes the capability, exactly as every other release does, so a
+        /// marker nobody holds cannot be dropped by naming it.
+        ///
+        /// The board column this hands back is always `None` — there is no column, because the lock issue is
+        /// off-board — and that is discarded rather than reported: a caller who reads a restored column here
+        /// is reading a fact about an item this subject is not.
+        let release (transport: Transport.IGitHubTransport) (held: Writes.Held) : Errors.IoResult<unit> =
+            Writes.release transport held |> Result.map ignore
 
     /// Build the context — the transport, the board coordinates, the token check. `Error` is a printed
     /// message and an exit code (a missing token is a refusal, never an empty board).

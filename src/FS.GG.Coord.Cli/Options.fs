@@ -1498,6 +1498,89 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                   FS.GG.Coord.Types.Repo = r
                   FS.GG.Coord.Types.Number = n })
 
+    /// An owner + repo → the CLOSED issue whose comments are that repo's per-receiver OPERATION-LOCK CAS
+    /// subject (design §4.1, extending ADR-0041 onto a third subject).
+    ///
+    /// A DIFFERENT LOCK FROM THE CHORE LOCK, ON A DIFFERENT SUBJECT, AND THAT IS THE MECHANISM RATHER THAN
+    /// AN ACCIDENT. Mutual exclusion here is answered by the SUBJECT — one lock issue per receiver — not by
+    /// anything in the marker, which is ADR-0041's own argument: "`fsgg:claim` disambiguates markers ON THE
+    /// SAME ISSUE. A dedicated issue disambiguates BY SUBJECT." Sharing the chore lock's issue would make a
+    /// chore drain and a dispatch operation serialise against each other, which is two questions answered
+    /// in one colour; sharing a marker prefix would need a CAS change §4.1 forbids outright.
+    ///
+    /// `None` is the FAIL-CLOSED answer and every caller must treat it as one: a fence that cannot find its
+    /// lock REFUSES, never proceeds (#266, #421). This is design §4.1's "absent ref ⇒ refuse", and it is a
+    /// requirement rather than commentary.
+    ///
+    /// ALL EIGHT ROSTER REPOSITORIES, AND THE EIGHTH IS THE POINT. `choreLockNumbers` above lists SEVEN and
+    /// omits `FS.GG.Net` — and `FS.GG.Net#58` is one of the two pull requests `.github#1858` measured as
+    /// merged by the unlocked executor. A per-receiver table built the same way would inherit that hole in
+    /// exactly the repository the incident reached, so the design makes the eighth row part of this slice's
+    /// acceptance and `OpLockTests` proves the completeness MECHANICALLY against `registry/repos.yml`
+    /// rather than against a hand-checked list that would rot the same way the seven-row table did.
+    ///
+    /// EMBEDDED BESIDE THE ROSTER, for `choreLockNumbers`' reason and not a new one (ADR-0042,
+    /// `.github#1026`): the engine has no YAML reader deliberately, because the shim ships to receivers as a
+    /// `kind: client` kit item WITHOUT the roster, so a `repos.yml` reader would be absent exactly where
+    /// receivers run. Growth is a code edit here, gated by that test.
+    ///
+    /// THE NUMBERS ARE THE CLOSED `[op-lock]` ISSUES, one per repo, each created closed and UNLOCKED — a
+    /// locked conversation refuses comments and the marker IS a comment, so locking one would silently
+    /// disable the lock it names. Each issue's body names this file as the place its number is embedded,
+    /// and that pairing is the whole coherence contract: change one, change the other.
+    let private opLockNumbers: (string * int) list =
+        // (canonical repo, its closed `[op-lock]` issue number). Canonical spellings only — the lookup
+        // canonicalises the caller's input through `resolveRepo` first, exactly as the chore-lock lookup
+        // does, so `net`, `Net` and `FS.GG.Net` all find this row.
+        //
+        // `FS.GG.SDD`'s op-lock number (878) coincides with `FS.GG.Rendering`'s CHORE-lock number (878).
+        // They are different issues in different repositories and nothing compares them, because a `Ref`
+        // carries its repo; the coincidence is noted so a later reader does not "fix" one of them.
+        [ ".github", 2714
+          "FS.GG.SDD", 878
+          "FS.GG.Rendering", 1245
+          "FS.GG.Governance", 410
+          "FS.GG.Templates", 413
+          "FS.GG.Game", 604
+          "FS.GG.Audio", 259
+          "FS.GG.Net", 72 ]
+
+    let opLockRef
+        (extra: FS.GG.Coord.Types.Ref list)
+        (owner: string)
+        (repo: string)
+        : FS.GG.Coord.Types.Ref option =
+        // Keyed on OWNER as well as repo, for `choreLockRef`'s fail-closed reason: these numbers are FS-GG's
+        // issues, so a caller under another owner must never be handed a real-but-unrelated ref — a lock
+        // that protects nothing while reporting that it does. `extra` is consulted FIRST so a vendored
+        // deployment can bring its own lock issues (or repoint one) without a code change, and it is matched
+        // on (owner, repo) so it works under ANY owner.
+        let ownerLc = owner.ToLowerInvariant()
+        let repoLc = (resolveRepoName repo).ToLowerInvariant()
+
+        let fromExtra =
+            extra
+            |> List.tryFind (fun r ->
+                r.Owner.ToLowerInvariant() = ownerLc
+                && (resolveRepoName r.Repo).ToLowerInvariant() = repoLc)
+
+        match fromExtra with
+        // Already canonical (its repo was resolved when parsed) and carrying its own owner, so it is
+        // returned verbatim — the CAS compares the value the deployment declared.
+        | Some _ as hit -> hit
+        | None when ownerLc <> "fs-gg" -> None
+        | None ->
+            opLockNumbers
+            |> List.tryFind (fun (r, _) -> r.ToLowerInvariant() = repoLc)
+            |> Option.map (fun (r, n) ->
+                // CANONICAL on the way out — built from the TABLE's spelling, never the caller's casing.
+                // Echoing the caller back would mint a Ref structurally UNEQUAL to the canonical one while
+                // `Short` renders both alike: two locks that compare different and print the same, which is
+                // the split a CAS cannot survive and no log would show.
+                { FS.GG.Coord.Types.Owner = "FS-GG"
+                  FS.GG.Coord.Types.Repo = r
+                  FS.GG.Coord.Types.Number = n })
+
     /// `say`'s message is POSITIONAL, and `--to` is OPTIONAL — the shape bash shipped, the shape all seven
     /// prescribing sites document, and the shape the port dropped (#919).
     ///
