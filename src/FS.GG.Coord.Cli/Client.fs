@@ -994,7 +994,18 @@ module Client =
                 | [], _ -> Error "drive-board and work-board declare different fsgg:wave-model:v1 values"
                 | _, _ -> errors |> String.concat "; " |> Error
 
-    let private activeItemRefs (doc: string) : Result<Ref list, string> =
+    /// `batch`'s implementer-slot projection over the very snapshot it scheduled from (.github#2678).
+    ///
+    /// NAMED, PUBLIC, AND TYPED, WHERE IT USED TO BE AN INLINE FLAT REF LIST. The list was where the two
+    /// over-broad clauses lived — `c.Item.ItemPr.IsSome` admitted a row whose PR is open and whose claim
+    /// is absent, and `Batch.Unowned item` admitted a reservation that by name has no owner — so `batch`
+    /// reported six occupied slots on a board carrying exactly three live claims, while `who` and
+    /// `driver --events` read the same board and both answered three. The predicate now lives in
+    /// `Batch.implementerSlots`, where it is pure and pinned; this function's remaining job is parsing.
+    ///
+    /// Public because a projection nobody could call is a projection nobody could pin AGAINST the other
+    /// two readings of the same board, which is the disagreement this item is about.
+    let slotOccupancyOf (doc: string) : Result<Batch.SlotOccupancy, string> =
         match Snapshot.parse doc with
         | Error errors ->
             errors
@@ -1002,40 +1013,33 @@ module Client =
             |> String.concat "; "
             |> Error
         | Ok request ->
-            let candidates =
-                request.Candidates
-                |> List.choose (fun c ->
-                    if c.Item.Claim.IsSome || c.Item.ItemPr.IsSome then Some c.Item.Ref else None)
-
-            let reservations =
-                request.InFlight
-                |> List.choose (fun r ->
-                    match r.Holder with
-                    | Batch.LiveClaim(_, item, _, _) -> Some item
-                    | Batch.BatchMember item
-                    | Batch.Unowned item -> Some item
-                    | _ -> None)
-
-            Ok(candidates @ reservations |> List.distinct)
+            Ok(Batch.implementerSlots (request.Candidates |> List.map (fun c -> c.Item)) request.InFlight)
 
     /// Occupancy is advisory, not enforcing: refusing `batch` on an open slot would prevent the dispatch
     /// that closes it, and a draining queue legitimately has spare capacity. It is nevertheless loud and
     /// typed at the decision point, where a host can act on the measured deficit instead of remembering
     /// prose from the start of a long run. STDERR preserves `batch`'s stdout machine contract byte-for-byte.
     let private sayWaveOccupancy (doc: string) (result: Batch.BatchResult) : unit =
-        match readWaveModel (), activeItemRefs doc with
-        | Ok model, Ok active ->
-            let occupancy = Batch.waveOccupancy model active
+        match readWaveModel (), slotOccupancyOf doc with
+        | Ok model, Ok slots ->
+            let occupancy = Batch.waveOccupancy model slots.Occupying
             eprint (Batch.renderWaveOccupancy occupancy)
+
+            // .github#2678 acceptance 5 — a PR-bearing, claim-free row is REAL, and it is now said out
+            // loud under its own name instead of being folded into implementer occupancy, where the only
+            // trace it left was a slot count nobody could reconcile against `who` or `driver --events`.
+            // Between the occupancy object and the shortfall headline, because it is the fact that
+            // explains why a board can be busy and its slots still open.
+            Batch.renderWorkWithoutClaim slots |> Option.iter eprint
 
             Batch.waveShortfallHeadline (List.length result.Chosen) occupancy
             |> Option.iter eprint
-        | model, active ->
+        | model, slots ->
             let explain = function
                 | Ok _ -> None
                 | Error e -> Some e
 
-            [ explain model; explain active ]
+            [ explain model; explain slots ]
             |> List.choose id
             |> String.concat "; "
             |> fun reason -> eprint $"wave occupancy: unavailable (%s{reason})"
@@ -1392,9 +1396,16 @@ module Client =
         | Error e, _ -> eprint (Errors.explain e); ExitError
         | _, Error e -> eprint e; ExitError
         | Ok(_, doc, _), Ok model ->
-            match activeItemRefs doc with
+            // THE SAME PROJECTION `batch` REPORTS, AND THE SECOND CONSUMER THE MISCOUNT REACHED
+            // (.github#2678). `Driver.nextAction` sizes the next wave as
+            // `min slotsPerWave (capacity - activeItems)`, so every claim-free row with an open
+            // `item/<n>-*` PR shrank the wave this planner offered by one, exactly as it shrank the
+            // `openSlots` `batch` printed. One derivation now answers both, so the planning verb and the
+            // scheduling verb cannot drift from each other or from `driver --events`.
+            match slotOccupancyOf doc with
             | Error e -> eprint e; ExitError
-            | Ok active ->
+            | Ok slots ->
+                let active = slots.Occupying
                 match Snapshot.parse doc with
                 | Error errors ->
                     errors |> List.iter (fun error -> eprint $"fsgg-coord-engine: %s{error.Path}: %s{error.Message}")
