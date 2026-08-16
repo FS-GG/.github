@@ -134,8 +134,9 @@ regression coverage, and run proportionate build/test/format gates. Poll inbox a
 Every gate this change adds or modifies **ships with evidence it can fail**: invert it, run the suite,
 and record the mutation and the observed red. A test that passes both before and after the fix has not
 tested the fix, and a gate whose inversion survives is a material finding at review by definition — see
-Gate-inversion evidence in [independent-review](references/independent-review.md), whose numbered steps
-also bound the fixture and the measurement environment. Doing this at authoring time is cheaper than at
+[Gate-inversion evidence](references/independent-review.md#gate-inversion-evidence), whose numbered steps
+also bound the fixture, the measurement environment, the unreadable input, and the repair that must catch
+the escape actually found. Doing this at authoring time is cheaper than at
 review time, and it makes the critic's step a confirmation rather than a discovery.
 
 ## 4. Route implementation findings
@@ -152,7 +153,14 @@ when authorship truly depends on landed work, then add it to the follow-up queue
 [findings-and-filing](references/findings-and-filing.md) carries the rest of this rule and is **binding,
 not elaboration** — load it for the dedupe reads and the judgement boundaries. This section owns
 findings discovered before independent review begins. Once review starts, do not file the critic's
-findings or add them to a private follow-up queue; the critic owns their disposition.
+findings or add them to a private follow-up queue; the critic owns their disposition, under
+[Root cause, dedupe, and materiality](references/independent-review.md#root-cause-dedupe-and-materiality),
+which is also where the definition of a **material** finding lives.
+
+Every checkable assertion you write into the handoff carries `Verification:` or exactly `unverified`, per
+[Handoff-assertion provenance](references/independent-review.md#handoff-assertion-provenance); a claim
+about whether an issue or PR **body** changed is answered by `body-edits` and never by the REST timeline,
+per [Body-edit provenance](references/independent-review.md#body-edit-provenance--the-rest-timeline-does-not-surface-body-edits).
 
 For a bulk rename (or when the critic requires it), produce the typed semantic-diff receipt over the
 exact base/head and declared paths. Classify every changed literal, comment, serialized key, generated
@@ -230,12 +238,23 @@ the handoff supplies a built artifact and runnable production-route evidence so 
 or measure the comparison required by `independent-review`, not infer it from source alone. The same
 critic reviews up to three numbered repair rounds. If material findings remain after round three,
 never start round four or merge that PR: close it without merging and automatically enter the one
-fresh-worker, fresh-critic repair phase defined by `independent-review`. Park the item on `Blocked on:
+fresh-worker, fresh-critic
+[repair phase](references/independent-review.md#repair-phase). Park the item on `Blocked on:
 human/action` and release the claim only if that repair phase exhausts or its required route is
 unavailable.
 
 [independent-review](references/independent-review.md) is the binding contract for materiality, critic
-ownership, the durable PR record, direct filing, confirmation, and host verification. Do not merge
+ownership, the durable PR record, direct filing, confirmation, and host verification. Its
+[Runtime-route evidence gate](references/independent-review.md#runtime-route-evidence-gate) states when
+that comparison must be executed rather than read;
+[Game functionality](references/independent-review.md#game-functionality--the-bot-driven-player-journey-gate)
+states when a bot-driven player journey is blocking;
+[Disposition and repair bounds](references/independent-review.md#disposition-and-repair-bounds) states the
+park procedure and the critic's filing preconditions;
+[A head that moves after the chain was accepted](references/independent-review.md#a-head-that-moves-after-the-chain-was-accepted)
+and
+[Reading the review state](references/independent-review.md#reading-the-review-state-a-designed-wait-is-not-broken-evidence)
+state what a moved head and a designed wait do and do not mean. Do not merge
 without its passing review evidence and exact-SHA structured v2 acceptance record, authored through
 `scripts/fsgg-coord review record <ref> <draft.json> --pr <n> --json`. If no independent agent mechanism is available, stop and report
 that the review gate is unavailable; self-review does not satisfy it.
