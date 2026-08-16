@@ -62,6 +62,7 @@ CITATION = re.compile(
     r":(?P<line>\d+)(?:-(?P<end>\d+))?"
 )
 FRAGMENT = re.compile(r"\]\((?P<dest>[^)\s#]*)#(?P<fragment>[^)\s]+)\)")
+INLINE_CODE = re.compile(r"`+[^`]*`+")
 ATX = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<text>.*?)\s*#*\s*$")
 EXPLICIT_ANCHOR = re.compile(r"<a\s+[^>]*(?:name|id)=\"(?P<anchor>[^\"]+)\"")
 
@@ -152,8 +153,20 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             print(f"::error::prose-citations: cannot read {relative}: {exc}", file=sys.stderr)
             return NO_VERDICT
+        quoted = False
         for number, original in enumerate(lines, 1):
             line = QUALIFIED.sub("", original)
+            # A link written inside code is an ILLUSTRATION of link syntax, never a live citation:
+            # real Markdown links are not authored inside fences or code spans. So quoted fragments
+            # are inert, exactly as a quoted protocol marker is. This asymmetry with the `path:line`
+            # predicate above — which deliberately still reads backticked citations, because
+            # `` `scripts/x.py:1` `` is the ordinary way to WRITE one — is the point, not an
+            # oversight. Measured on this gate's own PR: `work/2660-.../plan.md` documents the
+            # grammar as `](dest.md#fragment)` and the first draft flagged its own documentation.
+            fence = original.lstrip().startswith("```")
+            prose = "" if (quoted or fence) else INLINE_CODE.sub("", original)
+            if fence:
+                quoted = not quoted
             for match in CITATION.finditer(line):
                 target = normalize(match.group("path"))
                 if not target.startswith(owned):
@@ -164,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
                         f"{relative}:{number}: repository-local citation "
                         f"{target}:{match.group('line')} does not name a tracked file"
                     )
-            for match in FRAGMENT.finditer(original):
+            for match in FRAGMENT.finditer(prose):
                 destination = match.group("dest")
                 if "://" in destination or destination.startswith("mailto:"):
                     continue

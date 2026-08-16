@@ -78,6 +78,16 @@ a scheme, resolving outside the repository, or naming a non-Markdown file are fo
 fragment link whose Markdown target is untracked is a finding, symmetric with an untracked
 `path:line` target.
 
+**Quoted is inert.** A link written inside a fenced block or an inline code span is an *illustration*
+of link syntax, never a live citation — real Markdown links are not authored inside code. So quoted
+fragments carry no citation and raise no error, exactly as a quoted protocol marker is inert in the
+review contract. This is deliberately asymmetric with the `path:line` predicate, which still reads
+backticked citations because `` `scripts/x.py:1` `` is the ordinary way to *write* one, whereas
+`` `](x.md#y)` `` can only be an example. The asymmetry was not theoretical: the first draft of this
+amendment flagged its own plan document, which states the grammar as an inline code span. The
+inertness is bounded by its own fixture leg — the identical fragment, unquoted, is still red — so
+"quoted is inert" and "the predicate stopped working" do not share an exit code.
+
 Anchors are derived as GitHub derives them — ATX headings outside fenced code blocks, lowercased with
 non-word characters dropped and spaces hyphenated, `-1`/`-2` suffixes for repeats, plus explicit
 `<a name=…>`/`<a id=…>`. Deriving them by parsing rather than by grepping is load-bearing and has its

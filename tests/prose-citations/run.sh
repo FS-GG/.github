@@ -119,6 +119,34 @@ git -C "$FOREIGN" add docs/guide/live.md
 expect "URLs, plain links, and non-Markdown targets are outside the section grammar" \
   0 "1 section citations" "$FOREIGN"
 
+# A link written inside code is an ILLUSTRATION of link syntax, not a live citation. Measured on
+# this gate's own PR: its plan documents the grammar as `](dest.md#fragment)` and the first draft
+# flagged its own documentation. Both legs carry a fragment that WOULD be red if it were read.
+QUOTED="$WORK/quoted"; cp -a "$CLEAN" "$QUOTED"
+printf '\nThe grammar is `](dest.md#no-such-heading)`, illustrated.\n' >> "$QUOTED/docs/guide/live.md"
+git -C "$QUOTED" add docs/guide/live.md
+expect "a fragment inside an inline code span is inert, not a citation" 0 "1 section citations" \
+  "$QUOTED"
+
+FENCED_SUBJECT="$WORK/fenced-subject"; cp -a "$CLEAN" "$FENCED_SUBJECT"
+cat >> "$FENCED_SUBJECT/docs/guide/live.md" <<'EOF'
+
+```markdown
+[an example](../target.md#no-such-heading)
+```
+EOF
+git -C "$FENCED_SUBJECT" add docs/guide/live.md
+expect "a fragment inside a fenced block is inert, not a citation" 0 "1 section citations" \
+  "$FENCED_SUBJECT"
+
+# ...and the inertness is bounded: the SAME fragment, unquoted, is still red. Without this leg
+# "quoted is inert" and "the predicate stopped working" would share an exit code.
+UNQUOTED="$WORK/unquoted"; cp -a "$CLEAN" "$UNQUOTED"
+printf '\nThe live one is [here](../target.md#no-such-heading).\n' >> "$UNQUOTED/docs/guide/live.md"
+git -C "$UNQUOTED" add docs/guide/live.md
+expect "the same fragment UNQUOTED is still red, so inertness is bounded" 1 \
+  "#no-such-heading names no heading in docs/target.md" "$UNQUOTED"
+
 NO_SECTIONS="$WORK/no-sections"; mkdir -p "$NO_SECTIONS/docs" "$NO_SECTIONS/scripts"
 git -C "$NO_SECTIONS" init -q
 printf '# live\n\nSee `scripts/live.py:1`.\n' > "$NO_SECTIONS/docs/live.md"
