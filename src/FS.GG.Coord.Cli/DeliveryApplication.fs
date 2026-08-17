@@ -370,13 +370,13 @@ module DeliveryApplication =
     // `fsgg:claim` and nothing else (`src/FS.GG.Coord.GitHub/Reads.fs`, `markerRe`), so an election
     // marker is invisible to the lock by construction and can forge no tenancy.
 
-    /// One election as it sits on the item: the COMMENT ID — which is the whole of `grant=`, because
-    /// it is server-assigned and no caller chooses it — and the marker's raw fields.
-    ///
-    /// `Fields` is deliberately a raw `Map` rather than a record: the gate reads unknown fields
-    /// tolerantly and this producer must be able to see an election written by an older or newer
-    /// engine without failing to parse it. Nothing here validates; `Client` decides which elections
-    /// are this delivery target's, and the fence decides which one wins.
+    // One election as it sits on the item: the COMMENT ID — which is the whole of `grant=`, because
+    // it is server-assigned and no caller chooses it — and the marker's raw fields.
+    //
+    // `Fields` is deliberately a raw `Map` rather than a record: the gate reads unknown fields
+    // tolerantly and this producer must be able to see an election written by an older or newer
+    // engine without failing to parse it. Nothing here validates; `Client` decides which elections
+    // are this delivery target's, and the fence decides which one wins.
     type Election = { Id: int64; Fields: Map<string, string> }
 
     // `RegexOptions.Singleline` IS Python's `re.DOTALL`, and it is load-bearing for the same reason
@@ -391,38 +391,38 @@ module DeliveryApplication =
     let private electionFieldPattern =
         Regex(@"(?<k>[A-Za-z]+)=(?<v>\S+)", RegexOptions.Compiled)
 
-    /// The exact election text `delivery` appends to the item.
-    ///
-    /// Six of the seven fields are `REQUIRED_ELECTION_FIELDS`. The seventh, `pr=`, is this producer's
-    /// IDEMPOTENCE DISCRIMINATOR and it is why repeating a `delivery` call is safe. The fence ignores
-    /// fields it does not require, so it costs the reader nothing; it earns its place on the write
-    /// side, twice over:
-    ///
-    ///   * WITHOUT it, a second `delivery` call for the same item would post a SECOND election under
-    ///     the same opkey. Comment ids are monotone, so that election is strictly HIGHER, and an
-    ///     authorization naming it loses the gate's own lowest-id comparison — the pull request would
-    ///     be refused for the rest of that claim generation. Posting unconditionally is not merely
-    ///     wasteful; it is self-denial.
-    ///   * With a LAXER rule — "reuse any election bearing this opkey" — a second executor delivering
-    ///     the same item under one generation through a DIFFERENT pull request would inherit the
-    ///     first executor's grant and both would pass check 4. That would neuter the one guarantee
-    ///     the election exists to provide: design §4.2, *"at most one merge takes effect per (item,
-    ///     generation, receiver)"*. Keyed on the pull request, each contender posts its own election
-    ///     and only the lowest id wins, which is the refusal the fence's own check-4 message
-    ///     describes.
-    ///
-    /// `op=merge` is `Operation.wire Operation.Merge`; it is spelled literally here because this
-    /// marker is a wire form and `Operation.wire` is the authority for the spelling rather than a
-    /// value to interpolate into a template whose other six fields are literals too — the opkey it
-    /// keys is composed through `Operation.compose`, which is where the vocabulary is actually load-
-    /// bearing.
+    // The exact election text `delivery` appends to the item.
+    //
+    // Six of the seven fields are `REQUIRED_ELECTION_FIELDS`. The seventh, `pr=`, is this producer's
+    // IDEMPOTENCE DISCRIMINATOR and it is why repeating a `delivery` call is safe. The fence ignores
+    // fields it does not require, so it costs the reader nothing; it earns its place on the write
+    // side, twice over:
+    //
+    //   * WITHOUT it, a second `delivery` call for the same item would post a SECOND election under
+    //     the same opkey. Comment ids are monotone, so that election is strictly HIGHER, and an
+    //     authorization naming it loses the gate's own lowest-id comparison — the pull request would
+    //     be refused for the rest of that claim generation. Posting unconditionally is not merely
+    //     wasteful; it is self-denial.
+    //   * With a LAXER rule — "reuse any election bearing this opkey" — a second executor delivering
+    //     the same item under one generation through a DIFFERENT pull request would inherit the
+    //     first executor's grant and both would pass check 4. That would neuter the one guarantee
+    //     the election exists to provide: design §4.2, *"at most one merge takes effect per (item,
+    //     generation, receiver)"*. Keyed on the pull request, each contender posts its own election
+    //     and only the lowest id wins, which is the refusal the fence's own check-4 message
+    //     describes.
+    //
+    // `op=merge` is `Operation.wire Operation.Merge`; it is spelled literally here because this
+    // marker is a wire form and `Operation.wire` is the authority for the spelling rather than a
+    // value to interpolate into a template whose other six fields are literals too — the opkey it
+    // keys is composed through `Operation.compose`, which is where the vocabulary is actually load-
+    // bearing.
     let electionMarker (opkey: string) (item: string) (gen: string) (receiver: string) (pr: int) : string =
         $"<!-- fsgg:merge-election v=1 opkey=%s{opkey} item=%s{item} gen=%s{gen} receiver=%s{receiver} op=merge pr=%d{pr} -->"
 
-    /// Every election on the item, one per comment whose body OPENS with the marker.
-    ///
-    /// A comment carrying no election, or quoting one below its first byte, yields nothing — it is
-    /// not an election, exactly as the gate reads it.
+    // Every election on the item, one per comment whose body OPENS with the marker.
+    //
+    // A comment carrying no election, or quoting one below its first byte, yields nothing — it is
+    // not an election, exactly as the gate reads it.
     let electionsFromComments (comments: Driver.ReviewComment list) : Election list =
         comments
         |> List.choose (fun comment ->
@@ -436,11 +436,11 @@ module DeliveryApplication =
                     |> Map.ofSeq
                 Some { Id = comment.Id; Fields = fields })
 
-    /// The elections THIS delivery target already owns — same operation key, same pull request.
-    ///
-    /// Deliberately NOT "every election bearing this opkey": see `electionMarker`'s second bullet.
-    /// The wider set is the candidate set the FENCE computes, and the whole point of the fence is
-    /// that this producer does not get to compute it.
+    // The elections THIS delivery target already owns — same operation key, same pull request.
+    //
+    // Deliberately NOT "every election bearing this opkey": see `electionMarker`'s second bullet.
+    // The wider set is the candidate set the FENCE computes, and the whole point of the fence is
+    // that this producer does not get to compute it.
     let electionsOwnedBy (opkey: string) (pr: int) (elections: Election list) : Election list =
         elections
         |> List.filter (fun election ->

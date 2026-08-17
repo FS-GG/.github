@@ -1462,24 +1462,26 @@ module Client =
         )
 
     /// The exact marker text `delivery` writes: `v=1 item=<owner/repo>#<n> gen=<claim marker comment
-    /// id> opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha>`.
-    ///
-    /// ALL SIX FIELDS `scripts/check-claim-fence.py`'s `REQUIRED_AUTH_FIELDS` names, in its own
-    /// order. Until this row's second landing it wrote FOUR, and the consequence was not a narrower
-    /// pass: the fence returns at CHECK 1 on a marker missing `opkey`/`grant`, so its check 4 — the
-    /// only one of the six a forger cannot satisfy by typing — was never evaluated on any real pull
-    /// request, while `.github/workflows/fsgg-claim-fence.yml` told operators check 4 "is expected to
-    /// fail on every real pull request today" for a known reason. A documented expectation about an
-    /// unreachable branch is `.github#266`'s class one level up.
-    ///
-    /// THE TWO NARROWER READERS ARE UNAFFECTED, WHICH IS WHY THIS NEEDS NO CUTOVER.
-    /// `scripts/check-claim-generation.py` — the only one of the three readers that is a REQUIRED
-    /// status context on `main` — requires `v`/`item`/`gen`/`head` and commits in its own docstring
-    /// to "silently accept (never reject on) any ADDITIONAL `key=value` pairs — including a future
-    /// `opkey=`/`grant=`". The receiver-side validation job in `.github/workflows/kit-materialize.yml`
-    /// requires the same four with the same tolerance. So a six-field marker passes both, and an
-    /// existing FOUR-field marker on an open pull request keeps passing both until `rebindAuthorization`
-    /// replaces it on that pull request's next `delivery` call.
+    /// id> opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha>` — ALL SIX fields
+    /// `scripts/check-claim-fence.py`'s `REQUIRED_AUTH_FIELDS` names, in its own order. The two
+    /// narrower readers accept supersets, so widening it needed no cutover; `Client.fsi` has the rest.
+    //
+    // WHY SIX AND NOT FOUR, RECORDED WHERE THE TEMPLATE IS. Until this row's second landing this
+    // wrote four fields, and the consequence was not a narrower pass: the fence returns at CHECK 1 on
+    // a marker missing `opkey`/`grant`, so its check 4 — the only one of the six a forger cannot
+    // satisfy by typing — was never evaluated on any real pull request, while
+    // `.github/workflows/fsgg-claim-fence.yml` told operators check 4 "is expected to fail on every
+    // real pull request today" for a known reason. A documented expectation about an unreachable
+    // branch is `.github#266`'s class one level up.
+    //
+    // THE TWO NARROWER READERS ARE UNAFFECTED, WHICH IS WHY THIS NEEDS NO CUTOVER.
+    // `scripts/check-claim-generation.py` — the only one of the three readers that is a REQUIRED
+    // status context on `main` — requires `v`/`item`/`gen`/`head` and commits in its own docstring to
+    // "silently accept (never reject on) any ADDITIONAL `key=value` pairs — including a future
+    // `opkey=`/`grant=`". The receiver-side validation job in `.github/workflows/kit-materialize.yml`
+    // requires the same four with the same tolerance. So a six-field marker passes both, and an
+    // existing FOUR-field marker on an open pull request keeps passing both until
+    // `rebindAuthorization` replaces it on that pull request's next `delivery` call.
     let authorizationMarker (item: string) (gen: string) (opkey: string) (grant: string) (head: string) : string =
         $"<!-- fsgg:pr-authorization v=1 item=%s{item} gen=%s{gen} opkey=%s{opkey} grant=%s{grant} head=%s{head} -->"
 
@@ -1501,13 +1503,13 @@ module Client =
     ///     freshly rendered marker (a stale head, a stale gen, or any other drift) is treated exactly
     ///     like zero matches: stripped and replaced, never left in place or duplicated alongside a
     ///     second, corrected one.
-    ///
-    /// THAT SECOND RULE IS ALSO THE WHOLE MIGRATION FOR THE SIX-FIELD MARKER, and it needed no new
-    /// code. A four-field marker written before this row's second landing is not byte-identical to a
-    /// six-field one, so it takes the `AuthorizationRebound` arm and is replaced in place on the next
-    /// `delivery` call — one marker in, one marker out. There is no cutover, no dual-shape
-    /// acceptance and no rebinding campaign, because the only marker reader that is a required status
-    /// context accepts both shapes (see `authorizationMarker`).
+    //
+    // THAT SECOND RULE IS ALSO THE WHOLE MIGRATION FOR THE SIX-FIELD MARKER, and it needed no new
+    // code. A four-field marker written before this row's second landing is not byte-identical to a
+    // six-field one, so it takes the `AuthorizationRebound` arm and is replaced in place on the next
+    // `delivery` call — one marker in, one marker out. There is no cutover, no dual-shape acceptance
+    // and no rebinding campaign, because the only marker reader that is a required status context
+    // accepts both shapes (see `authorizationMarker`).
     let rebindAuthorization (body: string) (item: string) (gen: string) (opkey: string) (grant: string) (head: string) : AuthorizationRebind =
         let desired = authorizationMarker item gen opkey grant head
         let matches = authorizationMarkerPattern.Matches body
@@ -1520,63 +1522,21 @@ module Client =
             else
                 AuthorizationRebound(stripped + "\n\n" + desired)
 
-    /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
-    /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
-    /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
-    /// elsewhere), or the PR has already merged (nothing further to authorize).
-    /// `rebindAuthorization`'s `AuthorizationCurrent` answer skips the PATCH entirely, so a routine
-    /// status check that changed nothing spends one read and zero writes — the common case on every call
-    /// after the first.
-    ///
-    /// NO LONGER GATED ON `--apply` (.github#2488). It used to be — `apply, pr, marker, merged` all had
-    /// to line up — on the theory that this was one of `delivery`'s writes and `--apply` gates every
-    /// write the command makes. Measured against the fleet's real PRs, that gating made the write
-    /// UNREACHABLE: five real `item/<n>-*` PRs merged after this function landed on `main` carried NO
-    /// `fsgg:pr-authorization` marker at all, because nothing in the fleet's real flow ever calls
-    /// `delivery --apply --pr N` — the documented merge step is a direct `gh api -X PUT …/pulls/<pr>/
-    /// merge` (`deep-detail.md`'s "MERGE over REST"), which never reaches this function, and even a
-    /// worker who DID pass `--apply` reached it too late: `--apply` immediately attempts the
-    /// `GuardedLand`/`Complete` transition in the SAME call, so by the time any CI re-evaluation could
-    /// see the freshly-PATCHed body the PR was often already merged or closed. Dropping the gate makes
-    /// every LIVE `delivery <ref> --pr N` call — including a plain, non-`--apply` status read — refresh
-    /// the marker as a side effect wherever a caller with a live GitHub credential DOES make that call
-    /// (a worker's own shell; `pnext-item` §5's own documented step routes to `--snapshot FILE`, an
-    /// IO-free path this change does not touch — nothing in that skill's CURRENT text calls the live
-    /// form, a distinct reachability gap tracked separately, not fixed by this signature change alone).
-    /// This is safe precisely because it is the ONLY thing this function does: unlike `delivery`'s
-    /// `GuardedLand`/`Complete` transitions (still exclusively `--apply`-gated, untouched here), a
-    /// PR-body PATCH of an HTML-comment marker takes no board-affecting action, so a read-only
-    /// inspection performing it carries none of the "did this quietly merge something" risk that gating
-    /// write-capable commands behind `--apply` exists to prevent. It ALSO cannot run from this repo's
-    /// own CI: the live form's first action is a Coordination Projects (v2) board bootstrap
-    /// (`Board.bootstrapCached`), a read this org's CI credential inventory does not carry (ADR-0019
-    /// §1, `.github#2332`) — see `.github/workflows/coherence.yml`'s `claim-generation` job comment for
-    /// the measured failure and why a CI-side self-heal was tried and deliberately dropped.
-    ///
-    /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
-    /// endpoint is the one GitHub documents for it.
-    ///
-    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` drives this directly
-    /// against a `Fake.Recorder`, the same "reuse the internal seam rather than restate the whole
-    /// `delivery` command's board-scan/PR-facts machinery" idiom `AuthorizedMarkerTests.fs` already uses
-    /// for `authorizedMarker`, above. This is what makes the LIVE wired IO (`Reads.prBody` then a
-    /// conditional `ctx.Transport.Send` PATCH) hermetically testable, not merely the pure
-    /// `rebindAuthorization` decision it wraps.
-    /// THE ORDERING RULE, ASKED RATHER THAN RE-IMPLEMENTED (.github#2395, design §4.2).
-    ///
-    /// "Lowest id wins, lease-free" is exported exactly once, as `Reads.lowestId` — slice 2 added it
-    /// (`.github#2312`) for precisely this read, and §4.2 forbids a second copy: *"That ordering rule
-    /// must not be written twice"*. `Reads` owns no election record and this row does not declare
-    /// `Reads.fs`, so the candidates are PROJECTED onto `Reads.Marker` to ask the question and the
-    /// winner is mapped back by id.
-    ///
-    /// EVERY FIELD BUT `Id` IS A PLACEHOLDER THIS CALL NEVER READS BACK, and that is safe by the
-    /// exported contract rather than by inspection of the implementation: `Reads.lowestId`'s own
-    /// signature comment says it *"filters nothing, decides no arm, and is not a lock"* and answers
-    /// *"only which marker is first"*. It is `winner` WITHOUT the staleness filter, so no placeholder
-    /// here can reach a lease, a worker comparison or a column restore. `Worker` is spelled empty
-    /// rather than plausibly, so a placeholder can never be mistaken for a real identity if one of
-    /// these values ever escapes into a diagnostic.
+    // THE ORDERING RULE, ASKED RATHER THAN RE-IMPLEMENTED (.github#2395, design §4.2).
+    //
+    // "Lowest id wins, lease-free" is exported exactly once, as `Reads.lowestId` — slice 2 added it
+    // (`.github#2312`) for precisely this read, and §4.2 forbids a second copy: *"That ordering rule
+    // must not be written twice"*. `Reads` owns no election record and this row does not declare
+    // `Reads.fs`, so the candidates are PROJECTED onto `Reads.Marker` to ask the question and the
+    // winner is mapped back by id.
+    //
+    // EVERY FIELD BUT `Id` IS A PLACEHOLDER THIS CALL NEVER READS BACK, and that is safe by the
+    // exported contract rather than by inspection of the implementation: `Reads.lowestId`'s own
+    // signature comment says it *"filters nothing, decides no arm, and is not a lock"* and answers
+    // *"only which marker is first"*. It is `winner` WITHOUT the staleness filter, so no placeholder
+    // here can reach a lease, a worker comparison or a column restore. `Worker` is spelled empty
+    // rather than plausibly, so a placeholder can never be mistaken for a real identity if one of
+    // these values ever escapes into a diagnostic.
     let private lowestElection (elections: DeliveryApplication.Election list) : DeliveryApplication.Election option =
         elections
         |> List.map (fun election ->
@@ -1590,28 +1550,28 @@ module Client =
         |> Reads.lowestId
         |> Option.bind (fun winner -> elections |> List.tryFind (fun election -> election.Id = winner.Id))
 
-    /// The first of §11.2 row 3's two acts: obtain the merge election this pull request's
-    /// authorization will be GROUNDED IN, posting one only when this delivery target does not
-    /// already own it. Returns `(opkey, grant)`.
-    ///
-    /// THE TWO ACTS CANNOT BE ATOMIC, SO THE ORDER IS THE DESIGN. GitHub offers no multi-write
-    /// transaction, and this pair is deliberately ordered election-then-authorization because an
-    /// election is *append-only, never deleted, no lease, no renewal* (§4.2). A failure after the
-    /// election and before the authorization therefore leaves a DURABLE, REUSABLE fact that the next
-    /// `delivery` call finds and completes; the reverse order has no such property, because an
-    /// authorization naming an election that does not exist is check-4 RED and its `grant=` names an
-    /// id that may later belong to an unrelated comment. This is the opposite shape to the
-    /// `claim --force` non-atomicity measured on 2026-08-16, where a 503 between a DESTRUCTIVE
-    /// eviction and the replacement write left the row with no holder at all: both acts here are
-    /// non-destructive — an append, then an idempotent replace-in-place — so the intermediate state
-    /// is weaker than the final state rather than worse than the initial one.
-    ///
-    /// AND IT REFUSES RATHER THAN DEGRADES. A `compose` refusal, an unreadable comment list, or a
-    /// failed POST propagates, and `ensureAuthorization` below therefore never reaches its PATCH. No
-    /// four-field fallback is written: a marker the fence calls ungrounded is exactly the decorative
-    /// case §6.3 names, and a failed read must not be able to masquerade as a legitimate answer
-    /// (`#266`). Nothing is made worse by refusing — the previous marker, if any, is left exactly as
-    /// it was, and `delivery` is safe to re-run.
+    // The first of §11.2 row 3's two acts: obtain the merge election this pull request's
+    // authorization will be GROUNDED IN, posting one only when this delivery target does not
+    // already own it. Returns `(opkey, grant)`.
+    //
+    // THE TWO ACTS CANNOT BE ATOMIC, SO THE ORDER IS THE DESIGN. GitHub offers no multi-write
+    // transaction, and this pair is deliberately ordered election-then-authorization because an
+    // election is *append-only, never deleted, no lease, no renewal* (§4.2). A failure after the
+    // election and before the authorization therefore leaves a DURABLE, REUSABLE fact that the next
+    // `delivery` call finds and completes; the reverse order has no such property, because an
+    // authorization naming an election that does not exist is check-4 RED and its `grant=` names an
+    // id that may later belong to an unrelated comment. This is the opposite shape to the
+    // `claim --force` non-atomicity measured on 2026-08-16, where a 503 between a DESTRUCTIVE
+    // eviction and the replacement write left the row with no holder at all: both acts here are
+    // non-destructive — an append, then an idempotent replace-in-place — so the intermediate state
+    // is weaker than the final state rather than worse than the initial one.
+    //
+    // AND IT REFUSES RATHER THAN DEGRADES. A `compose` refusal, an unreadable comment list, or a
+    // failed POST propagates, and `ensureAuthorization` below therefore never reaches its PATCH. No
+    // four-field fallback is written: a marker the fence calls ungrounded is exactly the decorative
+    // case §6.3 names, and a failed read must not be able to masquerade as a legitimate answer
+    // (`#266`). Nothing is made worse by refusing — the previous marker, if any, is left exactly as
+    // it was, and `delivery` is safe to re-run.
     let electionGrounding
         (ctx: Context)
         (target: Ref)
@@ -1665,6 +1625,48 @@ module Client =
                     Writes.postIssueComment ctx.Transport target body
                     |> Result.map (fun id -> (opkey, string id)))
 
+    /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
+    /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
+    /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
+    /// elsewhere), or the PR has already merged (nothing further to authorize).
+    /// `rebindAuthorization`'s `AuthorizationCurrent` answer skips the PATCH entirely, so a routine
+    /// status check that changed nothing spends one read and zero writes — the common case on every call
+    /// after the first.
+    ///
+    /// NO LONGER GATED ON `--apply` (.github#2488). It used to be — `apply, pr, marker, merged` all had
+    /// to line up — on the theory that this was one of `delivery`'s writes and `--apply` gates every
+    /// write the command makes. Measured against the fleet's real PRs, that gating made the write
+    /// UNREACHABLE: five real `item/<n>-*` PRs merged after this function landed on `main` carried NO
+    /// `fsgg:pr-authorization` marker at all, because nothing in the fleet's real flow ever calls
+    /// `delivery --apply --pr N` — the documented merge step is a direct `gh api -X PUT …/pulls/<pr>/
+    /// merge` (`deep-detail.md`'s "MERGE over REST"), which never reaches this function, and even a
+    /// worker who DID pass `--apply` reached it too late: `--apply` immediately attempts the
+    /// `GuardedLand`/`Complete` transition in the SAME call, so by the time any CI re-evaluation could
+    /// see the freshly-PATCHed body the PR was often already merged or closed. Dropping the gate makes
+    /// every LIVE `delivery <ref> --pr N` call — including a plain, non-`--apply` status read — refresh
+    /// the marker as a side effect wherever a caller with a live GitHub credential DOES make that call
+    /// (a worker's own shell; `pnext-item` §5's own documented step routes to `--snapshot FILE`, an
+    /// IO-free path this change does not touch — nothing in that skill's CURRENT text calls the live
+    /// form, a distinct reachability gap tracked separately, not fixed by this signature change alone).
+    /// This is safe precisely because it is the ONLY thing this function does: unlike `delivery`'s
+    /// `GuardedLand`/`Complete` transitions (still exclusively `--apply`-gated, untouched here), a
+    /// PR-body PATCH of an HTML-comment marker takes no board-affecting action, so a read-only
+    /// inspection performing it carries none of the "did this quietly merge something" risk that gating
+    /// write-capable commands behind `--apply` exists to prevent. It ALSO cannot run from this repo's
+    /// own CI: the live form's first action is a Coordination Projects (v2) board bootstrap
+    /// (`Board.bootstrapCached`), a read this org's CI credential inventory does not carry (ADR-0019
+    /// §1, `.github#2332`) — see `.github/workflows/coherence.yml`'s `claim-generation` job comment for
+    /// the measured failure and why a CI-side self-heal was tried and deliberately dropped.
+    ///
+    /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
+    /// endpoint is the one GitHub documents for it.
+    ///
+    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` drives this directly
+    /// against a `Fake.Recorder`, the same "reuse the internal seam rather than restate the whole
+    /// `delivery` command's board-scan/PR-facts machinery" idiom `AuthorizedMarkerTests.fs` already uses
+    /// for `authorizedMarker`, above. This is what makes the LIVE wired IO (`Reads.prBody` then a
+    /// conditional `ctx.Transport.Send` PATCH) hermetically testable, not merely the pure
+    /// `rebindAuthorization` decision it wraps.
     let ensureAuthorization
         (ctx: Context)
         (target: Ref)
