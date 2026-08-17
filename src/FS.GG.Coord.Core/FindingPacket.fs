@@ -56,7 +56,7 @@ module FindingPacket =
         "must be an object carrying exactly one of 'established' (the root cause) "
         + "or 'notEstablished' (what was measured instead)"
 
-    /// The reason `none` and `null` are both refused, said once so every field says it the same way.
+    // The reason `none` and `null` are both refused, said once so every field says it the same way.
     let private collapses =
         "cannot distinguish 'the finder searched and found nothing' from 'the finder did not search', "
         + "and the filing bar's tests rest on that distinction"
@@ -64,7 +64,7 @@ module FindingPacket =
     let private oneOf (field: string) (shape: string) (blame: string) =
         { Field = field; Detail = $"%s{blame}; it %s{shape}" }
 
-    /// Decode a one-key tagged union. `cases` maps the JSON key to its constructor.
+    // Decode a one-key tagged union. `cases` maps the JSON key to its constructor.
     let private decodeUnion (field: string) (shape: string) (cases: (string * (string -> 'a)) list) (element: JsonElement) =
         match element.ValueKind with
         | JsonValueKind.String ->
