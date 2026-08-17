@@ -25,13 +25,14 @@ The positive leg is what makes the negative leg mean anything.
 AND THE COMPILER CANNOT WARN. `///` binds silently to the next declaration, so a doc block whose
 subject has been deleted or moved re-binds to whatever now follows it rather than erroring. The
 Release build of all three projects emits zero warnings over 3,913 such lines. The worked example
-the row cites is still live at `0ddd4b88`, in a file this gate does NOT report and this row did not
-sweep -- `src/FS.GG.Coord.Cli/Client.fs` has no sibling `.fsi` at `0ddd4b88` or at this head, so it
-is not a subject, carries no baseline entry, and its 1,714 `///` lines are compiler-KEPT. That is
-what makes it a clean illustration of the re-binding hazard and not of this gate's subject: the two
-are independent, and the example is cited for the first. (`.github#2724` adds a `Client.fsi`; on the
-day it merges this file becomes a subject and its residue is baselined. Nothing here depends on
-that, and this paragraph is written to be true without it.)
+the row cites is still live, and its file changed status underneath this row while it was in review.
+At `0ddd4b88` `src/FS.GG.Coord.Cli/Client.fs` had NO sibling `.fsi`: it was not a subject, carried no
+baseline entry, and its 1,714 `///` lines were compiler-KEPT, so the example illustrated the
+re-binding hazard and nothing about this gate's subject. `.github#2724` merged at `479d185a` and gave
+it `Client.fsi`. The same 1,714 lines are now discarded, this gate now reports the file, and its
+residue is baselined at 1,714 -- see `tests/signature-doc-siting/baseline.txt`, which records how it
+got there. The re-binding point the example is cited for is unaffected either way; only whether the
+compiler keeps the block has changed, and it changed in the direction that makes this row's case.
 `src/FS.GG.Coord.Cli/Client.fs` lines 718-752 are a 35-line block describing an implementation of
 `boardBlockingCounts` that no longer exists -- the declaration it now attaches to, at line 753, is
 the one-line forward `let boardBlockingCounts = BoardFactsApplication.blockingCounts` -- and lines
@@ -67,14 +68,16 @@ IT LEXES RATHER THAN GREPS, and each clause below has a measured reason:
     string -- while `'T` and `xs'` must not be mistaken for literals. See `char_literal_end`.
 
 WHAT IS LIVE HERE AND WHAT IS LATENT, measured rather than assumed. Multi-line strings are LIVE:
-`src/` holds 320 continuation lines inside them across 4 SUBJECT files -- 245 triple-quoted, 75
-ordinary, 0 verbatim -- chiefly `Cli/Options.fs` (248) and `GitHub/Scan.fs` (44). THE POPULATION IS
-PART OF THAT NUMBER AND IS STATED BECAUSE IT MOVES: counted over all 66 `.fs` files under `src/`
-rather than the 61 subjects, the same replay gives 323 across 5 files (245 triple, 78 ordinary, 0
-verbatim), the extra 3 being `Cli/Client.fs:3205-3207` -- a file with no sibling `.fsi`, and so not
-a subject today. Either figure is right for its population and neither is right for the other;
-`.github#2724` converts the second into the first by adding `Client.fsi`. The load-bearing claim is
-invariant across both: not one of those lines carries a `///` or a `(*`. And, at code level, 106
+`src/` holds 323 continuation lines inside them across 5 SUBJECT files -- 245 triple-quoted, 78
+ordinary, 0 verbatim -- chiefly `Cli/Options.fs` (248) and `GitHub/Scan.fs` (44), then
+`Core/Protocol.fs` (18), `GitHub/Done.fs` (10) and `Cli/Client.fs` (3). THE POPULATION IS PART OF
+THAT NUMBER, and this row watched it move: at `0ddd4b88` the same replay gave 320 across 4 subjects,
+because `Cli/Client.fs:3205-3207` sat in a file with no sibling `.fsi`. `.github#2724` added
+`Client.fsi` at `479d185a` and those 3 lines crossed into the subject population without anyone
+editing them. Counted over all 66 `.fs` under `src/` the answer is 323 either way, so the two
+populations agree today and did not before -- which is the reason to name which one a figure is for
+rather than to quote it bare. The load-bearing claim is invariant across every version of that
+count: not one of those lines carries a `///` or a `(*`. And, at code level, 106
 character literals against 40 `'` that are not one, the two `'"'` above among the literals (see
 `char_literal_end` for the method, and for two earlier figures here that did not survive
 re-derivation). What is latent is the multi-line VERBATIM string specifically:

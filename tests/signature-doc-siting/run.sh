@@ -290,9 +290,9 @@ must_exit "red: a real doc comment after a nested block comment is still found" 
 # following that printed remedy reached exit 0 while `grep -c '///'` still returned 455. Mirrored, a
 # `///` on a continuation line INSIDE such a string was reported as a doc comment.
 #
-# `src/` DOES hold multi-line strings — 320 continuation lines across the 4 SUBJECT files that have
-# them (323 across 5 if the population is all of `src/**.fs` rather than the subjects; the extra 3
-# are `Cli/Client.fs:3205-3207`, which has no sibling `.fsi` today) — but not one
+# `src/` DOES hold multi-line strings — 323 continuation lines across the 5 SUBJECT files that have
+# them (320 across 4 at `0ddd4b88`, before `.github#2724` gave `Cli/Client.fs` a sibling `.fsi` and
+# moved its 3 into the subject population) — but not one
 # of them happens to carry a `///` or a `(*`, so the corpus cannot reach either failure. That is why
 # both are constructed here. Latent is not harmless: the subject is `src/**` in perpetuity, and the
 # recorded `Cli` residue is edited by every extraction lane.

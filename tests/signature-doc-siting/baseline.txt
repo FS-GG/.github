@@ -18,12 +18,29 @@
 # gate be believed at all. `tests/pipefail-assertions/baseline.txt` (.github#2689) is the same
 # mechanism over a different subject, and this one is spelled the same way on purpose.
 #
-# WHY THESE 943 LINES ARE HERE RATHER THAN SWEPT. `.github#2730` swept `src/FS.GG.Coord.Core` (1,853
-# lines, 27 files) and `src/FS.GG.Coord.GitHub` (1,117 lines, 10 files) to zero. It did not sweep
-# `src/FS.GG.Coord.Cli`: those files were outside its declared `Paths:`, `.github#2724` held
+# WHY THESE 2,657 LINES ARE HERE RATHER THAN SWEPT. `.github#2730` swept `src/FS.GG.Coord.Core`
+# (1,853 lines, 27 files) and `src/FS.GG.Coord.GitHub` (1,117 lines, 10 files) to zero. It did not
+# sweep `src/FS.GG.Coord.Cli`: those files were outside its declared `Paths:`, `.github#2724` held
 # `Client.fs`/`Client.fsi` while it ran, and the extraction programme (`.github#2724`,
 # `.github#2731` onward) gives each extracted module a proper `.fsi` with its prose moved as part of
 # that work. Sweeping them there would have collided with every extraction lane for no benefit.
+#
+# `Client.fs`'s 1,714 IS THE FIRST ROW THIS GATE ADDED RATHER THAN INHERITED, and it is worth saying
+# how it got here, because the mechanism above predicted it and then the prediction only half held.
+# `.github#2724` merged at `479d185a` while this row was in review, and it gave `Client.fs` the
+# sibling `Client.fsi` it had been waiting for. That made `Client.fs` a SUBJECT for the first time —
+# 61 subjects became 62 — and its 1,714 `///` lines, which the compiler had been keeping right up
+# until that merge, became discarded ones in the same commit. The prose was NOT moved as part of
+# that work: the signature was extracted and the implementation's doc comments were left where they
+# were. So the residue did not clear, it transferred, and this line records it at the size it
+# actually is rather than letting the count quietly grow.
+#
+# THIS ROW DID NOT SWEEP IT, AND DELIBERATELY SO. `src/FS.GG.Coord.Cli/Client.fs` is outside this
+# row's declared `Paths:`; 1,714 blocks is larger than everything `.github#2730` swept in
+# `FS.GG.Coord.GitHub`, and each one needs the same caller-can-act-on-it judgement the rest of the
+# sweep got. Doing it here, unreviewed and out of touch-set, is exactly the collision the paragraph
+# above exists to avoid. It is recorded, visible, and shrinking, which is the whole point of the
+# mechanism. Filed as a finding packet against the extraction programme rather than silently absorbed.
 #
 # They are recorded rather than dropped so the residue is visible and shrinking. Each extraction
 # lane decrements its own line inside the touch-set it already holds, at zero marginal lane cost --
@@ -39,6 +56,7 @@
 # implementation, is correctly placed where it is, and becomes `//` with its wording unchanged.
 # Then write the new count here, or delete the line when it reaches zero.
 
+1714 src/FS.GG.Coord.Cli/Client.fs
 10 src/FS.GG.Coord.Cli/CycleLedgerApplication.fs
 15 src/FS.GG.Coord.Cli/DeliveryApplication.fs
 3 src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs
