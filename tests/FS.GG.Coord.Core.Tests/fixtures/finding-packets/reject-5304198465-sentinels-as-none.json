@@ -1,0 +1,13 @@
+{
+  "schema": "fsgg.coord.finding-packet/v1",
+  "surface": "src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs",
+  "cause": {
+    "established": "The verb exists in the application layer and was never wired into the command surface."
+  },
+  "redToday": "none",
+  "derivedBy": "none",
+  "classRow": null,
+  "whyNotHere": "The route pass held no claim and no lane by construction, and the fix is in engine source, outside anything that pass declared.",
+  "paths": ["src/FS.GG.Coord.Cli/Options.fs", "src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs"],
+  "finder": "merlin-efd3"
+}

@@ -57,6 +57,14 @@
     <Compile Include="Intake.fs" />
     <Compile Include="IntakeReceipt.fsi" />
     <Compile Include="IntakeReceipt.fs" />
+    <!-- FindingPacket (.github#2737) opens NO sibling module — only System, System.Text.Json and
+         System.Text.RegularExpressions — so it constrains nothing below it and is placed here purely
+         for readability, beside the intake types its `toIntakeSeed` feeds. It is the schema for the
+         finding packet, which under .github#2695 is the SOLE INPUT to the sole filing authority.
+         System.Text.Json is in the net10.0 shared framework, so this adds no PackageReference and
+         `packages.lock.json` is unchanged. -->
+    <Compile Include="FindingPacket.fsi" />
+    <Compile Include="FindingPacket.fs" />
     <Compile Include="DeliveryRoute.fsi" />
     <Compile Include="DeliveryRoute.fs" />
     <Compile Include="StructuredDecision.fsi" />

@@ -16,6 +16,7 @@ module Options =
         | Facts
         | CommandContractCmd
         | IntakeCmd
+        | PacketCmd
         | RouteCmd
         | WhoAmI
         | Budget
@@ -318,6 +319,11 @@ DECISION (pure — no board, no network):
   command-contract [--json]                  emit the parser's command/flag contract for tooling
   intake <validate|apply> <draft.json> [--json]
                                              validate or atomically project one receipt-bound filing draft
+  packet validate <packet.json> [--json]     validate one fsgg.coord.finding-packet/v1 document before
+                                             posting it (.github#2737). PURE: it reads a file and decides;
+                                             it touches no board and can refuse no post. A packet that
+                                             fails here is still postable as prose — the register never
+                                             blocks, and a wedged chain costs more than a duplicate row
   delivery-route <show REF|record REF receipt.json> [--json]
                                              inspect or append a source-bound agent delivery-route receipt
 
@@ -617,6 +623,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Scan -> JsonOnly
         | CommandContractCmd -> JsonOnly
         | IntakeCmd -> JsonOnly
+        // .github#2737: the success document and the refusal document are both JSON on stdout; the
+        // per-field findings a finder actually reads go to stderr, so there is no text projection.
+        | PacketCmd -> JsonOnly
         | RouteCmd -> JsonOnly
         | BoardCmd -> JsonOnly
         | Issues -> JsonOnly // the raw REST array; the caller projects it with jq
@@ -1068,6 +1077,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Facts -> Reads
         | CommandContractCmd -> Reads
         | IntakeCmd -> Writes // `intake apply` creates/reuses and projects the receipt-bound issue
+        | PacketCmd -> Reads // .github#2737: decides over a local file; no board, no network, no post
         | RouteCmd -> Writes // `record` appends the validated durable decision receipt
 
         // ---- LOCAL — a file, an identity, a registry read; no token, no board --------------------------
@@ -1232,6 +1242,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Facts -> "facts"
         | CommandContractCmd -> "command-contract"
         | IntakeCmd -> "intake"
+        | PacketCmd -> "packet"
         | RouteCmd -> "delivery-route"
         | WhoAmI -> "whoami"
         | Budget -> "budget"
@@ -2043,6 +2054,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
         | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
         | "intake" :: rest -> flags (start { defaults with Command = IntakeCmd }) rest
+        | "packet" :: rest -> flags (start { defaults with Command = PacketCmd }) rest
         | "delivery-route" :: rest -> flags (start { defaults with Command = RouteCmd }) rest
 
         | "whoami" :: rest -> flags (start { defaults with Command = WhoAmI }) rest

@@ -318,6 +318,12 @@ the standing safety advisories carry forward.
     <Compile Include="Followups.fsi" />
     <Compile Include="Followups.fs" />
     <Compile Include="IntakeApplication.fs" />
+    <!-- PacketApplication (.github#2737) is the finder's pre-flight over one
+         fsgg.coord.finding-packet/v1 document. It opens no Client seam and takes no lock: the pure
+         decode and validation are FS.GG.Coord.FindingPacket's, and this module owns only the file
+         read and the printing. -->
+    <Compile Include="PacketApplication.fsi" />
+    <Compile Include="PacketApplication.fs" />
     <Compile Include="DeliveryRouteApplication.fsi" />
     <Compile Include="DeliveryRouteApplication.fs" />
     <Compile Include="Client.fsi" />

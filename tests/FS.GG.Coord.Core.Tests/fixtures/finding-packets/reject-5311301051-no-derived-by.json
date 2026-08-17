@@ -1,0 +1,16 @@
+{
+  "schema": "fsgg.coord.finding-packet/v1",
+  "surface": "scripts/check-engine-freshness.py, its wire-surface relevance leg.",
+  "cause": {
+    "established": "The relevance predicate is path membership -- Protocol.fs appears in the commit's changed paths -- where the justification it prints is about projected content. The gate already owns a cheap, exact test of the latter, scripts/generate-projections --check, which it does not consult."
+  },
+  "redToday": {
+    "found": "python3 scripts/check-engine-freshness.py --repo . --ref origin/main exits 1 (7 drift commits, 1 WIRE, 1 DEFECT); --ref HEAD at PR #2747's head lists WIRE 45ea1936, a commit that changes only comments in Protocol.fs, while scripts/generate-projections --check at that same head reports \"projections: current\"."
+  },
+  "classRow": {
+    "searchedNotFound": "gh search issues --repo FS-GG/.github --state open \"engine-freshness\" returns #2743, #2130, #2695, #54, #2691, #2687, #266. No open row expresses this cause. It is adjacent to #266 but is its inverse -- a gate that fires when its stated subject has not changed, rather than one that passes when its subject is missing."
+  },
+  "whyNotHere": "scripts/check-engine-freshness.py is outside .github#2730's declared Paths:, and the fix is a judgement about a different gate's relevance bar, not a mechanical repair.",
+  "paths": ["scripts/check-engine-freshness.py", "tests/engine-freshness"],
+  "finder": "dunlin-8fca"
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coord.finding-packet/v1",
+  "surface": "src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs",
+  "cause": {
+    "established": "The verb exists in the application layer and was never wired into the command surface. DeliveryRouteApplication.run implements an offline `route validate <subject> <record.json>` and nothing dispatches to it; Options.fs:1963 routes `delivery-route` to `deliveryRouteCmd`, which handles only `show` and `record`."
+  },
+  "redToday": {
+    "found": "During a pass that authored thirteen receipts there was no way to check one without attempting a live board write. grep -rn \"DeliveryRouteApplication\" src/ --include=*.fs returns only the module definition and two decodeStructured call sites."
+  },
+  "derivedBy": {
+    "notSearched": "An adjudicator should check whether a gate already derives 'an application verb with no command-surface dispatch'."
+  },
+  "classRow": {
+    "notSearched": "This may be evidence on a wiring/coverage class row rather than a row of its own."
+  },
+  "whyNotHere": "The route pass held no claim and no lane by construction -- recording a receipt is not a claim -- and the fix is in engine source, outside anything that pass declared.",
+  "paths": ["src/FS.GG.Coord.Cli/Options.fs", "src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs"],
+  "finder": "merlin-efd3"
+}

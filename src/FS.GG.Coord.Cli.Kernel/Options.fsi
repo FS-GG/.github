@@ -32,6 +32,9 @@ module Options =
         | CommandContractCmd
         /// Validate an intake draft, or report that its live transaction is not yet available.
         | IntakeCmd
+        /// Validate one `fsgg.coord.finding-packet/v1` document (.github#2737). PURE — a finder gates
+        /// its own draft before posting, and nothing here can refuse a post.
+        | PacketCmd
         /// Record, inspect, or validate an explicit delivery-route receipt.
         | RouteCmd
 

@@ -280,7 +280,12 @@ BOARD_WRITES_CONDITIONAL="delivery delivery-route graphql next reap reconcile"
 #   at all; `whoami`/`followup`/`predicate` never touch the board (identity, a local queue, local registry
 #   files). `scan` POSTs to `graphql`, which is how a GraphQL READ is spelled. `body-edits` (.github#2477)
 #   is the same shape as `scan`: one `userContentEdits` GraphQL QUERY through `Reads.contentEditProvenance`,
-#   never a mutation, and it writes no board field, cache, or claim.
+#   never a mutation, and it writes no board field, cache, or claim. `packet` (.github#2737) never reaches
+#   the transport at all: `Program.fs` routes `PacketCmd` straight to `PacketApplication.run` and NEVER to
+#   `Client` — unlike `intake`, whose `apply` half does — so it reads one local file and decides. Its place
+#   here is load-bearing rather than tidy: an unclassified verb is REFUSED on a stale engine, and this verb
+#   is the pre-flight a finder runs precisely when the fleet is in the state that makes engines go stale, so
+#   leaving it out would deny the validator to the reader it exists for.
 #
 # `--help`, `-h` and `--version` are deliberately absent: they are not verbs, and the engine's
 # `command-contract` excludes them for the same reason. They are exempted by GRAMMAR at the guard below
@@ -290,7 +295,7 @@ BOARD_WRITES_CONDITIONAL="delivery delivery-route graphql next reap reconcile"
 # ONE LINE, AND NO SUBSTITUTION IN IT — the parity gate lifts these three assignments straight out of this
 # file and refuses any that is not a plain literal, so a `$…`/`$(…)`/continuation spelling would red §3b
 # rather than be evaluated. Long, therefore, on purpose.
-BOARD_READS="batch board body-edits bootstrap budget command-contract cycle decide diff-audit driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap predicate ready scan verify-paths who whoami"
+BOARD_READS="batch board body-edits bootstrap budget command-contract cycle decide diff-audit driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap packet predicate ready scan verify-paths who whoami"
 
 # STAT THE .dll, NOT THE APPHOST. `fsgg-coord-engine` is the .NET apphost — a fixed ~78 KB native stub,
 # BYTE-IDENTICAL across every build of every commit. The IL, which is the thing that goes stale, is in

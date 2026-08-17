@@ -55,6 +55,10 @@
          so it must compile AFTER that entry. Same rule as every line above it: the list carries no globs,
          and an unlisted file is a suite that runs nowhere. -->
     <Compile Include="ReviewHeadDivergenceTests.fs" />
+    <!-- FindingPacketTests (.github#2737) drives the new pure FindingPacket module against a corpus of
+         REAL packets lifted from the live registers .github#2691 and .github#2687. Same rule as every
+         line above it: the list carries no globs, and an unlisted file is a suite that runs nowhere. -->
+    <Compile Include="FindingPacketTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -63,6 +67,16 @@
 
   <ItemGroup>
     <Content Include="fixtures/structured-decisions/active-migration.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- .github#2737: real packets, lifted field by field from the live registers. Each file is named
+         for the GitHub comment id it came from, so the lift is checkable against the original. -->
+    <Content Include="fixtures/finding-packets/accept-5304198465.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/finding-packets/accept-5307639382.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/finding-packets/accept-5307153964.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/finding-packets/reject-5304189944-no-paths.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/finding-packets/reject-5309266535-not-a-finding.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/finding-packets/reject-5306816009-increment.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/finding-packets/reject-5311301051-no-derived-by.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/finding-packets/reject-5304198465-sentinels-as-none.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

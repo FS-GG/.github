@@ -857,6 +857,7 @@ module OptionsTests =
           "issues", Json
           "diff-audit", Json
           "intake", Json
+          "packet", Json
           "delivery-route", Json
           "graphql", Json
 

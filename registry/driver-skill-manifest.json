@@ -309,12 +309,12 @@
     {
       "id": "board-analyst",
       "scope": "operator",
-      "sha256": "154194b9d17241bff001de1b804ddfc8f8d1751145c368300b0e5eca0a9947f9",
-      "tree-sha256": "ffc26be548474b977c1c757ea5a24910124cf49783ac3a951a573da174c9f7ae",
+      "sha256": "54a78a2b5f66c8b2c5975f892df67a5dcae6e787c35dd4c000d02b1a070b93cb",
+      "tree-sha256": "117aaa681c6a0623dfc51517f895c2587d7d4afc05f9b271f966e1a297612096",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "154194b9d17241bff001de1b804ddfc8f8d1751145c368300b0e5eca0a9947f9",
+          "sha256": "54a78a2b5f66c8b2c5975f892df67a5dcae6e787c35dd4c000d02b1a070b93cb",
           "executable": false
         },
         {

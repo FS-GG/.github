@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coord.finding-packet/v1",
+  "surface": "scripts/fsgg-coord intake apply <draft>.json --json, against FS-GG/.github: \"the transport returned an unmerged next page; duplicate inventory is incomplete\", exit 1. Three occurrences across two different engine builds.",
+  "cause": {
+    "established": "src/FS.GG.Coord.GitHub/Reads.fs:2938-2944 issues exactly one request and never follows pagination. per_page=100 is the ceiling, and any repository with more than 100 issues-plus-PRs returns a NextLink, so the guard fires unconditionally. FS-GG/.github has 1162 issues alone and this endpoint counts pull requests too, so NextLink is always present and this call can never succeed. The refusal itself is correct and should not be softened; the defect is that the read cannot be completed."
+  },
+  "redToday": {
+    "found": "The org's only sanctioned filing path does not work in its largest repository. Under the sole-filing-authority direction the analyst is the only actor that files a row, and intake apply is the receipt-bound verb it files through. Five rows adjudicated in this pass are unfiled solely because of this."
+  },
+  "derivedBy": {
+    "searchedNotFound": "No scripts/check-*.py computes it. It surfaces only when someone runs intake apply against a repository over the page ceiling."
+  },
+  "classRow": {
+    "searchedNotFound": "None found, and I did not search exhaustively -- treat this dedupe as partial. .github#266 is the nearest relative by family and is the opposite polarity: that epic is about gates failing open, and this fails closed, correctly. .github#2698 is adjacent in seam but is a different cause."
+  },
+  "whyNotHere": "I hold no claim and open no PR. More to the point, I am the analyst: adjudicating my own finding would make the bar a formality, which is the one thing the role exists to prevent.",
+  "paths": ["src/FS.GG.Coord.GitHub/Reads.fs", "tests/FS.GG.Coord.GitHub.Tests"],
+  "finder": "dunlin-c152"
+}
