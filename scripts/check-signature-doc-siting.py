@@ -5,7 +5,7 @@ r"""No F# XML documentation comment may sit in an implementation file that has a
 
 THE DEFECT. When an F# module has a signature file, the `///` documentation comments in the
 IMPLEMENTATION are discarded by the compiler. The signature's documentation is what reaches the
-generated XML file, the IDE tooltip, and every downstream reader. Measured at `0ddd4b88`: 2,964
+generated XML file, the IDE tooltip, and every downstream reader. Measured at `0ddd4b88`: 2,970
 `///` lines sat in 37 implementation files under `src/FS.GG.Coord.Core` and
 `src/FS.GG.Coord.GitHub` that already had a sibling `.fsi`, of which 2,511 were substantive and
 written only there. Not one reached a consumer.
@@ -54,12 +54,32 @@ IT LEXES RATHER THAN GREPS, and each clause below has a measured reason:
     code, which is the one failure it must not have.
   * `(* ... *)` nests in F#, and a `///` inside one is a comment about a comment.
   * An ordinary string, a verbatim `@`-string, and a triple-quoted string can all contain `///` --
-    a URL, a path, an example of this very grammar.
+    a URL, a path, an example of this very grammar. ALL THREE SPAN NEWLINES, so all three are
+    tracked across lines; `@"..."` does so by design, and reading it a line at a time made this gate
+    return exit 0 on a planted contract sentence. See `doc_comment_lines`.
+  * `'"'` IS A CHARACTER LITERAL, NOT A QUOTE. It occurs in `src/` today, and it must not open a
+    string -- while `'T` and `xs'` must not be mistaken for literals. See `char_literal_end`.
 
-`src/` contains no such case TODAY: every line containing `///` in a subject file is a doc comment
-by this lexer's reading, so the three careful clauses are unexercised by the real tree. That is
-exactly why `tests/signature-doc-siting/run.sh` constructs each one synthetically. A precaution the
-corpus cannot exercise is a precaution nothing proves, and #266 is the register of those.
+WHAT IS LIVE HERE AND WHAT IS LATENT, measured rather than assumed. Multi-line strings are LIVE:
+`src/` holds 320 continuation lines inside them across 4 subject files -- 245 triple-quoted and 75
+ordinary, chiefly `Cli/Options.fs` (248) and `GitHub/Scan.fs` (44) -- and 29 character literals
+including the two `'"'` above. What is latent is the multi-line VERBATIM string specifically:
+`src/` holds none today.
+
+That distinction is exactly why the defect survived authoring. None of the 320 live continuation
+lines happens to carry a `///` or a `(*`, so the reset-per-line version of this lexer produced the
+same 943 as this one and looked correct -- and it still returned exit 0, `OK: every subject file
+matches`, on a genuine contract sentence planted behind a two-line `@"..."`. Latent is not
+harmless: the subject is `src/**` in perpetuity, the recorded `Cli` residue is edited by every
+extraction lane, and the miss is silent and unbounded. So `tests/signature-doc-siting/run.sh`
+constructs the multi-line cases synthetically, in BOTH directions. A precaution the corpus cannot
+exercise is a precaution nothing proves, and #266 is the register of those.
+
+BEHAVIOUR ON TODAY'S TREE IS UNCHANGED BY THAT REPAIR, and that is checked rather than hoped:
+line-for-line over all 66 `.fs` files under `src/`, the reset-per-line lexer and this one return
+IDENTICAL hit lists (0 differing, 0 unlexable). The repair changes what happens to shapes the tree
+does not yet contain, which is the only kind of change a gate over `src/**` in perpetuity can make
+safely.
 
 THE BASELINE, AND WHY IT IS EXACT IN BOTH DIRECTIONS. `src/FS.GG.Coord.Cli` was outside .github#2730's
 lane -- .github#2724 held `Client.fs`/`Client.fsi` while it ran, and the extraction programme gives
@@ -83,10 +103,13 @@ EXIT CODES -- three, and no fourth:
     0  every subject file matches its baseline entry exactly.
     1  a finding: a new doc comment, an unbaselined offender, or a stale baseline.
     3  NO VERDICT. Discovery found no `.fs` under `src/`, or none with a sibling `.fsi`, or the
-       baseline could not be read or parsed. Scanning nothing is a failure to scan, and without the
-       baseline the gate cannot tell a recorded residue from a new offender. This is never a pass,
-       and it is a distinct code because "I could not check" must not be mistaken for "I checked,
-       and it is fine" (#266) nor for "I checked, and it is broken" (#320).
+       baseline could not be read or parsed, or a subject file could not be READ, or one could not
+       be LEXED (it ends inside a string or a block comment, so the pass lost its place and every
+       line after that point was scanned in the wrong state). Scanning nothing is a failure to
+       scan; without the baseline the gate cannot tell a recorded residue from a new offender; and
+       a count taken after a mis-parse is worse than no count, because it looks like one. This is
+       never a pass, and it is a distinct code because "I could not check" must not be mistaken for
+       "I checked, and it is fine" (#266) nor for "I checked, and it is broken" (#320).
 
 The discovered counts are printed on EVERY run, green ones included, so a subject that silently
 shrank is visible in the log rather than inferred from a pass.
@@ -108,23 +131,78 @@ DEFAULT_BASELINE = os.path.join("tests", "signature-doc-siting", "baseline.txt")
 SOURCE_ROOT = "src"
 
 
-def doc_comment_lines(text: str) -> list[int]:
-    """1-based line numbers carrying an F# XML documentation comment.
+def char_literal_end(line: str, i: int) -> int | None:
+    """Index just past the F# character literal starting at `line[i] == "'"`, or None if it is not one.
 
-    A single left-to-right pass. State that survives a newline -- `(* *)` nesting depth and an open
-    triple-quoted literal -- is carried across lines; state that cannot -- an ordinary or verbatim
-    string -- is reset at each line, because neither spans a newline in a well-formed F# file and
-    carrying a mis-parsed one forward would silence every following line in the file.
+    A `'` in F# is not reliably a quote: `'T` is a generic type parameter and `xs'` is a primed
+    identifier, and `src/` holds 1,933 of those against 29 character literals. So a `'` is read as a
+    literal only when its closing `'` is where the grammar puts it, and otherwise as an ordinary
+    character.
+
+    THIS IS LOAD-BEARING, NOT DECORATIVE. `'"'` occurs in `src/` TODAY -- `RegistryPredicate.fs:40`
+    and `SemanticDiff.fs:103`, both subject files -- and once string state carries across lines (it
+    must; see `doc_comment_lines`) reading that quote as a string OPENER puts the pass into the
+    wrong state for the rest of the file, until some later unpaired quote happens to resynchronize
+    it. Any `///` inside that window is lost in silence. Measured: with this function stubbed to
+    return None, a `///` placed after a `| '"' ->` match arm goes unreported and the gate says
+    `OK: every subject file matches` -- the same blindness this module exists to refuse, in a
+    construct the tree already contains, so the two are repaired together. Today's two sites are
+    resynchronized by a later quote and the shipped counts are unaffected either way; that is luck,
+    not a property, and `tests/signature-doc-siting/run.sh` pins the behaviour rather than the luck.
+    """
+    n = len(line)
+    if i + 2 >= n:
+        return None
+    if line[i + 1] == "\\":
+        # `'\n'`, `'\''`, `'\\'`, `'\u0041'`: an escape consumes at least one character, so the
+        # closing quote cannot fall before i+3. The bound keeps a stray `'` from swallowing a line.
+        for j in range(i + 3, min(n, i + 12)):
+            if line[j] == "'":
+                return j + 1
+        return None
+    if line[i + 2] == "'":
+        return i + 3
+    return None
+
+
+def doc_comment_lines(text: str) -> tuple[list[int], str | None]:
+    """(1-based line numbers carrying an F# XML documentation comment, unterminated construct or None).
+
+    A single left-to-right pass whose every state carries ACROSS LINES: `(* *)` nesting depth, and
+    each of the three string forms.
+
+    AN EARLIER VERSION RESET THE TWO STRING STATES AT EACH LINE, on the stated ground that neither
+    spans a newline in a well-formed F# file. That is false, and `@"..."` is the plain
+    counterexample: an F# verbatim string spans newlines BY DESIGN, and an ordinary `"..."` may too.
+    Resetting cost the gate the thing it exists to do, in both directions and silently:
+
+      * a verbatim string whose continuation line held a `(*` left `depth == 1`, which suppressed
+        every `///` to the end of the file -- so a genuine new contract sentence planted in a swept
+        file returned exit 0, `OK: every subject file matches`;
+      * on a baselined file the same shape read as `STALE BASELINE: delete this line`, and following
+        that printed remedy reached exit 0 while `grep -c '///'` still returned 455 -- a green gate
+        endorsing a baseline that is no longer a true statement about the tree;
+      * mirrored, a `///` on a continuation line INSIDE a verbatim string was reported as a doc
+        comment, which is the false positive this module calls the one failure it must not have.
+
+    So the state carries, and `tests/signature-doc-siting/run.sh` asserts both directions.
+
+    AND A MIS-PARSE MUST NEVER AGAIN PRESENT AS GREEN. Carrying state is correct but it restores the
+    original author's real fear: a construct opened and never closed blinds the rest of the file.
+    The answer is not to reset it -- that is the defect above -- but to REFUSE. A file that ends
+    inside a string or a block comment is malformed F# the lexer could not follow, so the second
+    element of the return names it and the caller turns it into a NO VERDICT. `I could not lex this`
+    is then loud rather than silent, which is the whole of #266.
     """
     hits: list[int] = []
     depth = 0
     in_triple = False
+    in_str = False
+    in_verbatim = False
 
     for lineno, line in enumerate(text.split("\n"), 1):
         i = 0
         n = len(line)
-        in_str = False
-        in_verbatim = False
 
         while i < n:
             char = line[i]
@@ -180,6 +258,12 @@ def doc_comment_lines(text: str) -> list[int]:
             elif char == '"':
                 in_str = True
                 i += 1
+            elif char == "'":
+                # A character literal is consumed WHOLE, so a quote inside one (`'"'`) is inert
+                # rather than a string opener. A `'` that is not one -- `'T`, `xs'` -- advances by
+                # a single character, exactly as before.
+                end = char_literal_end(line, i)
+                i = i + 1 if end is None else end
             elif line.startswith("(*", i):
                 depth += 1
                 i += 2
@@ -195,7 +279,15 @@ def doc_comment_lines(text: str) -> list[int]:
             else:
                 i += 1
 
-    return hits
+    if in_triple:
+        return hits, "reached end of file inside a triple-quoted string"
+    if in_verbatim:
+        return hits, 'reached end of file inside a verbatim @"..." string'
+    if in_str:
+        return hits, "reached end of file inside a string literal"
+    if depth > 0:
+        return hits, f"reached end of file inside {depth} unclosed block comment(s)"
+    return hits, None
 
 
 def discover(root: str) -> tuple[list[str], list[str]]:
@@ -290,6 +382,7 @@ def main(argv: list[str] | None = None) -> int:
 
     observed: dict[str, list[int]] = {}
     unreadable: list[str] = []
+    unlexable: list[str] = []
     for path in subjects:
         try:
             with open(path, encoding="utf-8") as handle:
@@ -297,13 +390,25 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, UnicodeDecodeError) as exc:
             unreadable.append(f"{path}: {exc}")
             continue
-        lines = doc_comment_lines(text)
+        lines, unterminated = doc_comment_lines(text)
+        if unterminated is not None:
+            unlexable.append(f"{path}: {unterminated}")
+            continue
         if lines:
             observed[os.path.relpath(path, root).replace(os.sep, "/")] = lines
 
     if unreadable:
         print("NO VERDICT: a subject file could not be read, so the scan is incomplete:")
         for entry in unreadable:
+            print(f"  {entry}")
+        return EX_NO_VERDICT
+
+    if unlexable:
+        # A construct opened and never closed means the pass lost its place, and everything after it
+        # in that file was scanned in the wrong state. Reporting a count from it would be the exact
+        # silent blindness this gate exists to refuse, so it refuses to report one.
+        print("NO VERDICT: a subject file could not be lexed, so its count cannot be trusted:")
+        for entry in unlexable:
             print(f"  {entry}")
         return EX_NO_VERDICT
 

@@ -22,7 +22,7 @@ learns so from a red check on their own pull request rather than from nobody, ev
 **The defect, measured at `0ddd4b88` rather than quoted.** When an F# module has a signature file, the
 `///` documentation comments in the *implementation* are discarded: the signature's documentation is
 what reaches the generated XML file, the IDE tooltip, and every downstream reader. Across
-`src/FS.GG.Coord.Core` and `src/FS.GG.Coord.GitHub` there are **2,964** `///` lines in 37
+`src/FS.GG.Coord.Core` and `src/FS.GG.Coord.GitHub` there are **2,970** `///` lines in 37
 implementation files that have a sibling `.fsi`; **2,511** of those lines are substantive and written
 *only* there, and **zero** of them reach the generated XML.
 

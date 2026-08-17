@@ -227,6 +227,141 @@ cat >>"$QUOTED/src/Proj/Quoted.fs" <<'FS'
 FS
 must_exit "red: a real doc comment beside those non-doc-comments is still found" 1 "Quoted\.fs: 1 XML documentation comment" "$QUOTED"
 
+# 3b. STRINGS SPAN NEWLINES, AND THE LEXER MUST CARRY THAT ACROSS LINES — IN BOTH DIRECTIONS.
+#
+# An earlier version of the gate reset ordinary- and verbatim-string state at every line, on the
+# stated ground that neither "spans a newline in a well-formed F# file". Both halves are false, and
+# `dotnet fsi` says so: `@"a\n(* b\nc"` and `"a\n/// b\nc"` each evaluate to a THREE-LINE string.
+#
+# The cost was not theoretical. Reading `@"..."` a line at a time meant a continuation line holding
+# `(*` set the block-comment depth to 1, which silenced every `///` to the end of the file: a
+# genuine contract sentence planted in a swept file returned exit 0, `OK: every subject file
+# matches`. On a baselined file the same shape printed `STALE BASELINE: delete this line`, and
+# following that printed remedy reached exit 0 while `grep -c '///'` still returned 455. Mirrored, a
+# `///` on a continuation line INSIDE such a string was reported as a doc comment.
+#
+# `src/` DOES hold multi-line strings — 320 continuation lines across 4 subject files — but not one
+# of them happens to carry a `///` or a `(*`, so the corpus cannot reach either failure. That is why
+# both are constructed here. Latent is not harmless: the subject is `src/**` in perpetuity, and the
+# recorded `Cli` residue is edited by every extraction lane.
+
+SPAN="$(mktree spanning)"
+write_clean_pair "$SPAN"
+cat >"$SPAN/src/Proj/Span.fsi" <<'FSI'
+namespace Proj
+
+module Span =
+    val banner: string
+    val ordinary: string
+    val run: int -> int
+FSI
+cat >"$SPAN/src/Proj/Span.fs" <<'FS'
+namespace Proj
+
+module Span =
+    // The continuation line opens what LOOKS like a block comment but is string content. A lexer
+    // that reset string state per line read that `(*` as real and went blind from here on.
+    let banner = @"first line
+(* second line, still inside the verbatim string
+   third line"
+
+    // The same hazard in an ordinary string literal, which also spans newlines.
+    let ordinary = "first line
+(* second line, still inside the ordinary string
+   third line"
+
+    /// A REAL doc comment, after both strings have closed. Being found is the whole assertion.
+    let run n = n
+FS
+must_exit "red: a multi-line string does NOT silence a doc comment that follows it" 1 "Span\.fs: 1 XML documentation comment" "$SPAN"
+
+# ...and it must be the RIGHT line, not an accidental hit inside one of the strings.
+run_gate "$SPAN"
+if matches "$OUT" "Line\(s\): 15$"; then
+  ok "the doc comment after a multi-line string is found at its own line"
+else
+  bad "the doc comment after a multi-line string is found at its own line" "$OUT"
+fi
+
+# The mirror: a `///` on a continuation line INSIDE a multi-line string is string content, and
+# reporting it is the false positive this gate must not have.
+INSIDE="$(mktree inside)"
+write_clean_pair "$INSIDE"
+cat >"$INSIDE/src/Proj/Inside.fsi" <<'FSI'
+namespace Proj
+
+module Inside =
+    val verbatim: string
+    val ordinary: string
+    val triple: string
+    val run: int -> int
+FSI
+cat >"$INSIDE/src/Proj/Inside.fs" <<'FS'
+namespace Proj
+
+module Inside =
+    let verbatim = @"first line
+/// this is string content, not a doc comment
+last line"
+
+    let ordinary = "first line
+/// this is string content too
+last line"
+
+    let triple = """first line
+/// and so is this
+last line"""
+
+    let run n = n
+FS
+must_exit "green: a /// on a continuation line INSIDE a multi-line string is not a doc comment" 0 "OK: every subject file matches" "$INSIDE"
+
+# ...and the same tree must go RED the moment a real one is added after them, or the leg above
+# proves only that the gate went blind at the first string and never recovered.
+cat >>"$INSIDE/src/Proj/Inside.fs" <<'FS'
+
+    /// A real one, after all three multi-line strings.
+    let other n = n
+FS
+must_exit "red: a real doc comment after those multi-line strings is still found" 1 "Inside\.fs: 1 XML documentation comment" "$INSIDE"
+
+# 3c. `'"'` IS A CHARACTER LITERAL, NOT A STRING OPENER — and unlike everything else in this
+# section it is LIVE: `src/FS.GG.Coord.Core/RegistryPredicate.fs:40` and `SemanticDiff.fs:103` both
+# carry one today. Once string state carries across lines, misreading that quote as an opener puts
+# the pass in the wrong state for the rest of the file. `'T` and `xs'` must NOT be eaten in the
+# attempt — `src/` holds 1,933 of those against 29 character literals.
+CHARLIT="$(mktree charliteral)"
+write_clean_pair "$CHARLIT"
+cat >"$CHARLIT/src/Proj/Chars.fsi" <<'FSI'
+namespace Proj
+
+module Chars =
+    val classify: char -> int
+    val identity: 'a -> 'a
+    val run: int -> int
+FSI
+cat >"$CHARLIT/src/Proj/Chars.fs" <<'FS'
+namespace Proj
+
+module Chars =
+    let classify (c: char) =
+        match c with
+        | '"' -> 1
+        | '\'' -> 2
+        | '\\' -> 3
+        | '\n' -> 4
+        | _ -> 0
+
+    // A generic type parameter and a primed identifier: neither is a character literal, and eating
+    // either as one would consume the code around it.
+    let identity (x: 'a) : 'a = x
+    let run' n = n
+
+    /// A REAL doc comment after every one of those. Being found is the assertion.
+    let run n = run' n
+FS
+must_exit "red: a doc comment after a '\"' character literal is still found" 1 "Chars\.fs: 1 XML documentation comment" "$CHARLIT"
+
 # 4. A doc comment that is not line-leading. `src/FS.GG.Coord.Core/Protocol.fs` carries these after
 #    a `{` on the same physical line; a `^\s*///` grep misses every one of them.
 MIDLINE="$(mktree midline)"
@@ -267,6 +402,61 @@ FS
 must_exit "no verdict: .fs files exist but NOT ONE has a sibling .fsi" 3 "not one has a sibling" "$NOSIG"
 
 must_exit "no verdict: the baseline cannot be read" 3 "cannot read the baseline" "$GREEN" "$WORK/absent-baseline.txt"
+
+# A SUBJECT FILE THAT CANNOT BE READ. Until .github#2730's review this arm shipped in three places
+# and was asserted by no leg at all: stubbing `if unreadable:` to `if False:` left the whole fixture
+# green, 0 failures. A surviving inversion is material by definition, and a NO-VERDICT arm nothing
+# asserts is #266's own shape inside the change that serves #266.
+UNREADABLE="$(mktree unreadable)"
+write_clean_pair "$UNREADABLE"
+cat >"$UNREADABLE/src/Proj/Undecodable.fsi" <<'FSI'
+namespace Proj
+
+module Undecodable =
+    val run: int -> int
+FSI
+# Not valid UTF-8 in any position, so `open(..., encoding="utf-8").read()` raises.
+printf 'namespace Proj\n\xff\xfe\x00garbage\n' >"$UNREADABLE/src/Proj/Undecodable.fs"
+must_exit "no verdict: a subject file cannot be decoded" 3 "could not be read" "$UNREADABLE"
+
+# A SUBJECT FILE THAT CANNOT BE LEXED. Carrying string state across lines is what makes this gate
+# see a multi-line string at all, and it restores the original author's real fear: a construct
+# opened and never closed leaves the pass in the wrong state for everything after it. The answer is
+# to REFUSE rather than to reset — a count taken after a mis-parse is worse than no count, because
+# it looks like one.
+UNLEXABLE="$(mktree unlexable)"
+write_clean_pair "$UNLEXABLE"
+cat >"$UNLEXABLE/src/Proj/Unclosed.fsi" <<'FSI'
+namespace Proj
+
+module Unclosed =
+    val banner: string
+FSI
+cat >"$UNLEXABLE/src/Proj/Unclosed.fs" <<'FS'
+namespace Proj
+
+module Unclosed =
+    let banner = @"this verbatim string is never closed
+    /// and so this line cannot be classified either way
+FS
+must_exit "no verdict: a subject file ends inside an unterminated string" 3 "could not be lexed" "$UNLEXABLE"
+
+UNCLOSEDCOMMENT="$(mktree unclosedcomment)"
+write_clean_pair "$UNCLOSEDCOMMENT"
+cat >"$UNCLOSEDCOMMENT/src/Proj/Dangling.fsi" <<'FSI'
+namespace Proj
+
+module Dangling =
+    val run: int -> int
+FSI
+cat >"$UNCLOSEDCOMMENT/src/Proj/Dangling.fs" <<'FS'
+namespace Proj
+
+module Dangling =
+    (* this block comment is never closed
+    let run n = n
+FS
+must_exit "no verdict: a subject file ends inside an unclosed block comment" 3 "could not be lexed" "$UNCLOSEDCOMMENT"
 
 printf 'not-a-number src/Proj/Clean.fs\n' >"$WORK/bad-count.txt"
 must_exit "no verdict: a baseline count that is not an integer" 3 "count is not an integer" "$GREEN" "$WORK/bad-count.txt"
