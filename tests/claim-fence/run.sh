@@ -1135,6 +1135,565 @@ for row in json.load(open(sys.argv[1])):
 ' "$MUTANTS/index.json")
 
 echo
+echo "=== L. The FINDING summary DERIVES the failing check — it never predicts one ============"
+# WHAT THIS SECTION IS FOR, and it is a repair of a defect this fixture MISSED. Until `.github#2719`
+# was reopened, the FINDING step carried this sentence, addressed to operators:
+#
+#     "Note that `check4` is expected to fail on every real pull request today: nothing writes a
+#      `fsgg:merge-election` marker, because slice 3 (.github#2395) landed the authorization half
+#      without the election half."
+#
+# Both halves were wrong, in OPPOSITE directions, and the second is the one that matters. Check 4 was
+# not *failing*; it was never EVALUATED. `scripts/check-claim-fence.py` requires SIX authorization
+# fields and the pre-`.github#2395` producer composed FOUR, so the missing-field arm returned
+# `check1` and control never reached check 4 at all. A PREDICTED red and an UNREACHABLE branch are
+# indistinguishable in a job summary — nothing an operator can observe tells them apart — so the
+# sentence was unfalsifiable rather than merely stale. That is `.github#266`'s class arriving at the
+# operator-guidance layer.
+#
+# THE REPAIR IS NOT A CORRECTED PREDICTION, because a corrected prediction goes stale the same way.
+# It is to stop predicting: the heading is DERIVED from the gate's own verdict at read time. This
+# section holds that in two independent ways —
+#
+#   L2-L4  EXECUTE the step over a corpus of verdicts and assert the heading names the check the
+#          verdict names AND NONE OF THE OTHER FIVE. A derivation that hard-coded any one check would
+#          pass one corpus entry and red five; one that stopped deriving reds all six. L5/L6 apply
+#          exactly those two mutations and require the reds.
+#   L7-L10 assert that NO operator-facing text in this workflow names a check literally at all, bound
+#          by a recognition corpus in both directions (section G's lesson, applied to a second
+#          absence) and by a mutation that re-inserts the REMOVED SENTENCE ITSELF.
+#
+# THE SURFACE L7 SCANS IS DELIBERATE AND BOUNDED: every step's `name`, `run` and `env` values, as
+# PARSED — the text that reaches an operator in the job log and the job summary. YAML comments are
+# NOT scanned, because they are maintainer-facing and this very file's header now discusses check 1
+# and check 4 at length in order to explain the defect. That boundary is asserted rather than assumed:
+# L10 puts the removed sentence in a comment and requires the scan to stay silent, so a later reader
+# can see the surface is where this fixture says it is and not accidentally wider or narrower.
+
+cat > "$WORK/findingstep.py" <<'FINDPY'
+"""Extract ONE step's `run:` script from a workflow, selected BY ID, with `${{ }}` resolved.
+
+BY ID, never by position and never by name: an assertion that quietly starts grading a different step
+is the same defect class this fixture exists to close, and `tests/receiver-validate/run.sh` states the
+argument for its own extraction in the same words.
+
+The ONLY expression resolved is the one this harness supplies a value for. Anything else is a hard
+error rather than a placeholder — section K's question 4, applied here too, because a step whose text
+this harness cannot fully resolve is a step whose behaviour is NOT MEASURED, which is not the same as
+clean (#266).
+"""
+import re, sys, yaml
+
+WORKFLOW, JOB_ID, STEP_ID, OUT = sys.argv[1:5]
+BINDINGS = {"steps.fence.outputs.verdict": "@VERDICT@"}
+
+doc = yaml.safe_load(open(WORKFLOW, encoding="utf-8"))
+job = (doc.get("jobs") or {}).get(JOB_ID)
+if not isinstance(job, dict):
+    sys.exit("no job `%s` in %s" % (JOB_ID, WORKFLOW))
+steps = [s for s in (job.get("steps") or []) if isinstance(s, dict) and s.get("id") == STEP_ID]
+if len(steps) != 1:
+    sys.exit("expected exactly one step with `id: %s`, found %d" % (STEP_ID, len(steps)))
+step = steps[0]
+
+unresolved = []
+
+
+def sub(text):
+    def one(match):
+        expression = match.group(1).strip()
+        if expression in BINDINGS:
+            return BINDINGS[expression]
+        unresolved.append(expression)
+        return "UNRESOLVED"
+
+    return re.sub(r"\$\{\{(.*?)\}\}", one, text, flags=re.DOTALL)
+
+
+script = sub(str(step.get("run") or ""))
+env = {str(k): sub(str(v)) for k, v in (step.get("env") or {}).items()}
+if unresolved:
+    sys.exit("unresolvable `${{ }}` expression(s) in step `%s`: %s" % (STEP_ID, sorted(set(unresolved))))
+if env != {"VERDICT": "@VERDICT@"}:
+    sys.exit("step `%s` env is %r, not the single VERDICT binding this harness resolves" % (STEP_ID, env))
+if not script.strip():
+    sys.exit("step `%s` has no `run:` script to execute" % STEP_ID)
+open(OUT, "w", encoding="utf-8").write(script)
+FINDPY
+
+extract_finding() {  # <workflow> <out-script> -> stderr carries the reason on failure
+  python3 "$WORK/findingstep.py" "$1" "claim-fence" "finding" "$2"
+}
+
+FINDING_SH="$WORK/finding-step.sh"
+if extract_finding "$FLOW" "$FINDING_SH" 2>"$WORK/finding.err"; then
+  ok "L1 the FINDING step is selectable BY ID, and every \`\${{ }}\` it carries is one this harness resolves"
+else
+  bad "L1 the FINDING step could not be extracted by id, so nothing below measures anything" \
+    "$(cat "$WORK/finding.err")"
+fi
+
+# run_finding <script> <verdict> — executes the extracted step and sets FRC and FHEAD (its first
+# summary line, which is the heading). Under `bash -eo pipefail`, the STRICTER of the two shells
+# GitHub can give a step that declares none: a derivation that acquired a status from a pipeline
+# would be caught here as a non-zero FRC rather than silently tolerated.
+run_finding() {
+  local script="$1" verdict="$2" sum
+  sum="$(mktemp "$WORK/summary.XXXXXX")"
+  set +e
+  env VERDICT="$verdict" GITHUB_STEP_SUMMARY="$sum" \
+    bash --noprofile --norc -eo pipefail "$script" >/dev/null 2>&1
+  FRC=$?
+  set -e
+  FHEAD="$(head -n 1 "$sum")"
+}
+
+# THE CORPUS. One verdict per check the gate can name, each in the EXACT `[checkN]` shape
+# `scripts/check-claim-fence.py` prints (`print(f"check-claim-fence: [{check}] {message}")`). The
+# message text deliberately spells no check at all, so the assertion below cannot be satisfied by the
+# quoted verdict leaking into the heading.
+derive_check() {  # <script> -> prints one line per corpus failure; silence is a pass
+  local script="$1" n m
+  for n in 1 2 3 4 5 6; do
+    run_finding "$script" "check-claim-fence: [check$n] a fixture verdict, deliberately naming none in prose."
+    if [ "$FRC" != 0 ]; then
+      echo "the step EXITED $FRC on a [check$n] verdict — this producer is observe-only and must not"
+      continue
+    fi
+    case "$FHEAD" in
+      *"check$n"*) ;;
+      *) echo "a [check$n] verdict produced the heading: ${FHEAD:-<empty>} — which does not name check$n";;
+    esac
+    for m in 1 2 3 4 5 6; do
+      if [ "$m" != "$n" ]; then
+        case "$FHEAD" in
+          *"check$m"*) echo "a [check$n] verdict produced a heading naming check$m as well: $FHEAD";;
+        esac
+      fi
+    done
+  done
+  return 0
+}
+
+DERIVE="$(derive_check "$FINDING_SH")"
+if [ -z "$DERIVE" ]; then
+  ok "L2 over six verdicts, the heading names the check the verdict names — and none of the other five"
+else
+  bad "L2 over six verdicts, the heading names the check the verdict names — and none of the other five" "$DERIVE"
+fi
+
+# The gate can also emit a finding whose text this step cannot parse. "I could not tell WHICH" must be
+# a NAMED state, never a blank heading that reads like a clean one (#266).
+run_finding "$FINDING_SH" "check-claim-fence: something went sideways and no check id was printed"
+case "$FHEAD" in
+  *unnamed*) ok "L3 a verdict naming no check yields a NAMED \`unnamed\` heading, not a blank one" ;;
+  *) bad "L3 a verdict naming no check yields a NAMED \`unnamed\` heading, not a blank one" "heading was: ${FHEAD:-<empty>}" ;;
+esac
+[ "$FRC" = 0 ] \
+  && ok "L4 …and it still exits 0, so the observe-only boundary holds on the unparseable verdict too" \
+  || bad "L4 …and it still exits 0, so the observe-only boundary holds on the unparseable verdict too" "rc=$FRC"
+
+# ---- MUTATIONS: the two ways this derivation can regress, each applied and each required to red ----
+# Both mutations assert they CHANGED the script first. A mutation that silently matched nothing would
+# leave L5/L6 asserting that an unmodified script still passes, which is the vacuous shape these legs
+# exist to refuse.
+mutate_finding() {  # <name> <sed-expression> <expect-changed-marker>
+  local label="$1" expr="$2" mutant="$WORK/finding-mutant.sh"
+  sed "$expr" "$FINDING_SH" > "$mutant"
+  if cmp -s "$FINDING_SH" "$mutant"; then
+    bad "$label" "the mutation changed nothing, so this inversion tested nothing"
+    return
+  fi
+  if [ -z "$(derive_check "$mutant")" ]; then
+    bad "$label" "NOT CAUGHT — L2 still passed against the mutated derivation, so L2 asserts nothing"
+  else
+    ok "$label"
+  fi
+}
+
+mutate_finding \
+  "L5 MUTATION: hard-coding a PREDICTED check (\`fired=check4\`) in place of the derivation reds L2" \
+  's/fired="\${BASH_REMATCH\[1\]}"/fired=check4/'
+mutate_finding \
+  "L6 MUTATION: a derivation regex that can never match reds L2 (every heading becomes \`unnamed\`)" \
+  's/(check\[0-9\]+)/(NOTACHECK[0-9]+)/'
+
+# ------------------------------------------------------------------------------------------------
+# L7-L11. NO OPERATOR-FACING TEXT IN THIS WORKFLOW NAMES A CHECK LITERALLY.
+# ------------------------------------------------------------------------------------------------
+cat > "$WORK/namescheck.py" <<'NAMEPY'
+"""Does this workflow's OPERATOR-FACING text name a specific check? One line per offending fragment.
+
+A workflow that spells a check id in its own prose is either PREDICTING which one will fire — the
+sentence `.github#2719` was reopened for — or restating what the gate's verdict already says, which
+is the same claim with a second copy free to drift. Either way it is an assertion this file cannot
+keep true. The check id reaches the operator by DERIVATION or not at all.
+
+THE RECOGNIZER IS NOT A SPELLING LIST. `check`, word-initial, an optional single separator, then a
+DIGIT. Requiring the digit is what keeps `checkout`, `checks`, `checked` and `check-claim-fence.py`
+out; the word-initial lookbehind is what keeps `rechecking` out; permitting the separator is what
+keeps `check 4` in — the spelling the removed header sentence used. Modes `--corpus` and `--scan`
+share this one object, so the corpus binds the recognizer the scan actually uses.
+"""
+import re, sys, yaml
+
+NAMES_A_CHECK = re.compile(r"(?<![A-Za-z0-9_-])check[ \t_-]?[0-9]", re.IGNORECASE)
+
+# Lifted from the real removed text and from live production strings in this repository, so the
+# negatives are the confusable ones that ACTUALLY occur here rather than ones invented to be easy.
+MUST_MATCH = [
+    "Note that `check4` is expected to fail on every real pull request today",
+    "so check 4 currently finds no election on any real pull request",
+    "Check 4 was never evaluated at all",
+    "CHECK 2 fires here",
+    "the verdict stopped at check-1",
+    "expect (check6) to be red",
+    "check_3 is the live one",
+]
+MUST_NOT_MATCH = [
+    "      - uses: actions/checkout@v7",
+    "out=\"$(python scripts/check-claim-fence.py \"$@\" 2>&1)\" || rc=$?",
+    "One of the substantive checks of the fencing design 6.3 refused this head",
+    "they elect on the SAME opkey and pass checks 1, 2, 3 and 5 identically",
+    "rechecking the verdict changes nothing",
+    "a failed read is never a pass, and it is checked",
+    "A check run is per-SHA, and branch protection consumes the last result",
+    "if [[ \"$VERDICT\" =~ \\[(check[0-9]+)\\] ]]; then",
+    "the gate reported a finding but its verdict names no check in `[checkN]` form",
+    "name: fsgg-claim-fence",
+]
+
+
+def corpus():
+    for text in MUST_MATCH:
+        if not NAMES_A_CHECK.search(text):
+            print("MUST MATCH but did not: %r" % text)
+    for text in MUST_NOT_MATCH:
+        found = NAMES_A_CHECK.search(text)
+        if found:
+            print("MUST NOT MATCH but matched %r in: %r" % (found.group(0), text))
+
+
+def scan(path):
+    """Every step's `name`, `run` and `env` values, as PARSED. Comments are deliberately out of
+    scope — they are maintainer-facing, and this workflow's header explains the defect at length."""
+    doc = yaml.safe_load(open(path, encoding="utf-8"))
+    for job_id, job in (doc.get("jobs") or {}).items():
+        if not isinstance(job, dict):
+            continue
+        for index, step in enumerate(job.get("steps") or []):
+            if not isinstance(step, dict):
+                continue
+            surfaces = [("name", step.get("name")), ("run", step.get("run"))]
+            surfaces += [("env." + str(k), v) for k, v in (step.get("env") or {}).items()]
+            for where, value in surfaces:
+                if value is None:
+                    continue
+                for line in str(value).splitlines():
+                    found = NAMES_A_CHECK.search(line)
+                    if found:
+                        print(
+                            "job `%s` step %d %s names a check literally (%r) in: %s"
+                            % (job_id, index, where, found.group(0), line.strip())
+                        )
+
+
+if sys.argv[1] == "--corpus":
+    corpus()
+else:
+    scan(sys.argv[2])
+NAMEPY
+
+CORPUS="$(python3 "$WORK/namescheck.py" --corpus)"
+if [ -z "$CORPUS" ]; then
+  ok "L7 the recognizer is bound in BOTH directions: 7 spellings it must catch, 10 lookalikes it must not"
+else
+  bad "L7 the recognizer is bound in BOTH directions: 7 spellings it must catch, 10 lookalikes it must not" "$CORPUS"
+fi
+
+names_check() { python3 "$WORK/namescheck.py" --scan "$1"; }
+
+NAMED="$(names_check "$FLOW")"
+if [ -z "$NAMED" ]; then
+  ok "L8 no step name, run script or env value in this workflow names a check literally"
+else
+  bad "L8 no step name, run script or env value in this workflow names a check literally" "$NAMED"
+fi
+
+# THE HISTORICAL MUTATION. This is the exact sentence `.github#2719` was reopened for, put back where
+# it was. If L8 does not catch it, L8 is decoration.
+STALE_ECHO="            echo 'Note that \`check4\` is expected to fail on every real pull request today: nothing'"
+python3 - "$FLOW" "$WORK/flow-stale.yml" "$STALE_ECHO" <<'STALEPY'
+import sys
+flow, out, line = sys.argv[1], sys.argv[2], sys.argv[3]
+text = open(flow, encoding="utf-8").read()
+anchor = "            echo '```'\n"
+if anchor not in text:
+    sys.exit("fixture bug: the anchor this mutation inserts after is gone from the workflow")
+open(out, "w", encoding="utf-8").write(text.replace(anchor, line + "\n" + anchor, 1))
+STALEPY
+if cmp -s "$FLOW" "$WORK/flow-stale.yml"; then
+  bad "L9 MUTATION: re-inserting the removed \`check4\` prediction into a step's run block is caught" \
+    "the mutation changed nothing, so this inversion tested nothing"
+else
+  case "$(names_check "$WORK/flow-stale.yml")" in
+    *"names a check literally"*) ok "L9 MUTATION: re-inserting the removed \`check4\` prediction into a step's run block is caught" ;;
+    *) bad "L9 MUTATION: re-inserting the removed \`check4\` prediction into a step's run block is caught" \
+         "NOT CAUGHT — this is the escape shape itself, and it is the one this row was reopened for" ;;
+  esac
+fi
+
+# A SECOND MUTATION FOR THE SAME SENTENCE, ON A SURFACE THAT IS DELIBERATELY OUT OF SCOPE. Same bytes,
+# moved into a YAML comment: the scan must stay SILENT. Paired with L9 this pins the SURFACE as well
+# as the recognizer, so the boundary is measured rather than assumed — and so nobody later widens the
+# scan to comments and reds this workflow's own header for explaining the defect.
+python3 - "$FLOW" "$WORK/flow-comment.yml" <<'CMTPY'
+import sys
+flow, out = sys.argv[1], sys.argv[2]
+text = open(flow, encoding="utf-8").read()
+anchor = "name: fsgg-claim-fence\n"
+if anchor not in text:
+    sys.exit("fixture bug: the workflow `name:` anchor is gone")
+note = "# Note that `check4` is expected to fail on every real pull request today.\n"
+open(out, "w", encoding="utf-8").write(text.replace(anchor, note + anchor, 1))
+CMTPY
+#
+# The assertion is that the comment adds NO NEW violation, compared against the SAME scan of the
+# unmutated file — not that the mutant scans clean absolutely. The difference is not pedantry: an
+# absolute assertion here would also red whenever L8's own subject is dirty, so one defect would show
+# up as two failures and this leg would be reporting on a fact it does not own.
+NAMED_COMMENT="$(names_check "$WORK/flow-comment.yml")"
+if cmp -s "$FLOW" "$WORK/flow-comment.yml"; then
+  bad "L10 the scanned surface is the EXECUTED text: the same sentence in a YAML comment adds no violation" \
+    "the mutation changed nothing, so this inversion tested nothing"
+elif [ "$NAMED_COMMENT" = "$NAMED" ]; then
+  ok "L10 the scanned surface is the EXECUTED text: the same sentence in a YAML comment adds no violation"
+else
+  bad "L10 the scanned surface is the EXECUTED text: the same sentence in a YAML comment adds no violation" \
+    "the scan's surface is wider than this fixture documents. New violation(s):
+$NAMED_COMMENT"
+fi
+
+echo
+echo "=== M. THE PRODUCERS ARE REAL — field sets pinned, and check 4 REACHABLE by execution ==="
+# `tests/receiver-validate/run.sh:18-25` states why this section has to exist, and states it about
+# THIS gate: "a fixture that builds its own marker and then asserts the gate reads it proves only that
+# the fixture and the gate agree — which is exactly how a four-field producer and a six-field gate
+# coexist green." Every section above this one builds its own marker. Until `.github#2719` was
+# reopened this file carried ZERO references to the production writer, and that is precisely how the
+# unreachable-check-4 state survived a full round of independent review.
+#
+# THE RELATION IS CONTAINMENT, NEVER SET EQUALITY. Slice 6's own leg asked for equality and had to be
+# corrected, because equality "reds the moment the producer becomes correct": the election producer
+# legitimately writes a seventh field (`pr=`, its idempotence discriminator) that this gate does not
+# require, and the gate ignores fields it does not require by design. Containment still catches BOTH
+# failures this section exists for — a producer that STOPS writing a field the gate requires, and a
+# gate that STARTS requiring a field no producer writes — and M6/M7 apply exactly those two mutations
+# in exactly those two directions. M4 measures that the extra-field case is LIVE today, so the choice
+# of containment is a measurement rather than a preference.
+CLIENT_FS="$ROOT/src/FS.GG.Coord.Cli/Client.fs"
+DELIVERY_FS="$ROOT/src/FS.GG.Coord.Cli/DeliveryApplication.fs"
+
+cat > "$WORK/fieldsets.py" <<'FIELDPY'
+"""Emit {gate: {...}, producer: {...}} as JSON: what this gate REQUIRES and what production WRITES.
+
+THE GATE'S HALF IS IMPORTED, NOT MATCHED. `REQUIRED_AUTH_FIELDS` and `REQUIRED_ELECTION_FIELDS` are
+read from the loaded module object, so a text-matching mistake cannot quietly yield an empty set that
+makes every containment assertion below trivially true.
+
+THE PRODUCER'S HALF IS PARSED FROM F# SOURCE, because there is no way to import it here. Each parse
+is required to be non-empty by M1/M2, which is what stops a regex that silently matched nothing from
+satisfying containment for the wrong reason.
+"""
+import importlib.util, json, re, sys
+
+GATE, CLIENT, DELIVERY, OUT = sys.argv[1:5]
+
+spec = importlib.util.spec_from_file_location("check_claim_fence", GATE)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+FIELD = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*)=")
+
+
+def template(path, binder):
+    src = open(path, encoding="utf-8").read()
+    match = re.search(r"let %s[^=]*=\s*\n\s*\$\"(?P<body>[^\"]*)\"" % binder, src)
+    if not match:
+        return None, []
+    body = match.group("body")
+    return body, FIELD.findall(body)
+
+
+auth_body, auth_fields = template(CLIENT, "authorizationMarker")
+election_body, election_fields = template(DELIVERY, "electionMarker")
+
+json.dump(
+    {
+        "gate_auth": list(module.REQUIRED_AUTH_FIELDS),
+        "gate_election": list(module.REQUIRED_ELECTION_FIELDS),
+        "auth_body": auth_body,
+        "auth_fields": auth_fields,
+        "election_body": election_body,
+        "election_fields": election_fields,
+    },
+    open(OUT, "w", encoding="utf-8"),
+)
+FIELDPY
+
+FIELDS="$WORK/fieldsets.json"
+python3 "$WORK/fieldsets.py" "$TOOL" "$CLIENT_FS" "$DELIVERY_FS" "$FIELDS"
+
+# f <index-expression> [len] — read one fact out of the parsed field-set JSON. `len` asks for the
+# LENGTH, because an EMPTY list still prints as the non-empty string `[]` and would satisfy a naive
+# `-n` test — and emptiness is exactly what M1/M2 must be able to see.
+f() {
+  if [ "${2:-}" = len ]; then
+    python3 -c "import json;print(len(json.load(open('$FIELDS'))$1))"
+  else
+    python3 -c "import json;print(json.load(open('$FIELDS'))$1)"
+  fi
+}
+
+[ "$(f "['auth_body']")" != "None" ] && [ "$(f "['auth_fields']" len)" -gt 0 ] \
+  && ok "M1 the AUTHORIZATION producer exists: Client.fs carries an \`authorizationMarker\` this gate can be pinned to" \
+  || bad "M1 Client.fs has NO authorizationMarker — this gate reads a marker nothing writes, which is how slice 3 landed inert"
+
+[ "$(f "['election_body']")" != "None" ] && [ "$(f "['election_fields']" len)" -gt 0 ] \
+  && ok "M2 the ELECTION producer exists: DeliveryApplication.fs carries an \`electionMarker\` — check 4 has a subject" \
+  || bad "M2 DeliveryApplication.fs has NO electionMarker — check 4 reads a marker nothing writes"
+
+# containment <meta-json> <gate-key> <producer-key>
+containment() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+gate, producer = set(d[sys.argv[2]]), set(d[sys.argv[3]])
+if not gate or not producer:
+    sys.exit(1)
+sys.exit(0 if gate <= producer else 1)
+PY
+}
+
+show() { python3 -c "import json;d=json.load(open('$FIELDS'));print('gate requires:',d['$1']);print('producer writes:',d['$2'])"; }
+
+containment "$FIELDS" gate_auth auth_fields \
+  && ok "M3 every AUTHORIZATION field this gate requires is a field \`authorizationMarker\` writes (containment)" \
+  || bad "M3 the gate requires an authorization field the producer does not write" "$(show gate_auth auth_fields)"
+
+containment "$FIELDS" gate_election election_fields \
+  && ok "M4 every ELECTION field this gate requires is a field \`electionMarker\` writes (containment)" \
+  || bad "M4 the gate requires an election field the producer does not write" "$(show gate_election election_fields)"
+
+python3 - "$FIELDS" <<'PY' && ok "M5 containment-not-equality is the LIVE case: the election producer writes a field this gate does not require" || bad "M5 no producer writes a field beyond the gate's required set, so nothing here measures why equality would be wrong" "$(show gate_election election_fields)"
+import json, sys
+d = json.load(open(sys.argv[1]))
+sys.exit(0 if set(d["election_fields"]) - set(d["gate_election"]) else 1)
+PY
+
+# ---- MUTATIONS, one per direction containment exists to cover ----------------------------------
+mutate_fields() {  # <label> <python-mutation-body> <gate-key> <producer-key>
+  local label="$1" body="$2" gk="$3" pk="$4" out="$WORK/fields-mutant.json"
+  python3 - "$FIELDS" "$out" "$gk" "$pk" <<PY
+import json, sys
+d = json.load(open(sys.argv[1]))
+gate_key, producer_key = sys.argv[3], sys.argv[4]
+$body
+json.dump(d, open(sys.argv[2], "w"))
+PY
+  if cmp -s "$FIELDS" "$out"; then
+    bad "$label" "the mutation changed nothing, so this inversion tested nothing"
+  elif containment "$out" "$gk" "$pk"; then
+    bad "$label" "NOT CAUGHT — containment still held, so the leg above asserts nothing" \
+      "$(python3 -c "import json;d=json.load(open('$out'));print('gate requires:',d['$gk']);print('mutated producer writes:',d['$pk'])")"
+  else
+    ok "$label"
+  fi
+}
+
+# Direction 1 — THE INERT-READER DIRECTION: the producer stops writing a field the gate requires. This
+# is the exact regression that made check 4 unreachable, expressed as a mutation of the parsed facts.
+mutate_fields \
+  "M6 MUTATION: a producer that DROPS a gate-required authorization field reds M3 (the inert-reader direction)" \
+  'd[producer_key] = [x for x in d[producer_key] if x != sorted(set(d[gate_key]))[0]]' \
+  gate_auth auth_fields
+mutate_fields \
+  "M7 MUTATION: a producer that DROPS a gate-required election field reds M4" \
+  'd[producer_key] = [x for x in d[producer_key] if x != sorted(set(d[gate_key]))[0]]' \
+  gate_election election_fields
+# Direction 2 — the gate starts requiring a field no producer writes. Containment must catch this too,
+# or "containment rather than equality" would have been a relaxation instead of a re-statement.
+mutate_fields \
+  "M8 MUTATION: a gate that ADDS a required authorization field no producer writes reds M3" \
+  'd[gate_key] = list(d[gate_key]) + ["nonce"]' \
+  gate_auth auth_fields
+mutate_fields \
+  "M9 MUTATION: a gate that ADDS a required election field no producer writes reds M4" \
+  'd[gate_key] = list(d[gate_key]) + ["nonce"]' \
+  gate_election election_fields
+
+# ------------------------------------------------------------------------------------------------
+# M10/M11. THE REACHABILITY LEG — set comparison is not enough, so this one EXECUTES.
+#
+# M3 would still pass if the gate stopped at check 1 for some reason other than a missing field. What
+# `.github#2719` was reopened for is a REACHABILITY claim, so it is measured by running the real gate
+# against a marker instantiated from the producer's OWN PARSED TEMPLATE — not from this fixture's
+# `auth()` helper, which is the very thing that cannot detect a producer/gate disagreement.
+#
+# M11 IS THE CONTROL, AND IT IS WHAT MAKES M10 MEAN ANYTHING: the same machinery, with the two fields
+# `.github#2395` added removed again, must land on a DIFFERENT check — check 1, naming `opkey` and
+# `grant`. A harness that answered "check4" whatever it was fed would fail M11.
+# ------------------------------------------------------------------------------------------------
+instantiate() {  # <template> <opkey> <grant> — the producer's own template, filled in, on stdout
+  python3 - "$1" "$ITEM" "$GEN" "$2" "$3" "$HEAD" <<'PY'
+import re, sys
+tpl, item, gen, opkey, grant, head = sys.argv[1:7]
+values = {"item": item, "gen": gen, "opkey": opkey, "grant": grant, "head": head}
+missing = []
+
+
+def one(match):
+    name = match.group(1)
+    if name not in values:
+        missing.append(name)
+        return "UNBOUND"
+    return values[name]
+
+
+out = re.sub(r"%[sd]\{(\w+)\}", one, tpl)
+if missing:
+    sys.exit("the producer template carries placeholder(s) this fixture has no value for: %s" % sorted(set(missing)))
+print(out)
+PY
+}
+
+AUTH_TPL="$(f "['auth_body']")"
+W="$(new_world)"
+claim_comment "$W" "$GEN" 0
+B="$(instantiate "$AUTH_TPL" "$OPKEY" 9999 | body_file)"
+gate "$W" --repo "$REPO" --head-ref "$BRANCH" --head-sha "$HEAD" --body "$B"
+assert "M10 the PRODUCER's own marker template reaches CHECK 4 — the reachability this row was reopened for" 1 \
+  "[check4]" "no \`fsgg:merge-election\` marker on $ITEM bears"
+
+# The pre-`.github#2395` producer, rebuilt from THIS template by deleting exactly the two fields that
+# landing added. Same world, same helper, different check.
+OLD_TPL="$(python3 - "$AUTH_TPL" <<'OLDPY'
+import re, sys
+# Delete exactly the two fields `.github#2395` added, from TODAY's template — so this control is
+# rebuilt from the current producer rather than from a re-typed copy of the old one. The count is
+# asserted: a template whose shape moved makes this a NAMED fixture failure, never a silent no-op.
+out, n = re.subn(r" (?:opkey|grant)=%[sd]\{\w+\}", "", sys.argv[1])
+if n != 2:
+    sys.exit("expected to delete exactly 2 fields from the producer template, deleted %d" % n)
+print(out)
+OLDPY
+)"
+B="$(instantiate "$OLD_TPL" "$OPKEY" 9999 | body_file)"
+gate "$W" --repo "$REPO" --head-ref "$BRANCH" --head-sha "$HEAD" --body "$B"
+assert "M11 CONTROL: the four-field producer that shipped before .github#2395 stops at CHECK 1, naming both fields" 1 \
+  "[check1]" "missing required field(s): opkey, grant"
+
+echo
 echo "----------------------------------------------------------------------"
 echo "claim-fence fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
