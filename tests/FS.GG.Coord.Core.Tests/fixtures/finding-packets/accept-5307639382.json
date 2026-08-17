@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coord.finding-packet/v1",
+  "surface": "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj:139, the first prose line of the FsggStandingAdvisories property: \"Two published FS.GG.Coord.Cli versions must never be adopted.\"",
+  "cause": {
+    "established": "The lead sentence is a hand-maintained count of a hand-maintained list, in a field whose own governing comment says the advisories are the only part that persists across cuts. Every other quantity in this area is derived; this one restates its own list's length in prose one line above the list. It is wrong on either reading: three entries follow it, and only one of the three versions actually published FS.GG.Coord.Cli bytes."
+  },
+  "redToday": {
+    "searchedNotFound": "Nothing is red. python3 scripts/check-engine-release-notes.py exits 0; bash tests/engine-release-notes/run.sh reports 25 passed, 0 failed. The suite's assertion at tests/engine-release-notes/run.sh:351 checks that the three DO NOT ADOPT strings are present and never reads the count word, so the two cannot disagree loudly. This packet fails filing test 1 and proposes no row."
+  },
+  "derivedBy": {
+    "searchedNotFound": "No scripts/check-*.py computes this count. Test 2 does not reject this finding; test 1 does."
+  },
+  "classRow": {
+    "found": ".github#2648, via its criterion 6 -- \"Never state a version, a count, or a commit in this title\" -- which names this exact cause class. .github#2579 owns this field's shape but is CLOSED, so it cannot take evidence."
+  },
+  "whyNotHere": "PR #2706 edits this exact file, so it physically could. It should not: #2706's declared subject is the version bump and its release notes, the operator reserved the publish act on it, and the fsproj comment says in terms to leave the advisory reference where it is when cutting. Rewriting shipped consumer-facing safety text inside a release-cut PR is incidental widening.",
+  "paths": ["src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"],
+  "finder": "plover-da89"
+}

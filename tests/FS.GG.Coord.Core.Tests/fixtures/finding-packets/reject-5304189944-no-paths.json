@@ -1,0 +1,18 @@
+{
+  "schema": "fsgg.coord.finding-packet/v1",
+  "surface": "src/FS.GG.Coord.Core/Review.fs:314-320 (Review.repairAssertionValid, from .github#2549)",
+  "cause": {
+    "established": "Review.repairAssertionValid carries the identical unreachable blank-string conjunct pair that .github#2557 is removing from criticSuccessionValid -- same sole producer, same readString ordering."
+  },
+  "redToday": {
+    "searchedNotFound": "The condition is latent, so it fails test 1 of the filing bar. The finder deliberately did not file it and said so."
+  },
+  "derivedBy": {
+    "notSearched": "The packet does not say whether any gate derives this condition."
+  },
+  "classRow": {
+    "found": ".github#2557 is the row that closes this class when it merges, so an adjudicator should weigh whether this is evidence on #2557 rather than a row of its own."
+  },
+  "whyNotHere": "Deleting those conjuncts would leave a sole copy with no inversion leg anywhere, because that route has no fixture at all. Verification: grep -rn \"repairAssertion|RepairAssertion|AnsweredReviewUrl\" tests/ -l returns no matches.",
+  "finder": "avocet-e787"
+}

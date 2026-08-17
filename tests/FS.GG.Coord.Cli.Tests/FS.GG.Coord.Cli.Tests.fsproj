@@ -16,6 +16,10 @@
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="CrossRepoRankTests.fs" />
     <Compile Include="IntakeCliTests.fs" />
+    <!-- PacketCliTests (.github#2737) pins the `packet validate` command boundary: exit codes and
+         the stdout/stderr split. The decode and validation contract is pure and lives in
+         FS.GG.Coord.Core.Tests/FindingPacketTests.fs. -->
+    <Compile Include="PacketCliTests.fs" />
     <Compile Include="IntakeTransactionTests.fs" />
     <Compile Include="DriverEventsCliTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />

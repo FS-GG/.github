@@ -1,0 +1,14 @@
+{
+  "schema": "fsgg.coord.finding-packet/v1",
+  "cause": {
+    "established": "fsgg-sdd reaches consumers only as a published dotnet tool, and FS.GG.SDD publishes only from a tagged release (release.yml: on release published / push tags v* / workflow_dispatch). Nothing publishes on a merge to main, so after #882 merges the bytes still reach zero real trees until a release is cut."
+  },
+  "derivedBy": {
+    "notSearched": "The comment does not say whether any gate derives this condition."
+  },
+  "classRow": {
+    "found": "FS.GG.SDD#868 (open) already carries \"Publish the corrected CLI package so package consumers can exercise the unwrapped contract\" in its own acceptance; if one release is preferred rather than two, these are natural co-passengers."
+  },
+  "whyNotHere": "merge-and-release.md is explicit that a release is separate work and that the worker's obligation is to leave a destination behind, not to cut it inside the item. This is that destination request.",
+  "finder": "swift-6a33"
+}

@@ -362,6 +362,11 @@ let main argv =
                 | IntakeCmd when opts.Args |> List.tryHead = Some "validate" -> IntakeApplication.run opts
                 | IntakeCmd -> Client.run opts
 
+                // `packet validate` (.github#2737) is pure all the way down and has NO live half:
+                // it decides over a local file, touches no board, and — by DEC-001 — can refuse no
+                // post. It therefore never routes to `Client`, unlike `intake` above.
+                | PacketCmd -> PacketApplication.run opts
+
                 | RouteCmd -> Client.run opts
 
                 | DriverCmd -> Client.run opts

@@ -43,6 +43,7 @@ module CommandSurfaceTests =
           "facts", Facts
           "command-contract", CommandContractCmd
           "intake", IntakeCmd
+          "packet", PacketCmd
           "delivery-route", RouteCmd
 
           // IO — the client surface the shim execs in place of bash (ADR-0040 Phase D).

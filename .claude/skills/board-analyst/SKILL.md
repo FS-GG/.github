@@ -28,24 +28,66 @@ slower rather than smaller.
 So the finder writes the packet **while it still holds the context**, and you adjudicate the packet.
 It is an ordinary issue or PR comment carrying this block, under a stable search anchor:
 
-```
+````
 <!-- fsgg:finding-packet -->
-surface:       where it showed up - file:line, a command, or a run URL
-cause:         the root cause, established; or `not established` and what was measured instead
-red-today:     the command failing on main now, or the merge it blocks; or `none`
-derived-by:    the scripts/check-*.py that already computes this condition; or `none`
-class-row:     the open row proposing the mechanism that prevents this whole class; or `none`
-why-not-here:  why the fix could not ride the PR the finder was already pushing
-paths:         the narrow declaration the finder would propose
-finder:        the finder's minted worker id
+```json
+{
+  "schema":     "fsgg.coord.finding-packet/v1",
+  "surface":    "where it showed up — file:line, a command, or a run URL",
+  "cause":      { "established": "the root cause" },
+  "redToday":   { "found": "the command failing on main now, or the merge it blocks" },
+  "derivedBy":  { "searchedNotFound": "the search that found no scripts/check-*.py computing this" },
+  "classRow":   { "notSearched": "why you did not look for the class row" },
+  "whyNotHere": "why the fix could not ride the PR you were already pushing",
+  "paths":      ["the narrow declaration you would propose"],
+  "finder":     "your minted worker id, alone"
+}
 ```
+````
+
+**Four of those fields are answers to a question you were asked to go and look.** `cause` is
+`{"established": …}` or `{"notEstablished": "what you measured instead"}`. `redToday`, `derivedBy` and
+`classRow` each take exactly one of:
+
+| case | means |
+|---|---|
+| `{"found": "…"}` | you searched, and this is the answer |
+| `{"searchedNotFound": "…"}` | you searched and there is none — **the string is the search you ran** |
+| `{"notSearched": "…"}` | you did not search — the string is why not |
+
+The old form wrote `none` for all three, and a plain `null` is no better: neither can say whether you
+looked. That difference is not bookkeeping — tests 2 and 3 below *are* questions about whether a
+search happened and was adequate, so an analyst that cannot tell `searchedNotFound` from `notSearched`
+must redo every search, which is the whole cost the packet exists to avoid. **`notSearched` is an
+honest, unpenalised answer**; a false `none` is not.
+
+**Gate your own packet before you post it**, while you still hold the tree:
+
+```sh
+scripts/fsgg-coord packet validate my-packet.json
+```
+
+It reads a file and decides. **It touches no board and it cannot refuse a post** — nothing stands
+between you and the register, by design, because a synchronous filing choke-point would wedge chains.
+If it refuses and you are out of time, post what you have as prose anyway; a packet nobody validated
+beats a finding nobody recorded.
 
 **Nothing waits on you.** The finder posts the packet and moves on; a review chain, a merge, and a
 done stamp never block on an analyst pass. That is deliberate — a synchronous filing choke-point would
 wedge chains, and a wedged chain is a worse failure than a duplicate row.
 
-The anchor is a search key, not an engine marker: nothing parses it. Find the outstanding packets with
-one metered read.
+The anchor is still a search key rather than an engine marker — no bot watches the registers, and
+posting one triggers nothing. What parses the packet is `FS.GG.Coord.FindingPacket`, reached through
+`packet validate` above: a pure, total validator that rejects an unknown field, a sentinel written as
+`"none"` or `null`, and a `finder` that is a sentence naming an id rather than an id.
+
+**It applies forward only.** The packets already on `.github#2691`, `.github#2687` and `.github#2703`
+are free prose, they remain valid and readable, and nothing here invalidates or rewrites them —
+`.github#2737` measured the registers and found **no** existing packet in a form any parser could
+read, so a retroactive sweep would have rejected all of them and told an adjudicator nothing. Read a
+legacy packet the way you always did.
+
+Find the outstanding packets with one metered read.
 
 ```sh
 scripts/fsgg-coord issues .github --state all --refresh

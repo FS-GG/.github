@@ -1,0 +1,13 @@
+{
+  "schema": "fsgg.coord.finding-packet/v1",
+  "cause": {
+    "notEstablished": "This comment appends evidence to an existing packet (issuecomment-5306714602) rather than establishing a cause of its own. Its own first line reads: \"Increment on an EXISTING packet -- not a new finding.\""
+  },
+  "redToday": {
+    "searchedNotFound": "Red today -- NO. Nothing fails. #2699 is accurate against the engine at its own head."
+  },
+  "classRow": {
+    "found": "Class-anchored -- YES, to .github#2683, exactly as the parent packet argued."
+  },
+  "finder": "rook-0308"
+}

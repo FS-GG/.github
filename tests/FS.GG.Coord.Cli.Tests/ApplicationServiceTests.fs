@@ -4147,7 +4147,11 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
           // `graphqlAnswer` only knows the board-scan shapes), so `Reads.contentEditProvenance` gets a
           // `NotFound` back and the read refuses at `Errors.exitCode NotFound` — 1, the same code the
           // four lock verbs above land on for the same reason: the fixture has no answer for this call.
-          Options.BodyEdits, [ "body-edits"; "FS.GG.SDD#999"; "--json" ], 1 ]
+          Options.BodyEdits, [ "body-edits"; "FS.GG.SDD#999"; "--json" ], 1
+          // .github#2737. `packet validate` opens no transport seam at all, so it is driven here
+          // against a path that does not exist: the refusing arm must still put ONE document on
+          // stdout, with the per-field reading on stderr.
+          Options.PacketCmd, [ "packet"; "validate"; "no-such-packet.json"; "--json" ], 1 ]
 
     /// The `Json`-admitting verbs this fixture cannot reach, each with the reason and what reading their
     /// arms found. The reason lives HERE rather than in a PR body because that is the whole argument of
@@ -4240,6 +4244,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 | Options.SetPaths -> Client.setPaths ctx opts
                 | Options.ReviewCmd -> Client.review ctx opts
                 | Options.BodyEdits -> Client.bodyEditsCmd ctx opts
+                | Options.PacketCmd -> PacketApplication.run opts
                 | other ->
                     failwithf
                         "the .github#1688 sweep has no dispatch for %A — add one to `runJsonArm`, or give the verb a reason in `notDriven`"
