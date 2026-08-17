@@ -228,7 +228,11 @@ seed "$WORK/canary-moved"
 mkdir -p "$WORK/canary-moved/tests/FS.GG.Coord.Cli.Kernel.Tests"
 printf 'let unrelated = 1\n' > "$WORK/canary-moved/tests/FS.GG.Coord.Cli.Kernel.Tests/SomethingElse.fs"
 gate_on canary-moved
-if [ "$RC" = 3 ] && printf '%s' "$OUT" | grep -q 'is here but'; then
+# A HERE-STRING, NOT A PIPELINE. `check-pipefail-assertions` refuses a NEW `… | grep -q …` site in this
+# corpus and is right to: bash materialises a here-string before grep reads it, so there is no live
+# writer whose exit status could be discarded. The older legs above predate that baseline and are
+# carried by it; a leg added today takes the spelling the gate's own remedy prints.
+if [ "$RC" = 3 ] && grep -qF -- 'is here but' <<<"$OUT"; then
   ok "the canary path going STALE is NO VERDICT (3) — a guard its own subject's absence disarms cannot fail"
 else
   bad "a stale CANARY_FILE must exit 3, not skip its own assertion (got rc=$RC)" "$OUT"
