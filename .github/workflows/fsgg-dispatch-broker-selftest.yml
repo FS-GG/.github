@@ -60,20 +60,19 @@ jobs:
       # `.github#2720` was reopened because the previous pin was a `grep` for two literals in
       # `Operation.fs`: it stayed green on a semantic change and would have redded on a reformat. The
       # SDK is what buys the executed comparison that replaced it.
+      # THE SDK ONLY — THE BUILD ITSELF BELONGS TO THE FIXTURE, AND DELIBERATELY NOT TO A STEP HERE.
+      # `tests/dispatch-broker/run.sh` obtains the engine through `scripts/build-gate-engine`, which is
+      # the one sanctioned route because it sites `bin/` AND `obj/` outside the checkout entirely
+      # (`.github#2653`: a harness that builds the engine in place poisons `scripts/fsgg-coord`'s tier
+      # 2a and fail-closes every board write from that worktree). A `dotnet build` step here would
+      # recreate exactly that, and `tests/engine-build-siting` refuses it — it refused the first head
+      # of this change. This mirrors `skill-quality.yml`, the same mechanism's other consumer: the
+      # workflow provides the toolchain, the fixture asks for the answer.
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
           cache: true
           cache-dependency-path: "**/packages.lock.json"
-
-      # Locked restore, like every other project in this repository (ADR-0006): a silent version
-      # SUBSTITUTION fails here rather than quietly changing what the oracle was built from. Only the
-      # pure core is needed — `Operation` opens nothing but `System`, `System.Security.Cryptography`
-      # and `System.Text`, so this reaches no transport, no `gh`, and no network.
-      - name: Restore and build the engine the differential executes (locked)
-        run: |
-          dotnet restore src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj --locked-mode
-          dotnet build src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj -c Release --no-restore
 
       - name: Run the dispatch-broker fixture
         run: bash tests/dispatch-broker/run.sh

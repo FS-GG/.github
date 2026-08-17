@@ -34,7 +34,19 @@
 // refusal case added to the engine breaks THIS file's build rather than being silently reported as
 // something else.
 
-#r "../../src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll"
+// THE ASSEMBLY ARRIVES ON THE COMMAND LINE, AND THERE IS NO `#r` HERE ON PURPOSE (.github#2653).
+//
+// A `#r` would have to name a path inside the checkout, which means something must BUILD the engine
+// into the checkout — and `scripts/fsgg-coord`'s tier 2a then prefers that artifact over the shared
+// checkout's engine and `stale_guard` fail-closes EVERY board write from that worktree, for a build the
+// worker never asked for. `tests/engine-build-siting` is the gate that refuses exactly this, and it
+// caught the first head of this change doing it.
+//
+// So `differential.py` obtains the assembly through `scripts/build-gate-engine` — the one sanctioned
+// route, which sites both `bin/` and `obj/` outside the checkout entirely — and passes it here as
+// `dotnet fsi -r:<path>`. Running this script by hand without that reference is a compile error naming
+// `FS.GG.Coord`, which is the correct failure: it says the oracle is missing rather than silently
+// grading nothing.
 
 open System
 open FS.GG.Coord

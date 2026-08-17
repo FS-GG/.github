@@ -403,8 +403,12 @@ def engine_answers(fsx: str, dll: str) -> dict:
         "\t".join([vector[0].split()[0], units(vector[1]), units(vector[2]), units(vector[3]), vector[4], units(vector[5])])
         for vector in CORPUS
     )
+    # `-r:` rather than a `#r` inside the script: the assembly lives OUTSIDE the checkout, because
+    # building it into the checkout is `.github#2653` — tier 2a would prefer that artifact and
+    # `stale_guard` would then refuse every board write from the worktree. `run.sh` obtains this path
+    # from `scripts/build-gate-engine`, the one sanctioned route.
     proc = subprocess.run(
-        ["dotnet", "fsi", "--nologo", fsx],
+        ["dotnet", "fsi", "--nologo", f"-r:{os.path.abspath(dll)}", fsx],
         input=payload,
         capture_output=True,
         text=True,

@@ -945,8 +945,8 @@ echo "== E. the transcription differential: the broker's opkey domain vs \`Opera
 
 DIFFERENTIAL="$HERE/differential.py"
 ENGINE_FSX="$HERE/engine_opkey.fsx"
-CORE_PROJ="$REPO_ROOT/src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
-CORE_DLL="$REPO_ROOT/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll"
+# Filled in below from `scripts/build-gate-engine`. NOT a path inside this checkout: see E0.
+CORE_DLL=""
 
 # mutate_broker <slot> <old> <new> — write a mutated copy of the REAL workflow and PROVE the edit
 # landed where it was aimed: the anchor must match exactly once, and the file's sha256 must actually
@@ -1020,21 +1020,48 @@ if ! command -v dotnet >/dev/null 2>&1; then
 This is deliberately a failure rather than a skip: a transcription differential that silently does not run is
 indistinguishable from one that runs and agrees, which is precisely the defect .github#2720 was reopened for."
 else
+  # .github#2653 — ASK FOR THE ANSWER, DO NOT BUILD INTO THE CHECKOUT, AND DO NOT RESTATE THE LAYOUT.
+  # `scripts/build-gate-engine` is the ONE sanctioned way a gate harness gets an engine: it sites both
+  # `bin/` and `obj/` outside the checkout, so nothing is ever created here for `scripts/fsgg-coord`'s
+  # tier 2a to prefer over the shared checkout's engine. The first head of this section built
+  # `FS.GG.Coord.Core` in place and `tests/engine-build-siting` refused it, correctly: a harness build
+  # is not the deliberate worktree build tier 2a exists to protect, and it fail-closes every board
+  # write from the worktree it poisons. `FS.GG.Coord.Core.dll` sits beside the engine binary because
+  # the CLI project references it, so this needs no second path convention of its own.
+  #
+  # Foreground, with the exit code in its own variable: a BACKGROUNDED `dotnet build` reports exit 0
+  # while emitting MSB1003, because a background command does not inherit `cd`.
+  build_rc=0
+  ENGINE_BIN="$(bash "$REPO_ROOT/scripts/build-gate-engine" 2>"$WORK/build.log")" || build_rc=$?
+  if [ "$build_rc" = 0 ] && [ -n "$ENGINE_BIN" ]; then
+    CORE_DLL="$(dirname "$ENGINE_BIN")/FS.GG.Coord.Core.dll"
+  fi
   if [ ! -f "$CORE_DLL" ]; then
-    echo "-- building FS.GG.Coord.Core once, so the oracle is the SHIPPED assembly and not a copy --"
-    # Foreground, with the exit code captured in its own variable. A BACKGROUNDED `dotnet build`
-    # reports exit 0 while emitting MSB1003, because a background command does not inherit `cd`.
-    build_rc=0
-    dotnet build "$CORE_PROJ" -c Release --nologo -v q >"$WORK/build.log" 2>&1 || build_rc=$?
-    if [ "$build_rc" != 0 ] || [ ! -f "$CORE_DLL" ]; then
-      bad "E0  the engine oracle can be executed" \
-          "$(printf 'FS.GG.Coord.Core did not build (exit %s), so there is no oracle to compare against:\n%s' \
-             "$build_rc" "$(tail -30 "$WORK/build.log")")"
-    fi
+    bad "E0  the engine oracle can be executed" \
+        "$(printf 'scripts/build-gate-engine did not yield FS.GG.Coord.Core.dll (exit %s, engine=%q), so there is no oracle to compare against:\n%s' \
+           "$build_rc" "$ENGINE_BIN" "$(tail -30 "$WORK/build.log")")"
   fi
 
   if [ -f "$CORE_DLL" ]; then
-    ok "E0  the engine oracle is the shipped FS.GG.Coord.Core assembly"
+    ok "E0  the engine oracle is the shipped FS.GG.Coord.Core assembly, built OUT OF TREE"
+
+    # E0b. THE ORACLE'S ARTIFACT IS NOT IN THIS CHECKOUT, ASSERTED RATHER THAN TRUSTED. The whole
+    # reason E0 goes through `scripts/build-gate-engine` is `.github#2653`, and "we call the right
+    # script" is a weaker claim than "no shadowing artifact exists". `tests/engine-build-siting` reads
+    # the INVOCATION; this reads the RESULT, which is the second method that would catch a
+    # build-gate-engine whose redirect had silently stopped working.
+    case "$CORE_DLL" in
+      "$REPO_ROOT"/*)
+        bad "E0b the oracle's artifact is sited OUTSIDE this checkout" \
+            "the oracle resolved to $CORE_DLL, which is inside $REPO_ROOT. scripts/fsgg-coord tier 2a prefers a source build under the caller's toplevel, so this artifact would shadow the shared engine and stale_guard would fail-close EVERY board write from this worktree (.github#2653)." ;;
+      *)
+        if [ -d "$REPO_ROOT/src/FS.GG.Coord.Core/bin" ] || [ -d "$REPO_ROOT/src/FS.GG.Coord.Cli/bin" ]; then
+          bad "E0b the oracle's artifact is sited OUTSIDE this checkout" \
+              "the oracle itself is out of tree, but src/FS.GG.Coord.{Core,Cli}/bin exists in this checkout. Something built the engine in place; tier 2a will prefer it and stale_guard will refuse this worktree's board writes (.github#2653)."
+        else
+          ok "E0b the oracle's artifact is sited OUTSIDE this checkout — no tier-2a shadow"
+        fi ;;
+    esac
 
     # E1. The claim itself. `--cross-check` additionally drives every env-expressible vector through
     # the real `python3` subprocess boundary and refuses on any disagreement with the in-process
