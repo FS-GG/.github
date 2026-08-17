@@ -429,6 +429,8 @@ let main argv =
                 | Flush
                 | LintCmd
                 | RoomOpen
+                | OpLockAcquire
+                | OpLockRelease
                 | Issues
                 | IntakeCmd -> Client.run opts
 

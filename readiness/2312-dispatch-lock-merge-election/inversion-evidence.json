@@ -1,0 +1,306 @@
+{
+  "baselineArtifactSha256Prefixes": {
+    "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+    "fsgg-coord-engine.dll": "e347edc8f303eee3",
+    "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+  },
+  "legs": [
+    {
+      "leg": "L1",
+      "file": "src/FS.GG.Coord.Cli/Client.fs",
+      "mutation": {
+        "from": "let grant = string held.MarkerId",
+        "to": "let grant = generation"
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "2736069a1af057d8",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactsThatMoved": [
+        "fsgg-coord-engine.dll"
+      ],
+      "target": "op-lock acquire takes the grant and prints the broker's whole input tuple",
+      "observed": "red",
+      "everyOtherLegStillGreen": false,
+      "otherLegsThatAlsoRedded": [
+        "the text projection prints grant and opkey on stdout, and the release reminder on stderr"
+      ],
+      "why": "the grant must be the SERVER-assigned comment id, not any value the caller supplied",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    },
+    {
+      "leg": "L2",
+      "file": "src/FS.GG.Coord.Cli/Client.fs",
+      "mutation": {
+        "from": "match Operation.compose item generation receiver parsedOp with",
+        "to": "match Operation.compose item generation receiver (Operation.Dispatch \"something-else\") wit"
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "6b779dd5be239f96",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactsThatMoved": [
+        "fsgg-coord-engine.dll"
+      ],
+      "target": "op-lock acquire takes the grant and prints the broker's whole input tuple",
+      "observed": "red",
+      "everyOtherLegStillGreen": true,
+      "otherLegsThatAlsoRedded": [],
+      "why": "the opkey must be composed from the caller's own four components, or the broker's recomputation disagrees",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    },
+    {
+      "leg": "L3",
+      "file": "src/FS.GG.Coord.Cli/Client.fs",
+      "mutation": {
+        "from": "| OpLock.HeldByAnother _ -> ExitContended",
+        "to": "| OpLock.HeldByAnother _ -> ExitError"
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "7f2b69e3a429d116",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactsThatMoved": [
+        "fsgg-coord-engine.dll"
+      ],
+      "target": "a live holder REFUSES the dispatch with exit 6 - a contended receiver is the fence working",
+      "observed": "red",
+      "everyOtherLegStillGreen": true,
+      "otherLegsThatAlsoRedded": [],
+      "why": "a contended receiver and a misconfigured one must not share an exit code; their remedies are opposite",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    },
+    {
+      "leg": "L4",
+      "file": "src/FS.GG.Coord.Cli/Client.fs",
+      "mutation": {
+        "from": "if op.StartsWith(prefix, StringComparison.Ordinal) then",
+        "to": "if true then"
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "87bfa085a22373a4",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactsThatMoved": [
+        "fsgg-coord-engine.dll"
+      ],
+      "target": "the dispatch prefix is DERIVED from Operation.wire, so a non-dispatch operation is refused unpaid",
+      "observed": "red",
+      "everyOtherLegStillGreen": true,
+      "otherLegsThatAlsoRedded": [],
+      "why": "a non-dispatch operation must be refused BEFORE the lock is taken, not brokered under a lease its verifier cannot see",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    },
+    {
+      "leg": "L5",
+      "file": "src/FS.GG.Coord.Cli/Client.fs",
+      "mutation": {
+        "from": "match Writes.verifyHeld transport LeaseMinutes worker self session lockRef with",
+        "to": "match Writes.verifyHeld transport 120 worker self session lockRef with"
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "b09ebe5a5c6b9f4f",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactsThatMoved": [
+        "fsgg-coord-engine.dll"
+      ],
+      "target": "op-lock release drops OUR grant, through verifyHeld rather than lowest id",
+      "observed": "red",
+      "everyOtherLegStillGreen": true,
+      "otherLegsThatAlsoRedded": [],
+      "why": "the ten-minute lease is what makes a lapsed foreign marker lapsed; at the item's 120 it still wins and we hold nothing",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    },
+    {
+      "leg": "L6",
+      "file": "scripts/fsgg-coord-guards.sh",
+      "mutation": {
+        "from": "BOARD_WRITES=\"add adopt child claim done flush heartbeat intake op-lock release review roo",
+        "to": "BOARD_WRITES=\"add adopt child claim done flush heartbeat intake release review room say se"
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactsThatMoved": [],
+      "target": "both op-lock commands are BOARD WRITES in the engine and in the shim's partition",
+      "observed": "red",
+      "everyOtherLegStillGreen": true,
+      "otherLegsThatAlsoRedded": [],
+      "why": "a verb the shim classifies nowhere runs on a STALE engine; the guard refuses only what it can name",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    },
+    {
+      "leg": "L7",
+      "file": "src/FS.GG.Coord.Cli.Kernel/Options.fs",
+      "mutation": {
+        "from": "| OpLockAcquire -> Writes // POSTs the `fsgg:claim` grant marker onto the receiver's op-lo",
+        "to": "| OpLockAcquire -> Reads // POSTs the `fsgg:claim` grant marker onto the receiver's op-loc"
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "d6553718e4ed79aa"
+      },
+      "artifactsThatMoved": [
+        "FS.GG.Coord.Cli.Kernel.dll"
+      ],
+      "target": "both op-lock commands are BOARD WRITES in the engine and in the shim's partition",
+      "observed": "red",
+      "everyOtherLegStillGreen": true,
+      "otherLegsThatAlsoRedded": [],
+      "why": "the engine's own writes contract is what the parity gate holds the shim in bijection with",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    },
+    {
+      "leg": "L9",
+      "file": "src/FS.GG.Coord.Cli/Client.fs",
+      "mutation": {
+        "from": "| OpLockAcquire -> opLockAcquire ctx opts",
+        "to": "| OpLockAcquire -> failwith \"unwired\""
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "6f8371cee7228379",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactsThatMoved": [
+        "fsgg-coord-engine.dll"
+      ],
+      "target": "the CLI dispatch actually routes op-lock to its handlers - the link that was missing",
+      "observed": "red",
+      "everyOtherLegStillGreen": true,
+      "otherLegsThatAlsoRedded": [],
+      "why": "a handler nothing dispatches to is exactly the defect this row reopened, one level up",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    },
+    {
+      "leg": "L8",
+      "file": "src/FS.GG.Coord.Cli/Client.fs",
+      "mutation": {
+        "from": "Dispatch now, then `op-lock release %s{receiver}`",
+        "to": "Dispatch now, then drop the grant"
+      },
+      "anchoredByGitDiff": true,
+      "artifactHashesBefore": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactHashesAfter": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "9ff15bcc16a5fbab",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "artifactsThatMoved": [
+        "fsgg-coord-engine.dll"
+      ],
+      "target": "the text projection prints grant and opkey on stdout, and the release reminder on stderr",
+      "observed": "red",
+      "everyOtherLegStillGreen": true,
+      "otherLegsThatAlsoRedded": [],
+      "why": "CONTROL \u2014 this mutation must red exactly ONE leg and leave every other leg green",
+      "artifactHashesAfterRevert": {
+        "FS.GG.Coord.Cli.Tests.dll": "e8aa715d566be504",
+        "fsgg-coord-engine.dll": "e347edc8f303eee3",
+        "FS.GG.Coord.Cli.Kernel.dll": "60273412a080c44d"
+      },
+      "sourceRestoredByteForByte": true
+    }
+  ]
+}

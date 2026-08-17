@@ -1608,6 +1608,96 @@ printf '%s' "$missing" | jq -e 'map(select(.subject == "FS.GG.SDD#47")) | length
   && ok "#2157: a missing fresh row cannot masquerade as BLOCKER-CLEARED convergence" \
   || bad "#2157: missing BLOCKER-CLEARED row must fail closed" "rc=$missing_rc receipt=$missing"
 
+# ---- .github#2312: `op-lock acquire`/`release` TAKE AND DROP A REAL DISPATCH GRANT ------------------
+# The production caller slice 2 landed without. `Client.OpLock.acquire` and `Options.opLockRef` landed
+# correct and reachable from nothing but their own unit tests, so no `fsgg:claim` marker could ever appear
+# on an op-lock issue, so `fsgg-dispatch-broker.yml`'s `grant` input had no value any caller could supply
+# and its step-5 refusal ("no live grant holds this receiver's operation lock") was unreachable BY
+# CONSTRUCTION. These legs are the end-to-end form of the repair: a grant is obtained from a real CAS
+# against a real comment thread, and the id printed is the one the SERVER assigned.
+#
+# FS.GG.SDD#878 IS THE OP-LOCK ISSUE, resolved from the engine's own embedded table rather than named on
+# argv, so a table that lost the row reds here. It is not in `ISSUES` for `.github#1033`'s reason, restated:
+# a lock issue is off the board by construction, and `Writes.claim` reaches it as a bare comment thread,
+# which is all a CAS needs.
+#
+# EMPTY BEFORE, OURS AFTER, ONE VARIABLE — the same discipline the #1535 chore-lock legs above use, and for
+# the same reason: a leg that found a marker either way would pass without the verb having written anything.
+oplk0="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/878/comments")"
+grep -qF -- 'fsgg:claim' <<<"$oplk0" \
+  && bad ".github#2312: the operation lock is FREE before the probe" "a marker survives: $oplk0" \
+  || ok ".github#2312: FS.GG.SDD's operation lock is free before the probe (the one variable is the verb)"
+
+opa="$("$ENGINE" op-lock acquire "FS-GG/FS.GG.SDD#44" 650045 "FS-GG/FS.GG.SDD" dispatch:coordination-kit \
+       --worker otter-2312 --json 2>/dev/null)"; oparc=$?
+opgrant="$(printf '%s' "$opa" | jq -r '.grant // empty')"
+opkey="$(printf '%s' "$opa" | jq -r '.opkey // empty')"
+[ "$oparc" -eq 0 ] && [ -n "$opgrant" ] && grep -qE -- '^[0-9a-f]{64}$' <<<"$opkey" \
+  && ok ".github#2312: \`op-lock acquire\` succeeds and prints a grant and a 64-hex opkey" \
+  || bad ".github#2312: op-lock acquire must succeed on a free lock" "rc=$oparc: $opa"
+
+# THE GRANT IS THE SERVER'S ANSWER, NOT THE CALLER'S. Every other field of that document echoes something
+# the caller typed; this one cannot, and that is the entire authorization mechanism (design §3.2 — "nobody
+# can mint one locally, nobody can choose its value, and nobody can forge its ordering"). So the assertion
+# is not "a grant was printed" but "the printed grant IS the id this fixture assigned to the marker that
+# actually appeared", which no amount of echoing argv could satisfy.
+oplk1="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/878/comments")"
+opmarker="$(printf '%s' "$oplk1" | jq -r '[.[] | select(.body | contains("fsgg:claim"))] | if length == 1 then .[0].id else empty end')"
+[ -n "$opmarker" ] && [ "$opmarker" = "$opgrant" ] \
+  && grep -qF -- 'worker=otter-2312' <<<"$oplk1" \
+  && ok ".github#2312: the grant printed IS the server-assigned comment id of the marker on the lock issue" \
+  || bad ".github#2312: the grant must be the server's id" "printed=$opgrant thread marker=$opmarker: $oplk1"
+
+# A BUSY RECEIVER IS THE FENCE WORKING, AND IT EXITS 6. `ExitContended` says "back off and retry"; exit 1
+# would say "change something first". A caller handed the wrong one either stops retrying a receiver that
+# will free itself, or retries an unrostered one for ever.
+opb="$("$ENGINE" op-lock acquire "FS-GG/FS.GG.SDD#44" 650045 "FS-GG/FS.GG.SDD" dispatch:coordination-kit \
+       --worker crake-2312 --json 2>&1)"; opbrc=$?
+oplk2="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/878/comments")"
+[ "$opbrc" -eq 6 ] \
+  && [ "$(printf '%s' "$oplk2" | jq -r '[.[] | select(.body | contains("fsgg:claim"))] | length')" = "1" ] \
+  && grep -qF -- 'otter-2312' <<<"$opb" \
+  && ok ".github#2312: a second executor is REFUSED with exit 6 and names the holder — the lock working" \
+  || bad ".github#2312: a live holder must refuse the grant at exit 6" "rc=$opbrc: $opb / thread: $oplk2"
+
+# AND THE REFUSED EXECUTOR CANNOT DROP THE HOLDER'S GRANT EITHER. `release` DELETES, so a verb that found
+# its target by anything other than the capability `Writes.verifyHeld` grants would break a lock somebody
+# is standing in — #550, on the subject where it costs a duplicate dispatch.
+opnr="$("$ENGINE" op-lock release "FS-GG/FS.GG.SDD" --worker crake-2312 2>&1)"; opnrrc=$?
+oplk3="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/878/comments")"
+[ "$opnrrc" -eq 1 ] \
+  && [ "$(printf '%s' "$oplk3" | jq -r '[.[] | select(.body | contains("fsgg:claim"))] | length')" = "1" ] \
+  && ok ".github#2312: a non-holder's \`op-lock release\` REFUSES and deletes nothing" \
+  || bad ".github#2312: only the holder may drop the grant" "rc=$opnrrc: $opnr / thread: $oplk3"
+
+opr="$("$ENGINE" op-lock release "FS-GG/FS.GG.SDD" --worker otter-2312 --json 2>/dev/null)"; oprrc=$?
+oplk4="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/878/comments")"
+[ "$oprrc" -eq 0 ] && [ "$(printf '%s' "$opr" | jq -r '.grant')" = "$opgrant" ] \
+  && ! grep -qF -- 'fsgg:claim' <<<"$oplk4" \
+  && ok ".github#2312: the holder's \`op-lock release\` drops the grant and the lock is free again" \
+  || bad ".github#2312: the holder must be able to release" "rc=$oprrc: $opr / thread: $oplk4"
+
+# THE INJECTED ROSTER REACHES PRODUCTION. `opLockRef`'s `extra` parameter is documented as the per-deployment
+# roster a vendored tenant brings, and until this row it had no production reader at all — the only caller
+# would have passed `[]` for ever, which is this row's own reader-without-writer defect one level down. A
+# DIFFERENT issue number is the assertion: the marker must land on 4242, not on the embedded 878.
+opinj="$(FSGG_COORD_OP_LOCKS="FS-GG/FS.GG.SDD#4242" "$ENGINE" op-lock acquire "FS-GG/FS.GG.SDD#44" 650045 \
+         "FS-GG/FS.GG.SDD" dispatch:coordination-kit --worker teal-2312 --json 2>/dev/null)"; opinjrc=$?
+opinjg="$(printf '%s' "$opinj" | jq -r '.grant // empty')"
+opinj878="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/878/comments")"
+opinj4242="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/4242/comments")"
+[ "$opinjrc" -eq 0 ] && [ -n "$opinjg" ] \
+  && grep -qF -- 'worker=teal-2312' <<<"$opinj4242" \
+  && ! grep -qF -- 'fsgg:claim' <<<"$opinj878" \
+  && ok ".github#2312: FSGG_COORD_OP_LOCKS repoints the lock — the marker lands on the injected issue, not the embedded one" \
+  || bad ".github#2312: the injected op-lock roster must reach opLockRef" \
+       "rc=$opinjrc: $opinj / 4242: $opinj4242 / 878: $opinj878"
+
+FSGG_COORD_OP_LOCKS="FS-GG/FS.GG.SDD#4242" "$ENGINE" op-lock release "FS-GG/FS.GG.SDD" --worker teal-2312 >/dev/null 2>&1
+
+mark_contract "op-lock acquire" "oplock-grant-round-trip"
+mark_contract "op-lock release" "oplock-grant-round-trip"
+
 # These ten write rows are driven by their dedicated state-transition assertions above.  Marking
 # them here keeps the ledger at one entry per advertised command while the assertions remain next
 # to the preconditions that make each mutation meaningful.

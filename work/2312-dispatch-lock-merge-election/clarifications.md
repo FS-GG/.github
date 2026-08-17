@@ -146,12 +146,38 @@ and from the standing rule in each issue's body. The critic verified the propert
   half as a live-read verification rather than as a unit-test assertion. *(CQ-008)*
 - **DEC-007** Give `opLockRef` the same injected-roster parameter `choreLockRef` has, but add **no** new
   environment variable in this slice — the shape stays symmetric without widening the deployment surface.
+  **SUPERSEDED by DEC-011 on the 2026-08-17 reopen.**
+
+## Reopen Decisions — 2026-08-17
+
+- **DEC-010** The production caller is a **CLI verb pair**, `op-lock acquire` / `op-lock release`.
+  *Considered and rejected:* folding the acquire into an existing verb (there is none whose question this
+  is — the engine has never dispatched, and the chore lock's precedent of taking the lock inside `next`
+  does not transfer, because a dispatch is not a side effect of some other question being asked); and doing
+  nothing on the grounds that slices 3–6 would supply the caller (measured false — slice 5 landed and
+  transcribed the lock read into inline Python instead).
+- **DEC-011** `FSGG_COORD_OP_LOCKS` IS added, superseding DEC-007. Its deferral rested on "until a caller
+  needs it"; a caller now exists, and passing `[]` from the only production call site would leave
+  `opLockRef`'s `extra` parameter reachable from nothing — this row's own defect, one level down.
+- **DEC-012** `acquire` emits the whole authorization tuple, not only the grant. The broker recomputes the
+  `opkey` and refuses a mismatch, and it is a SHA-256 no operator can compute by hand; a grant-only verb
+  would force the caller to derive the key a second way, which is how two answers come to disagree.
+- **DEC-013** The `dispatch:` prefix is derived from `Operation.wire (Operation.Dispatch "")` and the parse
+  is round-tripped. *Considered and rejected:* a `"dispatch:"` literal in `Client.fs`, which is §12.5's
+  forbidden second copy of the wire vocabulary.
+- **DEC-014** A contended receiver exits `6` (`ExitContended`), every other refusal `1`. Their remedies are
+  opposite: back off and retry versus change a fact first.
+- **DEC-015** `parseChoreLocks` is reused for the op-lock roster rather than copied under a better name.
+  Its behaviour — comma-separated `owner/repo#n`, unparseable tokens dropped, not thrown — is this roster's
+  grammar and fail-closed polarity exactly. The name is the only chore-shaped thing about it, and a second
+  parser bought for a word is #485.
 
 ## Accepted Deferrals
 
 - **DEF-001** A behavioural ordering leg for `reap` and `adopt`, deferred with its reason recorded in
   DEC-006. Reaching it requires widening a shared fixture that many unrelated items depend on.
-- **DEF-002** `FSGG_COORD_OP_LOCKS` env injection, deferred under DEC-007 until a caller needs it.
+- **DEF-002** ~~`FSGG_COORD_OP_LOCKS` env injection, deferred under DEC-007 until a caller needs it.~~
+  **DISCHARGED by DEC-011 on the 2026-08-17 reopen** — the caller now exists.
 
 ## Remaining Ambiguity
 

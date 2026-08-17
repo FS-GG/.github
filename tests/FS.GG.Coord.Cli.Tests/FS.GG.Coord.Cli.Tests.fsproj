@@ -34,6 +34,7 @@
     <Compile Include="CacheIsolationTests.fs" />
     <Compile Include="ChoresTests.fs" />
     <Compile Include="OpLockTests.fs" />
+    <Compile Include="OpLockDispatchVerbTests.fs" />
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />
     <Compile Include="DeliveryApplicationTests.fs" />
