@@ -972,17 +972,68 @@ echo "== F. THE PRODUCER IS REAL — the leg slices 2 and 3 did not have =="
   && ok "F1  the producer exists: Client.fs carries an authorizationMarker composing the marker this gate grades" \
   || bad "F1  Client.fs has NO authorizationMarker — this gate reads a marker nothing writes, which is exactly how slices 2 and 3 landed inert"
 
-# BOTH DIRECTIONS. A producer that stops writing a field this gate requires reds here; a gate that
-# starts requiring a field no producer writes reds here too. `check-claim-fence.py` requires six
-# fields against a producer that writes four, which is why it finds nothing on any real pull request.
-python3 - "$META" <<'PY' && ok "F2  the fields this gate REQUIRES are exactly the fields the producer WRITES, in both directions" || bad "F2  the gate's required fields and the producer's written fields disagree" "$(python3 -c "import json;d=json.load(open('$META'));print('gate requires:',d['inline_required']);print('producer writes:',d['producer_fields'])")"
+# BOTH DIRECTIONS, AND THE RELATION IS CONTAINMENT RATHER THAN EQUALITY (.github#2395).
+#
+# This leg asked for SET EQUALITY until slice 3's second landing, and equality was an over-statement
+# of the contract that happened to hold only while both sets were the same four fields. The gate this
+# fixture grades states its own rule in its own extracted script and in `check-claim-generation.py`'s
+# docstring: it requires `v`/`item`/`gen`/`head` and "silently accepts (never rejects on) any
+# ADDITIONAL `key=value` pairs — including a future `opkey=`/`grant=`". That forward-compatibility is
+# the whole reason a stricter reader (`scripts/check-claim-fence.py`, six fields) could be added
+# without editing this one — so a producer that writes a SUPERSET is the designed case, not a drift,
+# and equality would have reddened this leg the moment the producer became correct.
+#
+# CONTAINMENT STILL CATCHES BOTH FAILURES THIS LEG EXISTS FOR, which is why it is a re-statement and
+# not a relaxation:
+#
+#   * a producer that STOPS writing a field this gate requires -> the required set is no longer
+#     contained -> RED. That is the "inert reader" direction, and F2m below measures it rather than
+#     asserting it.
+#   * a gate that STARTS requiring a field no producer writes -> same containment failure -> RED.
+#
+# The one case containment admits and equality did not is the one the gate documents as legal: extra
+# producer fields this gate does not read. Grading those here would make this fixture the authority
+# on a field set it deliberately does not validate.
+required_subset() {  # $1 = path to a meta json
+  python3 - "$1" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 gate, producer = set(d["inline_required"]), set(d["producer_fields"])
 if not gate or not producer:
     sys.exit(1)
-sys.exit(0 if gate == producer else 1)
+sys.exit(0 if gate <= producer else 1)
 PY
+}
+
+required_subset "$META" \
+  && ok "F2  every field this gate REQUIRES is a field the producer WRITES (containment, not equality)" \
+  || bad "F2  the gate requires a field the producer does not write" "$(python3 -c "import json;d=json.load(open('$META'));print('gate requires:',d['inline_required']);print('producer writes:',d['producer_fields'])")"
+
+# MUTATION: the corrected assertion must still fail when the producer drops a field the gate needs.
+# A containment test that survived a producer regression would be #266's shape rebuilt inside the very
+# fixture written to close it, so this measures the escape rather than promising it cannot happen.
+# The mutation is applied to the PARSED FACTS — the same `producer_fields` list F2 reads — because
+# that is the exact input whose corruption the leg above must catch; mutating Client.fs on disk would
+# additionally test the regex, which sections above already own.
+F2MUT="$WORK/meta-producer-regressed.json"
+python3 - "$META" "$F2MUT" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+gate = set(d["inline_required"])
+# Drop one field the GATE requires, chosen from the gate's own list so the mutation is meaningful
+# whatever the producer happens to write. Deterministic: the first required field, sorted.
+victim = sorted(gate)[0]
+d["producer_fields"] = [f for f in d["producer_fields"] if f != victim]
+d["_mutation_dropped"] = victim
+json.dump(d, open(sys.argv[2], "w"))
+PY
+F2MUT_VICTIM="$(python3 -c "import json,sys;print(json.load(open('$F2MUT'))['_mutation_dropped'])")"
+if required_subset "$F2MUT"; then
+  bad "F2m MUTATION: dropping the required field \`$F2MUT_VICTIM\` from the producer must red F2, but containment still held" \
+    "$(python3 -c "import json;d=json.load(open('$F2MUT'));print('gate requires:',d['inline_required']);print('mutated producer writes:',d['producer_fields'])")"
+else
+  ok "F2m MUTATION: dropping the required field \`$F2MUT_VICTIM\` from the producer reds F2 — so F2 is a real assertion"
+fi
 
 python3 - "$META" <<'PY' && ok "F3  the fsgg:claim fields this gate reads (worker, lease) are fields Writes.fs actually writes" || bad "F3  this gate reads an fsgg:claim field the engine does not write"
 import json, sys

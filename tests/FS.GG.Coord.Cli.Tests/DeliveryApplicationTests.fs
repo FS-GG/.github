@@ -658,70 +658,204 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         Assert.False(String.IsNullOrWhiteSpace err, "expected a non-empty diagnostic on stderr")
         Assert.True(err.Contains("declaredPaths") || err.Contains("unread"), $"expected the diagnostic to name the offending field, got: %s{err}")
 
-    // .github#2395 (design slice 3 of .github#1858): `Client.rebindAuthorization` is the pure decision
-    // behind `delivery`'s automatic write of the `fsgg:pr-authorization` marker `check-claim-generation.py`
-    // (`scripts/check-claim-generation.py`) reads. Each case below mirrors one of that gate's own four
-    // diagnoses — MISSING, STALE (a superset here: any mismatch of `gen`/`head` rebinds), and the "two
-    // markers is the same as none" rule — so a fix that makes any of them pass without truly repairing the
-    // marker is caught here first.
+    // ============================================================================================
+    // .github#2395 — THE MERGE ELECTION AND THE AUTHORIZATION GROUNDED IN IT
+    // ============================================================================================
+    //
+    // §11.2 row 3 of the fencing design declares TWO acts: *"`delivery` posts the merge election,
+    // THEN writes the PR authorization marker NAMING it and bound to head."* The row's first landing
+    // shipped only the second, with FOUR fields, and the consequence was not a narrower pass —
+    // `scripts/check-claim-fence.py` returns at CHECK 1 on a marker missing `opkey`/`grant`, so its
+    // check 4 was never evaluated on any real pull request while the fence workflow told operators
+    // check 4 was failing for a known reason.
+    //
+    // WHAT THESE TESTS ARE FOR, AND WHAT THEY ARE NOT. They pin the PRODUCER: the six-field
+    // authorization, the election that grounds it, the idempotence rule that keeps a repeated
+    // `delivery` call from denying its own pull request, the lowest-id selection, and the
+    // fail-closed refusal. They deliberately do NOT grade the producer against
+    // `scripts/check-claim-fence.py`'s own required-field tuples: that bidirectional agreement leg
+    // belongs to `.github#2719`, which declares that script and `tests/claim-fence`, and it must be
+    // written after this lands because it reds until the six-field marker exists. The executed
+    // demonstration that check 4 is REACHED and ABLE TO FAIL is recorded on this change's pull
+    // request instead.
+
+    /// `sha256("FS-GG/.github#2395\n5267541214\nFS-GG/.github\nmerge")`, lowercase hex.
+    ///
+    /// A LITERAL, AND DELIBERATELY NOT `Operation.compose`'s OWN ANSWER. Asserting the production
+    /// path against itself would pass for any key it chose to compute, including a wrong one. This
+    /// constant was computed out of band from design §3.3's own formula and is byte-identical to what
+    /// `scripts/check-claim-fence.py`'s independent `compose_opkey` produces for the same four
+    /// components — so it pins the WIRE AGREEMENT between the F# producer and the Python gate, which
+    /// is the only property check 5 actually needs.
+    let private expectedOpKey = "09ff79967fd2476062df93ab2b293f620d16e614f84276ded003a9e190e8f018"
+
+    // -------------------------------------------------------------------------------------------
+    // The authorization marker, pure
+    // -------------------------------------------------------------------------------------------
 
     [<Fact>]
-    let ``#2395 authorizationMarker renders the exact v1 grammar the gate parses`` () =
-        let marker = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    let ``#2395 authorizationMarker renders all six fields the fence requires, in the gate's order`` () =
+        let marker =
+            Client.authorizationMarker
+                "FS-GG/.github#2395"
+                "5267541214"
+                expectedOpKey
+                "5309319124"
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         Assert.Equal(
-            "<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
+            $"<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 opkey=%s{expectedOpKey} grant=5309319124 head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
             marker
         )
+
+    let private authMarker gen head =
+        Client.authorizationMarker "FS-GG/.github#2395" gen expectedOpKey "5309319124" head
 
     [<Fact>]
     let ``#2395 a body with no marker at all is rebound, not left missing`` () =
         let body = "Implements the thing.\n\nCloses #2395"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-a" with
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
         | Client.AuthorizationRebound updated ->
-            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-a", updated)
+            Assert.Contains(authMarker "5267541214" "head-a", updated)
             Assert.Contains("Closes #2395", updated)
         | Client.AuthorizationCurrent -> failwith "expected a rebind: the body carried no marker at all"
 
     [<Fact>]
     let ``#2395 a marker bound to a superseded head is rebound to the current one, not left stale`` () =
-        let body =
-            "Implements the thing.\n\n" + Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-old"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-new" with
+        let body = "Implements the thing.\n\n" + authMarker "5267541214" "head-old"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-new" with
         | Client.AuthorizationRebound updated ->
-            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-new", updated)
+            Assert.Contains(authMarker "5267541214" "head-new", updated)
             Assert.DoesNotContain("head-old", updated)
         | Client.AuthorizationCurrent -> failwith "expected a rebind: the marker's head was superseded"
 
     [<Fact>]
-    let ``#2395 two markers collapse to exactly one, never left duplicated`` () =
-        let stale = Client.authorizationMarker "FS-GG/.github#2395" "111" "head-old"
-        let alsoStale = Client.authorizationMarker "FS-GG/.github#2395" "222" "head-older"
-        let body = $"Implements the thing.\n\n{stale}\n\n{alsoStale}"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-new" with
+    let ``#2395 a marker naming a superseded GRANT is rebound, not left grounded in a lost election`` () =
+        let stale =
+            Client.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319000" "head-a"
+        let body = "Implements the thing.\n\n" + stale
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
         | Client.AuthorizationRebound updated ->
-            let desired = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-new"
-            let occurrences = System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
+            Assert.Contains(authMarker "5267541214" "head-a", updated)
+            Assert.DoesNotContain("5309319000", updated)
+        | Client.AuthorizationCurrent -> failwith "expected a rebind: the marker named a different election"
+
+    // THE MIGRATION, AS A TEST RATHER THAN A PROMISE. Every pull request open when this landed carries
+    // the FOUR-field marker the row's first landing wrote. Nothing rebinds it but this rule: a marker
+    // that is not byte-identical to the freshly rendered one takes the rebound arm, so the next
+    // `delivery` call upgrades it — one marker in, one marker out — with no cutover, no dual-shape
+    // acceptance and no rebinding campaign.
+    [<Fact>]
+    let ``#2395 a legacy FOUR-field marker is replaced in place by the six-field one, never left beside it`` () =
+        let legacy = "<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 head=head-a -->"
+        let body = $"Implements the thing.\n\n{legacy}"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
+        | Client.AuthorizationRebound updated ->
+            let occurrences =
+                System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
             Assert.Equal(1, occurrences)
-            Assert.Contains(desired, updated)
+            Assert.Contains(authMarker "5267541214" "head-a", updated)
+            Assert.DoesNotContain(legacy, updated)
+        | Client.AuthorizationCurrent -> failwith "expected a rebind: a four-field marker is not the six-field one"
+
+    [<Fact>]
+    let ``#2395 two markers collapse to exactly one, never left duplicated`` () =
+        let stale = authMarker "111" "head-old"
+        let alsoStale = authMarker "222" "head-older"
+        let body = $"Implements the thing.\n\n{stale}\n\n{alsoStale}"
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-new" with
+        | Client.AuthorizationRebound updated ->
+            let occurrences =
+                System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
+            Assert.Equal(1, occurrences)
+            Assert.Contains(authMarker "5267541214" "head-new", updated)
         | Client.AuthorizationCurrent -> failwith "expected a rebind: two stale markers must collapse to one current one"
 
     [<Fact>]
     let ``#2395 a body already carrying exactly the desired marker is reported current, not rewritten`` () =
-        let desired = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" "head-current"
+        let desired = authMarker "5267541214" "head-current"
         let body = $"Implements the thing.\n\n{desired}"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" "head-current" with
+        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-current" with
         | Client.AuthorizationCurrent -> ()
         | Client.AuthorizationRebound updated -> failwithf "expected no rewrite for an already-current marker, got %s" updated
 
-    // Everything above drives `rebindAuthorization` as a pure function — real coverage of the DECISION,
-    // but none of it proves the LIVE wired path actually reaches the transport with the right method,
-    // path, and body. `Client.ensureAuthorization` is that wiring (`Reads.prBody`'s GET, then a
-    // conditional PATCH via `ctx.Transport.Send`), and the two cases below drive it directly against a
-    // `Fake.Recorder` — the same "reuse the internal seam instead of restating the whole `delivery`
-    // command's board-scan/PR-facts machinery" idiom `AuthorizedMarkerTests.fs` already uses for
-    // `Client.authorizedMarker`. `tests/coord-engine-e2e/writes.sh` has no live `delivery --pr --apply`
-    // invocation, so this in-process pair is this change's only coverage of the real IO, not merely the
-    // pure decision it wraps.
+    // -------------------------------------------------------------------------------------------
+    // The election marker, pure
+    // -------------------------------------------------------------------------------------------
+
+    [<Fact>]
+    let ``#2395 electionMarker renders the six fields the fence requires plus the pr discriminator`` () =
+        Assert.Equal(
+            $"<!-- fsgg:merge-election v=1 opkey=%s{expectedOpKey} item=FS-GG/.github#2395 gen=5267541214 receiver=FS-GG/.github op=merge pr=9001 -->",
+            DeliveryApplication.electionMarker expectedOpKey "FS-GG/.github#2395" "5267541214" "FS-GG/.github" 9001
+        )
+
+    let private electionComment id body : Driver.ReviewComment =
+        { Id = id; Url = $"https://example.test/{id}"; Body = body }
+
+    let private anElection pr =
+        DeliveryApplication.electionMarker expectedOpKey "FS-GG/.github#2395" "5267541214" "FS-GG/.github" pr
+
+    [<Fact>]
+    let ``#2395 electionsFromComments reads a marker that opens the comment, with its fields`` () =
+        match DeliveryApplication.electionsFromComments [ electionComment 700L (anElection 9001) ] with
+        | [ election ] ->
+            Assert.Equal(700L, election.Id)
+            Assert.Equal(Some expectedOpKey, election.Fields.TryFind "opkey")
+            Assert.Equal(Some "FS-GG/.github#2395", election.Fields.TryFind "item")
+            Assert.Equal(Some "5267541214", election.Fields.TryFind "gen")
+            Assert.Equal(Some "FS-GG/.github", election.Fields.TryFind "receiver")
+            Assert.Equal(Some "merge", election.Fields.TryFind "op")
+            Assert.Equal(Some "9001", election.Fields.TryFind "pr")
+        | other -> failwithf "expected exactly one election, got %A" other
+
+    [<Fact>]
+    let ``#2395 trailing prose after the marker is outside it and pollutes no field`` () =
+        match DeliveryApplication.electionsFromComments [ electionComment 700L (anElection 9001 + "\n\nMerge election for pr=9999 op=nonsense.") ] with
+        | [ election ] ->
+            Assert.Equal(Some "9001", election.Fields.TryFind "pr")
+            Assert.Equal(Some "merge", election.Fields.TryFind "op")
+        | other -> failwithf "expected exactly one election, got %A" other
+
+    // THE ANCHORING BOUNDARY, AND IT IS THE FENCE'S RATHER THAN THIS MODULE'S CHOICE.
+    // `scripts/check-claim-fence.py` matches the election with `re.match` on the RAW comment body and
+    // never trims it, so a marker one byte from position 0 is INVISIBLE to the only reader that
+    // grades it. A producer whose parse were more permissive than that reader would reuse an election
+    // the fence cannot see, and would then grant an id check 4 refuses. Each leg below is one byte of
+    // difference from the accepted case above.
+    [<Theory>]
+    [<InlineData("\n")>]
+    [<InlineData(" ")>]
+    [<InlineData("\t")>]
+    [<InlineData("We elected this merge: ")>]
+    let ``#2395 a marker that does not open the comment at byte 0 is not an election`` (prefix: string) =
+        Assert.Empty(DeliveryApplication.electionsFromComments [ electionComment 700L (prefix + anElection 9001) ])
+
+    [<Fact>]
+    let ``#2395 a suffixed prefix is a different marker, never this one`` () =
+        let note = (anElection 9001).Replace("fsgg:merge-election", "fsgg:merge-election-note")
+        Assert.Empty(DeliveryApplication.electionsFromComments [ electionComment 700L note ])
+
+    [<Fact>]
+    let ``#2395 electionsOwnedBy keeps this opkey and this pull request, and nothing else`` () =
+        let otherKey = String.replicate 64 "b"
+        let comments =
+            [ electionComment 700L (anElection 9001)
+              electionComment 701L (anElection 9002)
+              electionComment 702L (DeliveryApplication.electionMarker otherKey "FS-GG/.github#2395" "5267541214" "FS-GG/.github" 9001) ]
+        match DeliveryApplication.electionsFromComments comments |> DeliveryApplication.electionsOwnedBy expectedOpKey 9001 with
+        | [ election ] -> Assert.Equal(700L, election.Id)
+        | other -> failwithf "expected exactly the opkey-and-pr match, got %A" other
+
+    // -------------------------------------------------------------------------------------------
+    // The wired path
+    // -------------------------------------------------------------------------------------------
+    //
+    // Everything above drives pure functions — real coverage of the DECISIONS, but none of it proves
+    // the LIVE path reaches the transport with the right method, path, order and body.
+    // `Client.electionGrounding` and `Client.ensureAuthorization` are that wiring, and the cases
+    // below drive them directly against a `Fake.Recorder` — the same "reuse the internal seam instead
+    // of restating the whole `delivery` command's board-scan/PR-facts machinery" idiom
+    // `AuthorizedMarkerTests.fs` already uses for `Client.authorizedMarker`.
 
     let private jsonBody (body: string) : string =
         System.Text.Json.JsonSerializer.Serialize {| body = body |}
@@ -756,90 +890,212 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
           DefaultRepo = Some ".github"
           ChoreLocks = [] }
 
+    /// A REST comment listing carrying the given `(id, body)` pairs, exactly as `commentsWithIdentity`
+    /// parses it.
+    let private commentListing (comments: (int64 * string) list) : string =
+        comments
+        |> List.map (fun (id, body) ->
+            System.Text.Json.JsonSerializer.Serialize
+                {| id = id
+                   html_url = $"https://example.test/{id}"
+                   body = body |})
+        |> String.concat ","
+        |> sprintf "[%s]"
+
+    /// One scripted world for the wired legs: the item's comment listing, what a comment POST returns,
+    /// and the pull request's body. Every request is TALLIED, so a leg can assert that a write did NOT
+    /// happen rather than merely that the call returned `Ok`.
+    type private World =
+        { mutable Requests: (string * string) list
+          mutable PostedBodies: string list
+          mutable PatchedBodies: string list }
+
+    let private world () =
+        { Requests = []; PostedBodies = []; PatchedBodies = [] }
+
+    let private scripted
+        (w: World)
+        (itemComments: Errors.IoResult<Response>)
+        (postResult: Errors.IoResult<Response>)
+        (prBody: string)
+        : Fake.Recorder =
+        ensureAuthorizationTransport (fun req ->
+            w.Requests <- w.Requests @ [ req.Method, req.Path.Trim '/' ]
+
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "repos/FS-GG/.github/issues/2395/comments" -> itemComments
+            | "POST", "repos/FS-GG/.github/issues/2395/comments" ->
+                match req.Body with
+                | Json payload ->
+                    use doc = System.Text.Json.JsonDocument.Parse payload
+                    w.PostedBodies <- w.PostedBodies @ [ doc.RootElement.GetProperty("body").GetString() ]
+                | _ -> failwith "expected the election POST to carry a JSON body"
+
+                postResult
+            | "GET", "repos/FS-GG/.github/pulls/9001" -> okResponse (jsonBody prBody)
+            | "PATCH", "repos/FS-GG/.github/pulls/9001" ->
+                match req.Body with
+                | Json payload ->
+                    use doc = System.Text.Json.JsonDocument.Parse payload
+                    w.PatchedBodies <- w.PatchedBodies @ [ doc.RootElement.GetProperty("body").GetString() ]
+                    okResponse "{}"
+                | _ -> failwith "expected the authorization PATCH to carry a JSON body"
+            | method', path -> Error(Errors.NotFound $"unexpected request in the #2395 fixture: %s{method'} %s{path}"))
+
+    let private head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
     [<Fact>]
-    let ``#2395 ensureAuthorization reads the live PR body and PATCHes the rebound marker onto pulls/n`` () =
-        let mutable patchedBody: string option = None
+    let ``#2395 ensureAuthorization posts the election FIRST, then PATCHes a marker naming its comment id`` () =
+        let w = world ()
 
         let transport =
-            ensureAuthorizationTransport (fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/pulls/9001" -> okResponse (jsonBody "Implements the thing.\n\nCloses #2395")
-                | "PATCH", "repos/FS-GG/.github/pulls/9001" ->
-                    match req.Body with
-                    | Json payload ->
-                        use doc = System.Text.Json.JsonDocument.Parse payload
-                        patchedBody <- Some(doc.RootElement.GetProperty("body").GetString())
-                        okResponse "{}"
-                    | _ -> failwith "expected the authorization PATCH to carry a JSON body"
-                | method', path -> Error(Errors.NotFound $"unexpected request in the #2395 fixture: %s{method'} %s{path}"))
-
-        let head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            scripted w (okResponse (commentListing [])) (okResponse """{"id":5309319124}""") "Implements the thing.\n\nCloses #2395"
 
         match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
-            match patchedBody with
-            | None -> failwith "expected a PATCH to reach repos/FS-GG/.github/pulls/9001"
-            | Some body ->
-                Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" head, body)
-                Assert.Contains("Closes #2395", body)
+            // The election is APPENDED before the authorization is written, and that order is the
+            // design's: an election is never deleted, so a failure between the two leaves a durable
+            // fact the next call reuses. The reverse would write an authorization naming an election
+            // that does not exist.
+            let posted = w.Requests |> List.findIndex (fun (m, p) -> m = "POST" && p = "repos/FS-GG/.github/issues/2395/comments")
+            let patched = w.Requests |> List.findIndex (fun (m, p) -> m = "PATCH" && p = "repos/FS-GG/.github/pulls/9001")
+            Assert.True(posted < patched, $"expected the election POST before the authorization PATCH, got %A{w.Requests}")
+
+            // The election comment BEGINS with its marker, because the fence anchors at byte 0.
+            let electionBody = Assert.Single w.PostedBodies
+            Assert.StartsWith("<!-- fsgg:merge-election v=1 opkey=", electionBody)
+            Assert.Contains($"opkey=%s{expectedOpKey} ", electionBody)
+            Assert.Contains("pr=9001 -->", electionBody)
+
+            let body = Assert.Single w.PatchedBodies
+            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" head, body)
+            Assert.Contains("Closes #2395", body)
 
     [<Fact>]
-    let ``#2395 ensureAuthorization spends zero writes once the live PR body is already current`` () =
-        let head = "cccccccccccccccccccccccccccccccccccccccc"
-        let desired = Client.authorizationMarker "FS-GG/.github#2395" "5267541214" head
+    let ``#2395 a second call posts NO second election and grants the same comment id`` () =
+        let w = world ()
 
         let transport =
-            ensureAuthorizationTransport (fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/pulls/9001" -> okResponse (jsonBody $"Implements the thing.\n\n{desired}")
-                | "PATCH", "repos/FS-GG/.github/pulls/9001" ->
-                    failwith "expected zero writes: the live PR body already carried the current marker"
-                | method', path -> Error(Errors.NotFound $"unexpected request in the #2395 fixture: %s{method'} %s{path}"))
+            scripted
+                w
+                (okResponse (commentListing [ 5309319124L, anElection 9001 ]))
+                (Error(Errors.NotFound "a second election must never be posted for the same opkey and pull request"))
+                "Implements the thing."
 
         match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
-        | Ok() -> ()
+        | Ok() ->
+            Assert.Empty w.PostedBodies
+            let body = Assert.Single w.PatchedBodies
+            Assert.Contains($"grant=5309319124 ", body)
+
+    // THE BOUNDARY OF `Reads.lowestId`, NOT MERELY ITS BRANCH. Two elections this target owns,
+    // adjacent comment ids, supplied HIGHEST FIRST so that "take the first one read" and "take the
+    // lowest id" give different answers. The fence grants only the lowest, so a producer that named
+    // the other would be refused at check 4 by its own writes.
+    [<Fact>]
+    let ``#2395 with two owned elections the LOWER comment id is granted, whatever order they are read in`` () =
+        let w = world ()
+
+        let transport =
+            scripted
+                w
+                (okResponse (commentListing [ 5309319125L, anElection 9001; 5309319124L, anElection 9001 ]))
+                (Error(Errors.NotFound "no election should be posted when this target already owns one"))
+                "Implements the thing."
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
+        | Ok() ->
+            let body = Assert.Single w.PatchedBodies
+            Assert.Contains("grant=5309319124 ", body)
+            Assert.DoesNotContain("grant=5309319125 ", body)
+
+    // THE OTHER DIRECTION OF THE `pr=` DISCRIMINATOR. An election posted for a DIFFERENT pull request
+    // under the same item and generation is a CONTENDER, never this pull request's grant. Reusing it
+    // would let two executors sharing one generation both pass check 4, which is exactly the
+    // "at most one merge per (item, generation, receiver)" guarantee the election exists to provide.
+    [<Fact>]
+    let ``#2395 an election posted for a different pull request is not reused, and this target elects its own`` () =
+        let w = world ()
+
+        let transport =
+            scripted w (okResponse (commentListing [ 5309319100L, anElection 9002 ])) (okResponse """{"id":5309319124}""") "Implements the thing."
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
+        | Ok() ->
+            Assert.Single w.PostedBodies |> ignore
+            let body = Assert.Single w.PatchedBodies
+            Assert.Contains("grant=5309319124 ", body)
+
+    // FAIL CLOSED, AND THE ASSERTION IS THE ABSENCE OF A WRITE RATHER THAN THE PRESENCE OF AN ERROR.
+    // A grounding that could not be established must leave the pull-request body exactly as it was:
+    // no four-field fallback, because a marker the fence calls ungrounded is the decorative case the
+    // design names, and no partial six-field marker, because there is no grant to name.
+    [<Fact>]
+    let ``#2395 an unreadable item comment list writes NO authorization at all`` () =
+        let w = world ()
+
+        let transport =
+            scripted w (Error(Errors.Malformed("FS-GG/.github#2395", "the fixture refuses this read"))) (okResponse """{"id":1}""") "Implements the thing."
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        | Ok() -> failwith "expected a refusal: the elections could not be read, so nothing grounds an authorization"
+        | Error _ ->
+            Assert.Empty w.PatchedBodies
+            Assert.Empty w.PostedBodies
+
+    [<Fact>]
+    let ``#2395 a failed election POST writes NO authorization at all`` () =
+        let w = world ()
+
+        let transport =
+            scripted w (okResponse (commentListing [])) (Error(Errors.Malformed("FS-GG/.github#2395", "the fixture refuses this write"))) "Implements the thing."
+
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        | Ok() -> failwith "expected a refusal: no election was obtained, so no grant exists to name"
+        | Error _ -> Assert.Empty w.PatchedBodies
+
+    // The engine's OWN sentinel for "nobody holds this item" is the literal string `released`, and a
+    // key composed on it would name a tenancy that does not exist — `Operation.compose` refuses it as
+    // `GenerationNotServerAssigned`. The refusal must happen BEFORE any IO: a component we already
+    // know is wrong is not worth a REST read.
+    [<Fact>]
+    let ``#2395 an operation key that cannot be composed refuses before it spends any IO`` () =
+        let transport =
+            ensureAuthorizationTransport (fun req ->
+                Error(Errors.NotFound $"a compose refusal must precede the transport, got %s{req.Method} %s{req.Path}"))
+
+        match Client.electionGrounding (ensureAuthorizationContext transport) ensureAuthorizationTarget "released" 9001 with
+        | Ok grounding -> failwithf "expected a refusal for the released sentinel, got %A" grounding
+        | Error e ->
+            let rendered = $"%A{e}"
+            Assert.Contains("operation key", rendered)
 
     // Replaces the deleted `#2395 ensureAuthorization makes no request at all without --apply` test.
     // That test asserted the very defect #2488 measured: it is the only reason no live `item/<n>-*` PR
     // ever carried a current marker at the moment `claim-generation` evaluated it (five for five,
     // #2488's own evidence table). `apply` no longer exists as a parameter — every call at this
-    // signature performs the read-modify-write below, so there is no argument left to hold "false" to
-    // reproduce the old no-op. Before this fix landed, this exact call (there was no sixth `false`
-    // argument to add — `ensureAuthorization` took one fewer parameter) would have failed to compile
-    // against the OLD 6-argument signature, and the OLD test at the OLD signature asserted zero requests
-    // for precisely this shape; reverting `Client.fs`'s call-site and signature change while keeping
-    // this test is the gate-inversion mutation this change's PR records having run.
+    // signature performs the read-modify-write below.
     [<Fact>]
     let ``#2488 ensureAuthorization is no longer gated on --apply: a plain live status read writes the marker too`` () =
-        let mutable patchedBody: string option = None
-        let head = "dddddddddddddddddddddddddddddddddddddddd"
+        let w = world ()
+        let plainHead = "dddddddddddddddddddddddddddddddddddddddd"
 
         let transport =
-            ensureAuthorizationTransport (fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/pulls/9001" -> okResponse (jsonBody "Implements the thing.")
-                | "PATCH", "repos/FS-GG/.github/pulls/9001" ->
-                    match req.Body with
-                    | Json payload ->
-                        use doc = System.Text.Json.JsonDocument.Parse payload
-                        patchedBody <- Some(doc.RootElement.GetProperty("body").GetString())
-                        okResponse "{}"
-                    | _ -> failwith "expected the authorization PATCH to carry a JSON body"
-                | method', path -> Error(Errors.NotFound $"unexpected request in the #2488 fixture: %s{method'} %s{path}"))
+            scripted w (okResponse (commentListing [])) (okResponse """{"id":5309319124}""") "Implements the thing."
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) plainHead false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
-            match patchedBody with
-            | None -> failwith "expected a PATCH even though this call carries nothing resembling --apply"
-            | Some body -> Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" head, body)
+            let body = Assert.Single w.PatchedBodies
+            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" plainHead, body)
 
-    // A genuinely still-live no-op: a merged PR's body is never rewritten, apply or not — nothing further
-    // needs authorizing once landing has already happened. Not previously covered at this wired level
-    // (only the apply-gated no-op was), so this is new coverage the #2488 signature change earns for
-    // free rather than a behavior it changes.
+    // A genuinely still-live no-op: a merged PR's body is never rewritten — nothing further needs
+    // authorizing once landing has already happened. Now stronger than before: it also proves the
+    // election is not posted on a merged pull request, which would be an append nothing could undo.
     [<Fact>]
     let ``#2488 ensureAuthorization still makes no request once the PR has merged`` () =
         let transport =
