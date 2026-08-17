@@ -4,7 +4,7 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "dda9cbebb37c66e919272ae084ec77b5280f0d4614d7a32d89a99ea40148675e",
+      "tree-sha256": "66f6ed6756c51b259b02f7f070afac78db77a865861a373ce76fd90ef1d54a78",
       "files": [
         {
           "path": "SKILL.md",
@@ -18,7 +18,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "260a2270f5954a5f54b7d8cf5369b880e6cca024c0fb777e5d8f83fd8b90603f",
+          "sha256": "173b1e49615f4f2f9164b79e6b6ea472d1ec39d798520e284306f81f992c36cf",
           "executable": false
         },
         {
@@ -78,7 +78,7 @@
     {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
-      "tree-sha256": "702e9406826611b0c87fdc6f017d1c9cd6ac5ea3f25abc8dcaf75eaddb7c7f09",
+      "tree-sha256": "345a845d5bd0ae3e4e22f3c18a7a33cdee4878ba12a42c0fab4107870644701c",
       "files": [
         {
           "path": "SKILL.md",
@@ -97,7 +97,7 @@
         },
         {
           "path": "references/protocol-facts.md",
-          "sha256": "d289299c7e0459d43524f4c9fad0a33ebe52d89c2ed5d2b535bb3a5437c0f60d",
+          "sha256": "6d3a347418d0c6cd21dfdd39a525d571b4d37a909183decbd8f1e8c9e8b8cab3",
           "executable": false
         },
         {

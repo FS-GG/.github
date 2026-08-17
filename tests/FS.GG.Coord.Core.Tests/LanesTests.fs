@@ -39,6 +39,9 @@ module LanesTests =
           HumanBlock = None
           Predicate = None
           Class = None
+          Kind = None
+          BoardKind = None
+          CommentCount = None
           BoardClass = None
           DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
           Severity = Unset

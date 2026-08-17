@@ -35,6 +35,9 @@ module ChoreTests =
           HumanBlock = None
           Predicate = None
           Class = None
+          Kind = None
+          BoardKind = None
+          CommentCount = None
           BoardClass = None
           DeliveryRoute =
             DeliveryRoute.Current
@@ -75,6 +78,9 @@ module ChoreTests =
             { item 1 with
                 Claim = Some(claim other, LeaseHeld)
                 Class = Some Decision
+                Kind = None
+                BoardKind = None
+                CommentCount = None
                 BoardClass = None }
         Assert.Empty(derive [ held ])
         Assert.Equal("CLASS-PROJECTION-LAG", (derive [ { held with Claim = None } ]).Head.Kind.RuleId)
@@ -140,3 +146,36 @@ module ChoreTests =
         let chore = (derive before).Head
         Assert.False(isRetired chore before)
         Assert.True(isRetired chore [ item 1 ])
+
+    // ---- .github#2712 — KIND-PROJECTION-LAG ---------------------------------------------------------
+
+    [<Fact>]
+    let ``2712 a declared kind the board does not render derives a Kind projection`` () =
+        let kindLag = { item 3 with Kind = Some Register; BoardKind = None }
+        Assert.Equal<string list>([ "KIND-PROJECTION-LAG" ], rules [ kindLag ])
+
+        let chore = derive [ kindLag ] |> List.exactlyOne
+        Assert.Equal(Some("Kind", "register"), chore.Kind.Write)
+        Assert.Contains("Kind: register", chore.Statement)
+
+    [<Fact>]
+    let ``2712 a row declaring NO kind derives no chore — an absent declaration is not a disagreement`` () =
+        // THE LEG THAT KEEPS THE LIVE BOARD QUIET. Every row today declares no `Kind:` line, so the wrong
+        // reading here would sweep a `Kind=work` write across the entire board on the next reconcile —
+        // asserting a fact nobody stated, on hundreds of rows, in one pass.
+        Assert.Empty(derive [ { item 3 with Kind = None; BoardKind = None } ])
+        Assert.Empty(derive [ { item 3 with Kind = None; BoardKind = Some Work } ])
+
+    [<Fact>]
+    let ``2712 an agreeing column derives no chore, and Class and Kind lag independently`` () =
+        Assert.Empty(derive [ { item 3 with Kind = Some Register; BoardKind = Some Register } ])
+
+        // BOTH axes at once, from one pass, in a stable order — so a row that is behind on both is
+        // repaired in one reconcile rather than alternating between them.
+        let both = { item 3 with Class = Some Defect; BoardClass = None; Kind = Some Anchor; BoardKind = None }
+        Assert.Equal<string list>([ "CLASS-PROJECTION-LAG"; "KIND-PROJECTION-LAG" ], rules [ both ])
+
+    [<Fact>]
+    let ``2712 reserved rows defer Kind projection exactly as they defer Class`` () =
+        let held = { item 3 with Claim = Some(claim other, LeaseHeld); Kind = Some Register; BoardKind = None }
+        Assert.Empty(derive [ held ])

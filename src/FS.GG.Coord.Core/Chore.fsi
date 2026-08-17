@@ -16,6 +16,13 @@ module Chore =
         | StaleClaim of holder: WorkerId
         | LifecycleProjectionLag of destination: BoardStatus
         | ClassProjectionLag of declared: ItemClass
+        /// The board's `Kind` column disagrees with the item's own `Kind:` line (.github#2712).
+        ///
+        /// `ClassProjectionLag`'s shape and authority direction exactly (ADR-0066): the body declares, the
+        /// column is written from it, and the chore exists in the gap. A row declaring NO `Kind:` line
+        /// derives no chore — an absent declaration is not a disagreement, and sweeping `work` onto every
+        /// unclassified row would write a fact nobody asserted.
+        | KindProjectionLag of declared: ItemKind
 
         member RuleId: string
         member Write: (string * string) option

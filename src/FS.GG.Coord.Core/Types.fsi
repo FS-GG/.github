@@ -167,6 +167,43 @@ module Types =
         /// would make the machine answer the question the item exists to escalate.
         | Decision
 
+    /// **WHETHER AN ITEM HAS A LIFECYCLE AT ALL (.github#2712)** — the axis `Status` was being asked to
+    /// carry for rows that never reach `Done`.
+    ///
+    /// `ItemClass` says how BAD a unit of work is. This says whether the row IS a unit of work. The board
+    /// modelled everything as `Backlog -> Ready -> In progress -> In review -> Done`, and at least three
+    /// kinds of row on it are not units of work and have no completion condition: `.github#266` is a class
+    /// ANCHOR with ten closed children that must still not close; `.github#2691`/`#2687`/`#2703` are
+    /// REGISTERS the process depends on, created deliberately off-board because no container existed for
+    /// them; `.github#2695` is a DIRECTIVE that says of itself it is "enforced by nothing except the host
+    /// remembering it".
+    ///
+    /// THIS IS `DeclaredNone` vs `Undeclared` GENERALISED FROM ONE FIELD TO THE ITEM. That distinction
+    /// (`TouchSet`, above) already separates "a decision somebody made — unschedulable BY DESIGN" from
+    /// "an OMISSION — somebody forgot", and `#1858` and `#266` both rely on it. This applies the identical
+    /// reading one level up, and reuses that vocabulary rather than coining a second one.
+    ///
+    /// THERE IS NO `unknown` CASE, and the absence is NOT read the way `ItemClass`'s is. An item declaring
+    /// no `Kind:` line carries `None`, and `None` means `Work` at every decision — because `Work` is what
+    /// every row on this board is today, so an undeclared row must behave exactly as it does now. That is
+    /// the opposite default from `Class`, and deliberately: an unset CLASS is a triage omission that must
+    /// stay loud, while an unset KIND is the overwhelmingly common and entirely correct answer. Defaulting
+    /// the other way would exempt the whole board from its own lifecycle in one release.
+    type ItemKind =
+        /// A closeable unit of work: it has a completion condition, and reaching it closes the row. Every
+        /// row that declares no kind is this one.
+        | Work
+        /// A CLASS ANCHOR. It names a defect class and accumulates instances; it has no completion
+        /// condition, and its children closing is not evidence that it should close (.github#266).
+        | Anchor
+        /// A REGISTER. It is a container other actors read and append to — pending finding packets,
+        /// rejections, resumable pass state. Its DEPTH is the fact worth observing about it; its closure
+        /// never is.
+        | Register
+        /// A DIRECTIVE. It records an instruction that governs how later work is done. It is enforced by
+        /// being read, and it does not finish.
+        | Directive
+
     /// The board's closed, ordered severity vocabulary (.github#1901).
     type Severity =
         | Critical
@@ -359,6 +396,44 @@ module Types =
           /// which is the fail-closed answer — a projection we could not observe is not one we may write.
           BoardClass: ItemClass option
 
+          /// **WHAT THE ITEM'S OWN TEXT SAYS IT IS FOR** — a `Kind:` body line (.github#2712).
+          ///
+          /// THE SOLE AUTHORITY FOR THE REDUCER EXEMPTION AND THE SCHEDULER REFUSAL, and `BoardKind`
+          /// below is deliberately not consulted by either. That is `Schedulability`'s existing rule for
+          /// `Class` (*"the column is a projection and can lag"*) and ADR-0066's direction, and here it
+          /// also closes a hazard `Class` does not have: were the column allowed to decide, anyone with
+          /// board-edit rights could make a real work row silently unschedulable and invisible to the
+          /// lifecycle reducer by changing one dropdown.
+          ///
+          /// `None` MEANS `Work`. That is the opposite reading from `Class`'s `None`, and it is the whole
+          /// safety property of this change: every row on the board today declares no kind, so every row
+          /// on the board today keeps exactly the behaviour it has now, and the exemption can only be
+          /// reached by somebody writing the line.
+          Kind: ItemKind option
+
+          /// **WHAT THE BOARD'S `Kind` COLUMN CURRENTLY RENDERS** — the projection, observed, never
+          /// derived, on `BoardClass`'s exact terms.
+          ///
+          /// TWO FIELDS BECAUSE THEY ARE TWO FACTS, and `KIND-PROJECTION-LAG` is derived exactly where
+          /// they disagree. Resolved at the impure edge (the scan reads the column); a context that never
+          /// resolves it keeps `None` and derives no projection chore, which is the fail-closed answer.
+          BoardKind: ItemKind option
+
+          /// **REGISTER DEPTH** — how many comments the ISSUE carries, as observed by the board scan
+          /// (.github#2712).
+          ///
+          /// The row this comes from exists because *nothing measured register depth*: `.github#2691` was
+          /// 57 comments and nothing on the board said whether that was a healthy inbox or a six-week
+          /// backlog, so the decision to dispatch the analyst was made by whoever happened to be looking.
+          /// It rides the board page query as a connection `totalCount`, which selects no nodes and
+          /// therefore costs nothing on top of the existing 7-point board read — the same argument
+          /// `Scan`'s own query comment makes for `class`, `phase` and `createdAt`.
+          ///
+          /// `None` means THIS READER DID NOT LOOK, never "no comments". Collapsing them would report an
+          /// unread register as an empty one, which is the reading that would send a host away from a
+          /// full inbox.
+          CommentCount: int option
+
           /// The mandatory, source-bound delivery-route verdict observed for this item. Missing, stale,
           /// or unreadable evidence is a scheduling hold, never an inferred lightweight route.
           DeliveryRoute: DeliveryRoute.Verdict
@@ -492,6 +567,24 @@ module Types =
     /// the nearest of three would be a guess carrying a parser's authority, which is exactly what
     /// .github#1588's AC3 forbids; `lint` reports the item as unclassed instead, and a human decides.
     val itemClassOfWireName: s: string -> ItemClass option
+
+    /// **THE KIND WIRE VOCABULARY: an `ItemKind` as the Projects v2 OPTION NAME, spelled ONCE.**
+    ///
+    /// Three wires from one function, exactly as `itemClassWireName` is: the board's single-select option
+    /// name, the value a filer writes in a `Kind:` body line, and the word the `kind-options` table in
+    /// `docs/coordination/board-schema.md` documents.
+    ///
+    /// A TOTAL match, no wildcard. There is no empty case: an item declaring no kind is `None`, and the
+    /// absence of a declaration is not a kind meaning absence.
+    val itemKindWireName: k: ItemKind -> string
+
+    /// The INVERSE, DERIVED from `itemKindWireName` rather than restating it, so the board field, the
+    /// body line and the docs cannot disagree. This is the function `Kind.fromBody` calls.
+    ///
+    /// `None` means the string is not a kind at all — NOT a default, and the stakes are higher than for
+    /// `ItemClass`: resolving an unknown word onto the nearest of four could EXEMPT a real work row from
+    /// the lifecycle reducer. `Kind.unrecognised` reports the word instead, and a human decides.
+    val itemKindOfWireName: s: string -> ItemKind option
 
     /// Render a severity as the exact Projects v2 option name.
     val severityWireName: severity: Severity -> string

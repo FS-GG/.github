@@ -106,6 +106,19 @@ module Types =
         /// A human must choose before any work is authorable.
         | Decision
 
+    /// WHETHER an item has a lifecycle at all (.github#2712) — `DeclaredNone` vs `Undeclared`
+    /// generalised from one field to the item. See Types.fsi for why `None` means `Work` here and
+    /// `None` means "untriaged, stay loud" for `ItemClass`.
+    type ItemKind =
+        /// A closeable unit of work. Every row declaring no `Kind:` line is this one.
+        | Work
+        /// A class anchor: it accumulates instances and has no completion condition (.github#266).
+        | Anchor
+        /// A register: a container other actors append to. Its depth is observable; its closure is not.
+        | Register
+        /// A directive: an instruction enforced by being read. It does not finish.
+        | Directive
+
     /// HOW MUCH an item costs when it goes wrong — the board's closed `Severity` vocabulary
     /// (.github#1901). Unlike `Class`, this is an ordered priority axis.
     type Severity =
@@ -202,6 +215,22 @@ module Types =
           /// Resolved at the impure edge (the scan reads the column), never by `Chore.derive` — the same
           /// split, for the same reason, as `Predicate` above.
           BoardClass: ItemClass option
+
+          /// The kind the item's OWN TEXT declares — a `Kind:` body line (.github#2712). `None` means the
+          /// text declares none, which MEANS `Work` at every decision: it is what every row on this board
+          /// is today, and an undeclared row must behave exactly as it does now.
+          Kind: ItemKind option
+
+          /// The kind the BOARD FIELD currently holds — the PROJECTION, observed, not derived, on
+          /// `BoardClass`'s exact terms. NEITHER the reducer NOR the scheduler consults it; it exists so
+          /// `KIND-PROJECTION-LAG` can be derived where it disagrees with `Kind`.
+          BoardKind: ItemKind option
+
+          /// How many comments the issue carries, as observed by the board scan (.github#2712). This is
+          /// REGISTER DEPTH: the fact that tells a healthy inbox from a six-week backlog without opening
+          /// the issue. `None` means this reader did not look — never "no comments", which would report an
+          /// unread register as an empty one.
+          CommentCount: int option
 
           /// The mandatory, source-bound delivery-route verdict observed for this item.  This is a
           /// scheduling fact rather than a UI hint: missing, stale, or unreadable evidence must never
@@ -316,6 +345,38 @@ module Types =
         else
             let t = s.Trim().ToLowerInvariant()
             everyItemClass |> List.tryFind (fun c -> itemClassWireName c = t)
+
+    // THE KIND WIRE VOCABULARY, on `itemClassWireName`'s exact terms and for its exact reasons — one
+    // string that is three wires at birth: the Projects v2 `Kind` option name, the value a filer writes
+    // in a `Kind:` body line, and the word `docs/coordination/board-schema.md`'s options table documents.
+    //
+    // A TOTAL match, no wildcard: a fifth `ItemKind` case must fail the BUILD here rather than render as
+    // "" and clear somebody's board column. There is no empty case — an item declaring no kind carries
+    // `None`, and the absence of a declaration is not a kind meaning absence.
+    let itemKindWireName (k: ItemKind) =
+        match k with
+        | Work -> "work"
+        | Anchor -> "anchor"
+        | Register -> "register"
+        | Directive -> "directive"
+
+    /// Every `ItemKind`, as the subject `itemKindOfWireName` searches — `everyItemClass`'s caveat
+    /// verbatim, and `TypesTests` pins it against the union by reflection so nobody has to remember it.
+    let private everyItemKind = [ Work; Anchor; Register; Directive ]
+
+    // THE INVERSE, DERIVED — never a second list of the strings (#1012). `Kind.fromBody` calls this, so
+    // the grammar a filer may write is defined by the renderer above and cannot drift from what
+    // `reconcile` writes onto the board.
+    //
+    // `None` means the string is not a kind at all. Deliberately not a default: resolving an unrecognised
+    // word onto one of four would be a guess carrying a parser's authority — and here the guess could
+    // silently EXEMPT a real work row from its own lifecycle, which is the worst direction available.
+    let itemKindOfWireName (s: string) =
+        if isNull s then
+            None
+        else
+            let t = s.Trim().ToLowerInvariant()
+            everyItemKind |> List.tryFind (fun k -> itemKindWireName k = t)
 
     let severityWireName (severity: Severity) =
         match severity with

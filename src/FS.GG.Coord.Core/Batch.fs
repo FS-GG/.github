@@ -749,6 +749,10 @@ module Batch =
             // `LiveClaim` and was told to wait out a lease that will never free. Carry it through.
             | HeldByLiveWork(worker, pr) -> reserve item (LiveClaim(worker, item.Ref, ageOf item, Some pr))
 
+            // NOT A UNIT OF WORK (.github#2712) — reserves nothing and is never chosen, exactly like the
+            // other non-startable verdicts below it. It reserves nothing DELIBERATELY: a standing row's
+            // touch-set (a register declares none) must not be held against work that is real.
+            | NotAUnitOfWork _
             | WrongStatus _
             | IssueClosed
             | NoTouchSet

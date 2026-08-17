@@ -137,6 +137,67 @@ On a product-workspace board, create `Class` with `createProjectV2Field` **befor
 but withholds the impossible downstream projection and reports the missing field once rather than failing a
 write for every classed row.
 
+## Kind
+
+Whether a row **has a lifecycle at all**
+([.github#2712](https://github.com/FS-GG/.github/issues/2712)) — the axis `Class` (how bad) and
+`Severity` (how costly) both presuppose and neither carries. The vocabulary is **closed** at exactly
+four values.
+
+<!-- kind-options:start -->
+| option | meaning |
+|---|---|
+| `work` | a closeable unit of work: it has a completion condition, and reaching it closes the row |
+| `anchor` | a class anchor: it names a defect class and accumulates instances, and its children closing is not evidence that it should close |
+| `register` | a container other actors read and append to — pending packets, rejections, resumable pass state; its depth is the fact worth observing, its closure never is |
+| `directive` | an instruction that governs how later work is done; it is enforced by being read, and it does not finish |
+<!-- kind-options:end -->
+
+**A non-`work` row is exempt from the lifecycle reducer entirely — not merely skipped by the
+scheduler.** The reducer projects no `Status` for it: no park, no promotion, no `Done`, and no
+lifecycle watermark. That is the load-bearing half: a register the reducer can mark `Done`, or
+re-park, is worse than one that is invisible. The scheduler refuses it with a reason naming the kind
+(`not-a-unit-of-work`) rather than reporting its column, because "Status is Backlog" about a row with
+no lifecycle is true, useless, and an instruction to adjust the wrong thing.
+
+The **authority is the item's own `Kind:` body line** — ADR-0045's sentinel grammar, shared verbatim
+with `Paths:`, `Class:` and `Blocked on:` (a line at up to three leading spaces, outside any fenced
+code block). **This board field is a downstream PROJECTION written by `reconcile`, not a
+hand-maintained input**, exactly as `Class` is; the chore is `KIND-PROJECTION-LAG`.
+
+On this axis the direction is load-bearing for **safety**, not only for drift. Because the value
+decides whether the reducer runs, a field-as-authority would let one dropdown edit remove a real work
+row from its own lifecycle and make it permanently unschedulable, with nothing in its body to explain
+why. So the reducer and the scheduler read the body line and never this column.
+
+**An absent `Kind:` line means `work`**, and that is the opposite reading from an absent `Class:`
+line. An unset *class* is a triage omission that must stay loud; an unset *kind* is the
+overwhelmingly common and entirely correct answer, and every row on the board today is in that state.
+Defaulting the other way would exempt the whole board from its own lifecycle in one release. There is
+no `KIND-UNSET` lint for the same reason.
+
+The pull-request gate checks this bounded table without Projects credentials:
+
+```sh
+scripts/project-field-options check --field Kind --schema docs/coordination/board-schema.md
+```
+
+As with `Class` there is no roster file to be the authority, so the check compares this table against
+the closed four-value vocabulary in the tool — the engine's `ItemKind` union. Drift in either
+direction, an absent marker block, or an unreadable schema is a refusal, never an empty/clean result.
+
+### Creating `Kind` is not a guarded migration
+
+The same recording `Class` carries above, for the same reason: creating `Kind` is
+`createProjectV2Field` on a field that **does not yet exist**, so there are no assignments to lose and
+no snapshot precondition is meaningful. The guarded snapshot → `add-option` → restore sequence below
+becomes relevant only if a **fifth option** is ever added — which is an ADR, not a board edit.
+
+Until an operator creates the field, `reconcile` **withholds** the `Kind` projection and reports the
+missing field once rather than failing a write for every declared row. The engine is correct without
+it: the exemption and the scheduler refusal are read from the body, so a board with no `Kind` column
+still refuses to run the reducer over a declared register.
+
 ## Severity
 
 How costly the row is, independently of what kind of work it represents. The operator decided the

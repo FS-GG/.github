@@ -374,3 +374,70 @@ module TypesTests =
         Assert.Equal(None, phaseOfWireName "Decisions")
         Assert.Equal(None, phaseOfWireName "")
         Assert.Equal(None, phaseOfWireName null)
+
+    // ---- .github#2712 — the `ItemKind` wire vocabulary --------------------------------------------
+    //
+    // Pinned on `ItemClass`'s exact terms above, and for its exact reasons: this one string is three
+    // wires at birth — the Projects v2 `Kind` option name, the value a filer writes in a `Kind:` body
+    // line, and the rows of the `kind-options` table in `docs/coordination/board-schema.md`. Only the
+    // first two are reachable from here; the third is gated by `scripts/project-field-options check
+    // --field Kind`, and the exact-spelling pins below are what make that cross-tool check mean anything.
+
+    /// Every `ItemKind` case, by reflection. A hand-written list is the copy this pattern refuses.
+    let private everyKind: (string * ItemKind) list =
+        FSharpType.GetUnionCases typeof<ItemKind>
+        |> Array.map (fun c -> c.Name, FSharpValue.MakeUnion(c, [||]) :?> ItemKind)
+        |> Array.toList
+
+    [<Fact>]
+    let ``2712 reflection can actually see ItemKind - the guards below are not vacuous`` () =
+        Assert.Equal(4, List.length everyKind)
+
+    [<Fact>]
+    let ``2712 every item kind round-trips through the wire`` () =
+        for name, k in everyKind do
+            let wire = itemKindWireName k
+
+            Assert.True(
+                itemKindOfWireName wire = Some k,
+                $"{name} renders as '{wire}' and does not parse back — reconcile would write what the body parser cannot read"
+            )
+
+    [<Fact>]
+    let ``2712 no two item kinds share a wire name`` () =
+        // Two cases spelling one string would make the body line AMBIGUOUS about the one question that
+        // decides whether the lifecycle reducer runs at all.
+        let names = everyKind |> List.map (snd >> itemKindWireName)
+        Assert.Equal<string list>(List.distinct names, names)
+
+    [<Fact>]
+    let ``2712 no item kind renders blank or padded`` () =
+        // A blank would parse back as "not a kind at all", which `Kind.govern` reads as `Work` — so a
+        // register whose case rendered empty would be silently returned to the lifecycle reducer.
+        for name, k in everyKind do
+            let w = itemKindWireName k
+            Assert.False(System.String.IsNullOrWhiteSpace w, $"case {name} renders blank on the wire")
+            Assert.Equal(w.Trim(), w)
+
+    [<Fact>]
+    let ``2712 the kind wire spellings are pinned to the documented board options`` () =
+        // Written down twice ON PURPOSE, exactly as the class pins above are: the round-trip proves the
+        // engine agrees with ITSELF and a RENAME leaves it green, while the board's `Kind` field, the
+        // `Kind:` lines in live issue bodies and the `kind-options` table would all stop matching.
+        Assert.Equal("work", itemKindWireName Work)
+        Assert.Equal("anchor", itemKindWireName Anchor)
+        Assert.Equal("register", itemKindWireName Register)
+        Assert.Equal("directive", itemKindWireName Directive)
+
+    [<Fact>]
+    let ``2712 the kind parser is forgiving about surrounding space and case, and refuses everything else`` () =
+        Assert.Equal(Some Register, itemKindOfWireName "  REGISTER  ")
+        Assert.Equal(Some Anchor, itemKindOfWireName "Anchor")
+        // TWO-SIDED. Lookalikes must NOT resolve — and resolving one would be worse here than on the
+        // `Class` axis, because the wrong answer removes a real work row from its own lifecycle.
+        for lookalike in [ "registers"; "reg"; "anchors"; "directives"; "standing"; "epic"; ""; "  "; "work " + "​" ] do
+            Assert.Equal(None, itemKindOfWireName lookalike)
+
+    [<Fact>]
+    let ``2712 Kind.legalKinds is the union itself, so a fifth case reaches every diagnostic`` () =
+        Assert.Equal<Set<ItemKind>>(everyKind |> List.map snd |> Set.ofList, Kind.legalKinds |> Set.ofList)

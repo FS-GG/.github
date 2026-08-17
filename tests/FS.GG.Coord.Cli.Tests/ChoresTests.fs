@@ -80,7 +80,10 @@ let private item n status state blockers claim =
       HumanBlock = None
       Predicate = None
       Class = None
+      Kind = None
       BoardClass = None
+      BoardKind = None
+      CommentCount = None
       DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
       Severity = Unset
       Phase = None
@@ -163,6 +166,9 @@ let private otherRepoBoard =
               Repo = "FS.GG.Rendering"
               Number = 640 }
           Class = Some Hardening
+          Kind = None
+          BoardKind = None
+          CommentCount = None
           BoardClass = None } ]
 
 [<Fact>]
@@ -305,6 +311,8 @@ let private classRow (boardClass: ItemClass option) : Scan.Row =
       IsPullRequest = false
       PathRepo = ".github"
       BoardClass = boardClass
+      BoardKind = None
+      CommentCount = None
       Severity = Unset
       Phase = None
       CreatedAt = None

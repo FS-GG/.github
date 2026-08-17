@@ -54,6 +54,8 @@ jobs:
       # execute, and it is enough — the drift being gated is between two files in this checkout.
       - name: Check documented Class schema against the closed ItemClass vocabulary
         run: scripts/project-field-options check --field Class --schema docs/coordination/board-schema.md
+      - name: Check documented Kind schema against the closed ItemKind vocabulary
+        run: scripts/project-field-options check --field Kind --schema docs/coordination/board-schema.md
       - name: Check documented Severity schema against the closed ordered vocabulary
         run: scripts/project-field-options check --field Severity --schema docs/coordination/board-schema.md
       - name: Check documented Phase schema against the engine Phase vocabulary

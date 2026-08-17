@@ -36,6 +36,15 @@ module LifecycleProjection =
     type Result =
         | Project of status: BoardStatus * observedAt: int64
         | Withheld of reason: string
+        /// **THE ROW IS A STANDING ITEM AND HAS NO LIFECYCLE TO PROJECT (.github#2712).**
+        ///
+        /// A DISTINCT case, deliberately not folded into `Withheld of reason: string`. `Withheld` says
+        /// *not on this observation* — a caller retries it next pass, and rightly. `Exempt` says *never*,
+        /// and the difference has to be one the compiler can enforce: a string reason is something a
+        /// caller may only log, whereas a union case makes every `match` in the repository fail the build
+        /// until its author has decided what an exempt row means there. That is what turns "the reducer
+        /// wrote no Status and no watermark" from an assertion into a checked property.
+        | Exempt of kind: ItemKind
 
     /// Persisted ordering receipt for lifecycle projections.
     type Watermark =
@@ -58,7 +67,22 @@ module LifecycleProjection =
     val explicitStatusWatermark: observedAt: int64 -> reason: string -> BoardStatus -> Watermark option
 
     /// Pure lifecycle reducer: observed facts, scheduling intent, and policy version are separate inputs.
-    val reduce: PolicyVersion -> SchedulingIntent -> Observation -> Result
+    ///
+    /// **`kind` IS A REQUIRED POSITIONAL ARGUMENT, AND THAT IS THE POINT (.github#2712).** A standing kind
+    /// answers `Exempt` before `intent` or `observation` is consulted at all. It is a PARAMETER rather
+    /// than a `SchedulingIntent` case or an arm of the caller's policy function because both of those live
+    /// downstream of the persisted watermark, and a watermark's mere existence suppresses policy
+    /// re-derivation (`Client.fs:2492`) — so an exemption expressed either way could be frozen by a
+    /// receipt the row already carries, which since .github#2690 is every `add`-filed row. A parameter has
+    /// no such channel: the watermark carries `Intent`, never `Kind`.
+    ///
+    /// Being required is the other half. No caller can adopt the new signature by accident, forget the
+    /// argument, or default it; `Kind.govern` is the one place the `None`-means-`Work` reading is spelled.
+    val reduce: PolicyVersion -> ItemKind -> SchedulingIntent -> Observation -> Result
 
     /// Rejects stale or contradictory event observations against a persisted projection receipt.
-    val advance: PolicyVersion -> SchedulingIntent -> Watermark option -> Observation -> Result
+    ///
+    /// `kind` is tested BEFORE the watermark comparison, not merely before the projection: a standing row
+    /// must not be able to reach a verdict *about* a watermark either, because the ordering refusals read
+    /// as "we could not decide yet" where the right answer is "there is nothing to decide, ever".
+    val advance: PolicyVersion -> ItemKind -> SchedulingIntent -> Watermark option -> Observation -> Result

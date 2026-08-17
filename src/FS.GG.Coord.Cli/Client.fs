@@ -698,6 +698,15 @@ module Client =
                                 | None when bodyWasRead c -> Class.fromTitle row.Title
                                 | None -> None
                             BoardClass = row.BoardClass
+                            // The `Kind:` body line joins here on `Class`'s terms, MINUS the title
+                            // fallback — there is no `[register]` title convention and inventing one would
+                            // derive a reducer exemption from a naming habit. `c.Item.Kind` is already the
+                            // pure body parse (`Snapshot.parse`), so this arm exists only so the join
+                            // reads symmetrically with `Class` above; an unread body leaves it `None`,
+                            // which `Kind.govern` reads as `Work` — the row behaves exactly as today.
+                            Kind = c.Item.Kind
+                            BoardKind = row.BoardKind
+                            CommentCount = row.CommentCount
                             Severity = row.Severity
                             Phase = row.Phase
                             AgeDays = ageDaysOf row } }
@@ -2491,8 +2500,16 @@ module Client =
         (watermark: LifecycleProjection.Watermark option) =
         let intent = watermark |> Option.map _.Intent |> Option.defaultValue (lifecyclePolicyIntent observedAt item)
         intent,
+        // `item.Kind` — THE ITEM'S OWN `Kind:` LINE, RE-READ ON THIS PASS (.github#2712), and pointedly
+        // NOT anything the watermark carries. The line above is the freeze: a watermark's mere existence
+        // makes `lifecyclePolicyIntent` unreachable, so any exemption expressed as an intent would be
+        // frozen by whatever receipt the row already has — which, since .github#2690, is every `add`-filed
+        // row. The kind is a separate argument sourced from the body, so no receipt in this system can
+        // suppress it. `Kind.govern` owns the `None`-means-`Work` reading, so a row declaring no kind
+        // reaches an unchanged reducer with an unchanged answer.
         LifecycleProjection.advance
             LifecycleProjection.IntentStatusV1
+            (Kind.govern item.Kind)
             intent
             watermark
             (lifecycleObservation observedAt item delivery)
@@ -2654,18 +2671,42 @@ module Client =
             | Ok values -> Ok values
             | Error e -> Error $"the item's `Blocked by` edges could not be resolved: %s{Errors.explain e}"
 
+        // A FIFTH READ, ADDED DELIBERATELY (.github#2712), for the ONE fact this function could not
+        // otherwise have: whether the row it is about to project a column onto is a unit of work at all.
+        //
+        // THE KIND CANNOT COME FROM ANYWHERE ELSE HERE. It is a `Kind:` BODY line — the sole authority,
+        // because a lagging or hand-edited board column must not be able to decide this — and this
+        // function holds no `Item` and no scanned row. Taking it from the persisted watermark instead is
+        // exactly the mistake `advance`'s own comment refutes: a receipt cannot carry an exemption without
+        // freezing it.
+        //
+        // AND THE COST IS PAID ONCE PER CLAIM, NOT PER ROW SCANNED. `take` is the dearest verb on this
+        // board — measured at ~190 REST requests for one run on `FS-GG/.github` — and it reaches here
+        // exactly once, for the single item it claims, so this is one request against that. Contrast the
+        // collision scan a few hundred lines up, which `take` skips precisely because it would be paid per
+        // candidate. The alternative to paying it is writing a `Status` column onto a register, which is
+        // the defect this row exists to remove.
+        //
+        // FAIL-CLOSED, on this function's own stated terms: an unreadable body is not an absent `Kind:`
+        // line, so it refuses rather than defaulting to `Work` and projecting.
+        let kind =
+            match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+            | Ok body -> Ok(Kind.govern (Kind.fromBody body))
+            | Error e -> Error $"the item's body could not be read, so its `Kind:` is UNKNOWN — not absent: %s{Errors.explain e}"
+
         // ALL FOUR READS ARE MADE, then judged — deliberately, not as an oversight. Short-circuiting on the
         // first failure would make this path's cost depend on which read failed, and a claim whose spend
         // varies with the weather is one no budget assertion can pin (`SchedulingCostTests`' standard, and
         // the read-cost leg in `ClaimLifecycleDestinationTests`). The reads are independent and none of
         // them writes, so making all four and reporting the first refusal costs at most three reads on the
         // rare failing path and keeps the common one exactly measurable.
-        match pullRequest, issue, comments, blockers with
-        | Error reason, _, _, _
-        | _, Error reason, _, _
-        | _, _, Error reason, _
-        | _, _, _, Error reason -> Error reason
-        | Ok pullRequest, Ok issue, Ok comments, Ok blockers ->
+        match pullRequest, issue, comments, blockers, kind with
+        | Error reason, _, _, _, _
+        | _, Error reason, _, _, _
+        | _, _, Error reason, _, _
+        | _, _, _, Error reason, _
+        | _, _, _, _, Error reason -> Error reason
+        | Ok pullRequest, Ok issue, Ok comments, Ok blockers, Ok kind ->
             let watermark = LifecycleProjection.tryWatermark comments
 
             let observation : LifecycleProjection.Observation =
@@ -2679,8 +2720,15 @@ module Client =
             let intent =
                 watermark |> Option.map _.Intent |> Option.defaultValue LifecycleProjection.Auto
 
-            match LifecycleProjection.advance LifecycleProjection.IntentStatusV1 intent watermark observation with
+            match LifecycleProjection.advance LifecycleProjection.IntentStatusV1 kind intent watermark observation with
             | LifecycleProjection.Project(destination, _) -> Ok destination
+            // NOTHING IS WRITTEN, and the caller's existing `Error reason` arm is exactly the right
+            // vocabulary for it: it already means "a fact said do not write this column", and it already
+            // reports rather than swallows. A standing row claimed by hand still gets its claim marker and
+            // its lease; what it does not get is a lifecycle column it has no lifecycle to justify.
+            | LifecycleProjection.Exempt kind ->
+                Error
+                    $"%s{ref.Short} is a %s{itemKindWireName kind} (`Kind: %s{itemKindWireName kind}`), not a unit of work, so it has no lifecycle Status to project (.github#2712)"
             | LifecycleProjection.Withheld reason -> Error $"the lifecycle projection was withheld: %s{reason}"
 
     /// Next/AfterDone consume the same reducer as reconcile. Only its verified destination is admitted to
@@ -2701,6 +2749,10 @@ module Client =
                         lifecycleSelection observedAt item delivery (LifecycleProjection.tryWatermark comments)
                     match selected with
                     | LifecycleProjection.Project(destination, _) -> Chore.lifecycleProjection item destination
+                    // NO CHORE for a standing row — no park, no promote, no `Done` (.github#2712 AC2).
+                    // Distinguished from `Withheld` even though both answer `None` here, because they are
+                    // different facts and this file is where the difference would rot if it were folded.
+                    | LifecycleProjection.Exempt _ -> None
                     | LifecycleProjection.Withheld _ -> None)
 
     /// THE OFFER PATH'S BOARD — the scan's bytes AND the scan's rows, joined the way `reconcile` joins them
@@ -3212,6 +3264,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // `.github#2333` failure this projector exists to prevent, parsing precision aside.
                 let resultLabel = function
                     | LifecycleProjection.Project(status, _) -> statusWireName status
+                    // RENDERED DISTINCTLY, never as a `withheld:` reason. This label is what the reconcile
+                    // health row reports as `intended`, and it is read by a human deciding whether the
+                    // board disagrees with itself. "exempt: register" says the row has no lifecycle;
+                    // "withheld: …" says we could not decide one this pass. Collapsing them would put a
+                    // permanent fact in a vocabulary that means "try again".
+                    | LifecycleProjection.Exempt kind -> $"exempt: %s{itemKindWireName kind}"
                     | LifecycleProjection.Withheld reason -> $"withheld: %s{reason}"
                 let intentLabel = function
                     | LifecycleProjection.Auto -> "auto"
@@ -3340,6 +3398,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                            Intent = intent }: LifecycleProjection.Watermark)
                                         watermarks
                                 | None -> chores, watermarks
+                            // NEITHER A CHORE NOR A WATERMARK (.github#2712 AC2 — "no park, no promote, no
+                            // `Done`, no watermark"). This arm is the second half of the exemption and it
+                            // is not redundant with the reducer's: `advance` decides that no STATUS is
+                            // projected, and this decides that no RECEIPT is persisted either. A watermark
+                            // written here would be a durable ordering fact about a lifecycle the row does
+                            // not have, and `tryWatermark` would keep re-asserting it with a fresh
+                            // `ObservedAt` on every pass.
+                            | LifecycleProjection.Exempt _ -> chores, watermarks
                             | LifecycleProjection.Withheld _ -> chores, watermarks) ([], Map.empty)
 
                 // Scheduling Status has one authority: the intent reducer above. `Chore.derive` remains
@@ -3551,6 +3617,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         // docs/coordination/board-schema.md, then the next reconcile projects every row.
                         let classFieldMissing = not (Map.containsKey "Class" board.Fields)
 
+                        // The IDENTICAL fact for `Kind` (.github#2712), and it is the COMMON case rather
+                        // than the exotic one: no board in this org has a `Kind` field yet, because
+                        // creating it is `createProjectV2Field` and an operator action (the `Class`
+                        // precedent in docs/coordination/board-schema.md). This is why the projection is
+                        // withheld behind ONE diagnostic instead of failing a write per declared row —
+                        // and it is why landing this change is safe against today's board.
+                        let kindFieldMissing = not (Map.containsKey "Kind" board.Fields)
+
                         let withheldClassProjections =
                             chores
                             |> List.filter (fun c ->
@@ -3558,9 +3632,20 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 | Chore.ClassProjectionLag _ -> true
                                 | _ -> false)
 
+                        let withheldKindProjections =
+                            chores
+                            |> List.filter (fun c ->
+                                match c.Kind with
+                                | Chore.KindProjectionLag _ -> true
+                                | _ -> false)
+
                         if classFieldMissing && not (List.isEmpty withheldClassProjections) then
                             eprint
                                 "fsgg-coord-engine: reconcile: board has no Class field; withheld Class projections. Create it with createProjectV2Field before writing the first Class: line (docs/coordination/board-schema.md)."
+
+                        if kindFieldMissing && not (List.isEmpty withheldKindProjections) then
+                            eprint
+                                "fsgg-coord-engine: reconcile: board has no Kind field; withheld Kind projections. Create it with createProjectV2Field before writing the first Kind: line (docs/coordination/board-schema.md)."
 
                         // `reap` owns the marker CAS and its column-restore rule. Run it once per affected
                         // repo; the same fresh derivation means every additional stale marker it safely
@@ -3651,6 +3736,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         let applied =
                             [ for chore in chores do
                                   match write chore with
+                                  | Some("Kind", _) when kindFieldMissing ->
+                                      // One map-level diagnostic above names the remedy, on the `Class`
+                                      // arm's exact terms.
+                                      reconcileRow
+                                          chore
+                                          (Some(
+                                              NotAttempted
+                                                  "the board declares no Kind field; create it with createProjectV2Field before projecting Kind"
+                                          ))
                                   | Some("Class", _) when classFieldMissing ->
                                       // One map-level diagnostic above names the remedy. Repeating it for
                                       // every row would turn a board configuration fact into N failures.
