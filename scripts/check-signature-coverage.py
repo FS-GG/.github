@@ -180,7 +180,7 @@ def discover(root: str) -> tuple[list[str], list[str]]:
     return sources, covered
 
 
-def substantive_lines(text: str) -> int:
+def substantive_lines(text: str) -> tuple[int, bool]:
     """Lines that are neither blank nor a non-doc comment.
 
     `///` counts (it is the contract). `//` does not. `(* ... *)` does not, and nesting is tracked
@@ -206,10 +206,31 @@ def substantive_lines(text: str) -> int:
     and are distinguished from generic type variables (`'a`, `'result`) by requiring the closing
     quote.
 
-    The remaining imprecision is bounded and cannot fail open: a construct left unterminated at
-    end of file can only cause an UNDERCOUNT, which lowers a ratio and can make this gate warn
-    where it need not have. A spurious warning is visible, cheap, and reports a real file for a
-    human to look at. Nothing here touches the existence leg, which counts no lines at all.
+    `(*)` IS THE MULTIPLICATION OPERATOR, NOT A COMMENT OPENER. `let mul = (*) 2 3` compiles and
+    evaluates to 6; `List.reduce (*)` is ordinary F#. Verified against the compiler itself rather
+    than against this file's own model -- `dotnet fsi` prints `val mul: int = 6`. Read as a comment
+    opener it runs away exactly like the string case: one `List.reduce (*)` took a 200-line
+    implementation to 1 substantive line and a true 5.0% ratio to 1000.0%, suppressing the warning.
+    There are no occurrences in this tree today, so it was latent -- which is what `SemanticDiff.fs`
+    also was, right up until it swallowed 513 lines.
+
+    THIS SCAN CAN ERR IN BOTH DIRECTIONS, AND EITHER DIRECTION CAN SUPPRESS A WARNING. An earlier
+    revision of this docstring claimed the residual "can only undercount". That was wrong twice
+    over. An undercount RAISES the ratio when it lands in the implementation -- the `SemanticDiff`
+    incident above, which is the very case this function was repaired for. And an unterminated
+    verbatim or triple-quoted string OVERCOUNTS, because every following line is read as string
+    content and counted. No one-directional safety property is claimed here, because none holds.
+
+    WHAT BOUNDS IT IS A STATE CHECK RATHER THAN AN ARGUMENT. This function reports whether it
+    finished outside every construct, and `main` refuses to score a pair where either file did not.
+    Every runaway known to this gate leaves the scan mid-construct at end of file, so it is reported
+    UNMEASURED rather than silently scored. What remains is a BALANCED mis-lex -- a phantom opener
+    later cancelled by a phantom closer -- which is local rather than a runaway. That is a real
+    residual and it is stated, not argued away.
+
+    The existence leg counts no lines and is untouched by any of this.
+
+    Returns `(substantive line count, finished in a clean lexical state)`.
     """
     count = 0
     depth = 0  # (* *) nesting
@@ -262,6 +283,12 @@ def substantive_lines(text: str) -> int:
             if line.startswith("//", i):
                 break
 
+            # `(*)` is the multiplication operator and must be consumed before `(*` is read as an
+            # opener, or the rest of the file becomes a comment.
+            if line.startswith("(*)", i):
+                substantive = True
+                i += 3
+                continue
             if line.startswith("(*", i):
                 depth += 1
                 i += 2
@@ -301,7 +328,7 @@ def substantive_lines(text: str) -> int:
 
         if substantive:
             count += 1
-    return count
+    return count, (depth == 0 and not in_triple and not in_verbatim)
 
 
 def _char_literal_length(line: str, i: int) -> int:
@@ -401,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     # The substance leg. It reads only files that HAVE a signature, so it can neither mask nor
     # duplicate the existence leg above.
     warnings: list[str] = []
+    unmeasured: list[str] = []
     unreadable: list[str] = []
     for path in covered:
         signature = path + "i"
@@ -409,12 +437,22 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, UnicodeDecodeError) as exc:
             unreadable.append(f"{path}: {exc}")
             continue
-        implementation = substantive_lines(implementation_text)
+        implementation, impl_clean = substantive_lines(implementation_text)
+        signature_count, sig_clean = substantive_lines(signature_text)
+        if not impl_clean or not sig_clean:
+            # The scan ended inside a string or a block comment, so its count is a guess about a
+            # file it lost its place in. Every runaway this gate knows about lands here, and a
+            # runaway moves the ratio far enough to invent or suppress a warning. Say so instead.
+            unmeasured.append(
+                f"{signature if not sig_clean else path}: the scan ended inside a string or block "
+                "comment, so no ratio was computed for this pair."
+            )
+            continue
         if implementation == 0:
             # No substantive implementation to be a fraction of; a ratio here would divide by zero
             # and would mean nothing if it did not.
             continue
-        ratio = 100.0 * substantive_lines(signature_text) / implementation
+        ratio = 100.0 * signature_count / implementation
         if ratio < args.warn_below:
             warnings.append(
                 f"{signature}: {ratio:.1f}% of its implementation's substantive lines "
@@ -427,6 +465,9 @@ def main(argv: list[str] | None = None) -> int:
         for entry in unreadable:
             print(f"  {entry}")
         return 3
+
+    for entry in unmeasured:
+        print(f"UNMEASURED  {entry}")
 
     for warning in warnings:
         print(f"WARN  {warning}")

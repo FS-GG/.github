@@ -114,6 +114,20 @@ must_not_warn() { # must_not_warn <name> <pattern> <root> [args...]
   fi
 }
 
+must_unmeasured() { # must_unmeasured <name> <pattern> <root>
+  local name="$1" pat="$2" root="$3" out rc
+  out="$(gate "$root")" && rc=0 || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    bad "$name (an unmeasurable pair must not fail the gate; exit $rc)" "$out"
+  elif ! grep -qE "UNMEASURED.*$pat" <<<"$out"; then
+    bad "$name (no UNMEASURED line matching /$pat/)" "$out"
+  elif grep -qE "WARN" <<<"$out"; then
+    bad "$name (scored a pair it could not measure)" "$out"
+  else
+    ok "$name"
+  fi
+}
+
 # ---- tree builders ---------------------------------------------------------------------------
 #
 # The gate's exemption table is REAL and is not stubbed here: these trees create the two exempt
@@ -284,7 +298,7 @@ pair "$C" "Edge" 100 9
 printf '(*\n(* nested *)\nstill inside\n*)\n' >>"$C/src/Demo/Edge.fsi"
 must_warn "substance: a nested (* *) block adds no substantive lines" "Edge\.fsi: 9\.0%" "$C"
 
-# ---- 15-17. a `(*` IS ONLY A COMMENT OPENER WHERE F# WOULD READ ONE ------------------------------
+# ---- 15-22. a `(*` IS ONLY A COMMENT OPENER WHERE F# WOULD READ ONE ------------------------------
 #
 # These three legs pin the fail-open the .github#2731 review round found. An earlier revision
 # counted `(*` and `*)` anywhere on a line, so `SemanticDiff.fs:99` -- which contains
@@ -321,19 +335,95 @@ body 100 >"$DOC/src/Demo/Edge.fs"
 # lines behind it, reaching 1/100 = 1% and warning on a signature that states twenty things.
 must_not_warn "lexing: a (* inside /// prose does not open a comment" "WARN" "$DOC"
 
-CHR="$WORK/char-literal"
-entry_points "$CHR"
-mkdir -p "$CHR/src/Demo"
-{
-  echo "let quote = '\"'"
-  body 99
-} >"$CHR/src/Demo/Edge.fs"
-sig_body 9 >"$CHR/src/Demo/Edge.fsi"
-# `'"'` occurs in this tree (SemanticDiff.fs:103, RegistryPredicate.fs:40). Read as a string opener
-# it would swallow the rest of the file and inflate the ratio out of warning range.
-must_warn "lexing: a '\"' char literal does not open a string" "Edge\.fsi: 9\.0%" "$CHR"
+# EACH CONSTRUCTION BELOW WAS MEASURED, NOT REASONED ABOUT, and that distinction is the whole
+# lesson of this row's round 0. That round bounded the string-literal defect at "<=2.22pp across
+# 3/68" using a reference counter that shared the defect under test, so the worst file in the tree
+# reported +0.00pp and never entered the affected list. An oracle that shares an assumption with its
+# subject cannot see errors in that assumption.
+#
+# So these legs were not derived from a second reading of the lexer. Each branch was DELETED from a
+# copy of the shipped gate and candidate inputs were run through both, keeping only inputs where the
+# two disagree. The witness is the disagreement, and each line below records it. A first attempt at
+# the char-literal leg -- `let quote = '"'` on its own -- was discarded here precisely because it
+# measured 100 substantive lines under BOTH scanners and therefore guarded nothing.
+#
+# Every leg is built the same way: one construct, then 99 plain lines, against a 9-line signature.
+# Correct = 9/100 = 9.0% and a warning. With the branch removed the construct swallows the file,
+# leaving 9/1 = 900% and silence -- so the leg reds on removal.
 
-# ---- 18-19. against the REAL repository, which is the tree that actually matters ------------------
+lex_leg() { # lex_leg <name> <dir> <first-line-file> <assert-msg>
+  local dir="$1" first="$2"
+  entry_points "$dir"
+  mkdir -p "$dir/src/Demo"
+  { cat "$first"; body 99; } >"$dir/src/Demo/Edge.fs"
+  sig_body 9 >"$dir/src/Demo/Edge.fsi"
+}
+
+# char literal: without it, `'` is ordinary, the `"` after it opens a string that closes at the
+# quote before `(*`, and `(*` is then read as a comment opener. Measured 100 -> 1.
+cat >"$WORK/first-char.fs" <<'FS'
+let pair = ('"', "(*")
+FS
+lex_leg "$WORK/char-literal" "$WORK/first-char.fs"
+must_warn "lexing: a '\"' char literal is not a string opener" "Edge\.fsi: 9\.0%" "$WORK/char-literal"
+
+# verbatim `@"`: `\` does not escape inside one, so the closing quote really closes. Without the
+# branch, `\"` reads as an escaped quote, the string runs on, and the later `(*` lands in code.
+# Measured 100 -> 1. This branch is the one that is load-bearing on the REAL tree: removing it
+# moves the whole `src/` total by 13 lines (`Fake.fs` alone, 143 -> 156).
+cat >"$WORK/first-verb.fs" <<'FS'
+let v = @"p\" + "(*"
+FS
+lex_leg "$WORK/verbatim" "$WORK/first-verb.fs"
+must_warn "lexing: @\"...\" is verbatim, so a backslash does not escape its quote" "Edge\.fsi: 9\.0%" "$WORK/verbatim"
+
+# triple-quoted: a bare `"` is ordinary content inside one. Without the branch the three opening
+# quotes read as an empty string plus an opener, the `"` inside closes it, and `(*` lands in code.
+# Measured 100 -> 1.
+cat >"$WORK/first-trip.fs" <<'FS'
+let t = """a"b(*"""
+FS
+lex_leg "$WORK/triple" "$WORK/first-trip.fs"
+must_warn "lexing: a bare quote inside a triple-quoted string is content" "Edge\.fsi: 9\.0%" "$WORK/triple"
+
+# `(*)` is the MULTIPLICATION OPERATOR, not a comment opener -- `dotnet fsi` on `let mul = (*) 2 3`
+# prints `val mul: int = 6`. Ground truth here is the F# compiler, deliberately: this is the one
+# fact in the file that must not come from the same model as the scanner. Zero occurrences in the
+# tree today, so nothing but this leg can hold it. Measured 100 -> 1.
+cat >"$WORK/first-mul.fs" <<'FS'
+let p = List.reduce (*) xs
+FS
+lex_leg "$WORK/mul-operator" "$WORK/first-mul.fs"
+must_warn "lexing: (*) is the multiplication operator, not a comment opener" "Edge\.fsi: 9\.0%" "$WORK/mul-operator"
+
+# ---- unmeasurable pairs are REPORTED, never scored ----------------------------------------------
+#
+# The gate no longer claims a one-directional error bound, because it has none: an undercount raises
+# the ratio when it lands in the implementation (the SemanticDiff incident), and an unterminated
+# verbatim or triple-quoted string OVERCOUNTS, reading every following line as string content. What
+# replaces the claim is a state check -- a scan that ends inside a construct scores nothing at all.
+
+UV="$WORK/unterminated-verbatim"
+entry_points "$UV"
+mkdir -p "$UV/src/Demo"
+{
+  printf 'let s = @"never closed\n'
+  body 99
+} >"$UV/src/Demo/Edge.fs"
+sig_body 9 >"$UV/src/Demo/Edge.fsi"
+must_unmeasured "state: an unterminated verbatim string yields UNMEASURED, not a ratio" "Edge" "$UV"
+
+UT="$WORK/unterminated-triple"
+entry_points "$UT"
+mkdir -p "$UT/src/Demo"
+{
+  printf 'let s = """never closed\n'
+  body 99
+} >"$UT/src/Demo/Edge.fs"
+sig_body 9 >"$UT/src/Demo/Edge.fsi"
+must_unmeasured "state: an unterminated triple-quoted string yields UNMEASURED, not a ratio" "Edge" "$UT"
+
+# ---- 23-24. against the REAL repository, which is the tree that actually matters ------------------
 #
 # A fixture green on synthetic strings while the shipped tree rots is not reachable from here.
 
@@ -347,7 +437,7 @@ body 12 >"$R/src/FS.GG.Coord.Core/PlantedOffender.fs"
 must_fail "repository: an offender planted in a copy of the real tree is caught" \
   "PlantedOffender\.fs: no sibling \.fsi" "$R"
 
-# ---- 20-22. HARNESS CONTROLS: this fixture, not the gate ------------------------------------------
+# ---- 25-27. HARNESS CONTROLS: this fixture, not the gate ------------------------------------------
 #
 # .github#2395's L5 leg. Three properties, each of which would silently hollow this file out.
 
