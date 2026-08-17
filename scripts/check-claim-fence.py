@@ -44,20 +44,37 @@ the forward-compatibility that lets this stricter reader be added without editin
 **The merge election**, an append-only comment on the ITEM (design doc §4.2):
 
     <!-- fsgg:merge-election v=1 opkey=<64 lowercase hex> item=FS-GG/.github#2719
-         gen=5309319124 receiver=FS-GG/.github op=merge -->
+         gen=5309319124 receiver=FS-GG/.github op=merge pr=2740 -->
 
-THE ELECTION'S WIRE SPELLING IS DEFINED HERE, AND THAT IS A GAP THIS SLICE INHERITED RATHER THAN CHOSE.
-§4.2 specifies the election's SEMANTICS exhaustively — append-only, never deleted, no lease, keyed on
-the opkey, winner is the lowest-id marker bearing that key, recording the item/generation/receiver it
-was elected for — but it gives no literal byte spelling, because writing the election is §11.2 slice 3's
-job (*"`delivery` posts the merge election, then writes the PR authorization marker naming it"*). Slice 3
-landed as `.github#2395` with the AUTHORIZATION half only; no producer of an election marker exists in
-this repository today (checked: `grep -rni election src/ --include=*.fs --include=*.fsi` finds the
-ordering function `Reads.lowestId` that slice 2 exported for it, `.github#2312`, and no writer). So the
-reader necessarily fixes the spelling. The fields above are not invented freely: they are exactly the
-four facts §6.3 check 4 requires the marker to record, plus the `v=`/prefix discipline every other
-marker in this repository already carries. A finding is packeted for the missing producer; it is not
-this slice's to write, and its absence is precisely why observe-only is the correct landing state.
+THE ELECTION'S WIRE SPELLING WAS DEFINED HERE FIRST, AND IT NOW HAS A PRODUCER. §4.2 specifies the
+election's SEMANTICS exhaustively — append-only, never deleted, no lease, keyed on the opkey, winner is
+the lowest-id marker bearing that key, recording the item/generation/receiver it was elected for — but
+it gives no literal byte spelling, because writing the election is §11.2 slice 3's job (*"`delivery`
+posts the merge election, then writes the PR authorization marker naming it"*). When this gate landed,
+slice 3 had landed only the AUTHORIZATION half and no writer existed, so this reader necessarily fixed
+the spelling.
+
+`.github#2395`'s second landing closed that: `DeliveryApplication.electionMarker` composes the marker
+and `Client.fs`'s `ensureAuthorization` posts it before writing the six-field authorization that names
+it. THE PRODUCER WRITES A SEVENTH FIELD, `pr=`, and this gate deliberately does not require it: it is
+the producer's idempotence discriminator (a second `delivery` call for the same pull request must reuse
+its election rather than post a strictly-higher-id one and thereby lose its own race), and a reader that
+required it would be grading a write-side concern. The relation between the two field sets is therefore
+CONTAINMENT, not equality, in that direction — `tests/claim-fence/run.sh` section M asserts exactly that
+and measures that the extra-field case is live today, because an equality assertion here would red the
+moment the producer became correct.
+
+The six fields this gate does require are not invented freely: they are exactly the facts §6.3 check 4
+requires the marker to record, plus the `v=`/prefix discipline every other marker in this repository
+already carries.
+
+WHAT THAT LANDING CHANGED FOR THIS GATE, AND IT IS NOT ONLY A FACT ABOUT THE WORLD. Before it, every
+real authorization carried four fields, `REQUIRED_AUTH_FIELDS` demanded six, and the missing-field arm
+below returned `check1` — so checks 4 and 5 were not merely failing on real pull requests, they were
+NEVER EVALUATED. Documentation that predicted a `check4` red therefore described a branch nothing could
+reach, and a predicted red is indistinguishable from an unreachable one in a job summary. That is
+`.github#266`'s class at the guidance layer, and it is why `tests/claim-fence/run.sh` section M closes
+with an EXECUTED reachability leg rather than a comparison of field sets alone.
 
 THE PREFIX IS NEW, AND THAT IS SAFE FOR THE REASON §4.3 GIVES FOR `fsgg:op-effect`: *"A new prefix is
 safe here precisely because `Reads.winner` never reads it: it decides no lock, so it cannot forge one."*

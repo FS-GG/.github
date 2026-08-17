@@ -32,11 +32,36 @@
 #
 # §9.1 also fixes what must be true before slice 8 arms anything, and neither condition is met yet:
 # the observe-only phase must run at least one full claim-lease window, and arming must confirm zero
-# open `item/<n>-*` pull requests lacking the marker. More immediately: NOTHING WRITES A MERGE
-# ELECTION YET. §11.2 slice 3 was to have `delivery` post the election and name it in the
-# authorization; `.github#2395` landed the authorization half only, so check 4 currently finds no
-# election on any real pull request. That is the honest state, it is why observe-only is the correct
-# landing, and it is packeted rather than silently absorbed.
+# open `item/<n>-*` pull requests lacking the marker.
+#
+# ============================================================================================
+# THE SUMMARY DERIVES THE FAILING CHECK. IT USED TO PREDICT ONE, AND THE PREDICTION WAS UNFALSIFIABLE
+# ============================================================================================
+#
+# This paragraph and the FINDING step below used to say: *"NOTHING WRITES A MERGE ELECTION YET …
+# `.github#2395` landed the authorization half only, so check 4 currently finds no election on any
+# real pull request."* Both halves were wrong, and they were wrong in OPPOSITE directions.
+#
+#   * The first half is now false as a fact. `.github#2395` (slice 3) has since landed BOTH halves:
+#     `delivery` posts a `fsgg:merge-election` marker and then writes a SIX-field authorization
+#     grounded on it (`src/FS.GG.Coord.Cli/Client.fs`'s `authorizationMarker`,
+#     `src/FS.GG.Coord.Cli/DeliveryApplication.fs`'s `electionMarker`).
+#   * The second half was NEVER true, and that is the part worth keeping a note about. Check 4 was not
+#     *finding no election*; it was never EVALUATED. `scripts/check-claim-fence.py`'s
+#     `REQUIRED_AUTH_FIELDS` names six fields and the pre-#2395 producer composed four, so the
+#     missing-field arm returned `check1` and control never reached check 4 at all.
+#
+# A PREDICTED RED AND AN UNREACHABLE BRANCH ARE INDISTINGUISHABLE IN A JOB SUMMARY. That is exactly
+# `.github#266`'s class — a verdict nobody can falsify by observation — arriving one layer out, at the
+# operator-guidance layer rather than at the gate. So the repair is NOT a corrected prediction, which
+# would go stale the same way the moment anything upstream moved. The FINDING step below DERIVES the
+# failing check from the gate's own verdict at read time, and predicts nothing.
+#
+# `tests/claim-fence/run.sh` holds both halves of the repair as tests rather than as promises:
+# section L executes that step over a corpus of verdicts and asserts the heading names the check the
+# verdict names and none of the other five, and section M pins this gate's required field sets against
+# the production writers — including an EXECUTED leg that runs this gate against the producer's own
+# parsed marker template and asserts it reaches check 4.
 #
 # ============================================================================================
 # WHY `merge_group` IS NOT OPTIONAL
@@ -180,21 +205,40 @@ jobs:
         env:
           VERDICT: ${{ steps.fence.outputs.verdict }}
 
+      # THE ONE STEP THAT NAMES A CHECK, AND IT DERIVES THE NAME RATHER THAN ASSERTING IT — see the
+      # header's "THE SUMMARY DERIVES THE FAILING CHECK" section for the measured reason. `id: finding`
+      # is how `tests/claim-fence/run.sh` section L selects this step: BY ID, never by position or by
+      # name, because an assertion that quietly starts grading a different step is the same defect
+      # class this file exists to close.
       - name: 'FINDING (observed, NOT enforced): the authorization is not grounded'
+        id: finding
         if: ${{ !cancelled() && steps.fence.outputs.rc == '1' }}
         run: |
+          # `[[ =~ ]]` is a bash builtin: no pipeline, so this cannot acquire a status from a
+          # SIGPIPE'd left-hand side under `-o pipefail`, and no subshell to lose `set -e` in. A
+          # verdict that names no check falls through to a NAMED "the gate named none" state rather
+          # than to a silently blank heading — "I could not tell" is never "it is fine" (#266).
+          fired=unnamed
+          if [[ "$VERDICT" =~ \[(check[0-9]+)\] ]]; then
+            fired="${BASH_REMATCH[1]}"
+          fi
           {
-            echo "### fsgg-claim-fence: FINDING — observed, NOT enforced"
+            echo "### fsgg-claim-fence: FINDING — observed, NOT enforced — $fired"
             echo
-            echo 'One of the five substantive checks of the fencing design §6.3 failed. The diagnosis'
-            echo 'below names WHICH. This job is deliberately OBSERVE-ONLY (§9.1 step 1): it reports'
-            echo '`success` regardless, and arming this context is slice 8 (.github#2723), not this'
-            echo 'one. So this finding does NOT block the merge, and it is not meant to yet.'
+            if [ "$fired" = unnamed ]; then
+              echo 'The gate reported a finding but its verdict names no check in `[checkN]` form.'
+              echo 'That is a defect in the gate or in this step, NOT a fact about this pull request.'
+            else
+              echo "One of the substantive checks of the fencing design 6.3 refused this head, and"
+              echo "the one that fired is $fired. That name is DERIVED from the verdict quoted below,"
+              echo 'not predicted: a prediction about which check will fail cannot be told apart from'
+              echo 'a branch the gate never reaches, which is how the sentence that used to sit here'
+              echo 'survived being false in two directions at once.'
+            fi
             echo
-            echo 'Note that `check4` is expected to fail on every real pull request today: nothing'
-            echo 'writes a `fsgg:merge-election` marker, because slice 3 (.github#2395) landed the'
-            echo 'authorization half without the election half. That is a known gap, not a defect in'
-            echo 'this pull request.'
+            echo 'This job is deliberately OBSERVE-ONLY (design 9.1 step 1): it reports `success`'
+            echo 'regardless, and arming this context is slice 8 (.github#2723), not this one. So this'
+            echo 'finding does NOT block the merge, and it is not meant to yet.'
             echo
             echo '```'
             printf '%s\n' "$VERDICT"
