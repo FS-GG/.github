@@ -141,7 +141,14 @@ module Bad =
     /// This sentence reaches no consumer: the compiler takes `Bad.fsi`'s documentation, not this.
     let run n = n
 FS
-must_exit "red: a doc comment in an implementation that has a sibling .fsi" 1 "Bad\.fs: 1 XML documentation comment" "$OFF"
+# The pattern pins the NO-BASELINE-ENTRY branch's own sentence, not just `<file>: N XML
+# documentation comment`. The gate has four finding shapes and two of them open with those same
+# words, so the shared prefix cannot tell them apart: deleting this branch outright (`if allowed ==
+# 0:` -> `if False:`) lets the `len(seen) > allowed` branch catch the same file and emit `baseline
+# allows 0 -- 1 new one(s)`, and the prefix-only assertion this leg used to carry stayed green at 36
+# passed, 0 failed. That was the same defect as the unlexable arms below, in the finding path.
+must_exit "red: a doc comment in an implementation that has a sibling .fsi" 1 \
+  "Bad\.fs: 1 XML documentation comment\(s\) in an implementation file that has a sibling \.fsi, and no baseline entry" "$OFF"
 
 # It must name the LINE, so the reader can go to it.
 run_gate "$OFF"
@@ -283,7 +290,9 @@ must_exit "red: a real doc comment after a nested block comment is still found" 
 # following that printed remedy reached exit 0 while `grep -c '///'` still returned 455. Mirrored, a
 # `///` on a continuation line INSIDE such a string was reported as a doc comment.
 #
-# `src/` DOES hold multi-line strings — 320 continuation lines across 4 subject files — but not one
+# `src/` DOES hold multi-line strings — 320 continuation lines across the 4 SUBJECT files that have
+# them (323 across 5 if the population is all of `src/**.fs` rather than the subjects; the extra 3
+# are `Cli/Client.fs:3205-3207`, which has no sibling `.fsi` today) — but not one
 # of them happens to carry a `///` or a `(*`, so the corpus cannot reach either failure. That is why
 # both are constructed here. Latent is not harmless: the subject is `src/**` in perpetuity, and the
 # recorded `Cli` residue is edited by every extraction lane.
@@ -470,6 +479,65 @@ must_exit "no verdict: a subject file cannot be decoded" 3 "could not be read" "
 # opened and never closed leaves the pass in the wrong state for everything after it. The answer is
 # to REFUSE rather than to reset — a count taken after a mis-parse is worse than no count, because
 # it looks like one.
+#
+# `doc_comment_lines` REFUSES THROUGH FOUR DISTINCT RETURNS, AND EACH GETS ITS OWN LEG ASSERTING ITS
+# OWN WORDS. Until .github#2730's round-3 review this section held two legs for the four arms, and
+# both asserted the CALLER's generic prefix `could not be lexed` rather than the arm's own sentence.
+# That cannot discriminate the four even in principle, and it was measured failing in both of the
+# ways a shared assertion fails:
+#
+#   * CONDITION-BLIND. `if in_triple:` -> `if False:` at the triple arm, and `if in_str:` -> `if
+#     False:` at the ordinary-string arm, each left the whole fixture at 36 passed, 0 failed — the
+#     two arms had no leg at all. A real subject file ending inside `"""...` or `"...` with a
+#     genuine `///` after the opening quote then shipped exit 0, `OK: every subject file matches its
+#     baseline entry exactly`, against exit 3 unmutated. That is a mis-parse presenting as green,
+#     which this module names the one failure it must not have.
+#   * MESSAGE-BLIND. The verbatim and block-comment arms DID red on a condition mutation (35/1
+#     each), yet swapping their two message strings — each arm still refusing, but reporting the
+#     other's words — also left 36 passed, 0 failed. An arm asserted only by a shared prefix is an
+#     arm whose identity nothing checks.
+#
+# So each leg below pins the arm's own discriminating sentence, and the depth-counting arm gets a
+# second leg at a different depth, because `{depth} unclosed block comment(s)` is a COUNT and a leg
+# that never varies it cannot tell 1 from 2. Mutate any one of the four conditions to `if False:`,
+# or swap any two of the four messages, and exactly the corresponding leg(s) red.
+
+UNLEXTRIPLE="$(mktree unlextriple)"
+write_clean_pair "$UNLEXTRIPLE"
+cat >"$UNLEXTRIPLE/src/Proj/Triple.fsi" <<'FSI'
+namespace Proj
+
+module Triple =
+    val banner: string
+FSI
+cat >"$UNLEXTRIPLE/src/Proj/Triple.fs" <<'FS'
+namespace Proj
+
+module Triple =
+    let banner = """this triple-quoted string is never closed
+    /// and so this line cannot be classified either way
+FS
+must_exit "no verdict: a subject file ends inside an unterminated TRIPLE-QUOTED string" 3 \
+  "reached end of file inside a triple-quoted string" "$UNLEXTRIPLE"
+
+UNLEXSTR="$(mktree unlexstr)"
+write_clean_pair "$UNLEXSTR"
+cat >"$UNLEXSTR/src/Proj/Ordinary.fsi" <<'FSI'
+namespace Proj
+
+module Ordinary =
+    val banner: string
+FSI
+cat >"$UNLEXSTR/src/Proj/Ordinary.fs" <<'FS'
+namespace Proj
+
+module Ordinary =
+    let banner = "this ordinary string is never closed
+    /// and so this line cannot be classified either way
+FS
+must_exit "no verdict: a subject file ends inside an unterminated ORDINARY string" 3 \
+  "reached end of file inside a string literal" "$UNLEXSTR"
+
 UNLEXABLE="$(mktree unlexable)"
 write_clean_pair "$UNLEXABLE"
 cat >"$UNLEXABLE/src/Proj/Unclosed.fsi" <<'FSI'
@@ -485,7 +553,8 @@ module Unclosed =
     let banner = @"this verbatim string is never closed
     /// and so this line cannot be classified either way
 FS
-must_exit "no verdict: a subject file ends inside an unterminated string" 3 "could not be lexed" "$UNLEXABLE"
+must_exit "no verdict: a subject file ends inside an unterminated VERBATIM string" 3 \
+  "reached end of file inside a verbatim @\"\.\.\.\" string" "$UNLEXABLE"
 
 UNCLOSEDCOMMENT="$(mktree unclosedcomment)"
 write_clean_pair "$UNCLOSEDCOMMENT"
@@ -502,7 +571,30 @@ module Dangling =
     (* this block comment is never closed
     let run n = n
 FS
-must_exit "no verdict: a subject file ends inside an unclosed block comment" 3 "could not be lexed" "$UNCLOSEDCOMMENT"
+must_exit "no verdict: a subject file ends inside ONE unclosed block comment" 3 \
+  "reached end of file inside 1 unclosed block comment\(s\)" "$UNCLOSEDCOMMENT"
+
+# The depth is a COUNT, and the leg above holds it at 1 forever. `(*` NESTS in F#, so a file may end
+# two deep, and a refusal that says `1` when the truth is `2` is a refusal that lost the very state
+# it is refusing on behalf of.
+NESTEDUNCLOSED="$(mktree nestedunclosed)"
+write_clean_pair "$NESTEDUNCLOSED"
+cat >"$NESTEDUNCLOSED/src/Proj/TwoDeep.fsi" <<'FSI'
+namespace Proj
+
+module TwoDeep =
+    val run: int -> int
+FSI
+cat >"$NESTEDUNCLOSED/src/Proj/TwoDeep.fs" <<'FS'
+namespace Proj
+
+module TwoDeep =
+    (* outer, never closed
+       (* inner, never closed either
+    let run n = n
+FS
+must_exit "no verdict: a subject file ends TWO unclosed block comments deep" 3 \
+  "reached end of file inside 2 unclosed block comment\(s\)" "$NESTEDUNCLOSED"
 
 printf 'not-a-number src/Proj/Clean.fs\n' >"$WORK/bad-count.txt"
 must_exit "no verdict: a baseline count that is not an integer" 3 "count is not an integer" "$GREEN" "$WORK/bad-count.txt"
@@ -583,7 +675,8 @@ must_exit "REAL-2: the copy of the real tree is green before anything is planted
 
 printf '\n/// A reintroduced doc comment. The compiler discards it; this gate must not.\n' \
   >>"$REAL_COPY/src/FS.GG.Coord.Core/Landable.fs"
-must_exit "REAL-3: a doc comment reintroduced into a swept file reds the gate" 1 "Landable\.fs: 1 XML documentation comment" "$REAL_COPY"
+must_exit "REAL-3: a doc comment reintroduced into a swept file reds the gate" 1 \
+  "Landable\.fs: 1 XML documentation comment\(s\) in an implementation file that has a sibling \.fsi, and no baseline entry" "$REAL_COPY"
 
 echo
 echo "signature-doc-siting fixture: $pass passed, $failcount failed"

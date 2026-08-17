@@ -124,6 +124,14 @@ jobs:
           echo "::error title=signature-doc-siting: a doc comment the compiler discards::A new doc comment in an implementation file that has a signature file, or a stale baseline. See the job log."
           exit 1
 
+      # "FIVE causes" IS READER-FACING AND CORRECT; the gate has SIX `EX_NO_VERDICT` returns, and the
+      # sixth is deliberately folded rather than missing. `main` refuses separately when `src/` is not
+      # a directory at all and when it is one holding no `.fs` file, but those are one cause to the
+      # person reading this summary — discovery did not find a subject set — with one repair, the
+      # harness or the checkout. Splitting them here would make the reader choose between two rows
+      # that lead to the same place. The five named causes cover all six returns; the job log still
+      # prints the exact one. Recorded at .github#2730 round 3 so the count is not re-raised as a
+      # defect: it was checked, and the grouping is the intent.
       - name: 'NO VERDICT (permanent): the gate could not read or lex a valid subject'
         if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
         run: |

@@ -25,7 +25,13 @@ The positive leg is what makes the negative leg mean anything.
 AND THE COMPILER CANNOT WARN. `///` binds silently to the next declaration, so a doc block whose
 subject has been deleted or moved re-binds to whatever now follows it rather than erroring. The
 Release build of all three projects emits zero warnings over 3,913 such lines. The worked example
-the row cites is still live at `0ddd4b88`, in a file this gate reports but this row did not sweep:
+the row cites is still live at `0ddd4b88`, in a file this gate does NOT report and this row did not
+sweep -- `src/FS.GG.Coord.Cli/Client.fs` has no sibling `.fsi` at `0ddd4b88` or at this head, so it
+is not a subject, carries no baseline entry, and its 1,714 `///` lines are compiler-KEPT. That is
+what makes it a clean illustration of the re-binding hazard and not of this gate's subject: the two
+are independent, and the example is cited for the first. (`.github#2724` adds a `Client.fsi`; on the
+day it merges this file becomes a subject and its residue is baselined. Nothing here depends on
+that, and this paragraph is written to be true without it.)
 `src/FS.GG.Coord.Cli/Client.fs` lines 718-752 are a 35-line block describing an implementation of
 `boardBlockingCounts` that no longer exists -- the declaration it now attaches to, at line 753, is
 the one-line forward `let boardBlockingCounts = BoardFactsApplication.blockingCounts` -- and lines
@@ -61,8 +67,14 @@ IT LEXES RATHER THAN GREPS, and each clause below has a measured reason:
     string -- while `'T` and `xs'` must not be mistaken for literals. See `char_literal_end`.
 
 WHAT IS LIVE HERE AND WHAT IS LATENT, measured rather than assumed. Multi-line strings are LIVE:
-`src/` holds 320 continuation lines inside them across 4 subject files -- 245 triple-quoted and 75
-ordinary, chiefly `Cli/Options.fs` (248) and `GitHub/Scan.fs` (44) -- and, at code level, 106
+`src/` holds 320 continuation lines inside them across 4 SUBJECT files -- 245 triple-quoted, 75
+ordinary, 0 verbatim -- chiefly `Cli/Options.fs` (248) and `GitHub/Scan.fs` (44). THE POPULATION IS
+PART OF THAT NUMBER AND IS STATED BECAUSE IT MOVES: counted over all 66 `.fs` files under `src/`
+rather than the 61 subjects, the same replay gives 323 across 5 files (245 triple, 78 ordinary, 0
+verbatim), the extra 3 being `Cli/Client.fs:3205-3207` -- a file with no sibling `.fsi`, and so not
+a subject today. Either figure is right for its population and neither is right for the other;
+`.github#2724` converts the second into the first by adding `Client.fsi`. The load-bearing claim is
+invariant across both: not one of those lines carries a `///` or a `(*`. And, at code level, 106
 character literals against 40 `'` that are not one, the two `'"'` above among the literals (see
 `char_literal_end` for the method, and for two earlier figures here that did not survive
 re-derivation). What is latent is the multi-line VERBATIM string specifically:
