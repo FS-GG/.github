@@ -62,8 +62,10 @@ IT LEXES RATHER THAN GREPS, and each clause below has a measured reason:
 
 WHAT IS LIVE HERE AND WHAT IS LATENT, measured rather than assumed. Multi-line strings are LIVE:
 `src/` holds 320 continuation lines inside them across 4 subject files -- 245 triple-quoted and 75
-ordinary, chiefly `Cli/Options.fs` (248) and `GitHub/Scan.fs` (44) -- and 29 character literals
-including the two `'"'` above. What is latent is the multi-line VERBATIM string specifically:
+ordinary, chiefly `Cli/Options.fs` (248) and `GitHub/Scan.fs` (44) -- and, at code level, 106
+character literals against 40 `'` that are not one, the two `'"'` above among the literals (see
+`char_literal_end` for the method, and for two earlier figures here that did not survive
+re-derivation). What is latent is the multi-line VERBATIM string specifically:
 `src/` holds none today.
 
 That distinction is exactly why the defect survived authoring. None of the 320 live continuation
@@ -135,9 +137,27 @@ def char_literal_end(line: str, i: int) -> int | None:
     """Index just past the F# character literal starting at `line[i] == "'"`, or None if it is not one.
 
     A `'` in F# is not reliably a quote: `'T` is a generic type parameter and `xs'` is a primed
-    identifier, and `src/` holds 1,933 of those against 29 character literals. So a `'` is read as a
-    literal only when its closing `'` is where the grammar puts it, and otherwise as an ordinary
-    character.
+    identifier, and `src/` holds BOTH shapes in quantity, so neither can be assumed away. So a `'` is
+    read as a literal only when its closing `'` is where the grammar puts it, and otherwise as an
+    ordinary character.
+
+    THE POPULATION, MEASURED THE WAY THIS FUNCTION SEES IT. Replay `doc_comment_lines`' pass over
+    `discover()`'s output and tally every `'` it reaches AT CODE LEVEL -- outside strings and block
+    comments, the only place this function is consulted -- and today's `src/` gives 106 character
+    literals against 40 `'` that are not one, over the 66 `.fs` files; 81 against 36 over the 61 with
+    a sibling `.fsi`. The literals span 25 distinct spellings, `'"'` among them; the non-literals are
+    type parameters (`'a`, `'item`, `'value`) and primed identifiers (`done'`, `member'`, `base'`,
+    `inline'`, `o'`).
+
+    AN EARLIER VERSION OF THIS PARAGRAPH SAID "1,933 of those against 29 character literals", and
+    neither number survived re-derivation at review. `29` reproduces under no scoping tried: this
+    lexer reaches 106/81, and a raw `grep -ohE "'(\\.|[^'\\])'" $(find src -name '*.fs' -not -path
+    '*/obj/*' -not -path '*/bin/*') | wc -l` gives 120 -- higher, not lower, because a raw grep also
+    counts what sits inside strings and comments. `1,933` is only reachable by a raw-text scan of
+    that same kind (a `'`-adjacent-identifier regex gives ~2,000 today), which counts a population
+    this function never decides over. The ratio they jointly asserted is also backwards. The argument
+    never needed a ratio: both shapes occur, and either one misread costs the pass its place for the
+    rest of the file -- which is what the paragraph below actually establishes.
 
     THIS IS LOAD-BEARING, NOT DECORATIVE. `'"'` occurs in `src/` TODAY -- `RegistryPredicate.fs:40`
     and `SemanticDiff.fs:103`, both subject files -- and once string state carries across lines (it

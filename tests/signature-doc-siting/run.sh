@@ -227,6 +227,49 @@ cat >>"$QUOTED/src/Proj/Quoted.fs" <<'FS'
 FS
 must_exit "red: a real doc comment beside those non-doc-comments is still found" 1 "Quoted\.fs: 1 XML documentation comment" "$QUOTED"
 
+# 3a. NESTING ITSELF, DISCRIMINATED — AND THE LEG ABOVE DOES NOT DO IT.
+#
+# `Quoted.fs` above contains a nested block comment, and its leg is named for one. But its inner
+# `///` sits BEFORE the inner `*)`, so it is skipped at depth 1 whether or not `(*` nests, and the
+# leg cannot tell the two lexers apart. Measured at review: with the `depth += 1` inside
+# `doc_comment_lines`' `if depth > 0:` branch neutralised — the one line that makes `(* *)` nest at
+# all — the ENTIRE fixture still passed, 34 legs, 0 failures. A precaution nothing can fail on is a
+# precaution nothing proves, which is this fixture's own stated subject.
+#
+# The construct that separates them is a `///` AFTER the inner `*)`. With nesting, that `*)` takes
+# the depth from 2 to 1 and the `///` is still inside the OUTER comment, correctly invisible.
+# Without it, the same `*)` closes the only comment the lexer is tracking, depth reaches 0 mid-line,
+# and the `///` is REPORTED — the false positive this module calls the one failure it must not have.
+# Shipped: `([], None)`. Nesting neutralised: `([6], None)`.
+NEST="$(mktree nesting)"
+write_clean_pair "$NEST"
+cat >"$NEST/src/Proj/Nest.fsi" <<'FSI'
+namespace Proj
+
+module Nest =
+    val run: int -> int
+FSI
+cat >"$NEST/src/Proj/Nest.fs" <<'FS'
+namespace Proj
+
+module Nest =
+    (*
+       An outer block comment. F# block comments NEST, so the inner one below closes only
+       (* itself *) /// and this, which follows that inner close, is still comment text.
+    *)
+    let run n = n
+FS
+must_exit "green: a /// AFTER an inner *) is still inside the outer block comment" 0 "OK: every subject file matches" "$NEST"
+
+# ...and the same tree must go RED once the outer comment has genuinely closed, or the leg above
+# proves only that the gate stopped looking somewhere in the middle.
+cat >>"$NEST/src/Proj/Nest.fs" <<'FS'
+
+    /// A real one, after the outer block comment has closed.
+    let other n = n
+FS
+must_exit "red: a real doc comment after a nested block comment is still found" 1 "Nest\.fs: 1 XML documentation comment" "$NEST"
+
 # 3b. STRINGS SPAN NEWLINES, AND THE LEXER MUST CARRY THAT ACROSS LINES — IN BOTH DIRECTIONS.
 #
 # An earlier version of the gate reset ordinary- and verbatim-string state at every line, on the
@@ -329,7 +372,10 @@ must_exit "red: a real doc comment after those multi-line strings is still found
 # section it is LIVE: `src/FS.GG.Coord.Core/RegistryPredicate.fs:40` and `SemanticDiff.fs:103` both
 # carry one today. Once string state carries across lines, misreading that quote as an opener puts
 # the pass in the wrong state for the rest of the file. `'T` and `xs'` must NOT be eaten in the
-# attempt — `src/` holds 1,933 of those against 29 character literals.
+# attempt — `src/` holds both shapes in quantity: at code level, 106 character literals against 40
+# `'` that are not one, over the 66 `.fs` files under `src/`. (An earlier version of this line said
+# "1,933 of those against 29 character literals"; neither figure survived re-derivation at review,
+# and `char_literal_end`'s docstring records the method and what each one was actually counting.)
 CHARLIT="$(mktree charliteral)"
 write_clean_pair "$CHARLIT"
 cat >"$CHARLIT/src/Proj/Chars.fsi" <<'FSI'

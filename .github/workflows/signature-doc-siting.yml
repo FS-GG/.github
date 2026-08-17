@@ -124,23 +124,35 @@ jobs:
           echo "::error title=signature-doc-siting: a doc comment the compiler discards::A new doc comment in an implementation file that has a signature file, or a stale baseline. See the job log."
           exit 1
 
-      - name: 'NO VERDICT (permanent): the gate could not read a valid subject'
+      - name: 'NO VERDICT (permanent): the gate could not read or lex a valid subject'
         if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
         run: |
           {
             echo "### signature-doc-siting: no verdict"
             echo
-            echo "The gate found no \`.fs\` file under \`src/\`, found none with a sibling \`.fsi\`,"
-            echo "could not read a subject file, or could not read/parse"
-            echo "\`tests/signature-doc-siting/baseline.txt\`."
+            echo "Exit 3 has **five** causes. The gate found no \`.fs\` file under \`src/\`, found"
+            echo "none with a sibling \`.fsi\`, could not **read** a subject file, could not **lex**"
+            echo "one, or could not read/parse \`tests/signature-doc-siting/baseline.txt\`."
             echo
-            echo "This repository demonstrably contains 66 \`.fs\` files under \`src/\`, 61 of them"
-            echo "with a sibling \`.fsi\`, so this means **discovery or the baseline broke** — not"
-            echo "that the tree is clean. Scanning nothing is a failure to scan, and without the"
-            echo "baseline the gate cannot tell a recorded residue from a new offender. Retrying"
-            echo "will not help."
+            echo "**Which one it was is in the job log**, naming the cause and the file. They fall"
+            echo "into two groups, and they need different repairs:"
+            echo
+            echo "* **Discovery or the baseline broke.** This repository demonstrably contains 66"
+            echo "  \`.fs\` files under \`src/\`, 61 of them with a sibling \`.fsi\`, so an empty"
+            echo "  subject set is a break in the harness rather than a fact about the tree."
+            echo "  Scanning nothing is a failure to scan, and without the baseline the gate cannot"
+            echo "  tell a recorded residue from a new offender."
+            echo "* **A subject file could not be read, or could not be lexed.** That one is a fact"
+            echo "  about the *source*, and the named file is the repair: it is not valid UTF-8, or"
+            echo "  it ends inside an unterminated string or an unclosed block comment, so the pass"
+            echo "  lost its place and every line after that point was scanned in the wrong state."
+            echo "  A count taken after a mis-parse is worse than no count, because it looks like"
+            echo "  one — which is why the gate refuses here rather than resetting and carrying on."
+            echo
+            echo "In none of the five does this mean the tree is clean, and in none of them will"
+            echo "retrying help."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=signature-doc-siting: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          echo "::error title=signature-doc-siting: no verdict (permanent)::The gate could not reach a verdict it can trust — discovery, the baseline, or a subject file it could not read or lex. See the job log for which."
           exit 1
 
       - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
