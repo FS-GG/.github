@@ -8960,6 +8960,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Twin of theirs: SessionId
             /// WE ASKED TO ACT AS A WORKER WE ARE NOT (#1646).
             | Impersonates of derived: WorkerId * named: WorkerId
+            // WE DO NOT HOLD THIS RECEIVER'S LOCK — the RELEASE path's arm, and it has no acquire-path
+            // counterpart because acquiring is how you come to hold one. Distinct from `HeldByAnother`,
+            // which says somebody else's live marker is there: this arm also covers the case where the
+            // issue carries no live marker at all, so there is nothing to drop. Both are refusals, and
+            // keeping them apart is what lets a caller tell "my grant already lapsed" from "another
+            // executor took the receiver while I was dispatching" — two facts that need opposite
+            // responses, exactly as `NoLockRef` and `HeldByAnother` do.
+            | NotHeld of owner: string * receiver: string
             /// WE COULD NOT TELL. A failed read, an unparseable marker, or a lost re-read. Never a yes.
             | Undetermined of detail: string
 
@@ -8975,6 +8983,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 $"the live grant carries our worker id under a different session (%s{theirs.Value}) — two executors sharing one id is not a lock"
             | Impersonates(derived, named) ->
                 $"refusing to take this receiver's operation lock as '%s{named.Value}' while acting as '%s{derived.Value}'"
+            | NotHeld(owner, receiver) ->
+                $"we do not hold %s{owner}/%s{receiver}'s operation lock — there is no grant of ours to drop"
             | Undetermined detail -> $"could not establish who holds this receiver's operation lock: %s{detail}"
 
         /// ACQUIRE the operation lock for one receiver, or say exactly why not.
@@ -9041,8 +9051,277 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         /// The board column this hands back is always `None` — there is no column, because the lock issue is
         /// off-board — and that is discarded rather than reported: a caller who reads a restored column here
         /// is reading a fact about an item this subject is not.
+        // RE-OBTAIN the capability for a grant this PROCESS did not take — `Writes.verifyHeld` on the
+        // receiver's lock ref, with `acquire`'s refusal vocabulary.
+        //
+        // **IT EXISTS BECAUSE ACQUIRE AND RELEASE ARE NECESSARILY DIFFERENT PROCESSES, AND THAT IS THE
+        // DESIGN RATHER THAN AN AWKWARDNESS.** The grant is a capability the *broker* verifies, and the
+        // broker is a queued CI job: design §4.1 requires the lock to be taken "immediately before a
+        // dispatch and released after it", and the dispatch happens between two invocations of this
+        // engine. A `Held` cannot survive that gap — it is an in-process value with no public constructor,
+        // deliberately (`Writes.Held`) — so the release path has to re-establish it from GitHub. This is
+        // the same shape `release <ref>` already uses for an ordinary item claim, and it is reached
+        // through the same function, so "is this marker ours?" keeps ONE answer.
+        //
+        // **IT IS NOT `Reads.lowestId` AND IT IS NOT `Reads.reserver`.** Dropping a lock is the most
+        // destructive act in this module, and `verifyHeld` is the only door to `Held` that applies the
+        // impersonation and twin predicates `claim` applies — the #1031/#1646 chain. Selecting the marker
+        // by lowest id and deleting it would delete whatever marker happened to be first, which under a
+        // shared worker id is precisely #550.
+        let held
+            (transport: Transport.IGitHubTransport)
+            (worker: WorkerId)
+            (self: Writes.SelfIdentity)
+            (session: SessionId option)
+            (extra: Ref list)
+            (owner: string)
+            (receiver: string)
+            : Result<Writes.Held, Refusal> =
+            // The free question first, for `acquire`'s reason verbatim: a receiver with no lock issue is a
+            // guaranteed refusal and must not cost a network round trip.
+            match Options.opLockRef extra owner receiver with
+            | None -> Result.Error(NoLockRef(owner, receiver))
+            | Some lockRef ->
+                match Writes.verifyHeld transport LeaseMinutes worker self session lockRef with
+                | Ok(Writes.Holds h) -> Ok h
+                | Ok Writes.DoesNotHold -> Result.Error(NotHeld(owner, receiver))
+                | Ok(Writes.TwinHolds theirs) -> Result.Error(Twin theirs)
+                | Ok(Writes.ImpersonatesHolder(derived, named)) -> Result.Error(Impersonates(derived, named))
+                | Result.Error e -> Result.Error(Undetermined(Errors.explain e))
+
         let release (transport: Transport.IGitHubTransport) (held: Writes.Held) : Errors.IoResult<unit> =
             Writes.release transport held |> Result.map ignore
+
+        // THE PER-DEPLOYMENT OP-LOCK ROSTER, read from `FSGG_COORD_OP_LOCKS`.
+        //
+        // This is what makes `opLockRef`'s `extra` parameter reachable from production at all. Without it
+        // the only production caller would pass `[]` for ever, and a documented injection point no code
+        // path can reach is the same defect this whole row is reopened for — a mechanism with no writer,
+        // green under its own tests.
+        //
+        // `parseChoreLocks` is CALLED rather than copied, and the name is the only thing chore-shaped
+        // about it: it is a comma-separated `owner/repo#n` → `Ref list` reader that drops an unparseable
+        // token instead of throwing, which is exactly this roster's grammar and exactly its fail-closed
+        // polarity — a dropped token degrades to "no lock for that receiver", and `NoLockRef` is a
+        // refusal, so a typo costs a dispatch that does not happen rather than one that happens unfenced.
+        // Writing a second parser here to get a better name would be the copy `.github#485` is about.
+        //
+        // A SEPARATE VARIABLE FROM `FSGG_COORD_CHORE_LOCKS`, because they name different subjects: the
+        // chore lock and the operation lock are two locks on two issues answering two questions, and a
+        // tenant that repointed one would otherwise silently repoint the other (design §4.1 — "sharing the
+        // chore lock's issue would make a chore drain and a dispatch operation serialise against each
+        // other, which is two questions answered in one colour").
+        let roster () : Ref list = parseChoreLocks (env "FSGG_COORD_OP_LOCKS" "")
+
+        // `owner/repo` → `(owner, repo)`, for the two arguments `opLockRef` takes.
+        //
+        // A PROJECTION, NOT THE VALIDATOR, and the difference matters. `Operation.compose` owns whether a
+        // receiver is well formed on the wire — its `ReceiverNotFullyQualified` arm is the authority, it
+        // is the same rule the broker recomputes, and `acquire` below runs it BEFORE this. What is left
+        // here is only splitting an already-accepted string into the pair a lookup wants.
+        //
+        // It cannot fail open, which is why `release` (which composes no key and so has no compose arm in
+        // front of it) may lean on it alone: anything this returns is fed to `opLockRef`, and a repo that
+        // is not on the embedded roster or in `FSGG_COORD_OP_LOCKS` comes back `None` → `NoLockRef` →
+        // refuse. The worst a lax split can do is turn a malformed receiver into a refusal with a slightly
+        // less specific message.
+        let splitReceiver (receiver: string) : Result<string * string, string> =
+            match receiver.Split('/') with
+            | [| owner; repo |] when owner.Trim() <> "" && repo.Trim() <> "" -> Ok(owner.Trim(), repo.Trim())
+            | _ ->
+                Result.Error
+                    $"receiver '%s{receiver}' is not owner/repo — the board's <repo>#N shorthand is not GitHub grammar (.github#2107), and a receiver this engine cannot name is a receiver it must not dispatch to"
+
+        // `dispatch:<event-type>` → `Operation.Dispatch <event-type>`, or a refusal naming what was given.
+        //
+        // **THE PREFIX IS DERIVED FROM `Operation.wire`, NEVER SPELLED HERE.** `wire (Dispatch payload)`
+        // is `"dispatch:" + payload`, so `wire (Dispatch "")` IS the prefix, computed by the one function
+        // that defines it. Typing `"dispatch:"` into this file would be a second copy of the wire
+        // vocabulary in the CLI layer — the same "forbidden second copy" §12.5 refuses and slice 3
+        // declined to write for the ordering rule. If the spelling ever changes, this follows it.
+        //
+        // **AND IT ROUND-TRIPS RATHER THAN TRUSTING THE SPLIT.** The parsed operation is re-rendered and
+        // required to equal the input, so a payload that `wire` would normalise, or a prefix that only
+        // looks right, is refused instead of being dispatched under a key the broker will recompute
+        // differently. A recomputed-key mismatch at the broker is a refusal too — but one that has already
+        // cost a round trip and reads as a fence failure rather than as a typo.
+        //
+        // THIS BROKER BROKERS `dispatch:*` ONLY, and that is the design's boundary, not a shortcut:
+        // `Operation.Merge` is fenced by the lease-free election (§4.2) because its verifier is a queued
+        // CI job, and a lease-based lock is verifiable only by a reader running inside the lease.
+        let parseDispatch (op: string) : Result<Operation.Op, string> =
+            let prefix = Operation.wire (Operation.Dispatch "")
+
+            if op.StartsWith(prefix, StringComparison.Ordinal) then
+                let parsed = Operation.Dispatch(op.Substring prefix.Length)
+
+                if Operation.wire parsed = op then
+                    Ok parsed
+                else
+                    Result.Error
+                        $"operation '%s{op}' does not survive a round trip through the engine's own wire spelling — the broker recomputes the key from this string and would disagree"
+            else
+                Result.Error
+                    $"operation '%s{op}' is not a dispatch operation: this verb fences `%s{prefix}<event-type>` and nothing else, because a lease-based lock is verifiable only by a reader running inside the lease and every other operation's verifier is a queued CI job (design §4.2)"
+
+    // `op-lock acquire <item> <generation> <receiver> <op>` — TAKE THE DISPATCH GRANT, AND PRINT THE
+    // AUTHORIZATION TUPLE THE BROKER DEMANDS.
+    //
+    // **THIS IS THE PRODUCTION CALLER `.github#2312` LANDED WITHOUT.** `Client.OpLock.acquire` and
+    // `Options.opLockRef` landed correct and complete in `d1632c4e` and were reachable from nothing but
+    // their own unit tests, so no `fsgg:claim` marker could ever appear on an op-lock issue, so
+    // `fsgg-dispatch-broker.yml`'s `grant` input had no non-empty value any caller could supply and its
+    // step-5 refusal — *"no live grant holds this receiver's operation lock"* — was unreachable by
+    // construction rather than by policy. A lock nobody can take is not a fence.
+    //
+    // **IT PRINTS THE WHOLE TUPLE, NOT JUST THE GRANT, AND THAT IS A CORRECTNESS DECISION.** The broker
+    // recomputes `opkey` from `(item, generation, receiver, op)` and refuses a mismatch. The opkey is a
+    // SHA-256 no operator can compute by hand, so a verb that emitted only the grant would produce
+    // something structurally unusable — the caller would still have to derive the key some second way, and
+    // a second way to compute a key is how the two answers come to disagree. Emitting both from one
+    // `Operation.compose` call is what makes the pair guaranteed consistent.
+    //
+    // **CHEAP QUESTIONS FIRST, NETWORK LAST**, which is the broker's own ordering comment and `acquire`'s:
+    // a malformed request is a guaranteed refusal and must not cost a round trip, and — the half that
+    // matters more — it must not cost a LOCK. Composing the key after taking the grant would leave a live
+    // marker on a receiver for a dispatch that was never going to be authorized, stalling that receiver
+    // for the whole ten-minute lease on a typo.
+    let opLockAcquire (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ item; generation; receiver; op ] ->
+            match worker opts with
+            | Error c -> c
+            | Ok w ->
+
+            match OpLock.parseDispatch op with
+            | Result.Error msg ->
+                eprint $"fsgg-coord-engine: op-lock acquire: %s{msg}"
+                ExitError
+            | Ok parsedOp ->
+
+            // PURE, AND BEFORE THE WRITE. `Operation.compose` is slice 1's key (`.github#2311`), CALLED
+            // rather than re-derived — it is the same function whose domain the broker transcribed, so the
+            // key printed below is the key the broker recomputes, by construction rather than by agreement.
+            // Its refusals ACCUMULATE, so a caller who fixes one component does not resubmit to find a
+            // second.
+            match Operation.compose item generation receiver parsedOp with
+            | Result.Error refusals ->
+                let why = refusals |> List.map Operation.describe |> String.concat "; "
+                eprint $"fsgg-coord-engine: op-lock acquire: %s{why}"
+                ExitError
+            | Ok(Operation.OpKey opkey) ->
+
+            match OpLock.splitReceiver receiver with
+            | Result.Error msg ->
+                eprint $"fsgg-coord-engine: op-lock acquire: %s{msg}"
+                ExitError
+            | Ok(receiverOwner, receiverRepo) ->
+
+            match
+                OpLock.acquire
+                    ctx.Transport
+                    (WorkerId w.Id)
+                    (selfOf w)
+                    (sessionOf w)
+                    (OpLock.roster ())
+                    receiverOwner
+                    receiverRepo
+            with
+            | Result.Error refusal ->
+                eprint $"fsgg-coord-engine: op-lock acquire refused: %s{OpLock.describe refusal}"
+
+                // A CONTENDED LOCK IS NOT A MISCONFIGURED ONE, and the exit codes say so because the
+                // remedies are opposite. `HeldByAnother` is the fence WORKING — another executor is
+                // dispatching against this receiver right now — and the caller should back off and retry,
+                // which is exactly what `ExitContended` documents. Every other arm is a fact somebody must
+                // change before a retry can differ, so retrying on them is a loop.
+                match refusal with
+                | OpLock.HeldByAnother _ -> ExitContended
+                | _ -> ExitError
+            | Ok held ->
+                // THE GRANT IS THE COMMENT ID, AND NOTHING ELSE IS. Nobody can mint one locally, nobody can
+                // choose its value, and nobody can forge its ordering (design §3.2) — which is the whole
+                // reason the broker's step 5 is the one check a requester cannot satisfy by typing.
+                let grant = string held.MarkerId
+
+                match opts.Render with
+                | Options.Json ->
+                    printfn
+                        "%s"
+                        (JsonSerializer.Serialize
+                            {| item = item
+                               generation = generation
+                               receiver = receiver
+                               op = Operation.wire parsedOp
+                               opkey = opkey
+                               grant = grant
+                               worker = w.Id
+                               leaseMinutes = OpLock.LeaseMinutes |})
+                | Options.Text ->
+                    printfn "grant=%s" grant
+                    printfn "opkey=%s" opkey
+                    printfn "item=%s" item
+                    printfn "generation=%s" generation
+                    printfn "receiver=%s" receiver
+                    printfn "op=%s" (Operation.wire parsedOp)
+
+                    eprint
+                        $"fsgg-coord-engine: %s{w.Id} holds %s{receiver}'s operation lock for %d{OpLock.LeaseMinutes} minutes. Dispatch now, then `op-lock release %s{receiver}` — a grant held across an item's lifetime serialises the fleet on this receiver."
+
+                ExitGreen
+        | args ->
+            eprint
+                $"fsgg-coord-engine: op-lock acquire needs exactly four arguments — <item> <generation> <receiver> <op> — and got %d{List.length args}. They are `Operation.compose`'s own components, in its own order: item as owner/repo#N, generation as the winning claim marker's comment id, receiver as owner/repo, op as dispatch:<event-type>."
+
+            ExitError
+
+    // `op-lock release <receiver>` — DROP THE GRANT, after the dispatch it fenced.
+    //
+    // The other half of design §4.1's "taken immediately before a dispatch and released after it, never
+    // held across an item's lifetime". It refuses unless we are the live winner, through the same
+    // `Writes.verifyHeld` door every other release in this engine goes through, so a lock nobody holds
+    // cannot be dropped by naming it and a twin's grant cannot be dropped at all.
+    //
+    // AN UNRELEASED GRANT IS NOT AN OUTAGE, and saying so is what keeps this verb honest about its own
+    // importance: the lease is ten minutes, and `claim`'s stale collection takes the dead marker on the
+    // next acquire (ADR-0041). The cost of skipping it is one receiver serialised for up to ten minutes,
+    // not a wedged fleet — which is exactly why the lease is minutes rather than the claim's 120.
+    let opLockRelease (ctx: Context) (opts: Options) : int =
+        match oneArg opts "op-lock release: a receiver, spelled owner/repo", worker opts with
+        | Error c, _
+        | _, Error c -> c
+        | Ok arg, Ok w ->
+
+        match OpLock.splitReceiver arg with
+        | Result.Error msg ->
+            eprint $"fsgg-coord-engine: op-lock release: %s{msg}"
+            ExitError
+        | Ok(receiverOwner, receiverRepo) ->
+
+        match
+            OpLock.held ctx.Transport (WorkerId w.Id) (selfOf w) (sessionOf w) (OpLock.roster ()) receiverOwner receiverRepo
+        with
+        | Result.Error refusal ->
+            eprint $"fsgg-coord-engine: op-lock release refused: %s{OpLock.describe refusal}"
+            ExitError
+        | Ok held ->
+            let grant = string held.MarkerId
+
+            match OpLock.release ctx.Transport held with
+            | Result.Error e -> fail e
+            | Ok() ->
+                match opts.Render with
+                | Options.Json ->
+                    printfn
+                        "%s"
+                        (JsonSerializer.Serialize
+                            {| receiver = arg
+                               grant = grant
+                               worker = w.Id
+                               released = true |})
+                | Options.Text -> printfn "released %s grant=%s" arg grant
+
+                ExitGreen
 
     /// Build the context — the transport, the board coordinates, the token check. `Error` is a printed
     /// message and an exit code (a missing token is a refusal, never an empty board).
@@ -10768,6 +11047,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Say -> say ctx opts
             | Inbox -> inbox ctx opts
             | RoomOpen -> roomOpen ctx opts
+            | OpLockAcquire -> opLockAcquire ctx opts
+            | OpLockRelease -> opLockRelease ctx opts
             | DoneCmd -> doneCmd ctx opts
             | VerifyPaths -> verifyPaths ctx opts
             | Bootstrap -> bootstrapCmd ctx opts

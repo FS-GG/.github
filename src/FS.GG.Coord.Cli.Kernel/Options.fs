@@ -60,6 +60,8 @@ module Options =
         | Predicate
         | DiffAudit
         | RoomOpen
+        | OpLockAcquire
+        | OpLockRelease
         | Help
         | Version
 
@@ -456,6 +458,24 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              onto each named item, so their holders share its channel. The
                                              room is off-board and closes itself when every referenced item
                                              is done
+  op-lock acquire <item> <generation> <receiver> <op> [--json|--text]
+                                             FENCE A CROSS-REPO DISPATCH. Take the receiver's per-receiver
+                                             operation lock and print the authorization tuple
+                                             `fsgg-dispatch-broker.yml` demands: the `grant` (the
+                                             GitHub-assigned comment id of the marker just posted — nobody
+                                             can mint one locally or choose its value) and the `opkey`
+                                             composed from the same four components the broker recomputes.
+                                             The four arguments are `Operation.compose`'s own, in its own
+                                             order. `<op>` is `dispatch:<event-type>`; this verb brokers no
+                                             other operation. REFUSES rather than proceeding when the
+                                             receiver has no lock issue, another executor holds it, or the
+                                             holder cannot be established — a fence that cannot show it
+                                             holds the lock must not act (#266, #421)
+  op-lock release <receiver> [--json|--text] drop that grant, AFTER the dispatch it fenced. The lease is
+                                             ten minutes, not the claim's 120: it bounds how long a dead
+                                             executor stalls one receiver's queue, and a grant held across
+                                             an item's lifetime would serialise the whole fleet on one
+                                             receiver. Refuses unless we are the live winner
   done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up (add
                [--partial "why"]             --partial "why" if this child does NOT complete its parent, #614)
   verify-paths --pr N [--repo NAME]          did the PR stay inside its issue's touch-set? (OK/DRIFT/
@@ -599,6 +619,14 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // comment records a caveat that was real and is now discharged, not one still standing.
         | Adopt -> Both Text
         | Take -> Both Text
+        // `op-lock acquire` EXISTS to be read by a machine: its stdout is the broker's input tuple —
+        // `grant`, `opkey`, `item`, `generation`, `receiver`, `op` — and the caller that consumes it is a
+        // shell composing `gh workflow run fsgg-dispatch-broker.yml -f grant=… -f opkey=…`. A text
+        // projection is kept as the default for the operator reading it by hand, which is the same polarity
+        // `who` and `budget` chose. `release` is `Both` for symmetry, and because a caller that scripted the
+        // acquire will script the release from the same harness.
+        | OpLockAcquire -> Both Text
+        | OpLockRelease -> Both Text
         | Widen -> Both Text // both reach the shared `updateTouchSet` (#1517)
         | SetPaths -> Both Text
         | Inbox -> Both Text
@@ -1121,6 +1149,16 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // SECOND `Chores.offer` site after `next`. None of that changes the row; it is why the row is here.
         | DoneCmd -> Writes
         | RoomOpen -> Writes // `Writes.createRoom` + a `Rooms: #room` back-reference onto each named item
+        // BOTH WRITE, EVERY INVOCATION, AND NEITHER WRITES THE PROJECT BOARD — which is why the row needs
+        // saying rather than assuming. The subject is an off-board, closed `[op-lock]` issue, so `who` and
+        // `reap` never see it (ADR-0041's own note about the chore lock, on a third subject). But the write
+        // is the same `Writes.claimScoped` POST/DELETE the item CAS makes, against the shared fleet's
+        // GitHub state, so a STALE engine must be refused it exactly as it is refused `claim` — the
+        // property `scripts/fsgg-coord-guards.sh` enforces and `tests/coord-engine-parity/shim.sh` §3b
+        // holds in bijection with this table. `WritesIf` would be wrong in both arms: there is no flag and
+        // no argv shape under which either of these is a read.
+        | OpLockAcquire -> Writes // POSTs the `fsgg:claim` grant marker onto the receiver's op-lock issue
+        | OpLockRelease -> Writes // DELETEs that marker
         // Both reach the same `Writes.widen` PATCH through the same `updateTouchSet` helper. `set-paths`
         // being the RECOVERY verb is exactly why its absence from the shim's list mattered (#1528).
         | Widen -> Writes
@@ -1282,6 +1320,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Predicate -> "predicate"
         | DiffAudit -> "diff-audit"
         | RoomOpen -> "room open"
+        // TWO WORDS, and the first is the one that carries the guard. `tests/coord-engine-parity/shim.sh`
+        // §3b projects this surface through `awk '{print $1}'` because the shim dispatches on `$1`, so both
+        // rows below classify as the single token `op-lock` — the same arrangement `room open` already has.
+        | OpLockAcquire -> "op-lock acquire"
+        | OpLockRelease -> "op-lock release"
         | Help -> "--help"
         | Version -> "--version"
 
@@ -2101,6 +2144,16 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "room" :: "open" :: rest -> flags (start { defaults with Command = RoomOpen }) rest
         | "room" :: sub :: _ -> Error $"unknown room subcommand: '%s{sub}' (expected: open)"
         | [ "room" ] -> Error "room needs a subcommand (open)"
+
+        // `op-lock acquire` / `op-lock release` — the dispatch fence's two halves (design §4.1). A
+        // NAMESPACE for the same reason `room` is one: the pair is one mechanism and reads as one, and an
+        // unknown third word is NAMED and refused rather than swallowed into `acquire`'s positional list,
+        // where `op-lock aquire FS-GG/FS.GG.Net …` would otherwise be read as a four-positional acquire
+        // with a typo'd first argument.
+        | "op-lock" :: "acquire" :: rest -> flags (start { defaults with Command = OpLockAcquire }) rest
+        | "op-lock" :: "release" :: rest -> flags (start { defaults with Command = OpLockRelease }) rest
+        | "op-lock" :: sub :: _ -> Error $"unknown op-lock subcommand: '%s{sub}' (expected: acquire, release)"
+        | [ "op-lock" ] -> Error "op-lock needs a subcommand (acquire, release)"
 
         | other :: _ -> Error $"unknown command: %s{other}"
 

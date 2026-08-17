@@ -875,6 +875,12 @@ module OptionsTests =
           "overlap", Text
           "say", Text
           "room open", Text
+          // `.github#2312` — both `Both Text`. `op-lock acquire`'s stdout is the dispatch broker's input
+          // tuple and the caller that consumes it is a shell composing `gh workflow run`, so the JSON
+          // projection is the point; the human form stays the bare default for the operator reading it by
+          // hand, which is `who`'s and `budget`'s polarity.
+          "op-lock acquire", Text
+          "op-lock release", Text
           "done", Text
           "verify-paths", Text
           "followup", Text

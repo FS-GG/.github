@@ -215,7 +215,18 @@
 # One space between, spaces added once around the whole, and no pattern for an empty verb can match.
 
 # WRITES, UNCONDITIONALLY — every invocation of these can mutate state the whole fleet shares.
-BOARD_WRITES="add adopt child claim done flush heartbeat intake release review room say set-field set-paths take widen"
+#
+# `op-lock` IS ONE WORD HERE FOR `room`'s REASON: the engine advertises `op-lock acquire` and `op-lock
+# release`, and this guard dispatches on `$1`, so the only token it can ever see is the namespace.
+# `tests/coord-engine-parity/shim.sh` §3b projects the engine's surface through `awk '{print $1}'` for
+# exactly that reason, and holds this set in bijection with it.
+#
+# AND IT IS A WRITE EVEN THOUGH ITS SUBJECT IS OFF-BOARD. Both halves POST or DELETE an `fsgg:claim`
+# marker on a receiver's closed `[op-lock]` issue through the same `Writes.claimScoped` CAS `claim` uses.
+# `who` and `reap` never see that issue (ADR-0041, on a third subject), but the fleet does: a stale engine
+# taking a dispatch grant is a stale engine deciding who may dispatch against a receiver, which is the
+# `.github#1858` failure with an extra step. Refuse it exactly as `claim` is refused.
+BOARD_WRITES="add adopt child claim done flush heartbeat intake op-lock release review room say set-field set-paths take widen"
 
 # WRITES ONLY UNDER A CONDITION — and the flat list above CANNOT say that, which is how it got wrong.
 # These are refused all the same, verb-level and fail-closed, and they are held in a set of their own so

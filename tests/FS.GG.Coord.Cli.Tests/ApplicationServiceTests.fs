@@ -4152,6 +4152,24 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
           // against a path that does not exist: the refusing arm must still put ONE document on
           // stdout, with the per-field reading on stderr.
           Options.PacketCmd, [ "packet"; "validate"; "no-such-packet.json"; "--json" ], 1 ]
+          // `.github#2312`. BOTH op-lock verbs are driven onto their fail-closed arm — a receiver with no
+          // operation-lock issue — because that arm is reached BEFORE any network call by design ("a
+          // receiver with no lock is a guaranteed refusal and must not cost a round trip"), so it is
+          // deterministic here whatever the fixture's transport would have answered. Exit 1: `NoLockRef`
+          // is a configuration fact somebody must change, not the contended `6` a busy receiver gets.
+          @ [ Options.OpLockAcquire,
+              [ "op-lock"
+                "acquire"
+                "FS-GG/.github#2312"
+                "5319401108"
+                "FS-GG/FS.GG.NotARepo"
+                "dispatch:coordination-kit"
+                "--worker"
+                "otter-9c21"
+                "--json" ],
+              1
+              Options.OpLockRelease,
+              [ "op-lock"; "release"; "FS-GG/FS.GG.NotARepo"; "--worker"; "otter-9c21"; "--json" ], 1 ]
 
     /// The `Json`-admitting verbs this fixture cannot reach, each with the reason and what reading their
     /// arms found. The reason lives HERE rather than in a PR body because that is the whole argument of
@@ -4245,6 +4263,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 | Options.ReviewCmd -> Client.review ctx opts
                 | Options.BodyEdits -> Client.bodyEditsCmd ctx opts
                 | Options.PacketCmd -> PacketApplication.run opts
+                | Options.OpLockAcquire -> Client.opLockAcquire ctx opts
+                | Options.OpLockRelease -> Client.opLockRelease ctx opts
                 | other ->
                     failwithf
                         "the .github#1688 sweep has no dispatch for %A — add one to `runJsonArm`, or give the verb a reason in `notDriven`"

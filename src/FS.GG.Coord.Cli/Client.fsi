@@ -1009,6 +1009,14 @@ module Client =
               derived: FS.GG.Coord.Types.WorkerId *
               named: FS.GG.Coord.Types.WorkerId
 
+            /// WE DO NOT HOLD THIS RECEIVER'S LOCK — the RELEASE path's arm, and it has no acquire-path
+            /// counterpart because acquiring is how you come to hold one. Distinct from `HeldByAnother`,
+            /// which says somebody else's live marker is there: this arm also covers an issue carrying no
+            /// live marker at all, so there is nothing to drop. Keeping them apart is what lets a caller
+            /// tell "my grant already lapsed" from "another executor took the receiver while I was
+            /// dispatching" — two facts that need opposite responses.
+            | NotHeld of owner: string * receiver: string
+
             /// WE COULD NOT TELL. A failed read, an unparseable marker, or a lost re-read. Never a yes.
             | Undetermined of detail: string
 
@@ -1038,6 +1046,69 @@ module Client =
             owner: string ->
             receiver: string ->
             Result<FS.GG.Coord.GitHub.Writes.Held,Refusal>
+
+        /// TEN MINUTES, matching the chore lock's, and for the same argument. This bounds how long a DEAD
+        /// executor stalls one receiver's dispatch queue — not how long a live one may take, because a live
+        /// holder heartbeats. A dispatch is a handful of API calls; a lease long enough to cover a hung
+        /// process is a lease that makes every other executor wait out a corpse.
+        val LeaseMinutes: int
+
+        /// RE-OBTAIN the capability for a grant this PROCESS did not take — `Writes.verifyHeld` on the
+        /// receiver's lock ref, with `acquire`'s refusal vocabulary.
+        ///
+        /// Acquire and release are NECESSARILY different processes, by design rather than by awkwardness:
+        /// the grant is verified by the broker, the broker is a queued CI job, and design §4.1 requires the
+        /// lock to be taken immediately before the dispatch and released after it. A `Held` cannot survive
+        /// that gap — it is an in-process value with no public constructor, deliberately — so the release
+        /// path re-establishes it from GitHub, through the same door `release <ref>` uses for an ordinary
+        /// item claim. That door applies `claim`'s own impersonation and twin predicates (#1031, #1646);
+        /// selecting the marker by lowest id and deleting it would delete whichever marker happened to be
+        /// first, which under a shared worker id is #550.
+        val held:
+          transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport ->
+            worker: FS.GG.Coord.Types.WorkerId ->
+            self: FS.GG.Coord.GitHub.Writes.SelfIdentity ->
+            session: FS.GG.Coord.Types.SessionId option ->
+            extra: FS.GG.Coord.Types.Ref list ->
+            owner: string ->
+            receiver: string ->
+            Result<FS.GG.Coord.GitHub.Writes.Held,Refusal>
+
+        /// RELEASE the operation lock. Takes the capability, exactly as every other release does, so a
+        /// marker nobody holds cannot be dropped by naming it.
+        ///
+        /// IT WAS UNREACHABLE UNTIL NOW, AND NOT ONLY UNCALLED: `d1632c4e` defined it in `Client.fs` and
+        /// left it out of this signature file, so F# made it private and no caller — production or test —
+        /// could have reached it even by trying. Exporting it is part of giving the lock a release half at
+        /// all.
+        val release:
+          transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport ->
+            held: FS.GG.Coord.GitHub.Writes.Held ->
+            FS.GG.Coord.GitHub.Errors.IoResult<unit>
+
+        /// The per-deployment op-lock roster, read from `FSGG_COORD_OP_LOCKS` — what makes `opLockRef`'s
+        /// `extra` parameter reachable from production at all. A SEPARATE variable from
+        /// `FSGG_COORD_CHORE_LOCKS`: the two name different subjects, and a tenant repointing one must not
+        /// silently repoint the other.
+        val roster: unit -> FS.GG.Coord.Types.Ref list
+
+    /// `op-lock acquire <item> <generation> <receiver> <op>` — take the dispatch grant and print the
+    /// authorization tuple `fsgg-dispatch-broker.yml` demands.
+    ///
+    /// THE PRODUCTION CALLER `.github#2312` LANDED WITHOUT. `OpLock.acquire` and `Options.opLockRef` landed
+    /// correct and complete and were reachable from nothing but their own unit tests, so no `fsgg:claim`
+    /// marker could ever appear on an op-lock issue and the broker's step-5 refusal was unreachable by
+    /// construction. It prints the `opkey` beside the `grant` because the broker recomputes the key and
+    /// refuses a mismatch, and a SHA-256 no operator can compute by hand makes a grant-only verb unusable.
+    ///
+    /// Exit `6` (contended) when another executor holds the receiver — the fence WORKING, and a back-off is
+    /// the remedy. Exit `1` for every other refusal, all of which need a fact changed before a retry can
+    /// differ.
+    val opLockAcquire: ctx: Kernel.Context -> opts: Options.Options -> int
+
+    /// `op-lock release <receiver>` — drop that grant after the dispatch it fenced. Refuses unless we are
+    /// the live winner.
+    val opLockRelease: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// Run `f` with a supplied `Context` installed as `followupAudit`'s ambient context, then restore whatever
     /// was there before — INCLUDING when `f` throws.

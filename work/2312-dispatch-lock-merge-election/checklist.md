@@ -2,7 +2,7 @@
 
 - **Work id:** 2312-dispatch-lock-merge-election
 - **Stage:** checklist
-- **Status:** checklistReady
+- **Status:** checklistReady (revision 2 — reopened 2026-08-17)
 
 ## Source Specification
 
@@ -42,6 +42,34 @@ Design §3, §4.1, §4.2, §6.3, §11.2, §11.3, §12.5 read in full before any 
 - CR-006 — met. All eight read back `state=closed locked=false labels=0`, `projectItems` empty.
 - CR-007 — met. `check-adr-coherence.py` OK; fixture 17/17.
 - CR-008 — carried into the PR body and the worker's report.
+
+## Reopen Checklist — 2026-08-17
+
+- **CR-009** — met. The reopen's finding was RE-MEASURED on this branch before any edit rather than taken
+  from the analyst's comment: `OpLock.acquire` had 0 production call sites and 3 in tests, and the control
+  (`Chores.offerWithLifecycle`) had real production sites, so the instrument could report both answers.
+- **CR-010** — met. A second finding beyond the reopen comment: `OpLock.release` was absent from
+  `Client.fsi` and therefore private, unreachable by any caller. Recorded in the spec's Reopen section and
+  in ADR-0075 §5.
+- **CR-011** — met. Every gate added by revision 2 carries a recorded inversion: nine legs, each naming the
+  exact mutation, the artifact whose SHA-256 moved, and the named test observed red. Written to
+  `readiness/2312-dispatch-lock-merge-election/inversion-evidence.json` by
+  `tests/FS.GG.Coord.Cli.Tests/inversions-2312.py`.
+- **CR-012** — met. One of those nine is a CONTROL that must red exactly ONE named leg and leave the other
+  fifteen green; it did. Without it, "the gate reds" is unfalsifiable.
+- **CR-013** — met, as a MEASUREMENT that contradicted this checklist's own first attempt. The inversion
+  harness originally verified each revert by requiring the rebuilt artifact to hash back to its baseline.
+  That assertion FAILED on byte-identical source: a local Release build of this tree is not byte-reproducible
+  (`fsgg-coord-engine.dll` alternated between two hashes). The revert is therefore verified on source bytes
+  and on the suite, and the hashes are recorded as observations. Reported as a finding-packet candidate.
+- **CR-014** — met. `src/FS.GG.Coord.Cli/Options.fs` and `Options.fsi`, two of this row's declared `Paths:`,
+  no longer exist — they moved to `src/FS.GG.Coord.Cli.Kernel/`. The declaration was widened (verdict
+  `disjoint`, no collisions) rather than assumed, and the two dead tokens are reported to the host rather
+  than silently rewritten.
+- **CR-015** — met. `tests/receiver-validate/run.sh:15` states in a comment that "slice 2 landed
+  `Client.OpLock.acquire` with no reachable caller, so no dispatch grant can exist". Revision 2 makes that
+  sentence false. It is a comment, not an assertion, so the fixture stays green (74/74); the file is outside
+  this row's lane and is reported to the host rather than edited.
 
 ## Accepted Deferrals
 

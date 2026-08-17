@@ -133,6 +133,20 @@ module Options =
         | DiffAudit
         | RoomOpen
 
+        /// TAKE this receiver's per-receiver operation lock and print the authorization tuple the dispatch
+        /// broker demands (executor-fencing design §4.1/§5.2, `.github#2312`). This is the production caller
+        /// `Client.OpLock.acquire` was landed without: until it existed, no `fsgg:claim` marker could ever
+        /// appear on an op-lock issue, so `fsgg-dispatch-broker.yml`'s `grant` input had no non-empty value
+        /// and its "no live grant holds this receiver's operation lock" refusal could not be passed by any
+        /// caller. It composes the operation key through `Operation.compose` (slice 1, `.github#2311`)
+        /// BEFORE it spends a network round trip, exactly as the broker's own ordering comment does.
+        | OpLockAcquire
+
+        /// DROP this receiver's operation lock, after the dispatch it fenced. The other half of §4.1's
+        /// "taken immediately before a dispatch and released after it, never held across an item's
+        /// lifetime" — a grant held for an item's lifetime converts a parallel fleet into a serial one.
+        | OpLockRelease
+
         | Help
         | Version
 

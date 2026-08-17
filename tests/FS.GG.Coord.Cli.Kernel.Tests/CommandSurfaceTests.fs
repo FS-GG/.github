@@ -102,7 +102,14 @@ module CommandSurfaceTests =
 
           // Coordination rooms (ADR-0051, #1215). The ONE two-word verb — a `room` namespace so
           // `room close`/`room list` have a home; the dispatch check below splits on whitespace for it.
-          "room open", RoomOpen ]
+          "room open", RoomOpen
+
+          // The per-receiver dispatch fence (`.github#2312` under `.github#1858`). TWO two-word verbs in
+          // one `op-lock` namespace — the pair is one mechanism and reads as one, and an unknown third
+          // word is named and refused rather than swallowed into `acquire`'s four positionals. The
+          // dispatch check below splits on whitespace for them exactly as it does for `room open`.
+          "op-lock acquire", OpLockAcquire
+          "op-lock release", OpLockRelease ]
 
     /// The two commands with no verb form — they are reached by flag (`--help`, `--version`), so the
     /// verb inventory cannot account for them and the DU cross-check must be told so explicitly.

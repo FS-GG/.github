@@ -123,6 +123,62 @@ happen to agree today.
 dangerous: `reserver` returns the *live* winner when one exists, while `reap` and `adopt` act **only** when
 none does. Substituting it would hand `reap` a live holder — breaking a lock its owner is still standing in.
 
+### **§5 — The lock's production caller is a CLI verb pair, and a lock with no caller is not a fence.** *(added on the 2026-08-17 reopen)*
+
+This section is written **after** the rest of this record, because the rest of it was true and still left the
+mechanism unreachable. `d1632c4e` landed §2's `Options.opLockRef` and `Client.OpLock.acquire` exactly as
+decided here — eight rows, the CAS unchanged, the fail-closed refusal — and landed them callable from
+**nothing but their own unit tests**. `OpLock.release` was one step worse: defined in `Client.fs`, omitted
+from `Client.fsi`, and therefore private, so no caller of any kind could have reached it. The board analyst
+measured it (`grep -rn "OpLock\.acquire" src/ --include=*.fs` → 0; the same expression over `tests/` → 4)
+and reopened the row on 2026-08-17 for that alone.
+
+The consequence was not stylistic, and naming it precisely is the point. `fsgg-dispatch-broker.yml` refuses
+a dispatch unless the presented `grant` **is the live CAS winner** on the receiver's operation-lock issue.
+With no writer, no `fsgg:claim` marker could ever appear on such an issue, so that refusal was unreachable
+**by construction** — the fence was not "off", it was a shape with no way in. Every test written against the
+lock passed throughout, because each supplied the subject the production path never would; that is
+[#266](https://github.com/FS-GG/.github/issues/266)'s admitted mechanism (*"the subject is missing or empty,
+and absence reads as pass"*) reached from the other side.
+
+**The decision: the grant is taken and dropped by two CLI verbs, `op-lock acquire` and `op-lock release`,
+and `acquire` emits the whole authorization tuple rather than only the grant.**
+
+- **A verb, because the executor is not the engine.** §5.2's broker is a workflow, and what stands between a
+  board worker and it is a shell composing `gh workflow run`. There is no existing verb whose job this is —
+  the engine has never dispatched — and the chore lock's precedent (taken inside `next`) does not transfer,
+  because a dispatch is not a side effect of some other question being asked.
+- **Two invocations, because acquire and release are necessarily two processes.** §4.1 requires the lock to
+  be *"taken immediately before a dispatch and released after it"*, and the dispatch happens between them,
+  in CI. A `Writes.Held` is an in-process capability with no public constructor — deliberately — so the
+  release path re-establishes it through `Writes.verifyHeld`, the same door `release <ref>` uses for an
+  ordinary item claim, which is also what keeps `claim`'s twin and impersonation predicates in the path.
+  Selecting the marker by `Reads.lowestId` instead would delete whichever marker happened to be *first*,
+  which under a lapsed foreign marker is another worker's, and under a shared worker id is
+  [#550](https://github.com/FS-GG/.github/issues/550).
+- **The whole tuple, because the broker recomputes the key.** It refuses on an `opkey` mismatch, and the
+  opkey is a SHA-256 no operator can compute by hand. A verb emitting only the grant would be structurally
+  unusable: the caller would still have to derive the key some second way, and a second way to compute a key
+  is exactly how two answers come to disagree. Both come out of one `Operation.compose` call (slice 1),
+  which makes their agreement a property rather than a convention.
+- **The key is composed before the lock is taken.** Cheap questions first is the broker's own ordering, and
+  here it protects more than a round trip: composing after acquiring would leave a live marker on a receiver
+  for a dispatch that was never going to be authorized, stalling it for the whole ten-minute lease on a typo.
+- **A contended receiver exits `6`, not `1`.** `HeldByAnother` is the fence *working*, and its remedy is to
+  back off and retry; every other refusal names a fact somebody must change first, on which a retry is a
+  loop. Collapsing them would tell a caller to stop retrying a busy receiver and to retry an unrostered one
+  for ever.
+- **`FSGG_COORD_OP_LOCKS` is read, and is a different variable from `FSGG_COORD_CHORE_LOCKS`.** §2's
+  `extra` roster parameter otherwise had no production reader at all — the same reader-without-writer shape,
+  one level down. Two subjects get two variables, or a vendored tenant repointing one lock silently repoints
+  the other.
+
+**What this section does not claim.** The broker is still driven by hand: nothing in the engine invokes
+`gh workflow run`, and this row does not decide that it should. What is now true, and was not, is that a
+grant *can be obtained*, so the broker's authorization path has an input it can be given and its refusals
+can be reached. Wiring an automatic dispatch caller is a separate decision that belongs with whichever slice
+owns the executor's own loop.
+
 ## Consequences
 
 - **The engine's CAS is untouched.** `Writes.claim`/`claimScoped` gained nothing; this is composition at the
@@ -149,6 +205,17 @@ none does. Substituting it would hand `reap` a live holder — breaking a lock i
   GitHub-visible fact, that holder, and whichever wins is *an* authorized executor. Deduplication under a
   generation is the property; authentication of the holder is not, and remains `#1938`'s unroutable
   boundary.
+- **The engine grew two verbs, `op-lock acquire` and `op-lock release`**, and the growth is not free: a new
+  verb costs a row in `Options.commandName`, `renderSupport` and the write-surface table, a row in the shim's
+  `BOARD_WRITES` partition (both halves classify as the single token `op-lock`, for `room open`'s reason),
+  and a row in each of the four hand-kept inventories that exist precisely so a verb cannot be added
+  silently. Every one of those refused the build until it was written, which is what those inventories are
+  for; the cost is the evidence they work.
+- **A source-level reachability assertion now guards the mechanism**, because that is the defect class this
+  row shipped and it is invisible to behavioural tests: `OpLockDispatchVerbTests` fails if
+  `Client.OpLock.acquire` or `OpLock.release` has no production call site, and carries a CONTROL leg proving
+  the same instrument returns empty for an absent symbol and non-empty for a consumed one. A green suite over
+  an unreachable subject is what this record's own §5 is about.
 - **Six further slices are written against this.** The election's *writer* (slice 3), the merge gate (slice
   4), the broker (slice 5), receiver-side validation (slice 6), the reproduction (slice 7) and the arming
   sequence (slice 8) all depend on the lock identity and ordering rule fixed here.
