@@ -328,6 +328,7 @@ the standing safety advisories carry forward.
     <Compile Include="IntakeApplication.fs" />
     <Compile Include="DeliveryRouteApplication.fsi" />
     <Compile Include="DeliveryRouteApplication.fs" />
+    <Compile Include="Client.fsi" />
     <Compile Include="Client.fs" />
     <Compile Include="SemanticDiffApplication.fs" />
     <Compile Include="Program.fs" />
