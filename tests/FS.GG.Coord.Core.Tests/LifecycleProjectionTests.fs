@@ -376,3 +376,64 @@ module LifecycleProjectionTests =
             match advanceOf kind LifecycleProjection.Auto None observation with
             | LifecycleProjection.Exempt k -> Assert.Equal(kind, k)
             | other -> failwithf "a %A row must be Exempt, not %A" kind other
+
+    [<Fact>]
+    let ``2712 the recorded residual bound is the one the reducer actually has`` () =
+        // THE PROSE IS THE SUBJECT HERE, NOT THE CODE. `clarifications.md` DEC-003 accepts a bounded
+        // residual: a row whose BODY could not be read is not known to be standing, so it reaches the
+        // reducer as `Work` and is treated exactly as today. The code is right and unchanged. What was
+        // wrong was the recorded SIZE of that residual — an earlier draft wrote it as
+        // `TouchSet.Unreadable -> Deferred -> Backlog`, and independent critic `tern-ca7d` refuted the
+        // parenthetical by execution in round 1.
+        //
+        // `Deferred -> Backlog` is only `projectWithIntent`'s LAST-RESORT arm. FOUR observation-driven
+        // arms sit ABOVE the intent dispatch, and the first of them is the one that matters: a CLOSED
+        // issue carrying a done receipt projects `Done` whatever the intent is. So the true bound is
+        // `Done` — which is exactly the state this row was filed to stop (`.github#2106` sitting `Done`
+        // while its issue must stay `OPEN`).
+        //
+        // THIS TEST EXISTS SO THE RECORDED BOUND CANNOT DRIFT FROM THE CODE AGAIN. A prose bound nothing
+        // executes is a claim about behaviour with no gate behind it, which is `.github#266`'s class
+        // landing on the declaration layer instead of on a gate. If a later change moves this arm, this
+        // fails and DEC-003 must be re-stated rather than quietly becoming false a second time.
+        let deferred = LifecycleProjection.Deferred("touch-set unreadable: the body could not be read", None, 1L)
+
+        let closedWithReceipt =
+            { observation with
+                Claim = fact None
+                Delivery = fact { Outstanding = false; DoneStamped = true }
+                Issue = fact Closed }
+
+        // The unreadable-body reading, spelled the way the engine spells it.
+        Assert.Equal(Work, Kind.govern None)
+
+        // THE BOUND, at its true size — and asserted as `Done` rather than merely "not Backlog", so the
+        // test names the outcome an operator would have to see rather than a category it avoids.
+        Assert.Equal(LifecycleProjection.Project(Done, 1L), reduceOf (Kind.govern None) deferred closedWithReceipt)
+        Assert.Equal(LifecycleProjection.Project(Done, 1L), advanceOf (Kind.govern None) deferred None closedWithReceipt)
+
+        // A WATERMARK DOES NOT CHANGE IT — the observation arm is above the intent dispatch, so the
+        // receipt is irrelevant here for the same structural reason the exemption is immune to it.
+        //
+        // STRICTLY OLDER (`0L` against the observation's `1L`), and that is not incidental: this
+        // fixture first used the SAME instant, and `advance`'s ordering rule withheld on the
+        // same-timestamp/different-status conflict BEFORE the residual could be observed at all. That is
+        // the ordering guarantee working, not the residual — and a fixture that withheld for an
+        // unrelated reason would have pinned nothing while looking green. `standingKinds` below uses the
+        // same watermark, where the exemption outranks the ordering rule regardless.
+        let stale: LifecycleProjection.Watermark =
+            { ObservedAt = 0L; Status = BoardStatus.Backlog; Intent = deferred }
+
+        Assert.Equal(LifecycleProjection.Project(Done, 1L), advanceOf (Kind.govern None) deferred (Some stale) closedWithReceipt)
+
+        // AND THE REFUTED FORM IS PINNED AS REFUTED. Asserting the positive alone would still pass if a
+        // later change made `Backlog` reachable here too; this says the old recorded bound is wrong.
+        Assert.NotEqual<LifecycleProjection.Result>(
+            LifecycleProjection.Project(BoardStatus.Backlog, 1L),
+            reduceOf (Kind.govern None) deferred closedWithReceipt)
+
+        // THE CONTRAST THAT MAKES THE RESIDUAL A RESIDUAL RATHER THAN A HOLE: the identical row whose
+        // body WAS read and DECLARES its kind is exempt. The residual is the unreadable body, nothing
+        // wider — which is what keeps DEC-003's acceptance honest.
+        for kind in standingKinds do
+            Assert.Equal(LifecycleProjection.Exempt kind, advanceOf kind deferred (Some stale) closedWithReceipt)
