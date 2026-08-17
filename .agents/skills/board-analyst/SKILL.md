@@ -138,8 +138,19 @@ There is a sixth shape none of the five will surface on its own — **rows that 
 and jointly red**, because they interact through a gate corpus neither author controls. Look for it
 whenever two open rows reach the same gate's subject from different directions.
 
-[churn-reading](references/churn-reading.md) has the commands, the worked reading for
-2026-08-15, and what separates a healthy net-positive day from a churning one.
+**Emit `fsgg.coord.churn-reading/v1` beside the prose, never instead of it** (.github#2739). All six
+elements above were free prose, so nothing could confirm a pass produced them — a reading that
+silently omitted element 4 or the sixth shape looked exactly like one that considered them and found
+nothing. The JSON is the *checkable skeleton*: it requires all six to be answered, its four pathology
+fields are tagged unions rather than arrays so that **"looked and found none" carries the search that
+found none** and is distinguishable from "did not look", and `remedy` must be non-null whenever any of
+them reports rows. It constrains nothing about the analysis — `cause`, `gate`, `remedy` and the
+required `prose` field are free text the validator never inspects. `FS.GG.Coord.ChurnReading` parses
+and validates it; its `scripts/fsgg-coord` verb is not wired yet.
+
+[churn-reading](references/churn-reading.md) has the commands, the schema and its rules, the worked
+reading for 2026-08-15 with its skeleton, and what separates a healthy net-positive day from a
+churning one.
 
 ## After you file, prove you did not glue the board
 
