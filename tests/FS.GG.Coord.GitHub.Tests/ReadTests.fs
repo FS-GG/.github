@@ -134,9 +134,14 @@ let private issuePage (numbers: int list) =
     |> String.concat ","
     |> fun elements -> "[" + elements + "]"
 
-/// `FS-GG/.github`'s shape, in miniature: a FULL first page (100, the `per_page` this read asks for) with
-/// a `rel="next"` link, and a short continuation. Page two is what each test injects its fault into — the
-/// status and body of the ONLY response that differs between the green leg and the red ones.
+/// `Reads.CollectionPageSize` — the page size this read requests AND the length the completeness guard
+/// compares the merged body against. It is private to `Reads`, so it is restated here, and the wire
+/// assertion in the merge test below is what keeps the restatement honest.
+let private pageOneSize = 100
+
+/// `FS-GG/.github`'s shape, in miniature: a FULL first page (`pageOneSize`, the `per_page` this read asks
+/// for) with a `rel="next"` link, and a short continuation. Page two is what each test injects its fault
+/// into — the status and body of the ONLY response that differs between the green leg and the red ones.
 let private paginatingListing (server: Loopback) (pageTwoStatus: int) (pageTwoBody: string) =
     server.On(fun req res ->
         if req.Url.PathAndQuery.Contains "page=2" then
@@ -145,10 +150,10 @@ let private paginatingListing (server: Loopback) (pageTwoStatus: int) (pageTwoBo
             server.Send
                 res
                 200
-                (issuePage [ 1..100 ])
+                (issuePage [ 1..pageOneSize ])
                 [ "Link",
-                  $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=100&page=2>; rel=\"next\", "
-                  + $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=100&page=2>; rel=\"last\"" ])
+                  $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"next\", "
+                  + $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"last\"" ])
 
 [<Fact>]
 let ``.github#2735 the duplicate inventory MERGES the continuation page`` () =
@@ -163,11 +168,20 @@ let ``.github#2735 the duplicate inventory MERGES the continuation page`` () =
 
     match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
     | Ok candidates ->
-        Assert.Equal(103, List.length candidates)
+        Assert.Equal(pageOneSize + 3, List.length candidates)
         Assert.Contains(candidates, fun c -> c.Number = 1)
-        Assert.Contains(candidates, fun c -> c.Number = 103)
+        Assert.Contains(candidates, fun c -> c.Number = pageOneSize + 3)
         // Two round trips really happened: the answer is a merge, not a first page that looked long.
         Assert.Equal(2, List.length server.Requests)
+
+        // THE REQUESTED PAGE SIZE IS PART OF THE GUARD, so it is asserted ON THE WIRE. The completeness
+        // check reads "a merged body carries MORE than `CollectionPageSize` elements"; that argument only
+        // holds while the request asks for exactly that many. Let the two drift and the guard fails OPEN
+        // in one direction — a `per_page` larger than the constant means an UNMERGED first page already
+        // clears `> CollectionPageSize` — and closed in the other. Nothing else in this suite notices a
+        // drift, because every fixture serves whatever it likes regardless of what was asked for.
+        Assert.Contains($"per_page=%d{pageOneSize}", List.head server.Requests)
+        Assert.Contains("state=all", List.head server.Requests)
     | Error e -> failwithf "a listing that paginates must yield a COMPLETE inventory, not a refusal: %A" e
 
 [<Fact>]
