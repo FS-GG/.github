@@ -50,5 +50,30 @@ jobs:
       # mention `dispatch-sender.yml` precisely to say they do not call it.
       - uses: ./.github/actions/setup-policy-python
 
+      # THE SDK IS PART OF THE GATE, NOT PACKAGING — the same argument the `paths:` filter above makes.
+      # The fixture's section E is a TRANSCRIPTION DIFFERENTIAL: the broker carries a second
+      # implementation of `Operation.preimage`, and section E compares the two by EXECUTING both — the
+      # shipped `run:` block on one side, `FS.GG.Coord.Core`'s public `Operation.compose` on the other.
+      # Without the SDK there is no oracle, so leg E0 REFUSES rather than skipping, and leg B9c asserts
+      # this step still exists so the refusal can never be arranged away by deleting it.
+      #
+      # `.github#2720` was reopened because the previous pin was a `grep` for two literals in
+      # `Operation.fs`: it stayed green on a semantic change and would have redded on a reformat. The
+      # SDK is what buys the executed comparison that replaced it.
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      # Locked restore, like every other project in this repository (ADR-0006): a silent version
+      # SUBSTITUTION fails here rather than quietly changing what the oracle was built from. Only the
+      # pure core is needed — `Operation` opens nothing but `System`, `System.Security.Cryptography`
+      # and `System.Text`, so this reaches no transport, no `gh`, and no network.
+      - name: Restore and build the engine the differential executes (locked)
+        run: |
+          dotnet restore src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj -c Release --no-restore
+
       - name: Run the dispatch-broker fixture
         run: bash tests/dispatch-broker/run.sh
