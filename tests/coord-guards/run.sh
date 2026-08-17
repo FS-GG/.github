@@ -495,8 +495,11 @@ fi
 # listing the tree explicitly instead of leaning on prefix matching.
 drive "$KERNEL" heartbeat "$FIXREF"
 K_RC="$DRIVE_RC"; K_OUT="$DRIVE_OUT"; K_ERR="$DRIVE_ERR"
-if [ "$K_RC" -eq 69 ] && ! printf '%s' "$K_OUT" | grep -q 'ENGINE RAN' \
-   && printf '%s' "$K_ERR" | grep -q 'BEHIND refs/remotes/origin/main by 1 commit'; then
+# HERE-STRINGS, NOT PIPELINES, in this section and §12: bash materialises the whole string before `grep`
+# reads it, so `grep -q`'s early exit has no live writer to SIGPIPE. `check-pipefail-assertions.py`
+# ratchets the pipeline spelling down and does not accept a raised baseline as the remedy.
+if [ "$K_RC" -eq 69 ] && ! grep -q 'ENGINE RAN' <<<"$K_OUT" \
+   && grep -qF 'BEHIND refs/remotes/origin/main by 1 commit' <<<"$K_ERR"; then
   ok "a shared checkout behind on src/FS.GG.Coord.Cli.Kernel ALONE is BEHIND: 'heartbeat' REFUSED (exit 69), engine never reached — the .github#2725 entry in ENGINE_SOURCE_TREES is load-bearing and now measured"
 else
   bad "a commit under src/FS.GG.Coord.Cli.Kernel alone must count as engine drift: the Kernel is packed into the tool, so it changes the engine the fleet runs" \
@@ -508,7 +511,7 @@ fi
 # same fixture shape with its one upstream commit OUTSIDE every named tree must be wholly silent — and
 # `docs/` is a tree this guard deliberately does not count, not an accident of the fixture.
 drive "$OUTSIDE" heartbeat "$FIXREF"
-if [ "$DRIVE_RC" -eq 0 ] && printf '%s' "$DRIVE_OUT" | grep -q 'ENGINE RAN' && [ -z "$DRIVE_ERR" ]; then
+if [ "$DRIVE_RC" -eq 0 ] && grep -q 'ENGINE RAN' <<<"$DRIVE_OUT" && [ -z "$DRIVE_ERR" ]; then
   ok "the same shape with its upstream commit OUTSIDE the engine trees (docs/) is silent and runs — so §11 is keyed on the TREE LIST, not on behind-ness as such"
 else
   bad "a commit outside every tree ENGINE_SOURCE_TREES names must not produce a verdict" "rc=$DRIVE_RC out=$DRIVE_OUT err=$DRIVE_ERR"
@@ -547,12 +550,14 @@ else
   # AND THE KERNEL IS NAMED, BY NAME. The loop above is satisfied by any list whose entries exist,
   # including the pre-.github#2725 three — so without this the rename guard would also certify the
   # reverted list. This is the assertion §11 proves the CONSEQUENCE of.
-  if printf ' %s ' "$ENGINE_SOURCE_TREES" | grep -qF ' src/FS.GG.Coord.Cli.Kernel '; then
-    ok "ENGINE_SOURCE_TREES names src/FS.GG.Coord.Cli.Kernel as its own entry, not by prefix accident"
-  else
+  # `case`, not `grep`: a fixed-string containment test needs no process at all, let alone a pipeline.
+  case " $ENGINE_SOURCE_TREES " in
+  *" src/FS.GG.Coord.Cli.Kernel "*)
+    ok "ENGINE_SOURCE_TREES names src/FS.GG.Coord.Cli.Kernel as its own entry, not by prefix accident" ;;
+  *)
     bad "ENGINE_SOURCE_TREES must name src/FS.GG.Coord.Cli.Kernel explicitly — git pathspecs match components, so src/FS.GG.Coord.Cli does not cover it" \
-        "list=$ENGINE_SOURCE_TREES"
-  fi
+        "list=$ENGINE_SOURCE_TREES" ;;
+  esac
 fi
 
 echo "coord-guards: $pass passed, $failcount failed"
