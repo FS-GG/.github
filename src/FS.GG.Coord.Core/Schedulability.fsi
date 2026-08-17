@@ -226,7 +226,9 @@ module Schedulability =
     /// field is the confident-but-unfounded sentence #440 and #488 were both closed for.
     val leaseWindow: leaseMinutes: int -> ageSeconds: int -> string
 
-    /// The path-collision pairs, as one string.
+    /// The path-collision pairs, as one string — STEMMED, so `src/Off/Sub/**` and `src/Off/Sub` do not
+    /// read as two different things when they are one subtree. The wide arrow is not decoration: these
+    /// lines are read beside a wall of issue refs, and the collision is what the eye must land on.
     val collisionText: hits: (string * string) list -> string
 
     /// A one-line reason, for the "passed over:" list a worker reads when nothing is startable.

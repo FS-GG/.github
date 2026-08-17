@@ -26,8 +26,6 @@ module Intake =
         && not (path.Contains "\\")
         && path.Split('/') |> Array.forall (fun segment -> segment <> "" && segment <> "." && segment <> "..")
 
-    /// Validate the durable facts that do not require a live repository read.  The IO layer owns
-    /// ownership candidates, duplicate completeness, path existence and board/claim predicates.
     let validate (draft: Draft) =
         let findings =
             [ if draft.Schema <> Schema then yield { Field = "schema"; Detail = $"must be '{Schema}'" }

@@ -5,27 +5,27 @@ module Rooms =
     open System.Text.RegularExpressions
     open Types
 
-    /// A `Rooms:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s `Paths:`
-    /// regex, because ADR-0051 puts it in the `Paths:`/`Blocked on:` declaration family (ADR-0045). Spaces,
-    /// not tabs: a token indented with a tab is code to the surrounding markdown anyway, exactly as the
-    /// fence and `Paths:` rules have it.
+    // A `Rooms:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s `Paths:`
+    // regex, because ADR-0051 puts it in the `Paths:`/`Blocked on:` declaration family (ADR-0045). Spaces,
+    // not tabs: a token indented with a tab is code to the surrounding markdown anyway, exactly as the
+    // fence and `Paths:` rules have it.
     let private declRe =
         Regex(@"^ {0,3}[Rr]ooms:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
-    /// The four ref spellings, the SAME grammar `EpicBody.childRefs` and `Blockers.canonToken` accept —
-    /// `ProtocolTests` pins the three against one token set so they cannot drift (#1153). Unlike
-    /// `childRefs`, which reads the FIRST ref of a task line, a `Rooms:` line may carry SEVERAL refs (a
-    /// room over `#12, #13`), so `parse` reads EVERY match on the line.
+    // The four ref spellings, the SAME grammar `EpicBody.childRefs` and `Blockers.canonToken` accept —
+    // `ProtocolTests` pins the three against one token set so they cannot drift (#1153). Unlike
+    // `childRefs`, which reads the FIRST ref of a task line, a `Rooms:` line may carry SEVERAL refs (a
+    // room over `#12, #13`), so `parse` reads EVERY match on the line.
     let private refRe =
         Regex(
             @"([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)#([0-9]+)|https?://github\.com/([^/\s]+)/([^/\s]+)/issues/([0-9]+)|([A-Za-z0-9._-]+)#([0-9]+)|#([0-9]+)",
             RegexOptions.Compiled
         )
 
-    /// Reduce one matched ref token to a canonical `Ref`. `owner`/`repo` in group 1 are each `[.\w-]+`
-    /// (no slash), so the pair splits on its single `/`. A `repo#n` carries only the repo and a bare `#n`
-    /// carries neither, both defaulting to the referencing item's own owner/repo — the same reduction
-    /// `EpicBody.childRefs` and `Blockers.canonToken` give.
+    // Reduce one matched ref token to a canonical `Ref`. `owner`/`repo` in group 1 are each `[.\w-]+`
+    // (no slash), so the pair splits on its single `/`. A `repo#n` carries only the repo and a bare `#n`
+    // carries neither, both defaulting to the referencing item's own owner/repo — the same reduction
+    // `EpicBody.childRefs` and `Blockers.canonToken` give.
     let private toRef (selfOwner: string) (selfRepo: string) (m: Match) : Ref =
         if m.Groups.[1].Success then
             let parts = m.Groups.[1].Value.Split('/')

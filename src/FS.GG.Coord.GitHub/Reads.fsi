@@ -20,6 +20,8 @@ namespace FS.GG.Coord.GitHub
 /// dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
 module Reads =
     type DuplicateCandidate = { Number: int; State: string; Title: string; Body: string; IsPullRequest: bool }
+    /// Complete, uncached all-state inventory for intake. Unlike `issues`, pull requests remain
+    /// candidates.
     val duplicateCandidates: transport: Transport.IGitHubTransport -> owner: string -> repo: string -> Errors.IoResult<DuplicateCandidate list>
 
     open FS.GG.Coord

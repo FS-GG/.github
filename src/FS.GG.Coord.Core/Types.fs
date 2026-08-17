@@ -46,23 +46,11 @@ module Types =
         member this.Short = $"%s{this.Repo}#%d{this.Number}"
         member this.Canonical = $"%s{this.Owner}/%s{this.Repo}#%d{this.Number}"
 
-    /// A `Blocked by` entry.
-    ///
-    /// `Ref` is an OPTION because `BlockerUnparseable` is a real case and prose is not a ref: "Blocked by
-    /// RESOLVED: shipped last week" blocks, and it has no owner, no repo and no number. The record used to
-    /// demand a `Ref` anyway — so the one state the type system was told to expect was the one it could not
-    /// hold, and the client quietly dropped every such blocker on the floor rather than fail to build one.
-    /// An item bash called BLOCKED then reached the engine as unblocked — and the engine's answer is the
-    /// one a worker acts on, so that is a worker being handed blocked work.
-    ///
-    /// `Raw` is what the field actually SAID, and it is always present — it is the only thing there is to
-    /// show a human when the ref did not parse.
     type Blocker =
         { Ref: Ref option
           Raw: string
           State: BlockerState }
 
-        /// What to call it in a sentence: the canonical ref when we have one, else the prose we were given.
         member this.Display =
             match this.Ref with
             | Some r -> r.Short
@@ -75,66 +63,32 @@ module Types =
     type TouchSet =
         | Undeclared
         | DeclaredNone
-        /// `Paths: any` — a file-less CHORE. It reserves nothing and conflicts with nothing, so it is
-        /// SCHEDULABLE and runs alongside any concurrent item — the opposite of `DeclaredNone`, which is
-        /// deliberately unschedulable. Both "reserve nothing"; they differ only in schedulability, which
-        /// is the collapse #1103 leg 8 exists to break. This is a DELIBERATE empty reservation (a sentinel
-        /// the parser verified), NOT #273's fail-open — a path-shaped token that reserves nothing by
-        /// mistake. See Types.fsi and ADR-0045.
         | DeclaredChore
         | Declared of PathToken list
-        /// The body was never read, so the touch-set is UNKNOWN — not absent. See Types.fsi.
         | Unreadable of reason: string
 
-    /// A `Blocked on: human/...` body-line sentinel: the item cannot be scheduled because a HUMAN must
-    /// act first, whatever its `Paths:` line says. The action-vs-decision distinction is load-bearing —
-    /// `Blocked by` is ref-typed and structurally cannot say "blocked on a person" (#1103 leg 2), so this
-    /// carries the WHY a bare empty `Blocked by` flattened. Decided by @EHotwagner on #1103; see ADR-0045.
     type HumanBlock =
-        /// `Blocked on: human/decision` — unstartable until a human CHOOSES (a decision item, e.g. #918/#498).
         | AwaitingHumanDecision
-        /// `Blocked on: human/action` — blocked on a human ACTION such as a scope/credential grant; it
-        /// becomes startable the moment the action lands (e.g. #574), but not before.
         | AwaitingHumanAction
 
-    /// What KIND of work an item is (.github#1588): defect, hardening, or a human decision.
     type ItemClass =
-        /// Something is broken NOW.
         | Defect
-        /// Nothing is broken; the change removes a way it could break.
         | Hardening
-        /// A human must choose before any work is authorable.
         | Decision
 
-    /// WHETHER an item has a lifecycle at all (.github#2712) — `DeclaredNone` vs `Undeclared`
-    /// generalised from one field to the item. See Types.fsi for why `None` means `Work` here and
-    /// `None` means "untriaged, stay loud" for `ItemClass`.
     type ItemKind =
-        /// A closeable unit of work. Every row declaring no `Kind:` line is this one.
         | Work
-        /// A class anchor: it accumulates instances and has no completion condition (.github#266).
         | Anchor
-        /// A register: a container other actors append to. Its depth is observable; its closure is not.
         | Register
-        /// A directive: an instruction enforced by being read. It does not finish.
         | Directive
 
-    /// HOW MUCH an item costs when it goes wrong — the board's closed `Severity` vocabulary
-    /// (.github#1901). Unlike `Class`, this is an ordered priority axis.
     type Severity =
         | Critical
         | High
         | Medium
         | Low
-        /// No human has rated the row yet. It ranks last and lint reports it until triaged.
         | Unset
 
-    /// WHICH PART OF THE PLAN an item belongs to — the board's `Phase` column (.github#1598).
-    ///
-    /// A CLOSED, ORDERED vocabulary. The order is the whole reason this is a union and not a string:
-    /// `P0 Decisions` is earlier in the plan than `P8 Net`, and "earlier in the plan" is a rank
-    /// input. A string carries no order, and `List.sortBy` over one would sort `P10` before `P2` the day
-    /// a tenth phase existed.
     type Phase =
         | P0Decisions
         | P1Rendering
@@ -170,87 +124,33 @@ module Types =
 
     type Item =
         { Ref: Ref
-          /// The repository whose worktree the item's `Paths:` tokens describe.  It normally equals
-          /// `Ref.Repo`, but cross-repository board items keep their issue in `.github` while reserving
-          /// a receiver tree (#1732).
           PathRepo: string
           Status: BoardStatus
           State: IssueState
           TouchSet: TouchSet
           Blockers: Blocker list
           Claim: (Claim * Liveness) option
-          /// The open `item/<n>-*` PR when this item carries NO live-held claim marker — a duplicate
-          /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
-          /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
           ItemPr: int option
-          /// A markerless item-PR probe could not be completed. This is deliberately separate from
-          /// `ItemPr`: `None` means no open PR was observed, while this receipt says no answer was
-          /// available at all. Mutating chores must fail closed on it (#1924).
           ItemPrUnreadable: bool
-          /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
-          /// declares no such line. When present it refuses scheduling regardless of `TouchSet` — AND it
-          /// holds `BLOCKER-CLEARED` off the row (.github#1644). `None` is ambiguous ("no sentinel" vs "the
-          /// body was never read"); `TouchSet.Unreadable` is the fact that tells them apart. See Types.fsi.
           HumanBlock: HumanBlock option
-          /// The item's declared machine-checkable registry predicate, ALREADY RESOLVED against the owning
-          /// manifest (ADR-0050 call-site B / .github#1203). `None` means the item declares no such
-          /// predicate — the common case, and the one that flips on blockers-cleared exactly as today. A
-          /// resolved `Verdict` is the FACT the pure `BLOCKER-CLEARED` derivation reads, the way it reads
-          /// `Blocker.State`: `Agrees` lets the flip proceed, `Contradicts`/`Unknown` HOLD it (fail closed,
-          /// #266). Resolved at the impure edge, never in `Chore.derive` — see `RegistryPredicate`.
           Predicate: RegistryPredicate.Verdict option
 
-          /// The class the item's OWN TEXT declares — a `Class:` body line, a `[decision]` title prefix,
-          /// or ADR-0045's `Blocked on: human/decision` sentinel (.github#1588). `None` means the text
-          /// carries no evidence, which is a REAL answer and never a default — see `Class` and ADR-0066.
           Class: ItemClass option
 
-          /// The class the BOARD FIELD currently holds — the PROJECTION, observed, not derived.
-          ///
-          /// Two fields, because they are two facts and the item turns on not collapsing them: `Class` is
-          /// what the item says it is, `BoardClass` is what the board currently renders, and
-          /// `CLASS-PROJECTION-LAG` exists exactly where they disagree. One field could not express the
-          /// disagreement, so nothing could reconcile it.
-          ///
-          /// Resolved at the impure edge (the scan reads the column), never by `Chore.derive` — the same
-          /// split, for the same reason, as `Predicate` above.
           BoardClass: ItemClass option
 
-          /// The kind the item's OWN TEXT declares — a `Kind:` body line (.github#2712). `None` means the
-          /// text declares none, which MEANS `Work` at every decision: it is what every row on this board
-          /// is today, and an undeclared row must behave exactly as it does now.
           Kind: ItemKind option
 
-          /// The kind the BOARD FIELD currently holds — the PROJECTION, observed, not derived, on
-          /// `BoardClass`'s exact terms. NEITHER the reducer NOR the scheduler consults it; it exists so
-          /// `KIND-PROJECTION-LAG` can be derived where it disagrees with `Kind`.
           BoardKind: ItemKind option
 
-          /// How many comments the issue carries, as observed by the board scan (.github#2712). This is
-          /// REGISTER DEPTH: the fact that tells a healthy inbox from a six-week backlog without opening
-          /// the issue. `None` means this reader did not look — never "no comments", which would report an
-          /// unread register as an empty one.
           CommentCount: int option
 
-          /// The mandatory, source-bound delivery-route verdict observed for this item.  This is a
-          /// scheduling fact rather than a UI hint: missing, stale, or unreadable evidence must never
-          /// become an implicit lightweight route.
           DeliveryRoute: DeliveryRoute.Verdict
 
-          /// The board's `Severity` column as observed. Missing or unrecognised values become `Unset`,
-          /// the explicit fail-loud value that ranks last and remains visible to lint.
           Severity: Severity
 
-          /// The board's `Phase` COLUMN as OBSERVED (.github#1598). Resolved at the
-          /// impure edge on `BoardClass`'s exact terms; `None` means this reader did not look, or the row
-          /// carries no phase, and it ranks LAST rather than defaulting to a phase.
           Phase: Phase option
 
-          /// How many whole days ago the ISSUE was created, as measured at the impure edge (.github#1598).
-          ///
-          /// An `int`, not a timestamp, for the reason `Claim.AgeSeconds` is one: the pure core must not
-          /// own a clock. `None` means the reader did not learn it — never "brand new", which would make
-          /// an unread age the highest-priority age under starvation escalation.
           AgeDays: int option }
 
     type Verdict<'a> =
@@ -288,12 +188,12 @@ module Types =
         | BlockerUnknown -> "unknown"
         | BlockerUnparseable -> "unparseable"
 
-    /// Every `BlockerState`, as the subject `blockerStateOfWireName` searches.
-    ///
-    /// THE ONE PART THE COMPILER CANNOT CHECK, named rather than hidden — `Protocol.everyCase` carries
-    /// the identical caveat for the same reason. A case missing here is a wire name that renders fine
-    /// and no longer PARSES, which is the round-trip breaking in the one direction a total match cannot
-    /// see. `TypesTests` pins this list against the union by reflection, so nobody has to remember it.
+    // Every `BlockerState`, as the subject `blockerStateOfWireName` searches.
+    //
+    // THE ONE PART THE COMPILER CANNOT CHECK, named rather than hidden — `Protocol.everyCase` carries
+    // the identical caveat for the same reason. A case missing here is a wire name that renders fine
+    // and no longer PARSES, which is the round-trip breaking in the one direction a total match cannot
+    // see. `TypesTests` pins this list against the union by reflection, so nobody has to remember it.
     let private everyBlockerState =
         [ BlockerOpen; BlockerClosed; BlockerMerged; BlockerUnknown; BlockerUnparseable ]
 
@@ -323,13 +223,13 @@ module Types =
         | Hardening -> "hardening"
         | Decision -> "decision"
 
-    /// Every `ItemClass`, as the subject `itemClassOfWireName` searches.
-    ///
-    /// THE ONE PART THE COMPILER CANNOT CHECK, named rather than hidden — `everyBlockerState` carries the
-    /// identical caveat. A case missing here renders fine and no longer PARSES, so a `Class:` line the
-    /// docs tell a filer to write would read as no declaration at all, and `lint` would report the item
-    /// untriaged while its author had triaged it. `TypesTests` pins this list against the union by
-    /// reflection, so nobody has to remember it.
+    // Every `ItemClass`, as the subject `itemClassOfWireName` searches.
+    //
+    // THE ONE PART THE COMPILER CANNOT CHECK, named rather than hidden — `everyBlockerState` carries the
+    // identical caveat. A case missing here renders fine and no longer PARSES, so a `Class:` line the
+    // docs tell a filer to write would read as no declaration at all, and `lint` would report the item
+    // untriaged while its author had triaged it. `TypesTests` pins this list against the union by
+    // reflection, so nobody has to remember it.
     let private everyItemClass = [ Defect; Hardening; Decision ]
 
     // THE INVERSE, DERIVED — never a second list of the strings (#1012). This is the function the body-line
@@ -360,8 +260,8 @@ module Types =
         | Register -> "register"
         | Directive -> "directive"
 
-    /// Every `ItemKind`, as the subject `itemKindOfWireName` searches — `everyItemClass`'s caveat
-    /// verbatim, and `TypesTests` pins it against the union by reflection so nobody has to remember it.
+    // Every `ItemKind`, as the subject `itemKindOfWireName` searches — `everyItemClass`'s caveat
+    // verbatim, and `TypesTests` pins it against the union by reflection so nobody has to remember it.
     let private everyItemKind = [ Work; Anchor; Register; Directive ]
 
     // THE INVERSE, DERIVED — never a second list of the strings (#1012). `Kind.fromBody` calls this, so
@@ -397,7 +297,6 @@ module Types =
             |> List.tryFind (fun severity ->
                 String.Equals(severityWireName severity, candidate, StringComparison.OrdinalIgnoreCase))
 
-    /// Lower sorts earlier: Critical > High > Medium > Low > Unset.
     let severityOrder (severity: Severity) =
         match severity with
         | Critical -> 0
@@ -426,11 +325,6 @@ module Types =
         | P7Audio -> "P7 Audio"
         | P8Net -> "P8 Net"
 
-    /// THE PLAN ORDER, and the only place it is a number.
-    ///
-    /// Deliberately NOT parsed back out of the wire name's `P<n>` prefix. That would be a second grammar
-    /// — one the renderer never promised to keep — and the day a phase is named without a numeric prefix
-    /// the parse would silently answer 0, which is the HIGHEST priority. A total match cannot do that.
     let phaseOrder (p: Phase) =
         match p with
         | P0Decisions -> 0
@@ -443,9 +337,9 @@ module Types =
         | P7Audio -> 7
         | P8Net -> 8
 
-    /// Every `Phase`, as the subject `phaseOfWireName` searches — `everyItemClass`'s caveat, one
-    /// vocabulary over: a case missing here renders fine and no longer PARSES, so a board column a
-    /// human set would read as no phase at all and rank last.
+    // Every `Phase`, as the subject `phaseOfWireName` searches — `everyItemClass`'s caveat, one
+    // vocabulary over: a case missing here renders fine and no longer PARSES, so a board column a
+    // human set would read as no phase at all and rank last.
     let private everyPhase =
         [ P0Decisions
           P1Rendering

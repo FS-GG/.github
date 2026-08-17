@@ -90,6 +90,9 @@ module Transport =
           Body: string
           /// Headers from the response that actually served this resource. Header names preserve the
           /// transport's received spelling; callers use the case-insensitive `header` accessor below.
+          ///
+          /// Rate-limit telemetry must PREFER these over a later `/rate_limit` summary: these headers
+          /// describe the request GitHub just billed or refused, and the summary can lag it.
           Headers: Map<string, string>
           /// The response's validator, for a conditional re-read.
           ///

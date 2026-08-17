@@ -77,7 +77,8 @@ module Delivery =
           PathsVerified: bool
           InReview: bool
           Review: Driver.ReviewChain option
-          /// Parser failures are evidence that review was attempted but is malformed.
+          /// Parser failures are evidence that review was attempted but is malformed; retaining the
+          /// diagnostic keeps delivery from misdirecting the holder to wait for a review that exists.
           ReviewProblem: string option
           Landable: bool
           Merged: bool

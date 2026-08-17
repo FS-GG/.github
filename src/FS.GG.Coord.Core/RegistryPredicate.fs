@@ -27,9 +27,9 @@ module RegistryPredicate =
 
     // ---- parsing registry/skills.yml rows ---------------------------------------------------------
 
-    /// Split the inside of a `{ ... }` flow-mapping on its TOP-LEVEL commas — commas inside a `"..."`
-    /// string literal or a `[...]` list are part of a value (`materializes-when: "profile in [a, b]"`),
-    /// not separators. Same reason `normalize_when` stashes literals: a comma is layout only outside them.
+    // Split the inside of a `{ ... }` flow-mapping on its TOP-LEVEL commas — commas inside a `"..."`
+    // string literal or a `[...]` list are part of a value (`materializes-when: "profile in [a, b]"`),
+    // not separators. Same reason `normalize_when` stashes literals: a comma is layout only outside them.
     let private splitTopLevel (inside: string) : string list =
         let parts = System.Collections.Generic.List<string>()
         let sb = System.Text.StringBuilder()
@@ -58,8 +58,8 @@ module RegistryPredicate =
         if t.Length >= 2 && t.StartsWith("\"") && t.EndsWith("\"") then t.Substring(1, t.Length - 2)
         else t
 
-    /// Parse one `- { k: v, ... }` line into a field map, or `None` if the line is not a flow-mapping
-    /// row (a comment, the `skills:` header, a blank line).
+    // Parse one `- { k: v, ... }` line into a field map, or `None` if the line is not a flow-mapping
+    // row (a comment, the `skills:` header, a blank line).
     let private parseRow (line: string) : Row option =
         let t = line.Trim()
         if not (t.StartsWith("-")) then
@@ -105,8 +105,8 @@ module RegistryPredicate =
 
     // ---- parsing the cross-repo-request assertion -------------------------------------------------
 
-    /// The value of a `### <label>` section of a rendered issue-form body, or `None` when the section
-    /// is absent or was left blank (`_No response_`).
+    // The value of a `### <label>` section of a rendered issue-form body, or `None` when the section
+    // is absent or was left blank (`_No response_`).
     let private sectionValue (issueBody: string) (label: string) : string option =
         let lines = issueBody.Replace("\r\n", "\n").Split('\n')
         let heading = "### " + label
@@ -143,10 +143,10 @@ module RegistryPredicate =
     let supportsField (field: string) : bool =
         field.Trim().ToLowerInvariant() = "mirrored"
 
-    /// Normalise a `mirrored` value for comparison: trimmed, surrounding quotes stripped, lower-cased.
-    /// The Cli hands the owner's value in as `true`/`false` (a JSON bool rendered); a request's value is
-    /// FREE TEXT off the issue form, so a filer typing `"true"` (with quotes) or `True` must not read as
-    /// a spurious contradiction of the owner's `true` (another false-Contradicts avenue, #658's spirit).
+    // Normalise a `mirrored` value for comparison: trimmed, surrounding quotes stripped, lower-cased.
+    // The Cli hands the owner's value in as `true`/`false` (a JSON bool rendered); a request's value is
+    // FREE TEXT off the issue form, so a filer typing `"true"` (with quotes) or `True` must not read as
+    // a spurious contradiction of the owner's `true` (another false-Contradicts avenue, #658's spirit).
     let private normalizeMirrored (v: string) : string =
         let t = v.Trim()
 

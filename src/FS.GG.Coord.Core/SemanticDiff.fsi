@@ -47,9 +47,16 @@ module SemanticDiff =
     /// one rename pair, so honesty alone let a receipt for 6 of 12 discovered occurrences validate
     /// (.github#2144 repair-phase round 2).
     type TrustedAudit =
-        { Expected: Receipt list
+        { /// One engine recomputation per submitted receipt, matched by rename pair and declared paths.
+          Expected: Receipt list
+          /// Every occurrence the engine discovered across the whole diff, receipts notwithstanding.
           Discovered: Occurrence list }
 
+    /// Every semantic occurrence of the rename in one file's base/head pair.
+    ///
+    /// Rename-shaped lines are aligned by their token-substituted CONTENT rather than by line number, so
+    /// insertions and deletions elsewhere in the file cannot hide an occurrence. Repeated equal lines are
+    /// paired first-to-first, which is what keeps the inventory deterministic.
     val inventory:
         path: string -> before: string -> after: string -> oldToken: string -> newToken: string -> Occurrence list
 

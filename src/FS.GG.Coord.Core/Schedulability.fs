@@ -11,7 +11,6 @@ module Schedulability =
 
     type Schedulability =
         | Startable
-        /// The row is a STANDING ITEM and is not a unit of work at all (.github#2712).
         | NotAUnitOfWork of ItemKind
         | WrongStatus of BoardStatus
         | IssueClosed
@@ -19,7 +18,6 @@ module Schedulability =
         | DeliberatelyNoTouchSet
         | UnusableTouchSet of tokens: string list
         | BlockedBy of Blocker list
-        /// A `Blocked on: human/...` sentinel refuses the item regardless of its touch-set (#1103 leg 2).
         | AwaitingHuman of HumanBlock
         | AwaitingDeliveryRouteDecision of reasons: string list
         | HeldBy of WorkerId
@@ -58,13 +56,6 @@ module Schedulability =
         | WithBacklogOptIn -> "with-backlog-opt-in"
         | NeverStartable -> "never"
 
-    /// `generated` is `.github#2305`/ADR-0044's set of generated, CI-gated artifact paths (from
-    /// `scripts/generated-paths`, exact repo-relative paths — the same shape `TouchSet.excludeGenerated`
-    /// takes). It is the FIRST parameter so every call site reads as "against THIS repo's generated
-    /// roster" before the rest of the question. `Set.empty` is always safe to pass — it makes step 6
-    /// below identical to the pre-#2305 behaviour, never MORE restrictive — so a caller with no roster to
-    /// hand (an offline/pure decision path with no filesystem, e.g. `lanes`/`decide`'s snapshot-only
-    /// input) degrades to the old answer rather than refusing or guessing one.
     let schedulable (generated: Set<string>) (allowBacklog: bool) (inFlight: TouchSet list) (item: Item) : Schedulability =
 
         // ORDER IS PART OF THE SPEC, not an implementation detail. Each check must come before every
@@ -276,12 +267,12 @@ module Schedulability =
         | _ :: _ -> OverlapsInFlight hits
         | [] -> Startable
 
-    /// THE OPERATOR'S WORDS, NOT THE COMPILER'S. `%A` on a union prints its CASE NAME — `BlockerOpen`,
-    /// `InProgress` — and after the flip (ADR-0034 Phase 3b) this prose is what every worker reads when
-    /// a scheduler hands them nothing. `InProgress` is not even what the board says; the column is
-    /// literally "In progress", so a worker who greps for what they were told finds nothing. These
-    /// renderings are the projection edge: the DU is the model, and this is the only place it is put
-    /// into English.
+    // THE OPERATOR'S WORDS, NOT THE COMPILER'S. `%A` on a union prints its CASE NAME — `BlockerOpen`,
+    // `InProgress` — and after the flip (ADR-0034 Phase 3b) this prose is what every worker reads when
+    // a scheduler hands them nothing. `InProgress` is not even what the board says; the column is
+    // literally "In progress", so a worker who greps for what they were told finds nothing. These
+    // renderings are the projection edge: the DU is the model, and this is the only place it is put
+    // into English.
     let private statusText (s: BoardStatus) =
         match s with
         | NoStatus -> "no Status"
@@ -300,39 +291,9 @@ module Schedulability =
         | BlockerUnknown -> "unknown"
         | BlockerUnparseable -> "unparseable"
 
-    /// The grammar, stated once. A refusal that does not say what WOULD have been accepted just moves
-    /// the worker's confusion one step later.
     let TouchSetGrammar =
         "supported: an exact path ('src/Foo.fs'), or a directory prefix ('src/Foo', 'src/Foo/*', 'src/Foo/**'). There is no glob matcher: a leading '**/' or an interior '*' matches nothing — spell the paths out."
 
-    /// THE OPERATOR'S QUESTION IS NOT "IS IT HELD?" BUT "SHOULD I WAIT?" — AND THAT IS A NUMBER (#428).
-    ///
-    /// "nothing schedulable" and "queued behind a claim held by <w>, lease frees in ~96m" are the same
-    /// fact and two completely different instructions: the first reads as an empty queue and sends a
-    /// worker home. Bash has always answered this (`lease_window`). The typed core must too, or the
-    /// flip is an information REGRESSION on the one line a starved worker actually reads.
-    ///
-    /// A NEGATIVE age means the age is UNKNOWN and says so, rather than guessing. `claim` has always
-    /// recorded a timestamp, but a hand-written or truncated marker may not — and inventing
-    /// "frees in ~120m" out of a missing field is the confident-but-unfounded sentence that #440 and
-    /// #488 were both closed for.
-    /// Does an EXPIRED lease still authorize the item's action verbs — `review`, `delivery` — the same
-    /// proof-of-life the scheduler already trusts when it refuses to hand a `HeldByLiveWork` item to a
-    /// SECOND worker (#581). A worker paused at the review handoff cannot heartbeat between turns — it
-    /// is not running — so its lease can lapse mid-review, and an open `item/<n>-*` PR is exactly the
-    /// evidence that tells that pause apart from abandonment (#2378).
-    ///
-    /// THIS IS THE SAME RULE AS `schedulable`'s `HeldByLiveWork` ARM, NAMED ONCE (#485's lesson applied
-    /// to a second question): "should a second worker get this item?" and "does the claim in hand still
-    /// authorize acting on it?" are asked of the identical fact (a claim's `Liveness`), and a caller that
-    /// re-derived the second from scratch could disagree with the first about what "live" means without
-    /// either side noticing.
-    ///
-    /// `LeaseExpiredBranchPushed` (#1055 — a pushed branch, no PR yet) is WEAKER evidence than an open
-    /// PR: a branch can be a stale leftover in a way a still-open PR cannot, so it does NOT authorize
-    /// here — matching `schedulable`'s own `Undetermined` (not `HeldByLiveWork`) verdict for the same
-    /// case. `LivenessUnknown` fails closed, as every liveness read in this codebase does: a probe that
-    /// could not be made is not a probe that came back "abandoned".
     let leaseAuthorizes (liveness: Liveness) : bool =
         match liveness with
         | LeaseHeld
@@ -355,28 +316,11 @@ module Schedulability =
             else
                 $"lease frees in ~%d{left}m"
 
-    /// The path-collision pair, as bash renders it — STEMMED, so `src/Off/Sub/**` and `src/Off/Sub` do
-    /// not read as two different things when they are one subtree. The wide arrow is not decoration:
-    /// these lines are read beside a wall of issue refs, and the collision is what the eye must land on.
     let collisionText (hits: (string * string) list) =
         hits
         |> List.map (fun (a, b) -> $"%s{TouchSet.stem a}  ⇄  %s{TouchSet.stem b}")
         |> String.concat ", "
 
-    /// THE WIRE VOCABULARY, AND THE ONLY PLACE IT IS SPELLED (#865).
-    ///
-    /// A `function` match, so the COMPILER enforces what a list literal never could: add a case to the
-    /// union and this fails to build (FS0025, incomplete match — and this project is warnings-as-errors),
-    /// so a verdict cannot reach the wire without a name, nor the docs without an entry. That is not a
-    /// style preference. It is the property `ProtocolTests` claimed in a comment and did not have: the
-    /// kinds were typed a THIRD time in `Snapshot`, and `ItemPrOpen` shipped on the wire while
-    /// `Protocol.verdicts` never heard of it, with the guard green over both.
-    ///
-    /// The strings are the shipped ones. `held-by` is deliberately NOT `held`: `held` is `who`'s
-    /// CLAIM-STATE vocabulary (held/stale/unclaimed, `Client.whoStateName`), a different question with a
-    /// different answer set. `Protocol.verdicts` documented the verdict as `held` for exactly as long as
-    /// nothing derived it, which sent a reader grepping a schedulability verdict into the claim-state
-    /// vocabulary — a wrong hit reads as an answer, where a miss would at least read as a question.
     let kind =
         function
         | Startable -> "startable"

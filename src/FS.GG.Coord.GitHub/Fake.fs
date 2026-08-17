@@ -9,11 +9,11 @@ module Fake =
 
     type Route = Request -> IoResult<Response>
 
-    /// `repos/{owner}/{repo}/…` → `owner/repo`, and whatever trailing numbers the path carries.
-    ///
-    /// The stub logs `<verb> <owner/repo> <number>`, and the CROSS-REPO assertions depend on it: #494 was
-    /// an issue read addressed to the wrong repository, and the only way the corpus can see that is if the
-    /// log names the repo the request was actually sent to.
+    // `repos/{owner}/{repo}/…` → `owner/repo`, and whatever trailing numbers the path carries.
+    //
+    // The stub logs `<verb> <owner/repo> <number>`, and the CROSS-REPO assertions depend on it: #494 was
+    // an issue read addressed to the wrong repository, and the only way the corpus can see that is if the
+    // log names the repo the request was actually sent to.
     let private restParts (path: string) =
         let m = Regex.Match(path, @"^repos/([^/]+)/([^/]+)(?:/(.*))?$")
 
@@ -24,21 +24,21 @@ module Fake =
             let rest = if m.Groups.[3].Success then m.Groups.[3].Value else ""
             Some(nwo, rest)
 
-    /// The `gh project item-edit` line, synthesised from a Projects v2 field mutation.
-    ///
-    /// THE ONE PIECE OF DELIBERATE ARCHAEOLOGY IN THIS FILE. Under bash, a board write was
-    /// `gh project item-edit --id … --project-id … --field-id … --single-select-option-id …`, and the
-    /// corpus asserts on those exact flag strings. Under the port it is a GraphQL mutation and those bytes
-    /// are gone. Re-emitting them here is not nostalgia: it is what keeps ~20 assertions — every one of
-    /// which encodes a real defect about routing a value to the right field type — TRUE STATEMENTS about
-    /// the new code instead of dead greps that pass over anything.
-    ///
-    /// An empty value is `--clear`, never `--text ""`. That is a real trap and a real bug: `item-edit
-    /// --text ''` is a NO-OP ("no changes to make"), so an empty write silently left the old value in
-    /// place, and the board went on showing a `Blocked by` that had been cleared.
-    /// A variable's value as the `gh` stub would have shown it on the command line. `VNumber` renders
-    /// without a trailing `.0` when it is integral, because `--number 3` is what the corpus greps for and
-    /// `--number 3.0` is a different string.
+    // The `gh project item-edit` line, synthesised from a Projects v2 field mutation.
+    //
+    // THE ONE PIECE OF DELIBERATE ARCHAEOLOGY IN THIS FILE. Under bash, a board write was
+    // `gh project item-edit --id … --project-id … --field-id … --single-select-option-id …`, and the
+    // corpus asserts on those exact flag strings. Under the port it is a GraphQL mutation and those bytes
+    // are gone. Re-emitting them here is not nostalgia: it is what keeps ~20 assertions — every one of
+    // which encodes a real defect about routing a value to the right field type — TRUE STATEMENTS about
+    // the new code instead of dead greps that pass over anything.
+    //
+    // An empty value is `--clear`, never `--text ""`. That is a real trap and a real bug: `item-edit
+    // --text ''` is a NO-OP ("no changes to make"), so an empty write silently left the old value in
+    // place, and the board went on showing a `Blocked by` that had been cleared.
+    // A variable's value as the `gh` stub would have shown it on the command line. `VNumber` renders
+    // without a trailing `.0` when it is integral, because `--number 3` is what the corpus greps for and
+    // `--number 3.0` is a different string.
     let private varText (v: Var) =
         match v with
         | VString s -> s

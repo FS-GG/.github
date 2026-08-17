@@ -18,78 +18,70 @@ module Scan =
           BlockedByRaw: string
           State: IssueState
           IsPullRequest: bool
-          /// The repository whose tree this item's `Paths:` tokens name.  This normally equals
-          /// `Ref.Repo`; a cross-repository coordination item may instead select `Repo Scope` (#1732).
-          /// It is deliberately separate from `Ref`, which continues to identify the issue to read,
-          /// claim, and close.
+          // The repository whose tree this item's `Paths:` tokens name.  This normally equals
+          // `Ref.Repo`; a cross-repository coordination item may instead select `Repo Scope` (#1732).
+          // It is deliberately separate from `Ref`, which continues to identify the issue to read,
+          // claim, and close.
           PathRepo: string
-          /// The `Class` column as OBSERVED (.github#1588). `None` covers three facts the board itself
-          /// does not tell apart — the row is unclassed, the value is a word this engine does not speak,
-          /// or the project has no `Class` field at all — and all three mean the same thing to the only
-          /// consumer: there is no projection here to trust. `lint` reports the gap from the ITEM's text,
-          /// which is the authority, so nothing downstream has to guess which of the three this was.
+          // The `Class` column as OBSERVED (.github#1588). `None` covers three facts the board itself
+          // does not tell apart — the row is unclassed, the value is a word this engine does not speak,
+          // or the project has no `Class` field at all — and all three mean the same thing to the only
+          // consumer: there is no projection here to trust. `lint` reports the gap from the ITEM's text,
+          // which is the authority, so nothing downstream has to guess which of the three this was.
           BoardClass: ItemClass option
 
-          /// The `Kind` column as OBSERVED (.github#2712). `None` covers the same three facts
-          /// `BoardClass` does — unset, a word this engine does not speak, or no such field on the
-          /// project — and they collapse for the same reason: to the only consumer there is no
-          /// projection here to trust, and the ITEM's own `Kind:` line is the authority.
           BoardKind: ItemKind option
 
-          /// **REGISTER DEPTH** — the ISSUE's comment count as observed (.github#2712).
-          ///
-          /// FREE. `comments { totalCount }` selects no NODES, so it does not multiply the node budget
-          /// GraphQL's primary limit is metered by; the board read stays the 7 points this query's own
-          /// comment measures. Verified directly before adoption: `comments { totalCount }` on
-          /// `.github#2691` answered 83 at `rateLimit.cost` 1.
-          ///
-          /// `None` means this reader did not look — a pull request (which is not an issue and has no
-          /// register semantics), or a cache entry written before this field existed. Never "no
-          /// comments": an unread register must not read as an empty one.
+          // **REGISTER DEPTH** — the ISSUE's comment count as observed (.github#2712).
+          //
+          // FREE. `comments { totalCount }` selects no NODES, so it does not multiply the node budget
+          // GraphQL's primary limit is metered by; the board read stays the 7 points this query's own
+          // comment measures. Verified directly before adoption: `comments { totalCount }` on
+          // `.github#2691` answered 83 at `rateLimit.cost` 1.
+          //
+          // `None` means this reader did not look — a pull request (which is not an issue and has no
+          // register semantics), or a cache entry written before this field existed. Never "no
+          // comments": an unread register must not read as an empty one.
           CommentCount: int option
 
-          /// The `Severity` column as observed. Missing or unrecognised values are explicitly `Unset`,
-          /// which ranks last and remains visible to lint.
+          // The `Severity` column as observed. Missing or unrecognised values are explicitly `Unset`,
+          // which ranks last and remains visible to lint.
           Severity: Severity
 
-          /// The `Phase` column as OBSERVED (.github#1598). `None` covers the same three facts
-          /// `BoardClass` does — unset, a word this engine does not speak, or no such field on the
-          /// project — and they collapse for the same reason: to the one consumer (`Rank`) all three mean
-          /// "no phase evidence", and an item with none sorts last.
           Phase: Phase option
 
-          /// When the ISSUE was created — the board's only usable age timestamp (.github#1598).
-          ///
-          /// Carried as the INSTANT, not as a day count, precisely because it is cached: a `Row` written
-          /// to disk today and read tomorrow must not report yesterday's age. The count is derived where
-          /// the clock is read (`Client.enrichBoardFacts`), so the cached fact never goes stale.
+          // When the ISSUE was created — the board's only usable age timestamp (.github#1598).
+          //
+          // Carried as the INSTANT, not as a day count, precisely because it is cached: a `Row` written
+          // to disk today and read tomorrow must not report yesterday's age. The count is derived where
+          // the clock is read (`Client.enrichBoardFacts`), so the cached fact never goes stale.
           CreatedAt: DateTimeOffset option
 
-          /// .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT — read ONLY for a
-          /// closed-and-`Done` candidate whose `BoardClass` was EMPTY at the moment of a `scanFresh` call
-          /// made with `Cache.Reconciling` (see `scanFresh`) — never for `Scheduling`/`Offering`, and
-          /// never merely to double-check a column that already carries a value.
-          ///
-          /// `None` is "not applicable, or this scan's intent never asked" — the overwhelming majority of
-          /// rows, on every scan. `Some(Ok text)` is the body; `Some(Error e)` mirrors `Scan.snapshot`'s
-          /// own `bodyUnreadable` naming, so a failed census read is COUNTED there, never silently dropped
-          /// (#266) — `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself,
-          /// which is what keeps the extra read off every caller but `reconcile`: `Client.fs`'s
-          /// `scanAndDecide` already forwards its own `Cache.ReadIntent` into `Scan.board` UNCHANGED
-          /// (`Scan.board ctx.Transport intent ...`), so gating the read HERE, inside `scanFresh`, needs no
-          /// new parameter on `snapshot` and no edit to `Client.fs` at all — the two calls already agree
-          /// on intent, they simply never shared this one narrow fact before.
-          ///
-          /// DELIBERATELY UNCACHED. `renderRows`/`parseRows` never round-trip it: `Cache.getScan` already
-          /// refuses to serve a cache hit for `Reconciling`/`Offering` (`Cache.fs`'s own `| Reconciling |
-          /// Offering -> None`), so every `Reconciling` scan reaches `scanFresh` fresh regardless — nothing
-          /// is lost by leaving this out of the cache file, and leaving it OUT is what stops a `Scheduling`
-          /// read that happens to share a cache file from ever being able to inherit a census read it never
-          /// asked for and never paid for.
+          // .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT — read ONLY for a
+          // closed-and-`Done` candidate whose `BoardClass` was EMPTY at the moment of a `scanFresh` call
+          // made with `Cache.Reconciling` (see `scanFresh`) — never for `Scheduling`/`Offering`, and
+          // never merely to double-check a column that already carries a value.
+          //
+          // `None` is "not applicable, or this scan's intent never asked" — the overwhelming majority of
+          // rows, on every scan. `Some(Ok text)` is the body; `Some(Error e)` mirrors `Scan.snapshot`'s
+          // own `bodyUnreadable` naming, so a failed census read is COUNTED there, never silently dropped
+          // (#266) — `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself,
+          // which is what keeps the extra read off every caller but `reconcile`: `Client.fs`'s
+          // `scanAndDecide` already forwards its own `Cache.ReadIntent` into `Scan.board` UNCHANGED
+          // (`Scan.board ctx.Transport intent ...`), so gating the read HERE, inside `scanFresh`, needs no
+          // new parameter on `snapshot` and no edit to `Client.fs` at all — the two calls already agree
+          // on intent, they simply never shared this one narrow fact before.
+          //
+          // DELIBERATELY UNCACHED. `renderRows`/`parseRows` never round-trip it: `Cache.getScan` already
+          // refuses to serve a cache hit for `Reconciling`/`Offering` (`Cache.fs`'s own `| Reconciling |
+          // Offering -> None`), so every `Reconciling` scan reaches `scanFresh` fresh regardless — nothing
+          // is lost by leaving this out of the cache file, and leaving it OUT is what stops a `Scheduling`
+          // read that happens to share a cache file from ever being able to inherit a census read it never
+          // asked for and never paid for.
           SweptBody: IoResult<string> option
 
-          /// Stable GraphQL node identity, retained only to make a fresh node-facts query.  It is not a
-          /// cached body or lock fact: every snapshot re-reads body and comment totalCount through this id.
+          // Stable GraphQL node identity, retained only to make a fresh node-facts query.  It is not a
+          // cached body or lock fact: every snapshot re-reads body and comment totalCount through this id.
           NodeId: string option }
 
     [<Literal>]
@@ -165,19 +157,19 @@ module Scan =
 
     // ---- the thrifty board query --------------------------------------------------------------------
 
-    /// THE COST LEVER, AND IT IS THE WHOLE QUERY.
-    ///
-    /// `fieldValueByName` is a RESOLVER field: one value per item, no node multiplication. The alternative
-    /// — what `gh project item-list` does — nests `fieldValues(first: 100)` inside `items(first: N)`, which
-    /// is O(items × 100) NODES, and GraphQL's primary limit is metered by nodes REQUESTED.
-    ///
-    /// Measured on the live 640-item board: this document is 7 pages × 1 point = **7 points**.
-    /// `gh project item-list` costs **6 points to read five items**.
-    ///
-    /// `class` and `phase` are both `fieldValueByName` RESOLVER fields and `createdAt` is a SCALAR on a
-    /// node already selected, so none of the three multiplies nodes and the 7 points above is unchanged
-    /// by .github#1588 or .github#1598. A `fieldValues(first: N)` connection would not have been free,
-    /// which is the whole reason this query does not use one.
+    // THE COST LEVER, AND IT IS THE WHOLE QUERY.
+    //
+    // `fieldValueByName` is a RESOLVER field: one value per item, no node multiplication. The alternative
+    // — what `gh project item-list` does — nests `fieldValues(first: 100)` inside `items(first: N)`, which
+    // is O(items × 100) NODES, and GraphQL's primary limit is metered by nodes REQUESTED.
+    //
+    // Measured on the live 640-item board: this document is 7 pages × 1 point = **7 points**.
+    // `gh project item-list` costs **6 points to read five items**.
+    //
+    // `class` and `phase` are both `fieldValueByName` RESOLVER fields and `createdAt` is a SCALAR on a
+    // node already selected, so none of the three multiplies nodes and the 7 points above is unchanged
+    // by .github#1588 or .github#1598. A `fieldValues(first: N)` connection would not have been free,
+    // which is the whole reason this query does not use one.
     [<Literal>]
     let private BoardDoc =
         "query($owner: String!, $number: Int!, $cursor: String) { \
@@ -255,12 +247,12 @@ module Scan =
         | true, o when o.ValueKind = JsonValueKind.Object -> str o inner
         | _ -> None
 
-    /// An ISO-8601 instant, or `None`.
-    ///
-    /// `RoundtripKind` so a `Z` suffix stays UTC instead of being reinterpreted as local time — an age in
-    /// DAYS would survive that, but a rank input that silently shifts by a timezone on one machine and
-    /// not another is exactly the kind of non-determinism the batch may not have. `None` on anything
-    /// unparseable: an age we could not read is unknown, never zero (`Item.AgeDays`).
+    // An ISO-8601 instant, or `None`.
+    //
+    // `RoundtripKind` so a `Z` suffix stays UTC instead of being reinterpreted as local time — an age in
+    // DAYS would survive that, but a rank input that silently shifts by a timezone on one machine and
+    // not another is exactly the kind of non-determinism the batch may not have. `None` on anything
+    // unparseable: an age we could not read is unknown, never zero (`Item.AgeDays`).
     let private instant (s: string option) : DateTimeOffset option =
         match s with
         | None -> None
@@ -374,20 +366,20 @@ module Scan =
         // would put a phantom on the queue.
         | _ -> None
 
-    /// Did the board query select this node AS an issue row? (.github#2525)
-    ///
-    /// `parseRow` has exactly one failure exit — `None` — and TWO completely different things arrive at it.
-    /// A draft card legitimately has no ref, and skipping it is correct. But a node the query matched
-    /// `... on Issue` / `... on PullRequest`, whose `number` or `repository.nameWithOwner` then came back
-    /// missing or ill-typed, is a REAL ROW WE FAILED TO READ — and it left the batch by the same silent
-    /// door, with no counter and no trace. `__typename` is already selected on every node by both board
-    /// documents, so the two cases are distinguishable for free; without this the caller cannot tell a
-    /// 640-row board from the part of it that happened to parse.
-    ///
-    /// `content` absent or null deliberately reads as FALSE here. That is the redacted-item case — an item
-    /// this token cannot see — and refusing the whole scan for it would refuse boards that legitimately
-    /// carry such items. It is a stated limit of this guard, not an oversight: this guard covers rows the
-    /// server DID hand us and we then failed to read, which is the class that produced .github#2525.
+    // Did the board query select this node AS an issue row? (.github#2525)
+    //
+    // `parseRow` has exactly one failure exit — `None` — and TWO completely different things arrive at it.
+    // A draft card legitimately has no ref, and skipping it is correct. But a node the query matched
+    // `... on Issue` / `... on PullRequest`, whose `number` or `repository.nameWithOwner` then came back
+    // missing or ill-typed, is a REAL ROW WE FAILED TO READ — and it left the batch by the same silent
+    // door, with no counter and no trace. `__typename` is already selected on every node by both board
+    // documents, so the two cases are distinguishable for free; without this the caller cannot tell a
+    // 640-row board from the part of it that happened to parse.
+    //
+    // `content` absent or null deliberately reads as FALSE here. That is the redacted-item case — an item
+    // this token cannot see — and refusing the whole scan for it would refuse boards that legitimately
+    // carry such items. It is a stated limit of this guard, not an oversight: this guard covers rows the
+    // server DID hand us and we then failed to read, which is the class that produced .github#2525.
     let private isIssueRowNode (node: JsonElement) : bool =
         match node.TryGetProperty "content" with
         | true, content when content.ValueKind = JsonValueKind.Object ->
@@ -397,8 +389,8 @@ module Scan =
             | _ -> false
         | _ -> false
 
-    /// The scan, as the JSON we cache. It is the ROWS, not the raw GraphQL — so a cache hit does not have to
-    /// re-walk a document, and the shape on disk is the shape the reader wants.
+    // The scan, as the JSON we cache. It is the ROWS, not the raw GraphQL — so a cache hit does not have to
+    // re-walk a document, and the shape on disk is the shape the reader wants.
     let private renderRows (rows: Row list) =
         let sb = StringBuilder()
         use stream = new IO.MemoryStream()
@@ -668,12 +660,12 @@ module Scan =
     let private urlRe =
         Regex(@"github\.com/(?<owner>[\w.-]+)/(?<repo>[\w.-]+)/issues/(?<num>\d+)", RegexOptions.Compiled)
 
-    /// Parse one `Blocked by` token into a ref — or say that it is not one.
-    ///
-    /// `None` is `BlockerUnparseable`, and it BLOCKS. Prose in a dependency field is not a cleared
-    /// dependency: *"Blocked by RESOLVED: shipped last week"* has no owner, no repo and no number, and the
-    /// bash client used to drop such blockers entirely — so an item it called BLOCKED arrived at the engine
-    /// UNBLOCKED, and the engine's answer is the one that reaches a worker: blocked work, handed out.
+    // Parse one `Blocked by` token into a ref — or say that it is not one.
+    //
+    // `None` is `BlockerUnparseable`, and it BLOCKS. Prose in a dependency field is not a cleared
+    // dependency: *"Blocked by RESOLVED: shipped last week"* has no owner, no repo and no number, and the
+    // bash client used to drop such blockers entirely — so an item it called BLOCKED arrived at the engine
+    // UNBLOCKED, and the engine's answer is the one that reaches a worker: blocked work, handed out.
     let private parseBlockerRef (defaultOwner: string) (defaultRepo: string) (token: string) : Ref option =
         let t = token.Trim()
 
@@ -707,21 +699,21 @@ module Scan =
                       Repo = repo
                       Number = int m.Groups.["num"].Value }
 
-    /// The board's `Blocked by` graph, for `Blockers.cycles` — resolved from the SCANNED ROWS ALONE, with
-    /// NO transport read (#1090).
-    ///
-    /// A ring can only run through ON-BOARD items, and a board item's OPEN/CLOSED state is already in
-    /// `rows` — so an on-board blocker's resolution is FREE, the same free case `resolveBlocker` takes when
-    /// the scan already saw the target. An OFF-BOARD blocker draws no ring edge whatever its state, because
-    /// `Blockers.cycles` keeps only edges whose target is a node in the graph. So this does not resolve one
-    /// — it marks it `BlockerUnknown` and spends no read. A lint that pays the REST lock budget (#418) to
-    /// distinguish a MERGED off-board blocker from a CLOSED one, for a blocker no ring can pass through,
-    /// would be resolving a fact its one consumer discards.
-    ///
-    /// **THE OFF-BOARD STATE IS A PLACEHOLDER, NOT A VERDICT** — this graph's resolution is accurate ONLY
-    /// for on-board refs, which is precisely what `Blockers.cycles` reads. It is not `snapshot`'s
-    /// fully-resolved blocker set, and no consumer that cares about an off-board blocker's real state may
-    /// use it. TOTAL and PURE: it reads nothing and terminates on any board.
+    // The board's `Blocked by` graph, for `Blockers.cycles` — resolved from the SCANNED ROWS ALONE, with
+    // NO transport read (#1090).
+    //
+    // A ring can only run through ON-BOARD items, and a board item's OPEN/CLOSED state is already in
+    // `rows` — so an on-board blocker's resolution is FREE, the same free case `resolveBlocker` takes when
+    // the scan already saw the target. An OFF-BOARD blocker draws no ring edge whatever its state, because
+    // `Blockers.cycles` keeps only edges whose target is a node in the graph. So this does not resolve one
+    // — it marks it `BlockerUnknown` and spends no read. A lint that pays the REST lock budget (#418) to
+    // distinguish a MERGED off-board blocker from a CLOSED one, for a blocker no ring can pass through,
+    // would be resolving a fact its one consumer discards.
+    //
+    // **THE OFF-BOARD STATE IS A PLACEHOLDER, NOT A VERDICT** — this graph's resolution is accurate ONLY
+    // for on-board refs, which is precisely what `Blockers.cycles` reads. It is not `snapshot`'s
+    // fully-resolved blocker set, and no consumer that cares about an off-board blocker's real state may
+    // use it. TOTAL and PURE: it reads nothing and terminates on any board.
     let blockerGraph (rows: Row list) : (Ref * Blocker list) list =
         let onBoard =
             rows
@@ -773,29 +765,29 @@ module Scan =
     // `Snapshot` held the other half facing the other way (#1012).
     let private blockerStateName = Types.blockerStateWireName
 
-    /// WHO A RESERVATION IS HELD BY, as the assembler knows it. A marker-backed claim (live OR stale — a
-    /// lock is a lock, #461) names its worker and item; a MARKERLESS In-progress board row (arm A of
-    /// bash's `active_claims`) reserves too — something is evidently editing those files — but has no
-    /// worker to name and no lease to wait out, so it is `Unowned`. It is written to the wire as the
-    /// codec's `live-claim` / `unowned` holder, which `Snapshot.parse` already reads.
+    // WHO A RESERVATION IS HELD BY, as the assembler knows it. A marker-backed claim (live OR stale — a
+    // lock is a lock, #461) names its worker and item; a MARKERLESS In-progress board row (arm A of
+    // bash's `active_claims`) reserves too — something is evidently editing those files — but has no
+    // worker to name and no lease to wait out, so it is `Unowned`. It is written to the wire as the
+    // codec's `live-claim` / `unowned` holder, which `Snapshot.parse` already reads.
     type private Reserved =
-        /// `livePr` carries the #581 proof of life onto the RESERVATION, so the cache does not
-        /// reconstruct a liveness-less claim and re-open the bug one layer down (#712). `Some pr` when
-        /// the lease has LAPSED but an open `item/<n>-*` PR keeps the claim alive (NOT reapable — talk to
-        /// the worker, there is no lease window to wait out); `None` is an ordinary within-lease claim, a
-        /// lapsed claim with no PR, OR a liveness that could not be read. It must never distinguish that
-        /// last case — `None` always means "no proof of life", which is what lets `Batch` derive
-        /// `KnownLiveWork` from it rather than hardcode it.
+        // `livePr` carries the #581 proof of life onto the RESERVATION, so the cache does not
+        // reconstruct a liveness-less claim and re-open the bug one layer down (#712). `Some pr` when
+        // the lease has LAPSED but an open `item/<n>-*` PR keeps the claim alive (NOT reapable — talk to
+        // the worker, there is no lease window to wait out); `None` is an ordinary within-lease claim, a
+        // lapsed claim with no PR, OR a liveness that could not be read. It must never distinguish that
+        // last case — `None` always means "no proof of life", which is what lets `Batch` derive
+        // `KnownLiveWork` from it rather than hardcode it.
         | RClaim of worker: WorkerId * holder: Ref * ageSeconds: int * livePr: int option
         | RUnowned of holder: Ref
 
-    /// The surface a reservation holds, on its way to the wire. `RvNames` is the ordinary case — the
-    /// path tokens lifted off the body we read. `RvUnreadable` is #1150: a live-held item whose BODY
-    /// READ FAILED reserves an UNKNOWN surface, not an empty one. We cannot prove any candidate disjoint
-    /// from a touch-set we never saw, so we carry `Unreadable` (with the read's reason) to the wire; the
-    /// codec reads it back into `TouchSet.Unreadable`, which `Batch.schedule` reds the batch on. Dropping
-    /// it — the pre-#1150 `| _ -> ()` on a failed body — was the fail-open: the claim reserved nothing and
-    /// a candidate overlapping its real files was handed the tree its holder is standing in.
+    // The surface a reservation holds, on its way to the wire. `RvNames` is the ordinary case — the
+    // path tokens lifted off the body we read. `RvUnreadable` is #1150: a live-held item whose BODY
+    // READ FAILED reserves an UNKNOWN surface, not an empty one. We cannot prove any candidate disjoint
+    // from a touch-set we never saw, so we carry `Unreadable` (with the read's reason) to the wire; the
+    // codec reads it back into `TouchSet.Unreadable`, which `Batch.schedule` reds the batch on. Dropping
+    // it — the pre-#1150 `| _ -> ()` on a failed body — was the fail-open: the claim reserved nothing and
+    // a candidate overlapping its real files was handed the tree its holder is standing in.
     type private ReservedPaths =
         | RvNames of string list
         | RvUnreadable of reason: string
@@ -807,10 +799,10 @@ module Scan =
     [<Literal>]
     let private NodeFactsChunkSize = 100
 
-    /// Fetch current bodies and exact comment cardinalities in bounded GraphQL chunks.  A zero cardinality
-    /// is an exact proof that the complete marker set is empty at this observation, so only that case may
-    /// skip the REST marker scan.  A positive count is deliberately not a marker projection: it still
-    /// takes the complete, uncached paginated scan below, preserving the lowest-id stale reservation rule.
+    // Fetch current bodies and exact comment cardinalities in bounded GraphQL chunks.  A zero cardinality
+    // is an exact proof that the complete marker set is empty at this observation, so only that case may
+    // skip the REST marker scan.  A positive count is deliberately not a marker projection: it still
+    // takes the complete, uncached paginated scan below, preserving the lowest-id stale reservation rule.
     let private freshNodeFacts (transport: IGitHubTransport) (rows: Row list) : IoResult<Map<string, FreshNodeFacts>> =
         // A pre-#2308 cache has no node id.  It is not a lock answer, merely an old cache shape, so those
         // rows take the former fresh REST body + complete marker path below.  A PRESENT id's fresh facts,
@@ -901,14 +893,14 @@ module Scan =
             (Ok [])
         |> Result.map Map.ofList
 
-    /// Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`. Every caller's cost is IDENTICAL
-    /// regardless of intent (.github#2254 repair 1, `heron-fef6`): the one extra body read a closed-and-
-    /// `Done` row with an empty `Class` column needs for `reconcile`'s census is paid, if at all, inside
-    /// `scanFresh` — gated on `Cache.Reconciling`, which `board` already receives from an UNCHANGED
-    /// `Client.fs` call site — and simply carried here on `Row.SweptBody`. This function reads that field;
-    /// it never calls `Reads.issueBody` itself and never sees `Cache.ReadIntent` at all, which is what
-    /// keeps `next`/`batch`/`take`/`scan` byte-identical to their pre-#2254 cost with no signature change
-    /// of their own to make.
+    // Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`. Every caller's cost is IDENTICAL
+    // regardless of intent (.github#2254 repair 1, `heron-fef6`): the one extra body read a closed-and-
+    // `Done` row with an empty `Class` column needs for `reconcile`'s census is paid, if at all, inside
+    // `scanFresh` — gated on `Cache.Reconciling`, which `board` already receives from an UNCHANGED
+    // `Client.fs` call site — and simply carried here on `Row.SweptBody`. This function reads that field;
+    // it never calls `Reads.issueBody` itself and never sees `Cache.ReadIntent` at all, which is what
+    // keeps `next`/`batch`/`take`/`scan` byte-identical to their pre-#2254 cost with no signature change
+    // of their own to make.
     let snapshot
         (transport: IGitHubTransport)
         (rows: Row list)
@@ -958,7 +950,7 @@ module Scan =
         let mutable offBoardSkipped = 0
         let mutable bodiesUnreadable = 0
 
-        /// Resolve one `Blocked by` token.
+        // Resolve one `Blocked by` token.
         let resolveBlocker (owner: string) (repoName: string) (token: string) : IoResult<Blocker> =
             match parseBlockerRef owner repoName token with
             | None ->

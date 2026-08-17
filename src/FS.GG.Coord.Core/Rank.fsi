@@ -71,6 +71,16 @@ module Rank =
     /// Returned as a tuple rather than a single score on purpose: a score would have to weight terms
     /// against each other, and there is no exchange rate between "blocks two items" and "is a defect".
     /// Lexicographic tiers need none — each term only breaks the ties the term above it left.
+    ///
+    /// ESCALATION IS THE TOP TERM, above the blocking count and not merely above severity, class and
+    /// phase. That is what makes anti-starvation a LIVENESS guarantee rather than a nudge: the item it
+    /// exists for is one whose touch-set permanently collides with something better-ranked, and
+    /// "something better-ranked" is most often a hub with many dependents. An escalation that lost to
+    /// the blocking count would leave exactly that item starving.
+    ///
+    /// The NEGATIONS in the tuple are not decoration: more blocked dependents and more days old both
+    /// mean EARLIER, and the natural order of an `int` says the opposite. An UNKNOWN age contributes 0
+    /// — the same as an item created today — so `None` can never out-rank a measured age.
     val key: r: Rank -> int * int * int * int * int * int * int
 
     /// How many of the GIVEN `Blocked by` EDGES still hold against each ref — the one counting rule, over
@@ -109,6 +119,9 @@ module Rank =
     /// A `Backlog` row reached by `--include-backlog` never escalates. Somebody DECIDED to park it, and
     /// letting it age its way to the front would silently undo that triage decision — the opposite of
     /// what .github#1598 is for, which is to stop `Backlog` being used as a priority lever at all.
+    ///
+    /// An item whose age could not be read NEVER escalates, which is the honest direction: escalating on
+    /// an unknown age would promote every unreadable row above the whole board.
     val isEscalated: status: BoardStatus -> ageDays: int option -> bool
 
     /// One item's rank, given `blockingCounts` over the whole candidate set.

@@ -210,10 +210,6 @@ module Driver =
                 StructuredDecision.validateReviewLedger subject records
                 |> Result.map (fun _ -> subject, pairs)
 
-    /// The structural facts `Review.fs` classifies its typed protocol states from — reused, not
-    /// re-derived: every field here is read off `classifyMarkers`' groups and the same `field`/
-    /// `fieldValues` readers `parseReviewCommentsCore` uses, so this is additive to the public surface
-    /// rather than a second parser (#2175 acceptance 11).
     type ReviewPhaseFacts =
         { StructuredErrors: string list
           InitialCount: int
@@ -223,39 +219,27 @@ module Driver =
           CriticIdentity: string option
           ConfirmationCount: int
           LatestVerdict: string option
-          /// Populated only when `LatestVerdict = None`: every markdown-emphasised near-miss field
-          /// `nearMissFieldHints` found in the comment `LatestVerdict` would have been read from — the
-          /// initial marker's own comment when there is no confirmation yet, else the latest
-          /// confirmation's. Empty whenever `LatestVerdict` is readable, or no near miss was found
-          /// (.github#2369) — this never widens what `field` accepts, only what a refusal explains.
           LatestVerdictNearMissHints: string list
           LatestReviewedHeadSha: string option
-          /// The URL of the comment `LatestVerdict` and `LatestReviewedHeadSha` were read from — the
-          /// latest confirmation's when one exists, else the single initial-review comment's
-          /// (.github#2549). Read off the SAME `classifyMarkers` groups every sibling field is read
-          /// off, and off the comment record's own `Url`, so it introduces no parsing and no second
-          /// classification. It exists so an out-of-band grant can be bound to the EXACT review it
-          /// answers: without it, a receipt could only say "some review", and a grant left over from an
-          /// earlier round would be indistinguishable from one answering the current one.
           LatestReviewUrl: string option
           EscalationPresent: bool
           RepairPhasePresent: bool
           AcceptanceCount: int
           AcceptancePresent: bool }
 
-    /// A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
-    /// one route shares — `fsgg-critic-normal`, or any future `fsgg-critic-<route>` — rather than a
-    /// minted, distinguishing identity the way a worker's `whoami --mint` id is (.github#2451). Measured
-    /// live: two separate critics dispatched during one run both posted `critic: fsgg-critic-normal`.
-    ///
-    /// This was a PRIVATE copy here until `.github#2662`, whose ledger validator needs the same rule from
-    /// `StructuredDecision` — a module that compiles ahead of this one and owns the very record whose
-    /// `critic` field the predicate judges. The copy is therefore gone and this is an alias for the one
-    /// exported spelling, so a change to the rule can no longer leave this file disagreeing with the
-    /// validator. `Review.fs` still carries its own private copy under the same rename discipline: its
-    /// exact source lines are pinned as gate-inversion anchors by
-    /// `tests/review-critic-succession-wire/run.sh`, and moving them would silently disarm five legs
-    /// whose whole purpose is to prove that guard can refuse.
+    // A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
+    // one route shares — `fsgg-critic-normal`, or any future `fsgg-critic-<route>` — rather than a
+    // minted, distinguishing identity the way a worker's `whoami --mint` id is (.github#2451). Measured
+    // live: two separate critics dispatched during one run both posted `critic: fsgg-critic-normal`.
+    //
+    // This was a PRIVATE copy here until `.github#2662`, whose ledger validator needs the same rule from
+    // `StructuredDecision` — a module that compiles ahead of this one and owns the very record whose
+    // `critic` field the predicate judges. The copy is therefore gone and this is an alias for the one
+    // exported spelling, so a change to the rule can no longer leave this file disagreeing with the
+    // validator. `Review.fs` still carries its own private copy under the same rename discipline: its
+    // exact source lines are pinned as gate-inversion anchors by
+    // `tests/review-critic-succession-wire/run.sh`, and moving them would silently disarm five legs
+    // whose whole purpose is to prove that guard can refuse.
     let private isGenericCriticIdentity = StructuredDecision.isGenericCriticIdentity
 
     let reviewPhaseFacts (comments: ReviewComment list) : ReviewPhaseFacts =
@@ -329,29 +313,12 @@ module Driver =
                   AcceptanceCount = List.length acceptances
                   AcceptancePresent = not (List.isEmpty acceptances) }
 
-    /// One review chain that a host-acceptance marker accepted at a head the PR has since moved off
-    /// (.github#2527). `InitialReviewUrl` is the chain's initial-review comment URL — the same key
-    /// `parseReviewCommentsCore` already requires every confirmation and the acceptance itself to carry
-    /// as `initial-review:`, so a chain is self-attributing in evidence that already exists rather than
-    /// in anything this change invents.
     type ChainRetirement =
         { InitialReviewUrl: string
           InitialReviewCommentId: int64
           AcceptedHead: string
           AcceptanceCommentId: int64 }
 
-    /// The read-time partition `Review.classify` reads a PR's comments through (.github#2527).
-    ///
-    /// NOTHING IS REWRITTEN. `Live` and `Retired` are new lists over the SAME comment values; the
-    /// supplied list is never mutated, reordered, or edited, and no marker is quoted inert. That is the
-    /// whole point: the competing-marker rule exists to stop one agent rewriting another's durable review
-    /// evidence, so a recovery from it may not do that either. A retired chain stays exactly as posted and
-    /// re-classifies exactly as it always did when inspected at its own head.
-    ///
-    /// `Diagnostics` names the NEAR MISSES — an acceptance whose accepted head is still the current head,
-    /// or whose `initial-review:` names no initial marker present — so a refusal can say which condition
-    /// failed instead of only how many markers it counted. Same convention as
-    /// `ReviewPhaseFacts.LatestVerdictNearMissHints` (.github#2369).
     type LiveReviewComments =
         { Live: ReviewComment list
           Retired: ChainRetirement list
@@ -359,42 +326,42 @@ module Driver =
           StructuredSubject: string option
           StructuredErrors: string list }
 
-    /// Partition a PR's review comments into the chain that BINDS the current head and the chains that a
-    /// host acceptance already settled at a head the PR has moved off (.github#2527).
-    ///
-    /// THE RULE. A chain is retired when, and only when, a host-acceptance marker (a) names that chain's
-    /// initial-review comment URL in `initial-review:`, and (b) carries an `accepted-head:` that is NOT
-    /// `currentHead`. Both halves are read from the acceptance marker's own REQUIRED fields
-    /// (`Protocol.lifecyclePolicy.HostAcceptanceFields`), through the same private `field` reader and the
-    /// same `classifyMarkers` groups every other caller uses — this is not a second marker parser
-    /// (.github#2175 acceptance 11).
-    ///
-    /// WHY READ FROM THE MARKER AND NOT FROM A GRANT. `RepairPhaseReceipt` and `CriticSuccessionReceipt`
-    /// are out-of-band grants because the facts they carry are genuinely unobservable from the PR. "An
-    /// acceptance marker names this chain and carries an accepted-head that is not the current head" is
-    /// observable: it is written in the marker's own required fields. A grant would add a second, less
-    /// checkable channel for the same conclusion.
-    ///
-    /// BE PRECISE ABOUT WHAT IS OBSERVED, THOUGH — it is the marker's STRUCTURE, not the TRUTH of its
-    /// `accepted-head`. Nothing here verifies that the acceptance was genuine or that the head it names
-    /// was ever really accepted; a forged acceptance marker will retire a live chain. That is not the
-    /// hole it first looks like, and the reason is worth stating because "observed, not asserted" alone
-    /// overstates the guarantee:
-    ///
-    ///   A forged acceptance bound to the CURRENT head already yields `Accepted`/`Accept` outright, with
-    ///   an `AcceptedReceipt`. Retirement, reached from the same forgery, yields only a chain awaiting a
-    ///   FRESH host acceptance at the current head. So this route confers STRICTLY LESS than the forgery
-    ///   it presupposes, and it publishes the bogus value in `RetiredChains` where a reader can see it.
-    ///
-    /// The guarantee is therefore relative, not absolute: retirement adds no authority an attacker who
-    /// can forge acceptance markers does not already have, and it adds evidence they would rather not
-    /// leave. That is what keeps the one-initial-marker rule's protection intact.
-    ///
-    /// WHY ONLY WITH COMPETING INITIAL MARKERS. Retirement is a TIE-BREAKER between chains, never a
-    /// re-classification of one. With a single chain the pre-existing answer for an accepted-then-moved
-    /// head is unchanged and still refused (`ReviewTests.fs` `#2175 a changed head after acceptance
-    /// invalidates the prior accepted evidence`) — so this change cannot alter any verdict on a PR that
-    /// carries one chain, which is every PR the protocol was already able to describe.
+    // Partition a PR's review comments into the chain that BINDS the current head and the chains that a
+    // host acceptance already settled at a head the PR has moved off (.github#2527).
+    //
+    // THE RULE. A chain is retired when, and only when, a host-acceptance marker (a) names that chain's
+    // initial-review comment URL in `initial-review:`, and (b) carries an `accepted-head:` that is NOT
+    // `currentHead`. Both halves are read from the acceptance marker's own REQUIRED fields
+    // (`Protocol.lifecyclePolicy.HostAcceptanceFields`), through the same private `field` reader and the
+    // same `classifyMarkers` groups every other caller uses — this is not a second marker parser
+    // (.github#2175 acceptance 11).
+    //
+    // WHY READ FROM THE MARKER AND NOT FROM A GRANT. `RepairPhaseReceipt` and `CriticSuccessionReceipt`
+    // are out-of-band grants because the facts they carry are genuinely unobservable from the PR. "An
+    // acceptance marker names this chain and carries an accepted-head that is not the current head" is
+    // observable: it is written in the marker's own required fields. A grant would add a second, less
+    // checkable channel for the same conclusion.
+    //
+    // BE PRECISE ABOUT WHAT IS OBSERVED, THOUGH — it is the marker's STRUCTURE, not the TRUTH of its
+    // `accepted-head`. Nothing here verifies that the acceptance was genuine or that the head it names
+    // was ever really accepted; a forged acceptance marker will retire a live chain. That is not the
+    // hole it first looks like, and the reason is worth stating because "observed, not asserted" alone
+    // overstates the guarantee:
+    //
+    //   A forged acceptance bound to the CURRENT head already yields `Accepted`/`Accept` outright, with
+    //   an `AcceptedReceipt`. Retirement, reached from the same forgery, yields only a chain awaiting a
+    //   FRESH host acceptance at the current head. So this route confers STRICTLY LESS than the forgery
+    //   it presupposes, and it publishes the bogus value in `RetiredChains` where a reader can see it.
+    //
+    // The guarantee is therefore relative, not absolute: retirement adds no authority an attacker who
+    // can forge acceptance markers does not already have, and it adds evidence they would rather not
+    // leave. That is what keeps the one-initial-marker rule's protection intact.
+    //
+    // WHY ONLY WITH COMPETING INITIAL MARKERS. Retirement is a TIE-BREAKER between chains, never a
+    // re-classification of one. With a single chain the pre-existing answer for an accepted-then-moved
+    // head is unchanged and still refused (`ReviewTests.fs` `#2175 a changed head after acceptance
+    // invalidates the prior accepted evidence`) — so this change cannot alter any verdict on a PR that
+    // carries one chain, which is every PR the protocol was already able to describe.
     let liveReviewComments (currentHead: string) (comments: ReviewComment list) : LiveReviewComments =
         let structuredPresent =
             comments |> List.exists (fun comment -> comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal))
@@ -635,9 +602,6 @@ module Driver =
     let parseReviewCommentsWithFacts mechanicallyRequired trustedAudit comments =
         parseNormalized (Some(mechanicallyRequired, trustedAudit)) comments
 
-    /// Validate the one structured generation effective at `currentHead`. Accepted generations for
-    /// earlier heads remain append-only evidence but are retired by `liveReviewComments` before the
-    /// ordinary chain parser enforces exact URL/head linkage on the live generation.
     let parseEffectiveReviewComments currentHead comments =
         let live = liveReviewComments currentHead comments
         if not (List.isEmpty live.StructuredErrors) then Error live.StructuredErrors
@@ -827,25 +791,25 @@ module Driver =
         | DispatchWave of slots: int
         | ContinueCurrentWave
 
-    /// Every problem a review chain can carry, each tagged `true` when it is a STRUCTURAL fact about the
-    /// durable review evidence and `false` when it is a LIVENESS fact about the pull request's current
-    /// check run (.github#2549).
-    ///
-    /// The two kinds were indistinguishable, and that cost a healthy chain. `Review.acceptanceOutcome`
-    /// folded every message here into `MalformedEvidence` — the same state a chain carrying two
-    /// competing initial markers reaches, whose taught recovery is to close the pull request without
-    /// merging. `.github#2504` then made "checks are not green" a condition every ordinary landing
-    /// passes through by design: `claim-generation` is a required context on `main` whose marker is
-    /// written by the `delivery` call `pnext-item` §6 places AFTER host acceptance, so it CANNOT be
-    /// green at the moment acceptance is first observed. Measured on `.github#2534` / PR #2541: a chain
-    /// with one initial marker, one confirmation, one critic and a correctly bound acceptance reported
-    /// `{"state":"malformedEvidence","stateErrors":["review checks are not green"],"action":"park"}`.
-    /// PR #2514 was closed without merging and reopened as #2528 on that reading on 2026-08-13.
-    ///
-    /// ONE list, ONE order. `validateReviewChain` below is exactly this list's messages, so the split is
-    /// a property of the construction rather than a promise — `Delivery.reviewProblem` and
-    /// `receiptFresh` cannot drift from it, and a later reword of any message cannot silently
-    /// reintroduce the conflation the way a string match in a second file would.
+    // Every problem a review chain can carry, each tagged `true` when it is a STRUCTURAL fact about the
+    // durable review evidence and `false` when it is a LIVENESS fact about the pull request's current
+    // check run (.github#2549).
+    //
+    // The two kinds were indistinguishable, and that cost a healthy chain. `Review.acceptanceOutcome`
+    // folded every message here into `MalformedEvidence` — the same state a chain carrying two
+    // competing initial markers reaches, whose taught recovery is to close the pull request without
+    // merging. `.github#2504` then made "checks are not green" a condition every ordinary landing
+    // passes through by design: `claim-generation` is a required context on `main` whose marker is
+    // written by the `delivery` call `pnext-item` §6 places AFTER host acceptance, so it CANNOT be
+    // green at the moment acceptance is first observed. Measured on `.github#2534` / PR #2541: a chain
+    // with one initial marker, one confirmation, one critic and a correctly bound acceptance reported
+    // `{"state":"malformedEvidence","stateErrors":["review checks are not green"],"action":"park"}`.
+    // PR #2514 was closed without merging and reopened as #2528 on that reading on 2026-08-13.
+    //
+    // ONE list, ONE order. `validateReviewChain` below is exactly this list's messages, so the split is
+    // a property of the construction rather than a promise — `Delivery.reviewProblem` and
+    // `receiptFresh` cannot drift from it, and a later reword of any message cannot silently
+    // reintroduce the conflation the way a string match in a second file would.
     let private reviewChainProblems maxRounds chain =
         [ if not chain.MarkerValid then
               true, "review marker is missing or invalid"
@@ -875,16 +839,6 @@ module Driver =
     let validateReviewChain maxRounds chain =
         reviewChainProblems maxRounds chain |> List.map snd
 
-    /// The STRUCTURAL subset of `validateReviewChain` — everything that is wrong with the durable review
-    /// evidence itself, with the live-check liveness clause withheld (.github#2549).
-    ///
-    /// This is what `Review.acceptanceOutcome` classifies `MalformedEvidence` from, so that word once
-    /// again means only what a host can act on by inspecting the chain: a broken marker, a missing
-    /// critic, an unordered round sequence, an exhausted ceiling, missing route evidence, an unresolved
-    /// diff audit. An empty result does NOT mean the chain may merge — it means nothing about the
-    /// evidence is malformed. Merge readiness stays where it has always been: `landable`'s own CI
-    /// verdict, which `.github#2360` requires to remain wholly independent of the review chain and which
-    /// this function does not touch, and the host-acceptance marker.
     let validateReviewChainStructure maxRounds chain =
         reviewChainProblems maxRounds chain
         |> List.choose (fun (structural, message) -> if structural then Some message else None)

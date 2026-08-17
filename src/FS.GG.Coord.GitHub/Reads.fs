@@ -21,25 +21,21 @@ module Reads =
           PathRepo: string option
           Raw: string }
 
-    /// THE MARKER READ, WITH ITS OWN COMPLETENESS ATTACHED (.github#1668).
-    ///
-    /// `Markers` alone cannot distinguish *"this issue carries no claim"* from *"this issue carries comments
-    /// I could not read, and any of them may have been the claim"*. Those are different facts, and the whole
-    /// of `who`'s under-report is the second one being rendered as the first.
+    // THE MARKER READ, WITH ITS OWN COMPLETENESS ATTACHED (.github#1668).
+    //
+    // `Markers` alone cannot distinguish *"this issue carries no claim"* from *"this issue carries comments
+    // I could not read, and any of them may have been the claim"*. Those are different facts, and the whole
+    // of `who`'s under-report is the second one being rendered as the first.
     type MarkerScan =
         {
-            /// The claim markers, lowest comment id first — the CAS's total order, winner at the head.
             Markers: Marker list
-            /// One entry per comment the scan could NOT classify, each saying which comment and why. EMPTY is
-            /// the load-bearing value: empty means the marker list is COMPLETE, and only then may a caller
-            /// say an item is unheld.
             Unreadable: string list
         }
 
     type RateLimitSnapshot = { Remaining: int; Limit: int }
 
-    /// Parse a JSON document, or say we could not. There is no third option, and in particular there is no
-    /// "return an empty document" — bytes we cannot read are a FAILED READ (#461).
+    // Parse a JSON document, or say we could not. There is no third option, and in particular there is no
+    // "return an empty document" — bytes we cannot read are a FAILED READ (#461).
     let private parse (subject: string) (body: string) : IoResult<JsonDocument> =
         if String.IsNullOrWhiteSpace body then
             Error(
@@ -58,70 +54,70 @@ module Reads =
                 // why this is an error and not an empty list.
                 Error(Malformed(subject, $"the response is not JSON: %s{e.Message}"))
 
-    /// The envelope itself is owned by `GraphQl`; consumers never see raw `data`/`errors`.
-    /// announced its own incompleteness.
-    ///
-    /// **THE ORDER IS THE CONTRACT, AND THIS FUNCTION IS WHAT MAKES IT STRUCTURAL** (`.github#2534`).
-    /// GitHub reports an exhausted GraphQL budget — and any other partial field failure — as an HTTP
-    /// **200 carrying BOTH `data` and `errors`**, byte-indistinguishable at the transport layer from a
-    /// complete answer. `GraphQl.decode` carries this shape and `Scan.fs`/`Done.fs`
-    /// each re-implemented it correctly, but nothing made a read that SKIPPED it fail — so three reads in
-    /// this module drifted: `recentCommentBodies` and `subIssues` accepted a partially populated `nodes`
-    /// array as a complete one, and `prClosingRef` turned a rate-limited response into `Ok None`, the
-    /// positive assertion *"this PR closes nothing"*. A convention enforced by repetition is not
-    /// enforced. A function every read must call to reach `data` is, and
-    /// `GraphQlErrorsFirstTests` fails the build if any read in this layer reaches `data` around it.
-    ///
-    /// RATE LIMIT FIRST: test the generic partial arm first and
-    /// an exhausted budget is misreported as a malformed response, destroying the one fact — that this
-    /// condition is temporary — the caller needs in order to back off rather than refuse the subject.
+    // The envelope itself is owned by `GraphQl`; consumers never see raw `data`/`errors`.
+    // announced its own incompleteness.
+    //
+    // **THE ORDER IS THE CONTRACT, AND THIS FUNCTION IS WHAT MAKES IT STRUCTURAL** (`.github#2534`).
+    // GitHub reports an exhausted GraphQL budget — and any other partial field failure — as an HTTP
+    // **200 carrying BOTH `data` and `errors`**, byte-indistinguishable at the transport layer from a
+    // complete answer. `GraphQl.decode` carries this shape and `Scan.fs`/`Done.fs`
+    // each re-implemented it correctly, but nothing made a read that SKIPPED it fail — so three reads in
+    // this module drifted: `recentCommentBodies` and `subIssues` accepted a partially populated `nodes`
+    // array as a complete one, and `prClosingRef` turned a rate-limited response into `Ok None`, the
+    // positive assertion *"this PR closes nothing"*. A convention enforced by repetition is not
+    // enforced. A function every read must call to reach `data` is, and
+    // `GraphQlErrorsFirstTests` fails the build if any read in this layer reaches `data` around it.
+    //
+    // RATE LIMIT FIRST: test the generic partial arm first and
+    // an exhausted budget is misreported as a malformed response, destroying the one fact — that this
+    // condition is temporary — the caller needs in order to back off rather than refuse the subject.
     let private str (e: JsonElement) (name: string) =
         match e.TryGetProperty name with
         | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
         | _ -> None
 
-    /// **A `first: N` CONNECTION EITHER RETURNED EVERYTHING IT HAS OR IT DID NOT, AND THE DIFFERENCE IS
-    /// ONLY VISIBLE IF YOU ASK** (`.github#2535`).
-    ///
-    /// A connection selected with a bare `first: N` and no cursor answers the same JSON shape whether the
-    /// set has N members or ten thousand — `nodes` is N long either way. So *"there were N or fewer"* and
-    /// *"there were more than N"* arrive byte-identical, and every reader that walked `nodes`, found no
-    /// match, and answered "absent" was reading the second as the first. That is `.github#2534`'s shape one
-    /// axis over — a partial answer rendered as a complete one — reached through the page size rather than
-    /// the error channel, which is why the two were kept as separate causes.
-    ///
-    /// This is the second of the two remedies this layer already had and did not apply uniformly: carry
-    /// `totalCount` and MAKE THE COMPARISON LOAD-BEARING. `SubIssueSet`'s own signature already says
-    /// *"`Total > Children.length` is a TRUNCATED graph, and the distinction is load-bearing"*, and
-    /// `userContentEdits(first: 100)` carries it for the same reason. The other remedy — a `pageInfo`
-    /// cursor walk — is the right one where the tail must actually be FETCHED (`Board.bootstrap`'s project
-    /// list, `Board.externalItemId`); this one is right where the honest answer to a truncated read is a
-    /// REFUSAL.
-    ///
-    /// **EVERY FAILURE TO ESTABLISH COMPLETENESS IS A REFUSAL, NEVER A SHRUG.** A missing `totalCount`, a
-    /// `totalCount` that is not a 32-bit integer, a missing or non-array `nodes` — each of them means *the
-    /// completeness of this read is unknown*, and an unknown completeness may not be spent as a known one.
-    /// This is `Board.nextPage`'s rule for `hasNextPage` (#2166), stated once for the other remedy.
-    ///
-    /// **THE COMPARISON IS AGAINST THE NUMBER OF NODES RETURNED, NOT THE NUMBER THE CALLER COULD USE.** A
-    /// caller that drops nodes on purpose — `Board.bootstrap` skips a field type it was never taught rather
-    /// than guessing it — would otherwise refuse a perfectly complete read for its own filtering.
-    ///
-    /// **THE WINDOW IS AN ARGUMENT BECAUSE THE DEFECT IS THE WINDOW.** `first: N` is an upper bound: the
-    /// connection returns `min(N, available)` nodes, so a page that came back SHORT of `N` cannot have been
-    /// cut by `N` — there was nothing left for the window to hide. The truncation question is live in
-    /// exactly one state, the one this item's own acceptance criterion names: *a fixture returning exactly N
-    /// entries with more available*. So the guard asks `totalCount` when the window came back FULL, and
-    /// nowhere else.
-    ///
-    /// That is not a softening; it is the guard being about the right thing. A `totalCount` we could not
-    /// read over a FULL window is still a refusal — the window was filled and nothing told us whether there
-    /// is more, which is precisely the ambiguity `.github#2535` is about. And in production the lenient arm
-    /// is unreachable anyway: every document this layer sends selects `totalCount` beside `nodes`, so it can
-    /// only be entered by a response that dropped a field we asked for AND under-filled the window.
-    ///
-    /// It lives in `Reads` because `Board` compiles after it and calls it, and because two copies of a
-    /// completeness check is exactly the drift this item is about.
+    // **A `first: N` CONNECTION EITHER RETURNED EVERYTHING IT HAS OR IT DID NOT, AND THE DIFFERENCE IS
+    // ONLY VISIBLE IF YOU ASK** (`.github#2535`).
+    //
+    // A connection selected with a bare `first: N` and no cursor answers the same JSON shape whether the
+    // set has N members or ten thousand — `nodes` is N long either way. So *"there were N or fewer"* and
+    // *"there were more than N"* arrive byte-identical, and every reader that walked `nodes`, found no
+    // match, and answered "absent" was reading the second as the first. That is `.github#2534`'s shape one
+    // axis over — a partial answer rendered as a complete one — reached through the page size rather than
+    // the error channel, which is why the two were kept as separate causes.
+    //
+    // This is the second of the two remedies this layer already had and did not apply uniformly: carry
+    // `totalCount` and MAKE THE COMPARISON LOAD-BEARING. `SubIssueSet`'s own signature already says
+    // *"`Total > Children.length` is a TRUNCATED graph, and the distinction is load-bearing"*, and
+    // `userContentEdits(first: 100)` carries it for the same reason. The other remedy — a `pageInfo`
+    // cursor walk — is the right one where the tail must actually be FETCHED (`Board.bootstrap`'s project
+    // list, `Board.externalItemId`); this one is right where the honest answer to a truncated read is a
+    // REFUSAL.
+    //
+    // **EVERY FAILURE TO ESTABLISH COMPLETENESS IS A REFUSAL, NEVER A SHRUG.** A missing `totalCount`, a
+    // `totalCount` that is not a 32-bit integer, a missing or non-array `nodes` — each of them means *the
+    // completeness of this read is unknown*, and an unknown completeness may not be spent as a known one.
+    // This is `Board.nextPage`'s rule for `hasNextPage` (#2166), stated once for the other remedy.
+    //
+    // **THE COMPARISON IS AGAINST THE NUMBER OF NODES RETURNED, NOT THE NUMBER THE CALLER COULD USE.** A
+    // caller that drops nodes on purpose — `Board.bootstrap` skips a field type it was never taught rather
+    // than guessing it — would otherwise refuse a perfectly complete read for its own filtering.
+    //
+    // **THE WINDOW IS AN ARGUMENT BECAUSE THE DEFECT IS THE WINDOW.** `first: N` is an upper bound: the
+    // connection returns `min(N, available)` nodes, so a page that came back SHORT of `N` cannot have been
+    // cut by `N` — there was nothing left for the window to hide. The truncation question is live in
+    // exactly one state, the one this item's own acceptance criterion names: *a fixture returning exactly N
+    // entries with more available*. So the guard asks `totalCount` when the window came back FULL, and
+    // nowhere else.
+    //
+    // That is not a softening; it is the guard being about the right thing. A `totalCount` we could not
+    // read over a FULL window is still a refusal — the window was filled and nothing told us whether there
+    // is more, which is precisely the ambiguity `.github#2535` is about. And in production the lenient arm
+    // is unreachable anyway: every document this layer sends selects `totalCount` beside `nodes`, so it can
+    // only be entered by a response that dropped a field we asked for AND under-filled the window.
+    //
+    // It lives in `Reads` because `Board` compiles after it and calls it, and because two copies of a
+    // completeness check is exactly the drift this item is about.
     let connectionComplete
         (subject: string)
         (what: string)
@@ -190,30 +186,30 @@ module Reads =
             )
         | None -> Ok()
 
-    /// The `per_page` every collection read in this module asks for.
-    ///
-    /// IT IS A CONSTANT BECAUSE THE HEADROOM PROOF DEPENDS ON THE REQUEST AND THE PAGE SHAPE AGREEING. Ask
-    /// for 100 and declare `Page(30, …)` and the guard would "prove" headroom over a page that is actually
-    /// full — the one boundary it exists to refuse. One literal, used by both.
+    // The `per_page` every collection read in this module asks for.
+    //
+    // IT IS A CONSTANT BECAUSE THE HEADROOM PROOF DEPENDS ON THE REQUEST AND THE PAGE SHAPE AGREEING. Ask
+    // for 100 and declare `Page(30, …)` and the guard would "prove" headroom over a page that is actually
+    // full — the one boundary it exists to refuse. One literal, used by both.
     [<Literal>]
     let private CollectionPageSize = 100
 
-    /// What a response's ETag is entitled to stand for. DECLARED BY THE CALLER, never inferred — a PR object
-    /// carries `labels`/`assignees` arrays and a check-runs page carries `check_runs`, and nothing in the
-    /// bytes distinguishes "a resource that happens to contain a list" from "a page OF a list". Guessing that
-    /// apart is how a validator comes to vouch for something it never saw.
+    // What a response's ETag is entitled to stand for. DECLARED BY THE CALLER, never inferred — a PR object
+    // carries `labels`/`assignees` arrays and a check-runs page carries `check_runs`, and nothing in the
+    // bytes distinguishes "a resource that happens to contain a list" from "a page OF a list". Guessing that
+    // apart is how a validator comes to vouch for something it never saw.
     type private PageShape =
-        /// ONE resource (`pulls/{n}`). It cannot paginate: there is no `Link`, no page two, and nothing for a
-        /// validator to be partial about.
+        // ONE resource (`pulls/{n}`). It cannot paginate: there is no `Link`, no page two, and nothing for a
+        // validator to be partial about.
         | Single
-        /// One PAGE of a collection: the `per_page` the request asked for, and where the items live — `None`
-        /// when the root IS the array (`repos/…/issues`), `Some prop` for GitHub's wrapper objects
-        /// (`{"total_count": …, "check_runs": [ … ]}`).
+        // One PAGE of a collection: the `per_page` the request asked for, and where the items live — `None`
+        // when the root IS the array (`repos/…/issues`), `Some prop` for GitHub's wrapper objects
+        // (`{"total_count": …, "check_runs": [ … ]}`).
         | Page of perPage: int * property: string option
 
-    /// How many items this page carries. `None` — a body we cannot count, or one shaped unlike the caller
-    /// declared — and `memoisable` then refuses, because an uncountable page is one we cannot prove anything
-    /// about.
+    // How many items this page carries. `None` — a body we cannot count, or one shaped unlike the caller
+    // declared — and `memoisable` then refuses, because an uncountable page is one we cannot prove anything
+    // about.
     let private pageCount (property: string option) (body: string) : int option =
         try
             use doc = JsonDocument.Parse body
@@ -234,38 +230,38 @@ module Reads =
         with :? JsonException ->
             None
 
-    /// May this response's ETag be stored against this body?
-    ///
-    /// **THIS PREDICATE IS A PROOF, NOT A HEURISTIC**, and the thing it proves is that a future 304 against
-    /// the stored validator can only mean the collection is genuinely unchanged.
-    ///
-    /// The hazard: `Transport.Send` follows `Link: rel=next` and MERGES the pages, but an ETag belongs to the
-    /// FIRST request alone. Store it against a merge and a set that grows a page while page one stays
-    /// byte-identical answers 304 — the merge never runs, and the caller is served a one-page body for a
-    /// two-page set. A red run invisible on page two then scores GREEN: #461 (a partial read wearing a
-    /// complete one's clothes) deciding whether to merge.
-    ///
-    /// `Transport.Send` now closes the FIRST half of that: a merged response carries no ETag at all, dropped
-    /// at the only layer that knows a merge happened. So page one's validator can no longer escape onto a
-    /// merged body, and the `NextLink` arm below is a backstop, not the guard.
-    ///
-    /// It is only half, and the second half is the one that bites. *Don't memoise a response that paginated*
-    /// never runs on the case that matters: the unsound read is precisely the one where the collection has
-    /// grown, page one 304s, and the pagination never happens at all — so there is no merge for anyone to
-    /// notice, at this layer or any other.
-    ///
-    /// **HEADROOM CLOSES IT.** Memoise a page only when it carries FEWER items than the `per_page` it asked
-    /// for. Then, writing `n` for the stored page's item count and `m` for the collection's true size later:
-    ///
-    ///   * `m <= perPage` — page one IS the whole collection. A 304 means page one's bytes still equal the
-    ///     stored body, so the collection is unchanged and serving it is correct.
-    ///   * `m > perPage` — page one now carries `perPage` items, and `n < perPage`, so page one's bytes
-    ///     CANNOT equal the stored body. The server must answer 200, and that response carries a `Link` — so
-    ///     we drop the validator rather than store it against a merge.
-    ///
-    /// A 304 is therefore only reachable in the first case. The `n < perPage` strictness is load-bearing:
-    /// at `n = perPage` exactly (a full page, no `Link`) growth could leave page one untouched and 304 over
-    /// the items that landed on page two — the one boundary this whole rule exists to refuse.
+    // May this response's ETag be stored against this body?
+    //
+    // **THIS PREDICATE IS A PROOF, NOT A HEURISTIC**, and the thing it proves is that a future 304 against
+    // the stored validator can only mean the collection is genuinely unchanged.
+    //
+    // The hazard: `Transport.Send` follows `Link: rel=next` and MERGES the pages, but an ETag belongs to the
+    // FIRST request alone. Store it against a merge and a set that grows a page while page one stays
+    // byte-identical answers 304 — the merge never runs, and the caller is served a one-page body for a
+    // two-page set. A red run invisible on page two then scores GREEN: #461 (a partial read wearing a
+    // complete one's clothes) deciding whether to merge.
+    //
+    // `Transport.Send` now closes the FIRST half of that: a merged response carries no ETag at all, dropped
+    // at the only layer that knows a merge happened. So page one's validator can no longer escape onto a
+    // merged body, and the `NextLink` arm below is a backstop, not the guard.
+    //
+    // It is only half, and the second half is the one that bites. *Don't memoise a response that paginated*
+    // never runs on the case that matters: the unsound read is precisely the one where the collection has
+    // grown, page one 304s, and the pagination never happens at all — so there is no merge for anyone to
+    // notice, at this layer or any other.
+    //
+    // **HEADROOM CLOSES IT.** Memoise a page only when it carries FEWER items than the `per_page` it asked
+    // for. Then, writing `n` for the stored page's item count and `m` for the collection's true size later:
+    //
+    //   * `m <= perPage` — page one IS the whole collection. A 304 means page one's bytes still equal the
+    //     stored body, so the collection is unchanged and serving it is correct.
+    //   * `m > perPage` — page one now carries `perPage` items, and `n < perPage`, so page one's bytes
+    //     CANNOT equal the stored body. The server must answer 200, and that response carries a `Link` — so
+    //     we drop the validator rather than store it against a merge.
+    //
+    // A 304 is therefore only reachable in the first case. The `n < perPage` strictness is load-bearing:
+    // at `n = perPage` exactly (a full page, no `Link`) growth could leave page one untouched and 304 over
+    // the items that landed on page two — the one boundary this whole rule exists to refuse.
     let private memoisable (shape: PageShape) (response: Response) : bool =
         // BELT AND BRACES. `Transport.Send` already strips the ETag from a merged response, so there is
         // nothing here to store — but a merged body must not be memoisable on its own terms either, and a
@@ -282,26 +278,26 @@ module Reads =
                 | Some n -> n < perPage
                 | None -> false
 
-    /// A REST GET that revalidates against a stored ETag: send the validator, serve the cached body on 304.
-    ///
-    /// **A 304 IS NOT A STALE READ, AND THAT IS THE WHOLE ARGUMENT.** The TTL caches (`Cache.getScan`) answer
-    /// WITHOUT asking, so they trade freshness for cost and must be gated on `ReadIntent`. This does not: the
-    /// server is asked every time, and a 304 is its assertion that the body we hold IS current. So this is
-    /// transparent — it returns exactly what the unconditional read would have returned — and it is free
-    /// (GitHub does not bill a 304 against the primary REST limit when the request carries an `Authorization`
-    /// header). Transparent and free is why it may go where a TTL cache may NOT.
-    ///
-    /// **IT MAY NOT GO ON THE LOCK, AND CHEAPNESS IS NOT AN ARGUMENT AGAINST THAT.** `markers`, `messages`
-    /// and `openIssues` stay unconditional under the rule they already carry — *a lock may never be read from
-    /// a cache* (ADR-0034 §3). `memoisable`'s headroom proof would in fact admit them, and that is not a
-    /// licence: it bounds what a VALIDATOR may vouch for, which is a strictly weaker question than what a LOCK
-    /// may be answered from. Two rules, and the stricter one governs.
-    ///
-    /// THE CACHE KEY CARRIES THE QUERY, not just the path. `actions/runs?head_sha=…` is the SAME path for
-    /// every commit, so keying on the path alone would serve one SHA's runs as another's — not a stale answer
-    /// but a WRONG one, and the verdict it feeds is whether to merge.
-    ///
-    /// `shape` is what this response's ETag is entitled to stand for — see `memoisable`.
+    // A REST GET that revalidates against a stored ETag: send the validator, serve the cached body on 304.
+    //
+    // **A 304 IS NOT A STALE READ, AND THAT IS THE WHOLE ARGUMENT.** The TTL caches (`Cache.getScan`) answer
+    // WITHOUT asking, so they trade freshness for cost and must be gated on `ReadIntent`. This does not: the
+    // server is asked every time, and a 304 is its assertion that the body we hold IS current. So this is
+    // transparent — it returns exactly what the unconditional read would have returned — and it is free
+    // (GitHub does not bill a 304 against the primary REST limit when the request carries an `Authorization`
+    // header). Transparent and free is why it may go where a TTL cache may NOT.
+    //
+    // **IT MAY NOT GO ON THE LOCK, AND CHEAPNESS IS NOT AN ARGUMENT AGAINST THAT.** `markers`, `messages`
+    // and `openIssues` stay unconditional under the rule they already carry — *a lock may never be read from
+    // a cache* (ADR-0034 §3). `memoisable`'s headroom proof would in fact admit them, and that is not a
+    // licence: it bounds what a VALIDATOR may vouch for, which is a strictly weaker question than what a LOCK
+    // may be answered from. Two rules, and the stricter one governs.
+    //
+    // THE CACHE KEY CARRIES THE QUERY, not just the path. `actions/runs?head_sha=…` is the SAME path for
+    // every commit, so keying on the path alone would serve one SHA's runs as another's — not a stale answer
+    // but a WRONG one, and the verdict it feeds is whether to merge.
+    //
+    // `shape` is what this response's ETag is entitled to stand for — see `memoisable`.
     let private conditionalGet
         (transport: IGitHubTransport)
         (subject: string)
@@ -341,11 +337,11 @@ module Reads =
 
     // ---- the claim marker -------------------------------------------------------------------------
 
-    /// ANCHORED AT THE START OF THE BODY, and `worker=` must be the FIRST key.
-    ///
-    /// Both are security properties, not style. Un-anchor it and any free-form `say` message whose text
-    /// merely QUOTES a marker (`<!-- fsgg:claim worker=ghost -->`) forges a lock on the item it is posted
-    /// to.
+    // ANCHORED AT THE START OF THE BODY, and `worker=` must be the FIRST key.
+    //
+    // Both are security properties, not style. Un-anchor it and any free-form `say` message whose text
+    // merely QUOTES a marker (`<!-- fsgg:claim worker=ghost -->`) forges a lock on the item it is posted
+    // to.
     let private markerRe = Regex(@"^<!--\s*fsgg:claim\s", RegexOptions.Compiled)
 
     let private workerRe =
@@ -359,17 +355,17 @@ module Reads =
     let private pathRepoRe =
         Regex(@"^<!--[^>]*\spathRepo=(?<r>[^\s>]+)", RegexOptions.Compiled)
 
-    /// Undo `enc_status`. `%` was encoded FIRST, so it must be decoded LAST — otherwise a status
-    /// containing a literal `%20` decodes into a space that was never there.
+    // Undo `enc_status`. `%` was encoded FIRST, so it must be decoded LAST — otherwise a status
+    // containing a literal `%20` decodes into a space that was never there.
     let private decodeStatus (s: string) =
         s.Replace("%20", " ").Replace("%25", "%")
 
-    /// The board column, from the marker's `prev=`.
-    ///
-    /// An unrecognised column yields `None` — "this claim recorded no restorable column" — rather than a
-    /// guess. `release` then puts back `Ready`, which is what it did before anyone recorded anything, and
-    /// says so. A value nobody recorded cannot be restored (#481), and inventing one would overwrite a
-    /// column somebody chose deliberately.
+    // The board column, from the marker's `prev=`.
+    //
+    // An unrecognised column yields `None` — "this claim recorded no restorable column" — rather than a
+    // guess. `release` then puts back `Ready`, which is what it did before anyone recorded anything, and
+    // says so. A value nobody recorded cannot be restored (#481), and inventing one would overwrite a
+    // column somebody chose deliberately.
     let statusOfName (name: string) =
         match name.Trim().ToLowerInvariant() with
         | "" -> None
@@ -381,25 +377,25 @@ module Reads =
         | "done" -> Some Done
         | _ -> None
 
-    /// WHAT ONE COMMENT TURNED OUT TO BE — three answers, and the third one is .github#1668's whole subject.
-    ///
-    /// `NotAMarker` and `Unclassifiable` were the SAME answer (`None`) for this function's entire life, and
-    /// collapsing them is a fail-OPEN on the lock itself: "I read this comment and it is not a claim" and "I
-    /// could not read this comment at all" both left the marker list one element shorter and said nothing.
-    /// An issue whose ONLY marker is unreadable then returns `Ok []` — a failed read wearing an empty set's
-    /// clothes, which is #461/#1794 one layer down, inside the read those items were closed to protect.
-    ///
-    /// The old code KNEW this was the risk and argued it away in a comment that was simply false: it said an
-    /// unorderable marker "still matches `markerRe` and still blocks below". Nothing blocked. `None` removed
-    /// it from the list, and `who` printed `UNCLAIMED — In progress with NO claim marker` over it.
+    // WHAT ONE COMMENT TURNED OUT TO BE — three answers, and the third one is .github#1668's whole subject.
+    //
+    // `NotAMarker` and `Unclassifiable` were the SAME answer (`None`) for this function's entire life, and
+    // collapsing them is a fail-OPEN on the lock itself: "I read this comment and it is not a claim" and "I
+    // could not read this comment at all" both left the marker list one element shorter and said nothing.
+    // An issue whose ONLY marker is unreadable then returns `Ok []` — a failed read wearing an empty set's
+    // clothes, which is #461/#1794 one layer down, inside the read those items were closed to protect.
+    //
+    // The old code KNEW this was the risk and argued it away in a comment that was simply false: it said an
+    // unorderable marker "still matches `markerRe` and still blocks below". Nothing blocked. `None` removed
+    // it from the list, and `who` printed `UNCLAIMED — In progress with NO claim marker` over it.
     type private CommentRead =
-        /// A claim marker, read whole.
+        // A claim marker, read whole.
         | IsMarker of Marker
-        /// POSITIVELY identified as something other than a claim — an ordinary comment, a `fsgg:msg`. We
-        /// looked, and there is no lock here. This one is safe to drop, and it is the only one that is.
+        // POSITIVELY identified as something other than a claim — an ordinary comment, a `fsgg:msg`. We
+        // looked, and there is no lock here. This one is safe to drop, and it is the only one that is.
         | NotAMarker
-        /// WE COULD NOT TELL. Either the comment carried no readable body — so it may have been a marker and
-        /// we cannot say — or its body IS a marker and it carries no id to order it by. Never a silent drop.
+        // WE COULD NOT TELL. Either the comment carried no readable body — so it may have been a marker and
+        // we cannot say — or its body IS a marker and it carries no id to order it by. Never a silent drop.
         | Unclassifiable of reason: string
 
     let private readComment (now: DateTimeOffset) (index: int) (comment: JsonElement) : CommentRead =
@@ -481,70 +477,54 @@ module Reads =
                       PathRepo = pathRepo
                       Raw = body }
 
-    /// Has this marker's lease lapsed?
-    ///
-    /// A NEGATIVE age means we could not read the marker's timestamp, and it is NOT stale. Reading an
-    /// unreadable age as an expired lease would reap a live claim on the strength of a field we failed to
-    /// parse — a failed read deciding a lock, which is the exact substitution this whole layer exists to
-    /// make impossible.
     let isStale (leaseMinutes: int) (marker: Marker) =
         marker.AgeSeconds >= 0 && marker.AgeSeconds > leaseMinutes * 60
 
-    /// THE CAS's WINNER, IN ONE PLACE: the lowest-id marker whose lease is still live.
-    ///
-    /// GitHub issues comment ids from a single server-side sequence, so this is a total order that every
-    /// racer observes identically — which is what makes the comment-order CAS a real compare-and-swap
-    /// rather than a hopeful convention.
-    ///
-    /// It is a function, and there is one of it, because #485 is what happens otherwise: "who holds this?"
-    /// computed in five places and agreeing in none.
-    ///
-    /// IT SORTS. It does not ASSUME its input is in id order, even though `markers` returns it that way.
-    /// A rule that depends on an invariant it does not enforce is a rule with a silent failure mode — and
-    /// this one's failure mode is that two racers each compute a different winner and both believe they
-    /// hold the lock, which is the precise outcome the CAS exists to make impossible. Sorting here costs
-    /// nothing on a list that is already sorted, and it closes the hole for every caller that is not
-    /// `markers`.
-    /// THE ORDERING RULE ITSELF, LEASE-FREE AND EXPORTED: the lowest-id marker in the CAS's total order.
-    ///
-    /// This is "lowest id wins" and nothing else. It applies no lease filter, makes no liveness judgement,
-    /// and decides no arm — every caller below keeps its own, because the shared thing is the ORDERING and
-    /// not any one caller's semantics (design §4.2). That distinction is load-bearing rather than pedantic:
-    /// `reserver` returns the LIVE winner when one exists, so a site that wanted "lowest id, lease
-    /// irrespective" and reached for `reserver` instead would be handed a live holder — wrong everywhere,
-    /// and dangerous in `reap` and `adopt`, the two paths that BREAK locks.
-    ///
-    /// WHY IT IS EXPORTED, WHICH IS THE WHOLE POINT OF ITS EXISTENCE. The expression used to live inline in
-    /// one branch of `reserver` and nowhere a caller could reach, so every caller that needed it wrote it
-    /// again: `who`'s Held/Stale classification, `reap`'s stale-lock candidate, and `adopt`'s expired-claim
-    /// selection each hand-rolled `List.sortBy (fun m -> m.Id) |> List.tryHead`. That is #485's defect
-    /// reappearing for the lease-free variant, under the two highest-stakes lock paths in the engine — and
-    /// it is exactly what `winner`'s own doc comment says a function exists to prevent. The merge election
-    /// (design §4.2) needed the same rule again and would have made a fifth copy.
-    ///
-    /// IT SORTS, for `winner`'s reason and not a weaker one. It does not assume its input arrives in id
-    /// order even though `markerScan` returns it that way: a rule that depends on an invariant it does not
-    /// enforce has a silent failure mode, and this one's is two racers computing two different winners and
-    /// both believing they hold the lock. Sorting an already-sorted list costs nothing.
-    ///
-    /// `winner` is `lowestId` composed with the staleness filter, which is the honest statement of their
-    /// relationship: they are ONE rule with ONE parameter, not two rules that happen to agree today.
+    // THE CAS's WINNER, IN ONE PLACE: the lowest-id marker whose lease is still live.
+    //
+    // GitHub issues comment ids from a single server-side sequence, so this is a total order that every
+    // racer observes identically — which is what makes the comment-order CAS a real compare-and-swap
+    // rather than a hopeful convention.
+    //
+    // It is a function, and there is one of it, because #485 is what happens otherwise: "who holds this?"
+    // computed in five places and agreeing in none.
+    //
+    // IT SORTS. It does not ASSUME its input is in id order, even though `markers` returns it that way.
+    // A rule that depends on an invariant it does not enforce is a rule with a silent failure mode — and
+    // this one's failure mode is that two racers each compute a different winner and both believe they
+    // hold the lock, which is the precise outcome the CAS exists to make impossible. Sorting here costs
+    // nothing on a list that is already sorted, and it closes the hole for every caller that is not
+    // `markers`.
+    // THE ORDERING RULE ITSELF, LEASE-FREE AND EXPORTED: the lowest-id marker in the CAS's total order.
+    //
+    // This is "lowest id wins" and nothing else. It applies no lease filter, makes no liveness judgement,
+    // and decides no arm — every caller below keeps its own, because the shared thing is the ORDERING and
+    // not any one caller's semantics (design §4.2). That distinction is load-bearing rather than pedantic:
+    // `reserver` returns the LIVE winner when one exists, so a site that wanted "lowest id, lease
+    // irrespective" and reached for `reserver` instead would be handed a live holder — wrong everywhere,
+    // and dangerous in `reap` and `adopt`, the two paths that BREAK locks.
+    //
+    // WHY IT IS EXPORTED, WHICH IS THE WHOLE POINT OF ITS EXISTENCE. The expression used to live inline in
+    // one branch of `reserver` and nowhere a caller could reach, so every caller that needed it wrote it
+    // again: `who`'s Held/Stale classification, `reap`'s stale-lock candidate, and `adopt`'s expired-claim
+    // selection each hand-rolled `List.sortBy (fun m -> m.Id) |> List.tryHead`. That is #485's defect
+    // reappearing for the lease-free variant, under the two highest-stakes lock paths in the engine — and
+    // it is exactly what `winner`'s own doc comment says a function exists to prevent. The merge election
+    // (design §4.2) needed the same rule again and would have made a fifth copy.
+    //
+    // IT SORTS, for `winner`'s reason and not a weaker one. It does not assume its input arrives in id
+    // order even though `markerScan` returns it that way: a rule that depends on an invariant it does not
+    // enforce has a silent failure mode, and this one's is two racers computing two different winners and
+    // both believing they hold the lock. Sorting an already-sorted list costs nothing.
+    //
+    // `winner` is `lowestId` composed with the staleness filter, which is the honest statement of their
+    // relationship: they are ONE rule with ONE parameter, not two rules that happen to agree today.
     let lowestId (markers: Marker list) : Marker option =
         markers |> List.sortBy (fun m -> m.Id) |> List.tryHead
 
     let winner (leaseMinutes: int) (markers: Marker list) =
         markers |> List.filter (isStale leaseMinutes >> not) |> lowestId
 
-    /// THE MARKER THAT HOLDS THE LOCK, REGARDLESS OF LEASE — the live CAS `winner` if there is one, else
-    /// the lowest-id marker whose lease has lapsed.
-    ///
-    /// `winner` decides IDENTITY: only a live marker can answer a heartbeat or lose a CAS. This decides
-    /// RESERVATION, and the two are not the same question. A lease is a clock; a lock is a lock, and it is
-    /// broken only by `reap`, never by the clock running out (#461/#581, case 25). So the SCHEDULER must
-    /// reserve a stale-but-unreaped claim's touch-set exactly as it reserves a live one — scheduling over
-    /// it would hand a second worker the very tree its holder is standing in, the double-book this whole
-    /// scheduler exists to prevent. This is the same choice `who` makes when it classifies a row Held (a
-    /// live winner) or Stale (a lapsed marker still holding the lock).
     let reserver (leaseMinutes: int) (markers: Marker list) : Marker option =
         match winner leaseMinutes markers with
         | Some m -> Some m
@@ -612,18 +592,18 @@ module Reads =
                         { Markers = found
                           Unreadable = unreadable }
 
-    /// REQUIRE A COMPLETE LOCK READ before a caller decides or writes from it (.github#1896).
-    ///
-    /// `markerScan` deliberately preserves a lower bound for `who`, which can report the honest
-    /// `Undetermined` verdict. The scheduler and the CAS have no safe partial answer: reserving only the
-    /// markers they happened to parse can double-book a touch-set, and posting against that lower bound can
-    /// double-hold the lock. They pass their scan through this gate and a single unclassifiable comment
-    /// refuses the whole operation.
-    ///
-    /// This is separate from `markerScan`, rather than making that read itself fail, because the lower bound
-    /// plus its provenance is useful to a reporting caller. There is deliberately no projection that returns
-    /// `scan.Markers` alone: adding a new decision caller now requires choosing this gate or explicitly
-    /// handling `Unreadable`, so the old fail-open cannot be reached by accident.
+    // REQUIRE A COMPLETE LOCK READ before a caller decides or writes from it (.github#1896).
+    //
+    // `markerScan` deliberately preserves a lower bound for `who`, which can report the honest
+    // `Undetermined` verdict. The scheduler and the CAS have no safe partial answer: reserving only the
+    // markers they happened to parse can double-book a touch-set, and posting against that lower bound can
+    // double-hold the lock. They pass their scan through this gate and a single unclassifiable comment
+    // refuses the whole operation.
+    //
+    // This is separate from `markerScan`, rather than making that read itself fail, because the lower bound
+    // plus its provenance is useful to a reporting caller. There is deliberately no projection that returns
+    // `scan.Markers` alone: adding a new decision caller now requires choosing this gate or explicitly
+    // handling `Unreadable`, so the old fail-open cannot be reached by accident.
     let requireCompleteMarkerScan (subject: string) (scan: MarkerScan) : IoResult<Marker list> =
         match scan.Unreadable with
         | [] -> Ok scan.Markers
@@ -646,8 +626,8 @@ module Reads =
           At: string
           Text: string }
 
-    /// ANCHORED, exactly like `markerRe`. Un-anchor it and a `say` message whose TEXT merely quotes a
-    /// message marker would be delivered as though it were one — the same forgery `markerRe` refuses.
+    // ANCHORED, exactly like `markerRe`. Un-anchor it and a `say` message whose TEXT merely quotes a
+    // message marker would be delivered as though it were one — the same forgery `markerRe` refuses.
     let private msgRe = Regex(@"^<!--\s*fsgg:msg\s", RegexOptions.Compiled)
 
     let private msgFromToRe =
@@ -696,12 +676,12 @@ module Reads =
                           At = (str comment "created_at" |> Option.defaultValue "")
                           Text = text }
 
-    /// The worker-to-worker messages on an issue, in comment-id order (lowest first).
-    ///
-    /// A message is an `fsgg:msg` comment `say` posts; `inbox` reads them across every in-flight claim. Read
-    /// UNCONDITIONALLY, exactly like `markers`: a 304 could serve a comments page captured before a `say`,
-    /// and a lost message is a coordination failure even where it is not a lost lock — the same reason the
-    /// claim scan never goes conditional.
+    // The worker-to-worker messages on an issue, in comment-id order (lowest first).
+    //
+    // A message is an `fsgg:msg` comment `say` posts; `inbox` reads them across every in-flight claim. Read
+    // UNCONDITIONALLY, exactly like `markers`: a 304 could serve a comments page captured before a `say`,
+    // and a lost message is a coordination failure even where it is not a lost lock — the same reason the
+    // claim scan never goes conditional.
     let messages (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<Message list> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} messages"
@@ -811,30 +791,30 @@ module Reads =
     let private RecentCommentsDoc =
         "query($owner: String!, $repo: String!, $number: Int!, $last: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { comments(last: $last) { nodes { body } } } } rateLimit { cost remaining } }"
 
-    /// The MOST RECENT `limit` comment bodies of an issue, oldest-of-the-window first — one bounded
-    /// GraphQL call, never more (.github#2300 repair 2).
-    ///
-    /// `commentBodies`'s REST pagination is UNBOUNDED: the transport auto-follows every `Link: rel=next`
-    /// page (`Transport.fs`'s `follow`, guarded only at 100 PAGES, i.e. up to 10,000 comments), and
-    /// nothing short of exhausting the thread ever stops it — that is `.github#2300`'s own growth defect.
-    /// A delivery-route search only ever needs the LATEST matching marker
-    /// (`Client.readDeliveryRouteVerdict`/`requireCurrentDeliveryRoute` both search from the end and take
-    /// the first hit), so it only ever needed the TAIL of the thread. This fetches exactly that tail, in
-    /// ONE HTTP round-trip, whatever the thread's true length: a GraphQL response carries no `Link`
-    /// header, so `Transport.fs`'s REST auto-pagination — which is unconditional and cannot be told to
-    /// stop early over REST (there is no per-request opt-out on `Request`, and adding one is a
-    /// `Transport.fs` change this item does not reach) — never engages here. Bounded by construction, not
-    /// by a promise a caller has to keep.
-    ///
-    /// **FAILS CLOSED WHEN THE MARKER IS OLDER THAN `limit`.** A caller that searches this list for the
-    /// latest matching marker and finds none must read that as "no receipt among the last `limit`
-    /// comments", never as "no receipt exists" — those are different facts, and `Client.fs`'s callers
-    /// both already collapse an absent match into `DeliveryRoute.Unreadable`/`Stale`, which REFUSES
-    /// scheduling (`AwaitingDeliveryRouteDecision`) rather than guessing. So a genuinely CURRENT receipt
-    /// that some other actor buried under `limit` unrelated comments without re-affirming it reads as
-    /// missing and the item is refused — safe (never schedules on a receipt this call could not see), but
-    /// a real usability cost or a stale-looking row for that one, comment-heavy issue. That trade is
-    /// deliberate: the alternative is the unbounded read this repair exists to remove.
+    // The MOST RECENT `limit` comment bodies of an issue, oldest-of-the-window first — one bounded
+    // GraphQL call, never more (.github#2300 repair 2).
+    //
+    // `commentBodies`'s REST pagination is UNBOUNDED: the transport auto-follows every `Link: rel=next`
+    // page (`Transport.fs`'s `follow`, guarded only at 100 PAGES, i.e. up to 10,000 comments), and
+    // nothing short of exhausting the thread ever stops it — that is `.github#2300`'s own growth defect.
+    // A delivery-route search only ever needs the LATEST matching marker
+    // (`Client.readDeliveryRouteVerdict`/`requireCurrentDeliveryRoute` both search from the end and take
+    // the first hit), so it only ever needed the TAIL of the thread. This fetches exactly that tail, in
+    // ONE HTTP round-trip, whatever the thread's true length: a GraphQL response carries no `Link`
+    // header, so `Transport.fs`'s REST auto-pagination — which is unconditional and cannot be told to
+    // stop early over REST (there is no per-request opt-out on `Request`, and adding one is a
+    // `Transport.fs` change this item does not reach) — never engages here. Bounded by construction, not
+    // by a promise a caller has to keep.
+    //
+    // **FAILS CLOSED WHEN THE MARKER IS OLDER THAN `limit`.** A caller that searches this list for the
+    // latest matching marker and finds none must read that as "no receipt among the last `limit`
+    // comments", never as "no receipt exists" — those are different facts, and `Client.fs`'s callers
+    // both already collapse an absent match into `DeliveryRoute.Unreadable`/`Stale`, which REFUSES
+    // scheduling (`AwaitingDeliveryRouteDecision`) rather than guessing. So a genuinely CURRENT receipt
+    // that some other actor buried under `limit` unrelated comments without re-affirming it reads as
+    // missing and the item is refused — safe (never schedules on a receipt this call could not see), but
+    // a real usability cost or a stale-looking row for that one, comment-heavy issue. That trade is
+    // deliberate: the alternative is the unbounded read this repair exists to remove.
     let recentCommentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) (limit: int) : IoResult<string list> =
         let subject = $"%s{owner}/%s{repo}#%d{number} recent comments (last %d{limit})"
 
@@ -929,9 +909,9 @@ module Reads =
                 | true, v when v.ValueKind = JsonValueKind.Null -> Ok ""
                 | _ -> Ok ""
 
-    /// A per-ref state read for reconcilers. Unlike an open-list membership test, this distinguishes a
-    /// valid CLOSED off-board issue from a missing, unreadable, or pull-request ref; those latter cases
-    /// remain `Error` and callers must retain their local queue entry.
+    // A per-ref state read for reconcilers. Unlike an open-list membership test, this distinguishes a
+    // valid CLOSED off-board issue from a missing, unreadable, or pull-request ref; those latter cases
+    // remain `Error` and callers must retain their local queue entry.
     let issueState (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<IssueState> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} state"
@@ -1041,13 +1021,13 @@ module Reads =
 
     // ---- proof of life ----------------------------------------------------------------------------
 
-    /// Is there a pushed `item/<n>-*` branch on the remote? `prAlive` asks this only once it has found NO
-    /// open PR, to tell a pushed-but-PR-less branch (proof of life, #1055) from a genuinely dead claim.
-    ///
-    /// It CANNOT reuse `branchTip`, which collapses "unreadable" and "absent" both to `None`: here that
-    /// collapse is the #266 bug — "I could not ask" must NOT read as "no branch", or the same REST outage
-    /// that expired the lease would license the reap. So this is three-valued: `Ok true`/`Ok false`, and an
-    /// `Error` (rate-limited, propagated; anything else the caller maps to `LivenessUnknown`).
+    // Is there a pushed `item/<n>-*` branch on the remote? `prAlive` asks this only once it has found NO
+    // open PR, to tell a pushed-but-PR-less branch (proof of life, #1055) from a genuinely dead claim.
+    //
+    // It CANNOT reuse `branchTip`, which collapses "unreadable" and "absent" both to `None`: here that
+    // collapse is the #266 bug — "I could not ask" must NOT read as "no branch", or the same REST outage
+    // that expired the lease would license the reap. So this is three-valued: `Ok true`/`Ok false`, and an
+    // `Error` (rate-limited, propagated; anything else the caller maps to `LivenessUnknown`).
     let private itemBranchPushed
         (transport: IGitHubTransport)
         (owner: string)
@@ -1174,12 +1154,6 @@ module Reads =
                 | true, v when v.ValueKind = JsonValueKind.Number -> Ok(v.GetInt64())
                 | _ -> Error(Malformed(subject, "the issue response carried no numeric `id`"))
 
-    /// The REST ids of an issue's EXISTING sub-issues (`issues/{n}/sub_issues`).
-    ///
-    /// FAILS CLOSED (#320): an unreadable list is an ERROR, never an empty one. `child` reads this to be
-    /// idempotent — re-linking a child that is already attached is a no-op, not a 422 — and folding a
-    /// failed read into "the edge is absent" would make it POST, collect a 422, and blame the token. An
-    /// unreachable subject is not an absent one.
     let subIssueIds (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<int64 list> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} sub-issues"
@@ -1393,10 +1367,6 @@ module Reads =
     let private ContentEditsDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issueOrPullRequest(number: $number) { ... on Comment { userContentEdits(first: 100) { totalCount nodes { editedAt editor { login } } } } } } rateLimit { cost remaining } }"
 
-    /// `.github#2477`: the metered read `.github#2456`'s independent-review contract names as the
-    /// authoritative source for "has this issue/PR body changed since X" — GraphQL's `userContentEdits`
-    /// connection, reached through the one metered transport rather than a hand-built `gh api graphql`
-    /// call `graphql-monopoly` refuses.
     let contentEditProvenance
         (transport: IGitHubTransport)
         (owner: string)
@@ -1515,7 +1485,7 @@ module Reads =
                     | None -> Error(Malformed(subject, "the PR response carried no head.ref"))
                 | _ -> Error(Malformed(subject, "the PR response carried no `head`"))
 
-    /// The immutable commit identity for evidence that must bind to the reviewed PR revision.
+    // The immutable commit identity for evidence that must bind to the reviewed PR revision.
     let prHeadSha (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
@@ -1693,21 +1663,21 @@ module Reads =
                 | true, v when v.ValueKind = JsonValueKind.Null -> Ok ""
                 | _ -> Ok ""
 
-    /// A JSON element's `int64` property, or `None` — for `check_suite.id` / `check_suite_id`.
+    // A JSON element's `int64` property, or `None` — for `check_suite.id` / `check_suite_id`.
     let private int64Of (e: JsonElement) (name: string) =
         match e.TryGetProperty name with
         | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
         | _ -> None
 
-    /// A JSON element's `int` property, or `None`.
+    // A JSON element's `int` property, or `None`.
     let private intOf (e: JsonElement) (name: string) =
         match e.TryGetProperty name with
         | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
         | _ -> None
 
-    /// The `workflow_runs[]` on a head SHA, as `Landable.RunRow`s — or `None` if the read failed. `None` is
-    /// distinct from `Some []` (no runs registered yet, a real observation the scorer reads as #606's empty
-    /// set), so a failed read collapses to `PrUnknown` while an honest empty stays a finding.
+    // The `workflow_runs[]` on a head SHA, as `Landable.RunRow`s — or `None` if the read failed. `None` is
+    // distinct from `Some []` (no runs registered yet, a real observation the scorer reads as #606's empty
+    // set), so a failed read collapses to `PrUnknown` while an honest empty stays a finding.
     let private workflowRuns
         (transport: IGitHubTransport)
         (owner: string)
@@ -1763,7 +1733,7 @@ module Reads =
                     |> Some
                 | _ -> None
 
-    /// The `check_runs[]` on a head SHA, as `Landable.CheckRow`s — or `None` if the read failed.
+    // The `check_runs[]` on a head SHA, as `Landable.CheckRow`s — or `None` if the read failed.
     let private checkRuns
         (transport: IGitHubTransport)
         (owner: string)
@@ -1808,18 +1778,18 @@ module Reads =
                     |> Some
                 | _ -> None
 
-    /// `mergeable` as GitHub returns it: `true`/`false`, `null` while it COMPUTES lazily in a background
-    /// job, or absent (a malformed/minimal PR response). `Computing` and `Absent` are held apart because
-    /// only `Computing` is worth a re-read — an absent field will not appear on a second look.
+    // `mergeable` as GitHub returns it: `true`/`false`, `null` while it COMPUTES lazily in a background
+    // job, or absent (a malformed/minimal PR response). `Computing` and `Absent` are held apart because
+    // only `Computing` is worth a re-read — an absent field will not appear on a second look.
     type private MergeState =
         | Mergeable of bool
         | Computing
         | Absent
 
-    /// The delay between mergeability re-reads. GitHub computes `mergeable` in a BACKGROUND job and returns
-    /// `null` until it lands, so a retry fired microseconds after the first read cannot have observed a job
-    /// that had not finished — a zero-delay retry is a no-op dressed as diligence. Default ~1s (bash's), env
-    /// so the test harness can drive the fixture's read-count flip without paying the wall-clock.
+    // The delay between mergeability re-reads. GitHub computes `mergeable` in a BACKGROUND job and returns
+    // `null` until it lands, so a retry fired microseconds after the first read cannot have observed a job
+    // that had not finished — a zero-delay retry is a no-op dressed as diligence. Default ~1s (bash's), env
+    // so the test harness can drive the fixture's read-count flip without paying the wall-clock.
     let private mergeableRetryMs () =
         match Environment.GetEnvironmentVariable "FSGG_COORD_MERGEABLE_RETRY_MS" with
         | null
@@ -1829,50 +1799,50 @@ module Reads =
             | true, n when n >= 0 -> n
             | _ -> 1000
 
-    /// Everything ONE read of `pulls/{n}` tells the landable verdict, bound together so no two facts here
-    /// can describe different PRs. `None` on any field is "unreadable or absent", never a guess.
+    // Everything ONE read of `pulls/{n}` tells the landable verdict, bound together so no two facts here
+    // can describe different PRs. `None` on any field is "unreadable or absent", never a guess.
     type private PrFacts =
         {
             Merge: MergeState
-            /// The head commit the PR OBJECT names — eventually consistent, so not necessarily the branch's
-            /// real tip (#955/#989/#995).
+            // The head commit the PR OBJECT names — eventually consistent, so not necessarily the branch's
+            // real tip (#955/#989/#995).
             HeadSha: string option
-            /// The head BRANCH, which is what lets a stale `head.sha` be measured against that tip.
+            // The head BRANCH, which is what lets a stale `head.sha` be measured against that tip.
             HeadRef: string option
-            /// The BASE branch — the branch whose policy decides whether GitHub will take this merge (#1575).
-            /// Read from the same object as the rest, so a verdict can never be scored against one PR's head
-            /// and another PR's base.
+            // The BASE branch — the branch whose policy decides whether GitHub will take this merge (#1575).
+            // Read from the same object as the rest, so a verdict can never be scored against one PR's head
+            // and another PR's base.
             BaseRef: string option
-            /// `mergeable_state` — GITHUB'S OWN ANSWER to "will I take this merge?" (#1575), and the field
-            /// that makes the whole guard below free. `mergeable` says only "does it apply cleanly"; this
-            /// says whether the BASE BRANCH POLICY is satisfied — `clean`, `blocked` (a required context has
-            /// not passed, or has not reported at all), `behind` (a strict base moved), `draft`, `unstable`
-            /// (a NON-required check failed — GitHub still merges it), `dirty`, `unknown`.
-            ///
-            /// It is computed by the same lazy background job as `mergeable` and rides in the same object,
-            /// so it costs NO extra request and needs NO extra token scope. Both matter: see the guard.
+            // `mergeable_state` — GITHUB'S OWN ANSWER to "will I take this merge?" (#1575), and the field
+            // that makes the whole guard below free. `mergeable` says only "does it apply cleanly"; this
+            // says whether the BASE BRANCH POLICY is satisfied — `clean`, `blocked` (a required context has
+            // not passed, or has not reported at all), `behind` (a strict base moved), `draft`, `unstable`
+            // (a NON-required check failed — GitHub still merges it), `dirty`, `unknown`.
+            //
+            // It is computed by the same lazy background job as `mergeable` and rides in the same object,
+            // so it costs NO extra request and needs NO extra token scope. Both matter: see the guard.
             MergeableState: string option
-            /// IS THE PR STILL OPEN, AND DID IT MERGE? (#1680) — `state` and `merged`, from the same object
-            /// as everything else here, so a verdict can never be scored against one PR's openness and
-            /// another PR's checks.
-            ///
-            /// Free, which is the point: both ride in the `pulls/{n}` body this function already reads, so
-            /// asking "is this PR merged?" costs no request, no pagination and no extra scope. That matters
-            /// because the alternative — leaving merged-ness out of the domain — is what made the answer
-            /// `pending`. GitHub reports `mergeable: null` and `mergeable_state: "unknown"` for a merged PR
-            /// (measured on #1675: `state=closed merged=true mergeable=null`), so a reader that knows only
-            /// about mergeability sees the SAME shape as a PR whose background job has not finished, and
-            /// #950's arm maps that to `PrPending` — correctly, for the case it was written for, and
-            /// catastrophically for this one. The distinction is not inferable from `mergeable`; it has to
-            /// be READ. So it is read.
-            ///
-            /// `Merged` is NOT derived from `State = "closed"`: a closed PR may or may not have merged, and
-            /// conflating them is exactly the collapse #1680 AC4 refuses. Both are carried.
+            // IS THE PR STILL OPEN, AND DID IT MERGE? (#1680) — `state` and `merged`, from the same object
+            // as everything else here, so a verdict can never be scored against one PR's openness and
+            // another PR's checks.
+            //
+            // Free, which is the point: both ride in the `pulls/{n}` body this function already reads, so
+            // asking "is this PR merged?" costs no request, no pagination and no extra scope. That matters
+            // because the alternative — leaving merged-ness out of the domain — is what made the answer
+            // `pending`. GitHub reports `mergeable: null` and `mergeable_state: "unknown"` for a merged PR
+            // (measured on #1675: `state=closed merged=true mergeable=null`), so a reader that knows only
+            // about mergeability sees the SAME shape as a PR whose background job has not finished, and
+            // #950's arm maps that to `PrPending` — correctly, for the case it was written for, and
+            // catastrophically for this one. The distinction is not inferable from `mergeable`; it has to
+            // be READ. So it is read.
+            //
+            // `Merged` is NOT derived from `State = "closed"`: a closed PR may or may not have merged, and
+            // conflating them is exactly the collapse #1680 AC4 refuses. Both are carried.
             State: string option
             Merged: bool
         }
 
-    /// Read a PR once: its mergeability state, head SHA, head branch ref, and base branch ref.
+    // Read a PR once: its mergeability state, head SHA, head branch ref, and base branch ref.
     let private prFacts (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : PrFacts option =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} landable"
@@ -1939,14 +1909,14 @@ module Reads =
                       State = str root "state"
                       Merged = merged }
 
-    /// The BRANCH's real tip — the commit `refs/heads/{branch}` names right now, or `None` if it cannot be
-    /// read. `None` is never "the branch is empty": an unreadable ref proves nothing, and the one caller
-    /// (#989) keeps its existing verdict rather than acting on a fact it does not have.
-    ///
-    /// UNCONDITIONAL, deliberately, where every neighbouring read is conditional. The whole question this
-    /// answers is "has the PR object caught up with the push YET?", so a 304 served from a validator stored
-    /// microseconds ago would answer with the state the caller is trying to see PAST. Memoising the read that
-    /// exists to detect staleness is how the detector inherits the staleness.
+    // The BRANCH's real tip — the commit `refs/heads/{branch}` names right now, or `None` if it cannot be
+    // read. `None` is never "the branch is empty": an unreadable ref proves nothing, and the one caller
+    // (#989) keeps its existing verdict rather than acting on a fact it does not have.
+    //
+    // UNCONDITIONAL, deliberately, where every neighbouring read is conditional. The whole question this
+    // answers is "has the PR object caught up with the push YET?", so a 304 served from a validator stored
+    // microseconds ago would answer with the state the caller is trying to see PAST. Memoising the read that
+    // exists to detect staleness is how the detector inherits the staleness.
     let private branchTip
         (transport: IGitHubTransport)
         (owner: string)
@@ -2005,8 +1975,8 @@ module Reads =
     // says it will refuse — and it is not smuggled onto a read the fleet's token cannot make. A gate
     // that fails closed on a question nobody can answer does not fail closed; it fails ALWAYS.
 
-    /// The contexts a branch REQUIRES — or why we could not name them (#1575). `RequiredUnreadable` is a
-    /// missing SENTENCE here, not a missing verdict.
+    // The contexts a branch REQUIRES — or why we could not name them (#1575). `RequiredUnreadable` is a
+    // missing SENTENCE here, not a missing verdict.
     type private RequiredSet =
         | RequiredContexts of string list
         | RequiredUnreadable of string
@@ -2014,10 +1984,10 @@ module Reads =
     let private requiredCheckError (subject: string) (error: IoError) =
         $"could not read %s{subject} — %s{Errors.explain error}"
 
-    /// Required contexts from CLASSIC branch protection.
-    ///
-    /// A 404 is an answer about THIS store — no classic protection on this branch — and says nothing
-    /// about rulesets, which are read separately below. A 403 is not: it means "I may not look".
+    // Required contexts from CLASSIC branch protection.
+    //
+    // A 404 is an answer about THIS store — no classic protection on this branch — and says nothing
+    // about rulesets, which are read separately below. A 403 is not: it means "I may not look".
     let private classicRequired
         (transport: IGitHubTransport)
         (owner: string)
@@ -2092,12 +2062,12 @@ module Reads =
                     // Protected, but not on status checks. A real answer.
                     | _ -> Ok []
 
-    /// Required contexts from RULESETS — the OTHER, entirely separate store. `branches/<b>/protection`
-    /// does not report ruleset rules and `rules/branches/<b>` does not report classic protection; a branch
-    /// may be governed by either, both, or neither, and GitHub enforces both (#574).
-    ///
-    /// A 404 here is NOT "no rules": this endpoint answers `[]` for a branch with no rules, so a 404 means
-    /// "no such repo or branch".
+    // Required contexts from RULESETS — the OTHER, entirely separate store. `branches/<b>/protection`
+    // does not report ruleset rules and `rules/branches/<b>` does not report classic protection; a branch
+    // may be governed by either, both, or neither, and GitHub enforces both (#574).
+    //
+    // A 404 here is NOT "no rules": this endpoint answers `[]` for a branch with no rules, so a 404 means
+    // "no such repo or branch".
     let private rulesetRequired
         (transport: IGitHubTransport)
         (owner: string)
@@ -2157,29 +2127,29 @@ module Reads =
                     else
                         contexts |> List.choose id |> List.filter (fun c -> c <> "") |> Ok
 
-    /// Does GITHUB ITSELF say it will refuse this merge? `Some state` names the `mergeable_state` it said
-    /// so with; `None` means it did not say so — including the case where it said NOTHING (see below).
-    ///
-    /// AN ALLOW-LIST OF REFUSALS, NOT A DENY-LIST OF PERMISSIONS, and that is the fail-safe direction here.
-    /// GitHub may add a state tomorrow; an unknown state must not silently start refusing every merge in
-    /// the fleet. The three listed are the states it documents as blocking:
-    ///
-    ///   * `blocked` — the base branch policy is not satisfied. THE #1575 STATE: a required context that
-    ///     has not passed, or has not reported at all, or a required review, or an unresolved conversation.
-    ///   * `behind`  — the base moved and the branch is required to be up to date (`strict`).
-    ///   * `draft`   — a draft PR is not mergeable, whatever its checks say.
-    ///
-    /// NOT `unstable`: that is a NON-required check failing, which GitHub merges. (Our own rollup reds it
-    /// first, which is a house rule stricter than GitHub's — deliberately, and unchanged here.)
-    /// NOT `clean`, the merge path. NOT `dirty`/`unknown`, which never reach this arm — `mergeable` has
-    /// already answered for them.
+    // Does GITHUB ITSELF say it will refuse this merge? `Some state` names the `mergeable_state` it said
+    // so with; `None` means it did not say so — including the case where it said NOTHING (see below).
+    //
+    // AN ALLOW-LIST OF REFUSALS, NOT A DENY-LIST OF PERMISSIONS, and that is the fail-safe direction here.
+    // GitHub may add a state tomorrow; an unknown state must not silently start refusing every merge in
+    // the fleet. The three listed are the states it documents as blocking:
+    //
+    //   * `blocked` — the base branch policy is not satisfied. THE #1575 STATE: a required context that
+    //     has not passed, or has not reported at all, or a required review, or an unresolved conversation.
+    //   * `behind`  — the base moved and the branch is required to be up to date (`strict`).
+    //   * `draft`   — a draft PR is not mergeable, whatever its checks say.
+    //
+    // NOT `unstable`: that is a NON-required check failing, which GitHub merges. (Our own rollup reds it
+    // first, which is a house rule stricter than GitHub's — deliberately, and unchanged here.)
+    // NOT `clean`, the merge path. NOT `dirty`/`unknown`, which never reach this arm — `mergeable` has
+    // already answered for them.
     let private refusedState (facts: PrFacts) : string option =
         match facts.MergeableState with
         | Some("blocked" | "behind" | "draft" as s) -> Some s
         | _ -> None
 
-    /// The UNION of both stores. Short-circuits on the classic store's failure: a list we already cannot
-    /// complete is not worth a second request.
+    // The UNION of both stores. Short-circuits on the classic store's failure: a list we already cannot
+    // complete is not worth a second request.
     let private requiredContexts
         (transport: IGitHubTransport)
         (owner: string)
@@ -2194,46 +2164,44 @@ module Reads =
             | Error why -> RequiredUnreadable why
             | Ok rules -> RequiredContexts(List.distinct (classic @ rules))
 
-    /// The landable verdict AND the number of subjects it was scored over (`Landable.scoreN`). The count is
-    /// what `landable --wait` polls on: a `red` over ZERO subjects is "CI has not started yet", not "CI
-    /// failed" (#606/#724), and it is 0 for every verdict reached before the runs are scored (conflicted,
-    /// unknown). `prLandable` is this, with the count dropped.
-    /// `prLandableN`, plus the two assertions a caller can add to it (#737):
-    ///
-    /// `required` — check-run names that must have REPORTED, threaded to `Landable.scoreRequired`.
-    ///
-    /// `expected` — the head SHA the caller believes it is gating. GitHub's PR object is EVENTUALLY
-    /// CONSISTENT after a force-push: for a second or so `pulls/{n}` still names the PREVIOUS commit, whose
-    /// checks are green and are not about the code that would be merged. A caller that has just pushed KNOWS
-    /// the SHA it pushed (`git rev-parse HEAD`), so it can say so, and a disagreement scores `PrPending` —
-    /// never green, never a verdict about the wrong commit. `pending` does not settle, so `--wait` simply
-    /// waits for GitHub to catch up. Omit it and the PR's own head SHA is taken on trust, which is the right
-    /// default for every caller that did not just push.
-    ///
-    /// Why a verdict that is not `red` is nonetheless not `green`. DIAGNOSTICS — the verdict is decided
-    /// above, and nothing here changes it — but a bare `pending` is one honest word and no thread to pull,
-    /// which is fine while the state is transient and useless on the case that never resolves.
-    ///
-    /// The three arms are held APART because their REMEDIES are opposite, and an operator handed one
-    /// sentence for all three is sent to look at the wrong thing (#1575 AC2).
+    // The landable verdict AND the number of subjects it was scored over (`Landable.scoreN`). The count is
+    // what `landable --wait` polls on: a `red` over ZERO subjects is "CI has not started yet", not "CI
+    // failed" (#606/#724), and it is 0 for every verdict reached before the runs are scored (conflicted,
+    // unknown). `prLandable` is this, with the count dropped.
+    // `prLandableN`, plus the two assertions a caller can add to it (#737):
+    //
+    // `required` — check-run names that must have REPORTED, threaded to `Landable.scoreRequired`.
+    //
+    // `expected` — the head SHA the caller believes it is gating. GitHub's PR object is EVENTUALLY
+    // CONSISTENT after a force-push: for a second or so `pulls/{n}` still names the PREVIOUS commit, whose
+    // checks are green and are not about the code that would be merged. A caller that has just pushed KNOWS
+    // the SHA it pushed (`git rev-parse HEAD`), so it can say so, and a disagreement scores `PrPending` —
+    // never green, never a verdict about the wrong commit. `pending` does not settle, so `--wait` simply
+    // waits for GitHub to catch up. Omit it and the PR's own head SHA is taken on trust, which is the right
+    // default for every caller that did not just push.
+    //
+    // Why a verdict that is not `red` is nonetheless not `green`. DIAGNOSTICS — the verdict is decided
+    // above, and nothing here changes it — but a bare `pending` is one honest word and no thread to pull,
+    // which is fine while the state is transient and useless on the case that never resolves.
+    //
+    // The three arms are held APART because their REMEDIES are opposite, and an operator handed one
+    // sentence for all three is sent to look at the wrong thing (#1575 AC2).
     type Unmet =
-        /// An assertion the CALLER added (`--require NAME`, `--sha SHA`). Nobody but this caller is looking
-        /// at it, and the base branch policy has no opinion about it.
+        // An assertion the CALLER added (`--require NAME`, `--sha SHA`). Nobody but this caller is looking
+        // at it, and the base branch policy has no opinion about it.
         | Asserted of string
-        /// GITHUB ITSELF WILL REFUSE THIS MERGE — its `mergeable_state` for the gated head, verbatim
-        /// (`blocked`, `behind`, `draft`). Nobody asked for this one; it is a fact about the PR (#1575).
+        // GITHUB ITSELF WILL REFUSE THIS MERGE — its `mergeable_state` for the gated head, verbatim
+        // (`blocked`, `behind`, `draft`). Nobody asked for this one; it is a fact about the PR (#1575).
         | Refused of state: string * baseRef: string
-        /// …and WHICH context the base branch requires that has no check run on this head. Diagnosis only:
-        /// the verdict above already stands without it.
+        // …and WHICH context the base branch requires that has no check run on this head. Diagnosis only:
+        // the verdict above already stands without it.
         | NotReported of context: string * baseRef: string
-        /// The policy could not be read, so the refusal cannot be attributed to a named context. A missing
-        /// SENTENCE, never a missing verdict — reading it needs a scope a workflow token cannot hold, and
-        /// making the verdict depend on it is #463 (a probe that 403'd everywhere and stopped the kit
-        /// landing at all).
+        // The policy could not be read, so the refusal cannot be attributed to a named context. A missing
+        // SENTENCE, never a missing verdict — reading it needs a scope a workflow token cannot hold, and
+        // making the verdict depend on it is #463 (a probe that 403'd everywhere and stopped the kit
+        // landing at all).
         | PolicyUnreadable of string
 
-    /// Returns the verdict, the subject count `--wait` settles on, and — for diagnostics only — every
-    /// unmet reason, typed (`Unmet`). The verdict never depends on that list.
     let prLandableRequire
         (transport: IGitHubTransport)
         (owner: string)
@@ -2630,10 +2598,10 @@ module Reads =
     let private ClosingRefDoc =
         "query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { closingIssuesReferences(first: 5) { totalCount nodes { number repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
 
-    /// `ClosingRefDoc`'s own window, as the guard must see it. It is stated beside the document it belongs
-    /// to because the two must agree: a `first:` raised in the document and not here would make the guard
-    /// refuse a page it should accept, and lowered would make it accept a page it should refuse.
-    /// `.github#2535 the connection windows in the documents agree with the guards` pins the pair.
+    // `ClosingRefDoc`'s own window, as the guard must see it. It is stated beside the document it belongs
+    // to because the two must agree: a `first:` raised in the document and not here would make the guard
+    // refuse a page it should accept, and lowered would make it accept a page it should refuse.
+    // `.github#2535 the connection windows in the documents agree with the guards` pins the pair.
     [<Literal>]
     let private ClosingRefWindow = 5
 
@@ -2751,7 +2719,7 @@ module Reads =
 
     // ---- the claim-scan candidate set --------------------------------------------------------------
 
-    /// See Reads.fsi. `BodyRead ""` is a real empty body; `BodyUnread` is one nobody read.
+    // See Reads.fsi. `BodyRead ""` is a real empty body; `BodyUnread` is one nobody read.
     type IssueBodyRead =
         | BodyRead of body: string
         | BodyUnread of reason: string
@@ -2851,25 +2819,25 @@ module Reads =
 
                     walk 0 [] (doc.RootElement.EnumerateArray() |> List.ofSeq)
 
-    /// `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
-    /// serves the cached body for zero cost, which is the whole reason the command exists — a worker reads
-    /// issues WITHOUT spending GraphQL, so it never has to fall back to `gh issue list` (2 points a call).
-    ///
-    /// UNLIKE `openIssues`, this read IS conditional, and that is correct: its subject is the issue list a
-    /// human/consumer asked for, not the lock. `openIssues` must never be served a 304 because a stale body
-    /// could hide a claim marker (#461); here there is no marker to hide — a listing is a listing — so the
-    /// ETag is pure budget savings. The cache key is the request AS A STRING (path + the query that shapes
-    /// the result), so a different state or label is a different cache entry, exactly as bash slugs its path.
-    ///
-    /// **IT IS A PAGE OF A COLLECTION, AND IT DOES PAGINATE.** `docs/coordination/graphql-budget.md` says this
-    /// command "asks for one page of 100", and that was true of the bash client — it is NOT true here:
-    /// `Transport.Send` follows `Link: rel=next` and merges. So the ETag it stores is PAGE ONE'S, over a body
-    /// that may be a merge, and it is memoised only under `memoisable`'s headroom rule. Without that, a repo
-    /// whose open issues cross 100 would revalidate the whole list against its first page and 304 over
-    /// everything past it — silently, and only once the repo got big enough. `FS-GG/.github` sits under 100
-    /// today, which is why this has never bitten and why it would have bitten later.
-    ///
-    /// Returns the issue array as a JSON string — pull requests dropped (#641) — for the caller to jq.
+    // `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
+    // serves the cached body for zero cost, which is the whole reason the command exists — a worker reads
+    // issues WITHOUT spending GraphQL, so it never has to fall back to `gh issue list` (2 points a call).
+    //
+    // UNLIKE `openIssues`, this read IS conditional, and that is correct: its subject is the issue list a
+    // human/consumer asked for, not the lock. `openIssues` must never be served a 304 because a stale body
+    // could hide a claim marker (#461); here there is no marker to hide — a listing is a listing — so the
+    // ETag is pure budget savings. The cache key is the request AS A STRING (path + the query that shapes
+    // the result), so a different state or label is a different cache entry, exactly as bash slugs its path.
+    //
+    // **IT IS A PAGE OF A COLLECTION, AND IT DOES PAGINATE.** `docs/coordination/graphql-budget.md` says this
+    // command "asks for one page of 100", and that was true of the bash client — it is NOT true here:
+    // `Transport.Send` follows `Link: rel=next` and merges. So the ETag it stores is PAGE ONE'S, over a body
+    // that may be a merge, and it is memoised only under `memoisable`'s headroom rule. Without that, a repo
+    // whose open issues cross 100 would revalidate the whole list against its first page and 304 over
+    // everything past it — silently, and only once the repo got big enough. `FS-GG/.github` sits under 100
+    // today, which is why this has never bitten and why it would have bitten later.
+    //
+    // Returns the issue array as a JSON string — pull requests dropped (#641) — for the caller to jq.
     let issues
         (transport: IGitHubTransport)
         (owner: string)
@@ -2959,7 +2927,6 @@ module Reads =
                         Cache.putBody cacheKey validator filtered
                         Ok filtered
 
-    /// Complete, uncached all-state inventory for intake. Unlike `issues`, PRs remain candidates.
     let duplicateCandidates (transport: IGitHubTransport) (owner: string) (repo: string) : IoResult<DuplicateCandidate list> =
         let subject = $"%s{owner}/%s{repo} all duplicate candidates"
         let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues"; Query = [ "state", "all"; "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }

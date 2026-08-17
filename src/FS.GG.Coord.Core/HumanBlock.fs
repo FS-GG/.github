@@ -5,21 +5,21 @@ module HumanBlock =
     open System.Text.RegularExpressions
     open Types
 
-    /// A `Blocked on:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s
-    /// `Paths:` regex, because #1103 decided one grammar for both. (Spaces, not tabs, exactly as the fence
-    /// and `Paths:` rules — a token indented with a tab is code to the surrounding markdown anyway.)
+    // A `Blocked on:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s
+    // `Paths:` regex, because #1103 decided one grammar for both. (Spaces, not tabs, exactly as the fence
+    // and `Paths:` rules — a token indented with a tab is code to the surrounding markdown anyway.)
     let private declRe =
         Regex(@"^ {0,3}[Bb]locked [Oo]n:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
-    /// A `Blocked by:` line (.github#2079) — the SAME shape again, one word different. This is NOT the
-    /// sentinel grammar above; it is the body-line spelling of the DEPENDENCY the `Blocked by` board field
-    /// exists to carry (ADR-0045/#1933), and it is inert wherever it lands here.
+    // A `Blocked by:` line (.github#2079) — the SAME shape again, one word different. This is NOT the
+    // sentinel grammar above; it is the body-line spelling of the DEPENDENCY the `Blocked by` board field
+    // exists to carry (ADR-0045/#1933), and it is inert wherever it lands here.
     let private blockedByLineRe =
         Regex(@"^ {0,3}[Bb]locked [Bb]y:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
-    /// The recognised sentinel values, normalised for case and surrounding space. Anything else is not a
-    /// sentinel — a `Blocked on: #123` a filer wrote by hand is a `Blocked by` ref in the wrong place, not
-    /// this line, and reading it as a human-block would refuse an item that has an ordinary blocker.
+    // The recognised sentinel values, normalised for case and surrounding space. Anything else is not a
+    // sentinel — a `Blocked on: #123` a filer wrote by hand is a `Blocked by` ref in the wrong place, not
+    // this line, and reading it as a human-block would refuse an item that has an ordinary blocker.
     let private classify (value: string) : HumanBlock option =
         match value.Trim().ToLowerInvariant() with
         | "human/decision" -> Some AwaitingHumanDecision

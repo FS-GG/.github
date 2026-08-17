@@ -42,8 +42,8 @@ module Cache =
             // back to NO CACHE: the safe direction is always to pay for the read.
             | _ -> 0
 
-    /// A filename-safe slug. The cache key must not be able to escape the cache directory, and a repo or
-    /// project title is arbitrary text.
+    // A filename-safe slug. The cache key must not be able to escape the cache directory, and a repo or
+    // project title is arbitrary text.
     let private slug (s: string) =
         let cleaned = Regex.Replace(s, @"[^A-Za-z0-9._-]+", "-")
         cleaned.Trim('-').ToLowerInvariant()
@@ -159,12 +159,12 @@ module Cache =
                 // cache strictly worse than not having one.
                 None
 
-    /// Does this scan document actually carry items?
-    ///
-    /// This is the guard behind "a failed read is never rescued by the cache", and it is deliberately
-    /// strict: a document that is not a non-empty JSON array is not a board scan we are willing to memoise.
-    /// Bytes that do not parse are the #461 shape — a truncated page, a proxy's HTML — and an empty array
-    /// is #344's confident empty board.
+    // Does this scan document actually carry items?
+    //
+    // This is the guard behind "a failed read is never rescued by the cache", and it is deliberately
+    // strict: a document that is not a non-empty JSON array is not a board scan we are willing to memoise.
+    // Bytes that do not parse are the #461 shape — a truncated page, a proxy's HTML — and an empty array
+    // is #344's confident empty board.
     let private isNonEmptyScan (scan: string) =
         if String.IsNullOrWhiteSpace scan then
             false
@@ -200,8 +200,8 @@ module Cache =
                 // get to keep it.
                 false
 
-    /// The three fields the board scan carries. Anything else is not foldable — and a field the scan has no
-    /// slot for must leave the cache alone rather than inventing one.
+    // The three fields the board scan carries. Anything else is not foldable — and a field the scan has no
+    // slot for must leave the cache alone rather than inventing one.
     let private scanKey (field: string) =
         match field with
         | "Status" -> Some "status"
@@ -365,9 +365,9 @@ module Cache =
     let private boardMapFile (owner: string) (title: string) =
         Path.Combine(ensureRoot (), $"boardmap-%s{slug owner}-%s{slug title}.json")
 
-    /// A board map worth memoising: a JSON object whose `fields` is a non-empty object. The mirror of
-    /// `isNonEmptyScan` — an empty field map is #199's shape, a bootstrap that failed to walk the document,
-    /// and caching it would make every write fail with "no field named Status" for a day.
+    // A board map worth memoising: a JSON object whose `fields` is a non-empty object. The mirror of
+    // `isNonEmptyScan` — an empty field map is #199's shape, a bootstrap that failed to walk the document,
+    // and caching it would make every write fail with "no field named Status" for a day.
     let private isUsableBoardMap (board: string) =
         if String.IsNullOrWhiteSpace board then
             false
@@ -468,13 +468,6 @@ module Cache =
         // both engines and a worker that switched mid-loop does not re-read mail it has already seen.
         Path.Combine(ensureRoot (), $"inbox-%s{slug worker}")
 
-    /// The highest message id this worker has already seen. `0` — a fresh mailbox — when there is no cursor
-    /// or it cannot be read.
-    ///
-    /// The failure direction is DELIBERATE and it is the opposite of the lock's. A lost cursor re-shows old
-    /// mail (harmless noise); a cursor read as HIGHER than it is would hide new mail. So an unreadable or
-    /// malformed cursor falls back to `0` — showing too much, never too little — where the lock, faced with
-    /// the same ambiguity, fails the other way and blocks.
     let inboxCursor (worker: string) : int64 =
         let file = inboxCursorFile worker
 
@@ -488,8 +481,6 @@ module Cache =
             with :? IOException ->
                 0L
 
-    /// Advance the cursor to the highest message id seen. `inbox --peek` never calls this — that is the
-    /// whole of what `--peek` means.
     let putInboxCursor (worker: string) (id: int64) : unit =
         try
             let file = inboxCursorFile worker
@@ -507,26 +498,8 @@ module Cache =
           Value: string
           At: string
           Worker: string
-          /// The board this write was queued against, as `(owner, project title)`.
-          ///
-          /// THE FIELD #882 IS ABOUT. `Ref` is `owner/repo#n` — an ISSUE, which can sit on several boards —
-          /// while the board itself came from `$FSGG_COORD_OWNER`/`$FSGG_COORD_PROJECT` at queue time and was
-          /// recorded nowhere. `flush` then resolved every entry against whatever board it happened to
-          /// bootstrap: repoint the config, and the entry's item is `NotOnBoard`, which is PERMANENT, so the
-          /// write was dropped and reported as "permanently un-writable" — of a write that was perfectly
-          /// writable, against the board nobody wrote down.
-          ///
-          /// `None` means the entry was queued by a build that predates #882 and recorded no board. It is not
-          /// a licence to guess: see `flush`, which replays it against the current board exactly as it always
-          /// did, because that is the behaviour it was queued under.
           Board: (string * string) option }
 
-    /// Do two board identities name the same board?
-    ///
-    /// THE SAME EQUIVALENCE THE CACHE FILENAMES USE, and it lives here because `slug` does. Every other cache
-    /// file is keyed on `slug owner`/`slug title`, so two identities that slug alike already share a scan
-    /// cache and a board map — a comparison that disagreed with the filenames would let `flush` skip an entry
-    /// whose board it is demonstrably already serving from cache.
     let sameBoard ((ao, at): string * string) ((bo, bt): string * string) =
         slug ao = slug bo && slug at = slug bt
 
@@ -577,12 +550,12 @@ module Cache =
         with :? IOException ->
             None
 
-    /// Run `f` with exclusive access to the queue, or answer `None` if the lock did not free in time.
-    ///
-    /// NO STALE-LOCK POLICY, AND NONE IS NEEDED. The lock is the open handle, not a record written into the
-    /// file, so the kernel drops it when the holder's last descriptor closes — including on SIGKILL, where no
-    /// cleanup code of ours runs at all. A worker that dies mid-flush frees the queue by dying. This is the
-    /// property that makes an advisory lock the cheap answer here rather than the one with a caretaker.
+    // Run `f` with exclusive access to the queue, or answer `None` if the lock did not free in time.
+    //
+    // NO STALE-LOCK POLICY, AND NONE IS NEEDED. The lock is the open handle, not a record written into the
+    // file, so the kernel drops it when the holder's last descriptor closes — including on SIGKILL, where no
+    // cleanup code of ours runs at all. A worker that dies mid-flush frees the queue by dying. This is the
+    // property that makes an advisory lock the cheap answer here rather than the one with a caretaker.
     let private withPendingLock (f: unit -> 'a) : 'a option =
         let file = pendingLockFile ()
         let deadline = DateTime.UtcNow.AddMilliseconds(float (lockTimeoutMs ()))
@@ -719,7 +692,6 @@ module Cache =
             with :? IOException as e ->
                 Error(Transport $"the deferred-write queue could not be read: %s{e.Message}")
 
-    /// Everything currently queued, read under the lock so it cannot observe a partial rewrite.
     let pending () : IoResult<Deferred list> =
         match withPendingLock pendingUnlocked with
         | Some r -> r

@@ -257,7 +257,7 @@ module Cache =
     /// having in hand the failure that licenses it.
     val defer: error: IoError -> entry: Deferred -> IoResult<unit>
 
-    /// Everything currently queued.
+    /// Everything currently queued, read under the lock so it cannot observe a partial rewrite.
     val pending: unit -> IoResult<Deferred list>
 
     /// Drop one entry — it has been replayed successfully, or it is permanently un-writable.

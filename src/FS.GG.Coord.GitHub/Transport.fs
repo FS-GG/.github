@@ -38,9 +38,6 @@ module Transport =
     type Response =
         { Status: int
           Body: string
-          /// Response headers preserved from the resource that actually answered this request.
-          /// Rate-limit telemetry must prefer these over a later `/rate_limit` summary: the headers
-          /// describe the request GitHub just billed (or refused), while the summary can lag it.
           Headers: Map<string, string>
           ETag: string option
           NextLink: string option }
@@ -68,18 +65,6 @@ module Transport =
         | "" -> DefaultApiBase
         | b -> b.TrimEnd('/')
 
-    /// Which concrete `ProjectV2Owner` a coordination board hangs off.
-    ///
-    /// GitHub's GraphQL exposes an org-owned and a user-owned board under DIFFERENT root fields —
-    /// `organization(login:)` and `user(login:)` — even though both implement the same `ProjectV2Owner`
-    /// interface, and the `projectsV2`/`projectV2` selection that hangs off them is byte-for-byte identical.
-    /// A user login queried through `organization(login:)` resolves to `null` and every board read/write
-    /// fails, so the owner kind has to be chosen BEFORE the query is built.
-    ///
-    /// `Org` IS THE DEFAULT, AND ITS QUERIES ARE BYTE-IDENTICAL to the pre-existing ones — nothing on the
-    /// FS-GG (org-owned) board changes. `User` is the same document with the one root selection swapped.
-    /// `Viewer` (#1349) resolves the board from the token's OWN identity — the `viewer` root, which needs no
-    /// login and so keeps the operator's own account name out of plaintext config.
     type OwnerKind =
         | Org
         | User
@@ -87,25 +72,12 @@ module Transport =
 
     module OwnerKind =
 
-        /// The GraphQL root field that resolves this owner — and the `data.<field>` the response comes back
-        /// under, so the writer and the reader cannot pick different names. `Org`/`User` resolve by login;
-        /// `Viewer` resolves the authenticated token's own User with no login at all.
         let ownerField (kind: OwnerKind) =
             match kind with
             | Org -> "organization"
             | User -> "user"
             | Viewer -> "viewer"
 
-        /// Rewrite an ORG-shaped ProjectV2 query for this owner kind.
-        ///
-        /// `Org` returns the document UNCHANGED — byte-identical, so the org path provably cannot drift.
-        /// `User` swaps the single `organization(login: $owner)` selection for `user(login: $owner)`; the
-        /// rest of the document is identical across both, because everything below the root field hangs off
-        /// the shared `ProjectV2Owner` interface.
-        /// `Viewer` swaps that same selection for the `viewer` root — which takes NO argument — and drops the
-        /// now-unused `$owner: String!` operation variable (GraphQL rejects a declared-but-unused variable).
-        /// `viewer` implements the same `ProjectV2Owner` interface, so, again, everything below it is
-        /// identical.
         let forOwner (kind: OwnerKind) (orgQuery: string) =
             match kind with
             | Org -> orgQuery
@@ -118,23 +90,12 @@ module Transport =
                     .Replace("query($owner: String!, ", "query(")
                     .Replace("query($owner: String!)", "query")
 
-        /// The owner variables this kind binds for the query. `Org`/`User` pass `$owner`; `Viewer` binds
-        /// NOTHING — its document declares no `$owner`, and GitHub rejects a request that supplies a variable
-        /// the operation does not declare, so the binding has to be dropped in lockstep with the declaration.
         let ownerVars (kind: OwnerKind) (owner: string) : (string * Var) list =
             match kind with
             | Org
             | User -> [ "owner", VString owner ]
             | Viewer -> []
 
-        /// The owner kind for THIS client, read from `FSGG_COORD_OWNER_TYPE` (and, for `user`, whether an
-        /// explicit `FSGG_COORD_OWNER` login is set).
-        ///
-        /// Unset, empty, `org`, or `organization` is `Org` — the default that keeps the org board
-        /// byte-identical. `user` WITH an explicit `FSGG_COORD_OWNER` is `User` (queries `user(login:)`, as
-        /// #1344). `user` with NO `FSGG_COORD_OWNER` is `Viewer` — resolve the board from the token's own
-        /// identity, so no login lives in config (#1349). An unrecognised value falls back to `Org` rather
-        /// than failing: the safe direction is the one that leaves the FS-GG board reachable.
         let fromEnv () =
             match Environment.GetEnvironmentVariable "FSGG_COORD_OWNER_TYPE" with
             | null -> Org
@@ -147,12 +108,12 @@ module Transport =
                     | _ -> User
                 | _ -> Org
 
-    /// The `Link` header's `rel="next"`, if there is one.
-    ///
-    /// GitHub paginates with `Link: <https://…?page=2>; rel="next", <…>; rel="last"`. Parsing it is how the
-    /// adapter earns the `--paginate` the bash client passed to `gh` — and pagination is not an
-    /// optimisation on the claim scan, it is correctness: a lock has no 100-issue limit, and a first page
-    /// read as the whole set is a scan that cannot see the markers past it.
+    // The `Link` header's `rel="next"`, if there is one.
+    //
+    // GitHub paginates with `Link: <https://…?page=2>; rel="next", <…>; rel="last"`. Parsing it is how the
+    // adapter earns the `--paginate` the bash client passed to `gh` — and pagination is not an
+    // optimisation on the claim scan, it is correctness: a lock has no 100-issue limit, and a first page
+    // read as the whole set is a scan that cannot see the markers past it.
     let private parseNextLink (value: string) =
         if String.IsNullOrWhiteSpace value then
             None
@@ -187,11 +148,11 @@ module Transport =
 
             "?" + encoded
 
-    /// Concatenate two JSON array pages.
-    ///
-    /// A page that is not an array is a FAILED READ, never an empty one. `gh` exits 0 on a truncated page
-    /// or a proxy's HTML error body, and the empty string that falls out of `jq` reads as "nothing here" —
-    /// that is #461, and it is the reason this returns an error instead of an empty array.
+    // Concatenate two JSON array pages.
+    //
+    // A page that is not an array is a FAILED READ, never an empty one. `gh` exits 0 on a truncated page
+    // or a proxy's HTML error body, and the empty string that falls out of `jq` reads as "nothing here" —
+    // that is #461, and it is the reason this returns an error instead of an empty array.
     let private mergeArrays (first: string) (second: string) : Result<string, string> =
         try
             use a = JsonDocument.Parse first
@@ -213,10 +174,10 @@ module Transport =
         with :? JsonException as e ->
             Error $"a page of the response is not JSON: %s{e.Message}"
 
-    /// A variable's JSON, DERIVED FROM ITS TYPE.
-    ///
-    /// A NUMBER field mutation sending `{"number": "42"}` is rejected by the API, and a DATE field sending a
-    /// quoted number is worse — it is accepted and wrong. GraphQL is typed; so is this.
+    // A variable's JSON, DERIVED FROM ITS TYPE.
+    //
+    // A NUMBER field mutation sending `{"number": "42"}` is rejected by the API, and a DATE field sending a
+    // quoted number is worse — it is accepted and wrong. GraphQL is typed; so is this.
     let private varJson (v: Var) : JsonNode =
         match v with
         | VString s -> JsonValue.Create s
@@ -260,8 +221,8 @@ module Transport =
                 client.DefaultRequestHeaders.Authorization <-
                     Headers.AuthenticationHeaderValue("Bearer", token)
 
-        /// Send one HTTP request. The URL is absolute, because pagination hands us a fully-qualified
-        /// `Link` to follow rather than a path to rebuild.
+        // Send one HTTP request. The URL is absolute, because pagination hands us a fully-qualified
+        // `Link` to follow rather than a path to rebuild.
         let sendOne (request: Request) (url: string) : IoResult<Response> =
             try
                 let method =

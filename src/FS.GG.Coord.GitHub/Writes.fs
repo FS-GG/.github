@@ -76,20 +76,20 @@ module Writes =
     type Rewritten internal (body: string) =
         member _.Body = body
 
-    /// The worker id a marker carries when we could not parse one out of it. A claim held by NOBODY, which
-    /// BLOCKS — see `Reads.parseMarker`.
+    // The worker id a marker carries when we could not parse one out of it. A claim held by NOBODY, which
+    // BLOCKS — see `Reads.parseMarker`.
     [<Literal>]
     let private UnparsedMarker = "unparsed-marker"
 
     // ---- the marker body -------------------------------------------------------------------------
 
-    /// `%` is encoded FIRST, so that decoding can take it LAST. Get this order wrong and a status
-    /// containing a literal `%20` round-trips into a space that was never in it.
+    // `%` is encoded FIRST, so that decoding can take it LAST. Get this order wrong and a status
+    // containing a literal `%20` round-trips into a space that was never in it.
     let private encodeStatus (s: string) =
         s.Replace("%", "%25").Replace(" ", "%20")
 
-    /// THE MARKER. `worker=` MUST stay the first key — the parser anchors on it, and the anchor is what
-    /// stops a `say` message that merely QUOTES a marker from forging a lock.
+    // THE MARKER. `worker=` MUST stay the first key — the parser anchors on it, and the anchor is what
+    // stops a `say` message that merely QUOTES a marker from forging a lock.
     let private markerBody
         (worker: WorkerId)
         (session: SessionId option)
@@ -120,46 +120,46 @@ module Writes =
 
         $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes} renewed=%d{renewalToken}%s{sessionPart}%s{prevPart}%s{pathRepoPart} -->"
 
-    /// IS A MARKER BEARING OUR WORKER ID ACTUALLY A TWIN'S? Returns the OTHER session when it is.
-    ///
-    /// ONE PREDICATE, TWO CALLERS — `claim` (which refuses to adopt a twin's lock) and `verifyHeld` (which
-    /// refuses to hand out the capability over it). It is factored here because the two must agree BY
-    /// CONSTRUCTION: a `claim` that calls a marker a twin and a `verifyHeld` that calls the same marker ours
-    /// would mean the tool refuses you the lock and then authorises you to delete it. Two implementations of
-    /// one question is #485's shape (one question, five implementations, agreeing in none), and this is the
-    /// question the protocol can least afford to answer twice.
-    ///
-    /// TWIN ONLY WHEN BOTH SESSIONS ARE KNOWN. A sessionless marker — a human, a harness that exports none,
-    /// any marker minted before #419 — is genuinely indistinguishable from ours, and failing closed on it
-    /// would lock workers out of items they really hold. Our own session is never a twin, or a worker could
-    /// neither renew nor verify its own lease.
+    // IS A MARKER BEARING OUR WORKER ID ACTUALLY A TWIN'S? Returns the OTHER session when it is.
+    //
+    // ONE PREDICATE, TWO CALLERS — `claim` (which refuses to adopt a twin's lock) and `verifyHeld` (which
+    // refuses to hand out the capability over it). It is factored here because the two must agree BY
+    // CONSTRUCTION: a `claim` that calls a marker a twin and a `verifyHeld` that calls the same marker ours
+    // would mean the tool refuses you the lock and then authorises you to delete it. Two implementations of
+    // one question is #485's shape (one question, five implementations, agreeing in none), and this is the
+    // question the protocol can least afford to answer twice.
+    //
+    // TWIN ONLY WHEN BOTH SESSIONS ARE KNOWN. A sessionless marker — a human, a harness that exports none,
+    // any marker minted before #419 — is genuinely indistinguishable from ours, and failing closed on it
+    // would lock workers out of items they really hold. Our own session is never a twin, or a worker could
+    // neither renew nor verify its own lease.
     let private twinSession (ours: SessionId option) (theirs: SessionId option) : SessionId option =
         match ours, theirs with
         | Some(SessionId o), Some(SessionId t) when o <> t -> Some(SessionId t)
         | _ -> None
 
-    /// IS THE CALLER ASKING TO ACT AS SOMEBODY ELSE? Returns the id it derived for ITSELF when it is (#1646).
-    ///
-    /// ONE PREDICATE, TWO CALLERS — `claim` and `verifyHeld` — for `twinSession`'s reason, verbatim: these are
-    /// `Held`'s only two doors, and a `claim` that takes a lock `verifyHeld` then refuses to verify (or the
-    /// reverse) would mean the tool hands you the lock in one verb and denies it in another.
-    ///
-    /// AND EACH CALLER ASKS IT ONCE, FOR ITS WHOLE FUNCTION. `claim` asked it on the re-claim arm alone at
-    /// first, on the reasoning that its other arms CREATE a marker rather than adopt one. Review found that
-    /// `--force` breaks the reasoning — it deletes the holder's live marker on the way, and then signs
-    /// #1620's theft notice with the named worker's name — and the fresh-CAS arm plants a lock whose creator
-    /// cannot then drop it. Two of the three exceptions were the hole again. So: no arms.
-    ///
-    /// It compares the named `worker` against what this PROCESS resolves for itself with `--worker` taken
-    /// away. That is the only fact in the whole exchange the flag cannot restate: the id came off the board,
-    /// and under a shared harness session the session came from a sibling, so both of the older legs match on
-    /// facts the impersonator legitimately holds.
-    ///
-    /// UNASKABLE IS NOT "NO". `DerivesNothing` — a human, a harness exporting no session and no
-    /// `$FSGG_WORKER` — has nothing to compare, exactly as a caller with no session of its own can never
-    /// conclude "twin". It returns `None` there because the question cannot be put, not because the answer is
-    /// clean, and #1646 records that residue rather than dressing it up: a caller that unsets its own identity
-    /// before impersonating arrives here and is indistinguishable from the operator this arm exists for.
+    // IS THE CALLER ASKING TO ACT AS SOMEBODY ELSE? Returns the id it derived for ITSELF when it is (#1646).
+    //
+    // ONE PREDICATE, TWO CALLERS — `claim` and `verifyHeld` — for `twinSession`'s reason, verbatim: these are
+    // `Held`'s only two doors, and a `claim` that takes a lock `verifyHeld` then refuses to verify (or the
+    // reverse) would mean the tool hands you the lock in one verb and denies it in another.
+    //
+    // AND EACH CALLER ASKS IT ONCE, FOR ITS WHOLE FUNCTION. `claim` asked it on the re-claim arm alone at
+    // first, on the reasoning that its other arms CREATE a marker rather than adopt one. Review found that
+    // `--force` breaks the reasoning — it deletes the holder's live marker on the way, and then signs
+    // #1620's theft notice with the named worker's name — and the fresh-CAS arm plants a lock whose creator
+    // cannot then drop it. Two of the three exceptions were the hole again. So: no arms.
+    //
+    // It compares the named `worker` against what this PROCESS resolves for itself with `--worker` taken
+    // away. That is the only fact in the whole exchange the flag cannot restate: the id came off the board,
+    // and under a shared harness session the session came from a sibling, so both of the older legs match on
+    // facts the impersonator legitimately holds.
+    //
+    // UNASKABLE IS NOT "NO". `DerivesNothing` — a human, a harness exporting no session and no
+    // `$FSGG_WORKER` — has nothing to compare, exactly as a caller with no session of its own can never
+    // conclude "twin". It returns `None` there because the question cannot be put, not because the answer is
+    // clean, and #1646 records that residue rather than dressing it up: a caller that unsets its own identity
+    // before impersonating arrives here and is indistinguishable from the operator this arm exists for.
     let private impersonated (self: SelfIdentity) (worker: WorkerId) : WorkerId option =
         match self with
         | Derives d when d <> worker -> Some d
@@ -204,17 +204,17 @@ module Writes =
             with :? JsonException as e ->
                 Error(Malformed(ref.Short, $"the comment-post response is not JSON: %s{e.Message}"))
 
-    /// A deliberately narrow public route for durable protocol evidence.  Claim mutation still owns its
-    /// private CAS primitive; callers here have no capability to edit or remove another protocol marker.
+    // A deliberately narrow public route for durable protocol evidence.  Claim mutation still owns its
+    // private CAS primitive; callers here have no capability to edit or remove another protocol marker.
     let postIssueComment transport ref body = postComment transport ref body
 
-    /// Delete a comment. **A 404 IS SUCCESS.**
-    ///
-    /// "Already gone" is the goal state. Two workers collecting the same expired marker must not turn the
-    /// loser's benign 404 into a hard error — and, more sharply, a CAS backing off must be able to withdraw
-    /// its own marker even if somebody else got there first.
-    ///
-    /// Non-zero means the comment IS STILL THERE, and that is the only thing a caller cares about.
+    // Delete a comment. **A 404 IS SUCCESS.**
+    //
+    // "Already gone" is the goal state. Two workers collecting the same expired marker must not turn the
+    // loser's benign 404 into a hard error — and, more sharply, a CAS backing off must be able to withdraw
+    // its own marker even if somebody else got there first.
+    //
+    // Non-zero means the comment IS STILL THERE, and that is the only thing a caller cares about.
     let private deleteComment (transport: IGitHubTransport) (ref: Ref) (commentId: int64) : IoResult<unit> =
         let request =
             { Method = "DELETE"
@@ -566,8 +566,8 @@ module Writes =
         // Nobody holds it. Post and race, evicting nothing.
         | None -> admitNew () |> Result.bind (fun () -> postAndResolve [])
 
-    /// Compatibility entry point for callers that do not have a board path scope (notably chore
-    /// locks and focused CAS tests). Its marker is intentionally legacy-shaped.
+    // Compatibility entry point for callers that do not have a board path scope (notably chore
+    // locks and focused CAS tests). Its marker is intentionally legacy-shaped.
     let claim
         (transport: IGitHubTransport)
         (leaseMinutes: int)
@@ -724,7 +724,7 @@ module Writes =
         else
             Ok(Validated tokens)
 
-    /// A `Paths:` line, at the start of a line, with up to three leading spaces (CommonMark's limit).
+    // A `Paths:` line, at the start of a line, with up to three leading spaces (CommonMark's limit).
     let private pathsLine = Regex(@"^ {0,3}[Pp]aths:", RegexOptions.Compiled)
 
     let rewrite (body: string) (paths: Validated) : Rewritten =
@@ -918,9 +918,9 @@ module Writes =
 
         postComment transport ref body |> Result.map ignore
 
-    /// The durable terminal fact for lifecycle reconciliation.  A Project field is a projection which can
-    /// be queued or repaired; the receipt is the evidence that the guarded `done` transaction actually
-    /// reached its green preconditions.
+    // The durable terminal fact for lifecycle reconciliation.  A Project field is a projection which can
+    // be queued or repaired; the receipt is the evidence that the guarded `done` transaction actually
+    // reached its green preconditions.
     let doneReceipt (transport: IGitHubTransport) (ref: Ref) (receipt: string) : IoResult<unit> =
         let body =
             "<!-- fsgg:done-receipt v=1 -->\n"
@@ -929,7 +929,7 @@ module Writes =
 
         postComment transport ref body |> Result.map ignore
 
-    /// Persist the ordering receipt only after the caller has freshly verified its board mutation.
+    // Persist the ordering receipt only after the caller has freshly verified its board mutation.
     let lifecycleWatermark (transport: IGitHubTransport) (ref: Ref) (marker: string) : IoResult<unit> =
         postComment transport ref marker |> Result.map ignore
 
@@ -959,14 +959,6 @@ module Writes =
 
     // ---- coordination rooms (ADR-0051) ---------------------------------------------------------------
 
-    /// Append a `Rooms: <roomRef>` line to a body, fence-safely. PURE, so `room open`'s write can be
-    /// validated in a test with no network.
-    ///
-    /// UNLIKE `rewrite`, this APPENDS rather than replaces: a room membership is additive (`Rooms.parse`
-    /// unions every line), so a second room adds a second line and never clobbers the first. The fence is
-    /// closed BEFORE the append for `rewrite`'s exact reason (#972): a line appended under an unterminated
-    /// fence lands inside the code block and `Rooms.parse` — which reads only `Markdown.unfenced` lines —
-    /// would never see it, so the write would silently vanish.
     let appendRoomLine (body: string) (roomRef: string) : string =
         let declaration = $"Rooms: %s{roomRef}"
         let out = ResizeArray<string>()
@@ -984,16 +976,9 @@ module Writes =
         out.Add declaration
         String.Join("\n", out)
 
-    /// Write a `Rooms: <roomRef>` back-reference onto an item's body (ADR-0051). Does NOT take a `Held`:
-    /// `room open` writes onto the items of a contended cluster it need not itself hold, exactly as `say`
-    /// and `child` write to items without the lock. The CURRENT body is read by the caller and passed in,
-    /// so the append is pure and the PATCH is the only IO.
     let writeRoomRef (transport: IGitHubTransport) (ref: Ref) (currentBody: string) (roomRef: string) : IoResult<unit> =
         patchBody transport ref (Rewritten(appendRoomLine currentBody roomRef))
 
-    /// Create the room ISSUE (ADR-0051). A net-new write — no other verb POSTs an issue — returning the new
-    /// item's `Ref` so the caller can write each member's `Rooms:` back-reference to it. The room is created
-    /// OFF the board (nothing calls `add`): it is coordination scaffolding, not deliverable work.
     let createRoom (transport: IGitHubTransport) (owner: string) (repo: string) (title: string) (body: string) : IoResult<Ref> =
         let payload =
             let o = Nodes.JsonObject()
@@ -1032,7 +1017,7 @@ module Writes =
             with :? JsonException as e ->
                 Error(Malformed($"%s{owner}/%s{repo}", $"the issue-create response is not JSON: %s{e.Message}"))
 
-    /// The first write boundary of #2134: a malformed draft cannot reach issue creation.
+    // The first write boundary of #2134: a malformed draft cannot reach issue creation.
     let createIntake (transport: IGitHubTransport) (draft: Intake.Draft) : IoResult<Ref> =
         match Intake.validate draft with
         | Error findings ->
@@ -1051,10 +1036,10 @@ module Writes =
             let body = $"%s{IntakeReceipt.marker valid}\n\n## Observed behavior\n\n%s{valid.Observed}\n\n## Root cause\n\n%s{valid.RootCause}\n\n## Acceptance\n\n%s{valid.Acceptance}\n\n## Verification\n\n%s{valid.Verification}\n\nClass: %s{valid.Class}\n%s{optionalLines}\n\nPaths: %s{paths}"
             createRoom transport valid.Owner valid.Repository valid.Title body
 
-    /// Close the room ISSUE (ADR-0051 §4). Its lifecycle is DERIVED: a room dies when every item that
-    /// currently references it is done, and the caller (`done --flip`'s roll-up) has already established
-    /// that. This just PATCHes the issue closed — a room carries no lock and no lease, so there is nothing
-    /// else to unwind.
+    // Close the room ISSUE (ADR-0051 §4). Its lifecycle is DERIVED: a room dies when every item that
+    // currently references it is done, and the caller (`done --flip`'s roll-up) has already established
+    // that. This just PATCHes the issue closed — a room carries no lock and no lease, so there is nothing
+    // else to unwind.
     let closeRoom (transport: IGitHubTransport) (ref: Ref) : IoResult<unit> =
         let payload =
             let o = Nodes.JsonObject()

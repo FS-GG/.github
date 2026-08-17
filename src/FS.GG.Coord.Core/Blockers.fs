@@ -119,9 +119,9 @@ module Blockers =
         | Placeholder
         | NotIssueRefs
 
-    /// Canonicalize ONE token to `owner/repo#n`, or `None` when it is not an issue ref. The four accepted
-    /// forms are anchored (`^…$`) so trailing prose — `FS-GG/FS.GG.SDD#8 (republish vehicle)` — cannot be
-    /// silently swallowed by a ref prefix; only a token that is a ref, whole, canonicalizes.
+    // Canonicalize ONE token to `owner/repo#n`, or `None` when it is not an issue ref. The four accepted
+    // forms are anchored (`^…$`) so trailing prose — `FS-GG/FS.GG.SDD#8 (republish vehicle)` — cannot be
+    // silently swallowed by a ref prefix; only a token that is a ref, whole, canonicalizes.
     let private canonToken (defaultOwner: string) (defaultRepo: string) (tok: string) : string option =
         let url = Regex.Match(tok, @"^https?://github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)$")
 
