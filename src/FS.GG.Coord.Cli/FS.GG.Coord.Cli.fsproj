@@ -228,12 +228,14 @@ the standing safety advisories carry forward.
          HALF ONE — THE CHECKOUT PATH — IS FIXED HERE, COMPLETELY AND DETERMINISTICALLY.
          SIX packed entries embedded the absolute directory the package happened to be built in:
          `FS.GG.Coord.Core`, `FS.GG.Coord.GitHub` and `fsgg-coord-engine`, each as `.dll` and `.pdb`.
+         THE GRADED SET IS EIGHT SINCE .github#2725, which split `FS.GG.Coord.Cli.Kernel` out of this
+         project; it carries the property for the same reason and its two entries are graded alongside.
          `DeterministicSourcePaths` maps them to the `/_/` source root, so the packed bytes stop
          depending on WHERE the tree was checked out. This is not cosmetic: it is the precondition for
          `payloadSha256` to be comparable ACROSS machines at all, which is what .github#2428 needs to
          compare a locally packed artifact against what a feed already serves, and what made three
          agents on #2688 report three different `payload_id` values for one tree. It is set on all
-         three coord projects, not this one alone — fixing only this project would leave two of the six
+         coord projects, not this one alone — fixing only this project would leave four of the eight
          entries still path-bound and the package still not path-independent.
 
          HALF TWO — THE F# CLOSURE-NAME RACE — CANNOT BE FIXED FROM BUILD CONFIGURATION, AND THAT IS
@@ -291,30 +293,20 @@ the standing safety advisories carry forward.
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Json.fsi" />
-    <Compile Include="Json.fs" />
     <Compile Include="Snapshot.fsi" />
     <Compile Include="Snapshot.fs" />
-    <Compile Include="Options.fsi" />
-    <Compile Include="Options.fs" />
     <Compile Include="DeliveryApplication.fsi" />
     <Compile Include="DeliveryApplication.fs" />
     <Compile Include="ReviewApplication.fsi" />
     <Compile Include="ReviewApplication.fs" />
     <Compile Include="CycleLedgerApplication.fsi" />
     <Compile Include="CycleLedgerApplication.fs" />
-    <Compile Include="Identity.fsi" />
-    <Compile Include="Identity.fs" />
-    <Compile Include="RefParsing.fsi" />
-    <Compile Include="RefParsing.fs" />
     <Compile Include="FollowupAudit.fsi" />
     <Compile Include="FollowupAudit.fs" />
     <Compile Include="Chores.fsi" />
     <Compile Include="Chores.fs" />
     <Compile Include="KitDigest.fsi" />
     <Compile Include="KitDigest.fs" />
-    <Compile Include="Render.fsi" />
-    <Compile Include="Render.fs" />
     <Compile Include="ReadyApplication.fsi" />
     <Compile Include="ReadyApplication.fs" />
     <Compile Include="LintApplication.fsi" />
@@ -347,6 +339,18 @@ the standing safety advisories carry forward.
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
+    <!-- .github#2725 — the shared base every command family needs. `Json`, `Options`, `Identity`,
+         `RefParsing` and `Render` moved there as whole files (their `<Compile Include>` lines are gone
+         from the list above), and the exit vocabulary, `Context`, the refusal helpers, worker resolution
+         and the checkout-scope readers were extracted out of `Client.fs` into its `Kernel` module. The
+         namespace did not move — everything there is still `FS.GG.Coord.Cli` — so nothing in this project
+         had to be re-spelled to keep compiling.
+
+         WHAT THIS BUYS IS LANE CONCURRENCY, NOT BUILD TIME, and the row that ordered it says so against
+         its own interest: touching an 11,090-line file and touching a 72-line file both rebuild in ~3.9s.
+         What a separate project buys is that .github#2726–#2729 can each add a family project without any
+         of them editing THIS file to reach the shared base. -->
+    <ProjectReference Include="../FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

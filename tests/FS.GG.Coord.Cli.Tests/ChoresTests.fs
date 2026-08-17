@@ -466,7 +466,7 @@ let private withCache (f: unit -> 'a) : 'a =
         with _ ->
             ()
 
-let private context (transport: Fake.Recorder) : Client.Context =
+let private context (transport: Fake.Recorder) : Kernel.Context =
     { Transport = transport
       Owner = "FS-GG"
       Title = "Coordination"

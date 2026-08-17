@@ -341,7 +341,12 @@ BOARD_READS="batch board body-edits bootstrap budget command-contract cycle deci
 # drift instead of reddening on it. Stated as a miss rather than left implied: a shared checkout behind
 # ONLY on a package pin or an SDK band is not caught here, and `dirty_guard` will not see it either once
 # it is committed upstream.
-ENGINE_SOURCE_TREES="src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub"
+# `src/FS.GG.Coord.Cli.Kernel` joined the list at .github#2725, and it is a SEPARATE ENTRY rather
+# than a widening of the `src/FS.GG.Coord.Cli` one on purpose. These trees are matched as git
+# pathspecs, so `src/FS.GG.Coord.Cli` already covers a directory whose name merely starts with it
+# only by accident of prefix matching — and relying on that would also sweep in a future
+# `src/FS.GG.Coord.Cli.Tests`. The engine is now two projects and the list says two projects.
+ENGINE_SOURCE_TREES="src/FS.GG.Coord.Cli src/FS.GG.Coord.Cli.Kernel src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub"
 
 # WHAT A CHECKOUT WOULD HAVE HAD TO EDIT TO CHANGE THE ENGINE IT BUILDS (.github#2653) — the subject of
 # `authored_engine_source` below, and deliberately NEITHER of the two pathspecs above and below it.
@@ -397,10 +402,18 @@ ENGINE_BUILD_INPUTS="$ENGINE_SOURCE_TREES Directory.Build.props Directory.Packag
 #
 # A PATHSPEC THAT MATCHES NOTHING COUNTS ZERO, AND ZERO READS AS FRESH — so it is checked, not assumed.
 # This is the same fail-open `check-engine-freshness.py` guards with `_assert_exists`, and it is a live
-# risk rather than a theoretical one: `ENGINE_SOURCE_TREES` is three hard-coded directory names, and a
-# renamed or moved project would leave `rev-list --count` answering `0` forever, over nothing, silently —
-# a guard reporting fresh about a subject it can no longer see. So a `HEAD` with NO commit under those
-# trees is a `noverdict`, not a pass.
+# risk rather than a theoretical one: `ENGINE_SOURCE_TREES` is four hard-coded directory names since
+# .github#2725, and a renamed or moved project would leave `rev-list --count` answering `0` forever, over
+# nothing, silently — a guard reporting fresh about a subject it can no longer see. So a `HEAD` with NO
+# commit under those trees is a `noverdict`, not a pass.
+#
+# THE `noverdict` ARM ABOVE IS NOT THE WHOLE ANSWER, AND SAYING SO IS THE POINT. It fires only when NO
+# commit reachable from HEAD touches ANY of the four trees — i.e. when the whole list has gone blind. One
+# renamed project out of four leaves the other three matching, so the probe stays confident and simply
+# stops seeing the renamed tree. That residue is caught statically, in `tests/coord-guards/run.sh` §12,
+# and deliberately NOT here: this function is on the hot path of every tier-2 invocation, and a
+# missing-tree REFUSAL here would cost the whole fleet an outage over a directory rename — the same
+# asymmetry the note beside the constant itself draws.
 #
 # MEASURED: ~5 ms for the whole probe on this repo (4 `git` calls, 20 runs), against `dirty_guard`'s ~3 ms
 # on the same host. It is on the hot path of every tier-2 invocation, reads only already-fetched refs, and

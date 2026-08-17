@@ -553,7 +553,7 @@ expect "a hatch inside a \`run:\` block is SHELL TEXT and does not license anyth
 # gate. Rule (a) certified it: "both triggers agree", perfectly, on a list omitting the subject.
 RB12="$(root "$WORK/cover-regression")"
 mkdir -p "$RB12/src" "$RB12/tests"
-for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests; do
+for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Cli.Kernel src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests tests/FS.GG.Coord.Cli.Kernel.Tests; do
   mkdir -p "$RB12/$d"
   cp "$REPO_ROOT/$d/$(basename "$d").fsproj" "$RB12/$d/"
 done
@@ -566,7 +566,7 @@ expect "REGRESSION #930: coord-engine.yml's real coverage gap is caught" \
 # ...and the SAME tree, with the file as this PR ships it, passes. The fix is the subject of the
 # assertion, not just the bug.
 RB13="$(root "$WORK/cover-regression-fixed")"
-for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests; do
+for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Cli.Kernel src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests tests/FS.GG.Coord.Cli.Kernel.Tests; do
   mkdir -p "$RB13/$d"
   cp "$REPO_ROOT/$d/$(basename "$d").fsproj" "$RB13/$d/"
 done

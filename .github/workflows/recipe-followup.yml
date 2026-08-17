@@ -31,7 +31,7 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
-      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Cli.Kernel/Options.fs"
       - "src/FS.GG.Coord.Cli/Followups.fs"
       - ".github/workflows/**"
   push:
@@ -42,7 +42,7 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
-      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Cli.Kernel/Options.fs"
       - "src/FS.GG.Coord.Cli/Followups.fs"
       - ".github/workflows/**"
   workflow_dispatch:
@@ -75,9 +75,9 @@ jobs:
           # routed to `Command = Followup`) and REACHABLE (dispatched to a handler). Rename or drop it in
           # either place and every recipe that tells a worker to run it becomes a lie. Whitespace-robust,
           # so a formatter reflow does not red the gate on a `followup` that is in fact still wired.
-          grep -qE '"followup"[[:space:]]*::[[:space:]]*rest' src/FS.GG.Coord.Cli/Options.fs \
-            && grep -qE 'Command[[:space:]]*=[[:space:]]*Followup' src/FS.GG.Coord.Cli/Options.fs \
-            || { echo "::error::src/FS.GG.Coord.Cli/Options.fs does not route the 'followup' subcommand token to Command = Followup, but every recipe tells workers to call it."; exit 1; }
+          grep -qE '"followup"[[:space:]]*::[[:space:]]*rest' src/FS.GG.Coord.Cli.Kernel/Options.fs \
+            && grep -qE 'Command[[:space:]]*=[[:space:]]*Followup' src/FS.GG.Coord.Cli.Kernel/Options.fs \
+            || { echo "::error::src/FS.GG.Coord.Cli.Kernel/Options.fs does not route the 'followup' subcommand token to Command = Followup, but every recipe tells workers to call it."; exit 1; }
           # Audit is a GitHub-backed fleet reconciliation; the normal queue verbs deliberately stay
           # local so a worker can drain its promise while the board budget is exhausted. Pin BOTH arms:
           # accepting either handler alone would make one documented followup verb unreachable.

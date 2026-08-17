@@ -145,139 +145,6 @@ module Client =
         paths: FS.GG.Coord.Types.TouchSet ->
         items: FS.GG.Coord.Types.Item list -> FS.GG.Coord.Types.Ref list
 
-    /// 0 — the verb did what it was asked, or its answer is YES.
-    ///
-    /// THE EXIT VOCABULARY BELOW IS A CONTRACT, not an implementation detail. The recipes and the shell corpus
-    /// read the NUMBER and never parse the words, so these values are as public as any function here and move
-    /// only by decision. Two invariants hold across every command in this module. First, they fail CLOSED: a
-    /// read that could not be made is a distinct non-zero code, never a green empty answer, because "looked and
-    /// found nothing" and "could not look" need opposite responses (#266). Second, an exhausted budget is
-    /// EX_RATE (75) rather than a generic 1, so a temporary condition is never reported as a permanent one.
-    [<Literal>]
-    val ExitGreen: int = 0
-
-    /// 1 — a usage error, or an operation that did not complete.
-    ///
-    /// The catch-all STOP, and it carries no verdict about the subject: it says the COMMAND failed, never that
-    /// the answer was no. A caller that needs "the gate ran and refused" wants `ExitRed`.
-    [<Literal>]
-    val ExitError: int = 1
-
-    /// 3 — a VERDICT, and it is no. A gate that ran to completion and refused.
-    ///
-    /// Held at 3 across every verdict-bearing command (`done`, `landable`, `verify-paths`, `predicate`,
-    /// `adopt`, `claim`'s refusals) so a caller can key on the number without knowing which verb produced it.
-    /// Its documented remedy is "a red is a finding": investigate the subject, do not retry the command.
-    [<Literal>]
-    val ExitRed: int = 3
-
-    /// 4 — the gate ran and could NOT decide. Fail-closed, and deliberately not a share of `ExitRed`.
-    ///
-    /// The two mean different things to whoever reads them: 3's remedy is "a red check is a finding" and points
-    /// at the subject; 4's is "go and get the fact this gate could not read" and points at the environment —
-    /// an unresolvable board, an unreadable body, an unknown PR state. Collapsing them is how a credential gap
-    /// gets reported as a clean board. No poll loop retries it.
-    [<Literal>]
-    val ExitNoVerdict: int = 4
-
-    /// 5 — looked, and there is nothing startable: an empty queue, or every candidate blocked.
-    ///
-    /// #585 — `take`'s exit code must tell "I claimed you an item" (0) apart from the ways it can claim
-    /// NOTHING, so a worker loop (`take && work_it`) never proceeds on nothing. A read failure keeps its own
-    /// non-zero code and is NEVER this one, so "could not look" is never reported as "empty" (#266). This
-    /// reverses #480's "the empty queue exits cleanly (0)", by decision on #585.
-    [<Literal>]
-    val ExitNone: int = 5
-
-    /// 6 — lost every race. The board is contended; back off and retry.
-    ///
-    /// The caller holds NOTHING when it sees this, which is what makes a bounded retry safe here and unsafe on
-    /// a code that might have taken a lock. Distinct from `ExitNone` because the two have opposite remedies: 5
-    /// means there is no work, 6 means there is work and somebody else got it.
-    [<Literal>]
-    val ExitContended: int = 6
-
-    /// 7 — not settled yet. The ONE verdict worth retrying, and it has its own number for that reason.
-    ///
-    /// #720/#724 — `landable`'s exit code is a POLL-LOOP CONTRACT: a recipe reads it to tell "keep waiting"
-    /// from "stop" WITHOUT parsing the verdict word. Every stop outcome is a different code — a red or
-    /// conflicted verdict is `ExitRed` (do NOT wait), an unknown is `ExitNoVerdict` (fail-closed, never a
-    /// retry), and a PR that is not open at all is `ExitNotOpen`. Disposed on the record (ADR-0040 §5): bash's
-    /// `landable` numbered its poll loop 0/3/1, where this engine keeps 3 == red across every verdict command
-    /// and gives pending its own 7. The LITERALS differ; the PROPERTY does not.
-    [<Literal>]
-    val ExitPending: int = 7
-
-    /// 10 — the PR is NOT OPEN: merged, or closed without merging (#1680). A VERDICT, and a terminal one.
-    ///
-    /// It exists because the four codes above have no word for "there is nothing left to gate", so a merged
-    /// PR was answered with `ExitPending` — the one code the contract defines as worth retrying — and
-    /// `--wait` spent its whole 600s budget on a fact settled before it started. Its own number rather than
-    /// a share of `ExitRed`: both mean stop, but 3's documented remedy is "a red check is a finding", and
-    /// the caller that meets a merged PR is usually a successor recovering an item whose worker died
-    /// between merge and stamp — who must be told to STAMP, not to investigate a failure.
-    [<Literal>]
-    val ExitNotOpen: int = 10
-
-    /// The ambient facts every IO command in this module is handed: the transport it may reach GitHub through,
-    /// the board owner and title it is scoped to, the default repo a bare `<n>` ref resolves against, and the
-    /// chore-lock roster a vendored tenant injects by environment.
-    ///
-    /// BUILT ONCE PER PROCESS, at the composition edge in `run`, for every command that TAKES one. That is what
-    /// makes each such command below a function of its arguments rather than of the environment, and it is the
-    /// only reason the test project can drive them at all: no unit test can construct a live transport, so a
-    /// command that reached for one itself would be untestable by construction. This type is exported for that
-    /// reason and for no other — it is a parameter, not a service locator.
-    ///
-    /// `followupAudit` IS THE EXCEPTION, and it is evidence rather than a pattern to copy. It takes no `Context`,
-    /// so it builds one INSIDE the command from the environment — which is precisely why
-    /// `withFollowupAuditContextForTest` has to exist at all, and why both bindings below are annotated as
-    /// arguments for the extraction programme (.github#2725 onward) rather than as designs.
-    type Context =
-        {
-          Transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport
-          Owner: string
-          Title: string
-
-          /// The board's default repo scope, for a bare `repo#n` ref and the candidate filter.
-          DefaultRepo: string option
-
-          /// The per-deployment chore-lock roster a VENDORED tenant injects by env
-          /// (`FSGG_COORD_CHORE_LOCKS`, parsed by `parseChoreLocks`). Matched on (owner, repo) under ANY
-          /// owner and consulted BEFORE the engine's embedded FS-GG table — empty for the default FS-GG
-          /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
-          ChoreLocks: FS.GG.Coord.Types.Ref list
-        }
-
-    /// Parse a `<ref>` — a URL, `owner/repo#n`, `repo#n` (owner defaulting to the board owner), or a bare
-    /// `n`/`#n` (repo defaulting to `defaultRepo`, the checkout you are standing in).
-    ///
-    /// PUBLIC PURELY TO BE TESTED — `parseRef` below is the real entry point, and it takes a `Context`
-    /// carrying a live transport, which no unit test can build. Same idiom as `parseGitHubSlug` (#480).
-    ///
-    /// #548: the bare form is the one EVERY recipe hands a worker — `claim <issue>`, `widen <issue>`,
-    /// `heartbeat <issue>`, `done <issue> --flip` — immediately after `take` has printed the item and the
-    /// worker has been thinking in bare numbers all session. Rejecting it was not a papercut. On
-    /// `heartbeat` the refusal runs unattended, so it ends 120 minutes later as an expired lease and TWO
-    /// WORKERS ON ONE ITEM — the exact failure the protocol exists to prevent. On `done --flip` it fires
-    /// after the merge, stranding green, merged work with the board un-flipped and the touch-set still
-    /// reserved. On `widen` it is worse still: the recipe teaches a worker to read a non-zero exit as a
-    /// COLLISION, so a usage error is indistinguishable from one, and the documented response to a
-    /// collision is to stop editing — or to route around the tool with `gh issue edit`, which is the
-    /// silent last-write-wins body clobber `widen` exists to prevent.
-    ///
-    /// `defaultRepo` is `None` when there is NO FS-GG repo to infer from — outside a checkout, or in one
-    /// whose owner is not the board's — and a bare number then stays a hard error. That is the ask's one
-    /// ambiguity criterion: `506` must never silently address another org's issue #506.
-    ///
-    /// The bare form matches `Blockers.canonToken`, which has always accepted `#n` by adopting the item's
-    /// own owner/repo. `#?` here so `548` and `#548` both parse and the two ref readers in this codebase
-    /// stop disagreeing about what a ref is.
-    val parseRefIn:
-      owner: string ->
-        defaultRepo: string option ->
-        raw: string -> Result<FS.GG.Coord.Types.Ref,string>
-
     /// Decode the current SDD analysis fact for the named work — the errors in one `sdd readiness` JSON
     /// document, or `[]`. The route boundary owns this one interpretation so a `workId` substitution and an
     /// unready analysis cannot be accepted on one command path while another merely checks that JSON was
@@ -366,7 +233,7 @@ module Client =
     ///
     /// Exits 0 on a completed answer, INCLUDING the empty one. An IO failure keeps the read's own exit code
     /// through `fail`, so "nothing schedulable" and "could not read the board" are never the same number.
-    val batch: ctx: Context -> opts: Options.Options -> int
+    val batch: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// One candidate's live board/claim/PR/review/delivery facts, projected into the shape
     /// `DriverEvents.classify` consumes (.github#2135). Named and pure over its inputs — no `ctx`, no
@@ -419,7 +286,7 @@ module Client =
         projection: FS.GG.Coord.DriverEvents.Projection -> string
 
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
-    val driver: ctx: Context -> opts: Options.Options -> int
+    val driver: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// The delivery receipt and `verify-paths` both exclude generated, CI-gated artifacts from the
     /// authored touch-set boundary.  The collector fails closed, so an unreadable generator can only
@@ -548,7 +415,7 @@ module Client =
     /// conditional `ctx.Transport.Send` PATCH) hermetically testable, not merely the pure
     /// `rebindAuthorization` decision it wraps.
     val ensureAuthorization:
-      ctx: Context ->
+      ctx: Kernel.Context ->
         target: FS.GG.Coord.Types.Ref ->
         marker: FS.GG.Coord.GitHub.Reads.Marker option ->
         pr: int option ->
@@ -566,7 +433,7 @@ module Client =
     /// substitutes for them.
     ///
     /// Exit codes come from the delegated application service rather than from this dispatcher.
-    val review: ctx: Context -> opts: Options.Options -> int
+    val review: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// THE OFFER PATH'S BOARD — the scan's bytes AND the scan's rows, joined the way `reconcile` joins them
     /// (.github#1649).
@@ -651,7 +518,7 @@ module Client =
     /// assertable by a test rather than re-argued in a comment. `ChoresTests` drives THIS function over a
     /// warm cache, so a mutation back to `Scheduling` reds a leg instead of passing one.
     val wholeBoard:
-      ctx: Context ->
+      ctx: Kernel.Context ->
         opts: Options.Options -> FS.GG.Coord.Chore.Board option
 
     /// `next` — the single next schedulable item: the ref alone on stdout, every reason on stderr.
@@ -664,7 +531,7 @@ module Client =
     /// TAKING this repo's chore lock. A caller that wants the decision without the offer wants `batch` — that
     /// is the read, and the one a stale engine still permits. Exits 0 whether or not there was an item; an IO
     /// failure keeps the read's own code.
-    val next: ctx: Context -> opts: Options.Options -> int
+    val next: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `ready` — the board as a RECONCILER sees it: always fresh, not-`Done` by default, `--status`/`--all` to
     /// widen past that.
@@ -673,7 +540,7 @@ module Client =
     /// refuse, because a reconciler's question is "what is on the board" and a scheduler's is "what may I
     /// start". Defaults to JSON; `--text` gives the human-readable table. Exits 0 on a completed read; an IO
     /// failure keeps the read's own code.
-    val ready: ctx: Context -> opts: Options.Options -> int
+    val ready: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// True only for the one shape `Board.bootstrap` emits when the configured Projects v2 board itself
     /// could not be resolved — a credential/visibility gap, not a real reconcile finding (round-2 review
@@ -704,7 +571,7 @@ module Client =
     /// REACHED the board and did not complete — a snapshot that would not parse, or an applied remedy that
     /// failed — which is a different fact from both of those and must not be collapsed into either. Any other
     /// IO failure keeps the read's own code.
-    val reconcile: ctx: Context -> opts: Options.Options -> int
+    val reconcile: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `who` — who holds what, right now: held, stale, or unclaimed.
     ///
@@ -720,7 +587,7 @@ module Client =
     /// needs one at all.
     ///
     /// Exits 0 on a completed read; an IO failure keeps the read's own code.
-    val who: ctx: Context -> opts: Options.Options -> int
+    val who: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// The one resolved-Status boundary for a `Blocked` write.  Callers may arrive through an
     /// explicit park, a recorded claim restore, or reconciliation; none may write the column until
@@ -741,7 +608,7 @@ module Client =
     /// body — a fact it could not read is a refusal, never a pass. `set-field --batch` cannot use this
     /// as-is; that is what `requireCoherentParkIfBlockedForBatch` below exists for.
     val requireCoherentParkIfBlocked:
-      ctx: Context ->
+      ctx: Kernel.Context ->
         ref: FS.GG.Coord.Types.Ref ->
         requested: FS.GG.Coord.Types.BoardStatus option -> Result<unit,int>
 
@@ -760,7 +627,7 @@ module Client =
     ///
     /// `--apply` gates the destructive delete. The bare form is a DRY RUN that only reports what it WOULD
     /// collect, so breaking a lock is never the default — the operator opts into it.
-    val reap: ctx: Context -> opts: Options.Options -> int
+    val reap: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `budget` — what is left, and what is stuck: the GraphQL meter, the REST telemetry, and the deferral
     /// queue.
@@ -779,7 +646,7 @@ module Client =
     /// A queue we could not READ is `None`, never `0`. They are opposite answers — "nothing is waiting" vs
     /// "I cannot tell you what is waiting" — and rendering the second as the first is how a worker concludes
     /// their `done --flip` was dropped when it is sitting in the queue, or the reverse (#266).
-    val budget: ctx: Context -> opts: Options.Options -> int
+    val budget: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `claim` — take the lock on ONE named item, without the scheduler's overlap-avoidance in front of it.
     ///
@@ -799,7 +666,7 @@ module Client =
     /// held by nobody; `ExitContended` when the caller genuinely lost a race; `ExitError` for a usage fault. A
     /// lost race never asks the caller to re-issue anything: `take` advances through its own ranked candidates
     /// (.github#2683).
-    val claim: ctx: Context -> opts: Options.Options -> int
+    val claim: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// #697 — take over an ORPHAN (a stale claim whose PR is FINISHED) and land it.
     ///
@@ -820,7 +687,7 @@ module Client =
     /// would be a SECOND lock, and the second one is the one with the bug. `adopt` is a GATE IN FRONT OF
     /// `claim`, not a rival to it — so the "GREEN and MERGEABLE" line is a PRECONDITION report, not a success
     /// banner: the `claim` below can still refuse, and the ADOPTED epilogue prints only when it truly won.
-    val adopt: ctx: Context -> opts: Options.Options -> int
+    val adopt: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `landable` — is this OPEN PR finished work? One verdict word on stdout, the decision in the exit code.
     ///
@@ -835,7 +702,7 @@ module Client =
     /// (7) not settled and worth retrying, `ExitRed` (3) red or conflicted — stop, do not wait,
     /// `ExitNoVerdict` (4) unknown, fail-closed, `ExitNotOpen` (10) the PR is merged or closed so there is
     /// nothing left to gate (#1680), and `ExitError` (1) for a usage fault.
-    val landable: ctx: Context -> opts: Options.Options -> int
+    val landable: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// The authoritative inventory of every `Status=Blocked` writer (#2109).  Every writer, including
     /// a recorded restore, passes the same resolved-Status gate before emitting its mutation — the gate
@@ -873,7 +740,7 @@ module Client =
     /// pair in this batch defers to the live-read gate, so a batch that never touches `Blocked by` behaves
     /// exactly as it did before this issue.
     val requireCoherentParkIfBlockedForBatch:
-      ctx: Context ->
+      ctx: Kernel.Context ->
         ref: FS.GG.Coord.Types.Ref ->
         requested: FS.GG.Coord.Types.BoardStatus option ->
         pendingBlockedBy: FS.GG.Coord.GitHub.Board.FieldWrite option ->
@@ -896,7 +763,7 @@ module Client =
     ///
     /// A non-fatal board write that could not land is SURFACED as a stderr note rather than swallowed (#1151)
     /// and does not change the code: the lock is genuinely released whatever the column says.
-    val release: ctx: Context -> opts: Options.Options -> int
+    val release: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `heartbeat` — renew the lease on a held item.
     ///
@@ -913,7 +780,7 @@ module Client =
     /// their item alive under our control while they are told nothing) or a twin marker (#419). And a read it
     /// could not make keeps THAT read's own code — 75 on an exhausted budget — never a green and never a
     /// generic 1.
-    val heartbeat: ctx: Context -> opts: Options.Options -> int
+    val heartbeat: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// The claim argv derived from a selected scheduler item.  The scheduler has already resolved this
     /// identity; this boundary must preserve it rather than reinterpret a display ref in the board owner's
@@ -930,7 +797,7 @@ module Client =
     /// on nothing. 0 means an item was claimed and only that. `ExitNone` (5) means it looked and there was
     /// nothing startable. `ExitContended` (6) means it lost every race and holds nothing, which is the one of
     /// the three a caller may safely retry. A read failure keeps its own code and is never any of these.
-    val take: ctx: Context -> opts: Options.Options -> int
+    val take: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `set-field` — write one board field, or, with `--batch`, N fields in ONE aliased mutation (#448). An
     /// empty value clears the field.
@@ -942,7 +809,7 @@ module Client =
     /// what the live field currently holds.
     ///
     /// Exits 0 when the write landed, `ExitError` on a usage fault or a refused incoherent write.
-    val setField: ctx: Context -> opts: Options.Options -> int
+    val setField: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `widen` — add paths to a HELD item's touch-set. A UNION, and idempotent.
     ///
@@ -957,14 +824,14 @@ module Client =
     /// to the body moves it.
     ///
     /// Exit codes come from `updateTouchSet`, which this and `set-paths` share.
-    val widen: ctx: Context -> opts: Options.Options -> int
+    val widen: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `set-paths` — replace a HELD item's touch-set explicitly. The only door that NARROWS one.
     ///
     /// `widen`'s sibling through the same `updateTouchSet` implementation, differing in exactly one argument:
     /// this one replaces where `widen` unions. `--json` returns the resulting declaration and the #353 verdict
     /// as one object rather than as prose split across two streams (#1517).
-    val setPaths: ctx: Context -> opts: Options.Options -> int
+    val setPaths: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// #353 — DOES THIS ITEM'S TOUCH-SET COLLIDE WITH ANOTHER'S, and NOTHING outside its own repo counts.
     ///
@@ -976,7 +843,7 @@ module Client =
     /// would run the pair in parallel. Two shapes, both repo-scoped:
     ///   `overlap <ref> --active`     — the item vs the LIVE claims in its own repo.
     ///   `overlap <ref-a> <ref-b>`    — the two items, or DISJOINT-by-construction if they are in different repos.
-    val overlapCmd: ctx: Context -> opts: Options.Options -> int
+    val overlapCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// This worker's mailbox: every message addressed to it (or broadcast) across the in-flight claims.
     ///
@@ -990,7 +857,7 @@ module Client =
     /// posted on an off-board claim. The candidate set is the board's In-progress rows (arm A) UNION every
     /// open issue in the repos in scope (arm B — paginated, and never conditional, so a 304 cannot hide a
     /// message the way it must never hide a lock).
-    val inbox: ctx: Context -> opts: Options.Options -> int
+    val inbox: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `done` — the done stamp, and the gate in front of it.
     ///
@@ -1000,14 +867,7 @@ module Client =
     /// Four outcomes, and the middle two are the point. 0 is a green stamp. `ExitRed` (3) is a gate that ran
     /// and refused — the work is not done. `ExitNoVerdict` (4) is a gate that could not read a fact it needed,
     /// which must never be reported as either of the other two. `ExitError` (1) is a usage fault.
-    val doneCmd: ctx: Context -> opts: Options.Options -> int
-
-    /// A GitHub remote URL → its `owner/repo`, or `None` when the URL is not a GitHub remote naming
-    /// exactly one owner/repo. Handles every form `git config remote.origin.url` yields:
-    /// `https://github.com/FS-GG/x(.git)`, `git@github.com:FS-GG/x(.git)`, `ssh://…/FS-GG/x.git`. A bare
-    /// host or a nested path is NOT a scope — bash's `*/*/*|*/` guard, held here as an exact one-slash
-    /// requirement — so a malformed remote can never be silently read as a repo.
-    val parseGitHubSlug: url: string -> string option
+    val doneCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// Check a PR's changed files against the touch-set declared by the issue it implements.
     ///
@@ -1021,7 +881,7 @@ module Client =
     /// ERROR — even under --warn, which downgrades a real DRIFT/INVALID to advisory but cannot downgrade a
     /// read that never happened. Stamping "stays inside its touch-set" on a subject nobody looked at is the
     /// exact fail-open this command exists to prevent.
-    val verifyPaths: ctx: Context -> opts: Options.Options -> int
+    val verifyPaths: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `whoami` — resolve, explain, or MINT this shell's worker identity. The only sanctioned source of a
     /// worker id.
@@ -1043,20 +903,6 @@ module Client =
     /// (0 agrees / 3 contradicts / 4 unknown, the `landable` shape). `--json` emits the structured
     /// verdict the filing-time workflow reads to build its auto-comment (`.ownerValue`, `.note`).
     val predicate: opts: Options.Options -> int
-
-    /// `FSGG_COORD_CHORE_LOCKS` → the injected chore-lock roster a vendored tenant runs against a non-FS-GG
-    /// board. Comma-separated fully-qualified refs `owner/repo#n`; a token that does not parse is DROPPED,
-    /// never thrown — a dropped lock costs a chore not offered (fail-closed, condition 1), the same answer an
-    /// absent lock already gives, so a typo degrades to the default rather than crashing the caller's real
-    /// command. Parsing lives HERE, not in the pure `Options.choreLockRef`, because env is IO and ADR-0042's
-    /// constraint is only that no `repos.yml` READER ship to a receiver — env DOES reach the receiver, so a
-    /// per-deployment roster injected by env is exactly the seam a file reader could not be. The repo is
-    /// canonicalised on the way in (`resolveRepo`), so the stored ref is already in the spelling the CAS
-    /// compares. The pattern is byte-identical to `parseRef`'s own fully-qualified arm — which no longer lives
-    /// in this module at all, but in `RefParsing.parse` (`src/FS.GG.Coord.Cli/RefParsing.fs`, the `full` match)
-    /// that `parseRefIn` delegates to — and the two are kept in step BY EYE, which is the standing hazard here
-    /// rather than a note: nothing compiles the copy against its original.
-    val parseChoreLocks: raw: string -> FS.GG.Coord.Types.Ref list
 
     /// THE PER-RECEIVER OPERATION LOCK — the item CAS, unchanged, on a third subject.
     ///
@@ -1165,7 +1011,7 @@ module Client =
     /// dependency inversion this file cannot express while it is one module. Read this binding as evidence for
     /// the extraction programme (.github#2725 onward), not as a pattern to copy.
     val withFollowupAuditContextForTest:
-      ctx: Context -> f: (unit -> 'a) -> 'a
+      ctx: Kernel.Context -> f: (unit -> 'a) -> 'a
 
     /// `followup audit` — the read-only reconciliation PREVIEW over the local follow-up queues.
     ///
@@ -1179,30 +1025,13 @@ module Client =
     /// rather than receiving one, which is what `withFollowupAuditContextForTest` exists to work around.
     val followupAudit: opts: Options.Options -> int
 
-    /// The checkout's `owner/repo` → the repo a bare `<n>` resolves against, or `None` when that slug's
-    /// owner is not the board's. PUBLIC PURELY TO BE TESTED — the PRIVATE `defaultRepoScope` wraps it with
-    /// the process call that reads the git remote (which a unit test cannot drive) and with `--repo`'s
-    /// precedence: an explicit `--repo` wins, resolved through the same short-id map, so `--repo rendering`
-    /// names one queue in both argument positions; otherwise the checkout you are standing in, exactly as
-    /// `take`/`batch` default. That wrapper's result is what `run` installs as `Context.DefaultRepo`. Same
-    /// idiom as `parseGitHubSlug`.
-    ///
-    /// THE OWNER CHECK THIS FUNCTION PERFORMS IS THE WHOLE #548 AMBIGUITY CRITERION, and it is why the
-    /// wrapper is not just `scopedRepo`. `resolveRepo` throws the owner away, so in a NON-FS-GG checkout
-    /// `scopedRepo` happily yields `acme/thing` → `thing`, and a bare `506` would then silently address
-    /// `FS-GG/thing#506` — an issue in a repo the caller is not standing in and may not have meant to
-    /// exist. Comparing the remote's owner against the board's and yielding `None` on a mismatch is what
-    /// keeps a bare number a hard error outside the org, which the issue names as the one thing to get
-    /// right.
-    val defaultRepoForOwner: owner: string -> slug: string -> string option
-
     /// `board` — the bootstrapped Coordination board as JSON: its number, title, owner and field map.
     ///
     /// The one read that resolves the board itself, and the operation every other IO command implicitly depends
     /// on: a token that cannot perform THIS cannot perform any of them, which makes it the diagnostic to reach
     /// for when a board-scoped verb reports a gap. Exits 0 with the JSON; an IO failure keeps the read's own
     /// code through `fail`.
-    val boardCmd: ctx: Context -> int
+    val boardCmd: ctx: Kernel.Context -> int
 
     /// `body-edits <ref>` — "has this issue/PR body changed since X" (`.github#2477`).
     ///
@@ -1220,7 +1049,7 @@ module Client =
     /// NEVER as "0 edits". Silently reporting a failed read as a negative is exactly the false negative
     /// `.github#2456` was written to prevent; this command exists so a critic never has to choose between
     /// asking the authoritative question and obeying `graphql-monopoly`.
-    val bodyEditsCmd: ctx: Context -> opts: Options.Options -> int
+    val bodyEditsCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// `add <ref>` — put an issue on the board (#861).
     ///
@@ -1273,7 +1102,7 @@ module Client =
     /// returned, so that lookup is redundant and is charged anyway; retiring it is a change to
     /// `Board.boardWrite`'s signature and belongs to whoever owns that file.) Two of the three are not
     /// spent when the column is already set — the read answers, and nothing is written.
-    val addCmd: ctx: Context -> opts: Options.Options -> int
+    val addCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// An alias of `LintApplication.EpicFinding` — one epic-rollup finding as a code, a severity and a detail.
     ///
@@ -1306,18 +1135,18 @@ module Client =
     /// Exits 0 when nothing fatal was found and `ExitError` when something was. It has no `ExitRed` arm: the
     /// distinction lint draws is between a run that produced fatal findings and one that did not, not between
     /// a subject that passed a gate and one that failed it.
-    val lint: ctx: Context -> opts: Options.Options -> int
+    val lint: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// #2134's receipt-first intake transaction. The receipt is persisted immediately after the only
     /// REST create, so a retry repairs the same issue's projection rather than issuing a second POST.
     /// Execute the live receipt-first intake transaction.  This is public so the transaction can be
     /// driven over a recording transport: the tests must count the issue-create POST, not infer it
     /// from a later board result.
-    val intakeCmd: ctx: Context -> opts: Options.Options -> int
+    val intakeCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
     /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
-    val deliveryRouteCmd: ctx: Context -> opts: Options.Options -> int
+    val deliveryRouteCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// THE COMPOSITION EDGE: build the one `Context` for this process, resolve the repo scope, and dispatch to
     /// the IO command `opts` names.

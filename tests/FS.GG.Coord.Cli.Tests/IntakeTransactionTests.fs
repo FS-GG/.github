@@ -21,7 +21,7 @@ module IntakeTransactionTests =
     let private options path =
         let parsed = Options.parse [ "intake"; "apply"; path ] |> Result.defaultWith failwith
         { parsed with Args = [ "apply"; path ] }
-    let private context transport : Client.Context = { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some ".github"; ChoreLocks = [] }
+    let private context transport : Kernel.Context = { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some ".github"; ChoreLocks = [] }
 
     let private invokeDraft cache (json: string) transport =
         let path = Path.Combine(cache, "draft.json")
@@ -64,7 +64,7 @@ module IntakeTransactionTests =
             let world = Fake.Recorder(fun req ->
                 if req.Method = "POST" && req.Path.EndsWith "/issues" then posts <- posts + 1
                 Error(NotFound "stop after receipt recovery"))
-            Assert.Equal(Client.ExitError, invoke cache world)
+            Assert.Equal(Kernel.ExitError, invoke cache world)
             Assert.Equal(0, posts)
 
     [<Fact>]
@@ -72,7 +72,7 @@ module IntakeTransactionTests =
         withCache <| fun cache ->
             let invalid = draft.Replace("src/FS.GG.Coord.Core", "definitely/not/a/live/path-2134")
             let world = Fake.Recorder(fun _ -> Error(NotFound "live-path refusal must precede transport"))
-            Assert.Equal(Client.ExitError, invokeDraft cache invalid world)
+            Assert.Equal(Kernel.ExitError, invokeDraft cache invalid world)
             Assert.Equal(0, world.RestCalls + world.GraphQlCalls)
 
     [<Fact>]
@@ -85,7 +85,7 @@ module IntakeTransactionTests =
                 | "GET", "repos/FS-GG/.github/issues/42" -> ok "{\"number\":42,\"state\":\"closed\"}"
                 | "POST", path when path.EndsWith "/issues" -> creates <- creates + 1; Error(NotFound "must refuse before create")
                 | _ -> Error(NotFound "unexpected request"))
-            Assert.Equal(Client.ExitError, invokeDraft cache blocked world)
+            Assert.Equal(Kernel.ExitError, invokeDraft cache blocked world)
             Assert.Equal(0, creates)
 
     [<Fact>]
@@ -101,7 +101,7 @@ module IntakeTransactionTests =
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "repos/FS-GG/.github/issues/88" -> bodyReads <- bodyReads + 1; ok "{\"number\":88,\"state\":\"open\",\"body\":\"Blocked on: human/decision\"}"
                 | _ -> Error(NotFound "Ready guard must refuse before board projection"))
-            Assert.Equal(Client.ExitError, invokeDraft cache ready world)
+            Assert.Equal(Kernel.ExitError, invokeDraft cache ready world)
             Assert.True(bodyReads >= 1, "the Ready gate must inspect the live issue body")
 
     [<Fact>]
@@ -113,13 +113,13 @@ module IntakeTransactionTests =
                 | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
                 | "POST", "repos/FS-GG/.github/issues" -> posts <- posts + 1; ok "{\"number\":77}"
                 | _ -> Error(NotFound "interrupted after persisted create"))
-            Assert.Equal(Client.ExitError, invoke cache first)
+            Assert.Equal(Kernel.ExitError, invoke cache first)
             if posts <> 1 then failwith (String.concat "\n" first.Log)
             let mutable retryPosts = 0
             let retry = Fake.Recorder(fun req ->
                 if req.Method = "POST" && req.Path.EndsWith "/issues" then retryPosts <- retryPosts + 1
                 Error(NotFound "stop after recovered receipt"))
-            Assert.Equal(Client.ExitError, invoke cache retry)
+            Assert.Equal(Kernel.ExitError, invoke cache retry)
             Assert.Equal(0, retryPosts)
 
     [<Fact>]
@@ -133,7 +133,7 @@ module IntakeTransactionTests =
                 | "GET", "repos/FS-GG/.github/issues" -> ok ($"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":{System.Text.Json.JsonSerializer.Serialize(draftMarker cache)}}}]")
                 | "POST", path when path.EndsWith "/issues" -> posts <- posts + 1; Error(NotFound "must not create again")
                 | _ -> Error(NotFound "stop after intent recovery"))
-            Assert.Equal(Client.ExitError, invoke cache world)
+            Assert.Equal(Kernel.ExitError, invoke cache world)
             Assert.Equal(0, posts)
             match Cache.getIntakeReceipt "tx-2134" with
             | Ok(Some receipt) -> Assert.Equal(77, receipt.IssueNumber)
@@ -149,7 +149,7 @@ module IntakeTransactionTests =
                 | "GET", "repos/FS-GG/.github/issues" -> ok "[{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":\"unrelated issue filed by another actor\"}]"
                 | "POST", path when path.EndsWith "/issues" -> posts <- posts + 1; Error(NotFound "must refuse, not create")
                 | _ -> Error(NotFound "stop after provenance refusal"))
-            Assert.Equal(Client.ExitError, invoke cache world)
+            Assert.Equal(Kernel.ExitError, invoke cache world)
             Assert.Equal(0, posts)
             Assert.Equal(Ok None, Cache.getIntakeReceipt "tx-2134")
 
@@ -172,7 +172,7 @@ module IntakeTransactionTests =
                 | "GET", "repos/FS-GG/.github/issues" -> ok ("[" + candidate + "]")
                 | "POST", _ -> posts <- posts + 1; Error(NotFound "duplicate must stop before any other write")
                 | _ -> Error(NotFound "duplicate must stop before any other write"))
-            Assert.Equal(Client.ExitError, invoke cache world)
+            Assert.Equal(Kernel.ExitError, invoke cache world)
             Assert.Equal(0, posts)
 
     [<Fact>]
@@ -185,7 +185,7 @@ module IntakeTransactionTests =
                 | "GET", "repos/FS-GG/.github/issues" -> ok "[{\"number\":88,\"state\":\"open\",\"title\":\"same\",\"body\":\"existing\"}]"
                 | "POST", path when path.EndsWith "/issues" -> creates <- creates + 1; Error(NotFound "reuse must not create")
                 | _ -> Error(NotFound "stop after reuse binding"))
-            Assert.Equal(Client.ExitError, invokeDraft cache reuse world)
+            Assert.Equal(Kernel.ExitError, invokeDraft cache reuse world)
             Assert.Equal(0, creates)
             match Cache.getIntakeReceipt "tx-2134" with
             | Ok(Some receipt) -> Assert.Equal(88, receipt.IssueNumber)
@@ -196,11 +196,11 @@ module IntakeTransactionTests =
         withCache <| fun cache ->
             File.WriteAllText(Path.Combine(cache, "intake-tx-2134.json"), "not-json")
             let unreadable = Fake.Recorder(fun _ -> Error(NotFound "must not read network"))
-            Assert.Equal(Client.ExitError, invoke cache unreadable)
+            Assert.Equal(Kernel.ExitError, invoke cache unreadable)
             Assert.Equal(0, unreadable.RestCalls)
             File.WriteAllText(Path.Combine(cache, "intake-tx-2134.json"), "{\"draftId\":\"tx-2134\",\"owner\":\"other\",\"repository\":\".github\",\"issueNumber\":77}")
             let mismatched = Fake.Recorder(fun _ -> Error(NotFound "must not read network"))
-            Assert.Equal(Client.ExitError, invoke cache mismatched)
+            Assert.Equal(Kernel.ExitError, invoke cache mismatched)
             Assert.Equal(0, mismatched.RestCalls)
 
     [<Theory>]
@@ -253,7 +253,7 @@ module IntakeTransactionTests =
                     | _ -> Error(NotFound "unrecognised board request")
                 | _ -> Error(NotFound "unrecognised request"))
             let code = invoke cache world
-            if code <> Client.ExitGreen then failwith (String.concat "\n" world.Log)
+            if code <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
             Assert.Equal(1, creates)
             Assert.Equal(1, added)
             Assert.Equal(1, statusWrites)

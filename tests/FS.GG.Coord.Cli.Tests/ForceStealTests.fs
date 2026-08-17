@@ -196,7 +196,7 @@ module ForceStealTests =
                 ok """{"number":42,"body":"Paths: src/Thing.fs"}"""
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"

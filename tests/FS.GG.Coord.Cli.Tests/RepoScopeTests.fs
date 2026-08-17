@@ -19,7 +19,7 @@ module RepoScopeTests =
     [<InlineData("ssh://git@github.com/FS-GG/FS.GG.Audio.git", "FS-GG/FS.GG.Audio")>]
     [<InlineData("https://github.com/FS-GG/FS.GG.SDD/", "FS-GG/FS.GG.SDD")>]
     let ``every git remote form yields owner/repo`` (url: string) (expected: string) =
-        Assert.Equal(Some expected, Client.parseGitHubSlug url)
+        Assert.Equal(Some expected, Kernel.parseGitHubSlug url)
 
     [<Theory>]
     [<InlineData("")>] // no remote at all
@@ -29,7 +29,7 @@ module RepoScopeTests =
     [<InlineData("https://github.com/FS-GG/group/repo")>] // a nested path is not a scope (bash's */*/* )
     [<InlineData("git@github.com:FS-GG/")>] // owner with an empty repo
     let ``a remote that does not name exactly one owner/repo is refused`` (url: string) =
-        Assert.Equal(None, Client.parseGitHubSlug url)
+        Assert.Equal(None, Kernel.parseGitHubSlug url)
 
     // ---- #962: `--repo` RESOLVES, at the parser, for every verb ------------------------------------------
 

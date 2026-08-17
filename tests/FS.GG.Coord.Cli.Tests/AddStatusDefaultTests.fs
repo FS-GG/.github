@@ -254,7 +254,7 @@ module AddStatusDefaultTests =
     let private ClaimMarkerComment =
         "<!-- fsgg:claim worker=vole-418 lease=120 renewed=1 session=s prev=Ready pathRepo=FS.GG.SDD -->"
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"
@@ -274,7 +274,7 @@ module AddStatusDefaultTests =
     /// scaffolding for `set-field` and `release`, because the refusal it adds is ONE shared gate reached
     /// through four doors, and a gate proven at one door is a gate a scheduled job walks around — which is
     /// exactly what the host measured on 2026-08-16, seven times, at doors this module did not drive.
-    let private runVerbWithStderr (invoke: Client.Context -> Options.Options -> int) (transport: Fake.Recorder) (args: string list) : int * string * string =
+    let private runVerbWithStderr (invoke: Kernel.Context -> Options.Options -> int) (transport: Fake.Recorder) (args: string list) : int * string * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1823-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"

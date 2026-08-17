@@ -148,6 +148,11 @@ TAG_PREFIX = "coord-engine/v"
 # fleet runs, so counting it would be noise with a gate's authority behind it.
 ENGINE_SOURCE = (
     "src/FS.GG.Coord.Cli",
+    # .github#2725 — the CLI kernel. `FS.GG.Coord.Cli` ProjectReferences it and packs its output, so a
+    # commit that touches ONLY this tree changes the engine the fleet runs. Omitting it would make such a
+    # commit invisible to the release-debt count, which under-reports drift in the direction that matters:
+    # silently, and toward "nothing is owed".
+    "src/FS.GG.Coord.Cli.Kernel",
     "src/FS.GG.Coord.Core",
     "src/FS.GG.Coord.GitHub",
 )

@@ -614,14 +614,14 @@ module OptionsTests =
     let ``parseChoreLocks reads a comma-separated roster, canonicalises the repo, and DROPS junk`` () =
         // A malformed token degrades to the fail-closed default (a chore not offered), never a throw that
         // would take down the caller's real command — the same answer an absent lock already gives.
-        let got = Client.parseChoreLocks "acme/Product.X#42, FS-GG/sdd#7 , garbage, /bad#1, a/b#x"
+        let got = Kernel.parseChoreLocks "acme/Product.X#42, FS-GG/sdd#7 , garbage, /bad#1, a/b#x"
         Assert.Equal<FS.GG.Coord.Types.Ref list>(
             // `FS-GG/sdd` is canonicalised to `FS.GG.SDD` on the way in, so the stored ref is CAS-comparable.
             [ mkRef "acme" "Product.X" 42; mkRef "FS-GG" "FS.GG.SDD" 7 ],
             got
         )
         // an unset / empty env is an empty roster, not an error
-        Assert.Equal<FS.GG.Coord.Types.Ref list>([], Client.parseChoreLocks "")
+        Assert.Equal<FS.GG.Coord.Types.Ref list>([], Kernel.parseChoreLocks "")
 
     // ---- `room open` (ADR-0051, #1215) ----------------------------------------------------------------
 

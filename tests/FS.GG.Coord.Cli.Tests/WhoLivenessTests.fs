@@ -120,7 +120,7 @@ module WhoLivenessTests =
     /// The #1668 board: one OPEN row, `In progress`.
     let private world (comments: string) = worldWith graphqlAnswer comments
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"

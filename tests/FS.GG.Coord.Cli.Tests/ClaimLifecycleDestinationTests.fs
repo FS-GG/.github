@@ -273,7 +273,7 @@ module ClaimLifecycleDestinationTests =
           StatusWrites = fun () -> List.ofSeq writes
           Column = fun () -> column }
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"

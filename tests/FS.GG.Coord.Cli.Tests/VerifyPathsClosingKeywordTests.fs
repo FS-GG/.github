@@ -33,7 +33,7 @@ module VerifyPathsClosingKeywordTests =
             else
                 Error(Errors.NotFound $"unexpected read for this fixture: %s{req.Path}"))
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"
@@ -82,7 +82,7 @@ module VerifyPathsClosingKeywordTests =
         let code, out =
             runVerifyPaths (serving prBody issueBody lockOnly) [ "verify-paths"; "--pr"; "900"; "--repo"; ".github" ]
 
-        Assert.Equal(Client.ExitGreen, code)
+        Assert.Equal(Kernel.ExitGreen, code)
         Assert.Contains("regenerated (expected)", out)
         Assert.True(Client.deliveryPathsVerified (Declared [ Matchable "some/file.txt" ]) [ "registry/repos.lock" ])
         Assert.False(Client.deliveryPathsVerified (Declared [ Matchable "some/file.txt" ]) [ "unrelated/file.txt" ])
@@ -95,7 +95,7 @@ module VerifyPathsClosingKeywordTests =
         let code, out =
             runVerifyPaths (serving prBody issueBody files) [ "verify-paths"; "--pr"; "900"; "--repo"; ".github" ]
 
-        Assert.Equal(Client.ExitRed, code)
+        Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-CLOSES DEFECT", out)
         Assert.Contains("`Closes .github#42`", out)
         // The touch-set itself was clean — the OK line still prints, so a reader can see BOTH facts
@@ -110,7 +110,7 @@ module VerifyPathsClosingKeywordTests =
         let code, out =
             runVerifyPaths (serving prBody issueBody files) [ "verify-paths"; "--pr"; "900"; "--repo"; ".github" ]
 
-        Assert.Equal(Client.ExitGreen, code)
+        Assert.Equal(Kernel.ExitGreen, code)
         Assert.DoesNotContain("FSGG-CLOSES", out)
         Assert.Contains("FSGG-PATHS OK", out)
 
@@ -122,7 +122,7 @@ module VerifyPathsClosingKeywordTests =
         let code, out =
             runVerifyPaths (serving prBody issueBody files) [ "verify-paths"; "--pr"; "900"; "--repo"; ".github" ]
 
-        Assert.Equal(Client.ExitGreen, code)
+        Assert.Equal(Kernel.ExitGreen, code)
         Assert.DoesNotContain("FSGG-CLOSES", out)
 
     [<Fact>]
@@ -136,6 +136,6 @@ module VerifyPathsClosingKeywordTests =
         let code, out =
             runVerifyPaths (serving prBody issueBody driftFiles) [ "verify-paths"; "--pr"; "900"; "--repo"; ".github" ]
 
-        Assert.Equal(Client.ExitRed, code)
+        Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.Contains("FSGG-CLOSES DEFECT", out)

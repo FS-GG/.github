@@ -99,7 +99,7 @@ SHAPES THIS GATE REFUSES RATHER THAN SKIPS
 RULE (b): WHAT COUNTS AS DECLARING A PROJECT, AND WHY IT IS NARROW
   The obligation attaches to a project only when a pattern's LITERAL PREFIX is that project's own
   directory — `src/FS.GG.Coord.Cli/**` declares it; `src/**` and `tests/**` do not, and neither does
-  `src/FS.GG.Coord.Cli/Options.fs`.
+  `src/FS.GG.Coord.Cli.Kernel/Options.fs`.
 
   That narrowness is the whole soundness of the rule, and each exclusion is a false positive it was
   measured to produce without it:
@@ -109,7 +109,7 @@ RULE (b): WHAT COUNTS AS DECLARING A PROJECT, AND WHY IT IS NARROW
       Requiring their closure would drag `src/**` onto a workflow whose subject it is not, and the
       first thing a wrongly-red gate teaches is that this gate is noise (#698).
     - NAMING ONE FILE is not declaring the project. `recipe-landable.yml` watches
-      `src/FS.GG.Coord.Cli/Options.fs` because it GREPS that file. Watching a file you read is not
+      `src/FS.GG.Coord.Cli.Kernel/Options.fs` because it GREPS that file. Watching a file you read is not
       building the project it lives in.
     - A pattern that already covers the whole tree needs no obligation: `src/**` selects every
       project's closure by construction, so there is nothing that could be missing.

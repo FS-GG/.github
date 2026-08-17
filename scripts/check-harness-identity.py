@@ -13,7 +13,7 @@ is isolating process-global state — but leaves the identity ladder inherited, 
 `let`-binding over (`runIn`) had already fixed. A fifth, `runReconcileWith`, was found discharging this
 very item: same shape, same file, still latent when this gate was written.
 
-THE DEFECT, MECHANICALLY. `Identity.resolve` (src/FS.GG.Coord.Cli/Identity.fs) reads `--worker` FIRST,
+THE DEFECT, MECHANICALLY. `Identity.resolve` (src/FS.GG.Coord.Cli.Kernel/Identity.fs) reads `--worker` FIRST,
 so a harness naming its worker that way gets the id it asked for — `Worker.Id`. But `Identity.resolve`
 ALSO computes `Worker.Derived`, independently, from whatever the process's OWN environment says: first
 `$FSGG_WORKER`, then a session id off `CLAUDE_CODE_SESSION_ID` / `OPENCODE_SESSION_ID` /
