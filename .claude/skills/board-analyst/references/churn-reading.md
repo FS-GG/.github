@@ -133,6 +133,98 @@ not a remedy; a named owner and a run against the merged tree is.
 numbers that support it. Otherwise the difference between "the analyst looked and the board is fine"
 and "the analyst did not look" is invisible, which is the same defect as a gate that has never been red.
 
+## The checkable skeleton — `fsgg.coord.churn-reading/v1`
+
+**Emit this JSON document beside the prose reading. It never replaces it, and the schema is built so
+it cannot.** The `prose` field is required and free-form: the validator never inspects a word of it,
+but a skeleton with no reading attached does not validate. That asymmetry is deliberate. The reading's
+value is the judgement in it; the defect this shape fixes is only that nothing could confirm a pass
+emitted all six elements. A reading that silently omitted part 4 or the sixth shape was
+indistinguishable from one that considered them and found nothing — **which is precisely the
+distinction the paragraph above says matters.**
+
+`FS.GG.Coord.ChurnReading` (`src/FS.GG.Coord.Core/ChurnReading.fsi`) is what parses and validates it:
+pure, total, and never throwing, so a malformed reading is a value naming the field and the shape that
+was meant rather than an exception. `ChurnReading.validate` takes the instant to judge the window
+against as a parameter — it reads no clock, because a validator whose verdict moves with the wall
+clock cannot be re-derived either.
+
+```json
+{
+  "schema": "fsgg.coord.churn-reading/v1",
+  "window": { "start": "2026-08-14T17:00:00Z", "end": "2026-08-15T17:00:00Z" },
+  "rowsOpened": 17,
+  "rowsClosed": 24,
+  "netRowDelta": -7,
+  "itemsLanded": { "count": 24, "unit": "issues closed" },
+  "causeInstances": { "found": [ { "cause": "…", "rows": [".github#2381", ".github#2648"] } ] },
+  "successorGeneratingCauses": { "searchedNotFound": "the search performed" },
+  "alreadyDerived": { "found": [ { "row": ".github#2648", "gate": "scripts/check-engine-freshness.py" } ] },
+  "jointlyRedCandidates": { "found": [ { "rows": [".github#2666", ".github#2584"], "gate": "…" } ] },
+  "remedy": "…, or explicit null",
+  "prose": "the reading itself, or an unambiguous pointer to where it was posted"
+}
+```
+
+### The census, and why it is not an array
+
+The four pathology fields are **tagged unions, not arrays**, and each is required — an absent field is
+a validation error, never a quiet pass. Each takes exactly one of:
+
+| case | meaning | payload |
+| --- | --- | --- |
+| `found` | the pass looked and these are the rows | a non-empty array |
+| `searchedNotFound` | the pass looked and there are none | **the search performed** |
+| `notSearched` | the pass did not look | why not — decodes, never validates |
+
+A bare `[]` would already have been a large improvement on prose, because absent stops looking like
+empty. It is not enough. `.github#2760` records the same defect one layer up — `gate.report_ok` takes
+a prose summary rather than a subject census, *"so the harness built to make fail-open impossible
+cannot tell 'looked and found nothing' from 'did not look'"* — and an empty array cannot tell them
+apart either. So `searchedNotFound` **carries the search**, which is the property `[]`, `"none"` and
+`null` all lack: a reader can check the claim instead of trusting it. This is deliberately the same
+vocabulary `.github#2737` established for `FindingPacket.Answer`, because the packet is this reading's
+input and the two documents should express one idea one way.
+
+`notSearched` decodes and then fails validation, naming which of the six elements was skipped. That is
+not a contradiction. All six are required, so a pass that skipped one is **incomplete rather than
+clean** and must be told so — but an analyst who genuinely did not look needs an honest shape to
+write, or the shape they reach for instead is a false `searchedNotFound`.
+
+### The rest of the rules, and the measurement behind each
+
+* **`window` is two explicit UTC instants**, `2026-08-14T17:00:00Z`-shaped. `"today"`, a bare date and
+  an endpoint carrying a non-zero offset are all refused. § *Two windows, one board* below is the
+  whole reason: two readers of this board on this day, both with correct arithmetic, reported net −7
+  and net −1 and both were right.
+* **The window must have closed.** An end later than the instant `validate` is given is refused — a
+  reading whose window has not closed cannot be re-derived even by its author five minutes later.
+* **`netRowDelta` must equal `rowsOpened − rowsClosed`.** The only arithmetic invariant this document
+  has, and transcription slips in published counts are a measured failure of this repository rather
+  than a hypothetical one.
+* **`itemsLanded` carries its unit.** `{ "count": 25 }` is refused. The reading that motivated this
+  whole role said *"while 25 items landed"*, and § *A worked reading* below records that at that row's
+  own endpoint **no candidate unit produces 25** — issues closed, pull requests merged and pull
+  requests closed were all measured, and none of them is that number. A count whose unit is
+  unrecoverable is not a measurement.
+* **`remedy` is nullable, and required to be non-null whenever any census reports `found`.** Write
+  explicit `null`; the string `"none"` is refused by name, because it is the sentinel this shape
+  replaces. Whether a remedy names a *mechanism* rather than an intention stays part 5's judgement,
+  and so does part 5's rule that a prescription naming a live row carries the instant it was correct
+  at — no validator can check either, and neither should try to.
+* **A `jointlyRedCandidates` entry names at least two rows.** "Individually green and *jointly* red"
+  is a coupling; one row cannot be jointly anything.
+
+### Running it
+
+The validator is the engine's, so there is exactly one implementation of these rules and no second
+model of them to drift. **Its `scripts/fsgg-coord` verb is not wired yet**, and this file will not
+pretend otherwise — a doc asserting a property the code does not have is the defect this repository
+treats most seriously. Today the rules are exercised by
+`tests/FS.GG.Coord.Core.Tests/ChurnReadingTests.fs`, whose fixture
+`fixtures/churn-readings/worked-2026-08-15.json` is the worked reading below lifted field by field, so
+the schema is proven against a pass that actually happened rather than one constructed to fit it.
+
 ## A worked reading — FS-GG/.github, 2026-08-14T17:00:00Z to 2026-08-15T17:00:00Z
 
 **Both endpoints of that window are in the past, and that is not a stylistic preference.** It is the
@@ -265,6 +357,15 @@ Two structural pathologies are present and neither is a rate problem:
 
 **Filed as a result of this reading: nothing.** Every remedy above is a disposition of an existing row
 or a sequencing decision, which is the outcome a healthy pass should usually produce.
+
+**This reading's skeleton is
+`tests/FS.GG.Coord.Core.Tests/fixtures/churn-readings/worked-2026-08-15.json`**, lifted field by field
+from the paragraphs above. Read the two side by side to see what the schema does and does not carry:
+every number, row and gate name is in the JSON, and **none of the judgement is** — not *"read this
+carefully before calling it carelessness, because it is the opposite"*, not the three-links-up vantage
+that makes part 3 visible, not the refutation kept beside its own prescription. Those live in `prose`,
+which the validator requires and never reads. That is the whole relationship: the skeleton makes the
+six questions answerable, and the reading is still the thing worth having.
 
 ## Two windows, one board — why part 1 says "state the window"
 

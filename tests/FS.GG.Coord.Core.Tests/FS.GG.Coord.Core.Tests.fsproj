@@ -59,6 +59,11 @@
          REAL packets lifted from the live registers .github#2691 and .github#2687. Same rule as every
          line above it: the list carries no globs, and an unlisted file is a suite that runs nowhere. -->
     <Compile Include="FindingPacketTests.fs" />
+    <!-- ChurnReadingTests (.github#2739) drives the new pure ChurnReading module against the REAL
+         2026-08-15 worked reading in .claude/skills/board-analyst/references/churn-reading.md, lifted
+         field by field. Same rule as every line above it: the list carries no globs, and an unlisted
+         file is a suite that runs nowhere. -->
+    <Compile Include="ChurnReadingTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -77,6 +82,10 @@
     <Content Include="fixtures/finding-packets/reject-5306816009-increment.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="fixtures/finding-packets/reject-5311301051-no-derived-by.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="fixtures/finding-packets/reject-5304198465-sentinels-as-none.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- .github#2739: the 2026-08-15 worked reading, lifted field by field from
+         .claude/skills/board-analyst/references/churn-reading.md so the schema is proven against a pass
+         that actually happened rather than one constructed to fit it (AC5). -->
+    <Content Include="fixtures/churn-readings/worked-2026-08-15.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

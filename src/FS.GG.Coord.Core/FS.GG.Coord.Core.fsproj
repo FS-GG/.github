@@ -65,6 +65,16 @@
          `packages.lock.json` is unchanged. -->
     <Compile Include="FindingPacket.fsi" />
     <Compile Include="FindingPacket.fs" />
+    <!-- ChurnReading (.github#2739) is the checkable skeleton beside the board-analyst's churn reading,
+         and it sits here for the same reason FindingPacket does: it opens NO sibling module — only
+         System, System.Globalization and System.Text.Json — so it constrains nothing below it, and the
+         two schemas are neighbours because the packet is this reading's INPUT and .github#2739's route
+         decision requires the pair to express the same sentinel idea the same way. System.Globalization
+         and System.Text.Json are both in the net10.0 shared framework, so this adds no PackageReference
+         and `packages.lock.json` is unchanged. This list has no globs: a file not named here is not
+         compiled at all. -->
+    <Compile Include="ChurnReading.fsi" />
+    <Compile Include="ChurnReading.fs" />
     <Compile Include="DeliveryRoute.fsi" />
     <Compile Include="DeliveryRoute.fs" />
     <Compile Include="StructuredDecision.fsi" />
