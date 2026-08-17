@@ -951,8 +951,10 @@ module Client =
     /// requested paths into the item's declaration, so a caller's declared `Paths:` can be WIDER than what it
     /// legitimately holds. Declaration breadth is therefore never permission.
     ///
-    /// The four mechanical declaration lines this writes are excluded from the delivery-route receipt's
-    /// canonical subject (.github#2392), so widening does not stale that receipt.
+    /// Widening does not stale the item's delivery-route receipt. That receipt's `subjectRevision` is checked
+    /// against a route RECORD's digest, and `StructuredDecision.routeDigest` hashes that record's own fields —
+    /// including the touch-set SNAPSHOT the record carries. It never re-reads the live issue body, so no edit
+    /// to the body moves it.
     ///
     /// Exit codes come from `updateTouchSet`, which this and `set-paths` share.
     val widen: ctx: Context -> opts: Options.Options -> int
