@@ -76,10 +76,21 @@ jobs:
   # Before that, three operators had no floor at all and four had the literal `1`: suppressing 282 of
   # 385 mutants left this required check green, silent and exit 0 (.github#2730 repair phase).
   #
+  # AND THE EQUALITY IS NOT SUFFICIENT EITHER, BECAUSE `0 + 0 == 0` SOLVES IT. An operator that
+  # enumerates nothing and is read nowhere satisfies the relation exactly, in both directions.
+  # Measured through the shipped `main()`: `bool-flip` suppressed on both sides printed `423 mutants`
+  # and `bool-flip 0 + 0 == 0` as ACCOUNTED FOR, refused nothing, landed all three controls and
+  # exited 0. So the registry is additionally quantified over: every operator in `OPERATORS` must be
+  # READ AT A NON-ZERO COUNT, one predicate naming no operator, covering any operator added later.
+  # It matters because the trigger is one edit to the GATE, not two to the harness -- `report-swap`
+  # and `len-pin` resolve `print` and `len` BY NAME in both readings, so routing this gate's output
+  # through a `report()` helper would zero both of `report-swap`'s terms at a single site, 119 of 432
+  # mutants. Independence here is in the KEY, not in the library (.github#2730 repair phase, round 2).
+  #
   # IT IS HERE BECAUSE THE SWEEP MUST OUTLIVE THE PEOPLE WHO RAN IT ONCE. .github#2730's ordinary
   # review chain exhausted at round 3 with five instances of one class, each found by the next critic
   # and invisible to the previous round's sweep, because every sweep was drawn from its author's own
-  # model of what the gate does. A branch added to this gate later, with no leg, is that sixth
+  # model of what the gate does. A branch added to this gate later, with no leg, is the NEXT
   # instance; run here, it is a red check instead of a review round. Survivors are justified, one per
   # line and with a proof, in `tests/signature-doc-siting/mutants-allowed.txt` — a file that only ever
   # shrinks. It records NO survivor today and exactly one SKIP: a candidate site the sweep declined

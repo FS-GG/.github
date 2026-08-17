@@ -62,14 +62,16 @@ THE OPERATORS, and each is mechanical rather than chosen:
                           enumerated from the filesystem rather than named here, each narrowing
                           `discover()` to exclude that project. This is M5 itself, generalised: it
                           extends to a fourth project on the day one is added, with no edit here.
-  early-ok                `main` returns `EX_OK` before doing anything. The unconditional pass.
 
 TEN OPERATORS, AND THE LIST ABOVE IS NOT THE AUTHORITY -- `OPERATORS` below is, and the enumeration,
 the second reading and the accounting are all checked against it. An earlier version of this header
 named seven of the ten, omitting `bool-flip`, `boolop-flip` and `report-swap`, which between them
-generate 131 of 385 mutants; the same three were the ones with no floor entry at all. A prose list
-and a predicate that drift apart is how a guard becomes decorative, so neither is now allowed to be
-the only place an operator is named.
+generate 131 of 385 mutants; the same three were the ones with no floor entry at all. A LATER version
+listed `early-ok` here as an eleventh, which is not in `OPERATORS` at all and never was: it is a
+CONTROL, described under CONTROLS below, and nothing enumerates it, reads it or accounts for it. A
+prose list and a predicate that drift apart is how a guard becomes decorative -- this header says so
+two paragraphs on and then drifted -- so neither is now allowed to be the only place an operator is
+named, and this list holds exactly the ten `OPERATORS` holds.
 
 CONTROLS, BECAUSE AN INSTRUMENT'S SILENCE PROVES NOTHING (#266, and seven instrument faults measured
 in this row's own session -- a `dotnet test` that exited 0 while running nothing, a gate graded
@@ -88,11 +90,16 @@ is run, so "SURVIVED" can never mean "was never applied" and never means "did no
 
 AND THE ENUMERATION IS ITSELF ACCOUNTED FOR, SITE BY SITE, because the controls above prove the
 sweep can SPEAK and prove nothing about whether it SAW. `token_reading` reads the same gate a second
-time through `tokenize` -- the CPython lexer, which shares no code with the `ast` walk above -- and
-counts the candidate sites of every one of the ten operators. `main` then asserts an EQUALITY rather
-than a floor:
+time through `tokenize` -- a different reader from the `ast` walk above, though NOT an independent
+one: they are two front ends of one CPython, and, far more to the point, nine of the ten operators
+are resolved by both readings through the SAME FEATURE OF THE GATE'S TEXT. INDEPENDENCE IS IN THE
+KEY, NOT IN THE LIBRARY. The block above `_significant_tokens` classifies every operator by its key
+and says which edits to the gate would defeat both readings at once; that classification is the
+honest statement of what this second reading is worth. `main` then asserts an EQUALITY rather than a
+floor, and a NON-ZERO reading beside it, because the equality alone has a degenerate solution:
 
     enumerated(op) + skipped(op) == second reading(op),   for every operator, both directions
+    second reading(op) > 0,                               for every operator
 
 Every site the AST walk declines is therefore REPORTED (there is no `continue` that drops one in
 silence), and every reported skip must additionally carry a written justification in
@@ -100,6 +107,18 @@ silence), and every reported skip must additionally carry a written justificatio
 mutant nothing kills are the same fact about coverage. A silent loss breaks the equality; a loud but
 unaccounted loss is an unjustified skip and fails the run. See the block above the check in `main`
 for the measurement that made this necessary and for what each direction of the inequality means.
+
+THE SECOND LINE IS NOT DECORATION, AND THE EQUALITY ALONE DOES NOT IMPLY IT. `0 + 0 == 0` satisfies
+the equality exactly, in both directions, for an operator that enumerates nothing and is read
+nowhere -- and that state is reachable by ONE edit to the gate, not two to this harness, because
+`report-swap` and `len-pin` resolve `print` and `len` by name in both readings and a `report()`
+helper would zero both terms of `report-swap` at a single site (119 of 432 mutants). Measured
+through this `main()` at the head that shipped only the equality: `bool-flip` suppressed on both
+sides printed `423 mutants`, printed `bool-flip 0 + 0 == 0` as accounted for, refused nothing,
+landed all three controls and exited 0. The non-zero line closes it for all ten at once, as ONE
+predicate quantified over `OPERATORS` rather than as ten hand-written checks -- and it needs no
+partner on the left-hand term, because the equality plus a non-zero reading already entails a
+non-zero enumeration, and a guard that cannot fire is the defect, not the remedy.
 
 Pure stdlib. No network, no build, no `dotnet`. Each mutant runs against its own private copy of
 `scripts/`, `src/` and `tests/signature-doc-siting/`, so the sweep never writes into the repository
@@ -435,10 +454,38 @@ def enumerate_mutants(gate_source: str, projects: list[str]) -> tuple[list[Mutan
 # ---- THE SECOND READING ---------------------------------------------------------------------------
 #
 # Everything above reads the gate through `ast`. Everything below reads the SAME BYTES through
-# `tokenize`, which shares no code with the parser's tree walk: it is the CPython lexer, so a change
-# to `ast`, a walk that silently yields nothing, or a refactor that renames an anchor cannot move
-# both readings the same way. That is the whole point -- a floor derived from the reading it is
-# supposed to check is not a check.
+# `tokenize`: a different reader, so a walk that silently yields nothing, or a refactor that renames
+# an anchor, cannot move both readings the same way. That is the whole point -- a floor derived from
+# the reading it is supposed to check is not a check.
+#
+# HOW FAR THAT INDEPENDENCE ACTUALLY GOES, STATED PRECISELY, BECAUSE THE OBVIOUS ANSWER IS THE WRONG
+# ONE. `ast` and `tokenize` are two front ends of ONE CPython, which is a real common mode -- but it
+# is not the operative one, and saying only that names the wrong risk. THE OPERATIVE COUPLING IS THE
+# KEY: what each reading matches on in the subject. Both readings of an operator resolve it through
+# the same feature of the gate's text, so an edit to the gate that removes that feature zeroes BOTH
+# terms at once, and no amount of reader-diversity helps. Classified, and the classification is the
+# disclosure:
+#
+#   * REBINDABLE-IDENTIFIER KEYS -- `report-swap` on the name `print` (`ast`: `Call.func.id ==
+#     "print"`; tokens: NAME `print` followed by `(`) and `len-pin` on the name `len`, the same way.
+#     These are ordinary bindings, so ONE edit to the gate defeats both readings: routing output
+#     through a `report()` helper takes `report-swap` to `0 + 0 == 0` -- 119 of 432 mutants, 27.5% --
+#     and a `size = len` alias does the same to `len-pin`. HIGHEST exposure, and the reason the
+#     registry now refuses a zero reading rather than accepting the equality it satisfies.
+#   * RESERVED-TOKEN KEYS -- `bool-flip` on `True`/`False`, `boolop-flip` on `and`/`or`, `cond-*` on
+#     `if`/`elif`/`while`, `cmp-flip` on the comparison operators, `num` and `str` on literal syntax.
+#     Python forbids rebinding these, so no alias defeats them; only REWRITING the construct away
+#     does (`any([...])` for an `or`, a dispatch table for an `if` chain, a resource file for the
+#     messages). Lower exposure, same shape, and the same zero-count refusal catches it.
+#   * NO KEY AT ALL -- `dir-drop` read the filesystem on the `ast` side and was handed that same
+#     list's `len()` on this side. Not key-coupled: VALUE-identical, which is strictly worse, and
+#     vacuous for every input rather than merely defeatable by an edit. That is the sixth instance of
+#     this row's class and it is repaired above, in `independent_project_reading`.
+#
+# What is NOT claimed: that the two readings are independent of CPython, or that a rewrite of the
+# gate which removes a construct entirely will be caught as a LOSS rather than as a refusal. It will
+# be caught -- the zero reading refuses -- but the refusal says "this operator now measures nothing",
+# which is a prompt to a human, not a proof that the gate is still asserted.
 #
 # WHY A LEXER AND NOT A REGEX. A regex over lines cannot tell a `==` in code from a `==` inside this
 # gate's own 150-line docstring, and this gate is mostly prose: its docstrings hold `'` , `///`,
@@ -541,7 +588,51 @@ def _is_docstring_group(toks: list[tokenize.TokenInfo], start: int, end: int) ->
     return at_statement_start and is_whole_statement
 
 
-def token_reading(gate_source: str, projects: list[str]) -> dict[str, int]:
+def independent_project_reading() -> int:
+    """Projects under `src/` holding a subject -- walked the OTHER WAY ROUND from `discovered_projects`.
+
+    `dir-drop` WAS THE ONE OPERATOR WHOSE TWO READINGS WERE NOT TWO READINGS. The enumeration emits
+    exactly one mutation-or-skip per entry of the list `discovered_projects()` returns, and the
+    second reading used to be `len(<that same list object>)`, handed in as a parameter. So
+    `enumerated + skipped == reading` held for EVERY input, including every wrong one: the arm was
+    vacuous by construction, not merely weak. That is this row's own class a sixth time and one layer
+    below the fifth -- the other nine operators are coupled through a shared KEY, which a rewrite of
+    the subject can defeat; this one was coupled through a shared VALUE, which nothing could defeat
+    because there was only ever one reading wearing two names. Measured before this function existed,
+    at the repaired head: crippling `discovered_projects` to return its first entry only dropped two
+    `dir-drop` mutants, and the equality, the registry guard and the sweep all stayed green at exit 0.
+
+    So this counts the same population by walking it in the opposite direction. `discovered_projects`
+    lists `src/`'s immediate entries, walks each one, enumerates `.fs` files and asks whether each has
+    a sibling `.fsi`, stopping that entry at the first hit. This makes ONE walk of the whole of
+    `src/`, enumerates `.fsi` files and asks whether each has a sibling `.fs`, and counts the DISTINCT
+    top-level entries that answer yes. A fault in either walk's pruning, in either direction of the
+    sibling test, or in either stopping rule moves exactly one of the two.
+
+    WHAT STILL COUPLES THEM, named rather than left for the next critic: both reach the filesystem
+    through `os`, both root at `REPO/src`, and both prune `obj` and `bin` by the same two names. A
+    tree that changed between the two calls, an `os.walk` that lied, or a fourth build-output
+    directory neither prunes would move both together. That is a common mode, and it is the residual.
+    """
+    src = os.path.join(REPO, "src")
+    found: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(src):
+        dirnames[:] = [d for d in dirnames if d not in ("obj", "bin")]
+        relative = os.path.relpath(dirpath, src)
+        if relative == os.curdir:
+            continue
+        top = relative.split(os.sep)[0]
+        if top in found:
+            continue
+        for name in filenames:
+            # `Foo.fsi` -> `Foo.fs`: the sibling test run from the signature side.
+            if name.endswith(".fsi") and os.path.exists(os.path.join(dirpath, name[:-1])):
+                found.add(top)
+                break
+    return len(found)
+
+
+def token_reading(gate_source: str) -> dict[str, int]:
     """Candidate sites per operator, counted from the token stream and the filesystem.
 
     Raises `SystemExit` on an interpreter whose `tokenize` cannot see inside an f-string, because
@@ -558,8 +649,10 @@ def token_reading(gate_source: str, projects: list[str]) -> dict[str, int]:
     toks = _significant_tokens(gate_source)
     counts = {operator: 0 for operator in OPERATORS}
 
-    # DISCOVERY: the filesystem is the second reading, exactly as it is the first one.
-    counts["dir-drop"] = len(projects)
+    # DISCOVERY: the filesystem is the second reading, exactly as it is the first one -- but it must
+    # be READ a second time, not handed the first reading's answer. See `independent_project_reading`
+    # for the measurement that made this a function rather than the `len(projects)` it used to be.
+    counts["dir-drop"] = independent_project_reading()
 
     depth = 0
     pending_for_at: set[int] = set()
@@ -846,18 +939,47 @@ def main(argv: list[str] | None = None) -> int:
     #
     # Both remedies are cheap and both are visible; a guard that quietly tolerates disagreement
     # between its two readings has stopped being a second reading at all.
-    if not projects:
-        print("REFUSING: no project under src/ holds a subject, so dir-drop asserts nothing.")
-        return 3
-
-    reading = token_reading(gate_source, projects)
+    #
+    # AND AN EQUALITY IS STILL NOT ENOUGH, BECAUSE `0 + 0 == 0` IS ONE OF ITS SOLUTIONS. The relation
+    # above is exact per operator and holds in both directions, and it is SATISFIED PERFECTLY by an
+    # operator that enumerates nothing, skips nothing and is read nowhere. Measured through this
+    # `main()` at the head that shipped only the equality: suppressing `bool-flip` in the enumeration
+    # AND zeroing its second reading printed `mutants enumerated: 423`, printed `bool-flip 0 + 0 ==
+    # 0` in the accounting table below as ACCOUNTED FOR, emitted no `REFUSING:` line, landed all
+    # three controls and exited 0. The registry's third claimed guarantee -- an operator in
+    # `OPERATORS` that the second reading does not see -- was UNPROVIDED, because it was written as a
+    # test of key PRESENCE (`set(OPERATORS) - set(reading)`) against a dict `token_reading` builds
+    # with all ten keys and never deletes from. That difference is empty for every input, so the
+    # branch was unreachable and the guarantee was prose.
+    #
+    # AND THE TRIGGER IS ONE EDIT TO THE GATE, NOT TWO TO THIS HARNESS. Four of the ten operators are
+    # keyed on a REBINDABLE IDENTIFIER in the subject rather than on a reserved token: `report-swap`
+    # and `len-pin` resolve `print` and `len` by name in BOTH readings. Routing this gate's output
+    # through a `report()` helper zeroes both of `report-swap`'s terms at one site -- 119 of 432
+    # mutants, 27.5% of the sweep -- and the equality would have reported `0 + 0 == 0` and passed.
+    #
+    # SO THE REGISTRY IS QUANTIFIED OVER, ONCE, AND IT NAMES NO OPERATOR. Every operator in
+    # `OPERATORS` must be READ AT A NON-ZERO COUNT by the second reading. One predicate over the
+    # registry that is already the sole authority for the enumeration, the second reading and the
+    # accounting -- so an operator added to `OPERATORS` tomorrow is covered by the commit that adds
+    # it, which is the property ten hand-written checks would not have. It is deliberately NOT paired
+    # with a second guard on the left-hand term: `enumerated + skipped == reading` together with
+    # `reading > 0` already entails `enumerated + skipped > 0`, so such a guard could never fire, and
+    # an unreachable branch is the exact defect being repaired here.
+    #
+    # IT ALSO SUBSUMES THE ONE ZERO-COUNT CHECK THIS FILE HAD WRITTEN BY HAND. `if not projects:
+    # return 3` guarded `dir-drop` alone -- the one operator whose author happened to think of it --
+    # and generalised nowhere. `reading["dir-drop"]` is zero on exactly the trees that check refused,
+    # so the general predicate strictly dominates it and the hand-written one is gone rather than
+    # kept beside it.
+    reading = token_reading(gate_source)
 
     # AND NEITHER SIDE MAY GROW AN OPERATOR THE OTHER HAS NEVER HEARD OF. This is the guard that
     # keeps the finding above from regenerating: the three operators with no floor were added to the
     # AST walk and nobody added them here, and nothing said so.
     unknown_enumerated = sorted(set(by_operator) - set(OPERATORS))
     unknown_skipped = sorted(set(skipped_by_operator) - set(OPERATORS))
-    unread = sorted(set(OPERATORS) - set(reading))
+    unread = sorted(operator for operator in OPERATORS if reading.get(operator, 0) == 0)
     if unknown_enumerated or unknown_skipped or unread:
         print("REFUSING: the operator registry, the enumeration and the second reading disagree.")
         for operator in unknown_enumerated:
@@ -865,7 +987,11 @@ def main(argv: list[str] | None = None) -> int:
         for operator in unknown_skipped:
             print(f"  {operator}: skipped, but not in OPERATORS -- its losses would be unaccounted")
         for operator in unread:
-            print(f"  {operator}: in OPERATORS, but `token_reading` counts no sites for it")
+            print(
+                f"  {operator}: in OPERATORS, but the second reading counts 0 candidate sites for it "
+                f"-- its accounting line would read `0 + 0 == 0`, which this equality accepts and "
+                f"which asserts nothing about the gate"
+            )
         return 3
 
     disagreements = []
