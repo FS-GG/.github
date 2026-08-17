@@ -1,6 +1,5 @@
 namespace FS.GG.Coord.Cli
 
-/// JSON snapshot boundary for the pure resumable review/repair protocol (.github#2175).
 module ReviewApplication =
     open System
     open System.IO
@@ -46,9 +45,9 @@ module ReviewApplication =
         | JsonValueKind.False -> false
         | _ -> invalidArg name "must be a boolean"
 
-    /// The seven-word `PrState` wire vocabulary `Landable.name` renders — read here in reverse. Not a
-    /// second authority: `Landable.name` is forward-only (`PrState -> string`), so the reverse parser is
-    /// this boundary's own job, exactly as `DeliveryApplication`'s `stage`/`action` readers are.
+    // The seven-word `PrState` wire vocabulary `Landable.name` renders — read here in reverse. Not a
+    // second authority: `Landable.name` is forward-only (`PrState -> string`), so the reverse parser is
+    // this boundary's own job, exactly as `DeliveryApplication`'s `stage`/`action` readers are.
     let private checks (name: string) (element: JsonElement) : Types.PrState =
         match readString name element with
         | "green" -> Types.PrGreen
@@ -102,10 +101,10 @@ module ReviewApplication =
         | JsonValueKind.Object -> Some(repairPhaseReceipt value)
         | _ -> invalidArg "repairPhaseGranted" "must be an object or null"
 
-    /// UNLIKE `required`, absence is not an error here — `criticSuccessionGranted` is additive
-    /// (.github#2417 FR-005): a snapshot producer that predates this field, or one that simply has no
-    /// grant to report, omits the key entirely, and that MUST parse exactly as it always has rather than
-    /// forcing every existing caller to start emitting an explicit `"criticSuccessionGranted": null`.
+    // UNLIKE `required`, absence is not an error here — `criticSuccessionGranted` is additive
+    // (.github#2417 FR-005): a snapshot producer that predates this field, or one that simply has no
+    // grant to report, omits the key entirely, and that MUST parse exactly as it always has rather than
+    // forcing every existing caller to start emitting an explicit `"criticSuccessionGranted": null`.
     let private optionalProperty (name: string) (element: JsonElement) : JsonElement option =
         match element.TryGetProperty name with
         | true, value when value.ValueKind <> JsonValueKind.Null -> Some value
@@ -130,27 +129,27 @@ module ReviewApplication =
           GrantedBy = readString "grantedBy" element
           Reason = readString "reason" element }
 
-    /// Additive exactly as `criticSuccessionGranted` is (.github#2549): a snapshot producer that
-    /// predates this field, or one with no grant to report, omits the key and MUST parse exactly as it
-    /// always has. A present-but-not-an-object value is still an error rather than a silent `None` —
-    /// a malformed grant must never read as "no grant was offered", because those two lead to
-    /// different, and in the refusing direction identical-looking, next actions.
+    // Additive exactly as `criticSuccessionGranted` is (.github#2549): a snapshot producer that
+    // predates this field, or one with no grant to report, omits the key and MUST parse exactly as it
+    // always has. A present-but-not-an-object value is still an error rather than a silent `None` —
+    // a malformed grant must never read as "no grant was offered", because those two lead to
+    // different, and in the refusing direction identical-looking, next actions.
     let private repairAssertionGranted (element: JsonElement) : Review.RepairAssertionReceipt option =
         match optionalProperty "repairAssertionGranted" element with
         | Some value when value.ValueKind = JsonValueKind.Object -> Some(repairAssertionReceipt value)
         | Some _ -> invalidArg "repairAssertionGranted" "must be an object or null"
         | None -> None
 
-    /// `DiffAuditTrusted` is not yet on this wire contract — the pure snapshot path this command serves
-    /// (a worker or the #2135 event projection asking "what next") does not need the live, engine-
-    /// recomputed diff-audit inventory `Driver.parseReviewCommentsWithFacts` optionally consumes; a
-    /// caller that mechanically requires the diff-audit gate goes through `Driver.parseReviewCommentsWithAudit`
-    /// directly, as the existing live `delivery` path already does. Always `None` here; a future cut can
-    /// add the field additively without breaking this one.
-    ///
-    /// `criticSuccessionGranted` (.github#2417) is read from the SAME `facts` JSON object on the wire —
-    /// callers author it alongside `repairPhaseGranted` — but it is NOT a `Review.Facts` field (see that
-    /// type's own doc comment for why); it is threaded separately below as its own tuple member.
+    // `DiffAuditTrusted` is not yet on this wire contract — the pure snapshot path this command serves
+    // (a worker or the #2135 event projection asking "what next") does not need the live, engine-
+    // recomputed diff-audit inventory `Driver.parseReviewCommentsWithFacts` optionally consumes; a
+    // caller that mechanically requires the diff-audit gate goes through `Driver.parseReviewCommentsWithAudit`
+    // directly, as the existing live `delivery` path already does. Always `None` here; a future cut can
+    // add the field additively without breaking this one.
+    //
+    // `criticSuccessionGranted` (.github#2417) is read from the SAME `facts` JSON object on the wire —
+    // callers author it alongside `repairPhaseGranted` — but it is NOT a `Review.Facts` field (see that
+    // type's own doc comment for why); it is threaded separately below as its own tuple member.
     let private facts (element: JsonElement) : Review.Facts =
         { Comments = comments element
           Checks = checks "checks" element
@@ -262,11 +261,11 @@ module ReviewApplication =
            reason = receipt.Reason
            candidateHeadSha = receipt.CandidateHeadSha |}
 
-    /// .github#2527. Serialized on EVERY verdict, empty where nothing retired, so a consumer reads one
-    /// stable shape rather than a key that appears only in the recovery case. This is the fact that
-    /// answers "why is a pull request carrying two initial review markers being judged on the later
-    /// one" — without it the recovery is correct but unexplained, which for a rule whose whole job is to
-    /// stop a stranger continuing someone else's chain is not good enough.
+    // .github#2527. Serialized on EVERY verdict, empty where nothing retired, so a consumer reads one
+    // stable shape rather than a key that appears only in the recovery case. This is the fact that
+    // answers "why is a pull request carrying two initial review markers being judged on the later
+    // one" — without it the recovery is correct but unexplained, which for a rule whose whole job is to
+    // stop a stranger continuing someone else's chain is not good enough.
     let private retiredChainJson (retired: Driver.ChainRetirement) =
         {| initialReview = retired.InitialReviewUrl
            initialReviewCommentId = retired.InitialReviewCommentId
@@ -282,13 +281,13 @@ module ReviewApplication =
            diffAuditRequired = receipt.DiffAuditRequired
            diffAuditHead = receipt.DiffAuditHead |}
 
-    /// `render`'s own public 3-arg shape (`Options -> Review.Binding -> Review.Facts -> int`) is a fixed
-    /// contract other callers depend on positionally — most importantly `Client.review`'s live
-    /// `review <ref> --pr N` path, which calls `ReviewApplication.render opts binding facts` as a tail
-    /// expression whose type must be `int`. This private helper carries the actual rendering logic plus
-    /// the one extra fact (.github#2417) that path never supplies; `render` below is a thin wrapper that
-    /// always passes `None`, and `run` (the `--snapshot` path, which DOES parse a grant) calls this
-    /// directly with the parsed value — so neither existing caller's signature changes.
+    // `render`'s own public 3-arg shape (`Options -> Review.Binding -> Review.Facts -> int`) is a fixed
+    // contract other callers depend on positionally — most importantly `Client.review`'s live
+    // `review <ref> --pr N` path, which calls `ReviewApplication.render opts binding facts` as a tail
+    // expression whose type must be `int`. This private helper carries the actual rendering logic plus
+    // the one extra fact (.github#2417) that path never supplies; `render` below is a thin wrapper that
+    // always passes `None`, and `run` (the `--snapshot` path, which DOES parse a grant) calls this
+    // directly with the parsed value — so neither existing caller's signature changes.
     let private renderVerdict
         (opts: Options)
         (binding: Review.Binding)
@@ -350,8 +349,6 @@ module ReviewApplication =
                 | None -> printfn "%s — %s" (stateName verdict.State) (actionName verdict.NextAction)
             ExitCode.toInt ExitCode.Green
 
-    /// The live path's entrypoint — always `None` for the succession grant; see `renderVerdict`'s doc
-    /// comment for why this stays a fixed 3-arg wrapper rather than growing a parameter.
     let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
         renderVerdict opts binding facts None None
 

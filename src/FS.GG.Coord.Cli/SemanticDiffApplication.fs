@@ -16,8 +16,9 @@ module SemanticDiffApplication =
         child.WaitForExit()
         if child.ExitCode = 0 then Ok output else Error error
 
-    /// `diff-audit <base> <head> <old-token> <new-token> --paths P... [--repo ROOT]` reads each
-    /// declared path from the two immutable commits. A failed git read is an error, never an empty audit.
+    // The command's contract — argument grammar, the git-read refusal, how requiredness is derived,
+    // what a supplied receipt may and may not change, and every exit code — is stated in
+    // `SemanticDiffApplication.fsi`, which is where the compiler keeps it (.github#2730).
     let run (opts: Options.Options) =
         match opts.Args with
         | [ baseSha; headSha; oldToken; newToken ]

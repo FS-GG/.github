@@ -311,12 +311,14 @@ the standing safety advisories carry forward.
     <Compile Include="ReadyApplication.fs" />
     <Compile Include="LintApplication.fsi" />
     <Compile Include="LintApplication.fs" />
+    <Compile Include="BoardFactsApplication.fsi" />
     <Compile Include="BoardFactsApplication.fs" />
     <!-- AFTER `Client.fs`, deliberately: the follow-up queue reuses `parseRefIn` and the exit constants
          rather than growing a second answer to "what is a ref?" or "what does an empty look exit?" (#485).
          It is a LOCAL verb — no token, no board — and depends on `Client` for those two things only. -->
     <Compile Include="Followups.fsi" />
     <Compile Include="Followups.fs" />
+    <Compile Include="IntakeApplication.fsi" />
     <Compile Include="IntakeApplication.fs" />
     <!-- PacketApplication (.github#2737) is the finder's pre-flight over one
          fsgg.coord.finding-packet/v1 document. It opens no Client seam and takes no lock: the pure
@@ -328,6 +330,7 @@ the standing safety advisories carry forward.
     <Compile Include="DeliveryRouteApplication.fs" />
     <Compile Include="Client.fsi" />
     <Compile Include="Client.fs" />
+    <Compile Include="SemanticDiffApplication.fsi" />
     <Compile Include="SemanticDiffApplication.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />

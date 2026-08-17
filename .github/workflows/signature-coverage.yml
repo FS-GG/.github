@@ -1,0 +1,144 @@
+# signature-coverage — every compiled F# implementation states a contract, and states a real one.
+#
+# .github#2731, epic #266 (the rule nothing asserts).
+#
+# TWO LEGS, ONE INSTRUMENT. `scripts/check-signature-coverage.py` fails when a `.fs` under the
+# subject roots has no sibling `.fsi` (an ERROR), and reports a signature file whose substantive size
+# is under 10% of its implementation's (a WARNING). The second leg is the reason the gate exists:
+# existence alone is satisfiable by a token file, and at `d1632c4e` four of them already did satisfy
+# it — `CycleLedgerApplication.fsi` stated one `val` and no contract against 258 lines. A gate that
+# counted that as covered would report a clean tree while the convention had been hollowed out.
+#
+# NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision, for the same reason,
+# `.github/workflows/signature-doc-siting.yml`, `pipefail-assertions.yml` and `shell-lint.yml` make.
+# This gate's subject is every `.fs` under `src/` and `scripts/`, and the offence it exists to catch
+# ARRIVES WITH A NEW FILE. A filter over `src/**/*.fs` would fire on that one, but the exemption
+# table is falsified by edits that touch no `.fs` at all: deleting an entry point, or removing its
+# `[<EntryPoint>]`, turns a valid exemption into a stale or unjustified one. A gate that does not run
+# reports nothing while looking exactly like one that passed, which is the #266 shape itself.
+#
+# THIS IS ALSO WHY THE GATE IS NOT HOSTED IN AN EXISTING FIXTURE. `tests/source-coherence/` was the
+# obvious home and is wrong: `source-coherence.yml`'s `paths:` filter is six patterns and contains no
+# `src/**`, so a signature-coverage check sited there would not fire on the pull request that
+# introduced the offence — it would wait for the 06:53 cron and report after the merge.
+#
+# No `schedule:` — the subject is committed files in this repository, so every change that could
+# falsify the verdict arrives as a push or a pull request. A nightly re-run would prove only that the
+# tree did not change on its own.
+#
+# NO MUTATION SWEEP HERE, AND THAT IS A DECISION RATHER THAN AN OMISSION.
+# `signature-doc-siting.yml` carries one because its gate is a hand-written lexer whose branches are
+# invisible from its output. This gate is 336 lines with two comparisons and a table, and
+# `tests/signature-coverage/run.sh` closes the same hole directly: it tests the ratio predicate at
+# its BOUNDARY (exactly 10.0% must not warn, 9.0% must — so `<` vs `<=` and the constant are both
+# pinned), and its third harness control neuters the gate's existence leg in a copy and requires the
+# offending tree to then pass. If this gate grows branches that those legs do not reach, a sweep
+# becomes the right answer and should be added.
+name: signature-coverage
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signature-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO — and can still decline to say YES — before
+  # believing it when it says yes. The fixture exercises both legs separately, the ratio predicate at
+  # its boundary, the self-validating exemption table, `obj/`+`bin/` pruning, the substantive-line
+  # definition that makes padding useless, both NO VERDICT paths, and the real repository tree both
+  # read-only and with an offender planted into a copy. It ends with three controls over itself.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Run the signature-coverage fixture (no network)
+        run: bash tests/signature-coverage/run.sh
+
+  every-implementation-has-a-signature:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Assert every compiled F# implementation has a signature file
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-signature-coverage.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network, no
+      # build — so it has no retryable failure to report. The INCONCLUSIVE leg below catches a 2 if
+      # one ever appears.
+      - name: "OK: every implementation has a signature file"
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "signature-coverage: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "FINDING: a missing signature file, or an exemption that does not hold up"
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### signature-coverage: an implementation states no contract"
+            echo
+            echo "Either a \`.fs\` under \`src/\` or \`scripts/\` has no sibling \`.fsi\`, or one of"
+            echo "the gate's listed entry-point exemptions no longer holds. The log above names"
+            echo "which, and every finding names its own remedy."
+            echo
+            echo "**A missing \`.fsi\`.** Add it, and state what each exported value *promises* and"
+            echo "*refuses* — not a list of names. A signature that only repeats the types is the"
+            echo "token file this gate's second leg exists to report. Write the prose in the"
+            echo "\`.fsi\`: a \`///\` in an implementation that has a sibling signature is discarded"
+            echo "by the compiler and reaches no consumer (.github#2730), so moving it there is not"
+            echo "a stylistic preference."
+            echo
+            echo "**A composition root.** If the file genuinely has no callable surface — an"
+            echo "\`[<EntryPoint>]\` \`main\` and nothing else — add it to \`EXEMPT\` in"
+            echo "\`scripts/check-signature-coverage.py\` **with the reason written out**. The gate"
+            echo "validates its own exemptions: a listed path that does not exist, carries no"
+            echo "\`[<EntryPoint>]\`, or has a blank reason is itself a finding, so an exemption is a"
+            echo "claim this gate can falsify rather than a hole in it."
+            echo
+            echo "**A stale exemption.** An entry point was deleted or renamed. Delete the entry, or"
+            echo "correct the path."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: "NO VERDICT: the gate could not check"
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### signature-coverage: NO VERDICT"
+            echo
+            echo "No subject root exists, discovery found no \`.fs\` at all, or a file that had to be"
+            echo "read could not be. **Scanning nothing is a failure to scan**, so this is not a"
+            echo "pass — it is a distinct exit code precisely so it cannot be read as one."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: "INCONCLUSIVE: unexpected exit code"
+        if: ${{ !cancelled() && steps.check.outputs.rc != '0' && steps.check.outputs.rc != '1' && steps.check.outputs.rc != '3' }}
+        run: |
+          echo "::error::signature-coverage exited ${{ steps.check.outputs.rc }}, which is not one of its three documented codes (0, 1, 3)."
+          exit 1
