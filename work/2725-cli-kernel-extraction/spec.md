@@ -132,6 +132,25 @@ applied uniformly:
 - AC-006 [US-001] [FR-006]: Given the boundary as built, when the file set each of
   `.github#2726`–`#2729` would need to edit is enumerated, then no two of them require editing the
   same file, and none of them requires editing a Kernel file to add a family.
+  **AMENDED AT IMPLEMENTATION, AND THE FIRST CONJUNCT IS NOT MET.** Both halves were enumerated by
+  execution and they answer differently, so they are recorded separately rather than averaged.
+  (i) *"none of them requires editing a Kernel file to add a family"* — **MET**, and compiler-held.
+  (ii) *"no two of them require editing the same file"* — **NOT MET**, and **not achievable by any
+  module boundary**, which is why this is an amendment to the criterion and not a defect in the
+  boundary. Nineteen files are shared. Sixteen are hand-kept per-project enumerations — four gate
+  scripts, five workflow trigger lists, two committed `packages.lock.json` files, four gate fixtures and
+  the consuming `.fsproj` — which any *n*th project must join wherever the module seam is drawn; a seam
+  cannot make a literal list stop being a literal list. The remaining three are the departing family's
+  own surface (`Client.fs`, `Client.fsi`, the CLI test project's `.fsproj`), shared until the last
+  family leaves. The enumeration is published in the pull-request body per PD-006, and the reproducible
+  method for it is stated there.
+  (iii) The criterion as authored was therefore unsatisfiable when it was written, and CHK-006's `pass`
+  graded its testability and its linkage to AC-006 — not its achievability. Recording it as unmet with
+  the measurement is worth more than reporting a boundary that met it, because no boundary can.
+  (iv) The **cause** — that per-project registries in this repository are hand-kept enumerations rather
+  than derived from the project graph — is a finding on its own row, filed as a packet against
+  `.github#2691`. It is deliberately **not** repaired here: repairing it would rewrite sixteen gates
+  from inside a row whose subject is one module boundary.
 - AC-007 [US-002] [FR-007]: Given every module in the Kernel project, when the project's compile list
   is read, then each `.fs` is preceded by its own `.fsi`, so the Kernel's public surface cannot widen
   except by an edit somebody reviews.
@@ -147,7 +166,7 @@ applied uniformly:
 - FR-003: `tests/FS.GG.Coord.Cli.Kernel.Tests` MUST reference `FS.GG.Coord.Cli.Kernel` and MUST NOT reference `FS.GG.Coord.Cli`. (Stories: US-001; Acceptance: AC-003)
 - FR-004: Every CLI verb's exit contract MUST be unchanged, evidenced by the exit-contract suite passing with no edit other than the module qualifier on the relocated literals. (Stories: US-004; Acceptance: AC-004)
 - FR-005: The packed tool payload MUST be produced and its entry set enumerated by execution, confirming the release saga tolerates `FS.GG.Coord.Cli.Kernel.dll` and `.pdb`. (Stories: US-003; Acceptance: AC-005)
-- FR-006: The boundary MUST create disjoint lanes for `.github#2726`–`#2729`, demonstrated by enumerating the file set each would edit and showing the sets are pairwise disjoint. (Stories: US-001; Acceptance: AC-006)
+- FR-006: The boundary MUST create disjoint lanes for `.github#2726`–`#2729`, demonstrated by enumerating the file set each would edit and showing the sets are pairwise disjoint. (Stories: US-001; Acceptance: AC-006) **AMENDED AT IMPLEMENTATION — see AC-006. The enumeration was performed and the sets are NOT pairwise disjoint: nineteen files are shared, sixteen of them hand-kept per-project registries that no module boundary can remove from the path of an nth project. What FR-006 asked for cannot be demonstrated by any boundary in this repository, so the requirement is recorded UNMET with the measured residue published where the next four rows read it, rather than restated until it reads as discharged. The source and test DIRECTORIES are genuinely disjoint and compiler-held; that is the part of FR-006's intent this boundary does deliver, and it is stated as the narrower claim it is.**
 - FR-007: Every module in `src/FS.GG.Coord.Cli.Kernel` MUST be fronted by its own signature file. (Stories: US-002; Acceptance: AC-007)
 - FR-008: Relocated documentation MUST be sited by the Documentation Siting Rule above, and the outcome MUST be reported as counts a reviewer can check. (Stories: US-002; Acceptance: AC-008)
 

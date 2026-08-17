@@ -50,7 +50,9 @@ WHAT IS DELIBERATELY NOT THE BUG — the allowlist, and why each entry is there:
     #836, which added the explicit "what actually landed" sections (`--engine=fs` … "went with the
     bash they chose between"). Its plan sections are a record OF THE PLAN, correct in the past tense.
 
-  - `tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs` — it asserts the REJECTION. The string is the
+  - `tests/FS.GG.Coord.Cli.Kernel.Tests/OptionsTests.fs` (in `tests/FS.GG.Coord.Cli.Tests/` before
+    .github#2725 moved it with its module; `CANARY_FILE` below is the single live spelling) — it
+    asserts the REJECTION. The string is the
     test's subject: `parse [ "decide"; "--engine=fs" ] |> rejected`. Strip it and the assertion that
     the flag is refused stops existing, which is the one test standing between this gate and a flag
     that quietly comes back.

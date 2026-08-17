@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2725-cli-kernel-extraction/spec.md
-    digest: f4d490271c557ce53a55799f561de0c42e23733eb97a32ebee3e57940531786f
+    digest: adf71ee0826b4aacbe5a0a0c212ec88a79fe398278b9cf9b910f6e876164978b
     schemaVersion: 1
   - label: clarifications
     path: work/2725-cli-kernel-extraction/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/2725-cli-kernel-extraction/checklist.md
-    digest: a78148337d84ff99d7b2decacd1943cdb7096deaa8b9e1d24ad7426b0f56c200
+    digest: de37aedb582cd549b9f6be6ece07c84e8ca1cc902b56ae122affdb06b8782c37
     schemaVersion: 1
   - label: plan
     path: work/2725-cli-kernel-extraction/plan.md
-    digest: 7e4b8d713948efd0e50d22e94af645624f8534edd239ecf15d43ca2d9fccba19
+    digest: 294ee3643d7b36fbc8c7018bea26acbf213d71ec3a77dd33c58c9561f110bdb4
     schemaVersion: 1
 tasks:
   - id: T001

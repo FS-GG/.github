@@ -4,7 +4,14 @@ namespace FS.GG.Coord.Cli
 /// compiler rather than by what an implementation happens to expose.
 ///
 /// `.github#2724` measured what happens without one: 186 module-level bindings in `Client.fs`, 87 of them
-/// public, and exactly FOUR required by production code outside the module. This file exists so the same
+/// public, and exactly FOUR required by production code outside the module. THE METHOD BEHIND 87, because
+/// a count stated without one is not a measurement: 186 lines matching `^    let ` in that file, less the
+/// 96 matching `^    let private `, less the 3 `let mutable private` forward declarations — the arithmetic
+/// `.github#2724` recorded at `src/FS.GG.Coord.Cli/Client.fsi:29-30`, reproduced there rather than
+/// restated here. Two neighbouring counts are NOT this one and do not reproduce it: 90 is the same
+/// subtraction with the three forward declarations left in, and 81 is `^    val ` plus `^    type ` in the
+/// base `Client.fsi`, which counts the reviewed surface after `.github#2724` had already made ten
+/// internal-only bindings private. This file exists so the same
 /// thing cannot happen here as command families are cut out one at a time. A binding absent from this file
 /// is private to the module whatever `Kernel.fs` says, so the shared surface can widen only by an edit
 /// somebody reviews.
@@ -112,10 +119,11 @@ module Kernel =
     /// `let private eprint` inside `Client`, which reaches it at ~350 sites; those sites are unchanged and
     /// still spell it `eprint`, because `Client.fs` opens this module.
     ///
-    /// Its `Client.fs` doc comment was NOT carried across: it described a `Board status → its name`
-    /// helper that no longer exists anywhere in the module, so carrying it into a signature file — where
-    /// it would reach consumers for the first time — would have published a paragraph about a different
-    /// binding. Recorded rather than silently dropped.
+    /// Its `Client.fs` doc comment was NOT promoted into this signature: it described a `Board status →
+    /// its name` helper that exists nowhere in the tree, so carrying it here — where it would reach
+    /// consumers for the first time — would have published a paragraph about a different binding. It does
+    /// still stand beside the implementation in `Kernel.fs`, demoted from `///` to `//` and labelled as
+    /// inherited-stale, so nothing was deleted and nothing is published. Recorded rather than dropped.
     val eprint: s: string -> unit
 
     /// An IO failure → its exit code and a printed reason, rendered in the caller's chosen mode.
@@ -320,7 +328,7 @@ module Kernel =
     /// per-deployment roster injected by env is exactly the seam a file reader could not be. The repo is
     /// canonicalised on the way in (`resolveRepo`), so the stored ref is already in the spelling the CAS
     /// compares. The pattern is byte-identical to `parseRef`'s own fully-qualified arm — which no longer lives
-    /// in this module at all, but in `RefParsing.parse` (`src/FS.GG.Coord.Cli/RefParsing.fs`, the `full` match)
+    /// in this module at all, but in `RefParsing.parse` (`src/FS.GG.Coord.Cli.Kernel/RefParsing.fs`, the `full` match)
     /// that `parseRefIn` delegates to — and the two are kept in step BY EYE, which is the standing hazard here
     /// rather than a note: nothing compiles the copy against its original.
     val parseChoreLocks: raw: string -> FS.GG.Coord.Types.Ref list

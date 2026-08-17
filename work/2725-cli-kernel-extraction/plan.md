@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2725-cli-kernel-extraction/spec.md sha256:f4d490271c557ce53a55799f561de0c42e23733eb97a32ebee3e57940531786f schemaVersion:1
+- spec: work/2725-cli-kernel-extraction/spec.md sha256:adf71ee0826b4aacbe5a0a0c212ec88a79fe398278b9cf9b910f6e876164978b schemaVersion:1
 - clarifications: work/2725-cli-kernel-extraction/clarifications.md sha256:2b8b03d6721374c488fb2623d202a19031daeed76e64585d7b323bb2f7cb3892 schemaVersion:1
-- checklist: work/2725-cli-kernel-extraction/checklist.md sha256:a78148337d84ff99d7b2decacd1943cdb7096deaa8b9e1d24ad7426b0f56c200 schemaVersion:1
+- checklist: work/2725-cli-kernel-extraction/checklist.md sha256:de37aedb582cd549b9f6be6ece07c84e8ca1cc902b56ae122affdb06b8782c37 schemaVersion:1
 
 ## Plan Scope
 - Work item 2725-cli-kernel-extraction is planned from the current specification, clarification, and checklist facts.
@@ -66,14 +66,36 @@ the private readers they compose with) turns 1,307 lines of test from "welded to
 - delete that family's handlers from `src/FS.GG.Coord.Cli/Client.fs` and its entries from
   `Client.fsi`, and move its tests out of `tests/FS.GG.Coord.Cli.Tests/`.
 
-The first two are disjoint by construction. The third is **shared residue**, and this plan states so
-rather than claiming a disjointness it does not have: `Client.fs`, `Client.fsi` and
-`FS.GG.Coord.Cli.fsproj` remain a common editing surface until the last family leaves. What changes is
-that the *shared base* is no longer part of that residue — no family extraction needs to touch
-`Options`, `Render`, `Json`, `Identity`, `RefParsing` or the Kernel module at all, and none needs to
-add a `<Compile Include>` line to `FS.GG.Coord.Cli.fsproj` for the code it depends on. That is the
-concrete concurrency this work buys, and FR-006's evidence is the enumeration above rather than an
-assertion that the residue vanished.
+**CORRECTED AT REVIEW ROUND 1. The first two are NOT disjoint by construction, and this paragraph
+previously said they were.** Creating a project in this repository is not a private act: it must also
+join sixteen hand-kept per-project registries, and until it does, four gates are red or silently
+measuring the wrong tree. The measured residue is **nineteen** files, not three.
+
+*Group A — project-membership registries. Every new project must join all sixteen, whatever the module
+seam is:* `.github/workflows/coord-engine.yml` (both `paths:` blocks, plus a `--locked-mode` restore,
+a `dotnet test` step and a non-vacuity step per test project), `.github/workflows/engine-build-determinism.yml`
+(both `paths:` blocks — an `.fsproj` list, which rule (b) provably cannot reach),
+`.github/workflows/graphql-monopoly.yml`, `.github/workflows/projections.yml`,
+`.github/workflows/skill-quality.yml`, `scripts/check-engine-build-determinism.py` (`GRADED_STEMS`
+**and** the separately-keyed `clean()` directory list), `scripts/check-engine-freshness.py`
+(`ENGINE_SOURCE`), `scripts/check-worker-id-attractor.py` (`ENGINE_SURFACE`),
+`scripts/fsgg-coord-guards.sh` (`ENGINE_SOURCE_TREES`), `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj`,
+`src/FS.GG.Coord.Cli/packages.lock.json`, `tests/FS.GG.Coord.Cli.Tests/packages.lock.json`,
+`tests/engine-build-determinism/run.sh`, `tests/engine-freshness/run.sh`,
+`tests/paths-coherence/run.sh`, `tests/worker-id-attractor/run.sh`.
+
+*Group B — the departing family's own surface, shared until the last family leaves:*
+`src/FS.GG.Coord.Cli/Client.fs`, `src/FS.GG.Coord.Cli/Client.fsi`,
+`tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj` (its `<Compile Include>` list is a literal
+enumeration of 39 entries, and each departing family deletes its own).
+
+What DOES change, and it is a real and narrower result than FR-006 asked for: the *shared base* is no
+longer part of the residue. No family extraction needs to touch `Options`, `Render`, `Json`,
+`Identity`, `RefParsing` or the Kernel module, and none needs a `<Compile Include>` line in
+`FS.GG.Coord.Cli.fsproj` for the code it depends on. The source and test **directories** are disjoint
+and compiler-held. Pairwise disjointness of the FILE SETS is not delivered and is not deliverable —
+see the AC-006 amendment in `work/2725-cli-kernel-extraction/spec.md` — so what `.github#2726`–`#2729`
+inherit from this row is a true nineteen-file residue rather than a `pass`.
 
 ### Identified next seam, not taken here
 
@@ -111,12 +133,12 @@ is edited.
 ## Plan Decisions
 - PD-001 [AC-001] [FR-001] complete: Create `src/FS.GG.Coord.Cli.Kernel` with `IsPackable=false`, `TreatWarningsAsErrors`, `GenerateDocumentationFile`, `InvariantGlobalization` and `DeterministicSourcePaths` mirroring the sibling coord projects, referencing `FS.GG.Coord.Core` and `FS.GG.Coord.GitHub`; add the `ProjectReference` from `FS.GG.Coord.Cli`; generate and commit `packages.lock.json` for the new project and regenerate the CLI's, because locked restore is inherited and every consuming workflow passes `--locked-mode`.
 - PD-002 [AC-002] [FR-002] complete: Record the pre-change suite total, move exactly the test files that cover moved modules, and reconcile the post-change totals arithmetically rather than reporting each suite green in isolation — a suite that runs nothing also reports green.
-- PD-003 [AC-003] [FR-003] complete: `tests/FS.GG.Coord.Cli.Kernel.Tests` references only `FS.GG.Coord.Cli.Kernel`. It carries its own `AssemblyInfo.fs` disabling xUnit class parallelisation, because `IdentityTests.fs` mutates process-global environment variables; it does not carry a copy of `CacheSandbox.fs`, because nothing in the moved set reaches the scan cache.
+- PD-003 [AC-003] [FR-003] complete: `tests/FS.GG.Coord.Cli.Kernel.Tests` references only `FS.GG.Coord.Cli.Kernel`. It carries its own `AssemblyInfo.fs` disabling xUnit class parallelisation, because `IdentityTests.fs` mutates process-global environment variables; it does not carry a copy of `CacheSandbox.fs`, because nothing in the moved set reaches the scan cache. **That reachability claim was `unverified` at review round 0 and is now substantiated two ways** (review round 1): statically, the Kernel project's ten `.fs`/`.fsi` files contain **zero** non-comment mentions of `Cache` — every occurrence is inside a `//` or `///` comment; and by execution, the real scan cache root (`$XDG_CACHE_HOME/fsgg-coord`, **1,874** files) is **byte-identical** by name and SHA-256 before and after the 179-test Kernel suite runs against it unsandboxed. The comparison was falsified before its silence was trusted: a planted empty file in that directory makes it report a difference.
 - PD-004 [AC-004] [FR-004] complete: `Client` reaches the extracted bindings by `open FS.GG.Coord.Cli.Kernel`, so its own ~350 `eprint`, ~143 `fail` and ~100 exit-literal sites keep the spelling they have and the extraction diff stays readable; only external call sites (the test projects) gain the `Kernel.` qualifier.
 - PD-005 [AC-005] [FR-005] complete: Confirm AC5 by execution — `dotnet pack` the tool, enumerate the real `.nupkg` entries, and drive `scripts/release-saga.py`'s own payload function over the produced artifact, rather than reading the enumeration code and concluding it is dynamic.
-- PD-006 [AC-006] [FR-006] complete: State the lanes as the enumeration under *The lanes this boundary creates*, including the residue that remains shared, and put that statement in the pull-request body where the next four rows will read it.
+- PD-006 [AC-006] [FR-006] complete: State the lanes as the enumeration under *The lanes this boundary creates*, including the residue that remains shared, and put that statement in the pull-request body where the next four rows will read it. **DISCHARGE CORRECTED AT REVIEW (round 1).** As first written this decision discharged AC-006 by restating what AC-006 demanded, and independent review was right to refuse it: the enumeration named three shared files and the measured residue is **nineteen**. What is now discharged, and how it was measured rather than asserted: (a) the residue is enumerated by a stated, re-runnable method — this row's own diff `479d185a..484cb2f9`, minus the Kernel's own two project directories, minus this row's SDD package, minus the eleven files touched only because a *file moved* (a new project moves nothing), minus the twenty qualifier-only test respellings — which partitions the remainder into **16** project-membership registries and **3** files of departing-family surface; (b) the workflow half of that residue is **compulsory, not inferred** — reverting only `coord-engine.yml`, `graphql-monopoly.yml`, `projections.yml` and `skill-quality.yml` to `479d185a` while keeping the new `ProjectReference` makes `python3 scripts/check-paths-coherence.py` exit **1** with exactly four rule-(b) errors naming those four workflows; (c) AC-006's first conjunct is recorded **NOT MET** in `spec.md` with the reason it is unachievable by any boundary, rather than ticked; (d) the cause is a packet against `.github#2691`, not a repair inside this row. The purpose stated above is unchanged — the next four rows must read a true residue, and a residue short by sixteen files would have caused the collision this decision exists to prevent.
 - PD-007 [AC-007] [FR-007] complete: Every `.fs` in the Kernel project is preceded by its `.fsi` in the compile list; the new `Kernel` module gets a hand-authored signature and the five relocated modules keep theirs unchanged.
-- PD-008 [AC-008] [FR-008] complete: Apply the Documentation Siting Rule mechanically and report the outcome as counts — lines carried into `Kernel.fsi` from `Client.fsi`, lines carried into `Kernel.fs` from `Client.fs`, and signature entries newly authored for declarations whose visibility changed.
+- PD-008 [AC-008] [FR-008] complete: Apply the Documentation Siting Rule mechanically and report the outcome as counts — lines carried into `Kernel.fsi` from `Client.fsi`, lines carried into `Kernel.fs` from `Client.fs`, and signature entries newly authored for declarations whose visibility changed. **RULE 3 CORRECTED AT REVIEW (round 1).** It was applied to two declarations and skipped for three that met its condition, so the reported count understated it. Rule 3 now covers all five, per declaration and each verified byte-identical before the `.fs` copy was dropped: `parseRefIn` **24**, `parseGitHubSlug` **5**, `ExitNotOpen` **8**, `Context.DefaultRepo` **1**, `Context.ChoreLocks` **4** — **42** `///` lines dropped from the `.fs` and surviving in the `.fsi`, not 29. The count is reported per declaration rather than as one whole-file figure on purpose: whole-file methods disagree with each other. Measured here, a *fully*-matched contiguous `///` run gives **13** and a line-multiset intersection gives **54**; review's own contiguous-run method reported **31**. All three are describing the same three files, and a figure a reader cannot reproduce from a stated method is the defect this row was asked to stop repeating — so the per-declaration table is the reported form, and each whole-file number is quoted only with the method that produces it. After the repair the same two methods give **0** and **41**.
 
 ## Contract Impact
 - PC-001 [PD-001] project graph: `src/FS.GG.Coord.Cli.fsproj` gains one `ProjectReference` and loses ten `<Compile Include>` entries; a new `src/FS.GG.Coord.Cli.Kernel.fsproj` and a new `tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj` enter the build graph. Both new projects carry a committed `packages.lock.json`, because locked restore is inherited from the org-shared build config and every consuming workflow passes `--locked-mode` as a global property.

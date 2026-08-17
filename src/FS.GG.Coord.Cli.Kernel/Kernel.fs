@@ -7,7 +7,9 @@ namespace FS.GG.Coord.Cli
 /// particular command: the exit-code vocabulary, the ambient `Context`, the stderr and refusal helpers,
 /// worker resolution, ref parsing's context-bound entry points, and the readers that answer "which repo is
 /// this checkout". `.github#2724` measured why that mattered — 87 public bindings on one 11,090-line
-/// module, of which four were required by production code — and this project is where the shared quarter
+/// module, of which four were required by production code (the 87 is `^    let ` 186, less `^    let
+/// private ` 96, less the 3 `let mutable private` forward declarations; see `Kernel.fsi`'s header and
+/// `src/FS.GG.Coord.Cli/Client.fsi:29-30`) — and this project is where the shared quarter
 /// of them goes so that .github#2726–#2729 have something to depend on that is not `Client`.
 ///
 /// WHAT MOVED IS THE CODE, NOT THE BEHAVIOUR. Every binding below is byte-identical to the one it replaces
@@ -63,19 +65,21 @@ module Kernel =
     [<Literal>]
     let ExitPending = 7
 
-    /// 10 — the PR is NOT OPEN: merged, or closed without merging (#1680). A VERDICT, and a terminal one.
-    ///
-    /// It exists because the four codes above have no word for "there is nothing left to gate", so a merged
-    /// PR was answered with `ExitPending` — the one code the contract defines as worth retrying — and
-    /// `--wait` spent its whole 600s budget on a fact settled before it started. Its own number rather than
-    /// a share of `ExitRed`: both mean stop, but 3's documented remedy is "a red check is a finding", and
-    /// the caller that meets a merged PR is usually a successor recovering an item whose worker died
-    /// between merge and stamp — who must be told to STAMP, not to investigate a failure.
+    // Its eight `///` lines live in `Kernel.fsi` alone, by the Documentation Siting Rule's rule 3: the two
+    // copies were byte-identical, so the signature keeps them and this declaration is left bare — as five
+    // of its seven siblings above already are.
     [<Literal>]
     let ExitNotOpen = 10
 
-    /// Board status → its name, qualified against BoardStatus (bare `Ready` would resolve to the
-    /// `Command.Ready` opened below). One place, so every render agrees.
+    // INHERITED STALE, AND KEPT AS `//` ON PURPOSE. This paragraph came across from `Client.fs` under
+    // rule 1's byte-for-byte fidelity, and it does not describe `eprint`: it describes a `Board status →
+    // its name` helper that exists nowhere in the tree, and its parenthetical points at a
+    // `Command.Ready` "opened below" that is in fact opened ABOVE, at line 27. Rule 2 correctly refused to
+    // promote it into `Kernel.fsi`; demoting it from `///` to `//` here stops the compiler and the reader
+    // treating a paragraph about a different binding as this one's documentation, without deleting a text
+    // this row did not author. Its accurate replacement is in `Kernel.fsi`.
+    //   Board status → its name, qualified against BoardStatus (bare `Ready` would resolve to the
+    //   `Command.Ready` opened below). One place, so every render agrees.
     let eprint (s: string) = Console.Error.WriteLine(s: string)
 
     /// An IO failure → its exit code and a printed reason. `RateLimited` becomes EX_RATE (75), the back-off
@@ -124,12 +128,9 @@ module Kernel =
         { Transport: IGitHubTransport
           Owner: string
           Title: string
-          /// The board's default repo scope, for a bare `repo#n` ref and the candidate filter.
+          // `DefaultRepo`'s one line and `ChoreLocks`' four live in `Kernel.fsi` alone, by rule 3: both
+          // copies were byte-identical, so the signature keeps them and these fields are left bare.
           DefaultRepo: string option
-          /// The per-deployment chore-lock roster a VENDORED tenant injects by env
-          /// (`FSGG_COORD_CHORE_LOCKS`, parsed by `parseChoreLocks`). Matched on (owner, repo) under ANY
-          /// owner and consulted BEFORE the engine's embedded FS-GG table — empty for the default FS-GG
-          /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
           ChoreLocks: Ref list }
 
     /// Fake transports are deterministic in-process fixtures: they do not receive HTTP response

@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/2725-cli-kernel-extraction/clarifications.md
 
 ## Source Snapshot
-- spec: work/2725-cli-kernel-extraction/spec.md sha256:f4d490271c557ce53a55799f561de0c42e23733eb97a32ebee3e57940531786f schemaVersion:1
+- spec: work/2725-cli-kernel-extraction/spec.md sha256:adf71ee0826b4aacbe5a0a0c212ec88a79fe398278b9cf9b910f6e876164978b schemaVersion:1
 - clarifications: work/2725-cli-kernel-extraction/clarifications.md sha256:2b8b03d6721374c488fb2623d202a19031daeed76e64585d7b323bb2f7cb3892 schemaVersion:1
 
 ## Checklist Items
@@ -51,7 +51,16 @@ No accepted checklist deferrals recorded.
 No blocking findings recorded.
 
 ## Advisory Notes
-No advisory notes recorded.
+- CR-006's `pass` grades FR-006's TESTABILITY and its linkage to AC-006. It is not a finding that FR-006
+  was met, and it must not be read as one. FR-006 was subsequently tested at implementation and is
+  recorded NOT MET: see the amendments on AC-006 and FR-006 in
+  work/2725-cli-kernel-extraction/spec.md and the corrected discharge at PD-006 in
+  work/2725-cli-kernel-extraction/plan.md. Independent review read this `pass` as a discharge, which is
+  a reading the row invited, so the distinction is stated here rather than left to the reader.
+- What the checklist stage could not have caught, and is worth saying because a future checklist can:
+  AC-006's first conjunct is unsatisfiable by any module boundary in this repository. CHK-006 asks
+  whether a requirement is testable and linked, never whether its criterion is achievable, so a
+  criterion that no implementation can meet passes this stage by construction.
 
 ## Lifecycle Notes
 - Specification requirements reviewed: 8.

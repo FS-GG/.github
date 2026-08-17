@@ -15,6 +15,10 @@
 # the mtime half is silent and the drift half is the only thing being measured), and a linked worktree
 # that the caller stands in.
 #
+# FOUR SUCH CHECKOUTS SINCE .github#2725, differing only in WHICH tree the one upstream commit touches:
+# `Core` (§1-§9), `Cli.Kernel` alone (§11), nothing the list names (§11's control), and no upstream commit
+# at all (§8). The tree list is the subject of §11-§12, and one fixture cannot be the control for itself.
+#
 # HERMETIC. A `git init` fixture, a shell script standing in for the engine, no dotnet, no network, no
 # token, and no board. Seconds.
 #
@@ -69,7 +73,11 @@ else
 fi
 
 # ---- the tier-2b fixture -------------------------------------------------------------------------
-# $1 = root, $2 = "behind" (the .github#2581 shape) or "current" (the happy path).
+# $1 = root, $2 = the drift to plant upstream:
+#   behind   — one commit under `src/FS.GG.Coord.Core` (the .github#2581 shape)
+#   kernel   — one commit under `src/FS.GG.Coord.Cli.Kernel` ALONE (.github#2725; see §11)
+#   outside  — one commit under a tree `ENGINE_SOURCE_TREES` deliberately does not name (§11's control)
+#   current  — no upstream commit at all (the happy path)
 #
 # THE ORDER IS LOAD-BEARING. All git work happens first, then the sources are back-dated and the engine
 # is stamped AFTER them — because `git reset --hard` rewrites working-tree files with fresh mtimes, and
@@ -81,11 +89,16 @@ fixture() {
   local shared="$root/shared"
   local remote="$root/remote"
   local bindir
-  mkdir -p "$shared/src/FS.GG.Coord.Cli" "$shared/src/FS.GG.Coord.Core" "$shared/src/FS.GG.Coord.GitHub"
+  # THE FIXTURE MIRRORS THE REAL PROJECT SET, INCLUDING `FS.GG.Coord.Cli.Kernel` — see §11. A fixture
+  # missing a tree the list names cannot red when that tree stops being named.
+  mkdir -p "$shared/src/FS.GG.Coord.Cli" "$shared/src/FS.GG.Coord.Cli.Kernel" \
+           "$shared/src/FS.GG.Coord.Core" "$shared/src/FS.GG.Coord.GitHub" "$shared/docs"
   printf 'bin/\nobj/\n'  >"$shared/.gitignore"
   printf '// cli\n'      >"$shared/src/FS.GG.Coord.Cli/Program.fs"
+  printf '// kernel v1\n' >"$shared/src/FS.GG.Coord.Cli.Kernel/Options.fs"
   printf '// core v1\n'  >"$shared/src/FS.GG.Coord.Core/Protocol.fs"
   printf '// github\n'   >"$shared/src/FS.GG.Coord.GitHub/Writes.fs"
+  printf 'notes v1\n'    >"$shared/docs/notes.md"
 
   git -C "$shared" init -q
   # `symbolic-ref` rather than `init -b main`: the latter is git 2.28+, and this fixture must not make a
@@ -100,11 +113,22 @@ fixture() {
   git -C "$shared" remote add origin "$remote"
   git -C "$shared" push -q origin main
 
-  if [ "$mode" = behind ]; then
-    # ONE COMMIT UNDER THE ENGINE'S OWN SOURCE TREES — not under docs or workflows, which
-    # `ENGINE_SOURCE_TREES` deliberately does not count.
-    printf '// core v2\n' >"$shared/src/FS.GG.Coord.Core/Protocol.fs"
-    git -C "$shared" commit -q -a -m 'engine v2'
+  # EACH DRIFT MODE PLANTS EXACTLY ONE UPSTREAM COMMIT AND TOUCHES EXACTLY ONE TREE, so a leg that reds
+  # names the tree that caused it. `current` plants none.
+  case "$mode" in
+    behind)
+      # ONE COMMIT UNDER THE ENGINE'S OWN SOURCE TREES — not under docs or workflows, which
+      # `ENGINE_SOURCE_TREES` deliberately does not count.
+      printf '// core v2\n' >"$shared/src/FS.GG.Coord.Core/Protocol.fs" ;;
+    kernel)
+      printf '// kernel v2\n' >"$shared/src/FS.GG.Coord.Cli.Kernel/Options.fs" ;;
+    outside)
+      printf 'notes v2\n' >"$shared/docs/notes.md" ;;
+    current) : ;;
+    *) echo "FAIL  fixture: unknown mode '$mode'" >&2; exit 1 ;;
+  esac
+  if [ "$mode" != current ]; then
+    git -C "$shared" commit -q -a -m "upstream $mode"
     git -C "$shared" push -q origin main
     git -C "$shared" reset -q --hard HEAD~1
   fi
@@ -125,6 +149,8 @@ fixture() {
 
 BEHIND="$ROOT/behind"; mkdir -p "$BEHIND"; fixture "$BEHIND" behind
 CURRENT="$ROOT/current"; mkdir -p "$CURRENT"; fixture "$CURRENT" current
+KERNEL="$ROOT/kernel"; mkdir -p "$KERNEL"; fixture "$KERNEL" kernel
+OUTSIDE="$ROOT/outside"; mkdir -p "$OUTSIDE"; fixture "$OUTSIDE" outside
 
 # A CURRENT ENGINE THE CALLER OWNS — what the recovery route tells a blocked worker to build. It is a
 # separate file in a separate directory from the fixture's shared build, so a leg that reached the
@@ -453,6 +479,80 @@ if [ -f "$CG" ] && grep -q 'tests/coord-guards/run.sh' "$CG" \
   ok "coord-guards.yml runs this suite and is selected by a change to the guard module, the shim, or this suite"
 else
   bad "a workflow must run tests/coord-guards/run.sh and be selected by the paths this suite is about" "$CG"
+fi
+
+# ---- 11. THE ENGINE IS TWO PROJECTS, AND A KERNEL-ONLY COMMIT DRIFTS (.github#2725) ---------------
+# WHY THIS SECTION EXISTS AS A REPAIR AND NOT AS AN ADDITION. `.github#2725` added
+# `src/FS.GG.Coord.Cli.Kernel` to `ENGINE_SOURCE_TREES`, and independent review measured that REVERTING
+# that entry left this suite at 27/27 green: a load-bearing constant with no fixture behind it, which
+# `independent-review.md` § Gate-inversion makes a material finding by definition. The consequence is
+# not cosmetic — with the entry gone, a shared checkout behind on the Kernel ALONE produces no drift
+# signal at all, so the guard hands the worker the shared engine and silently discards the very edits it
+# is testing: the failure `scripts/fsgg-coord:209-213` forbids.
+#
+# GIT PATHSPECS MATCH PATH COMPONENTS, NOT STRING PREFIXES, which is why the entry is load-bearing at all
+# and why `src/FS.GG.Coord.Cli` does not quietly cover it. That is also the module's own stated reason for
+# listing the tree explicitly instead of leaning on prefix matching.
+drive "$KERNEL" heartbeat "$FIXREF"
+K_RC="$DRIVE_RC"; K_OUT="$DRIVE_OUT"; K_ERR="$DRIVE_ERR"
+if [ "$K_RC" -eq 69 ] && ! printf '%s' "$K_OUT" | grep -q 'ENGINE RAN' \
+   && printf '%s' "$K_ERR" | grep -q 'BEHIND refs/remotes/origin/main by 1 commit'; then
+  ok "a shared checkout behind on src/FS.GG.Coord.Cli.Kernel ALONE is BEHIND: 'heartbeat' REFUSED (exit 69), engine never reached — the .github#2725 entry in ENGINE_SOURCE_TREES is load-bearing and now measured"
+else
+  bad "a commit under src/FS.GG.Coord.Cli.Kernel alone must count as engine drift: the Kernel is packed into the tool, so it changes the engine the fleet runs" \
+      "rc=$K_RC out=$K_OUT err=$K_ERR"
+fi
+
+# THE CONTROL, WITHOUT WHICH THE LEG ABOVE PROVES NOTHING. A leg that reds on ANY upstream commit would
+# pass with or without the Kernel entry and would be certifying "behind-ness", not the tree list. So the
+# same fixture shape with its one upstream commit OUTSIDE every named tree must be wholly silent — and
+# `docs/` is a tree this guard deliberately does not count, not an accident of the fixture.
+drive "$OUTSIDE" heartbeat "$FIXREF"
+if [ "$DRIVE_RC" -eq 0 ] && printf '%s' "$DRIVE_OUT" | grep -q 'ENGINE RAN' && [ -z "$DRIVE_ERR" ]; then
+  ok "the same shape with its upstream commit OUTSIDE the engine trees (docs/) is silent and runs — so §11 is keyed on the TREE LIST, not on behind-ness as such"
+else
+  bad "a commit outside every tree ENGINE_SOURCE_TREES names must not produce a verdict" "rc=$DRIVE_RC out=$DRIVE_OUT err=$DRIVE_ERR"
+fi
+
+# ---- 12. EVERY TREE THE LIST NAMES STILL EXISTS (the second mutation) -----------------------------
+# §11 catches "the entry was deleted". It does NOT catch "the project was renamed and the entry now names
+# nothing" — two different mutations, and review measured that the sibling gates repaired on this row
+# survive the second one. `upstream_drift` cannot be the one to catch it: its subject is on the hot path
+# of every tier-2 invocation, and a missing-tree REFUSAL there costs an outage for the whole fleet, which
+# is the module's own stated reason for keeping that pathspec narrow. A static assertion in this suite
+# costs nothing and turns a rename from silent into red.
+#
+# THE LIST IS READ OUT OF THE MODULE UNDER TEST, never restated here — §6's anchored-literal extraction,
+# for §6's reason: a leg that retypes the constant certifies the test author's memory.
+TREES_DECL="$(grep -E '^ENGINE_SOURCE_TREES="[^"$`(]*"$' "$ROOT/scripts/fsgg-coord-guards.sh")"
+if [ "$(printf '%s\n' "$TREES_DECL" | grep -c .)" -ne 1 ]; then
+  bad "the module must declare ENGINE_SOURCE_TREES as a single plain literal" "$TREES_DECL"
+else
+  ENGINE_SOURCE_TREES=""
+  eval "$TREES_DECL"
+  missing=""; treecount=0
+  # WORD SPLITTING IS THE POINT — the constant is a space-separated pathspec list.
+  # shellcheck disable=SC2086
+  for tree in $ENGINE_SOURCE_TREES; do
+    treecount=$((treecount+1))
+    [ -d "$REPO_ROOT/$tree" ] || missing="$missing $tree"
+  done
+  if [ "$treecount" -ge 2 ] && [ -z "$missing" ]; then
+    ok "all $treecount trees ENGINE_SOURCE_TREES names exist in this repository — a renamed or removed engine project reds here instead of leaving rev-list counting 0 over nothing, forever, silently"
+  else
+    bad "every tree ENGINE_SOURCE_TREES names must exist: a pathspec matching nothing counts 0, and 0 reads as FRESH" \
+        "count=$treecount missing:$missing"
+  fi
+
+  # AND THE KERNEL IS NAMED, BY NAME. The loop above is satisfied by any list whose entries exist,
+  # including the pre-.github#2725 three — so without this the rename guard would also certify the
+  # reverted list. This is the assertion §11 proves the CONSEQUENCE of.
+  if printf ' %s ' "$ENGINE_SOURCE_TREES" | grep -qF ' src/FS.GG.Coord.Cli.Kernel '; then
+    ok "ENGINE_SOURCE_TREES names src/FS.GG.Coord.Cli.Kernel as its own entry, not by prefix accident"
+  else
+    bad "ENGINE_SOURCE_TREES must name src/FS.GG.Coord.Cli.Kernel explicitly — git pathspecs match components, so src/FS.GG.Coord.Cli does not cover it" \
+        "list=$ENGINE_SOURCE_TREES"
+  fi
 fi
 
 echo "coord-guards: $pass passed, $failcount failed"
