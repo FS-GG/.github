@@ -79,6 +79,12 @@ cp -r "$REPO_ROOT/.claude" "$REPO_ROOT/.agents" "$REPO_ROOT/docs" \
 mkdir -p "$REAL/src" "$REAL/scripts"
 cp -r "$REPO_ROOT/src/FS.GG.Coord.Cli" "$REAL/src/"
 rm -rf "$REAL/src/FS.GG.Coord.Cli/bin" "$REAL/src/FS.GG.Coord.Cli/obj"
+# ...and the engine's SECOND project (.github#2725). The engine is `FS.GG.Coord.Cli` plus the
+# `FS.GG.Coord.Cli.Kernel` it was cut into, and the split moved SIX of the ten mint remedies rule 4
+# audits and ALL of the dispatch rule 5 reads. Copying only the first project would leave every leg
+# below measuring a tree that is not the shipped one — the blind spot #569 lived in, one project along.
+cp -r "$REPO_ROOT/src/FS.GG.Coord.Cli.Kernel" "$REAL/src/"
+rm -rf "$REAL/src/FS.GG.Coord.Cli.Kernel/bin" "$REAL/src/FS.GG.Coord.Cli.Kernel/obj"
 cp "$REPO_ROOT/scripts/fsgg-coord" "$REAL/scripts/"
 
 # Sanity: the shipped tree, copied, is green. Everything below is a mutation of THIS.
@@ -438,7 +444,7 @@ expect "rule 5: the resolver spelling is accepted — the rule can be SATISFIED,
 #     reports a clean tree it never audited. That is the exact #266 signature this gate exists to end,
 #     rebuilt inside the rule written to end it — so it must be a NO VERDICT, never a pass.
 REAL_U="$WORK/real-u"; cp -r "$REAL" "$REAL_U"
-sed -i 's/^\( *\)| "\([a-z][a-z-]*\)" :: rest/\1| Verb "\2" :: rest/' "$REAL_U/src/FS.GG.Coord.Cli/Options.fs"
+sed -i 's/^\( *\)| "\([a-z][a-z-]*\)" :: rest/\1| Verb "\2" :: rest/' "$REAL_U/src/FS.GG.Coord.Cli.Kernel/Options.fs"
 expect "rule 5: a dispatch this gate can no longer parse is exit 3 (no verdict) — never a green audit (#266)" \
   3 "no verbs parsed out of it" "$REAL_U"
 
@@ -465,12 +471,39 @@ find "$REAL_V/src" \( -name '*.fs' -o -name '*.fsi' \) \
 expect "rule 5: an engine that yields NO printed command at all is exit 3 — examining nothing is not a clean audit" \
   3 "found NO printed command" "$REAL_V"
 
+# (g2) THE DISPATCH FILE ITSELF GOES MISSING, WHICH IS THE FAIL-OPEN .github#2725 WALKED INTO AND THE
+#      ONE THIS LEG EXISTS FOR. `engine_verbs` swallows the read error and returns `[]`; before the
+#      guard below existed, rule 5 then audited ZERO sites and the gate printed `ok` and exited 0.
+#      Measured on the real tree at the moment `Options.fs` moved into the kernel project: the summary
+#      line went from `67 printed command(s) across src/ (48 engine verb(s))` to `0 printed command(s)
+#      across src/ (0 engine verb(s))`, and the exit code did not move at all.
+#
+#      IT IS NOT THE SAME LEG AS (g). (g) deletes the printed COMMANDS and keeps the dispatch, so the
+#      verb list is full and the corpus is empty. This deletes the DISPATCH and keeps the corpus, so
+#      the verb list is empty and every site is unexaminable. Those are different breakages of the same
+#      rule, they take different branches, and (g)'s guard cannot see this one — which is exactly how
+#      it went unnoticed.
+REAL_V2="$WORK/real-v2"; cp -r "$REAL" "$REAL_V2"
+rm -f "$REAL_V2/src/FS.GG.Coord.Cli.Kernel/Options.fs"
+expect "rule 5: the DISPATCH file missing from a project that IS here is exit 3 — a hard-coded subject path whose absence empties the audit cannot report green" \
+  3 "audited NOTHING while every other leg reported green" "$REAL_V2"
+
+#      ...AND THE INVERSE, which is what stops the guard above from being a blanket refusal. A tree with
+#      no dispatch PROJECT in it has genuinely nothing to dispatch — every synthetic `mkengine` fixture
+#      above is that tree — and auditing nothing there is honest rather than broken. Keyed on the
+#      project rather than on "is any engine tree here", because the broader question reds 23 of this
+#      file's own legs.
+REAL_V3="$WORK/real-v3"; cp -r "$REAL" "$REAL_V3"
+rm -rf "$REAL_V3/src/FS.GG.Coord.Cli.Kernel"
+expect "rule 5: a tree with no dispatch PROJECT at all stays green — the guard separates a fixture from a moved file" \
+  0 "ok: no literal worker id" "$REAL_V3"
+
 # (h) A MULTI-LINE `"""` STRING IS PRINTED TOO — and it is the biggest one the tool has. `--help` is a
 #     101-line triple-quoted block whose interior lines contain no quote at all, so a line-at-a-time
 #     reader calls every one of them "not a string" and the most-read output in the engine becomes
 #     invisible to this rule. Caught reviewing this change; pinned here so it cannot come back.
 REAL_W="$WORK/real-w"; cp -r "$REAL" "$REAL_W"
-python3 - "$REAL_W/src/FS.GG.Coord.Cli/Options.fs" <<'PY'
+python3 - "$REAL_W/src/FS.GG.Coord.Cli.Kernel/Options.fs" <<'PY'
 import sys, pathlib
 p = pathlib.Path(sys.argv[1]); t = p.read_text()
 # inject a broken remedy INTO the --help block, on an interior line (no quotes of its own)

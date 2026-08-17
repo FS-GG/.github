@@ -233,7 +233,7 @@ module ClaimOverlapTests =
                 ok """{"id":8099}"""
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"
@@ -334,7 +334,7 @@ module ClaimOverlapTests =
 
         let code, _, err = runClaim transport (claimArgs [ "--refuse-overlap" ])
 
-        Assert.Equal(Client.ExitContended, code)
+        Assert.Equal(Kernel.ExitContended, code)
         Assert.Contains("OVERLAP", err)
         Assert.Contains("refusing to claim", err)
 
@@ -433,11 +433,11 @@ module ClaimOverlapTests =
 
         // `--refuse-overlap` cannot GUARANTEE disjointness over a scan it never completed, so it refuses
         // rather than claim blind (#523's doctrine, applied to `claim` too). This is Errors.exitCode's
-        // ordinary `Transport` mapping (`Client.ExitError`, 1) — NOT `ExitContended` (6), which is
+        // ordinary `Transport` mapping (`Kernel.ExitError`, 1) — NOT `ExitContended` (6), which is
         // reserved for a scan that COMPLETED and found a real collision. An unreadable scan is not a
         // collision, and conflating the two exit codes would make a caller unable to tell "definitely
         // overlaps" from "could not check" from the number alone.
-        Assert.Equal(Client.ExitError, code)
+        Assert.Equal(Kernel.ExitError, code)
         Assert.Contains("could not reach GitHub", err)
         Assert.Contains("UNREADABLE (round-1 repair)", err)
         Assert.DoesNotContain("OVERLAP", err)
@@ -456,10 +456,10 @@ module ClaimOverlapTests =
     // OBSERVED RED, both new legs above, against the mutated binary:
     //   - "an UNREADABLE collision scan still WARNS-and-claims by default (AC2)": the DEFAULT call now
     //     hits the (originally --refuse-overlap-only) `failWith` arm and REFUSES — `Assert.Equal(0, code)`
-    //     fails (`Client.ExitError` observed instead), and the marker is never posted
+    //     fails (`Kernel.ExitError` observed instead), and the marker is never posted
     //     (`Assert.NotEmpty(thread.Posted)` fails on an empty list).
     //   - "claim --refuse-overlap REFUSES on an UNREADABLE collision scan (AC3)": `--refuse-overlap` now
-    //     hits the (originally default-only) warn arm and CLAIMS BLIND — `Assert.Equal(Client.ExitError,
+    //     hits the (originally default-only) warn arm and CLAIMS BLIND — `Assert.Equal(Kernel.ExitError,
     //     code)` fails (`0` observed instead), and `Assert.Empty(thread.Posted)` fails (a marker WAS
     //     posted).
     // RESTORED, rebuilt, both legs green again — matching the four pre-existing `ClaimOverlapTests` legs,

@@ -85,7 +85,7 @@ import argparse
 import re
 import sys
 import traceback
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 OK, FINDING, NO_VERDICT_PERMANENT = 0, 1, 3
 
@@ -134,7 +134,15 @@ CODE_SUFFIXES = (".fs", ".fsi", ".py", ".sh")
 PATHS_SUBJECT = DOC_SURFACE + CODE_SURFACE + (ROOTS_DECL,) + FALLBACK_ROOTS
 # The engine, specifically. Its remedies are the non-vacuity subject below: this program demonstrably
 # prints them, so finding none means the extractor is broken, not that the tree is clean.
-ENGINE_SURFACE = "src/FS.GG.Coord.Cli"
+#
+# A TUPLE SINCE .github#2725, AND THE PLURAL IS LOAD-BEARING. The engine used to be one project; it is
+# now `FS.GG.Coord.Cli` plus the `FS.GG.Coord.Cli.Kernel` it was cut into, and six of the ten mint
+# remedies this gate audits moved with the cut. Matching is still a path-COMPONENT prefix, never a string
+# prefix — `startswith` would count a future `src/FS.GG.Coord.Cli.Tests/` as the engine, and remedies in a
+# TEST project would then satisfy the non-vacuity guard below while the real engine printed nothing.
+# `src/FS.GG.Coord.Cli.Kernel` is named EXPLICITLY for that reason rather than reached by loosening the
+# match: the loosening is what would let the test project in.
+ENGINE_SURFACE = ("src/FS.GG.Coord.Cli", "src/FS.GG.Coord.Cli.Kernel")
 # Build output carries a COPY of every doc comment (bin|obj/…/*.xml, and .fs the compiler generates).
 # It is not a surface anybody edits, so a finding there is one nobody can act on.
 CODE_EXCLUDE_DIRS = frozenset(("bin", "obj"))
@@ -181,8 +189,13 @@ RUNNABLE_MINT_CMD = "scripts/fsgg-coord"
 # then be silent on the newest sites, which are the ones nothing has audited yet. `Options.fs` dispatches
 # on `| "<verb>" :: rest ->` and REFUSES anything else (`unknown command: --repo`), so this list is the
 # engine's own answer to "what is a verb", not our guess at it.
-DISPATCH_SOURCE = "src/FS.GG.Coord.Cli/Options.fs"
+DISPATCH_SOURCE = "src/FS.GG.Coord.Cli.Kernel/Options.fs"
 DISPATCH_VERB = re.compile(r'^\s*\|\s*"(?P<verb>[a-z][a-z-]*)"\s*::\s*rest\b')
+# The project that OWNS the dispatch, derived rather than restated so the two cannot drift apart. It is
+# what the fail-closed guard in rule 5 asks about: a dispatch file missing from a project that IS here
+# means the file moved and this rule went silent, while a project that is not here at all is a fixture
+# with nothing to dispatch. See the guard for the measurement behind that distinction (.github#2725).
+DISPATCH_PROJECT = str(PurePosixPath(DISPATCH_SOURCE).parent)
 
 # WHERE A PRINTED COMMAND CAN LIVE. The engine's own source, and only the F# in it: `scripts/` holds CI
 # linters whose docstrings DISCUSS commands ("`fsgg-coord landable` is the only sanctioned reader") — prose
@@ -586,7 +599,7 @@ def main(argv: list[str]) -> int:
         # `src/FS.GG.Coord.Cli.Tests/` as the engine, and remedies in a TEST project would then
         # satisfy the non-vacuity guard below while the real engine printed nothing — the exact
         # vacuity it exists to prevent.
-        in_engine = rel == ENGINE_SURFACE or rel.startswith(ENGINE_SURFACE + "/")
+        in_engine = any(rel == tree or rel.startswith(tree + "/") for tree in ENGINE_SURFACE)
         for lineno, line in enumerate(text.splitlines(), 1):
             for m in MINT_CALL.finditer(line):
                 if in_engine:
@@ -607,9 +620,9 @@ def main(argv: list[str]) -> int:
     # of them, at #569. If we found none, the glob, the suffix list, or MINT_CALL is broken, and the
     # leg above is worthless rather than clean. Skipped when there is no engine in the tree at all
     # (a doc-only fixture): nothing there prints a remedy, so auditing nothing is honest.
-    if (root / ENGINE_SURFACE).is_dir() and engine_sites == 0:
+    if any((root / tree).is_dir() for tree in ENGINE_SURFACE) and engine_sites == 0:
         raise GateError(
-            f"found NO mint remedy in {ENGINE_SURFACE}, which prints them — the extractor is "
+            f"found NO mint remedy in {'/'.join(ENGINE_SURFACE)}, which prints them — the extractor is "
             f"broken, not the tree. Examining nothing is a failure to audit, not a clean audit "
             f"(#266)."
         )
@@ -674,6 +687,33 @@ def main(argv: list[str]) -> int:
             f"{DISPATCH_SOURCE} exists but no verbs parsed out of it — DISPATCH_VERB no longer matches "
             f"the engine's dispatch, so rule 5 would audit nothing and report green (#266)."
         )
+    elif (root / DISPATCH_PROJECT).is_dir():
+        # THE ENGINE IS IN THIS TREE AND ITS DISPATCH FILE IS NOT WHERE WE LOOKED, AND UNTIL .github#2725
+        # THAT WAS SILENCE. `engine_verbs` swallows the read error and returns `[]`, the branch above
+        # tests `DISPATCH_SOURCE.exists()` and finds it false, and rule 5 then audits ZERO sites and the
+        # gate prints `ok`. Measured, not theorised: relocating `Options.fs` into the kernel project took
+        # this gate from `67 printed command(s) across src/ (48 engine verb(s))` to `0 printed command(s)
+        # across src/ (0 engine verb(s))` — and it still exited 0.
+        #
+        # A HARD-CODED SUBJECT PATH IS A FAIL-OPEN WHENEVER ITS ABSENCE IS INDISTINGUISHABLE FROM A CLEAN
+        # SUBJECT (#266). The question asked is deliberately the narrowest one that separates the two
+        # cases: is the DISPATCH PROJECT here? `DISPATCH_PROJECT` is derived from `DISPATCH_SOURCE`
+        # rather than written out again, so the guard cannot drift away from the path it guards.
+        #
+        #   * project present, file missing  → the file MOVED inside it, and rule 5 has gone silent. Red.
+        #   * project absent                 → a synthetic or doc-only fixture with no dispatch to read.
+        #                                      Auditing nothing there is honest, and stays green.
+        #
+        # Asking the broader question ("is any engine tree here?") would red every synthetic fixture in
+        # `tests/worker-id-attractor/run.sh` that stands up a one-file `src/FS.GG.Coord.Cli` to exercise
+        # rule 4 — measured: 23 of its legs. A guard that cannot tell a fixture from a real checkout is
+        # not a sharper guard, it is a broken one.
+        raise GateError(
+            f"{DISPATCH_PROJECT}/ is in this tree but {DISPATCH_SOURCE} is not, so no verbs parsed and "
+            f"rule 5 audited NOTHING while every other leg reported green. A hard-coded subject path "
+            f"whose absence empties the audit is a check that cannot fail (#266). Repoint "
+            f"DISPATCH_SOURCE at the engine's dispatch file."
+        )
 
     # Fail closed: an extractor that sees nothing must not be mistaken for a clean surface. These
     # documents demonstrably discuss the worker id — if we found no mention of it at all, the glob or
@@ -712,7 +752,7 @@ def main(argv: list[str]) -> int:
     print(
         f"ok: no literal worker id, and exactly one mint idiom — {mentions} worker-id mention(s) "
         f"audited, {sanctioned} showing the sanctioned mint; {engine_sites} printed remedy(s) in "
-        f"{ENGINE_SURFACE} run as printed; {printed_calls} printed command(s) across "
+        f"{' + '.join(ENGINE_SURFACE)} run as printed; {printed_calls} printed command(s) across "
         f"{PRINTED_SURFACE}/ ({len(verbs)} engine verb(s)) run as printed."
     )
     return OK

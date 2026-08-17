@@ -55,9 +55,15 @@ make_repo() {
   local r="$1"
   mkdir -p "$r"
   git_ -C "$r" init -q
-  mkdir -p "$r/src/FS.GG.Coord.Cli" "$r/src/FS.GG.Coord.Core" "$r/src/FS.GG.Coord.GitHub"
+  # EVERY tree named in the gate's ENGINE_SOURCE must exist here, because the gate asserts each one
+  # exists at HEAD rather than silently measuring a path that has moved (.github#2725 added the fourth).
+  # A fixture missing one does not test the gate leniently — the gate refuses outright, and all 32 legs
+  # below fail for a reason that has nothing to do with what they assert.
+  mkdir -p "$r/src/FS.GG.Coord.Cli" "$r/src/FS.GG.Coord.Cli.Kernel" \
+           "$r/src/FS.GG.Coord.Core" "$r/src/FS.GG.Coord.GitHub"
   echo "module Protocol"  > "$r/src/FS.GG.Coord.Core/Protocol.fs"
   echo "module Client"    > "$r/src/FS.GG.Coord.Cli/Client.fs"
+  echo "module Options"   > "$r/src/FS.GG.Coord.Cli.Kernel/Options.fs"
   echo "module Reads"     > "$r/src/FS.GG.Coord.GitHub/Reads.fs"
   echo "unrelated"        > "$r/README.md"
   git_ -C "$r" add -A

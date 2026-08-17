@@ -20,6 +20,11 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
+      # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
+      # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
+      # workflow would not start on such a change and would be green by absence (#266) — which is
+      # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
+      - "src/FS.GG.Coord.Cli.Kernel/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "scripts/generate-projections"
       - "tests/component-count/**"
@@ -38,6 +43,11 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
+      # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
+      # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
+      # workflow would not start on such a change and would be green by absence (#266) — which is
+      # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
+      - "src/FS.GG.Coord.Cli.Kernel/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "scripts/generate-projections"
       - "tests/component-count/**"

@@ -30,6 +30,10 @@ on:
   pull_request:
     paths:
       - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      # .github#2725 — the fourth coord project. It carries `DeterministicSourcePaths` and packs two
+      # entries into the tool, so its project file is one of the four that can switch this gate's subject
+      # off. A trigger list that omitted it would let exactly that edit ship unmeasured.
+      - "src/FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj"
       - "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
       - "src/FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj"
       - "Directory.Build.props"
@@ -41,6 +45,10 @@ on:
     branches: [main]
     paths:
       - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      # .github#2725 — the fourth coord project. It carries `DeterministicSourcePaths` and packs two
+      # entries into the tool, so its project file is one of the four that can switch this gate's subject
+      # off. A trigger list that omitted it would let exactly that edit ship unmeasured.
+      - "src/FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj"
       - "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
       - "src/FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj"
       - "Directory.Build.props"

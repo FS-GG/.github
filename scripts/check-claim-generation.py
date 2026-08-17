@@ -234,7 +234,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib.gate import ExitCode, GateError, Unreachable, run  # noqa: E402
 
-# The engine's own default, `src/FS.GG.Coord.Cli/Options.fs:241` (`DefaultLeaseMinutes = 120`),
+# The engine's own default, `src/FS.GG.Coord.Cli.Kernel/Options.fs:241` (`DefaultLeaseMinutes = 120`),
 # overridable by the SAME environment variable the engine reads (`FSGG_CLAIM_LEASE_MIN`,
 # `Options.fs:243`), so a repo that has shortened its lease does not have to be told twice.
 DEFAULT_LEASE_MINUTES = 120

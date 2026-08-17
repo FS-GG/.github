@@ -152,8 +152,8 @@ module FollowupsTests =
             Assert.Equal(Empty, apply w List)
             // The CONSTANT, not the digit 5: `Empty` must BE `take`'s EX_NONE, so a caller keying on
             // "nothing to do" reads one number across the engine (#585/#485).
-            Assert.Equal(Client.ExitNone, exitCode Empty)
-            Assert.NotEqual(Client.ExitGreen, exitCode Empty))
+            Assert.Equal(Kernel.ExitNone, exitCode Empty)
+            Assert.NotEqual(Kernel.ExitGreen, exitCode Empty))
 
     [<Fact>]
     let ``the terminal audit is local, worker-keyed, and does not consume an owed queue`` () =
@@ -188,7 +188,7 @@ module FollowupsTests =
         // #266's whole lesson, as an assertion: "I looked and there is nothing" must never be reachable
         // from "I could not look". A worker who reads the second as the first walks away from a promise.
         Assert.NotEqual(exitCode (Unreadable "the disk is on fire"), exitCode Empty)
-        Assert.Equal(Client.ExitError, exitCode (Unreadable "the disk is on fire"))
+        Assert.Equal(Kernel.ExitError, exitCode (Unreadable "the disk is on fire"))
 
     [<Fact>]
     let ``a CORRUPT head wedges the queue rather than silently dropping the promise`` () =

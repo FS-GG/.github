@@ -112,15 +112,6 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "fs.gg.coord.cli": {
-        "type": "Project",
-        "dependencies": {
-          "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
-          "FS.GG.Coord.Core": "[1.0.0, )",
-          "FS.GG.Coord.GitHub": "[1.0.0, )",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
       "fs.gg.coord.cli.kernel": {
         "type": "Project",
         "dependencies": {

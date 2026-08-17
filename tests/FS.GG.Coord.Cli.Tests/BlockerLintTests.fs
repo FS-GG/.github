@@ -230,7 +230,7 @@ module BlockerLintTests =
                     ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body |})
                 | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p} — a coherent field must never read the body"))
 
-        let context (transport: Fake.Recorder) : Client.Context =
+        let context (transport: Fake.Recorder) : Kernel.Context =
             { Transport = transport
               Owner = "FS-GG"
               Title = "Coordination"
@@ -570,7 +570,7 @@ module BlockerLintTests =
                     | Ok o -> o
                     | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-                let context: Client.Context =
+                let context: Kernel.Context =
                     { Transport = transport
                       Owner = "FS-GG"
                       Title = "Coordination"
@@ -801,7 +801,7 @@ module BlockerLintTests =
                 | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/42-" -> ok "[]"
                 | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
-        let private context (transport: Fake.Recorder) : Client.Context =
+        let private context (transport: Fake.Recorder) : Kernel.Context =
             { Transport = transport
               Owner = "FS-GG"
               Title = "Coordination"
@@ -985,7 +985,7 @@ module BlockerLintTests =
                     | Ok o -> o
                     | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-                let context: Client.Context =
+                let context: Kernel.Context =
                     { Transport = transport
                       Owner = "FS-GG"
                       Title = "Coordination"

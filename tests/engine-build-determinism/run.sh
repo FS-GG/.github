@@ -9,10 +9,10 @@
 #   arm 1  the production shape: pack as the repository is configured. Expect exit 0.
 #   arm 2  SUBJECT MUTATION: pack the same tree with DeterministicSourcePaths=false, which is exactly
 #          the state `main` was in before .github#2688. Expect a non-zero exit that names every one
-#          of the six packed entries as embedding the build root. This is the leg that shows the gate
+#          of the eight packed entries as embedding the build root. This is the leg that shows the gate
 #          measures the artifact rather than the project files: nothing in the tree changes between
 #          arm 1 and arm 2 except the property MSBuild resolves.
-#   arm 3  NON-VACUITY: hand the gate a package with none of the three coord assemblies in it. "Found
+#   arm 3  NON-VACUITY: hand the gate a package with none of the four coord assemblies in it. "Found
 #          no leak" and "graded no entries" must not share an exit code. Expect a non-zero exit.
 #
 # Arms 1 and 2 each pack from a clean obj/ and bin/ — the checker does that itself, and must, because
@@ -47,13 +47,14 @@ if python3 "$gate" --repo "$root" --property DeterministicSourcePaths=false \
 fi
 for entry in FS.GG.Coord.Core.dll FS.GG.Coord.Core.pdb \
              FS.GG.Coord.GitHub.dll FS.GG.Coord.GitHub.pdb \
+             FS.GG.Coord.Cli.Kernel.dll FS.GG.Coord.Cli.Kernel.pdb \
              fsgg-coord-engine.dll fsgg-coord-engine.pdb; do
   grep -q "embeds the build root" "$work/arm2.err" \
     || fail "arm 2 red for the wrong reason; expected a build-root finding"
   grep -q "$entry" "$work/arm2.err" \
     || fail "arm 2 did not name $entry — the gate is not grading every packed coord entry"
 done
-echo "   ok — all six packed coord entries named"
+echo "   ok — all eight packed coord entries named"
 
 # ── arm 3 — a package it cannot grade is a refusal, not a pass ───────────────────────────────────
 echo "== arm 3: a package carrying none of the coord assemblies must be refused"

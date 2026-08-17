@@ -24,9 +24,18 @@ on:
   pull_request:
     paths:
       - "src/FS.GG.Coord.Cli/**"
+      # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
+      # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
+      # workflow would not start on such a change and would be green by absence (#266) — which is
+      # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
+      - "src/FS.GG.Coord.Cli.Kernel/**"
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      # .github#2725 — the kernel suite. It is a SEPARATE assembly with its own 179 tests, and
+      # `dotnet test` on the CLI suite does not run one of them, so a workflow that started only on
+      # the CLI suite would report green over a kernel change it never executed.
+      - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
       - "tests/FS.GG.Coord.Core.Tests/**"
       - "tests/m6-decision-cutover/**"
       # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
@@ -63,9 +72,18 @@ on:
     branches: [main]
     paths:
       - "src/FS.GG.Coord.Cli/**"
+      # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
+      # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
+      # workflow would not start on such a change and would be green by absence (#266) — which is
+      # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
+      - "src/FS.GG.Coord.Cli.Kernel/**"
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      # .github#2725 — the kernel suite. It is a SEPARATE assembly with its own 179 tests, and
+      # `dotnet test` on the CLI suite does not run one of them, so a workflow that started only on
+      # the CLI suite would report green over a kernel change it never executed.
+      - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
       - "tests/FS.GG.Coord.Core.Tests/**"
       - "tests/m6-decision-cutover/**"
       # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
@@ -130,6 +148,7 @@ jobs:
           dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --locked-mode
 
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
@@ -236,6 +255,31 @@ jobs:
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
+
+      # THE KERNEL SUITE IS A SEPARATE ASSEMBLY, AND THAT IS WHY IT NEEDS ITS OWN TWO STEPS (.github#2725).
+      # `dotnet test` on the CLI suite discovers exactly the tests in `FS.GG.Coord.Cli.Tests.dll`, and the
+      # 179 tests that moved to `FS.GG.Coord.Cli.Kernel.Tests.dll` are not among them. A split that added a
+      # test project and did not add these lines would not have made the suite smaller — it would have made
+      # 179 assertions stop running while every step below still reported green, which is #266 in the exact
+      # form this repository keeps meeting it.
+      - name: Test — the kernel's argument grammar, identity, and ref parsing
+        run: dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj -c Release --logger "console;verbosity=normal"
+
+      # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). A runner that discovers nothing exits 0, so
+      # the count is read and floored rather than the exit code trusted. The floor is deliberately well
+      # under the 179 that run today: it is a vacuity guard, not a census, and a census would red on every
+      # honest test deletion.
+      - name: Non-vacuity — the kernel run must have executed tests
+        run: |
+          set -euo pipefail
+          out="$(dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --no-build -c Release 2>&1)"
+          printf '%s\n' "$out"
+          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
+          if [ "${passed:-0}" -lt 20 ]; then
+            echo "::error title=coord-engine: the kernel suite audited nothing::Only ${passed:-0} tests ran. The kernel is what every command family will depend on; a green gate over an unexecuted suite is the bug this engine exists to end (#266)."
+            exit 1
+          fi
+          echo "coord-engine (kernel): $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
 
       # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). A runner that discovers nothing exits 0.
       - name: Non-vacuity — the run must have executed tests
