@@ -33,9 +33,18 @@ module Reads =
     ///
     /// The fail-closed refusal is preserved and asked of the SHAPE instead: a `rel="next"` link is only
     /// emitted over a FULL page, so a merged body carries strictly more elements than the `per_page` this
-    /// read requested, and a body that does not is a transport that truncated. That refusal names itself
-    /// a FAILED READ, because the one answer this must never be confused with is "read it, found
+    /// read requested, and a body that does not is a set this cannot account for. That refusal names
+    /// itself a FAILED READ, because the one answer this must never be confused with is "read it, found
     /// nothing" — the seam that decides whether a new row duplicates an existing one (#266).
+    ///
+    /// **THAT SHAPE RULE IS A HEURISTIC ABOUT THE SERVER, NOT A PROPERTY OF THE TYPE, AND IT IS KNOWN TO
+    /// BREAK.** A complete inventory is REFUSED whenever its merged total is `<=` the requested `per_page`
+    /// and page one advertised a continuation — demonstrated against the real transport, so do not read it
+    /// as an invariant. It is kept because every break is in the FAIL-CLOSED direction (it refuses a good
+    /// read; it never answers with a short one — no `Ok` over an incomplete inventory is reachable) and
+    /// because GitHub does not emit that shape: it derives `Link` from a count and never advertises an
+    /// empty successor. The residual window is a `<=`-one-page repository whose set shrinks mid-read, or a
+    /// proxied endpoint. See `Reads.fs` for the measurements.
     val duplicateCandidates: transport: Transport.IGitHubTransport -> owner: string -> repo: string -> Errors.IoResult<DuplicateCandidate list>
 
     open FS.GG.Coord

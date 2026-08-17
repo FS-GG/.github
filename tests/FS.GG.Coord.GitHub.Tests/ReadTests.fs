@@ -135,9 +135,32 @@ let private issuePage (numbers: int list) =
     |> fun elements -> "[" + elements + "]"
 
 /// `Reads.CollectionPageSize` — the page size this read requests AND the length the completeness guard
-/// compares the merged body against. It is private to `Reads`, so it is restated here, and the wire
-/// assertion in the merge test below is what keeps the restatement honest.
+/// compares the merged body against. It is private to `Reads`, so it is restated here, and the dedicated
+/// wire test below is what keeps the restatement honest.
 let private pageOneSize = 100
+
+/// The query parameters of ONE recorded request, split at `&` and `=` and unescaped — an exact map, not a
+/// substring haystack.
+///
+/// `Assert.Contains` over the raw query string was the first cut, and it leaked in the one direction that
+/// matters (.github#2735, review round 1): `"per_page=1000"` CONTAINS `"per_page=100"`, and
+/// `"state=allx"` CONTAINS `"state=all"`. So a containment assertion closes only the DOWNWARD drift and
+/// leaves the fail-open one — a page size LARGER than the constant the guard compares against — wide
+/// open. Containment is the wrong oracle for a fault whose whole shape is a value that EXTENDS the
+/// expected one; equality on the parsed value is the right one.
+let private queryOf (pathAndQuery: string) =
+    match pathAndQuery.IndexOf '?' with
+    | -1 -> Map.empty
+    | mark ->
+        pathAndQuery.Substring(mark + 1).Split('&')
+        |> Array.filter (System.String.IsNullOrEmpty >> not)
+        |> Array.map (fun pair ->
+            match pair.IndexOf '=' with
+            | -1 -> System.Uri.UnescapeDataString pair, ""
+            | split ->
+                System.Uri.UnescapeDataString(pair.Substring(0, split)),
+                System.Uri.UnescapeDataString(pair.Substring(split + 1)))
+        |> Map.ofArray
 
 /// `FS-GG/.github`'s shape, in miniature: a FULL first page (`pageOneSize`, the `per_page` this read asks
 /// for) with a `rel="next"` link, and a short continuation. Page two is what each test injects its fault
@@ -173,16 +196,50 @@ let ``.github#2735 the duplicate inventory MERGES the continuation page`` () =
         Assert.Contains(candidates, fun c -> c.Number = pageOneSize + 3)
         // Two round trips really happened: the answer is a merge, not a first page that looked long.
         Assert.Equal(2, List.length server.Requests)
-
-        // THE REQUESTED PAGE SIZE IS PART OF THE GUARD, so it is asserted ON THE WIRE. The completeness
-        // check reads "a merged body carries MORE than `CollectionPageSize` elements"; that argument only
-        // holds while the request asks for exactly that many. Let the two drift and the guard fails OPEN
-        // in one direction — a `per_page` larger than the constant means an UNMERGED first page already
-        // clears `> CollectionPageSize` — and closed in the other. Nothing else in this suite notices a
-        // drift, because every fixture serves whatever it likes regardless of what was asked for.
-        Assert.Contains($"per_page=%d{pageOneSize}", List.head server.Requests)
-        Assert.Contains("state=all", List.head server.Requests)
     | Error e -> failwithf "a listing that paginates must yield a COMPLETE inventory, not a refusal: %A" e
+
+[<Fact>]
+let ``.github#2735 the duplicate inventory REQUESTS state=all at exactly the page size its guard compares against`` () =
+    // THE WIRE IS ITS OWN GATE, UNDER ITS OWN NAME, and that separation is half the repair (.github#2735,
+    // review round 1). These assertions used to ride along inside the merge test above, where a `per_page`
+    // drift reddened a test titled `... MERGES the continuation page` — a red whose NAME describes a
+    // different property from the mutation that produced it. That is not a bookkeeping nicety: a mutation
+    // credited to a red that some OTHER assertion raised for some OTHER reason has not been shown to have
+    // a gate at all, and two escapes went through exactly there. So the rule this file now follows is that
+    // every mutation must red a test whose TITLE describes that mutation, and the wire contract gets the
+    // title of this one.
+    //
+    // TWO PARAMETERS, BOTH LOAD-BEARING.
+    //   `per_page` — the completeness guard reads "a merged body carries MORE than `CollectionPageSize`
+    //   elements", and that argument holds only while the request asked for exactly that many. A LARGER
+    //   `per_page` is the fail-OPEN direction: an unmerged first page would already clear the comparison,
+    //   and a truncated inventory would be answered rather than refused.
+    //   `state=all` — the `.fsi` calls this an ALL-STATE inventory and #2134 pins closed issues AND pull
+    //   requests as candidates. Narrowed to open issues, this read answers a duplicate check from a
+    //   partial set and does not know it, which is the exact class this row exists to end. Before this
+    //   test, nothing in the suite pinned it: #2134's own fixture is a `Fake.Recorder`, which never sees a
+    //   query at all.
+    //
+    // THE ASSERTION IS EQUALITY OVER THE WHOLE PARAMETER MAP, not containment over a chosen subset. Both
+    // halves of that matter. Containment is what leaked (`queryOf` above says how); and asserting the
+    // whole map rather than two hand-picked keys means the predicate is not the author's own guess at
+    // which parameters are worth watching — a parameter added, dropped or renamed reds here too.
+    //
+    // NOTHING ABOUT THE RESPONSE IS ASSERTED, deliberately. A second oracle here would give this gate a
+    // second reason to red, and a gate that can red for two reasons is precisely what both round-1
+    // findings were made of.
+    use server = new Loopback()
+    server.On(fun _ res -> server.Send res 200 "[]" [])
+
+    use transport = new HttpTransport(server.Base, "t")
+    Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" |> ignore
+
+    Assert.Equal(1, List.length server.Requests)
+
+    Assert.Equal<Map<string, string>>(
+        Map.ofList [ "state", "all"; "per_page", string pageOneSize ],
+        queryOf (List.head server.Requests)
+    )
 
 [<Fact>]
 let ``.github#2735 a continuation page that is NOT AN ARRAY is a failed read, not a short inventory`` () =
@@ -202,15 +259,28 @@ let ``.github#2735 a continuation page that is NOT AN ARRAY is a failed read, no
 let ``.github#2735 a continuation page that ERRORS is a failed read, not a short inventory`` () =
     // The other half of the same fault: page two answers, and answers 500. Nothing about page one's 100
     // rows becomes trustworthy because the rest of the set was unreachable.
+    //
+    // PAGE TWO'S BODY IS A PERFECTLY VALID ARRAY, and that is the repair (.github#2735, review round 1).
+    // It used to be `{"message":"Server Error"}` — not a JSON array — so the read failed at the MERGE no
+    // matter what status accompanied it, and flipping the 500 to a 200 left this test GREEN. The gate was
+    // named for the status and did not exercise it: it was a second copy of the not-an-array test above,
+    // with a decorative 500 on the fixture. Serving a body that would merge without complaint makes the
+    // STATUS the only fault present, which is what the title claims is under test.
+    //
+    // AND THE ORACLE IS THE SPECIFIC ERROR THAT PATH PRODUCES, not `Error _`. `Error _` cannot tell "page
+    // two errored" from "page two was malformed", so it was structurally unable to notice that its two
+    // faults had collapsed into one. `sendOne` classifies a non-2xx that is not a rate limit as
+    // `Http(status, body)` and `follow` propagates it unchanged, so the status this fixture answered has
+    // to come back out the other end for the test to pass.
     use server = new Loopback()
-    paginatingListing server 500 """{"message":"Server Error"}"""
+    paginatingListing server 500 (issuePage [ 101..103 ])
 
     use transport = new HttpTransport(server.Base, "t")
 
     match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
-    | Error _ -> ()
-    | Ok candidates ->
-        failwithf "an unreachable continuation page must refuse, not answer with %d rows" (List.length candidates)
+    | Error(Http(500, _)) -> ()
+    | other ->
+        failwithf "an unreachable continuation page must refuse with the status it answered: %A" other
 
 [<Fact>]
 let ``.github#2735 a listing that genuinely has nothing reads as an EMPTY inventory, not a failure`` () =
