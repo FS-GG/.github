@@ -1430,6 +1430,14 @@ no_mutation_verdict "predicate" 4 env FSGG_REGISTRY="$PREDICATE_FIX/registry/ski
 printf '%s\n' 'Bulk rename: true' >"$PREDICATE_FIX/item-body.md"
 no_mutation_verdict "diff-audit" 3 "$ENGINE" diff-audit HEAD HEAD oldName newName - "$PREDICATE_FIX/item-body.md" --repo "$REPO_ROOT" --paths src/FS.GG.Coord.Core/SemanticDiff.fs
 
+# `packet validate` (.github#2737) reads ONE local file and decides. It is the finder's pre-flight over
+# an `fsgg.coord.finding-packet/v1` document, and by DEC-001 it sits outside the write path entirely:
+# it can refuse no post, so a wire mutation from it would be a defect rather than a design choice.
+# The packet below is `.github#2691` comment 5304198465, lifted field by field — a real filed packet,
+# so the green arm proves the validator ACCEPTS as well as refuses.
+printf '%s\n' '{"schema":"fsgg.coord.finding-packet/v1","surface":"src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs","cause":{"established":"the verb was never wired into the command surface"},"redToday":{"found":"nothing dispatches to DeliveryRouteApplication.run"},"derivedBy":{"notSearched":"an adjudicator should check whether a gate already derives this"},"classRow":{"notSearched":"this may be evidence on a wiring/coverage class row"},"whyNotHere":"no claim and no lane; the fix is engine source the pass did not declare","paths":["src/FS.GG.Coord.Cli/Options.fs"],"finder":"merlin-efd3"}' >"$PREDICATE_FIX/finding-packet.json"
+no_mutation "packet" "$ENGINE" packet validate "$PREDICATE_FIX/finding-packet.json"
+
 # `--apply` is a valid alternative argv shape even when this fixture finds no safe repair/reap.
 # Do not call a non-zero no-op (or a parser refusal) evidence: both commands must complete their
 # read/decision path.  Their bare arms above are the no-write proofs; these establish the gate's
