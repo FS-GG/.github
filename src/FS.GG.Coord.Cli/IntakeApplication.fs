@@ -7,8 +7,9 @@ open System.Text.Json
 open FS.GG.Coord
 open FS.GG.Coord.Cli.Options
 
-/// The local half of #2134's public command contract.  `apply` is deliberately a typed refusal until
-/// the Client owns the live duplicate/ownership/board transaction; a green validation is never a create.
+// The command contract — the strict decode, how a live checkout is resolved by remote identity, why
+// `apply` is a typed refusal, and every exit code — is stated in `IntakeApplication.fsi`, which is
+// where the compiler keeps it (.github#2730). What follows is implementation reasoning only.
 module IntakeApplication =
     let private error message =
         printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"refusal\",\"reason\":%s}" (JsonSerializer.Serialize message)
@@ -26,8 +27,9 @@ module IntakeApplication =
         | true, value when value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString())) -> Ok(Some(value.GetString()))
         | true, _ -> Error $"{name} must be a non-empty string"
 
-    /// Decode a draft once, before either the local validation projection or the live transaction.
-    /// Keeping this public prevents `intake apply` growing a second, subtly different JSON decoder.
+    // Public deliberately — see the signature. `known` must stay in step with the field list built
+    // below it: a field added to one and not the other is either rejected as unknown or silently
+    // ignored, and neither failure is visible at the call site.
     let readDraft path =
         try
             use document = JsonDocument.Parse(File.ReadAllText path)
