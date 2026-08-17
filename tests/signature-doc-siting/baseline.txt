@@ -1,0 +1,53 @@
+# Baseline for scripts/check-signature-doc-siting.py (.github#2730).
+#
+# `<count> <path>` -- how many F# XML documentation comments (`///`) sit in that implementation
+# file, which has a sibling `.fsi` and therefore has every one of them discarded by the compiler.
+#
+# THIS FILE ONLY EVER SHRINKS, and the gate is what makes that true. The counts must match the tree
+# EXACTLY, not `<=`:
+#
+#   more than the number here  -> a new doc comment arrived. Move it to the `.fsi` if a caller can
+#                                 act on it, or write it `//` if it is about the implementation.
+#                                 Raising the number is not a remedy.
+#   fewer than the number here -> the baseline is STALE. Lower it in the same commit as the repair.
+#   a subject file with hits and no line here -> a new offender in a new file.
+#   a line here naming a path that is not a subject file -> delete the line.
+#
+# So a repair cannot land without its decrement, and a decrement cannot land without its repair.
+# The file is therefore always a true statement about the tree, which is the property that lets the
+# gate be believed at all. `tests/pipefail-assertions/baseline.txt` (.github#2689) is the same
+# mechanism over a different subject, and this one is spelled the same way on purpose.
+#
+# WHY THESE 943 LINES ARE HERE RATHER THAN SWEPT. `.github#2730` swept `src/FS.GG.Coord.Core` (1,853
+# lines, 27 files) and `src/FS.GG.Coord.GitHub` (1,117 lines, 10 files) to zero. It did not sweep
+# `src/FS.GG.Coord.Cli`: those files were outside its declared `Paths:`, `.github#2724` held
+# `Client.fs`/`Client.fsi` while it ran, and the extraction programme (`.github#2724`,
+# `.github#2731` onward) gives each extracted module a proper `.fsi` with its prose moved as part of
+# that work. Sweeping them there would have collided with every extraction lane for no benefit.
+#
+# They are recorded rather than dropped so the residue is visible and shrinking. Each extraction
+# lane decrements its own line inside the touch-set it already holds, at zero marginal lane cost --
+# nobody has to reserve `src/FS.GG.Coord.Cli` to make this file smaller.
+#
+# THE SUBJECT IS NOT SHRUNK TO MATCH. The gate scans every `.fs` under `src/` with a sibling `.fsi`,
+# including these. A gate whose population is chosen so that it cannot fire is the #266 failure mode
+# in its purest form, and an exemption recorded as a number a future lane must decrement is not the
+# same thing as an exemption recorded as a directory nobody looks at again.
+#
+# TO CLEAR A LINE: ask of each `///` block whether a caller who never opens the `.fs` could act on
+# it. If yes it is contract prose and belongs in the sibling `.fsi`; if no it is prose about the
+# implementation, is correctly placed where it is, and becomes `//` with its wording unchanged.
+# Then write the new count here, or delete the line when it reaches zero.
+
+10 src/FS.GG.Coord.Cli/CycleLedgerApplication.fs
+15 src/FS.GG.Coord.Cli/DeliveryApplication.fs
+3 src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs
+2 src/FS.GG.Coord.Cli/FollowupAudit.fs
+31 src/FS.GG.Coord.Cli/Followups.fs
+58 src/FS.GG.Coord.Cli/Identity.fs
+73 src/FS.GG.Coord.Cli/KitDigest.fs
+83 src/FS.GG.Coord.Cli/LintApplication.fs
+455 src/FS.GG.Coord.Cli/Options.fs
+159 src/FS.GG.Coord.Cli/Render.fs
+37 src/FS.GG.Coord.Cli/ReviewApplication.fs
+17 src/FS.GG.Coord.Cli/Snapshot.fs

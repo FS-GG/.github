@@ -1,0 +1,150 @@
+# signature-doc-siting — no F# XML documentation comment may sit in an implementation file whose
+# sibling signature file makes the compiler discard it.
+#
+# .github#2730, epic #266 (the rule nothing asserts).
+#
+# When an F# module has a signature file, the `///` comments in the IMPLEMENTATION are discarded: the
+# signature's documentation is what reaches the generated XML file, the IDE tooltip, and every
+# downstream reader. Measured at `0ddd4b88`: 2,511 substantive doc-comment lines were written only in
+# implementation files that had a sibling `.fsi`, and NOT ONE reached a consumer. The compiler cannot
+# warn — `///` binds silently to the next declaration, so a block whose subject moved re-binds to
+# whatever now follows it, and the Release build of all three projects emitted zero warnings over
+# 3,913 such lines.
+#
+# THE GATE DECIDES ON THE MARKER, NEVER THE CONTENT, and that is what makes it safe to enforce. It
+# never asks what a comment says, so it can form no opinion about whether a sentence is contract prose
+# or prose about the implementation — and a `//` comment is invisible to it entirely. Prose explaining
+# why THIS loop, this ordering constraint, the incident that produced this branch, is correctly placed
+# in the `.fs` and is never reported. The only thing refused is a `///` whose content the compiler
+# provably discards, which is wrong independently of what it says. A gate that had to classify prose
+# would be one contributors learn to suppress; this one has nothing to suppress.
+#
+# NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision, for the same reason, that
+# `.github/workflows/pipefail-assertions.yml` and `.github/workflows/shell-lint.yml` make. This gate's
+# subject is every `.fs` under `src/` that has a sibling `.fsi`, and BOTH halves of that membership
+# test can be changed by a commit that touches no `.fs` at all: ADDING a `Foo.fsi` beside an existing
+# `Foo.fs` silently converts that file's whole doc-comment population into offenders. A filter over
+# `src/**/*.fs` would not fire on such a commit, and a gate that does not run reports nothing while
+# looking exactly like one that passed.
+#
+# No `schedule:` — the subject is committed files in this repository, so every change that could
+# falsify the verdict arrives as a push or a pull request. A nightly re-run would prove only that the
+# tree did not change on its own.
+name: signature-doc-siting
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signature-doc-siting-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO — and can still decline to say YES — before
+  # believing it when it says yes. The fixture plants an offender, exercises every no-verdict leg,
+  # exercises the four shapes the gate must NOT report (no sibling `.fsi`, four slashes, `///` inside
+  # a string or a nested block comment), moves the baseline in both directions, and finally runs the
+  # gate over the repository's own content, once read-only and once with an offender planted into a
+  # copy. A fixture green on synthetic strings while the shipped baseline rots is not reachable.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Run the signature-doc-siting fixture (no network)
+        run: bash tests/signature-doc-siting/run.sh
+
+  no-discarded-doc-comments:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Assert no implementation file with a signature file carries a doc comment
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-signature-doc-siting.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the contract;
+      # nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network, no
+      # build — so it has no retryable failure to report. A leg for a verdict the gate can never mean
+      # would be a lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever appears.
+      - name: 'OK: every implementation file matches its baseline exactly'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "signature-doc-siting: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a doc comment the compiler discards, or a stale baseline'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### signature-doc-siting: a doc comment sits where the compiler discards it"
+            echo
+            echo "An \`.fs\` file with a sibling \`.fsi\` gained an F# XML documentation comment"
+            echo "(\`///\`) — or the baseline still claims comments that are no longer there."
+            echo
+            echo "When a module has a signature file, the signature's documentation is what reaches"
+            echo "the generated XML, the IDE tooltip, and every downstream reader. The"
+            echo "implementation's is **discarded**, and the compiler cannot warn: \`///\` binds"
+            echo "silently to the next declaration (.github#2730)."
+            echo
+            echo "Ask one question of the comment: **could a caller who never opens the \`.fs\` act"
+            echo "on this sentence?**"
+            echo
+            echo "* **Yes** — it is contract prose. Move it to the sibling \`.fsi\`, where the"
+            echo "  compiler keeps it. If the \`.fsi\` already says it, delete the duplicate."
+            echo "* **No** — it is about *this* implementation (the ordering constraint, the"
+            echo "  fail-closed branch, the API quirk being worked around, the incident that produced"
+            echo "  this branch). It is correctly placed exactly where it is. Write it \`//\`, with"
+            echo "  its wording unchanged. This gate never looks at a \`//\` comment."
+            echo
+            echo "If the baseline is **stale**, the gate prints the number to write — write it in the"
+            echo "same commit as the repair. The baseline only ever shrinks, and that is what makes"
+            echo "it a true statement about the tree rather than a list nobody maintains."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=signature-doc-siting: a doc comment the compiler discards::A new doc comment in an implementation file that has a signature file, or a stale baseline. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the gate could not read a valid subject'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### signature-doc-siting: no verdict"
+            echo
+            echo "The gate found no \`.fs\` file under \`src/\`, found none with a sibling \`.fsi\`,"
+            echo "could not read a subject file, or could not read/parse"
+            echo "\`tests/signature-doc-siting/baseline.txt\`."
+            echo
+            echo "This repository demonstrably contains 66 \`.fs\` files under \`src/\`, 61 of them"
+            echo "with a sibling \`.fsi\`, so this means **discovery or the baseline broke** — not"
+            echo "that the tree is clean. Scanning nothing is a failure to scan, and without the"
+            echo "baseline the gate cannot tell a recorded residue from a new offender. Retrying"
+            echo "will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=signature-doc-siting: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=signature-doc-siting: inconclusive::check-signature-doc-siting.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
