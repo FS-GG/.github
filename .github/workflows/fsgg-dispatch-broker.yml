@@ -202,9 +202,23 @@ jobs:
 
           # ---------------------------------------------------------------------------------------
           # The operation key's domain, transcribed from `Operation.preimage`
-          # (src/FS.GG.Coord.Core/Operation.fs) rather than approximated. Both of its injectivity
-          # clauses are here, because either one alone admits two distinct pre-images that compose
-          # one key:
+          # (src/FS.GG.Coord.Core/Operation.fs) rather than approximated.
+          #
+          # THE TRANSCRIPTION IS PINNED BY EXECUTION, NOT BY A GREP, AND THAT IS THE POINT OF THE
+          # SECOND COPY BEING TOLERABLE AT ALL. `tests/dispatch-broker` section E builds
+          # `FS.GG.Coord.Core`, lifts THIS `run:` block out of THIS file, and drives both over one
+          # corpus — comparing the accept/refuse verdict, the 64-hex digest, and the refusal class on
+          # every vector. Two implementations of one digest that must agree byte-for-byte or no dedupe
+          # ever matches cannot be held together by a source-text pin: the previous one stayed green
+          # on a semantic change and would have redded on a reformat, and `.github#2720` was reopened
+          # for exactly that. Legs E2-E7 mutate this block six ways and measure the red; leg E8 mutates
+          # something section E must NOT notice and measures that it stays green.
+          #
+          # SO: EDIT THIS BLOCK FREELY, BUT NOT ITS DOMAIN. Anything that changes which inputs compose
+          # a key, or what key they compose, will red section E unless `Operation.fs` moves with it.
+          #
+          # Both injectivity clauses are here, because either one alone admits two distinct pre-images
+          # that compose one key:
           #   1. no component may carry a control character, so `String.concat "\n"` is injective;
           #   2. no component may carry an unpaired surrogate, because UTF-8 encoding maps every one
           #      of them to the same EF BF BD.

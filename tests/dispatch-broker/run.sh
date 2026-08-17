@@ -45,7 +45,9 @@ REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 BROKER_WF="$REPO_ROOT/.github/workflows/fsgg-dispatch-broker.yml"
 SELFTEST_WF="$REPO_ROOT/.github/workflows/fsgg-dispatch-broker-selftest.yml"
 OPTIONS_FS="$REPO_ROOT/src/FS.GG.Coord.Cli.Kernel/Options.fs"
-OPERATION_FS="$REPO_ROOT/src/FS.GG.Coord.Core/Operation.fs"
+# `Operation.fs` is no longer READ as text by this fixture — section E BUILDS it and EXECUTES
+# `Operation.compose` instead, which is why the K6 grep is gone. It is still what leg B9d requires
+# the selftest to trigger on, because a change to it changes the oracle section E compares against.
 CLIENT_FS="$REPO_ROOT/src/FS.GG.Coord.Cli/Client.fs"
 SCANNER="$HERE/single_caller.py"
 
@@ -144,6 +146,17 @@ meta = {
     "selftest_pr_paths": list(pr.get("paths") or []),
     "selftest_runs_fixture": any(
         "tests/dispatch-broker/run.sh" in str(s.get("run", ""))
+        for job in (selftest.get("jobs") or {}).values()
+        if isinstance(job, dict)
+        for s in (job.get("steps") or [])
+        if isinstance(s, dict)
+    ),
+    # Section E compares the two implementations by EXECUTING both, so it needs the .NET SDK on the
+    # runner. Leg E0 already reds when `dotnet` is absent — but that red would arrive as "the fixture
+    # failed" long after somebody removed the step, so the step itself is pinned here where the reason
+    # is legible.
+    "selftest_installs_dotnet": any(
+        "setup-dotnet" in str(s.get("uses", ""))
         for job in (selftest.get("jobs") or {}).values()
         if isinstance(job, dict)
         for s in (job.get("steps") or [])
@@ -502,17 +515,19 @@ k_distinct "K3  changing the generation changes the key" "$K_ITEM" "5177045417" 
 k_distinct "K4  changing the receiver changes the key"   "$K_ITEM" "$K_GEN" "FS-GG/FS.GG.Audio" "$K_OP"
 k_distinct "K5  changing the operation changes the key"  "$K_ITEM" "$K_GEN" "$K_RECV" "dispatch:other"
 
-# K6. THE SEPARATOR AND THE FIELD ORDER, PINNED AT THE SOURCE. The broker is a second implementation of
-# `Operation.preimage` — unavoidable, because a runner cannot reach the engine's table or its types
-# without putting a compile on the critical path of every dispatch. So the ENGINE's composition is read
-# here, and a change to it reds this fixture rather than silently splitting the two.
-if grep -q 'let private Separator = "\\n"' "$OPERATION_FS" \
-   && grep -q 'String.concat Separator \[ item; generation; receiver; wire op \]' "$OPERATION_FS"; then
-  ok "K6  Operation.preimage still joins [item; generation; receiver; wire op] on \"\\n\""
-else
-  bad "K6  Operation.preimage still joins [item; generation; receiver; wire op] on \"\\n\"" \
-      "the engine's pre-image composition changed. The broker's copy in fsgg-dispatch-broker.yml must change with it, or the two will key the same operation differently and no dedupe will ever match."
-fi
+# K6 WAS A GREP OVER `Operation.fs`, AND IT IS GONE ON PURPOSE. It asserted that the engine's source
+# still contained two exact literals — `let private Separator = "\n"` and the `String.concat` line —
+# which is the wrong instrument in BOTH directions. It stayed green on a semantic change the literals
+# survived, and it would have redded on a pure REFORMAT of `Operation.fs` while nothing at all was
+# wrong: "it reds the moment the producer becomes correct" is the trap this board corrected in
+# `tests/receiver-validate/run.sh` the same week. The board analyst named its insufficiency directly
+# when it reopened `.github#2720` — "a grep-based constant leg is not that test".
+#
+# Section E replaces it with the test that WAS asked for: both implementations EXECUTED over one
+# corpus, their verdicts, digests and refusal classes compared. That subsumes everything K6 checked,
+# because a changed separator or a reordered pre-image now changes an observed digest rather than an
+# observed string of source text — and legs E2/E3 prove exactly that by making those two mutations and
+# measuring the red.
 
 echo
 echo "== S. the single-caller property: a CORPUS, inverted in both directions =="
@@ -826,13 +841,23 @@ else
 A row present in one and not the other is either a receiver that dispatches unfenced or one that cannot dispatch at all."
 fi
 
-ROSTER="$(python3 -c "import json,sys;t=json.load(open(sys.argv[1]))['workflow_op_locks'];print(len(t), 'FS-GG/FS.GG.Net' in t)" "$META")"
-if [ "$ROSTER" = "8 True" ]; then
-  ok "B8b all EIGHT roster repositories are present, FS.GG.Net included"
-else
-  bad "B8b all EIGHT roster repositories are present, FS.GG.Net included" \
-      "(rows, FS.GG.Net present) = $ROSTER. The chore-lock table omits FS.GG.Net, and FS.GG.Net#58 is one of the two PRs .github#1858 measured as merged by the unlocked executor — a per-receiver table built the same way would inherit the hole in exactly the repository the incident reached."
-fi
+# B8b. CONTAINMENT, NOT AN EQUALITY ON THE COUNT. This leg used to require exactly `8 True`, which
+# would have redded the day a NINTH FS-GG repository was onboarded and correctly added to BOTH tables
+# — "an assertion that reds the moment the producer becomes correct", the shape corrected in
+# `tests/receiver-validate/run.sh` this same week. What this leg actually owns is that the roster has
+# not SHRUNK and that FS.GG.Net specifically is in it; B8a above already pins exact agreement with
+# `Options.opLockNumbers`, so growth is checked there, in the one place that can see both sides.
+ROSTER="$(python3 -c "
+import json, sys
+table = json.load(open(sys.argv[1]))['workflow_op_locks']
+print(len(table) >= 8, 'FS-GG/FS.GG.Net' in table, len(table))" "$META")"
+case "$ROSTER" in
+  "True True "*)
+    ok "B8b the roster has not shrunk below its eight repositories, FS.GG.Net included" ;;
+  *)
+    bad "B8b the roster has not shrunk below its eight repositories, FS.GG.Net included" \
+        "(>=8, FS.GG.Net present, rows) = $ROSTER. The chore-lock table omits FS.GG.Net, and FS.GG.Net#58 is one of the two PRs .github#1858 measured as merged by the unlocked executor — a per-receiver table built the same way would inherit the hole in exactly the repository the incident reached." ;;
+esac
 
 # B8c. The lease the broker filters the op-lock's winners with is `Client.OpLock.LeaseMinutes`. It is a
 # constant in two places for the same reason the table is, so it is pinned the same way.
@@ -858,6 +883,24 @@ if [ "$(m "['selftest_runs_fixture']")" = "True" ]; then
 else
   bad "B9b the selftest actually runs tests/dispatch-broker/run.sh" "the selftest workflow no longer invokes this fixture, so none of the legs above run in CI."
 fi
+# B9d. THE ORACLE'S OWN SOURCE MUST BE IN THE TRIGGER, and it is more load-bearing now than when it
+# was first written. Before section E, `Operation.fs` was in the `paths:` filter because a grep read
+# it; now the fixture BUILDS it and executes `Operation.compose` as the oracle every digest comparison
+# is scored against. A PR that changes the engine's composition and does not run this fixture is
+# exactly the drift `.github#2720` was reopened for. CONTAINMENT, not equality: the filter may grow.
+case "$(m "['selftest_pr_paths']")" in
+  *"src/FS.GG.Coord.Core/Operation.fs"*)
+    ok "B9d the selftest triggers on Operation.fs — a changed engine re-runs the differential" ;;
+  *)
+    bad "B9d the selftest triggers on Operation.fs — a changed engine re-runs the differential" \
+        "$(printf 'pull_request.paths = %s\nSection E scores the broker against `Operation.compose`. If a PR can change that function without running this fixture, the two implementations can drift apart in exactly the way this slice was reopened to prevent.' "$(m "['selftest_pr_paths']")")" ;;
+esac
+if [ "$(m "['selftest_installs_dotnet']")" = "True" ]; then
+  ok "B9c the selftest installs the .NET SDK, so section E can EXECUTE the engine in CI"
+else
+  bad "B9c the selftest installs the .NET SDK, so section E can EXECUTE the engine in CI" \
+      "the selftest workflow no longer sets up dotnet. Section E's transcription differential compares the broker against \`Operation.compose\` by executing BOTH; without the SDK on the runner it has no verdict, and a no-verdict section is how .github#2720's grep-based pin got there in the first place."
+fi
 
 # B10. The broker writes one comment and reads two issues. `contents: write` would let a compromised
 # step push to this repository from a workflow whose whole job is to send a dispatch.
@@ -874,6 +917,217 @@ if [ "$RECEIPT_NEEDS_OK" = 1 ]; then
   ok "B11 the receipt job runs only after the dispatch it records"
 else
   bad "B11 the receipt job runs only after the dispatch it records" "receipt_needs = $(m "['receipt_needs']")"
+fi
+
+echo
+echo "== E. the transcription differential: the broker's opkey domain vs \`Operation.compose\`, EXECUTED =="
+
+# WHY THIS SECTION EXISTS. `.github#2720` was reopened on 2026-08-17 with two findings, and this is the
+# one that lives inside this slice's declared paths:
+#
+#   "Either have the broker call the engine, or add a test that fails when the transcription and
+#    `Operation.preimage` disagree. A grep-based constant leg is not that test."
+#
+# The broker cannot call the engine — a GitHub runner would have to build `FS.GG.Coord.Core` on the
+# critical path of every dispatch — so the second route is taken: `differential.py` drives the SHIPPED
+# `run:` block (lifted out of the real workflow by `yaml.safe_load`) and `engine_opkey.fsx` drives the
+# SHIPPED `Operation.compose` (through `FS.GG.Coord.Core.dll`), over one corpus of 48 vectors, and
+# compares the accept/refuse verdict, the 64-hex digest, and the refusal class. Neither side is
+# re-typed. See `differential.py`'s module docstring for why the broker is driven in-process and why
+# every vector presents a deliberately wrong opkey.
+#
+# EVERY LEG BELOW THAT ASSERTS A RED PERFORMS ITS OWN MUTATION AND MEASURES THE RESULT. A differential
+# that has never been seen to fail is a differential nobody has any reason to believe, and this
+# fixture's whole subject is gates that cannot fail on their subject. E8 is the control that keeps the
+# other legs honest: it mutates something section E must NOT be sensitive to and asserts E stays
+# green — while asserting that leg B2 reds on that same mutant, so "E did not notice" is demonstrably
+# "E is aimed at its own subject" and not "E notices nothing".
+
+DIFFERENTIAL="$HERE/differential.py"
+ENGINE_FSX="$HERE/engine_opkey.fsx"
+# Filled in below from `scripts/build-gate-engine`. NOT a path inside this checkout: see E0.
+CORE_DLL=""
+
+# mutate_broker <slot> <old> <new> — write a mutated copy of the REAL workflow and PROVE the edit
+# landed where it was aimed: the anchor must match exactly once, and the file's sha256 must actually
+# change. Verified by parse and by hash, never by eye — three separate counts of one YAML file were
+# published wrong on this board in a single session, one of them under an explicit "by parse" claim.
+mutate_broker() {
+  python3 - "$BROKER_WF" "$WORK/mutant-$1.yml" "$2" "$3" "$1" <<'PY'
+import hashlib, sys
+source_path, out_path, old, new, slot = sys.argv[1:6]
+with open(source_path, encoding="utf-8") as fh:
+    source = fh.read()
+hits = source.count(old)
+if hits != 1:
+    sys.exit(f"the `{slot}` anchor matched {hits} times, not once — this mutation did not land where it was aimed")
+mutated = source.replace(old, new)
+before, after = (hashlib.sha256(text.encode("utf-8")).hexdigest() for text in (source, mutated))
+if before == after:
+    sys.exit(f"the `{slot}` mutation left the artifact hash unchanged — nothing was mutated")
+with open(out_path, "w", encoding="utf-8") as fh:
+    fh.write(mutated)
+print(f"    {slot}: anchor matched once, sha256 {before[:12]} -> {after[:12]}")
+PY
+}
+
+# mutation_leg <name> <wanted-exit> <slot> <old> <new>
+#
+# A STALE ANCHOR IS A COUNTED FAILURE, NEVER AN ABORT. `mutate_broker` exits non-zero when its anchor
+# no longer matches exactly once, and under `set -e` that would tear the fixture down mid-section —
+# truncating every remaining leg and the summary line, which is the same "green-ish looking tail"
+# hazard leg S19 above already spells out. It is also not a hypothetical: it was MEASURED here, while
+# taking this section's own gate-inversion evidence, because the in-tree mutation being tested had
+# changed the very line leg E2's anchor points at. So the failure is caught and reported as what it
+# is — the mutation no longer tests what it claims to, which is a finding about the fixture.
+mutation_leg() {
+  local name="$1" want="$2" slot="$3" old="$4" new="$5"
+  if ! mutate_broker "$slot" "$old" "$new" >"$WORK/mutate_out" 2>&1; then
+    bad "$name" "$(printf 'the mutation could not be applied, so this leg tested NOTHING:\n%s' "$(cat "$WORK/mutate_out")")"
+    return
+  fi
+  cat "$WORK/mutate_out"
+  expect_differential "$name" "$want" "$WORK/mutant-$slot.yml"
+}
+
+# differential_exit <workflow> [dll] — echo the exit code. NEVER through a pipe: `$?` after a pipeline
+# reads the LAST command's status and not the gate's, which is one of this session's measured
+# instrument faults and would silently score every leg here against `head`.
+differential_exit() {
+  local wf="$1" dll="$2"; shift 2
+  local rc=0
+  python3 "$DIFFERENTIAL" --workflow "$wf" --fsx "$ENGINE_FSX" --dll "$dll" "$@" \
+    >"$WORK/diff_out" 2>&1 || rc=$?
+  echo "$rc"
+}
+
+# expect_differential <name> <wanted-exit> <workflow> [dll] [extra-flags...]
+expect_differential() {
+  local name="$1" want="$2" wf="$3" dll="${4:-$CORE_DLL}"; shift 4 2>/dev/null || shift $#
+  local rc; rc="$(differential_exit "$wf" "$dll" "$@")"
+  if [ "$rc" = "$want" ]; then ok "$name"
+  else bad "$name" "$(printf 'expected exit %s, got %s\n%s' "$want" "$rc" "$(cat "$WORK/diff_out")")"; fi
+}
+
+if ! command -v dotnet >/dev/null 2>&1; then
+  # A RED, NOT A SKIP. Section E's whole claim is that the two implementations are compared by
+  # EXECUTION; a fixture that quietly drops that comparison when the toolchain is missing has rebuilt
+  # the fails-open shape this slice exists to close, and would report green on a runner where the
+  # comparison never happened. `fsgg-dispatch-broker-selftest.yml` installs the SDK for exactly this
+  # reason, and leg B9c below asserts that it still does.
+  bad "E0  the engine oracle can be executed" \
+      "\`dotnet\` is not on PATH, so \`Operation.compose\` cannot be executed and section E has NO VERDICT.
+This is deliberately a failure rather than a skip: a transcription differential that silently does not run is
+indistinguishable from one that runs and agrees, which is precisely the defect .github#2720 was reopened for."
+else
+  # .github#2653 — ASK FOR THE ANSWER, DO NOT BUILD INTO THE CHECKOUT, AND DO NOT RESTATE THE LAYOUT.
+  # `scripts/build-gate-engine` is the ONE sanctioned way a gate harness gets an engine: it sites both
+  # `bin/` and `obj/` outside the checkout, so nothing is ever created here for `scripts/fsgg-coord`'s
+  # tier 2a to prefer over the shared checkout's engine. The first head of this section built
+  # `FS.GG.Coord.Core` in place and `tests/engine-build-siting` refused it, correctly: a harness build
+  # is not the deliberate worktree build tier 2a exists to protect, and it fail-closes every board
+  # write from the worktree it poisons. `FS.GG.Coord.Core.dll` sits beside the engine binary because
+  # the CLI project references it, so this needs no second path convention of its own.
+  #
+  # Foreground, with the exit code in its own variable: a BACKGROUNDED `dotnet build` reports exit 0
+  # while emitting MSB1003, because a background command does not inherit `cd`.
+  build_rc=0
+  ENGINE_BIN="$(bash "$REPO_ROOT/scripts/build-gate-engine" 2>"$WORK/build.log")" || build_rc=$?
+  if [ "$build_rc" = 0 ] && [ -n "$ENGINE_BIN" ]; then
+    CORE_DLL="$(dirname "$ENGINE_BIN")/FS.GG.Coord.Core.dll"
+  fi
+  if [ ! -f "$CORE_DLL" ]; then
+    bad "E0  the engine oracle can be executed" \
+        "$(printf 'scripts/build-gate-engine did not yield FS.GG.Coord.Core.dll (exit %s, engine=%q), so there is no oracle to compare against:\n%s' \
+           "$build_rc" "$ENGINE_BIN" "$(tail -30 "$WORK/build.log")")"
+  fi
+
+  if [ -f "$CORE_DLL" ]; then
+    ok "E0  the engine oracle is the shipped FS.GG.Coord.Core assembly, built OUT OF TREE"
+
+    # E0b. THE ORACLE'S ARTIFACT IS NOT IN THIS CHECKOUT, ASSERTED RATHER THAN TRUSTED. The whole
+    # reason E0 goes through `scripts/build-gate-engine` is `.github#2653`, and "we call the right
+    # script" is a weaker claim than "no shadowing artifact exists". `tests/engine-build-siting` reads
+    # the INVOCATION; this reads the RESULT, which is the second method that would catch a
+    # build-gate-engine whose redirect had silently stopped working.
+    case "$CORE_DLL" in
+      "$REPO_ROOT"/*)
+        bad "E0b the oracle's artifact is sited OUTSIDE this checkout" \
+            "the oracle resolved to $CORE_DLL, which is inside $REPO_ROOT. scripts/fsgg-coord tier 2a prefers a source build under the caller's toplevel, so this artifact would shadow the shared engine and stale_guard would fail-close EVERY board write from this worktree (.github#2653)." ;;
+      *)
+        if [ -d "$REPO_ROOT/src/FS.GG.Coord.Core/bin" ] || [ -d "$REPO_ROOT/src/FS.GG.Coord.Cli/bin" ]; then
+          bad "E0b the oracle's artifact is sited OUTSIDE this checkout" \
+              "the oracle itself is out of tree, but src/FS.GG.Coord.{Core,Cli}/bin exists in this checkout. Something built the engine in place; tier 2a will prefer it and stale_guard will refuse this worktree's board writes (.github#2653)."
+        else
+          ok "E0b the oracle's artifact is sited OUTSIDE this checkout — no tier-2a shadow"
+        fi ;;
+    esac
+
+    # E1. The claim itself. `--cross-check` additionally drives every env-expressible vector through
+    # the real `python3` subprocess boundary and refuses on any disagreement with the in-process
+    # harness, so the harness that reaches the ill-formed-text vectors is itself measured.
+    expect_differential "E1  the shipped broker agrees with \`Operation.compose\` on every vector" \
+                        0 "$BROKER_WF" "$CORE_DLL" --cross-check
+
+    # E2/E3. THE TWO MUTATIONS K6'S GREP EXISTED TO CATCH, now caught by an observed digest instead of
+    # an observed string of source text.
+    mutation_leg "E2  a changed pre-image SEPARATOR is caught (digests diverge)" 1 sep \
+      'preimage = "\n".join([item, generation, receiver, op])' \
+      'preimage = "\t".join([item, generation, receiver, op])'
+
+    mutation_leg "E3  a REORDERED pre-image is caught (digests diverge)" 1 order \
+      'preimage = "\n".join([item, generation, receiver, op])' \
+      'preimage = "\n".join([generation, item, receiver, op])'
+
+    # E4-E7. THE DOMAIN, WHICH THE GREP NEVER REACHED AT ALL. Each of these leaves the digest
+    # arithmetic untouched and widens the set of inputs the broker will key — the failure mode that
+    # matters, because a broker whose domain is wider than the engine's composes keys the engine would
+    # refuse, and those keys can never match a receipt the engine wrote.
+    mutation_leg "E4  dropping the leading-zero rule is caught (one tenancy keyed two ways)" 1 zero \
+      'return len(value) > 0 and value[0] != "0" and all("0" <= ch <= "9" for ch in value)' \
+      'return len(value) > 0 and all("0" <= ch <= "9" for ch in value)'
+
+    mutation_leg "E5  dropping the unpaired-surrogate guard is caught" 1 surrogate \
+      'if any(0xD800 <= ord(ch) <= 0xDFFF for ch in value):' 'if False:'
+
+    mutation_leg "E6  dropping the control-character guard is caught" 1 control \
+      'if any(unicodedata.category(ch) == "Cc" for ch in value):' 'if False:'
+
+    mutation_leg "E7  a changed owner/repo grammar is caught" 1 grammar \
+      'halves = value.split("/")' 'halves = value.split("|")'
+
+    # E8. THE HARNESS CONTROL, and the leg that makes the seven above mean something. It mutates the
+    # concurrency group — a real defect, and one section E has no business detecting. If E redded here
+    # too, every red above would be evidence only that the differential reacts to ANY edit. It must
+    # stay green, AND leg B2's structural check must red on the same mutant, so the pair shows the two
+    # gates are aimed at different subjects rather than one of them being blind.
+    mutation_leg "E8a CONTROL: a concurrency-group defect does NOT red the differential" 0 concurrency \
+      'group: fsgg-dispatch-${{ inputs.receiver }}' 'group: fsgg-dispatch-constant'
+    MUTANT_GROUP="$(python3 -c "
+import sys, yaml
+with open(sys.argv[1], encoding='utf-8') as fh:
+    doc = yaml.safe_load(fh)
+print((doc.get('concurrency') or {}).get('group', ''))" "$WORK/mutant-concurrency.yml")"
+    if [ "$MUTANT_GROUP" != "$GROUP_EXPECTED" ] && [ "$GROUP_ACTUAL" = "$GROUP_EXPECTED" ]; then
+      ok "E8b CONTROL: ...and leg B2's per-receiver check DOES red on that same mutant"
+    else
+      bad "E8b CONTROL: ...and leg B2's per-receiver check DOES red on that same mutant" \
+          "$(printf 'mutant group=%q, real group=%q, expected=%q. If B2 does not distinguish these, then E8a proves nothing: "the differential did not notice" would be indistinguishable from "nothing notices".' \
+             "$MUTANT_GROUP" "$GROUP_ACTUAL" "$GROUP_EXPECTED")"
+    fi
+
+    # E9/E10. THE TWO WAYS THIS SECTION COULD SILENTLY STOP TESTING ANYTHING. Both must be a
+    # NO-VERDICT (exit 3) and never a pass.
+    expect_differential "E9  an ABSENT engine assembly is a no-verdict, never a pass" \
+                        3 "$BROKER_WF" "$WORK/there-is-no-such.dll"
+
+    mutation_leg "E10 a \`run:\` block this differential cannot extract is a no-verdict" 3 heredoc \
+      "          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib" "          set -euo pipefail
+          python3 - <<'PYTHON'
+          import hashlib"
+  fi
 fi
 
 echo

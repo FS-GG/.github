@@ -50,5 +50,29 @@ jobs:
       # mention `dispatch-sender.yml` precisely to say they do not call it.
       - uses: ./.github/actions/setup-policy-python
 
+      # THE SDK IS PART OF THE GATE, NOT PACKAGING — the same argument the `paths:` filter above makes.
+      # The fixture's section E is a TRANSCRIPTION DIFFERENTIAL: the broker carries a second
+      # implementation of `Operation.preimage`, and section E compares the two by EXECUTING both — the
+      # shipped `run:` block on one side, `FS.GG.Coord.Core`'s public `Operation.compose` on the other.
+      # Without the SDK there is no oracle, so leg E0 REFUSES rather than skipping, and leg B9c asserts
+      # this step still exists so the refusal can never be arranged away by deleting it.
+      #
+      # `.github#2720` was reopened because the previous pin was a `grep` for two literals in
+      # `Operation.fs`: it stayed green on a semantic change and would have redded on a reformat. The
+      # SDK is what buys the executed comparison that replaced it.
+      # THE SDK ONLY — THE BUILD ITSELF BELONGS TO THE FIXTURE, AND DELIBERATELY NOT TO A STEP HERE.
+      # `tests/dispatch-broker/run.sh` obtains the engine through `scripts/build-gate-engine`, which is
+      # the one sanctioned route because it sites `bin/` AND `obj/` outside the checkout entirely
+      # (`.github#2653`: a harness that builds the engine in place poisons `scripts/fsgg-coord`'s tier
+      # 2a and fail-closes every board write from that worktree). A `dotnet build` step here would
+      # recreate exactly that, and `tests/engine-build-siting` refuses it — it refused the first head
+      # of this change. This mirrors `skill-quality.yml`, the same mechanism's other consumer: the
+      # workflow provides the toolchain, the fixture asks for the answer.
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
       - name: Run the dispatch-broker fixture
         run: bash tests/dispatch-broker/run.sh
