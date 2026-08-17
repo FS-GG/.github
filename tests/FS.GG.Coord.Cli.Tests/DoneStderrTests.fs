@@ -134,7 +134,7 @@ module DoneStderrTests =
                 | _ -> Error(Errors.NotFound "a comment POST with no JSON body")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
-    let private context : Client.Context =
+    let private context : Kernel.Context =
         { Transport = world
           Owner = "FS-GG"
           Title = "Coordination"

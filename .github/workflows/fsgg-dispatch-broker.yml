@@ -141,7 +141,7 @@ jobs:
       # TRUSTED. The engine's table cannot be reached from a runner (there is no CLI verb for it, and
       # building the engine to answer a table lookup would put a compile on the critical path of every
       # dispatch), so the table is restated here — and `tests/dispatch-broker` leg B8 parses
-      # `src/FS.GG.Coord.Cli/Options.fs` and refuses on any difference, in either direction. All eight
+      # `src/FS.GG.Coord.Cli.Kernel/Options.fs` and refuses on any difference, in either direction. All eight
       # roster repositories, `FS.GG.Net` included: the chore-lock table's seven-row hole is in exactly
       # the repository the `.github#1858` incident reached (`FS.GG.Net#58`), and a per-receiver table
       # built the same way would inherit it.

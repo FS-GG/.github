@@ -65,7 +65,7 @@ module VerifyPathsSddPackageTests =
             else
                 Error(Errors.NotFound $"unexpected read for this fixture: %s{req.Path}"))
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"
@@ -137,7 +137,7 @@ module VerifyPathsSddPackageTests =
     let ``#2324 AC-001 the item's own sdd package is expected output, not drift`` () =
         let code, out, _ = runVerifyPaths (serving issue (files packageFiles) (Some [ sddReceipt ]))
 
-        Assert.Equal(Client.ExitGreen, code)
+        Assert.Equal(Kernel.ExitGreen, code)
         Assert.Contains("FSGG-PATHS OK", out)
         Assert.DoesNotContain("FSGG-PATHS DRIFT", out)
         Assert.Contains("sdd package (expected)", out)
@@ -151,7 +151,7 @@ module VerifyPathsSddPackageTests =
         let code, out, _ =
             runVerifyPaths (serving issue (files (packageFiles @ [ "src/Sneaky.fs" ])) (Some [ sddReceipt ]))
 
-        Assert.Equal(Client.ExitRed, code)
+        Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.Contains("undeclared (review)", out)
         Assert.Contains("src/Sneaky.fs", out)
@@ -176,7 +176,7 @@ module VerifyPathsSddPackageTests =
 
         let code, out, _ = runVerifyPaths (serving issue (files numberShapedPackage) (Some [ lightweight ]))
 
-        Assert.Equal(Client.ExitRed, code)
+        Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.Contains("undeclared (review)", out)
         Assert.Contains("work/42/spec.md", out)
@@ -195,7 +195,7 @@ module VerifyPathsSddPackageTests =
     let ``#2324 AC-004 an unreadable receipt window subtracts nothing rather than everything, and says so`` () =
         let code, out, err = runVerifyPaths (serving issue (files packageFiles) None)
 
-        Assert.Equal(Client.ExitRed, code)
+        Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.Contains("work/2324-mandatory-sdd-output-enforcement/spec.md", out)
         Assert.DoesNotContain("sdd package (expected)", out)
@@ -213,7 +213,7 @@ module VerifyPathsSddPackageTests =
 
         let code, out, err = runVerifyPaths (serving issue (files packageFiles) (Some [ stale ]))
 
-        Assert.Equal(Client.ExitRed, code)
+        Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.DoesNotContain("sdd package (expected)", out)
         nothingSubtractedSaidSo err
@@ -238,7 +238,7 @@ module VerifyPathsSddPackageTests =
 
         let code, out, _ = runVerifyPaths (serving issue (files otherItemsPackage) (Some [ sddReceipt ]))
 
-        Assert.Equal(Client.ExitRed, code)
+        Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
         Assert.Contains("undeclared (review)", out)
         Assert.Contains("work/2324-mandatory-sdd-output-enforcement-followup/spec.md", out)
@@ -251,7 +251,7 @@ module VerifyPathsSddPackageTests =
         let transport = serving issue (files [ "src/Impl.fs" ]) (Some [ sddReceipt ])
         let code, out, _ = runVerifyPaths transport
 
-        Assert.Equal(Client.ExitGreen, code)
+        Assert.Equal(Kernel.ExitGreen, code)
         Assert.Contains("FSGG-PATHS OK", out)
         Assert.DoesNotContain("sdd package (expected)", out)
         // THE COST ASSERTION, not merely the output one: `List.isEmpty drift` must gate the network call,
@@ -263,5 +263,5 @@ module VerifyPathsSddPackageTests =
         let transport = serving issue (files packageFiles) (Some [ sddReceipt ])
         let code, _, _ = runVerifyPaths transport
 
-        Assert.Equal(Client.ExitGreen, code)
+        Assert.Equal(Kernel.ExitGreen, code)
         Assert.Equal(1, transport.Count("comment-list FS-GG/.github 42"))

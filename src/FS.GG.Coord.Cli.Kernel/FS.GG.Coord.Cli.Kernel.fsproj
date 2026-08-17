@@ -1,0 +1,91 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- FS.GG.Coord.Cli.Kernel — the shared base every CLI command family needs (.github#2725, the first
+       of the .github#2725–#2729 extraction programme).
+
+       WHY A PROJECT AND NOT MORE FILES, WHICH IS THE WHOLE CASE AND IS *NOT* BUILD TIME. Measured on the
+       row: touching `Client.fs` (11,090 lines) and touching `Json.fs` (72 lines) both rebuild in ~3.9s.
+       Splitting for compilation speed would be splitting for nothing. What a separate project buys is
+       LANE CONCURRENCY. F# projects use explicit `<Compile Include>` ordering, so splitting `Client.fs`
+       into more files inside `FS.GG.Coord.Cli` moves contention from one source file onto
+       `FS.GG.Coord.Cli.fsproj`, which is already the second most-touched file in the repository (34 of
+       the last 500 commits). A separate project gets its own project file and its own touch-set token,
+       so two workers extracting two command families no longer collide on the ordering list.
+
+       THIS PROJECT IS DELIBERATELY THE CONTENDED ONE. Every family depends on it, so it is where
+       contention concentrates — and that is correct precisely because it is small, stable, and rarely
+       the subject of a work item. A change HERE is expected to be rare; a change in a family project is
+       expected to be routine.
+
+       WHAT IS IN IT, AND ON WHAT PRINCIPLE. Two kinds of thing, priced differently:
+
+         * RELOCATED WHOLE FILES — `Json`, `Options`, `Identity`, `RefParsing`, `Render`. Each already
+           existed as its own file with its own signature file before this row; each moves verbatim,
+           bytes unchanged, `.fsi` and `.fs` together. This half is a project move, not an extraction,
+           and carries the risk of a project move and no more.
+         * ONE EXTRACTED MODULE — `Kernel`, lifted out of `Client.fs`: the exit-code vocabulary, the
+           `Context` record, the stderr/refusal helpers, worker resolution, ref parsing's context-bound
+           entry points, and the checkout-scope readers. This half is the real extraction.
+
+       NAMESPACE, DELIBERATELY UNCHANGED. Every module here stays in `namespace FS.GG.Coord.Cli`, which
+       .NET permits a namespace to span assemblies. So `open FS.GG.Coord.Cli` continues to reach
+       `Options`, `Render`, `Json`, `Identity` and `RefParsing` exactly as it did, from `FS.GG.Coord.Cli`
+       and from the test projects alike. AC3's "no behaviour change" is easier to hold when no consumer
+       has to be re-spelled to keep compiling.
+
+       A `.fsi` FOR EVERY MODULE (AC1), and it is not decoration. The whole force behind the programme is
+       that `Client.fs` had 87 public bindings nobody had chosen; a project whose surface is not
+       compiler-held would regrow that in a new place. Every module below is fronted by a signature. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors></WarningsNotAsErrors>
+    <!-- RestorePackagesWithLockFile, RestoreLockedMode and DisableImplicitLibraryPacksFolder (ADR-0006,
+         ADR-0032) are INHERITED from the root Directory.Build.props (#609); this project sets none of
+         them by hand, exactly as `FS.GG.Coord.Core` and `FS.GG.Coord.GitHub` no longer do. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- `IsPackable` is false and this assembly SHIPS ANYWAY, which is the whole reason this property is
+         here. `FS.GG.Coord.Cli` is `PackAsTool` and packs its whole output directory into
+         `tools/net10.0/any/`, so `FS.GG.Coord.Cli.Kernel.dll` and its `.pdb` are two NEW entries under
+         the `payloadSha256` the release saga compares — taking the packed set from six coord entries to
+         eight. Without `DeterministicSourcePaths` those two entries embed the absolute directory the
+         package happened to be built in, and the package stops being path-independent no matter what the
+         other three projects set (.github#2688). The sibling projects each carry this property for the
+         same reason and with the same reasoning; a fourth project that omitted it would re-open exactly
+         the defect #2688 closed, two entries at a time. -->
+    <DeterministicSourcePaths>true</DeterministicSourcePaths>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ORDER IS THE DEPENDENCY ORDER AND NOTHING ELSE. `Json` is free-standing; `Options` is the
+         argument grammar; `Identity` and `RefParsing` are free-standing readers; `Render` is the wire-JSON
+         writer; `Kernel` is last because it is the only module here that consumes the others (it fails
+         through `Render`, resolves through `Identity`, parses through `RefParsing`, and is handed
+         `Options`). -->
+    <Compile Include="Json.fsi" />
+    <Compile Include="Json.fs" />
+    <Compile Include="Options.fsi" />
+    <Compile Include="Options.fs" />
+    <Compile Include="Identity.fsi" />
+    <Compile Include="Identity.fs" />
+    <Compile Include="RefParsing.fsi" />
+    <Compile Include="RefParsing.fs" />
+    <Compile Include="Render.fsi" />
+    <Compile Include="Render.fs" />
+    <Compile Include="Kernel.fsi" />
+    <Compile Include="Kernel.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+</Project>

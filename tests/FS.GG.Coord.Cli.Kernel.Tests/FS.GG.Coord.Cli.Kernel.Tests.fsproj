@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The CLI kernel's own suite (.github#2725).
+
+       THE SINGLE `ProjectReference` BELOW IS THE ACCEPTANCE CRITERION, NOT A DETAIL. `.github#2724`
+       measured that of `Client`'s 77 surviving exports exactly FOUR are required by production code and
+       the other 73 are held open by the CLI test project alone — so the thing that welds this codebase
+       together is the test project reaching into `Client`, not production coupling between command
+       families. A Kernel that could only be tested through `FS.GG.Coord.Cli` would be a Kernel whose real
+       client is the test project, and the extraction would have moved code without moving the dependency.
+
+       This project therefore references `FS.GG.Coord.Cli.Kernel` and NOTHING ELSE. It cannot see
+       `Client`, `Snapshot`, `Chores`, `LintApplication` or any command handler, and that is checked by
+       the compiler on every build rather than asserted in a comment: any test here that reached for one
+       would not compile. It is the only mechanical evidence available that the cut is real.
+
+       THE FILES BELOW WERE MOVED, NOT COPIED (AC2). Each left `tests/FS.GG.Coord.Cli.Tests` in the same
+       commit that added it here; a `git log` with follow-renames on any of them crosses the boundary. An
+       XML comment may not contain a double hyphen, so that flag is named without it — the same convention
+       the sibling coord project files state about themselves. The only edit
+       they carry is the module qualifier on relocated bindings — `Client.parseChoreLocks` became
+       `Kernel.parseChoreLocks`, `Client.parseRefIn` became `Kernel.parseRefIn`, and so on — because those
+       bindings moved. Their namespace is deliberately unchanged (`FS.GG.Coord.Cli.Tests`): the namespace
+       spans assemblies exactly as the production one does, and re-namespacing a verbatim move would add
+       churn a reviewer then has to read past.
+
+       WHAT COVERAGE THIS SUITE DOES AND DOES NOT INHERIT, stated because the honest answer is not "all of
+       it". `Options`, `Identity` and `RefParsing` arrive with their dedicated suites. `Render` and `Json`
+       arrive with none, because none existed to move: they are covered indirectly by
+       `ApplicationServiceTests` and `ScanRoundTripTests`, which stay in the CLI test project because they
+       also cover modules that did not move. Duplicating them here is what AC2 forbids, and splitting them
+       is a different change from this one. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>true</GenerateProgramFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- RestorePackagesWithLockFile, RestoreLockedMode and DisableImplicitLibraryPacksFolder (ADR-0006,
+         ADR-0032) are INHERITED from the root Directory.Build.props (#609). -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="OptionsTests.fs" />
+    <Compile Include="CommandSurfaceTests.fs" />
+    <Compile Include="DriverCommandTests.fs" />
+    <Compile Include="IdentityTests.fs" />
+    <Compile Include="RefParseTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FsCheck.Xunit" />
+  </ItemGroup>
+</Project>

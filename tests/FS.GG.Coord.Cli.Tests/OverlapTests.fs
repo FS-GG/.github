@@ -35,7 +35,7 @@ open FS.GG.Coord.Cli
 ///
 /// GATE-INVERSION EVIDENCE. Reverting `Client.fs`'s `pathRepoOrFallback` call sites back to a bare
 /// `Option.defaultValue` reproduces the exact pre-fix behaviour, and every `Assert.Equal("OVERLAP", …)`
-/// / `Assert.Equal(Client.ExitContended, …)` leg below turns red — the fixture reports `DISJOINT` /
+/// / `Assert.Equal(Kernel.ExitContended, …)` leg below turns red — the fixture reports `DISJOINT` /
 /// `ExitGreen` instead, which is the confident-wrong verdict the issue is about. Recorded by hand against
 /// the pre-fix source at review time; this is the reproducible mutation the gate-inversion discipline
 /// asks for.
@@ -117,7 +117,7 @@ module OverlapTests =
                 ok (JsonSerializer.Serialize {| number = numberB; body = bodyB |})
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"
@@ -182,7 +182,7 @@ module OverlapTests =
 
         let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/.github#2070" ]
 
-        Assert.Equal(Client.ExitContended, code)
+        Assert.Equal(Kernel.ExitContended, code)
         Assert.Contains("OVERLAP", out)
         Assert.Contains("docs/architecture.md", out)
         Assert.DoesNotContain("DISJOINT", out)
@@ -206,7 +206,7 @@ module OverlapTests =
 
         let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/.github#2070" ]
 
-        Assert.Equal(Client.ExitContended, code)
+        Assert.Equal(Kernel.ExitContended, code)
         Assert.Contains("OVERLAP", out)
 
     [<Fact>]
@@ -228,7 +228,7 @@ module OverlapTests =
 
         let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/FS.GG.SDD#74" ]
 
-        Assert.Equal(Client.ExitGreen, code)
+        Assert.Equal(Kernel.ExitGreen, code)
         Assert.Contains("DISJOINT", out)
 
     // ---- AC3: the marker-backed scan `activeCollisions` — and therefore `overlap --active`, `widen`, ----
@@ -281,7 +281,7 @@ module OverlapTests =
 
         let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "--active" ]
 
-        Assert.Equal(Client.ExitContended, code)
+        Assert.Equal(Kernel.ExitContended, code)
         Assert.Contains("OVERLAP", out)
         Assert.Contains("smew-e1d9", out)
 
@@ -294,5 +294,5 @@ module OverlapTests =
 
         let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "--active" ]
 
-        Assert.Equal(Client.ExitContended, code)
+        Assert.Equal(Kernel.ExitContended, code)
         Assert.Contains("OVERLAP", out)

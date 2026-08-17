@@ -225,7 +225,7 @@ module SchedulingCostTests =
 
     let private world (rows: Row list) = worldWithQueries rows None
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"

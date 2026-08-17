@@ -524,7 +524,7 @@ module ApplicationServiceTests =
             Set.empty
             false
 
-    let private context (transport: Fake.Recorder) : Client.Context =
+    let private context (transport: Fake.Recorder) : Kernel.Context =
         { Transport = transport
           Owner = "FS-GG"
           Title = "Coordination"

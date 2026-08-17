@@ -40,7 +40,7 @@ module RefParseTests =
               Repo = eRepo
               Number = eNum }
 
-        Assert.Equal(Ok expected, Client.parseRefIn owner (Some ".github") raw)
+        Assert.Equal(Ok expected, Kernel.parseRefIn owner (Some ".github") raw)
 
     [<Fact>]
     let ``a bare number resolves against the repo it is given, not the board's own`` () =
@@ -51,7 +51,7 @@ module RefParseTests =
               Repo = "FS.GG.Game"
               Number = 171 }
 
-        Assert.Equal(Ok expected, Client.parseRefIn owner (Some "FS.GG.Game") "171")
+        Assert.Equal(Ok expected, Kernel.parseRefIn owner (Some "FS.GG.Game") "171")
 
     [<Fact>]
     let ``an explicit ref beats the default repo`` () =
@@ -61,7 +61,7 @@ module RefParseTests =
               Repo = "FS.GG.Audio"
               Number = 12 }
 
-        Assert.Equal(Ok expected, Client.parseRefIn owner (Some ".github") "FS.GG.Audio#12")
+        Assert.Equal(Ok expected, Kernel.parseRefIn owner (Some ".github") "FS.GG.Audio#12")
 
     // ---- the refusal: no repo to infer from --------------------------------------------------------
 
@@ -72,7 +72,7 @@ module RefParseTests =
         // `None` is what `defaultRepoScope` yields outside any checkout, and — the case the ask singles
         // out — inside a checkout whose owner is not the board's. Addressing `FS-GG/<something>#506` on
         // that evidence would be silently wrong, so it must refuse.
-        match Client.parseRefIn owner None raw with
+        match Kernel.parseRefIn owner None raw with
         | Ok r -> failwith $"expected a refusal, got %s{r.Owner}/%s{r.Repo}#%d{r.Number}"
         | Error msg ->
             // ASSERT THE MESSAGE, not just the failure: an rc-only assertion cannot tell "no repo to
@@ -99,7 +99,7 @@ module RefParseTests =
     let ``a token that is not a ref is refused even with a default repo`` (raw: string) =
         // A default repo must not turn junk into a ref. The bare form is `^#?(\d+)$` — anchored, digits
         // only — so it widens the grammar by exactly one shape and nothing else.
-        match Client.parseRefIn owner (Some ".github") raw with
+        match Kernel.parseRefIn owner (Some ".github") raw with
         | Ok r -> failwith $"expected a refusal, got %s{r.Owner}/%s{r.Repo}#%d{r.Number}"
         | Error msg -> Assert.Contains("unrecognised issue ref", msg)
 
@@ -117,7 +117,7 @@ module RefParseTests =
         // contract reads as "the ENGINE broke — report it, do not retry". A worker would report a bug
         // that does not exist and never learn what they actually mistyped. A bad argument is a bad
         // argument: refuse it, name the range, and stay out of the defect channel.
-        match Client.parseRefIn owner (Some ".github") raw with
+        match Kernel.parseRefIn owner (Some ".github") raw with
         | Ok r -> failwith $"expected a refusal, got #%d{r.Number}"
         | Error msg ->
             Assert.Contains("out of range", msg)
@@ -126,7 +126,7 @@ module RefParseTests =
     [<Fact>]
     let ``the largest Int32 issue number still parses`` () =
         // The boundary itself is legal — the refusal must start one past it, not at it.
-        match Client.parseRefIn owner (Some ".github") "2147483647" with
+        match Kernel.parseRefIn owner (Some ".github") "2147483647" with
         | Ok r -> Assert.Equal(2147483647, r.Number)
         | Error msg -> failwith $"expected a parse, got: %s{msg}"
 
@@ -137,7 +137,7 @@ module RefParseTests =
     [<InlineData("FS-GG/FS.GG.Game", "FS.GG.Game")>]
     [<InlineData("fs-gg/FS.GG.Audio", "FS.GG.Audio")>] // the owner compares case-insensitively, as GitHub does
     let ``a checkout owned by the board yields its repo as the bare-n default`` (slug: string) (expected: string) =
-        Assert.Equal(Some expected, Client.defaultRepoForOwner owner slug)
+        Assert.Equal(Some expected, Kernel.defaultRepoForOwner owner slug)
 
     [<Theory>]
     [<InlineData("acme/thing")>] // another org entirely — the case the ask singles out
@@ -148,7 +148,7 @@ module RefParseTests =
         // checkout would silently address `FS-GG/thing#506` — an issue in a repo the caller is not
         // standing in. That is the one thing the issue says to get right, and it is why this is not
         // simply `scopedRepo`. `None` here is what makes `parseRefIn` refuse.
-        Assert.Equal(None, Client.defaultRepoForOwner owner slug)
+        Assert.Equal(None, Kernel.defaultRepoForOwner owner slug)
 
     // ---- .github#2107: a closing keyword next to the board's OWN shorthand ------------------------
     //

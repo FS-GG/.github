@@ -1,0 +1,742 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2725-cli-kernel-extraction",
+  "stage": "analyze",
+  "status": "implementationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2725-cli-kernel-extraction/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "a78148337d84ff99d7b2decacd1943cdb7096deaa8b9e1d24ad7426b0f56c200"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2725-cli-kernel-extraction/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "2b8b03d6721374c488fb2623d202a19031daeed76e64585d7b323bb2f7cb3892"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2725-cli-kernel-extraction/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "7e4b8d713948efd0e50d22e94af645624f8534edd239ecf15d43ca2d9fccba19"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2725-cli-kernel-extraction/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "f4d490271c557ce53a55799f561de0c42e23733eb97a32ebee3e57940531786f"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2725-cli-kernel-extraction/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "45d8cca72e4fbe92383280719bc7457673ddb8341a41398eb8c6c682bd830098"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "sourceRelationships": [
+    {
+      "id": "AR001",
+      "sourcePath": "work/2725-cli-kernel-extraction/checklist.md",
+      "targetPath": "work/2725-cli-kernel-extraction/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR002",
+      "sourcePath": "work/2725-cli-kernel-extraction/checklist.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR003",
+      "sourcePath": "work/2725-cli-kernel-extraction/clarifications.md",
+      "targetPath": "work/2725-cli-kernel-extraction/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR004",
+      "sourcePath": "work/2725-cli-kernel-extraction/clarifications.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "DEC-001",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR005",
+      "sourcePath": "work/2725-cli-kernel-extraction/clarifications.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "DEC-002",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR006",
+      "sourcePath": "work/2725-cli-kernel-extraction/clarifications.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "DEC-003",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR007",
+      "sourcePath": "work/2725-cli-kernel-extraction/clarifications.md",
+      "targetPath": "work/2725-cli-kernel-extraction/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2725-cli-kernel-extraction/clarifications.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PC-001",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PC-002",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PC-003",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "GV-001",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PM-001",
+      "targetId": null,
+      "relationship": "migrationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PD-001",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR015",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PD-005",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PD-006",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PD-007",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR021",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "PD-008",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourcePlan",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "VO-001",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "VO-002",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR025",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "VO-003",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "VO-004",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR027",
+      "sourcePath": "work/2725-cli-kernel-extraction/plan.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "VO-005",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR028",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "AC-001",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "AC-002",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR030",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "AC-003",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR031",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "AC-004",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR032",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "AC-005",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR033",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "AC-006",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR034",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "AC-007",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR035",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "AC-008",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR036",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR037",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR038",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "FR-001",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR039",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR040",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "FR-003",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR041",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR042",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "FR-005",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR043",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "FR-006",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR044",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "FR-007",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR045",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "FR-008",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR046",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/clarifications.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "sourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR047",
+      "sourcePath": "work/2725-cli-kernel-extraction/spec.md",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR048",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T009",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR049",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T010",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR050",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T011",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR051",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T012",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR052",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T013",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR053",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T014",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR054",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T015",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR055",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T016",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR056",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T017",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR057",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T018",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR058",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T019",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR059",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T020",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR060",
+      "sourcePath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "targetPath": "work/2725-cli-kernel-extraction/tasks.yml",
+      "sourceId": "T021",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "readiness": {
+    "status": "implementationReady",
+    "readyCount": 60,
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0
+  },
+  "findings": [],
+  "generatedViews": [
+    {
+      "path": "readiness/2725-cli-kernel-extraction/work-model.json",
+      "kind": "workModel",
+      "currency": "missing",
+      "diagnosticIds": []
+    }
+  ],
+  "optionalBoundaryFacts": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "reason": "Lifecycle sources are current and ready for implementation."
+  }
+}

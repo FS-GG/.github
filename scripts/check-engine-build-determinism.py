@@ -8,8 +8,10 @@ WHAT THIS GATE IS FOR, AND WHAT IT DELIBERATELY DOES NOT CLAIM.
 
   1. THE CHECKOUT PATH. Six packed entries — `FS.GG.Coord.Core`, `FS.GG.Coord.GitHub` and
      `fsgg-coord-engine`, each as `.dll` and `.pdb` — embedded the absolute directory the package
-     happened to be built in. This is fixed, by `DeterministicSourcePaths` on all three coord
-     projects, and THIS GATE IS WHAT KEEPS IT FIXED.
+     happened to be built in. This is fixed, by `DeterministicSourcePaths` on all the coord projects,
+     and THIS GATE IS WHAT KEEPS IT FIXED. The set is EIGHT entries since .github#2725, which added
+     `FS.GG.Coord.Cli.Kernel` as a fourth coord project; it carries the property and is graded here for
+     exactly the reason the original six are.
   2. AN F# CLOSURE-NAME RACE inside the compiler, which no build setting on SDK 10.0.302 can reach.
      That half is bounded and recorded in `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj`, and this gate
      says nothing about it. A gate that pretended to grade it would have to sample dozens of clean
@@ -47,11 +49,22 @@ import sys
 import tempfile
 import zipfile
 
-# The project whose package is the subject, and the three assemblies this repository itself builds
+# The project whose package is the subject, and the four assemblies this repository itself builds
 # into it. `FSharp.Core` and its satellite resources are NuGet payload — not built here, not ours to
 # grade, and not affected by any property this repository sets.
 PROJECT = "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
-GRADED_STEMS = ("FS.GG.Coord.Core", "FS.GG.Coord.GitHub", "fsgg-coord-engine")
+# `FS.GG.Coord.Cli.Kernel` joined at .github#2725, taking the graded set from six entries to eight.
+# It is graded for the same reason as its three siblings and not as a courtesy: it is built by this
+# repository, it is packed into `tools/net10.0/any/` as a `.dll` and a `.pdb`, and it therefore
+# embeds the absolute checkout directory unless its own project sets `DeterministicSourcePaths`.
+# A stem missing from this tuple is a packed entry no gate holds — which is how two of the original
+# six came to be path-bound while the package was believed path-independent (.github#2688).
+GRADED_STEMS = (
+    "FS.GG.Coord.Core",
+    "FS.GG.Coord.GitHub",
+    "FS.GG.Coord.Cli.Kernel",
+    "fsgg-coord-engine",
+)
 GRADED_SUFFIXES = (".dll", ".pdb")
 
 # What `DeterministicSourcePaths` maps the source root to. Its ABSENCE is a failure as much as the
@@ -78,7 +91,17 @@ def clean(root: pathlib.Path) -> None:
     gate would then report whichever arm ran first. It is also the shape `.github#2688`'s AC2 states:
     each measurement starts from a clean `obj/` and `bin/`.
     """
-    for project in ("FS.GG.Coord.Cli", "FS.GG.Coord.Core", "FS.GG.Coord.GitHub"):
+    # KEEP THIS LIST IN STEP WITH `GRADED_STEMS`, and note that they are keyed differently: this one is
+    # PROJECT DIRECTORIES and that one is ASSEMBLY STEMS, which differ for `FS.GG.Coord.Cli` (whose
+    # assembly is `fsgg-coord-engine`). Adding a stem to the grade without adding its directory here
+    # would leave arm 2 reusing arm 1's `obj/`, so the gate would grade bytes it did not just produce —
+    # the precise failure this function's docstring exists to prevent.
+    for project in (
+        "FS.GG.Coord.Cli",
+        "FS.GG.Coord.Cli.Kernel",
+        "FS.GG.Coord.Core",
+        "FS.GG.Coord.GitHub",
+    ):
         for directory in ("obj", "bin"):
             shutil.rmtree(root / "src" / project / directory, ignore_errors=True)
 

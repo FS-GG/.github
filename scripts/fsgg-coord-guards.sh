@@ -341,7 +341,12 @@ BOARD_READS="batch board body-edits bootstrap budget command-contract cycle deci
 # drift instead of reddening on it. Stated as a miss rather than left implied: a shared checkout behind
 # ONLY on a package pin or an SDK band is not caught here, and `dirty_guard` will not see it either once
 # it is committed upstream.
-ENGINE_SOURCE_TREES="src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub"
+# `src/FS.GG.Coord.Cli.Kernel` joined the list at .github#2725, and it is a SEPARATE ENTRY rather
+# than a widening of the `src/FS.GG.Coord.Cli` one on purpose. These trees are matched as git
+# pathspecs, so `src/FS.GG.Coord.Cli` already covers a directory whose name merely starts with it
+# only by accident of prefix matching — and relying on that would also sweep in a future
+# `src/FS.GG.Coord.Cli.Tests`. The engine is now two projects and the list says two projects.
+ENGINE_SOURCE_TREES="src/FS.GG.Coord.Cli src/FS.GG.Coord.Cli.Kernel src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub"
 
 # WHAT A CHECKOUT WOULD HAVE HAD TO EDIT TO CHANGE THE ENGINE IT BUILDS (.github#2653) — the subject of
 # `authored_engine_source` below, and deliberately NEITHER of the two pathspecs above and below it.
