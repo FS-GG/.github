@@ -167,39 +167,37 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.60.0 — `claim` stops silently reverting a reviewed row's board column, and the packed kit retires the start-gate predicate that encoded the old behaviour.
+    <PackageReleaseNotes>0.61.0 — a `Kind` dimension separating closeable work from standing items, and a lifecycle-reducer exemption for every non-`work` kind.
 
-WHAT MOVED, AND WHY IT IS A MINOR. Measured against 0.59.0, the newest version any consumer can actually
-restore. Two things a receiver can observe move, and either alone would carry the line.
+WHAT MOVED, AND WHY IT IS A MINOR. Measured against 0.60.0, the newest version any consumer can actually
+restore. Two receiver-observable things move, and either alone would carry the line.
 
-First, `claim` derives the board column it writes from the item's LIVE facts instead of a fabricated
-observation (.github#2645). Re-affirming or renewing a lock on a row that is `In review` used to hand the
-lifecycle reducer a hardcoded "this item has no PR", so the reducer correctly concluded `In progress` and
-the column silently reverted mid-review; the receipt then reported that revert as convergence. The lock,
-lease and marker behaviour are unchanged. Two things you read from `claim --json` change with it:
-`statusWrite` gains a FIFTH value, `withheld`, for the case where a fact could not be read and NO write
-was attempted — distinct from `failed`, which asserts a mutation was sent, and from `deferred`, which
-promises `flush` will land one; and `converged` now means agreement with the destination the projection
-derived, not agreement with the literal column `In progress`.
+First, the board gains a `Kind:` body-line sentinel with a closed four-value vocabulary — `work`,
+`anchor`, `register`, `directive` — in the same grammar as `Paths:`, `Class:` and `Blocked on:`
+(.github#2712). A row declaring a non-`work` kind is EXEMPT FROM THE LIFECYCLE REDUCER ENTIRELY: the
+reducer projects no `Status` for it and persists no lifecycle watermark — no park, no promotion, no
+`Done`. The scheduler refuses it with a new verdict, `not-a-unit-of-work`, that names the kind rather
+than reporting the row's column. Class anchors, registers and directives have no completion condition,
+and one `Status` lifecycle was being applied to all three.
 
-Second, the packed `pnext-item`, `intra-repo-parallel-work` and `drive-board` reference pages retire a
-start-gate `jq` predicate that asserted `.status == "In progress"` and that every worker copies verbatim.
-They now state that asserting the literal is a bug, carry the five-value `statusWrite` vocabulary, and
-draw the distinction between `withheld` (a fact could not be read; re-run `claim` once it recovers) and
-`check-board`'s CLAIM-STATUS-LAG repair (a write that genuinely lagged). A receiver whose copied predicate
-stopped matching without being told would have been failed by a patch label; this is the same
-receiver-visible-contract shape the 0.57.0 and 0.59.0 cuts took minors for.
+AN ABSENT `Kind:` LINE MEANS `work`, so every existing row behaves exactly as it did at 0.60.0. This is
+the opposite default from an absent `Class:` line, deliberately: an unset class is a triage omission
+that must stay loud, while an unset kind is the common and correct answer.
 
-WHAT DID NOT MOVE, STATED SO THE LINE IS NOT MIS-READ. The `fsgg-coord-engine` wire surface is unchanged:
-no verb, flag, help entry, render name, result name or exit code moved. `withheld` is a new INHABITANT of
-an existing reported field rather than a new field, and widening that field's documented vocabulary is
-what this release does. `claim` costs four more REST reads and one more GraphQL read per invocation as a
-direct consequence of reading the facts it used to invent; the cost is bounded by items claimed rather
-than by board size, and it is pinned by a test so a sixth read has to argue for itself.
+Second, `ready --json` and the board reads gain two fields per row: `kind` (the board column, a
+projection of the body line, `null` until an operator creates the field) and `commentCount` — observable
+REGISTER DEPTH, so a host can tell a healthy inbox from a long backlog without opening the issue. It
+rides the existing board page query as a connection `totalCount` and selects no nodes, so the board read
+costs what it did before. A `KIND-PROJECTION-LAG` chore writes the column from the body, and is withheld
+behind one diagnostic while the project declares no `Kind` field.
 
-WHAT SHIPS IN THE KIT AT THIS VERSION. The retired start-gate predicate and the five-value `statusWrite`
-contract in `pnext-item`, `intra-repo-parallel-work` and `drive-board`, and the same correction in the
-coordination docs those pages project from.
+COSTS AND LIMITS. `claim` costs one further REST read per invocation — the item's body, for its `Kind:`
+line, which cannot be taken from the board column without letting a lagging projection decide, nor from
+the persisted watermark without freezing the exemption. It is bounded by items claimed rather than by
+board size and is pinned by a test. A row whose body could not be read is treated exactly as at 0.60.0.
+
+WHAT SHIPS IN THE KIT AT THIS VERSION. The `KIND-PROJECTION-LAG` remedy row in `check-board`, and the
+`not-a-unit-of-work` verdict in the `intra-repo-parallel-work` protocol projection.
 
 WHY THIS PACKAGE MOVES WITH THE KIT. The three packages resolve one scalar (`FsggCoherentSetVersion`,
 `Directory.Build.props`) by construction (.github#2402), so all three ship at this same version.
