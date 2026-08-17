@@ -113,11 +113,12 @@ jobs:
     #
     # THE SWEEP IS NOW 432 MUTANTS OVER A 90-LEG FIXTURE, not 385 over 86: the `str` operator stopped
     # skipping literals with no alphanumeric character in them, which is the gate's entire lexical
-    # vocabulary (.github#2730 repair phase). Measured at 2m17s locally at `--jobs 16`, against 2m16s
-    # for 385 before the change. The CI figure above is NOT re-measured here and is left as the
-    # historical measurement it was; scaled by mutant count it projects to about 17m, which is why
-    # the timeout is unchanged rather than raised. If this job ever approaches 30m, raise it here
-    # with the run that measured it rather than trimming the sweep.
+    # vocabulary (.github#2730 repair phase). Measured here, not projected: 19m3s in CI at `--jobs 8`
+    # (PR #2748, head b1bbe2e7), against 15m11s for 385 — and 2m21s locally at `--jobs 16` against
+    # 2m16s for 385, which is what a 24-core machine hides about a 4-vCPU runner. So the margin is
+    # eleven minutes rather than fifteen, and the timeout stays 30 on that measurement rather than on
+    # the older one. Raise it here WITH the run that measured it if this job ever approaches 30m;
+    # trimming the sweep to fit its own timeout would be the vacuity this whole job exists to refuse.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
