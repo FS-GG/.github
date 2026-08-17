@@ -66,7 +66,74 @@ let ``#2134 duplicate inventory refuses an unmerged continuation page`` () =
 // So these tests drive the REAL `HttpTransport` over real HTTP, against real `Link` headers, which is
 // the only arrangement in which the boundary is genuinely crossed.
 
+/// The query parameters of ONE recorded request, split at `&` and `=` and unescaped — an exact map, not a
+/// substring haystack.
+///
+/// `Assert.Contains` over the raw query string was the first cut, and it leaked in the one direction that
+/// matters (.github#2735, review round 1): `"per_page=1000"` CONTAINS `"per_page=100"`, and
+/// `"state=allx"` CONTAINS `"state=all"`. So a containment assertion closes only the DOWNWARD drift and
+/// leaves the fail-open one — a page size LARGER than the constant the guard compares against — wide
+/// open. Containment is the wrong oracle for a fault whose whole shape is a value that EXTENDS the
+/// expected one; equality on the parsed value is the right one.
+///
+/// It sits ABOVE the fixture because the fixture itself now uses it: `paginatingListing` routes on the
+/// PARSED `page` parameter rather than on `Contains "page=2"`, so the fixture's own dispatch is not a
+/// member of the substring family this function exists to retire (.github#2735, review round 2, note 4).
+let private queryOf (pathAndQuery: string) =
+    match pathAndQuery.IndexOf '?' with
+    | -1 -> Map.empty
+    | mark ->
+        pathAndQuery.Substring(mark + 1).Split('&')
+        |> Array.filter (System.String.IsNullOrEmpty >> not)
+        |> Array.map (fun pair ->
+            match pair.IndexOf '=' with
+            | -1 -> System.Uri.UnescapeDataString pair, ""
+            | split ->
+                System.Uri.UnescapeDataString(pair.Substring(0, split)),
+                System.Uri.UnescapeDataString(pair.Substring(split + 1)))
+        |> Map.ofArray
+
+/// ONE request AS IT ARRIVED ON THE WIRE — every component the client put there, as a single value.
+///
+/// THIS RECORD IS THE REPAIR, AND ITS SHAPE IS THE POINT (.github#2735, review round 2, F5). This chain
+/// has now found the SAME FAULT THREE TIMES, one level further out each time:
+///
+///   round 0 — the wire assertions were `Assert.Contains` over the raw query string, so `per_page=1000`
+///             and `state=allx` both satisfied them. The oracle was too weak for the values it watched.
+///   round 1 — repaired with EQUALITY OVER THE WHOLE PARAMETER MAP, explicitly so that "the predicate is
+///             not the author's own guess at which parameters are worth watching".
+///   round 2 — the PATH IS NOT IN THE MAP. The fix pinned the query exactly; the component one level out
+///             — the one that selects WHICH COLLECTION IS READ AT ALL — was still pinned by nothing, and
+///             `issues` → `pulls` left all 631 tests green while turning the duplicate inventory into a
+///             strict subset with every plain issue silently absent.
+///
+/// The cause is not "the path was forgotten". It is that each repair named the fields it had thought of,
+/// so the NEXT unnamed field was always open. Pinning `Path` as a fourth hand-picked key would be the
+/// same mistake a fourth time. So the recorded value is the WHOLE REQUEST, its equality is structural,
+/// and the oracle below is equality against a complete literal — a component that is added, dropped,
+/// renamed or retargeted reds BY CONSTRUCTION rather than because somebody remembered it.
+///
+/// `Headers` carries every header that arrived except `Host`, which is excluded by exact name because it
+/// is the ephemeral loopback port and cannot be written down. That exclusion is a DENY-LIST OF ONE, not
+/// an allow-list: a header this reader starts sending tomorrow is observed, and only `Host` is not.
+/// `Body` is recorded as text — empty when none was sent — which is what makes `Body = NoBody` a pinned
+/// component rather than an assumption.
+type private WireRequest =
+    { Method: string
+      Path: string
+      Query: Map<string, string>
+      Headers: Map<string, string>
+      Body: string }
+
 /// A loopback HTTP server: a free port, a settable handler, and the request log the assertions read.
+///
+/// ITS DEFAULT HANDLER REFUSES, and that is deliberate (.github#2735, review round 2, F5). It used to be
+/// `fun _ _ -> ()`, which answers 200 with an empty body to ANY request for ANY path — so a reader aimed
+/// at the wrong collection got back exactly what the right one would have returned. A fixture that
+/// answers every request is a fixture that cannot detect a wrong one, and that is precisely why the
+/// `issues` → `pulls` drift could not be seen from inside the suite. Production answers a wrong path with
+/// a 404; the fixture now does too, so the mutation is caught by the FIXTURE'S SHAPE as well as by the
+/// assertion below — two independent gates on the same fault, which is what closing a class looks like.
 type private Loopback() =
     let listener = new System.Net.HttpListener()
 
@@ -79,8 +146,45 @@ type private Loopback() =
         p
 
     let prefix = $"http://127.0.0.1:%d{port}/"
-    let seen = System.Collections.Generic.List<string>()
-    let mutable handler: System.Net.HttpListenerRequest -> System.Net.HttpListenerResponse -> unit = fun _ _ -> ()
+    let seen = System.Collections.Generic.List<WireRequest>()
+
+    // THE DEFAULT IS A REFUSAL, NOT AN EMPTY SUCCESS. See the type's doc comment: an unconfigured
+    // fixture that answers 200 is an oracle that cannot tell a right request from a wrong one.
+    let mutable handler: System.Net.HttpListenerRequest -> System.Net.HttpListenerResponse -> unit =
+        fun req res ->
+            let body =
+                $"""{{"message":"Loopback received a request no handler was installed for: %s{req.HttpMethod} %s{req.Url.PathAndQuery}"}}"""
+
+            res.StatusCode <- 404
+            res.ContentType <- "application/json"
+            let bytes = System.Text.Encoding.UTF8.GetBytes body
+            res.ContentLength64 <- int64 bytes.Length
+            res.OutputStream.Write(bytes, 0, bytes.Length)
+
+    /// Everything the client put on the wire, as one value. `Host` alone is dropped — it is the
+    /// ephemeral port and cannot be written into an oracle; every other header is kept.
+    let record (req: System.Net.HttpListenerRequest) =
+        let headers =
+            req.Headers.AllKeys
+            |> Array.choose (fun k ->
+                if isNull k || System.String.Equals(k, "Host", System.StringComparison.OrdinalIgnoreCase) then
+                    None
+                else
+                    Some(k, req.Headers.[k]))
+            |> Map.ofArray
+
+        let body =
+            if req.HasEntityBody then
+                use reader = new System.IO.StreamReader(req.InputStream, req.ContentEncoding)
+                reader.ReadToEnd()
+            else
+                ""
+
+        { Method = req.HttpMethod
+          Path = req.Url.AbsolutePath
+          Query = queryOf req.Url.PathAndQuery
+          Headers = headers
+          Body = body }
 
     do
         listener.Prefixes.Add prefix
@@ -90,7 +194,8 @@ type private Loopback() =
             while listener.IsListening do
                 try
                     let ctx = listener.GetContext()
-                    lock seen (fun () -> seen.Add ctx.Request.Url.PathAndQuery)
+                    let observed = record ctx.Request
+                    lock seen (fun () -> seen.Add observed)
                     handler ctx.Request ctx.Response
 
                     try
@@ -139,35 +244,35 @@ let private issuePage (numbers: int list) =
 /// wire test below is what keeps the restatement honest.
 let private pageOneSize = 100
 
-/// The query parameters of ONE recorded request, split at `&` and `=` and unescaped — an exact map, not a
-/// substring haystack.
-///
-/// `Assert.Contains` over the raw query string was the first cut, and it leaked in the one direction that
-/// matters (.github#2735, review round 1): `"per_page=1000"` CONTAINS `"per_page=100"`, and
-/// `"state=allx"` CONTAINS `"state=all"`. So a containment assertion closes only the DOWNWARD drift and
-/// leaves the fail-open one — a page size LARGER than the constant the guard compares against — wide
-/// open. Containment is the wrong oracle for a fault whose whole shape is a value that EXTENDS the
-/// expected one; equality on the parsed value is the right one.
-let private queryOf (pathAndQuery: string) =
-    match pathAndQuery.IndexOf '?' with
-    | -1 -> Map.empty
-    | mark ->
-        pathAndQuery.Substring(mark + 1).Split('&')
-        |> Array.filter (System.String.IsNullOrEmpty >> not)
-        |> Array.map (fun pair ->
-            match pair.IndexOf '=' with
-            | -1 -> System.Uri.UnescapeDataString pair, ""
-            | split ->
-                System.Uri.UnescapeDataString(pair.Substring(0, split)),
-                System.Uri.UnescapeDataString(pair.Substring(split + 1)))
-        |> Map.ofArray
+/// The ONE collection `duplicateCandidates` is entitled to read, spelled out so the fixtures can refuse
+/// anything else. `/issues` returns issues AND pull requests; `/pulls` returns pull requests only and
+/// carries every field this reader parses, so a drift between them is answered `Ok` over a strict subset
+/// rather than refused — which is why the fixtures below must not serve it (.github#2735, round 2, F5).
+let private expectedPath = "/repos/FS-GG/.github/issues"
+
+/// A fixture that answers ANY path cannot detect a WRONG one, so these two helpers answer exactly one
+/// path and refuse the rest with the 404 production would give. This is the structural half of F5's
+/// repair; the whole-request oracle in the wire test is the assertive half.
+let private refuseWrongPath (server: Loopback) (req: System.Net.HttpListenerRequest) (res: System.Net.HttpListenerResponse) =
+    server.Send
+        res
+        404
+        $"""{{"message":"Not Found: this fixture serves %s{expectedPath} only, and was asked for %s{req.Url.AbsolutePath}"}}"""
+        []
 
 /// `FS-GG/.github`'s shape, in miniature: a FULL first page (`pageOneSize`, the `per_page` this read asks
 /// for) with a `rel="next"` link, and a short continuation. Page two is what each test injects its fault
 /// into — the status and body of the ONLY response that differs between the green leg and the red ones.
+///
+/// The page-two branch is selected by the PARSED `page` parameter being exactly `"2"`, not by
+/// `PathAndQuery.Contains "page=2"`. The substring form worked only by luck of the page size — at
+/// `pageOneSize = 2` the string `per_page=2` contains `page=2` and page one would answer as page two —
+/// and it is a member of the very containment family this file spent round 1 retiring.
 let private paginatingListing (server: Loopback) (pageTwoStatus: int) (pageTwoBody: string) =
     server.On(fun req res ->
-        if req.Url.PathAndQuery.Contains "page=2" then
+        if req.Url.AbsolutePath <> expectedPath then
+            refuseWrongPath server req res
+        elif queryOf req.Url.PathAndQuery |> Map.tryFind "page" = Some "2" then
             server.Send res pageTwoStatus pageTwoBody []
         else
             server.Send
@@ -177,6 +282,15 @@ let private paginatingListing (server: Loopback) (pageTwoStatus: int) (pageTwoBo
                 [ "Link",
                   $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"next\", "
                   + $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"last\"" ])
+
+/// One page, no continuation link: the shape a listing that genuinely has nothing produces. Same
+/// refusal discipline as `paginatingListing`.
+let private singlePageListing (server: Loopback) (body: string) =
+    server.On(fun req res ->
+        if req.Url.AbsolutePath <> expectedPath then
+            refuseWrongPath server req res
+        else
+            server.Send res 200 body [])
 
 [<Fact>]
 let ``.github#2735 the duplicate inventory MERGES the continuation page`` () =
@@ -199,7 +313,7 @@ let ``.github#2735 the duplicate inventory MERGES the continuation page`` () =
     | Error e -> failwithf "a listing that paginates must yield a COMPLETE inventory, not a refusal: %A" e
 
 [<Fact>]
-let ``.github#2735 the duplicate inventory REQUESTS state=all at exactly the page size its guard compares against`` () =
+let ``.github#2735 the duplicate inventory's REQUEST — method, collection path, query, headers and body — is pinned WHOLE`` () =
     // THE WIRE IS ITS OWN GATE, UNDER ITS OWN NAME, and that separation is half the repair (.github#2735,
     // review round 1). These assertions used to ride along inside the merge test above, where a `per_page`
     // drift reddened a test titled `... MERGES the continuation page` — a red whose NAME describes a
@@ -220,14 +334,47 @@ let ``.github#2735 the duplicate inventory REQUESTS state=all at exactly the pag
     //   test, nothing in the suite pinned it: #2134's own fixture is a `Fake.Recorder`, which never sees a
     //   query at all.
     //
-    // THE ASSERTION IS EQUALITY OVER THE WHOLE PARAMETER MAP, not containment over a chosen subset. Both
-    // halves of that matter. Containment is what leaked (`queryOf` above says how); and asserting the
-    // whole map rather than two hand-picked keys means the predicate is not the author's own guess at
-    // which parameters are worth watching — a parameter added, dropped or renamed reds here too.
+    // AND THE PARAMETERS ARE NOT THE WHOLE REQUEST — which is the round-2 finding, and the reason this
+    // test is now scoped to the request as a VALUE rather than to a chosen set of its fields.
     //
-    // NOTHING ABOUT THE RESPONSE IS ASSERTED, deliberately. A second oracle here would give this gate a
-    // second reason to red, and a gate that can red for two reasons is precisely what both round-1
-    // findings were made of.
+    // Round 1 pinned the query map exactly, and argued the point that matters: asserting the whole map
+    // "means the predicate is not the author's own guess at which parameters are worth watching". The
+    // argument was right and the scope was one level too small. `Path` — the component that selects
+    // WHICH COLLECTION IS READ AT ALL, and which therefore dominates every parameter that merely filters
+    // it — is not a member of that map, so `repos/{o}/{r}/issues` → `repos/{o}/{r}/pulls` left all 631
+    // tests green. That drift does not 404: `/pulls` answers 200 with `number`, `state`, `title` and
+    // `body` all populated, so the reader returns `Ok` OVER A STRICT SUBSET with every plain issue
+    // silently missing from the duplicate inventory. Fail-open, on the seam that decides whether a row
+    // about to be created already exists.
+    //
+    // MEASURED AT THIS FILE'S PARENT HEAD, before the repair below existed: `issues` → `pulls` GREEN
+    // 631/631 exit 0; owner/repo transposed GREEN 631/631; `Method` `GET` → `POST` GREEN 631/631;
+    // `IfNoneMatch` `None` → `Some "…"` GREEN 631/631; `Body` `NoBody` → `Json "{}"` GREEN 631/631.
+    // FIVE of the request's seven components drifted without a single red. The query map was not
+    // under-specified — it was the only thing specified at all.
+    //
+    // SO THE ORACLE IS THE WHOLE VALUE, AND THAT IS A CHOICE ABOUT THE CLASS, NOT ABOUT THE PATH.
+    // Adding `Path` as a fourth hand-picked key would repair this instance and leave the next component
+    // open, exactly as rounds 0 and 1 did. Equality against a COMPLETE `WireRequest` literal has the
+    // property those did not: there is no author's judgement about which components deserve watching, so
+    // a component that is added, dropped, renamed or retargeted reds here BY CONSTRUCTION. The cost is
+    // named, in the house style — this test reds when the transport starts sending a new header, and
+    // that red is correct: a header the suite has never seen is a wire change nobody has reviewed.
+    //
+    // WHAT IS *NOT* PINNED HERE, AND WHY NOT — the two `Request` components that never reach a wire:
+    //   `Budget = Rest` decides which meter the call is billed to. It is consumed inside the client's
+    //   accounting and emits no header, no parameter and no path, so NO loopback fixture can observe it;
+    //   an assertion here would have to reach into the reader's source, which measures the test rather
+    //   than the subject. It is named rather than tested, and `Reads.fsi` carries the claim.
+    //   `Subject = subject` travels only into diagnostics. It is already observed, by the boundary tests
+    //   below, which match on the text of the refusal it names.
+    //
+    // NOTHING ABOUT THE RESPONSE IS ASSERTED, deliberately, and THIS IS THE ONE FIXTURE IN THE FILE THAT
+    // STILL ANSWERS ANY PATH. The others now refuse a wrong one (see `refuseWrongPath`), and that is the
+    // right default. Here it would be wrong: if this fixture 404'd a drifted path, a path mutation could
+    // red this test through the response rather than through the request, and a gate that can red for
+    // two reasons is precisely what both round-1 findings were made of. Response-blindness is what makes
+    // this test's red attributable to the request and nothing else.
     use server = new Loopback()
     server.On(fun _ res -> server.Send res 200 "[]" [])
 
@@ -236,9 +383,17 @@ let ``.github#2735 the duplicate inventory REQUESTS state=all at exactly the pag
 
     Assert.Equal(1, List.length server.Requests)
 
-    Assert.Equal<Map<string, string>>(
-        Map.ofList [ "state", "all"; "per_page", string pageOneSize ],
-        queryOf (List.head server.Requests)
+    Assert.Equal<WireRequest>(
+        { Method = "GET"
+          Path = expectedPath
+          Query = Map.ofList [ "state", "all"; "per_page", string pageOneSize ]
+          Headers =
+            Map.ofList
+                [ "Accept", "application/vnd.github+json"
+                  "Authorization", "Bearer t"
+                  "User-Agent", "fsgg-coord" ]
+          Body = "" },
+        List.head server.Requests
     )
 
 [<Fact>]
@@ -288,7 +443,7 @@ let ``.github#2735 a listing that genuinely has nothing reads as an EMPTY invent
     // inventory and it is empty" are different answers, and a repair that collapsed them in either
     // direction would be the defect. One page, no `rel="next"`, nothing in it: `Ok []`.
     use server = new Loopback()
-    server.On(fun _ res -> server.Send res 200 "[]" [])
+    singlePageListing server "[]"
 
     use transport = new HttpTransport(server.Base, "t")
 
