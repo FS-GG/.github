@@ -339,6 +339,114 @@ module DeliveryApplication =
                                 ({ Id = id; Kind = kind; Evidence = evidence; HeadSha = headSha; Verified = evidence.IsSome }: Delivery.Obligation))
                             |> Ok
 
+    // ============================================================================================
+    // THE MERGE ELECTION (.github#2395, §11.2 slice 3 of .github#1858)
+    // ============================================================================================
+    //
+    // §11.2 row 3 declares TWO acts — *"`delivery` posts the merge election, THEN writes the PR
+    // authorization marker NAMING it and bound to head"* — and only the second landed. This is the
+    // pure half of the first: the marker's text, and the parse that recognises one. The IO half
+    // (read the item, post when absent, hand the grant to the authorization) is `Client`'s.
+    //
+    // THE SPELLING IS NOT INVENTED HERE. `scripts/check-claim-fence.py` already fixed it as a
+    // READER, because writing the election was this row's job and the reader could not wait for it:
+    // `REQUIRED_ELECTION_FIELDS = ("v", "opkey", "item", "gen", "receiver", "op")`, matched by
+    // `ELECTION_MARKER_RE`. This producer emits exactly those six, plus `pr=` (below), and every
+    // regex in this section mirrors that gate's rather than inventing a second grammar.
+    //
+    // THE ANCHORING IS THE GATE'S, AND IT IS STRICTER THAN THE DELIVERY MARKERS ABOVE. The fence
+    // matches the election with `re.match` on the RAW comment body — `^<!--\s*fsgg:merge-election\s`,
+    // no `MULTILINE`, and NO `.strip()` anywhere on the path (`read_item_state` reads `comment["body"]`
+    // and matches it directly). So a leading newline or a leading space makes an election INVISIBLE
+    // to the only reader that grades it. This module therefore does NOT reuse `leadingLine`, which
+    // trims: it anchors at byte 0 exactly as the gate does, so a marker this parse accepts is one the
+    // gate accepts and — the direction that matters for a producer — a body this module composes
+    // begins with the marker at byte 0. The gate's own reason for the stricter anchor is that check 4
+    // is what everything else is grounded in: a comment that merely QUOTES an election — a review
+    // note, a design excerpt, this repository's design doc pasted into a comment — must not enter an
+    // election it never joined.
+    //
+    // A NEW PREFIX IS SAFE, and that is a property rather than a hope: the claim CAS matches
+    // `fsgg:claim` and nothing else (`src/FS.GG.Coord.GitHub/Reads.fs`, `markerRe`), so an election
+    // marker is invisible to the lock by construction and can forge no tenancy.
+
+    /// One election as it sits on the item: the COMMENT ID — which is the whole of `grant=`, because
+    /// it is server-assigned and no caller chooses it — and the marker's raw fields.
+    ///
+    /// `Fields` is deliberately a raw `Map` rather than a record: the gate reads unknown fields
+    /// tolerantly and this producer must be able to see an election written by an older or newer
+    /// engine without failing to parse it. Nothing here validates; `Client` decides which elections
+    /// are this delivery target's, and the fence decides which one wins.
+    type Election = { Id: int64; Fields: Map<string, string> }
+
+    // `RegexOptions.Singleline` IS Python's `re.DOTALL`, and it is load-bearing for the same reason
+    // the gate gives: the design doc's own spelling of this marker spans lines. `^` with no
+    // `Multiline` anchors at position 0 of the input in .NET exactly as Python's `^` does without
+    // `re.MULTILINE`, so this is the gate's `re.match(r"^...")` and not an approximation of it.
+    let private electionMarkerPattern =
+        Regex(@"^<!--\s*fsgg:merge-election\s(?<fields>.*?)-->", RegexOptions.Compiled ||| RegexOptions.Singleline)
+
+    // The gate's `FIELD_RE`, character for character. Values are non-whitespace by construction —
+    // none of these fields ever legitimately contains a space.
+    let private electionFieldPattern =
+        Regex(@"(?<k>[A-Za-z]+)=(?<v>\S+)", RegexOptions.Compiled)
+
+    /// The exact election text `delivery` appends to the item.
+    ///
+    /// Six of the seven fields are `REQUIRED_ELECTION_FIELDS`. The seventh, `pr=`, is this producer's
+    /// IDEMPOTENCE DISCRIMINATOR and it is why repeating a `delivery` call is safe. The fence ignores
+    /// fields it does not require, so it costs the reader nothing; it earns its place on the write
+    /// side, twice over:
+    ///
+    ///   * WITHOUT it, a second `delivery` call for the same item would post a SECOND election under
+    ///     the same opkey. Comment ids are monotone, so that election is strictly HIGHER, and an
+    ///     authorization naming it loses the gate's own lowest-id comparison — the pull request would
+    ///     be refused for the rest of that claim generation. Posting unconditionally is not merely
+    ///     wasteful; it is self-denial.
+    ///   * With a LAXER rule — "reuse any election bearing this opkey" — a second executor delivering
+    ///     the same item under one generation through a DIFFERENT pull request would inherit the
+    ///     first executor's grant and both would pass check 4. That would neuter the one guarantee
+    ///     the election exists to provide: design §4.2, *"at most one merge takes effect per (item,
+    ///     generation, receiver)"*. Keyed on the pull request, each contender posts its own election
+    ///     and only the lowest id wins, which is the refusal the fence's own check-4 message
+    ///     describes.
+    ///
+    /// `op=merge` is `Operation.wire Operation.Merge`; it is spelled literally here because this
+    /// marker is a wire form and `Operation.wire` is the authority for the spelling rather than a
+    /// value to interpolate into a template whose other six fields are literals too — the opkey it
+    /// keys is composed through `Operation.compose`, which is where the vocabulary is actually load-
+    /// bearing.
+    let electionMarker (opkey: string) (item: string) (gen: string) (receiver: string) (pr: int) : string =
+        $"<!-- fsgg:merge-election v=1 opkey=%s{opkey} item=%s{item} gen=%s{gen} receiver=%s{receiver} op=merge pr=%d{pr} -->"
+
+    /// Every election on the item, one per comment whose body OPENS with the marker.
+    ///
+    /// A comment carrying no election, or quoting one below its first byte, yields nothing — it is
+    /// not an election, exactly as the gate reads it.
+    let electionsFromComments (comments: Driver.ReviewComment list) : Election list =
+        comments
+        |> List.choose (fun comment ->
+            let matched = electionMarkerPattern.Match comment.Body
+            if not matched.Success then
+                None
+            else
+                let fields =
+                    electionFieldPattern.Matches(matched.Groups.["fields"].Value)
+                    |> Seq.map (fun m -> m.Groups.["k"].Value, m.Groups.["v"].Value)
+                    |> Map.ofSeq
+                Some { Id = comment.Id; Fields = fields })
+
+    /// The elections THIS delivery target already owns — same operation key, same pull request.
+    ///
+    /// Deliberately NOT "every election bearing this opkey": see `electionMarker`'s second bullet.
+    /// The wider set is the candidate set the FENCE computes, and the whole point of the fence is
+    /// that this producer does not get to compute it.
+    let electionsOwnedBy (opkey: string) (pr: int) (elections: Election list) : Election list =
+        elections
+        |> List.filter (fun election ->
+            election.Fields.TryFind "opkey" = Some opkey
+            && election.Fields.TryFind "pr" = Some(string pr))
+
     /// The live adapter must consume its delivery receipt and prove that the same claim generation
     /// still wins immediately before it asks GitHub to merge.  Keeping this boundary pure makes the
     /// no-write branch explicit and independently testable.

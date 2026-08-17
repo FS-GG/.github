@@ -16,6 +16,33 @@ module DeliveryApplication =
         comments: FS.GG.Coord.Driver.ReviewComment list ->
             Result<FS.GG.Coord.Delivery.Obligation list, string>
 
+    /// One `fsgg:merge-election` marker as it sits on the item (.github#2395, design slice 3 of
+    /// .github#1858).
+    ///
+    /// `Id` is the comment id, and it is the whole of the authorization's `grant=`: GitHub assigns
+    /// it, so no caller chooses it, which is what separates a grounded authorization from a
+    /// decorative one. `Fields` is raw and unvalidated on purpose — the fence tolerates fields it
+    /// does not require, and a producer that could not even PARSE an election written by another
+    /// engine version would post a duplicate rather than reuse it.
+    type Election = { Id: int64; Fields: Map<string, string> }
+
+    /// The exact `fsgg:merge-election` text `delivery` appends to the item — the six fields
+    /// `scripts/check-claim-fence.py` requires, plus `pr=`, this producer's idempotence
+    /// discriminator. See the implementation's own comment for why `pr=` is load-bearing in BOTH
+    /// directions: without it a repeated call denies its own pull request, and with a laxer rule two
+    /// executors under one generation would both pass check 4.
+    val electionMarker:
+        opkey: string -> item: string -> gen: string -> receiver: string -> pr: int -> string
+
+    /// Every election on the item, one per comment whose body OPENS with the marker at byte 0 —
+    /// the fence's own anchoring, which does not trim, so a comment that merely quotes an election
+    /// is not one.
+    val electionsFromComments: comments: FS.GG.Coord.Driver.ReviewComment list -> Election list
+
+    /// The elections this delivery target already owns: same operation key AND same pull request.
+    /// Deliberately narrower than the fence's candidate set, which is keyed on the opkey alone.
+    val electionsOwnedBy: opkey: string -> pr: int -> elections: Election list -> Election list
+
     /// Consume the inspected receipt and require the current winning claim generation before a merge.
     val authorizeGuardedLanding:
         freshnessToken: string ->

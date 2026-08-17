@@ -344,11 +344,19 @@ module Client =
         FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.GitHub.Reads.Marker option>
 
     /// The exact marker text `delivery` writes: `v=1 item=<owner/repo>#<n> gen=<claim marker comment
-    /// id> head=<40-hex sha>`. The gate silently accepts (never rejects on) any ADDITIONAL `key=value`
-    /// pair, so this stays forward-compatible with a future `opkey=`/`grant=` without either side
-    /// having to change first.
+    /// id> opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha>`.
+    ///
+    /// ALL SIX of `scripts/check-claim-fence.py`'s `REQUIRED_AUTH_FIELDS`. Writing only four — which
+    /// is what landed the first time this row was worked — did not make that gate pass NARROWLY: it
+    /// stopped the gate at CHECK 1, so check 4, the only one of the six a forger cannot satisfy by
+    /// typing, was never evaluated on any real pull request.
+    ///
+    /// The two narrower readers are unaffected and need no cutover: `check-claim-generation.py` (the
+    /// only marker reader among `main`'s required contexts) and the receiver-side validation job in
+    /// `.github/workflows/kit-materialize.yml` each require four fields and accept additional pairs.
     val authorizationMarker:
-      item: string -> gen: string -> head: string -> string
+      item: string ->
+        gen: string -> opkey: string -> grant: string -> head: string -> string
 
     /// The one write-worthy fact about a PR body: is its authorization already exactly what the live
     /// claim/head demand, or does it need rebinding? `AuthorizationCurrent` lets the caller skip a PATCH
@@ -368,9 +376,42 @@ module Client =
     ///     freshly rendered marker (a stale head, a stale gen, or any other drift) is treated exactly
     ///     like zero matches: stripped and replaced, never left in place or duplicated alongside a
     ///     second, corrected one.
+    ///
+    /// That second rule is also the WHOLE migration for the six-field marker: a four-field marker
+    /// left on an open pull request is not byte-identical to the freshly rendered one, so it is
+    /// replaced in place on the next `delivery` call, one marker in and one marker out.
     val rebindAuthorization:
       body: string ->
-        item: string -> gen: string -> head: string -> AuthorizationRebind
+        item: string ->
+        gen: string ->
+        opkey: string -> grant: string -> head: string -> AuthorizationRebind
+
+    /// The merge election this pull request's authorization is GROUNDED IN, as `(opkey, grant)` —
+    /// posting one only when this delivery target does not already own it (.github#2395, design
+    /// §4.2, §11.2 row 3's first act).
+    ///
+    /// `opkey` is `Operation.compose item gen receiver Merge`, CALLED rather than re-expressed so
+    /// this producer and the fence's check 5 cannot disagree about a key. `grant` is the election
+    /// comment's server-assigned id, which is what a forger cannot choose and therefore what makes
+    /// the authorization grounded rather than decorative.
+    ///
+    /// IDEMPOTENT, AND THAT IS A CORRECTNESS PROPERTY RATHER THAN A SAVING. An election bearing this
+    /// operation key AND this pull request is reused — the LOWEST of them, so a duplicate a lost POST
+    /// response could have created cannot change which id is granted. Posting unconditionally would
+    /// deny this pull request for the rest of its claim generation, because a second election carries
+    /// a strictly higher comment id and the fence grants only the lowest.
+    ///
+    /// It REFUSES rather than degrades: a `compose` refusal, an unreadable comment list or a failed
+    /// POST propagates, and `ensureAuthorization` therefore writes nothing at all — never a
+    /// four-field fallback, which is the decorative case design §6.3 names.
+    ///
+    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests` drives it directly against a `Fake.Recorder`,
+    /// the same internal-seam idiom `ensureAuthorization` and `authorizedMarker` already use.
+    val electionGrounding:
+      ctx: Kernel.Context ->
+        target: FS.GG.Coord.Types.Ref ->
+        gen: string ->
+        pr: int -> FS.GG.Coord.GitHub.Errors.IoResult<string * string>
 
     /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
     /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE

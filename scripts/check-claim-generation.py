@@ -10,11 +10,10 @@ gate closes the boundary the design doc identifies as the one every guard *insid
 reach: an executor that never ran a lock verb has nothing a client-side guard can intercept, so the
 fence must live where the *effect* lands (the merge), not where the tool is invoked (design doc §1.1).
 
-THIS SLICE'S SCOPE, DELIBERATELY NARROWER THAN THE FULL DESIGN. The design's full merge gate (§6.3)
-has six checks, two of which (`grant=` names the lowest-id merge-ELECTION marker; the opkey recomputes)
-depend on machinery — `OpKey` and the merge election itself — that live in `src/FS.GG.Coord.*` and are
-explicitly OUT OF this item's `Paths:`. (`delivery` writing the plain `v=`/`item=`/`gen=`/`head=` marker
-landed separately, `.github#2395`; the election and its `opkey=`/`grant=` fields have not.) Those two
+THIS SLICE'S SCOPE, DELIBERATELY NARROWER THAN THE FULL DESIGN, AND NOW NARROWER THAN THE PRODUCER TOO.
+The design's full merge gate (§6.3) has six checks, two of which (`grant=` names the lowest-id
+merge-ELECTION marker; the opkey recomputes) depend on machinery — `OpKey` and the merge election
+itself — that lives in `src/FS.GG.Coord.*` and was explicitly OUT OF this item's `Paths:`. Those two
 checks are what grounds the marker in something a forger cannot type (design doc §6.3: "Only check 4
 grounds the marker in something the forger cannot choose"). Without them, THIS gate is satisfiable by a
 PR author who simply copies the CURRENT live generation into the marker by hand — it deduplicates and
@@ -22,22 +21,35 @@ fences the `#1853` incident's actual shape (an executor holding NO claim at all,
 generation and is refused at check 1 regardless), but it does not yet defend against a forger who *can*
 read the live generation. That is `.github#1858`'s own AC1 caveat repeated here, not a new one:
 `#2342`'s own scope says "Root cause is deliberately NOT asserted" and "[t]his slice consumes that
-identity at the merge boundary rather than defining the whole scheme." A later slice landing the
-election and re-wiring this gate's check 4 (see `#1858`'s replacement plan) closes that residual; it is
-out of scope here.
+identity at the merge boundary rather than defining the whole scheme."
+
+THAT RESIDUAL IS NOW CLOSED SOMEWHERE ELSE, AND THIS GATE DID NOT HAVE TO MOVE. `.github#2395`'s second
+landing made `delivery` post the `fsgg:merge-election` marker and compose the marker's `opkey=`/`grant=`
+alongside the four fields below, and `scripts/check-claim-fence.py` is the six-check reader that grades
+them. So the PRODUCER now writes six fields while THIS gate still requires four — which is the
+forward-compatibility the next paragraph commits to, working as intended rather than a drift. The two
+gates coexist deliberately during the observe-only phase (`.github#2719`): this armed narrow one keeps
+its current guarantee unchanged while the wider one is observed, and reconciling them is arming's
+business (slice 8, `.github#2723`), not this file's.
 
 THE MARKER THIS GATE READS. The design doc (§6.3) specifies a `fsgg:pr-authorization` marker in the PR
 BODY, bound to its head, carrying `item=`, `gen=`, `opkey=`, `grant=`, `head=`. `.github#2395` (design
-slice 3) made `delivery --apply --pr N` write and rebind this marker's `v=`/`item=`/`gen=`/`head=`
-fields automatically — `Client.ensureAuthorization`/`Client.rebindAuthorization`,
-`src/FS.GG.Coord.Cli/Client.fs` — but deliberately not the merge-election `opkey=`/`grant=`, which still
-depend on machinery out of that item's `Paths:` (see "THIS SLICE'S SCOPE" above). So this gate DEFINES
-the subset of that marker it can validate today and is written to remain forward-compatible with the
-rest: it requires `v=1 item=<owner>/<repo>#<n> gen=<comment id> head=<40-hex sha>`, and silently accepts
-(never rejects on) any *additional* `key=value` pairs — including a future `opkey=`/`grant=` — so a
-later slice landing them does not have to avoid emitting them and this gate does not have to change to
-tolerate them:
+slice 3) made `delivery <ref> --pr N` write and rebind that marker automatically —
+`Client.ensureAuthorization`/`Client.rebindAuthorization`, `src/FS.GG.Coord.Cli/Client.fs` — and its
+second landing added the merge-election `opkey=`/`grant=`, so the production path now emits ALL SIX.
+This gate DEFINES the subset of that marker it validates and is written to remain forward-compatible
+with the rest: it requires `v=1 item=<owner>/<repo>#<n> gen=<comment id> head=<40-hex sha>`, and
+silently accepts (never rejects on) any *additional* `key=value` pairs — `opkey=`/`grant=` included —
+so the slice that landed them did not have to avoid emitting them and this gate did not have to change
+to tolerate them. THAT IS WHAT MADE THE WIDENING NEED NO CUTOVER: this is the only marker reader among
+`main`'s required status contexts, so a six-field marker passes it, and a FOUR-field marker left on a
+pull request opened before that landing keeps passing it until `Client.rebindAuthorization` replaces it
+on that pull request's next `delivery` call.
 
+Both shapes below are accepted, and the first is what the production path writes today:
+
+    <!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2342 gen=5250268950
+         opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha> -->
     <!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2342 gen=5250268950 head=<40-hex sha> -->
 
 APPLICABILITY: ONLY a pull request whose branch is `item/<n>-*` — `pnext-item` §2's own naming
@@ -507,10 +519,11 @@ class ClaimState:
 def find_authorizations(body: str) -> list[dict[str, str]]:
     """Every `fsgg:pr-authorization` marker in `body`, each as its raw `{key: value}` fields.
 
-    Deliberately permissive about UNKNOWN fields (a future `opkey=`/`grant=`) and deliberately silent
-    about fields it does not understand — this gate validates only `v`/`item`/`gen`/`head`; anything
-    else passes through unread, so a later slice adding fields to the SAME marker does not have to
-    change this gate first (see the docstring's "THE MARKER THIS GATE READS").
+    Deliberately permissive about UNKNOWN fields and deliberately silent about fields it does not
+    understand — this gate validates only `v`/`item`/`gen`/`head`; anything else passes through unread.
+    That is no longer a hypothetical allowance: the production writer emits `opkey=` and `grant=` as
+    well (`.github#2395`), and this reader was never edited to accommodate them (see the docstring's
+    "THE MARKER THIS GATE READS").
     """
     out: list[dict[str, str]] = []
     for m in AUTH_MARKER_RE.finditer(body):

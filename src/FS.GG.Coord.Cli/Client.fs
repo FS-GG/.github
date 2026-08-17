@@ -1444,9 +1444,9 @@ module Client =
                 | Error e -> Error e
 
     /// `delivery`'s write-side counterpart to `scripts/check-claim-generation.py`'s read side
-    /// (.github#2395, design slice 3 of .github#1858, narrowed to the marker alone — the merge
-    /// election's `opkey=`/`grant=` stay out of this item's `Paths:`, exactly as that gate's own
-    /// docstring already documents for its read side).
+    /// (.github#2395, design slice 3 of .github#1858 — BOTH acts of §11.2 row 3 now, the merge
+    /// election and the authorization that names it; the first landing carried only the second and
+    /// said so in this comment's own text).
     ///
     /// UNLIKE the delivery-obligation/receipt markers `DeliveryApplication.obligationsFromComments`
     /// parses, this one is matched the SAME PERMISSIVE way `check-claim-generation.py`'s `AUTH_MARKER_RE`
@@ -1462,11 +1462,26 @@ module Client =
         )
 
     /// The exact marker text `delivery` writes: `v=1 item=<owner/repo>#<n> gen=<claim marker comment
-    /// id> head=<40-hex sha>`. The gate silently accepts (never rejects on) any ADDITIONAL `key=value`
-    /// pair, so this stays forward-compatible with a future `opkey=`/`grant=` without either side
-    /// having to change first.
-    let authorizationMarker (item: string) (gen: string) (head: string) : string =
-        $"<!-- fsgg:pr-authorization v=1 item=%s{item} gen=%s{gen} head=%s{head} -->"
+    /// id> opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha>`.
+    ///
+    /// ALL SIX FIELDS `scripts/check-claim-fence.py`'s `REQUIRED_AUTH_FIELDS` names, in its own
+    /// order. Until this row's second landing it wrote FOUR, and the consequence was not a narrower
+    /// pass: the fence returns at CHECK 1 on a marker missing `opkey`/`grant`, so its check 4 — the
+    /// only one of the six a forger cannot satisfy by typing — was never evaluated on any real pull
+    /// request, while `.github/workflows/fsgg-claim-fence.yml` told operators check 4 "is expected to
+    /// fail on every real pull request today" for a known reason. A documented expectation about an
+    /// unreachable branch is `.github#266`'s class one level up.
+    ///
+    /// THE TWO NARROWER READERS ARE UNAFFECTED, WHICH IS WHY THIS NEEDS NO CUTOVER.
+    /// `scripts/check-claim-generation.py` — the only one of the three readers that is a REQUIRED
+    /// status context on `main` — requires `v`/`item`/`gen`/`head` and commits in its own docstring
+    /// to "silently accept (never reject on) any ADDITIONAL `key=value` pairs — including a future
+    /// `opkey=`/`grant=`". The receiver-side validation job in `.github/workflows/kit-materialize.yml`
+    /// requires the same four with the same tolerance. So a six-field marker passes both, and an
+    /// existing FOUR-field marker on an open pull request keeps passing both until `rebindAuthorization`
+    /// replaces it on that pull request's next `delivery` call.
+    let authorizationMarker (item: string) (gen: string) (opkey: string) (grant: string) (head: string) : string =
+        $"<!-- fsgg:pr-authorization v=1 item=%s{item} gen=%s{gen} opkey=%s{opkey} grant=%s{grant} head=%s{head} -->"
 
     /// The one write-worthy fact about a PR body: is its authorization already exactly what the live
     /// claim/head demand, or does it need rebinding? `AuthorizationCurrent` lets the caller skip a PATCH
@@ -1486,8 +1501,15 @@ module Client =
     ///     freshly rendered marker (a stale head, a stale gen, or any other drift) is treated exactly
     ///     like zero matches: stripped and replaced, never left in place or duplicated alongside a
     ///     second, corrected one.
-    let rebindAuthorization (body: string) (item: string) (gen: string) (head: string) : AuthorizationRebind =
-        let desired = authorizationMarker item gen head
+    ///
+    /// THAT SECOND RULE IS ALSO THE WHOLE MIGRATION FOR THE SIX-FIELD MARKER, and it needed no new
+    /// code. A four-field marker written before this row's second landing is not byte-identical to a
+    /// six-field one, so it takes the `AuthorizationRebound` arm and is replaced in place on the next
+    /// `delivery` call — one marker in, one marker out. There is no cutover, no dual-shape
+    /// acceptance and no rebinding campaign, because the only marker reader that is a required status
+    /// context accepts both shapes (see `authorizationMarker`).
+    let rebindAuthorization (body: string) (item: string) (gen: string) (opkey: string) (grant: string) (head: string) : AuthorizationRebind =
+        let desired = authorizationMarker item gen opkey grant head
         let matches = authorizationMarkerPattern.Matches body
         if matches.Count = 1 && matches.[0].Value.Trim() = desired then
             AuthorizationCurrent
@@ -1540,6 +1562,109 @@ module Client =
     /// for `authorizedMarker`, above. This is what makes the LIVE wired IO (`Reads.prBody` then a
     /// conditional `ctx.Transport.Send` PATCH) hermetically testable, not merely the pure
     /// `rebindAuthorization` decision it wraps.
+    /// THE ORDERING RULE, ASKED RATHER THAN RE-IMPLEMENTED (.github#2395, design §4.2).
+    ///
+    /// "Lowest id wins, lease-free" is exported exactly once, as `Reads.lowestId` — slice 2 added it
+    /// (`.github#2312`) for precisely this read, and §4.2 forbids a second copy: *"That ordering rule
+    /// must not be written twice"*. `Reads` owns no election record and this row does not declare
+    /// `Reads.fs`, so the candidates are PROJECTED onto `Reads.Marker` to ask the question and the
+    /// winner is mapped back by id.
+    ///
+    /// EVERY FIELD BUT `Id` IS A PLACEHOLDER THIS CALL NEVER READS BACK, and that is safe by the
+    /// exported contract rather than by inspection of the implementation: `Reads.lowestId`'s own
+    /// signature comment says it *"filters nothing, decides no arm, and is not a lock"* and answers
+    /// *"only which marker is first"*. It is `winner` WITHOUT the staleness filter, so no placeholder
+    /// here can reach a lease, a worker comparison or a column restore. `Worker` is spelled empty
+    /// rather than plausibly, so a placeholder can never be mistaken for a real identity if one of
+    /// these values ever escapes into a diagnostic.
+    let private lowestElection (elections: DeliveryApplication.Election list) : DeliveryApplication.Election option =
+        elections
+        |> List.map (fun election ->
+            ({ Id = election.Id
+               Worker = WorkerId ""
+               Session = None
+               AgeSeconds = -1
+               PreviousStatus = None
+               PathRepo = None
+               Raw = "" }: Reads.Marker))
+        |> Reads.lowestId
+        |> Option.bind (fun winner -> elections |> List.tryFind (fun election -> election.Id = winner.Id))
+
+    /// The first of §11.2 row 3's two acts: obtain the merge election this pull request's
+    /// authorization will be GROUNDED IN, posting one only when this delivery target does not
+    /// already own it. Returns `(opkey, grant)`.
+    ///
+    /// THE TWO ACTS CANNOT BE ATOMIC, SO THE ORDER IS THE DESIGN. GitHub offers no multi-write
+    /// transaction, and this pair is deliberately ordered election-then-authorization because an
+    /// election is *append-only, never deleted, no lease, no renewal* (§4.2). A failure after the
+    /// election and before the authorization therefore leaves a DURABLE, REUSABLE fact that the next
+    /// `delivery` call finds and completes; the reverse order has no such property, because an
+    /// authorization naming an election that does not exist is check-4 RED and its `grant=` names an
+    /// id that may later belong to an unrelated comment. This is the opposite shape to the
+    /// `claim --force` non-atomicity measured on 2026-08-16, where a 503 between a DESTRUCTIVE
+    /// eviction and the replacement write left the row with no holder at all: both acts here are
+    /// non-destructive — an append, then an idempotent replace-in-place — so the intermediate state
+    /// is weaker than the final state rather than worse than the initial one.
+    ///
+    /// AND IT REFUSES RATHER THAN DEGRADES. A `compose` refusal, an unreadable comment list, or a
+    /// failed POST propagates, and `ensureAuthorization` below therefore never reaches its PATCH. No
+    /// four-field fallback is written: a marker the fence calls ungrounded is exactly the decorative
+    /// case §6.3 names, and a failed read must not be able to masquerade as a legitimate answer
+    /// (`#266`). Nothing is made worse by refusing — the previous marker, if any, is left exactly as
+    /// it was, and `delivery` is safe to re-run.
+    let electionGrounding
+        (ctx: Context)
+        (target: Ref)
+        (gen: string)
+        (pr: int)
+        : Errors.IoResult<string * string> =
+        let receiver = $"%s{target.Owner}/%s{target.Repo}"
+
+        // `Operation.compose` is slice 1's key (`.github#2311`), and it is CALLED rather than
+        // re-expressed so that this producer and the fence's check 5 cannot disagree about a key.
+        // Its refusals are real reachable paths — an item in the board's `<repo>#N` shorthand lands
+        // in `ItemNotFullyQualified`, and the `released` claim sentinel in `GenerationNotServerAssigned`
+        // — so they are reported in full rather than collapsed into one word.
+        match Operation.compose target.Canonical gen receiver Operation.Merge with
+        | Error refusals ->
+            Error(
+                Errors.Malformed(
+                    target.Short,
+                    "the merge election's operation key could not be composed: "
+                    + (refusals |> List.map Operation.describe |> String.concat "; ")
+                )
+            )
+        | Ok key ->
+            let opkey = key.Value
+
+            Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo target.Number
+            |> Result.bind (fun comments ->
+                let owned =
+                    comments
+                    |> List.map (fun comment ->
+                        ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                    |> DeliveryApplication.electionsFromComments
+                    |> DeliveryApplication.electionsOwnedBy opkey pr
+
+                match lowestElection owned with
+                // ALREADY ELECTED — the ordinary case on every call after the first, and the reason a
+                // repeated `delivery` neither costs a write nor denies its own pull request. The
+                // LOWEST of this target's own elections is named, not the first one read: a duplicate
+                // that a lost POST response could have created must not change which id is granted.
+                | Some election -> Ok(opkey, string election.Id)
+                | None ->
+                    // The marker is the comment's FIRST BYTE, because the fence anchors its match at
+                    // position 0 of the raw body and never trims. The prose belongs after it.
+                    let body =
+                        DeliveryApplication.electionMarker opkey target.Canonical gen receiver pr
+                        + "\n\nMerge election for this item's current claim generation, posted by `delivery` "
+                        + $"for pull request #%d{pr} (`.github#2395`, design §4.2). Append-only: it carries no "
+                        + "lease, is never deleted, and the lowest-id election bearing this operation key is the "
+                        + "one whose merge this generation admits."
+
+                    Writes.postIssueComment ctx.Transport target body
+                    |> Result.map (fun id -> (opkey, string id)))
+
     let ensureAuthorization
         (ctx: Context)
         (target: Ref)
@@ -1550,26 +1675,30 @@ module Client =
         : Errors.IoResult<unit> =
         match pr, marker, merged with
         | Some prNumber, Some heldMarker, false ->
-            Reads.prBody ctx.Transport target.Owner target.Repo prNumber
-            |> Result.bind (fun body ->
-                match rebindAuthorization body target.Canonical (string heldMarker.Id) head with
-                | AuthorizationCurrent -> Ok()
-                | AuthorizationRebound rebound ->
-                    let payload =
-                        let o = System.Text.Json.Nodes.JsonObject()
-                        o.["body"] <- System.Text.Json.Nodes.JsonValue.Create rebound
-                        o.ToJsonString()
+            let gen = string heldMarker.Id
 
-                    let request: Request =
-                        { Method = "PATCH"
-                          Path = $"repos/%s{target.Owner}/%s{target.Repo}/pulls/%d{prNumber}"
-                          Query = []
-                          Body = Transport.Json payload
-                          Budget = Rest
-                          IfNoneMatch = None
-                          Subject = target.Short }
+            electionGrounding ctx target gen prNumber
+            |> Result.bind (fun (opkey, grant) ->
+                Reads.prBody ctx.Transport target.Owner target.Repo prNumber
+                |> Result.bind (fun body ->
+                    match rebindAuthorization body target.Canonical gen opkey grant head with
+                    | AuthorizationCurrent -> Ok()
+                    | AuthorizationRebound rebound ->
+                        let payload =
+                            let o = System.Text.Json.Nodes.JsonObject()
+                            o.["body"] <- System.Text.Json.Nodes.JsonValue.Create rebound
+                            o.ToJsonString()
 
-                    ctx.Transport.Send request |> Result.map ignore)
+                        let request: Request =
+                            { Method = "PATCH"
+                              Path = $"repos/%s{target.Owner}/%s{target.Repo}/pulls/%d{prNumber}"
+                              Query = []
+                              Body = Transport.Json payload
+                              Budget = Rest
+                              IfNoneMatch = None
+                              Subject = target.Short }
+
+                        ctx.Transport.Send request |> Result.map ignore))
         | _ -> Ok()
 
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
