@@ -31,10 +31,498 @@ let ``#2134 duplicate candidates retain both closed issues and PRs`` () =
 
 [<Fact>]
 let ``#2134 duplicate inventory refuses an unmerged continuation page`` () =
+    // A TRANSPORT THAT DID NOT MERGE. One page of a set that has more, handed straight back — nought
+    // elements behind a `rel="next"` link that promises a hundred ahead of it. `HttpTransport` cannot
+    // produce this (it follows the link and concatenates), which is exactly why the guard must be stated
+    // against the SHAPE rather than against the flag: see the `.github#2735` block below for what
+    // happened when the flag alone was read as the answer.
     let transport = Fake.Recorder(fun _ -> Ok { Status = 200; Body = "[]"; ETag = None; NextLink = Some "https://api.github.test/page=2"; Headers = Map.empty })
     match Reads.duplicateCandidates transport "FS-GG" ".github" with
     | Error(Malformed(_, detail)) -> Assert.Contains("incomplete", detail)
     | other -> failwithf "an incomplete inventory must refuse: %A" other
+
+// ---- .github#2735: the duplicate inventory over a listing that PAGINATES ----------------------------
+//
+// `intake apply` — the only filing path that validates its input before creating anything — could not
+// file in `FS-GG/.github` at all. Every run died at the duplicate-inventory read, permanently, and the
+// refusal was correct in form and wrong in fact: the inventory it refused was COMPLETE.
+//
+// `Transport.Send` follows `Link: rel="next"` and concatenates the pages. What it does NOT do is clear
+// `NextLink` on the merged response — `follow` rebinds only `Body` and `ETag`, so the response a caller
+// receives after a three-page merge still carries PAGE ONE's link (`Transport.fs`, `follow ... { acc
+// with Body = merged; ETag = None }`). That is deliberate and load-bearing elsewhere: `memoisable`
+// reads `NextLink.IsSome` as *this collection paginated, so its ETag may not be stored*, which is a
+// question about history and is answered correctly. `duplicateCandidates` read the same flag as *there
+// are pages I have not fetched*, which is a question about the future, and the same bit cannot answer
+// both. In `FS-GG/.github`, whose issue listing always paginates, the misreading made the refusal
+// unconditional and permanent.
+//
+// WHY NO `Fake.Recorder` TEST COULD HAVE CAUGHT THIS, AND WHY THAT IS THE POINT. `Fake.Recorder`
+// implements `IGitHubTransport` DIRECTLY, and `Transport.Send` — the component that merges — sits BEHIND
+// that interface. A recorder can therefore only hand this reader a `Response` it invented, and #2134's
+// recorder above invented one (`[]` + a link) that the shipping adapter never produces. It asserted a
+// refusal, the refusal happened, and the test went green over a read that could not work. The instrument
+// was not wrong about what it measured; it was structurally incapable of measuring the thing that broke.
+// So these tests drive the REAL `HttpTransport` over real HTTP, against real `Link` headers, which is
+// the only arrangement in which the boundary is genuinely crossed.
+
+/// The query parameters of ONE recorded request, split at `&` and `=` and unescaped — an exact map, not a
+/// substring haystack.
+///
+/// `Assert.Contains` over the raw query string was the first cut, and it leaked in the one direction that
+/// matters (.github#2735, review round 1): `"per_page=1000"` CONTAINS `"per_page=100"`, and
+/// `"state=allx"` CONTAINS `"state=all"`. So a containment assertion closes only the DOWNWARD drift and
+/// leaves the fail-open one — a page size LARGER than the constant the guard compares against — wide
+/// open. Containment is the wrong oracle for a fault whose whole shape is a value that EXTENDS the
+/// expected one; equality on the parsed value is the right one.
+///
+/// It sits ABOVE the fixture because the fixture itself now uses it: `paginatingListing` routes on the
+/// PARSED `page` parameter rather than on `Contains "page=2"`, so the fixture's own dispatch is not a
+/// member of the substring family this function exists to retire (.github#2735, review round 2, note 4).
+let private queryOf (pathAndQuery: string) =
+    match pathAndQuery.IndexOf '?' with
+    | -1 -> Map.empty
+    | mark ->
+        pathAndQuery.Substring(mark + 1).Split('&')
+        |> Array.filter (System.String.IsNullOrEmpty >> not)
+        |> Array.map (fun pair ->
+            match pair.IndexOf '=' with
+            | -1 -> System.Uri.UnescapeDataString pair, ""
+            | split ->
+                System.Uri.UnescapeDataString(pair.Substring(0, split)),
+                System.Uri.UnescapeDataString(pair.Substring(split + 1)))
+        |> Map.ofArray
+
+/// ONE request AS IT ARRIVED ON THE WIRE — every component the client put there, as a single value.
+///
+/// THIS RECORD IS THE REPAIR, AND ITS SHAPE IS THE POINT (.github#2735, review round 2, F5). This chain
+/// has now found the SAME FAULT THREE TIMES, one level further out each time:
+///
+///   round 0 — the wire assertions were `Assert.Contains` over the raw query string, so `per_page=1000`
+///             and `state=allx` both satisfied them. The oracle was too weak for the values it watched.
+///   round 1 — repaired with EQUALITY OVER THE WHOLE PARAMETER MAP, explicitly so that "the predicate is
+///             not the author's own guess at which parameters are worth watching".
+///   round 2 — the PATH IS NOT IN THE MAP. The fix pinned the query exactly; the component one level out
+///             — the one that selects WHICH COLLECTION IS READ AT ALL — was still pinned by nothing, and
+///             `issues` → `pulls` left all 631 tests green while turning the duplicate inventory into a
+///             strict subset with every plain issue silently absent.
+///
+/// The cause is not "the path was forgotten". It is that each repair named the fields it had thought of,
+/// so the NEXT unnamed field was always open. Pinning `Path` as a fourth hand-picked key would be the
+/// same mistake a fourth time. So the recorded value is the WHOLE REQUEST, its equality is structural,
+/// and the oracle below is equality against a complete literal — a component that is added, dropped,
+/// renamed or retargeted reds BY CONSTRUCTION rather than because somebody remembered it.
+///
+/// `Headers` carries every header that arrived except `Host`, which is excluded by exact name because it
+/// is the ephemeral loopback port and cannot be written down. That exclusion is a DENY-LIST OF ONE, not
+/// an allow-list: a header this reader starts sending tomorrow is observed, and only `Host` is not.
+/// `Body` is recorded as text — empty when none was sent — which is what makes `Body = NoBody` a pinned
+/// component rather than an assumption.
+type private WireRequest =
+    { Method: string
+      Path: string
+      Query: Map<string, string>
+      Headers: Map<string, string>
+      Body: string }
+
+/// A loopback HTTP server: a free port, a settable handler, and the request log the assertions read.
+///
+/// ITS DEFAULT HANDLER REFUSES, and that is deliberate (.github#2735, review round 2, F5). It used to be
+/// `fun _ _ -> ()`, which answers 200 with an empty body to ANY request for ANY path — so a reader aimed
+/// at the wrong collection got back exactly what the right one would have returned. A fixture that
+/// answers every request is a fixture that cannot detect a wrong one, and that is precisely why the
+/// `issues` → `pulls` drift could not be seen from inside the suite. Production answers a wrong path with
+/// a 404; the fixture now does too, so the mutation is caught by the FIXTURE'S SHAPE as well as by the
+/// assertion below — two independent gates on the same fault, which is what closing a class looks like.
+type private Loopback() =
+    let listener = new System.Net.HttpListener()
+
+    // Port 0 is not available to HttpListener, so take a free one from the OS and hand it back.
+    let port =
+        use probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0)
+        probe.Start()
+        let p = (probe.LocalEndpoint :?> System.Net.IPEndPoint).Port
+        probe.Stop()
+        p
+
+    let prefix = $"http://127.0.0.1:%d{port}/"
+    let seen = System.Collections.Generic.List<WireRequest>()
+
+    // THE DEFAULT IS A REFUSAL, NOT AN EMPTY SUCCESS. See the type's doc comment: an unconfigured
+    // fixture that answers 200 is an oracle that cannot tell a right request from a wrong one.
+    let mutable handler: System.Net.HttpListenerRequest -> System.Net.HttpListenerResponse -> unit =
+        fun req res ->
+            let body =
+                $"""{{"message":"Loopback received a request no handler was installed for: %s{req.HttpMethod} %s{req.Url.PathAndQuery}"}}"""
+
+            res.StatusCode <- 404
+            res.ContentType <- "application/json"
+            let bytes = System.Text.Encoding.UTF8.GetBytes body
+            res.ContentLength64 <- int64 bytes.Length
+            res.OutputStream.Write(bytes, 0, bytes.Length)
+
+    /// Everything the client put on the wire, as one value. `Host` alone is dropped — it is the
+    /// ephemeral port and cannot be written into an oracle; every other header is kept.
+    let record (req: System.Net.HttpListenerRequest) =
+        let headers =
+            req.Headers.AllKeys
+            |> Array.choose (fun k ->
+                if isNull k || System.String.Equals(k, "Host", System.StringComparison.OrdinalIgnoreCase) then
+                    None
+                else
+                    Some(k, req.Headers.[k]))
+            |> Map.ofArray
+
+        let body =
+            if req.HasEntityBody then
+                use reader = new System.IO.StreamReader(req.InputStream, req.ContentEncoding)
+                reader.ReadToEnd()
+            else
+                ""
+
+        { Method = req.HttpMethod
+          Path = req.Url.AbsolutePath
+          Query = queryOf req.Url.PathAndQuery
+          Headers = headers
+          Body = body }
+
+    do
+        listener.Prefixes.Add prefix
+        listener.Start()
+
+        let loop () =
+            while listener.IsListening do
+                try
+                    let ctx = listener.GetContext()
+                    let observed = record ctx.Request
+                    lock seen (fun () -> seen.Add observed)
+                    handler ctx.Request ctx.Response
+
+                    try
+                        ctx.Response.Close()
+                    with _ ->
+                        ()
+                with _ ->
+                    ()
+
+        let t = System.Threading.Thread(loop)
+        t.IsBackground <- true
+        t.Start()
+
+    member _.Base = prefix.TrimEnd('/')
+    member _.Requests = lock seen (fun () -> List.ofSeq seen)
+    member _.On(f) = handler <- f
+
+    member _.Send (response: System.Net.HttpListenerResponse) (status: int) (body: string) (headers: (string * string) list) =
+        response.StatusCode <- status
+        response.ContentType <- "application/json"
+
+        for (k, v) in headers do
+            response.Headers.Add(k, v)
+
+        let bytes = System.Text.Encoding.UTF8.GetBytes body
+        response.ContentLength64 <- int64 bytes.Length
+        response.OutputStream.Write(bytes, 0, bytes.Length)
+
+    interface System.IDisposable with
+        member _.Dispose() =
+            try
+                listener.Stop()
+                (listener :> System.IDisposable).Dispose()
+            with _ ->
+                ()
+
+/// One page of the `issues` listing: the fields `duplicateCandidates` actually reads, for each number.
+let private issuePage (numbers: int list) =
+    numbers
+    |> List.map (fun n -> $"""{{"number":%d{n},"state":"open","title":"issue %d{n}","body":"body %d{n}"}}""")
+    |> String.concat ","
+    |> fun elements -> "[" + elements + "]"
+
+/// `Reads.CollectionPageSize` — the page size this read requests AND the length the completeness guard
+/// compares the merged body against. It is private to `Reads`, so it is restated here, and the dedicated
+/// wire test below is what keeps the restatement honest.
+let private pageOneSize = 100
+
+/// The ONE collection `duplicateCandidates` is entitled to read, spelled out so the fixtures can refuse
+/// anything else. `/issues` returns issues AND pull requests; `/pulls` returns pull requests only and
+/// carries every field this reader parses, so a drift between them is answered `Ok` over a strict subset
+/// rather than refused — which is why the fixtures below must not serve it (.github#2735, round 2, F5).
+let private expectedPath = "/repos/FS-GG/.github/issues"
+
+/// A fixture that answers ANY path cannot detect a WRONG one, so these two helpers answer exactly one
+/// path and refuse the rest with the 404 production would give. This is the structural half of F5's
+/// repair; the whole-request oracle in the wire test is the assertive half.
+let private refuseWrongPath (server: Loopback) (req: System.Net.HttpListenerRequest) (res: System.Net.HttpListenerResponse) =
+    server.Send
+        res
+        404
+        $"""{{"message":"Not Found: this fixture serves %s{expectedPath} only, and was asked for %s{req.Url.AbsolutePath}"}}"""
+        []
+
+/// `FS-GG/.github`'s shape, in miniature: a FULL first page (`pageOneSize`, the `per_page` this read asks
+/// for) with a `rel="next"` link, and a short continuation. Page two is what each test injects its fault
+/// into — the status and body of the ONLY response that differs between the green leg and the red ones.
+///
+/// The page-two branch is selected by the PARSED `page` parameter being exactly `"2"`, not by
+/// `PathAndQuery.Contains "page=2"`. The substring form worked only by luck of the page size — at
+/// `pageOneSize = 2` the string `per_page=2` contains `page=2` and page one would answer as page two —
+/// and it is a member of the very containment family this file spent round 1 retiring.
+let private paginatingListing (server: Loopback) (pageTwoStatus: int) (pageTwoBody: string) =
+    server.On(fun req res ->
+        if req.Url.AbsolutePath <> expectedPath then
+            refuseWrongPath server req res
+        elif queryOf req.Url.PathAndQuery |> Map.tryFind "page" = Some "2" then
+            server.Send res pageTwoStatus pageTwoBody []
+        else
+            server.Send
+                res
+                200
+                (issuePage [ 1..pageOneSize ])
+                [ "Link",
+                  $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"next\", "
+                  + $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"last\"" ])
+
+/// One page, no continuation link: the shape a listing that genuinely has nothing produces. Same
+/// refusal discipline as `paginatingListing`.
+let private singlePageListing (server: Loopback) (body: string) =
+    server.On(fun req res ->
+        if req.Url.AbsolutePath <> expectedPath then
+            refuseWrongPath server req res
+        else
+            server.Send res 200 body [])
+
+[<Fact>]
+let ``.github#2735 the duplicate inventory MERGES the continuation page`` () =
+    // THE REGRESSION. Both pages are served, the adapter merges them, and the answer must be the WHOLE
+    // set — including #101..#103, which exist only on page two and are precisely the rows a duplicate
+    // check would otherwise miss. Against the unrepaired reader this reds with `Malformed(..., "the
+    // transport returned an unmerged next page")` even though 103 candidates were fetched and merged.
+    use server = new Loopback()
+    paginatingListing server 200 (issuePage [ 101..103 ])
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Ok candidates ->
+        Assert.Equal(pageOneSize + 3, List.length candidates)
+        Assert.Contains(candidates, fun c -> c.Number = 1)
+        Assert.Contains(candidates, fun c -> c.Number = pageOneSize + 3)
+        // Two round trips really happened: the answer is a merge, not a first page that looked long.
+        Assert.Equal(2, List.length server.Requests)
+    | Error e -> failwithf "a listing that paginates must yield a COMPLETE inventory, not a refusal: %A" e
+
+[<Fact>]
+let ``.github#2735 the duplicate inventory's REQUEST — method, collection path, query, headers and body — is pinned WHOLE`` () =
+    // THE WIRE IS ITS OWN GATE, UNDER ITS OWN NAME, and that separation is half the repair (.github#2735,
+    // review round 1). These assertions used to ride along inside the merge test above, where a `per_page`
+    // drift reddened a test titled `... MERGES the continuation page` — a red whose NAME describes a
+    // different property from the mutation that produced it. That is not a bookkeeping nicety: a mutation
+    // credited to a red that some OTHER assertion raised for some OTHER reason has not been shown to have
+    // a gate at all, and two escapes went through exactly there. So the rule this file now follows is that
+    // every mutation must red a test whose TITLE describes that mutation, and the wire contract gets the
+    // title of this one.
+    //
+    // TWO PARAMETERS, BOTH LOAD-BEARING.
+    //   `per_page` — the completeness guard reads "a merged body carries MORE than `CollectionPageSize`
+    //   elements", and that argument holds only while the request asked for exactly that many. A LARGER
+    //   `per_page` is the fail-OPEN direction: an unmerged first page would already clear the comparison,
+    //   and a truncated inventory would be answered rather than refused.
+    //   `state=all` — the `.fsi` calls this an ALL-STATE inventory and #2134 pins closed issues AND pull
+    //   requests as candidates. Narrowed to open issues, this read answers a duplicate check from a
+    //   partial set and does not know it, which is the exact class this row exists to end. Before this
+    //   test, nothing in the suite pinned it: #2134's own fixture is a `Fake.Recorder`, which never sees a
+    //   query at all.
+    //
+    // AND THE PARAMETERS ARE NOT THE WHOLE REQUEST — which is the round-2 finding, and the reason this
+    // test is now scoped to the request as a VALUE rather than to a chosen set of its fields.
+    //
+    // Round 1 pinned the query map exactly, and argued the point that matters: asserting the whole map
+    // "means the predicate is not the author's own guess at which parameters are worth watching". The
+    // argument was right and the scope was one level too small. `Path` — the component that selects
+    // WHICH COLLECTION IS READ AT ALL, and which therefore dominates every parameter that merely filters
+    // it — is not a member of that map, so `repos/{o}/{r}/issues` → `repos/{o}/{r}/pulls` left all 631
+    // tests green. That drift does not 404: `/pulls` answers 200 with `number`, `state`, `title` and
+    // `body` all populated, so the reader returns `Ok` OVER A STRICT SUBSET with every plain issue
+    // silently missing from the duplicate inventory. Fail-open, on the seam that decides whether a row
+    // about to be created already exists.
+    //
+    // MEASURED AT THIS FILE'S PARENT HEAD, before the repair below existed: `issues` → `pulls` GREEN
+    // 631/631 exit 0; owner/repo transposed GREEN 631/631; `Method` `GET` → `POST` GREEN 631/631;
+    // `IfNoneMatch` `None` → `Some "…"` GREEN 631/631; `Body` `NoBody` → `Json "{}"` GREEN 631/631.
+    // FIVE of the request's seven components drifted without a single red. The query map was not
+    // under-specified — it was the only thing specified at all.
+    //
+    // SO THE ORACLE IS THE WHOLE VALUE, AND THAT IS A CHOICE ABOUT THE CLASS, NOT ABOUT THE PATH.
+    // Adding `Path` as a fourth hand-picked key would repair this instance and leave the next component
+    // open, exactly as rounds 0 and 1 did. Equality against a COMPLETE `WireRequest` literal has the
+    // property those did not: there is no author's judgement about which components deserve watching, so
+    // a component that is added, dropped, renamed or retargeted reds here BY CONSTRUCTION. The cost is
+    // named, in the house style — this test reds when the transport starts sending a new header, and
+    // that red is correct: a header the suite has never seen is a wire change nobody has reviewed.
+    //
+    // WHAT IS *NOT* PINNED HERE, AND WHY NOT — the two `Request` components that never reach a wire:
+    //   `Budget = Rest` decides which meter the call is billed to. It is consumed inside the client's
+    //   accounting and emits no header, no parameter and no path, so NO loopback fixture can observe it;
+    //   an assertion here would have to reach into the reader's source, which measures the test rather
+    //   than the subject. It is named rather than tested, and `Reads.fsi` carries the claim.
+    //   `Subject = subject` travels only into diagnostics. It is already observed, by the boundary tests
+    //   below, which match on the text of the refusal it names.
+    //
+    // NOTHING ABOUT THE RESPONSE IS ASSERTED, deliberately, and THIS IS THE ONE FIXTURE IN THE FILE THAT
+    // STILL ANSWERS ANY PATH. The others now refuse a wrong one (see `refuseWrongPath`), and that is the
+    // right default. Here it would be wrong: if this fixture 404'd a drifted path, a path mutation could
+    // red this test through the response rather than through the request, and a gate that can red for
+    // two reasons is precisely what both round-1 findings were made of. Response-blindness is what makes
+    // this test's red attributable to the request and nothing else.
+    use server = new Loopback()
+    server.On(fun _ res -> server.Send res 200 "[]" [])
+
+    use transport = new HttpTransport(server.Base, "t")
+    Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" |> ignore
+
+    Assert.Equal(1, List.length server.Requests)
+
+    Assert.Equal<WireRequest>(
+        { Method = "GET"
+          Path = expectedPath
+          Query = Map.ofList [ "state", "all"; "per_page", string pageOneSize ]
+          Headers =
+            Map.ofList
+                [ "Accept", "application/vnd.github+json"
+                  "Authorization", "Bearer t"
+                  "User-Agent", "fsgg-coord" ]
+          Body = "" },
+        List.head server.Requests
+    )
+
+[<Fact>]
+let ``.github#2735 a continuation page that is NOT AN ARRAY is a failed read, not a short inventory`` () =
+    // FAULT INJECTION, and the control is the test above: same server, same first page, same link — the
+    // only difference is page two's BODY. A gateway error page, a truncated response, a proxy's HTML: the
+    // inventory cannot be completed, so it must refuse rather than answer with page one's 100 rows.
+    use server = new Loopback()
+    paginatingListing server 200 """{"message":"Bad gateway"}"""
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Error(Malformed(_, detail)) -> Assert.Contains("not a JSON array", detail)
+    | other -> failwithf "an inventory that could not be completed must refuse: %A" other
+
+[<Fact>]
+let ``.github#2735 a continuation page that ERRORS is a failed read, not a short inventory`` () =
+    // The other half of the same fault: page two answers, and answers 500. Nothing about page one's 100
+    // rows becomes trustworthy because the rest of the set was unreachable.
+    //
+    // PAGE TWO'S BODY IS A PERFECTLY VALID ARRAY, and that is the repair (.github#2735, review round 1).
+    // It used to be `{"message":"Server Error"}` — not a JSON array — so the read failed at the MERGE no
+    // matter what status accompanied it, and flipping the 500 to a 200 left this test GREEN. The gate was
+    // named for the status and did not exercise it: it was a second copy of the not-an-array test above,
+    // with a decorative 500 on the fixture. Serving a body that would merge without complaint makes the
+    // STATUS the only fault present, which is what the title claims is under test.
+    //
+    // AND THE ORACLE IS THE SPECIFIC ERROR THAT PATH PRODUCES, not `Error _`. `Error _` cannot tell "page
+    // two errored" from "page two was malformed", so it was structurally unable to notice that its two
+    // faults had collapsed into one. `sendOne` classifies a non-2xx that is not a rate limit as
+    // `Http(status, body)` and `follow` propagates it unchanged, so the status this fixture answered has
+    // to come back out the other end for the test to pass.
+    use server = new Loopback()
+    paginatingListing server 500 (issuePage [ 101..103 ])
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Error(Http(500, _)) -> ()
+    | other ->
+        failwithf "an unreachable continuation page must refuse with the status it answered: %A" other
+
+[<Fact>]
+let ``.github#2735 a listing that genuinely has nothing reads as an EMPTY inventory, not a failure`` () =
+    // THE DISCRIMINATION THE REFUSAL EXISTS TO MAKE. "I could not read the inventory" and "I read the
+    // inventory and it is empty" are different answers, and a repair that collapsed them in either
+    // direction would be the defect. One page, no `rel="next"`, nothing in it: `Ok []`.
+    use server = new Loopback()
+    singlePageListing server "[]"
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Ok [] -> Assert.Equal(1, List.length server.Requests)
+    | other -> failwithf "an empty listing is an empty inventory: %A" other
+
+// ---- THE BOUNDARY THE GUARD IS MADE OF (.github#2735, review round 2, F3) ---------------------------
+//
+// COVERAGE OF A BRANCH IS NOT COVERAGE OF ITS PREDICATE, and every test above was blind to the
+// difference. The guard is `paginated && observed <= CollectionPageSize`. Before these two tests, the
+// only fixtures reaching it arrived with `observed = 0` (#2134's recorder serves `[]`) or `observed =
+// 103` (the merge test) — nought and three-clear, never the boundary itself. `0 <= 100` and `0 < 100`
+// are the same answer, so mutating `<=` to `<` left the FULL 629-test suite green while opening exactly
+// the fail-open the `Reads.fs` block asserts is unreachable: `Ok` over a page-one-only inventory.
+//
+// A boundary needs BOTH of its sides, and the two tests below are that pair. Refusing at
+// `CollectionPageSize` is only correct if `CollectionPageSize + 1` is accepted — a guard that refuses at
+// both is not a boundary, it is a wider refusal wearing one, and the merge test's 103 is too far away to
+// notice.
+//
+// Both fixtures drive the REAL `HttpTransport` over real HTTP, and both are shapes the shipping adapter
+// genuinely produces, which is what separates them from #2134's recorder-invented `[]` + link.
+
+[<Fact>]
+let ``.github#2735 a merged total of exactly the page size, behind an advertised continuation, is REFUSED`` () =
+    // THE REFUSING SIDE, AT THE BOUNDARY VALUE. A full first page advertising a continuation, and a
+    // continuation that turns out to add nothing. The merge runs for real: `mergeArrays` concatenates
+    // 100 + 0, and `follow` rebinds only `Body` and `ETag` (`Transport.fs:361`, `{ acc with Body =
+    // merged; ETag = None }`), so the response arriving at the guard carries exactly `CollectionPageSize`
+    // elements AND page one's `NextLink`. That is `observed = CollectionPageSize` with `paginated` set —
+    // the boundary itself. `<=` refuses it; `<` answers `Ok` over a set it cannot vouch for.
+    //
+    // The `Reads.fs` block already names this outcome — "a complete inventory is refused whenever the
+    // merged total is <= `CollectionPageSize` and page one advertised a continuation" — as the price paid
+    // for fail-closure, and the `.fsi` repeats it as a known break. Until now that was prose with no gate
+    // under it, which is how the operator that makes the refusal fail-closed came to be pinned by nothing.
+    use server = new Loopback()
+    paginatingListing server 200 "[]"
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains("incomplete", detail)
+        // THE COUNT IN THE MESSAGE IS PART OF THE PROPERTY, not decoration. Without it this test is green
+        // for a guard that refuses every paginated read regardless of length, and could not tell that
+        // case from a guard that refuses AT the boundary — which is the only thing under test here. The
+        // cost is named, in the house style: a reworded message reds this. That is the safe direction.
+        Assert.Contains($"only %d{pageOneSize} element(s) arrived", detail)
+        // FIXTURE VALIDITY, not a second oracle. Two round trips prove the 100 elements reaching the
+        // guard are a MERGED total and not an unmerged first page — without this, the test could pass on
+        // a shape that never crossed the boundary at all, which is the #2134 fixture's whole defect.
+        Assert.Equal(2, List.length server.Requests)
+    | other ->
+        failwithf
+            "a merged total of exactly the page size, behind an advertised continuation, must refuse rather than answer: %A"
+            other
+
+[<Fact>]
+let ``.github#2735 a merged total ONE PAST the page size is a complete inventory, not a refusal`` () =
+    // THE ACCEPTING SIDE, ONE STEP UP. Page two carries exactly one row, so the merged total is
+    // `CollectionPageSize + 1` — the smallest set the guard is supposed to let through.
+    //
+    // The merge test asserts the accepting side at 103, three clear of the boundary, so a comparison that
+    // drifted UP by one or two (`observed <= CollectionPageSize + 2`) would refuse two genuinely complete
+    // inventories and nothing in the suite would red. That is F3's fault in the opposite direction: a
+    // predicate exercised only away from its boundary. Hence exactly one row here, and not three.
+    use server = new Loopback()
+    paginatingListing server 200 (issuePage [ pageOneSize + 1 .. pageOneSize + 1 ])
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Ok candidates ->
+        Assert.Equal(pageOneSize + 1, List.length candidates)
+        Assert.Contains(candidates, fun c -> c.Number = pageOneSize + 1)
+    | other ->
+        failwithf "a merged total one element past the page size is complete and must be answered: %A" other
 
 /// A transport for `prAlive`'s TWO reads (#1055): the open-PR list, then — when no PR matches — the
 /// `git/matching-refs/heads/item/<n>-` branch probe. `pulls` answers the first, `refs` the second.

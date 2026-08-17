@@ -2927,15 +2927,80 @@ module Reads =
                         Cache.putBody cacheKey validator filtered
                         Ok filtered
 
+    // WHAT `NextLink` MEANS ON A RESPONSE THAT HAS ALREADY BEEN MERGED (.github#2735).
+    //
+    // `Transport.Send` follows `Link: rel="next"`, fetches every continuation and CONCATENATES them —
+    // and it does not clear `NextLink` while doing so, because `follow` rebinds only `Body` and `ETag`
+    // (`Transport.fs`). So the flag a caller sees says **this collection paginated**: a fact about what
+    // already happened, which is exactly the question `memoisable` asks of it when it refuses to store
+    // page one's validator against a merge. It does NOT say *there are pages I have not fetched*, and
+    // one bit cannot answer both questions.
+    //
+    // Reading it as the second is what this inventory did, and the cost was not a rare edge: in
+    // `FS-GG/.github` — whose issue listing ALWAYS paginates — a complete, fully merged inventory was
+    // refused on every single call. `intake apply`, the one filing path that validates its input before
+    // creating anything, could not file in that repository at all, so every row grew through unvalidated
+    // prose recovered afterwards by regex instead (.github#2735, first-hand reproduction 2026-08-16).
+    //
+    // THE REFUSAL STAYS. It is simply asked of the SHAPE rather than of the flag. A `rel="next"` link is
+    // emitted only over a page the server FILLED — it does not advertise a continuation it has nothing to
+    // put on — so page one carried exactly `CollectionPageSize` elements, and whatever lies behind that
+    // link carries at least one more. Hence:
+    //
+    //   * merged   -> the body carries STRICTLY MORE than `CollectionPageSize` elements.
+    //   * unmerged -> the body IS page one: exactly `CollectionPageSize`, and never more.
+    //
+    // THE BOUND ON THAT ARGUMENT, WRITTEN DOWN SO NOBODY INHERITS IT AS AN INVARIANT. An earlier draft of
+    // this comment called it "a proof rather than a heuristic". IT IS A HEURISTIC — about GitHub's
+    // behaviour, not a property of the type. Nothing in a `Response` forbids a server from advertising a
+    // continuation over a page it did not fill, and the independent review of this change broke it on
+    // purpose against the real `HttpTransport`: 100 rows + `rel="next"` + an empty page two, and 99 rows
+    // + `rel="next"` + 1 row, are both COMPLETE merged inventories and both are REFUSED here, while the
+    // control (100 + 1) answers `Ok`. Stated once, plainly: a complete inventory is refused whenever the
+    // merged total is <= `CollectionPageSize` and page one advertised a continuation.
+    //
+    // Two facts make that an acceptable price rather than a defect, and both are load-bearing:
+    //
+    //   1. EVERY BREAK IS FAIL-CLOSED. The predicate can refuse a set that was in fact complete; it
+    //      cannot answer with one that is not. No `Ok` over an incomplete inventory is reachable —
+    //      `Transport.follow` returns `Ok` only at `next = None`, its 100-page guard errors rather than
+    //      truncating, and with `per_page` pinned to `CollectionPageSize` an unmerged first page is
+    //      exactly `CollectionPageSize` and is refused. A wrong refusal costs a retry; a short inventory
+    //      answers "no duplicate found" on the seam that decides whether a new row duplicates an existing
+    //      one, which is #266's shape at its most expensive.
+    //   2. THE TRIGGERING SHAPE IS NOT ONE GITHUB EMITS. It computes `Link` from a count and does not
+    //      advertise an empty successor: `issues/2735/comments?per_page=4` over exactly 4 comments
+    //      returns NO `Link` header at all.
+    //
+    // So the RESIDUAL WINDOW is narrow, and it is named here rather than denied: a repository whose whole
+    // issue+PR set is <= `CollectionPageSize` and which SHRINKS between the page-one and page-two requests
+    // (a concurrent delete or transfer), or a proxied/Enterprise endpoint that advertises a `next` over a
+    // short page. Inside that window this refuses a good read. The message below is worded to survive it
+    // — it reports what was observed and refuses to decide, rather than naming a culprit it cannot see.
+    //
+    // `> CollectionPageSize` separates the two cases above, and it separates them in the fail-closed
+    // direction. A transport that hands back one page and its link still refuses — that is #2134's shape,
+    // which `Fake.Recorder` can produce and the shipping adapter cannot. This is the NEAR-mirror of
+    // `memoisable`'s headroom argument (a page SHORTER than `per_page` is the last one), and the
+    // difference is worth keeping in view: that one is a proof over the response in hand, while this one
+    // rests on the server's Link generation. Same boundary, weaker warrant.
+    //
+    // `per_page` is taken from `CollectionPageSize` rather than written out again: a literal here that
+    // drifted from the constant the guard compares against would disarm the guard silently.
     let duplicateCandidates (transport: IGitHubTransport) (owner: string) (repo: string) : IoResult<DuplicateCandidate list> =
         let subject = $"%s{owner}/%s{repo} all duplicate candidates"
-        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues"; Query = [ "state", "all"; "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues"; Query = [ "state", "all"; "per_page", string CollectionPageSize ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
         transport.Send request |> Result.bind (fun response ->
-            if response.NextLink.IsSome then
-                Error(Malformed(subject, "the transport returned an unmerged next page; duplicate inventory is incomplete"))
-            else parse subject response.Body |> Result.bind (fun doc ->
+            let paginated = response.NextLink.IsSome
+            parse subject response.Body |> Result.bind (fun doc ->
                 use doc = doc
                 if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "candidate list is not an array")) else
+                let observed = doc.RootElement.GetArrayLength()
+                if paginated && observed <= CollectionPageSize then
+                    // A FAILED READ, NOT AN EMPTY ANSWER — and the message has to say which, because the
+                    // caller's next act is to decide whether a row it is about to create already exists.
+                    Error(Malformed(subject, $"the listing advertises a continuation but only %d{observed} element(s) arrived over a page size of %d{CollectionPageSize}: either the continuation was not merged, or the server advertised a page it had not filled. Neither can be told from the other here and neither is a set to decide from, so the duplicate inventory is treated as incomplete. That is a FAILED READ, not an empty answer — refusing to decide from it"))
+                else
                 doc.RootElement.EnumerateArray()
                 |> Seq.mapi (fun index item ->
                     try
