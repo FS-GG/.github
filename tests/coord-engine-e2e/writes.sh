@@ -1438,6 +1438,35 @@ no_mutation_verdict "diff-audit" 3 "$ENGINE" diff-audit HEAD HEAD oldName newNam
 printf '%s\n' '{"schema":"fsgg.coord.finding-packet/v1","surface":"src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs","cause":{"established":"the verb was never wired into the command surface"},"redToday":{"found":"nothing dispatches to DeliveryRouteApplication.run"},"derivedBy":{"notSearched":"an adjudicator should check whether a gate already derives this"},"classRow":{"notSearched":"this may be evidence on a wiring/coverage class row"},"whyNotHere":"no claim and no lane; the fix is engine source the pass did not declare","paths":["src/FS.GG.Coord.Cli/Options.fs"],"finder":"merlin-efd3"}' >"$PREDICATE_FIX/finding-packet.json"
 no_mutation "packet" "$ENGINE" packet validate "$PREDICATE_FIX/finding-packet.json"
 
+# ...AND THE NO-WIRE CONTRACT GETS ITS OWN LEG, BECAUSE THE SHARED HELPER'S RED IS AMBIGUOUS (I7, PR
+# #2751 round 0). `no_mutation` conjoins two independent legs — `rc -eq 0` and an empty wire ledger —
+# under one message that says only "must not mutate". So an invocation that merely exits non-zero reds a
+# line asserting a mutation nobody made, and the red does not identify which contract broke. The helper
+# is pre-existing and has ~20 sibling call sites, so it is not rewritten here; instead THIS row's own
+# claim is stated as a leg whose SOLE predicate is the ledger. It is deliberately not conditioned on the
+# exit code — that half is already asserted by the line above and by `PacketCliTests` — so a red here
+# can mean exactly one thing: `packet validate` reached the wire.
+#
+# VERIFIED AS AN INSTRUMENT RATHER THAN ASSUMED, AND THE FIRST ATTEMPT AT THAT IS WHY THIS PARAGRAPH IS
+# LONG. Substituting `run heartbeat FS.GG.SDD#42` for the subject left this leg GREEN — not because the
+# predicate is dead, but because by this point in the file vole-418's lease has expired, so heartbeat
+# REFUSES before the transport: `rc=1`, `count: 0`, no request recorded. A mutation that reaches the
+# branch but never its boundary proves nothing. Substituting `run say FS.GG.SDD#43 --to kite-461` — a
+# verb that actually posts — reds it: `count: 1` with `POST /repos/FS-GG/FS.GG.SDD/issues/43/comments`
+# recorded, at `rc=0`. Both halves matter: the red arrives on a ZERO exit code, so it cannot have come
+# from an exit-status leg, which is precisely the ambiguity in `no_mutation` this leg exists to remove.
+# That heartbeat run is also the ambiguity itself, executed: `no_mutation` would have reported "must not
+# mutate" over an invocation whose wire ledger was empty.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+packet_out="$("$ENGINE" packet validate "$PREDICATE_FIX/finding-packet.json" 2>&1)"; packet_rc=$?
+packet_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+if [ "$(printf '%s' "$packet_ledger" | jq -r .count)" = 0 ]; then
+  ok "#2737: packet validate issued ZERO wire mutations — the sole predicate of this leg, so its red names mutation and nothing else"
+else
+  bad "#2737: packet validate must not reach the wire at all (DEC-001: it can refuse no post)" \
+      "ledger=$packet_ledger rc=$packet_rc output=$packet_out"
+fi
+
 # `--apply` is a valid alternative argv shape even when this fixture finds no safe repair/reap.
 # Do not call a non-zero no-op (or a parser refusal) evidence: both commands must complete their
 # read/decision path.  Their bare arms above are the no-write proofs; these establish the gate's
