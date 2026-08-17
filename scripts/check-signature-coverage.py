@@ -90,6 +90,14 @@ a listed path with a blank reason is a finding. An exemption is therefore a clai
 falsify, not a hole in it. That is the difference between this list and a directory nobody looks at
 again (`tests/signature-doc-siting/baseline.txt` makes the same argument about its own numbers).
 
+THE `[<EntryPoint>]` CHECK IS A SUBSTRING MATCH, NOT A PARSE, and that is a known weakness rather
+than an unexamined one. A `//`-commented or string-literal `[<EntryPoint>]` would satisfy it. It is
+latent today because the marker occurs exactly once in each exempt file, at the real attribute, and
+because reaching it at all requires someone to have already added a deliberate exemption entry with
+a written reason -- so the substring is the second lock, not the first. Tightening it to a parse
+would mean carrying an F# attribute reader here for two files; if the exemption list ever grows
+past a handful, that trade changes and this should become a parse.
+
 `obj/` AND `bin/` ARE PRUNED, AND THAT IS CORRECTNESS RATHER THAN TIDINESS. A built tree contains
 generated implementations -- `FS.GG.Coord.Core.AssemblyInfo.fs` and friends, 8 of them here after a
 Release build -- and not one has or should have a `.fsi`. A gate that walked into them would be
@@ -178,35 +186,138 @@ def substantive_lines(text: str) -> int:
     `///` counts (it is the contract). `//` does not. `(* ... *)` does not, and nesting is tracked
     because F# block comments nest.
 
-    KNOWN AND BOUNDED IMPRECISION: a `(*` inside a string literal is read as opening a comment. The
-    consequence is an UNDERCOUNT of substantive lines, which lowers a ratio and can only make this
-    gate warn where it need not have. It cannot manufacture a green, and it cannot touch the
-    existence leg at all -- that leg counts no lines. A spurious warning is visible and cheap; the
-    full lexer that would remove it belongs to the gate that needs exact counts
-    (`check-signature-doc-siting.py`), not to a heuristic with a four-point margin.
+    A `(*` IS ONLY A COMMENT OPENER WHERE F# WOULD READ ONE, and getting that wrong is not a
+    rounding error -- it is a FAIL-OPEN. An earlier revision of this function counted `(*` and `*)`
+    anywhere on a line, including inside string literals and inside the `///` prose it had just
+    counted. `src/FS.GG.Coord.Core/SemanticDiff.fs:99` contains `StartsWith("(*")` and the file
+    holds no `*)` at all, so that revision opened a block comment at line 99 and never closed it:
+    612 lines collapsed to 86 substantive, and `SemanticDiff.fsi` scored 96.51% against a true
+    17.89%. THE ERROR WAS +78.6 POINTS, IN THE GREEN DIRECTION, ON A SHIPPED FILE. A single
+    unmatched `(*` in a string can swallow the rest of any implementation and lift a genuinely thin
+    signature above the threshold, which is precisely the "reports green because it could not see
+    its subject" shape this gate was written against (#266). It changed no verdict at the time only
+    by luck -- 17.89% and 96.51% sit on the same side of 10%.
+
+    So the scan below tracks the four F# lexical states that can contain a `(*`: line comments
+    (`//`, `///`) run to end of line, ordinary strings honour `\\` escapes, `@"..."` verbatim
+    strings honour `""` as an escaped quote, and `\"\"\"..."\"\"` triple-quoted strings run until
+    their closing triple. Character literals are recognised too -- `'"'` occurs in this very tree
+    (`SemanticDiff.fs:103`, `RegistryPredicate.fs:40`) and would otherwise open a phantom string --
+    and are distinguished from generic type variables (`'a`, `'result`) by requiring the closing
+    quote.
+
+    The remaining imprecision is bounded and cannot fail open: a construct left unterminated at
+    end of file can only cause an UNDERCOUNT, which lowers a ratio and can make this gate warn
+    where it need not have. A spurious warning is visible, cheap, and reports a real file for a
+    human to look at. Nothing here touches the existence leg, which counts no lines at all.
     """
     count = 0
-    depth = 0
+    depth = 0  # (* *) nesting
+    in_triple = False
+    in_verbatim = False
+
     for raw in text.split("\n"):
         line = raw.strip()
-        if depth:
-            # Inside a block comment: the line contributes nothing, but it can still close (or
-            # further open) the comment, so the delimiters still have to be tracked.
-            depth += line.count("(*") - line.count("*)")
-            depth = max(depth, 0)
-            continue
-        if not line:
-            continue
-        if line.startswith("//") and not line.startswith("///"):
-            continue
-        if line.startswith("(*"):
-            depth += line.count("(*") - line.count("*)")
-            depth = max(depth, 0)
-            continue
-        count += 1
-        depth += line.count("(*") - line.count("*)")
-        depth = max(depth, 0)
+        substantive = False
+        i = 0
+        n = len(line)
+
+        while i < n:
+            if depth:
+                if line.startswith("(*", i):
+                    depth += 1
+                    i += 2
+                elif line.startswith("*)", i):
+                    depth -= 1
+                    i += 2
+                else:
+                    i += 1
+                continue
+
+            if in_triple:
+                substantive = True
+                if line.startswith('"""', i):
+                    in_triple = False
+                    i += 3
+                else:
+                    i += 1
+                continue
+
+            if in_verbatim:
+                substantive = True
+                if line.startswith('""', i):
+                    i += 2
+                elif line[i] == '"':
+                    in_verbatim = False
+                    i += 1
+                else:
+                    i += 1
+                continue
+
+            # `///` is contract and counts; `//` is implementation prose and does not. Either way
+            # the rest of the line is comment text and holds no delimiter this scan may honour.
+            if line.startswith("///", i):
+                substantive = True
+                break
+            if line.startswith("//", i):
+                break
+
+            if line.startswith("(*", i):
+                depth += 1
+                i += 2
+                continue
+            if line.startswith('"""', i):
+                in_triple = True
+                substantive = True
+                i += 3
+                continue
+            if line.startswith('@"', i):
+                in_verbatim = True
+                substantive = True
+                i += 2
+                continue
+            if line[i] == '"':
+                substantive = True
+                i += 1
+                while i < n:
+                    if line[i] == "\\":
+                        i += 2
+                        continue
+                    if line[i] == '"':
+                        i += 1
+                        break
+                    i += 1
+                continue
+            if line[i] == "'":
+                # A char literal closes; a generic type variable (`'a`, `'result`) does not.
+                consumed = _char_literal_length(line, i)
+                substantive = True
+                i += consumed if consumed else 1
+                continue
+
+            if not line[i].isspace():
+                substantive = True
+            i += 1
+
+        if substantive:
+            count += 1
     return count
+
+
+def _char_literal_length(line: str, i: int) -> int:
+    """Length of the F# character literal starting at `line[i]`, or 0 if this is not one.
+
+    `'"'` and `'\\n'` are literals; `'a` and `'result` are type variables. Only the closing quote
+    tells them apart, which is why this is a lookahead rather than a flag.
+    """
+    if line.startswith("'\\", i):
+        j = i + 2
+        while j < len(line) and line[j] != "'":
+            j += 1
+        return (j - i + 1) if j < len(line) else 0
+    if i + 2 < len(line) and line[i + 2] == "'":
+        return 3
+    return 0
 
 
 def read(root: str, relative: str) -> str:

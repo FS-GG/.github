@@ -284,7 +284,56 @@ pair "$C" "Edge" 100 9
 printf '(*\n(* nested *)\nstill inside\n*)\n' >>"$C/src/Demo/Edge.fsi"
 must_warn "substance: a nested (* *) block adds no substantive lines" "Edge\.fsi: 9\.0%" "$C"
 
-# ---- 15-16. against the REAL repository, which is the tree that actually matters ------------------
+# ---- 15-17. a `(*` IS ONLY A COMMENT OPENER WHERE F# WOULD READ ONE ------------------------------
+#
+# These three legs pin the fail-open the .github#2731 review round found. An earlier revision
+# counted `(*` and `*)` anywhere on a line, so `SemanticDiff.fs:99` -- which contains
+# `StartsWith("(*")` in a STRING, in a file holding no `*)` at all -- opened a block comment that
+# never closed: 612 lines collapsed to 86, and `SemanticDiff.fsi` scored 96.51% against a true
+# 17.89%. A +78.6 point error, in the GREEN direction, on a shipped file. It changed no verdict only
+# because both figures sit above 10%; a genuinely thin signature would have been lifted clear of the
+# threshold by one unmatched `(*` in a string.
+#
+# Each leg is built so the OLD counter gets the opposite answer, which is what makes them
+# regression legs rather than decoration.
+
+STR="$WORK/paren-in-string"
+entry_points "$STR"
+mkdir -p "$STR/src/Demo"
+# The offending construct FIRST, so an unterminated comment would swallow the other 99 lines.
+{
+  echo 'let opener = line.StartsWith("(*")'
+  body 99
+} >"$STR/src/Demo/Edge.fs"
+sig_body 9 >"$STR/src/Demo/Edge.fsi"
+# 9/100 = 9.0% and must warn. The old counter saw 9/1 = 900% and stayed silent.
+must_warn "lexing: a (* inside a string literal does not open a comment" "Edge\.fsi: 9\.0%" "$STR"
+
+DOC="$WORK/paren-in-doc"
+entry_points "$DOC"
+mkdir -p "$DOC/src/Demo"
+body 100 >"$DOC/src/Demo/Edge.fs"
+{
+  echo '/// Prose that mentions a (* block comment opener inline.'
+  sig_body 20
+} >"$DOC/src/Demo/Edge.fsi"
+# 21/100 = 21% and must NOT warn. The old counter counted the /// line, then swallowed the 20 `val`
+# lines behind it, reaching 1/100 = 1% and warning on a signature that states twenty things.
+must_not_warn "lexing: a (* inside /// prose does not open a comment" "WARN" "$DOC"
+
+CHR="$WORK/char-literal"
+entry_points "$CHR"
+mkdir -p "$CHR/src/Demo"
+{
+  echo "let quote = '\"'"
+  body 99
+} >"$CHR/src/Demo/Edge.fs"
+sig_body 9 >"$CHR/src/Demo/Edge.fsi"
+# `'"'` occurs in this tree (SemanticDiff.fs:103, RegistryPredicate.fs:40). Read as a string opener
+# it would swallow the rest of the file and inflate the ratio out of warning range.
+must_warn "lexing: a '\"' char literal does not open a string" "Edge\.fsi: 9\.0%" "$CHR"
+
+# ---- 18-19. against the REAL repository, which is the tree that actually matters ------------------
 #
 # A fixture green on synthetic strings while the shipped tree rots is not reachable from here.
 
@@ -298,7 +347,7 @@ body 12 >"$R/src/FS.GG.Coord.Core/PlantedOffender.fs"
 must_fail "repository: an offender planted in a copy of the real tree is caught" \
   "PlantedOffender\.fs: no sibling \.fsi" "$R"
 
-# ---- 17-19. HARNESS CONTROLS: this fixture, not the gate ------------------------------------------
+# ---- 20-22. HARNESS CONTROLS: this fixture, not the gate ------------------------------------------
 #
 # .github#2395's L5 leg. Three properties, each of which would silently hollow this file out.
 
