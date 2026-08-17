@@ -89,7 +89,7 @@ import argparse
 import re
 import sys
 import traceback
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 OK, FINDING, NO_VERDICT_PERMANENT = 0, 1, 3
 
@@ -120,7 +120,10 @@ ALLOWED_FILES = frozenset(
         # The plan-and-retrospective record (#836 added its "what actually landed" sections).
         "docs/design/coordination-engine.md",
         # Asserts the REJECTION — the string is the test's subject, not its narrative.
-        "tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs",
+        # It moved to the kernel suite with `Options` itself at .github#2725; a stale entry here does
+        # not fail open, it fails LOUD (the file stops being exempt and its two deliberate mentions
+        # become findings), which is the right direction for an allow-list to fail in.
+        "tests/FS.GG.Coord.Cli.Kernel.Tests/OptionsTests.fs",
         # States the rule in its own summary prose.
         ".github/workflows/engine-flag-narrative.yml",
         # TIER FIVE — found by this gate, on the day it was written, in the tree #917 declared clean.
@@ -172,7 +175,16 @@ REQUIRED_COVERAGE = ("src", "tests", "docs", "scripts", ".github")
 #    honest canary: its whole subject is the string, so it can never legitimately stop carrying it
 #    (a version of it that does not mention the flag has stopped asserting the flag is refused, which
 #    is itself the finding). This mirrors `check-worker-id-attractor.py`'s `engine_sites` guard.
-CANARY_FILE = "tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs"
+#
+#    THIS CONSTANT IS A HARD-CODED SUBJECT PATH, AND UNTIL .github#2725 ITS GUARD WAS DISARMED BY THE
+#    ONE EVENT IT EXISTS TO SURVIVE. The guard read `if CANARY_FILE.is_file() and canary_mentions == 0`,
+#    so a canary path that had gone STALE — the file moved, which is the commonest way a hard-coded path
+#    stops being right — made the first conjunct false and skipped the assertion entirely. Measured:
+#    with `CANARY_FILE` still naming the pre-.github#2725 location, this gate printed
+#    `ok: … 85 mention(s) audited` and exited 0 while its content guard checked nothing at all. The same
+#    inverted shape was found and repaired in `check-worker-id-attractor.py` in the same change; see the
+#    guard below for how the condition is now written.
+CANARY_FILE = "tests/FS.GG.Coord.Cli.Kernel.Tests/OptionsTests.fs"
 
 
 class GateError(Exception):
@@ -295,11 +307,24 @@ def main(argv: list[str]) -> int:
             )
 
     # CONTENT (guard 2). Coverage proves the walk reached the file; it does not prove the reader or
-    # the pattern still work. The rejection test's entire subject is this string, so if it exists and
-    # we did not see the flag in it, ENGINE_FLAG or the decoder is broken — and every "ok" above is
-    # worthless rather than good news. Skipped when the file is absent (a synthetic fixture tree):
-    # there is genuinely nothing to be canary of, and asserting on a file that is not there would
-    # red every tree but this repo's.
+    # the pattern still work. The rejection test's entire subject is this string, so if we did not see
+    # the flag in it, ENGINE_FLAG or the decoder is broken — and every "ok" above is worthless rather
+    # than good news.
+    #
+    # THE SKIP CONDITION IS THE PROJECT, NOT THE FILE (.github#2725), AND THAT IS THE WHOLE REPAIR.
+    # It used to be `CANARY_FILE.is_file() and canary_mentions == 0`, which disarms the guard in exactly
+    # the case it exists for: a canary path that has gone stale because the file MOVED. The intent it
+    # was written with is still honoured — a synthetic or foreign tree with no such suite in it has
+    # genuinely nothing to be canary of, and must not red — but that intent is served by asking whether
+    # the canary's PROJECT is here, which a fixture tree answers "no" to and this repository answers
+    # "yes" to whether or not the constant is still correct.
+    canary_project = str(PurePosixPath(CANARY_FILE).parent)
+    if (root / canary_project).is_dir() and not (root / CANARY_FILE).is_file():
+        raise GateError(
+            f"{canary_project}/ is here but {CANARY_FILE} is not, so the content guard below examined "
+            f"NOTHING while every leg above reported green. A hard-coded canary path whose absence "
+            f"skips its own assertion is a check that cannot fail (#266). Repoint CANARY_FILE."
+        )
     if (root / CANARY_FILE).is_file() and canary_mentions == 0:
         raise GateError(
             f"found NO mention of `--engine` in {CANARY_FILE}, whose whole subject is that string "

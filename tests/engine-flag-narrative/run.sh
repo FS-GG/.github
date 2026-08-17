@@ -146,8 +146,8 @@ fi
 # 7. The rejection test. The string IS its subject: strip it and the assertion that the flag is refused
 #    stops existing — the one test standing between this gate and the flag quietly coming back.
 seed "$WORK/rejection-test"
-mkdir -p "$WORK/rejection-test/tests/FS.GG.Coord.Cli.Tests"
-cat > "$WORK/rejection-test/tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs" <<EOF
+mkdir -p "$WORK/rejection-test/tests/FS.GG.Coord.Cli.Kernel.Tests"
+cat > "$WORK/rejection-test/tests/FS.GG.Coord.Cli.Kernel.Tests/OptionsTests.fs" <<EOF
         let e = parse [ "decide"; "$FS_FLAG" ] |> rejected
         Assert.Contains("$FS_FLAG", e)
 EOF
@@ -205,14 +205,44 @@ fi
 #      Here the rejection test EXISTS and carries no mention, which is impossible while the reader
 #      and the pattern work: its whole subject is that string. So it must be NO VERDICT, not a pass.
 seed "$WORK/canary-blind"
-mkdir -p "$WORK/canary-blind/tests/FS.GG.Coord.Cli.Tests"
+mkdir -p "$WORK/canary-blind/tests/FS.GG.Coord.Cli.Kernel.Tests"
 printf 'let e = parse [ "decide" ] |> rejected  // the flag is gone from its own assertion\n' \
-  > "$WORK/canary-blind/tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs"
+  > "$WORK/canary-blind/tests/FS.GG.Coord.Cli.Kernel.Tests/OptionsTests.fs"
 gate_on canary-blind
 if [ "$RC" = 3 ] && printf '%s' "$OUT" | grep -q 'no verdict'; then
   ok "the CANARY fires: the rejection test carrying no mention is NO VERDICT (3), not a pass"
 else
   bad "canary guard must exit 3 — the ADR count alone would otherwise green a blind read (got rc=$RC)" "$OUT"
+fi
+
+# 10b2. THE CANARY PATH ITSELF GOES STALE, which is the commonest way a hard-coded subject stops being
+#       right and — until .github#2725 — the one case that DISARMED this guard rather than tripping it.
+#       The condition was `CANARY_FILE.is_file() and canary_mentions == 0`: a moved canary makes the
+#       first conjunct false, the assertion is skipped, and the gate prints `ok` over a content check it
+#       never ran. Measured on the real tree when `OptionsTests.fs` moved to the kernel suite:
+#       `ok: … 85 mention(s) audited`, exit 0.
+#
+#       The repaired condition asks whether the canary's PROJECT is present, so a tree that HAS the
+#       suite but not the file is a refusal, while a tree with no such suite at all is still silent.
+seed "$WORK/canary-moved"
+mkdir -p "$WORK/canary-moved/tests/FS.GG.Coord.Cli.Kernel.Tests"
+printf 'let unrelated = 1\n' > "$WORK/canary-moved/tests/FS.GG.Coord.Cli.Kernel.Tests/SomethingElse.fs"
+gate_on canary-moved
+if [ "$RC" = 3 ] && printf '%s' "$OUT" | grep -q 'is here but'; then
+  ok "the canary path going STALE is NO VERDICT (3) — a guard its own subject's absence disarms cannot fail"
+else
+  bad "a stale CANARY_FILE must exit 3, not skip its own assertion (got rc=$RC)" "$OUT"
+fi
+
+# 10b3. ...and the inverse, which is what keeps 10b2 from being a blanket refusal. A tree with no
+#       canary PROJECT in it has genuinely nothing to be canary of — every synthetic tree in this file
+#       before leg 7 is that tree — and must stay green.
+seed "$WORK/canary-absent"
+gate_on canary-absent
+if [ "$RC" = 0 ]; then
+  ok "a tree with no canary PROJECT at all stays green — the guard tells a fixture from a moved file"
+else
+  bad "a tree with no canary project must not red (got rc=$RC)" "$OUT"
 fi
 
 # 10c. COVERAGE. Once the repair lands, `src/` legitimately carries ZERO mentions — so "was `src/`
