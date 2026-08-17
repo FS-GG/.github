@@ -2927,15 +2927,53 @@ module Reads =
                         Cache.putBody cacheKey validator filtered
                         Ok filtered
 
+    // WHAT `NextLink` MEANS ON A RESPONSE THAT HAS ALREADY BEEN MERGED (.github#2735).
+    //
+    // `Transport.Send` follows `Link: rel="next"`, fetches every continuation and CONCATENATES them —
+    // and it does not clear `NextLink` while doing so, because `follow` rebinds only `Body` and `ETag`
+    // (`Transport.fs`). So the flag a caller sees says **this collection paginated**: a fact about what
+    // already happened, which is exactly the question `memoisable` asks of it when it refuses to store
+    // page one's validator against a merge. It does NOT say *there are pages I have not fetched*, and
+    // one bit cannot answer both questions.
+    //
+    // Reading it as the second is what this inventory did, and the cost was not a rare edge: in
+    // `FS-GG/.github` — whose issue listing ALWAYS paginates — a complete, fully merged inventory was
+    // refused on every single call. `intake apply`, the one filing path that validates its input before
+    // creating anything, could not file in that repository at all, so every row grew through unvalidated
+    // prose recovered afterwards by regex instead (.github#2735, first-hand reproduction 2026-08-16).
+    //
+    // THE REFUSAL STAYS. It is simply asked of the SHAPE rather than of the flag, and in that form it is
+    // a proof rather than a heuristic. A `rel="next"` link is emitted only over a page the server FILLED
+    // — it does not advertise a continuation it has nothing to put on — so page one carried exactly
+    // `CollectionPageSize` elements, and whatever lies behind that link carries at least one more.
+    // Hence:
+    //
+    //   * merged   -> the body carries STRICTLY MORE than `CollectionPageSize` elements.
+    //   * unmerged -> the body IS page one: exactly `CollectionPageSize`, and never more.
+    //
+    // `> CollectionPageSize` separates those two, and it separates them in the fail-closed direction. A
+    // transport that hands back one page and its link still refuses — that is #2134's shape, which
+    // `Fake.Recorder` can produce and the shipping adapter cannot — and so does a server that answers a
+    // `rel="next"` with a short page, which is a read we cannot account for rather than one we may
+    // believe. This is the mirror image of `memoisable`'s headroom proof (a page SHORTER than `per_page`
+    // is provably the last one), argued across the same boundary and for the same reason.
+    //
+    // `per_page` is taken from `CollectionPageSize` rather than written out again: a literal here that
+    // drifted from the constant the guard compares against would disarm the guard silently.
     let duplicateCandidates (transport: IGitHubTransport) (owner: string) (repo: string) : IoResult<DuplicateCandidate list> =
         let subject = $"%s{owner}/%s{repo} all duplicate candidates"
-        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues"; Query = [ "state", "all"; "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues"; Query = [ "state", "all"; "per_page", string CollectionPageSize ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
         transport.Send request |> Result.bind (fun response ->
-            if response.NextLink.IsSome then
-                Error(Malformed(subject, "the transport returned an unmerged next page; duplicate inventory is incomplete"))
-            else parse subject response.Body |> Result.bind (fun doc ->
+            let paginated = response.NextLink.IsSome
+            parse subject response.Body |> Result.bind (fun doc ->
                 use doc = doc
                 if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "candidate list is not an array")) else
+                let observed = doc.RootElement.GetArrayLength()
+                if paginated && observed <= CollectionPageSize then
+                    // A FAILED READ, NOT AN EMPTY ANSWER — and the message has to say which, because the
+                    // caller's next act is to decide whether a row it is about to create already exists.
+                    Error(Malformed(subject, $"the listing paginates but only %d{observed} element(s) arrived over a page size of %d{CollectionPageSize}: the transport did not merge the continuation, so the duplicate inventory is incomplete. That is a FAILED READ, not an empty answer — refusing to decide from it"))
+                else
                 doc.RootElement.EnumerateArray()
                 |> Seq.mapi (fun index item ->
                     try

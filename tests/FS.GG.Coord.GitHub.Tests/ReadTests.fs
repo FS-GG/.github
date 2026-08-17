@@ -31,10 +31,186 @@ let ``#2134 duplicate candidates retain both closed issues and PRs`` () =
 
 [<Fact>]
 let ``#2134 duplicate inventory refuses an unmerged continuation page`` () =
+    // A TRANSPORT THAT DID NOT MERGE. One page of a set that has more, handed straight back — nought
+    // elements behind a `rel="next"` link that promises a hundred ahead of it. `HttpTransport` cannot
+    // produce this (it follows the link and concatenates), which is exactly why the guard must be stated
+    // against the SHAPE rather than against the flag: see the `.github#2735` block below for what
+    // happened when the flag alone was read as the answer.
     let transport = Fake.Recorder(fun _ -> Ok { Status = 200; Body = "[]"; ETag = None; NextLink = Some "https://api.github.test/page=2"; Headers = Map.empty })
     match Reads.duplicateCandidates transport "FS-GG" ".github" with
     | Error(Malformed(_, detail)) -> Assert.Contains("incomplete", detail)
     | other -> failwithf "an incomplete inventory must refuse: %A" other
+
+// ---- .github#2735: the duplicate inventory over a listing that PAGINATES ----------------------------
+//
+// `intake apply` — the only filing path that validates its input before creating anything — could not
+// file in `FS-GG/.github` at all. Every run died at the duplicate-inventory read, permanently, and the
+// refusal was correct in form and wrong in fact: the inventory it refused was COMPLETE.
+//
+// `Transport.Send` follows `Link: rel="next"` and concatenates the pages. What it does NOT do is clear
+// `NextLink` on the merged response — `follow` rebinds only `Body` and `ETag`, so the response a caller
+// receives after a three-page merge still carries PAGE ONE's link (`Transport.fs`, `follow ... { acc
+// with Body = merged; ETag = None }`). That is deliberate and load-bearing elsewhere: `memoisable`
+// reads `NextLink.IsSome` as *this collection paginated, so its ETag may not be stored*, which is a
+// question about history and is answered correctly. `duplicateCandidates` read the same flag as *there
+// are pages I have not fetched*, which is a question about the future, and the same bit cannot answer
+// both. In `FS-GG/.github`, whose issue listing always paginates, the misreading made the refusal
+// unconditional and permanent.
+//
+// WHY NO `Fake.Recorder` TEST COULD HAVE CAUGHT THIS, AND WHY THAT IS THE POINT. `Fake.Recorder`
+// implements `IGitHubTransport` DIRECTLY, and `Transport.Send` — the component that merges — sits BEHIND
+// that interface. A recorder can therefore only hand this reader a `Response` it invented, and #2134's
+// recorder above invented one (`[]` + a link) that the shipping adapter never produces. It asserted a
+// refusal, the refusal happened, and the test went green over a read that could not work. The instrument
+// was not wrong about what it measured; it was structurally incapable of measuring the thing that broke.
+// So these tests drive the REAL `HttpTransport` over real HTTP, against real `Link` headers, which is
+// the only arrangement in which the boundary is genuinely crossed.
+
+/// A loopback HTTP server: a free port, a settable handler, and the request log the assertions read.
+type private Loopback() =
+    let listener = new System.Net.HttpListener()
+
+    // Port 0 is not available to HttpListener, so take a free one from the OS and hand it back.
+    let port =
+        use probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0)
+        probe.Start()
+        let p = (probe.LocalEndpoint :?> System.Net.IPEndPoint).Port
+        probe.Stop()
+        p
+
+    let prefix = $"http://127.0.0.1:%d{port}/"
+    let seen = System.Collections.Generic.List<string>()
+    let mutable handler: System.Net.HttpListenerRequest -> System.Net.HttpListenerResponse -> unit = fun _ _ -> ()
+
+    do
+        listener.Prefixes.Add prefix
+        listener.Start()
+
+        let loop () =
+            while listener.IsListening do
+                try
+                    let ctx = listener.GetContext()
+                    lock seen (fun () -> seen.Add ctx.Request.Url.PathAndQuery)
+                    handler ctx.Request ctx.Response
+
+                    try
+                        ctx.Response.Close()
+                    with _ ->
+                        ()
+                with _ ->
+                    ()
+
+        let t = System.Threading.Thread(loop)
+        t.IsBackground <- true
+        t.Start()
+
+    member _.Base = prefix.TrimEnd('/')
+    member _.Requests = lock seen (fun () -> List.ofSeq seen)
+    member _.On(f) = handler <- f
+
+    member _.Send (response: System.Net.HttpListenerResponse) (status: int) (body: string) (headers: (string * string) list) =
+        response.StatusCode <- status
+        response.ContentType <- "application/json"
+
+        for (k, v) in headers do
+            response.Headers.Add(k, v)
+
+        let bytes = System.Text.Encoding.UTF8.GetBytes body
+        response.ContentLength64 <- int64 bytes.Length
+        response.OutputStream.Write(bytes, 0, bytes.Length)
+
+    interface System.IDisposable with
+        member _.Dispose() =
+            try
+                listener.Stop()
+                (listener :> System.IDisposable).Dispose()
+            with _ ->
+                ()
+
+/// One page of the `issues` listing: the fields `duplicateCandidates` actually reads, for each number.
+let private issuePage (numbers: int list) =
+    numbers
+    |> List.map (fun n -> $"""{{"number":%d{n},"state":"open","title":"issue %d{n}","body":"body %d{n}"}}""")
+    |> String.concat ","
+    |> fun elements -> "[" + elements + "]"
+
+/// `FS-GG/.github`'s shape, in miniature: a FULL first page (100, the `per_page` this read asks for) with
+/// a `rel="next"` link, and a short continuation. Page two is what each test injects its fault into — the
+/// status and body of the ONLY response that differs between the green leg and the red ones.
+let private paginatingListing (server: Loopback) (pageTwoStatus: int) (pageTwoBody: string) =
+    server.On(fun req res ->
+        if req.Url.PathAndQuery.Contains "page=2" then
+            server.Send res pageTwoStatus pageTwoBody []
+        else
+            server.Send
+                res
+                200
+                (issuePage [ 1..100 ])
+                [ "Link",
+                  $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=100&page=2>; rel=\"next\", "
+                  + $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=100&page=2>; rel=\"last\"" ])
+
+[<Fact>]
+let ``.github#2735 the duplicate inventory MERGES the continuation page`` () =
+    // THE REGRESSION. Both pages are served, the adapter merges them, and the answer must be the WHOLE
+    // set — including #101..#103, which exist only on page two and are precisely the rows a duplicate
+    // check would otherwise miss. Against the unrepaired reader this reds with `Malformed(..., "the
+    // transport returned an unmerged next page")` even though 103 candidates were fetched and merged.
+    use server = new Loopback()
+    paginatingListing server 200 (issuePage [ 101..103 ])
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Ok candidates ->
+        Assert.Equal(103, List.length candidates)
+        Assert.Contains(candidates, fun c -> c.Number = 1)
+        Assert.Contains(candidates, fun c -> c.Number = 103)
+        // Two round trips really happened: the answer is a merge, not a first page that looked long.
+        Assert.Equal(2, List.length server.Requests)
+    | Error e -> failwithf "a listing that paginates must yield a COMPLETE inventory, not a refusal: %A" e
+
+[<Fact>]
+let ``.github#2735 a continuation page that is NOT AN ARRAY is a failed read, not a short inventory`` () =
+    // FAULT INJECTION, and the control is the test above: same server, same first page, same link — the
+    // only difference is page two's BODY. A gateway error page, a truncated response, a proxy's HTML: the
+    // inventory cannot be completed, so it must refuse rather than answer with page one's 100 rows.
+    use server = new Loopback()
+    paginatingListing server 200 """{"message":"Bad gateway"}"""
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Error(Malformed(_, detail)) -> Assert.Contains("not a JSON array", detail)
+    | other -> failwithf "an inventory that could not be completed must refuse: %A" other
+
+[<Fact>]
+let ``.github#2735 a continuation page that ERRORS is a failed read, not a short inventory`` () =
+    // The other half of the same fault: page two answers, and answers 500. Nothing about page one's 100
+    // rows becomes trustworthy because the rest of the set was unreachable.
+    use server = new Loopback()
+    paginatingListing server 500 """{"message":"Server Error"}"""
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Error _ -> ()
+    | Ok candidates ->
+        failwithf "an unreachable continuation page must refuse, not answer with %d rows" (List.length candidates)
+
+[<Fact>]
+let ``.github#2735 a listing that genuinely has nothing reads as an EMPTY inventory, not a failure`` () =
+    // THE DISCRIMINATION THE REFUSAL EXISTS TO MAKE. "I could not read the inventory" and "I read the
+    // inventory and it is empty" are different answers, and a repair that collapsed them in either
+    // direction would be the defect. One page, no `rel="next"`, nothing in it: `Ok []`.
+    use server = new Loopback()
+    server.On(fun _ res -> server.Send res 200 "[]" [])
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Ok [] -> Assert.Equal(1, List.length server.Requests)
+    | other -> failwithf "an empty listing is an empty inventory: %A" other
 
 /// A transport for `prAlive`'s TWO reads (#1055): the open-PR list, then — when no PR matches — the
 /// `git/matching-refs/heads/item/<n>-` branch probe. `pulls` answers the first, `refs` the second.

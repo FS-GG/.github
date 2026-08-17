@@ -22,6 +22,20 @@ module Reads =
     type DuplicateCandidate = { Number: int; State: string; Title: string; Body: string; IsPullRequest: bool }
     /// Complete, uncached all-state inventory for intake. Unlike `issues`, pull requests remain
     /// candidates.
+    ///
+    /// **COMPLETE MEANS EVERY PAGE, AND IT IS `Transport.Send` THAT DELIVERS THAT** — it follows `Link:
+    /// rel="next"` and concatenates, erroring on any continuation it cannot fetch or merge. What it does
+    /// NOT do is clear `NextLink` on the merged response, so that flag reports *this collection
+    /// paginated* and never *pages remain unread*. Reading it as the latter is `.github#2735`: in
+    /// `FS-GG/.github`, whose issue listing always paginates, a fully merged inventory was refused on
+    /// every call, and `intake apply` — the one filing path that validates before it creates — could not
+    /// file there at all.
+    ///
+    /// The fail-closed refusal is preserved and asked of the SHAPE instead: a `rel="next"` link is only
+    /// emitted over a FULL page, so a merged body carries strictly more elements than the `per_page` this
+    /// read requested, and a body that does not is a transport that truncated. That refusal names itself
+    /// a FAILED READ, because the one answer this must never be confused with is "read it, found
+    /// nothing" — the seam that decides whether a new row duplicates an existing one (#266).
     val duplicateCandidates: transport: Transport.IGitHubTransport -> owner: string -> repo: string -> Errors.IoResult<DuplicateCandidate list>
 
     open FS.GG.Coord
