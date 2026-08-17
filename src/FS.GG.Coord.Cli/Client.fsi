@@ -223,11 +223,16 @@ module Client =
     /// the board owner and title it is scoped to, the default repo a bare `<n>` ref resolves against, and the
     /// chore-lock roster a vendored tenant injects by environment.
     ///
-    /// BUILT ONCE PER PROCESS, at the composition edge in `run`, and never inside a command. That is what makes
-    /// each command below a function of its arguments rather than of the environment, and it is the only reason
-    /// the test project can drive them at all: no unit test can construct a live transport, so a command that
-    /// reached for one itself would be untestable by construction. This type is exported for that reason and
-    /// for no other — it is a parameter, not a service locator.
+    /// BUILT ONCE PER PROCESS, at the composition edge in `run`, for every command that TAKES one. That is what
+    /// makes each such command below a function of its arguments rather than of the environment, and it is the
+    /// only reason the test project can drive them at all: no unit test can construct a live transport, so a
+    /// command that reached for one itself would be untestable by construction. This type is exported for that
+    /// reason and for no other — it is a parameter, not a service locator.
+    ///
+    /// `followupAudit` IS THE EXCEPTION, and it is evidence rather than a pattern to copy. It takes no `Context`,
+    /// so it builds one INSIDE the command from the environment — which is precisely why
+    /// `withFollowupAuditContextForTest` has to exist at all, and why both bindings below are annotated as
+    /// arguments for the extraction programme (.github#2725 onward) rather than as designs.
     type Context =
         {
           Transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport
@@ -273,21 +278,23 @@ module Client =
         defaultRepo: string option ->
         raw: string -> Result<FS.GG.Coord.Types.Ref,string>
 
-    /// Static receipt validation proves that an SDD route says which work package it governs.  Whether
-    /// that package's files currently exist and are `implementationReady` is a SEPARATE, ADVISORY fact
-    /// (#2298): requiring it to be true before the receipt records or the item schedules made `sdd-required`
-    /// permanently unreachable for any item that does not already carry a package, because the only actor
-    /// positioned to author that package — a CLAIMED WORKER, inside a worktree, via `fsgg-sdd` — could never
-    /// get claimed to do so. `sddEvidenceErrors` is reported (by `record` and `show`) but never refuses.
-    /// Decode the current SDD analysis fact for the named work.  The route boundary owns this one
-    /// interpretation so a `workId` substitution and an unready analysis cannot be accepted on one
-    /// command path while another merely checks that JSON was present.
+    /// Decode the current SDD analysis fact for the named work — the errors in one `sdd readiness` JSON
+    /// document, or `[]`. The route boundary owns this one interpretation so a `workId` substitution and an
+    /// unready analysis cannot be accepted on one command path while another merely checks that JSON was
+    /// present. An unreadable document is an ERROR in the returned list, never a silent `[]`.
     val sddReadinessEvidenceErrors:
       workId: string -> raw: string -> string list
 
     /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof surfaced by
     /// route reads and route recording, so the test can pin both the current and missing-work inversions.
-    /// ADVISORY ONLY (#2298) — see the doc comment above. Never fed back into a `DeliveryRoute.Verdict`.
+    ///
+    /// ADVISORY ONLY (#2298), and never fed back into a `DeliveryRoute.Verdict`. Static receipt validation
+    /// proves that an SDD route says WHICH work package it governs; whether that package's files currently
+    /// exist and are `implementationReady` is a SEPARATE fact. Requiring it to be true before the receipt
+    /// records or the item schedules made `sdd-required` permanently unreachable for any item that does not
+    /// already carry a package, because the only actor positioned to author that package — a CLAIMED
+    /// WORKER, inside a worktree, via `fsgg-sdd` — could never get claimed to do so. So this is REPORTED
+    /// (by `record` and `show`) and never refuses.
     val sddEvidenceErrors:
       receipt: FS.GG.Coord.DeliveryRoute.Receipt -> string list
 
@@ -690,24 +697,49 @@ module Client =
     /// `--apply` performs ONLY typed chore remedies. Judgement findings stay report-only in `lint`, because a
     /// repair that needs somebody to decide something is not mechanical and this verb has no way to ask.
     ///
-    /// It distinguishes three outcomes rather than two. A completed reconciliation is 0. A board that could not
+    /// It distinguishes FOUR outcomes rather than two. A completed reconciliation is 0. A board that could not
     /// be RESOLVED AT ALL — a credential or visibility gap — is `ExitNoVerdict`, with a sentence saying so in
     /// as many words, precisely so it is never mistaken for "reached the board, nothing to reconcile"; that
-    /// remedy is org-level (.github#2332) and not fixable from this repo's tree. Any other IO failure keeps the
-    /// read's own code.
+    /// remedy is org-level (.github#2332) and not fixable from this repo's tree. `ExitError` is a run that
+    /// REACHED the board and did not complete — a snapshot that would not parse, or an applied remedy that
+    /// failed — which is a different fact from both of those and must not be collapsed into either. Any other
+    /// IO failure keeps the read's own code.
     val reconcile: ctx: Context -> opts: Options.Options -> int
 
     /// `who` — who holds what, right now: held, stale, or unclaimed.
     ///
     /// `--local` joins the claims to local git worktrees; `--all-repos` widens past the repo scope; `--json`
-    /// gives the machine contract and anything else gives a human table. The output ALWAYS names its effective
-    /// scope, so a narrow answer can never be read as a whole-board one. Exits 0 on a completed read; an IO
-    /// failure keeps the read's own code.
+    /// gives the machine contract and anything else gives a human table.
+    ///
+    /// SCOPE IS PART OF THE ANSWER, INCLUDING THE EMPTY ANSWER (#1369 — a `[]` from the hub checkout was
+    /// routinely read as the org-wide claim set), but WHERE it is said depends on the renderer, and the
+    /// narrower rule is the true one. The human table always opens with a `scope:` line on stdout. Under
+    /// `--json` the array wire contract is preserved instead: nothing is added to stdout, a non-empty row
+    /// already names its own repository, and only for an EMPTY result does the explicit scope ride STDERR. So
+    /// a JSON caller reading stdout alone gets no scope line — by design, and it is exactly why the empty case
+    /// needs one at all.
+    ///
+    /// Exits 0 on a completed read; an IO failure keeps the read's own code.
     val who: ctx: Context -> opts: Options.Options -> int
 
     /// The one resolved-Status boundary for a `Blocked` write.  Callers may arrive through an
     /// explicit park, a recorded claim restore, or reconciliation; none may write the column until
     /// this verifies that the resulting row carries either a machine edge or a human sentinel.
+    ///
+    /// AC1 (.github#2079): **a `Blocked` park is coherent ONLY if the row will end with a non-empty
+    /// readable `Blocked by` field or a `Blocked on: human/...` sentinel.** A park is two independent
+    /// writes — the `Status` column and the `Blocked by` field — and nothing else bound them at write
+    /// time: `BLOCKED-NO-REASON` only reds the EMPTY-field case, so a stale-but-non-empty field (the
+    /// `FS.GG.Templates#348` shape — an edge that landed as a body line instead) satisfied every existing
+    /// check while naming refs that had all resolved, and `BLOCKER-CLEARED` promoted the row.
+    ///
+    /// Its callers order it BEFORE the lock drops — a refused write must not cost the caller their lock —
+    /// and AFTER the same call's own `Blocked by` write, so `release --blocked-by` has already landed and
+    /// the live read this makes sees it. A no-op for every OTHER requested status, including none: this is
+    /// ADR-0045's park invariant, not a general field-write gate, and it never fires on a row the call is
+    /// not about to park. `Error` carries `ExitError` in every arm, including an unreadable board, field or
+    /// body — a fact it could not read is a refusal, never a pass. `set-field --batch` cannot use this
+    /// as-is; that is what `requireCoherentParkIfBlockedForBatch` below exists for.
     val requireCoherentParkIfBlocked:
       ctx: Context ->
         ref: FS.GG.Coord.Types.Ref ->
@@ -730,10 +762,19 @@ module Client =
     /// collect, so breaking a lock is never the default — the operator opts into it.
     val reap: ctx: Context -> opts: Options.Options -> int
 
+    /// `budget` — what is left, and what is stuck: the GraphQL meter, the REST telemetry, and the deferral
+    /// queue.
+    ///
     /// `pendingBoardWrites` is the DEPTH OF THE DEFERRAL QUEUE — the writes `boardWrite` took on an
-    /// exhausted budget and `flush` will replay (#862). It reads a local file and spends nothing, which is
-    /// the point: the moment you most need to ask "did my stamp land?" is the moment you have no budget to
-    /// ask with.
+    /// exhausted budget and `flush` will replay (#862). It and the REST observations beside it come from
+    /// LOCAL files, which is the point: the moment you most need to ask "did my stamp land?" is the moment
+    /// you have no budget to ask with.
+    ///
+    /// THE COMMAND ITSELF IS NOT OFFLINE, and must not be described as though it were: it opens by reading
+    /// GitHub's own `/rate_limit`, so it needs a live transport and a token, and a failure there keeps that
+    /// read's own code rather than reporting an unknown budget as a healthy one. What it reports about REST
+    /// is deliberately NOT that figure — `/rate_limit`'s `core` count disagrees with the counter real
+    /// requests are billed against on this account, and a secondary limit never appears in it at all.
     ///
     /// A queue we could not READ is `None`, never `0`. They are opposite answers — "nothing is waiting" vs
     /// "I cannot tell you what is waiting" — and rendering the second as the first is how a worker concludes
@@ -796,22 +837,10 @@ module Client =
     /// nothing left to gate (#1680), and `ExitError` (1) for a usage fault.
     val landable: ctx: Context -> opts: Options.Options -> int
 
-    /// AC1 (.github#2079): **a `Blocked` park is coherent ONLY if the row will end with a non-empty
-    /// readable `Blocked by` field or a `Blocked on: human/...` sentinel.** A park is two independent
-    /// writes — the `Status` column and the `Blocked by` field — and nothing else bound them at write
-    /// time: `BLOCKED-NO-REASON` only reds the EMPTY-field case, so a stale-but-non-empty field (the
-    /// `FS.GG.Templates#348` shape — an edge that landed as a body line instead) satisfied every existing
-    /// check while naming refs that had all resolved, and `BLOCKER-CLEARED` promoted the row.
-    ///
-    /// Refuses BEFORE the lock drops — a refused write must not cost the caller their lock, `requestedStatus`'s
-    /// own timing argument, one clause over. A no-op for every OTHER `--status`, including none: this is
-    /// ADR-0045's park invariant, not a general field-write gate, and it never fires on a row this call is
-    /// not about to park.
-    ///
-    /// Called AFTER `writeBlockedByIfRequested`, so `--blocked-by` on this same call already landed and
-    /// the live read below sees it.
     /// The authoritative inventory of every `Status=Blocked` writer (#2109).  Every writer, including
-    /// a recorded restore, passes the same resolved-Status gate before emitting its mutation.
+    /// a recorded restore, passes the same resolved-Status gate before emitting its mutation — the gate
+    /// being `requireCoherentParkIfBlocked` above, whose AC1 invariant this list exists to grade the code
+    /// against.
     type BlockedStatusWriter =
         | CannotWriteBlocked of string
         | DeliberatePark of string
@@ -858,16 +887,32 @@ module Client =
     /// park never costs the caller its claim. `--blocked-by REF` writes that field in this same call, so a
     /// coherent park is one command rather than two.
     ///
-    /// Exits 0 once the lock is dropped, `ExitError` on a usage fault or a refused park. A non-fatal board
-    /// write that could not land is SURFACED as a stderr note rather than swallowed (#1151) and does not change
-    /// the code: the lock is genuinely released whatever the column says.
+    /// Exit contract, and it has FOUR arms rather than two. 0 once the lock is dropped. `ExitError` on a usage
+    /// fault, on a caller that does not hold the item, and on a refused park. `ExitRed` on a BROKEN IDENTITY —
+    /// a twin marker (#419) or an impersonation refusal (#1646) — which is a stop and never a retry, and which
+    /// matters most on this verb precisely because `release` DELETES the marker: adopting a twin's would drop a
+    /// lock somebody is working behind. And a read it could not make keeps THAT read's own code (75 on an
+    /// exhausted budget), never a green and never a generic 1.
+    ///
+    /// A non-fatal board write that could not land is SURFACED as a stderr note rather than swallowed (#1151)
+    /// and does not change the code: the lock is genuinely released whatever the column says.
     val release: ctx: Context -> opts: Options.Options -> int
 
     /// `heartbeat` — renew the lease on a held item.
     ///
     /// Runs UNATTENDED in the recipes, which is why its refusals matter more than its successes: a refusal here
     /// is not seen by anyone until the lease lapses 120 minutes later and a second worker is handed the same
-    /// item (#548). Exits 0 on a renewed lease and `ExitError` when it could not be renewed.
+    /// item (#548). So the refusals are enumerated in full below rather than summarised — a verb whose whole
+    /// argument is that its refusals are the part nobody watches must not describe them loosely.
+    ///
+    /// Exits 0 on a renewed lease. `ExitError` on a usage fault and on a caller that does not hold the item —
+    /// which splits into two remedies the command distinguishes on stderr: somebody ELSE holds it (including
+    /// after a `claim --force` steal, #1620, which this is the arm a displaced worker lands in) or the lease
+    /// EXPIRED and must be re-claimed. `ExitRed` on a BROKEN IDENTITY, a stop rather than a retry: an
+    /// impersonation refusal (#1646 — `heartbeat` is the quiet one, since renewing another worker's lease keeps
+    /// their item alive under our control while they are told nothing) or a twin marker (#419). And a read it
+    /// could not make keeps THAT read's own code — 75 on an exhausted budget — never a green and never a
+    /// generic 1.
     val heartbeat: ctx: Context -> opts: Options.Options -> int
 
     /// The claim argv derived from a selected scheduler item.  The scheduler has already resolved this
@@ -1005,7 +1050,10 @@ module Client =
     /// constraint is only that no `repos.yml` READER ship to a receiver — env DOES reach the receiver, so a
     /// per-deployment roster injected by env is exactly the seam a file reader could not be. The repo is
     /// canonicalised on the way in (`resolveRepo`), so the stored ref is already in the spelling the CAS
-    /// compares. The pattern is `parseRef`'s own fully-qualified arm (line ~166), kept in step by eye.
+    /// compares. The pattern is byte-identical to `parseRef`'s own fully-qualified arm — which no longer lives
+    /// in this module at all, but in `RefParsing.parse` (`src/FS.GG.Coord.Cli/RefParsing.fs`, the `full` match)
+    /// that `parseRefIn` delegates to — and the two are kept in step BY EYE, which is the standing hazard here
+    /// rather than a note: nothing compiles the copy against its original.
     val parseChoreLocks: raw: string -> FS.GG.Coord.Types.Ref list
 
     /// THE PER-RECEIVER OPERATION LOCK — the item CAS, unchanged, on a third subject.
@@ -1129,19 +1177,21 @@ module Client =
     /// rather than receiving one, which is what `withFollowupAuditContextForTest` exists to work around.
     val followupAudit: opts: Options.Options -> int
 
-    /// #548: the repo a BARE `<n>` ref resolves against — `Context.DefaultRepo`. An explicit `--repo` wins
-    /// (resolved through the same short-id map, so `--repo rendering` names one queue in both argument
-    /// positions); otherwise the checkout you are standing in, exactly as `take`/`batch` default.
-    ///
-    /// THE OWNER CHECK IS THE WHOLE AMBIGUITY CRITERION, and it is why this is not just `scopedRepo`.
-    /// `resolveRepo` throws the owner away, so in a NON-FS-GG checkout `scopedRepo` happily yields
-    /// `acme/thing` → `thing`, and a bare `506` would then silently address `FS-GG/thing#506` — an issue in
-    /// a repo the caller is not standing in and may not have meant to exist. Comparing the remote's owner
-    /// against the board's and yielding `None` on a mismatch is what keeps a bare number a hard error
-    /// outside the org, which the issue names as the one thing to get right.
     /// The checkout's `owner/repo` → the repo a bare `<n>` resolves against, or `None` when that slug's
-    /// owner is not the board's. PUBLIC PURELY TO BE TESTED — `defaultRepoScope` below wraps it with the
-    /// process call that reads the remote, which a unit test cannot drive. Same idiom as `parseGitHubSlug`.
+    /// owner is not the board's. PUBLIC PURELY TO BE TESTED — the PRIVATE `defaultRepoScope` wraps it with
+    /// the process call that reads the git remote (which a unit test cannot drive) and with `--repo`'s
+    /// precedence: an explicit `--repo` wins, resolved through the same short-id map, so `--repo rendering`
+    /// names one queue in both argument positions; otherwise the checkout you are standing in, exactly as
+    /// `take`/`batch` default. That wrapper's result is what `run` installs as `Context.DefaultRepo`. Same
+    /// idiom as `parseGitHubSlug`.
+    ///
+    /// THE OWNER CHECK THIS FUNCTION PERFORMS IS THE WHOLE #548 AMBIGUITY CRITERION, and it is why the
+    /// wrapper is not just `scopedRepo`. `resolveRepo` throws the owner away, so in a NON-FS-GG checkout
+    /// `scopedRepo` happily yields `acme/thing` → `thing`, and a bare `506` would then silently address
+    /// `FS-GG/thing#506` — an issue in a repo the caller is not standing in and may not have meant to
+    /// exist. Comparing the remote's owner against the board's and yielding `None` on a mismatch is what
+    /// keeps a bare number a hard error outside the org, which the issue names as the one thing to get
+    /// right.
     val defaultRepoForOwner: owner: string -> slug: string -> string option
 
     /// `board` — the bootstrapped Coordination board as JSON: its number, title, owner and field map.
@@ -1275,8 +1325,11 @@ module Client =
     /// DEFAULT is resolved from what the caller actually passed, before the #480 git-remote rewrite, so a
     /// non-FS-GG remote can never be laundered into an "explicit --repo" and defeat the owner check that keeps
     /// a bare `<n>` a hard error outside the org (#548/#962). And `Context.DefaultRepo` is populated once, here,
-    /// so accepting a bare `<n>` reaches all fifteen `parseRef` call sites through a single edit rather than
-    /// fifteen.
+    /// so accepting a bare `<n>` reached every `parseRef` call site through a single edit rather than through
+    /// one edit each — twenty-one such lines at the time of writing, carrying twenty-three invocations, two
+    /// lines parsing a pair. The COUNT drifts with the file and is quoted as a measurement, not a contract:
+    /// `grep -c 'parseRef ctx' src/FS.GG.Coord.Cli/Client.fs` re-derives it. The PROPERTY — one edit, not N —
+    /// is what this clause is about.
     ///
     /// `take` with no resolvable repo is a hard ERROR rather than a quiet fall-back to the whole org: it ACTS,
     /// claiming an item and printing a worktree command against THIS checkout's origin, and an undetectable
