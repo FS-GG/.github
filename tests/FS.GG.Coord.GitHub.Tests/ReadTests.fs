@@ -296,6 +296,79 @@ let ``.github#2735 a listing that genuinely has nothing reads as an EMPTY invent
     | Ok [] -> Assert.Equal(1, List.length server.Requests)
     | other -> failwithf "an empty listing is an empty inventory: %A" other
 
+// ---- THE BOUNDARY THE GUARD IS MADE OF (.github#2735, review round 2, F3) ---------------------------
+//
+// COVERAGE OF A BRANCH IS NOT COVERAGE OF ITS PREDICATE, and every test above was blind to the
+// difference. The guard is `paginated && observed <= CollectionPageSize`. Before these two tests, the
+// only fixtures reaching it arrived with `observed = 0` (#2134's recorder serves `[]`) or `observed =
+// 103` (the merge test) — nought and three-clear, never the boundary itself. `0 <= 100` and `0 < 100`
+// are the same answer, so mutating `<=` to `<` left the FULL 629-test suite green while opening exactly
+// the fail-open the `Reads.fs` block asserts is unreachable: `Ok` over a page-one-only inventory.
+//
+// A boundary needs BOTH of its sides, and the two tests below are that pair. Refusing at
+// `CollectionPageSize` is only correct if `CollectionPageSize + 1` is accepted — a guard that refuses at
+// both is not a boundary, it is a wider refusal wearing one, and the merge test's 103 is too far away to
+// notice.
+//
+// Both fixtures drive the REAL `HttpTransport` over real HTTP, and both are shapes the shipping adapter
+// genuinely produces, which is what separates them from #2134's recorder-invented `[]` + link.
+
+[<Fact>]
+let ``.github#2735 a merged total of exactly the page size, behind an advertised continuation, is REFUSED`` () =
+    // THE REFUSING SIDE, AT THE BOUNDARY VALUE. A full first page advertising a continuation, and a
+    // continuation that turns out to add nothing. The merge runs for real: `mergeArrays` concatenates
+    // 100 + 0, and `follow` rebinds only `Body` and `ETag` (`Transport.fs:361`, `{ acc with Body =
+    // merged; ETag = None }`), so the response arriving at the guard carries exactly `CollectionPageSize`
+    // elements AND page one's `NextLink`. That is `observed = CollectionPageSize` with `paginated` set —
+    // the boundary itself. `<=` refuses it; `<` answers `Ok` over a set it cannot vouch for.
+    //
+    // The `Reads.fs` block already names this outcome — "a complete inventory is refused whenever the
+    // merged total is <= `CollectionPageSize` and page one advertised a continuation" — as the price paid
+    // for fail-closure, and the `.fsi` repeats it as a known break. Until now that was prose with no gate
+    // under it, which is how the operator that makes the refusal fail-closed came to be pinned by nothing.
+    use server = new Loopback()
+    paginatingListing server 200 "[]"
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains("incomplete", detail)
+        // THE COUNT IN THE MESSAGE IS PART OF THE PROPERTY, not decoration. Without it this test is green
+        // for a guard that refuses every paginated read regardless of length, and could not tell that
+        // case from a guard that refuses AT the boundary — which is the only thing under test here. The
+        // cost is named, in the house style: a reworded message reds this. That is the safe direction.
+        Assert.Contains($"only %d{pageOneSize} element(s) arrived", detail)
+        // FIXTURE VALIDITY, not a second oracle. Two round trips prove the 100 elements reaching the
+        // guard are a MERGED total and not an unmerged first page — without this, the test could pass on
+        // a shape that never crossed the boundary at all, which is the #2134 fixture's whole defect.
+        Assert.Equal(2, List.length server.Requests)
+    | other ->
+        failwithf
+            "a merged total of exactly the page size, behind an advertised continuation, must refuse rather than answer: %A"
+            other
+
+[<Fact>]
+let ``.github#2735 a merged total ONE PAST the page size is a complete inventory, not a refusal`` () =
+    // THE ACCEPTING SIDE, ONE STEP UP. Page two carries exactly one row, so the merged total is
+    // `CollectionPageSize + 1` — the smallest set the guard is supposed to let through.
+    //
+    // The merge test asserts the accepting side at 103, three clear of the boundary, so a comparison that
+    // drifted UP by one or two (`observed <= CollectionPageSize + 2`) would refuse two genuinely complete
+    // inventories and nothing in the suite would red. That is F3's fault in the opposite direction: a
+    // predicate exercised only away from its boundary. Hence exactly one row here, and not three.
+    use server = new Loopback()
+    paginatingListing server 200 (issuePage [ pageOneSize + 1 .. pageOneSize + 1 ])
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
+    | Ok candidates ->
+        Assert.Equal(pageOneSize + 1, List.length candidates)
+        Assert.Contains(candidates, fun c -> c.Number = pageOneSize + 1)
+    | other ->
+        failwithf "a merged total one element past the page size is complete and must be answered: %A" other
+
 /// A transport for `prAlive`'s TWO reads (#1055): the open-PR list, then — when no PR matches — the
 /// `git/matching-refs/heads/item/<n>-` branch probe. `pulls` answers the first, `refs` the second.
 let private prAndRefs (pulls: string) (refs: string) =
