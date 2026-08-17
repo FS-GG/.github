@@ -1667,17 +1667,43 @@ print(out)
 PY
 }
 
+#
+# NEITHER LEG MAY ABORT THIS FIXTURE. Both build their subject from the LIVE producer template, so a
+# real producer regression can make that construction fail — and under `set -e` a failed command
+# substitution would kill the run before the summary line, turning "M3 and M10 red" into a truncated
+# transcript with no verdict at all. Every construction below is therefore status-checked and
+# converted into a NAMED `bad`, which is the same discipline `assert` applies to the gate's own
+# output. Measured: removing `grant=` from `Client.fs` aborted this fixture before it was fixed.
+build_body() {  # <template> <opkey> <grant> -> BODY_FILE, or empty on a construction failure
+  local tpl="$1" key="$2" grant="$3" text
+  BODY_ERR=""
+  BODY_FILE=""
+  if ! text="$(instantiate "$tpl" "$key" "$grant" 2>&1)"; then
+    BODY_ERR="$text"
+    return 0
+  fi
+  BODY_FILE="$(printf '%s\n' "$text" | body_file)"
+}
+
 AUTH_TPL="$(f "['auth_body']")"
 W="$(new_world)"
 claim_comment "$W" "$GEN" 0
-B="$(instantiate "$AUTH_TPL" "$OPKEY" 9999 | body_file)"
-gate "$W" --repo "$REPO" --head-ref "$BRANCH" --head-sha "$HEAD" --body "$B"
-assert "M10 the PRODUCER's own marker template reaches CHECK 4 — the reachability this row was reopened for" 1 \
-  "[check4]" "no \`fsgg:merge-election\` marker on $ITEM bears"
+build_body "$AUTH_TPL" "$OPKEY" 9999
+if [ -z "$BODY_FILE" ]; then
+  bad "M10 the PRODUCER's own marker template reaches CHECK 4 — the reachability this row was reopened for" \
+    "the producer's template could not be instantiated, so nothing was measured:
+$BODY_ERR"
+else
+  gate "$W" --repo "$REPO" --head-ref "$BRANCH" --head-sha "$HEAD" --body "$BODY_FILE"
+  assert "M10 the PRODUCER's own marker template reaches CHECK 4 — the reachability this row was reopened for" 1 \
+    "[check4]" "no \`fsgg:merge-election\` marker on $ITEM bears"
+fi
 
 # The pre-`.github#2395` producer, rebuilt from THIS template by deleting exactly the two fields that
 # landing added. Same world, same helper, different check.
-OLD_TPL="$(python3 - "$AUTH_TPL" <<'OLDPY'
+M11="M11 CONTROL: the four-field producer that shipped before .github#2395 stops at CHECK 1, naming both fields"
+set +e
+OLD_TPL="$(python3 - "$AUTH_TPL" 2>&1 <<'OLDPY'
 import re, sys
 # Delete exactly the two fields `.github#2395` added, from TODAY's template — so this control is
 # rebuilt from the current producer rather than from a re-typed copy of the old one. The count is
@@ -1688,10 +1714,21 @@ if n != 2:
 print(out)
 OLDPY
 )"
-B="$(instantiate "$OLD_TPL" "$OPKEY" 9999 | body_file)"
-gate "$W" --repo "$REPO" --head-ref "$BRANCH" --head-sha "$HEAD" --body "$B"
-assert "M11 CONTROL: the four-field producer that shipped before .github#2395 stops at CHECK 1, naming both fields" 1 \
-  "[check1]" "missing required field(s): opkey, grant"
+OLD_RC=$?
+set -e
+if [ "$OLD_RC" != 0 ]; then
+  bad "$M11" "the pre-#2395 control could not be rebuilt from the live template, so nothing was measured:
+$OLD_TPL"
+else
+  build_body "$OLD_TPL" "$OPKEY" 9999
+  if [ -z "$BODY_FILE" ]; then
+    bad "$M11" "the control template could not be instantiated, so nothing was measured:
+$BODY_ERR"
+  else
+    gate "$W" --repo "$REPO" --head-ref "$BRANCH" --head-sha "$HEAD" --body "$BODY_FILE"
+    assert "$M11" 1 "[check1]" "missing required field(s): opkey, grant"
+  fi
+fi
 
 echo
 echo "----------------------------------------------------------------------"
