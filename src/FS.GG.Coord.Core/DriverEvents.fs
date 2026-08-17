@@ -58,8 +58,8 @@ module DriverEvents =
           Cursor: Cursor
           RenderedAt: int64 }
 
-    /// The pure state+reason derivation. A failed read wins over every other fact — an item this
-    /// process could not read is never confidently Ready/Blocked/Done from stale or partial data.
+    // The pure state+reason derivation. A failed read wins over every other fact — an item this
+    // process could not read is never confidently Ready/Blocked/Done from stale or partial data.
     let private deriveState (facts: ItemFacts) : MaterialState * string =
         if not facts.ReadOk then
             Unreadable(facts.UnreadableReason |> Option.defaultValue "live read failed"), "live read failed or was incomplete"
@@ -132,18 +132,18 @@ module DriverEvents =
         | Released -> true
         | _ -> false
 
-    /// A terminal row regressing to `Ready` is never a legitimate transition (.github#2375 symptom 1,
-    /// issue acceptance #2): once this process has itself classified a ref `Done` (board status Done,
-    /// issue closed — the ONLY path `deriveState` reaches `Done` through) or `Released` (merged, closed,
-    /// every declared obligation verified), those are end states with no forward edge back to
-    /// unclaimed-and-schedulable in a legitimate lifecycle. A fresh read that disagrees is evidence of a
-    /// stale or partial read racing the board's own eventual consistency — reported at 09:03:29Z, 8
-    /// minutes after the merge, 11 seconds before a direct `gh issue view` confirmed CLOSED/Done — not
-    /// proof the item became schedulable again. Overriding to `Unreadable` keeps the regression OUT of
-    /// both `isActive` and "ready" while still surfacing, because `Unreadable` always reports
-    /// (`alwaysReports` below): a human sees the disagreement instead of a driver silently re-offering
-    /// finished work as startable. Scoped to the one dangerous regression the issue names — a terminal
-    /// row disagreeing about anything OTHER than "ready/schedulable" is not this guard's problem.
+    // A terminal row regressing to `Ready` is never a legitimate transition (.github#2375 symptom 1,
+    // issue acceptance #2): once this process has itself classified a ref `Done` (board status Done,
+    // issue closed — the ONLY path `deriveState` reaches `Done` through) or `Released` (merged, closed,
+    // every declared obligation verified), those are end states with no forward edge back to
+    // unclaimed-and-schedulable in a legitimate lifecycle. A fresh read that disagrees is evidence of a
+    // stale or partial read racing the board's own eventual consistency — reported at 09:03:29Z, 8
+    // minutes after the merge, 11 seconds before a direct `gh issue view` confirmed CLOSED/Done — not
+    // proof the item became schedulable again. Overriding to `Unreadable` keeps the regression OUT of
+    // both `isActive` and "ready" while still surfacing, because `Unreadable` always reports
+    // (`alwaysReports` below): a human sees the disagreement instead of a driver silently re-offering
+    // finished work as startable. Scoped to the one dangerous regression the issue names — a terminal
+    // row disagreeing about anything OTHER than "ready/schedulable" is not this guard's problem.
     let private guardTerminalRegression (cursor: Cursor) (c: Classified) : Classified =
         match Map.tryFind c.Ref cursor, c.State with
         | Some previous, Ready when isTerminal previous ->
@@ -152,28 +152,28 @@ module DriverEvents =
                 Reason = $"terminal regression refused: previous read was %A{previous}, this read says Ready" }
         | _ -> c
 
-    /// A ref this process previously classified ACTIVE that is simply ABSENT from the current facts
-    /// batch (.github#2375 symptom 2, issue acceptance #3) is a missing or partial read for THAT ref,
-    /// not evidence it went quiet: nothing in a legitimate lifecycle removes an active item from a full
-    /// board scan without first classifying it to some terminal or blocked state, and the caller's own
-    /// contract is a COMPLETE facts batch every read. Synthesizing an `Unreadable` entry for it keeps
-    /// the ref out of `Active` — matching what a genuinely failed read on that item would render — while
-    /// still emitting a transition (`alwaysReports`), so the rendered output is never the sterile "no
-    /// material transitions / no active items" pair with zero signal that three live claims went
-    /// unobserved. `cursor` is authoritative for "was this active", never `facts`, precisely because
-    /// this case is defined by the ref's ABSENCE from `facts`.
-    /// The cursor's last-known state, worded so it CANNOT be read as a current observation (.github#2525
-    /// acceptance #5).
-    ///
-    /// The old spelling interpolated the union with `%A`, which renders `Claimed "curlew-307b"` — a bare
-    /// present-tense claim — into a sentence about an item nobody could read this pass. In the measured
-    /// incident that string named a worker who had already released cleanly, while a different worker
-    /// actually held the row. The information is still worth reporting; asserting it as CURRENT is the
-    /// defect. Two things make the stale value stick and neither is safe to leave implicit: the sticky
-    /// cursor fold re-pins the original state for any ref that stays absent, and `alwaysReports` re-emits
-    /// `Unreadable` on every read — so a name that goes stale here is repeated forever and can never be
-    /// superseded, because the only thing that could supersede it is a fresh classification of a ref that
-    /// by definition is not in the batch.
+    // A ref this process previously classified ACTIVE that is simply ABSENT from the current facts
+    // batch (.github#2375 symptom 2, issue acceptance #3) is a missing or partial read for THAT ref,
+    // not evidence it went quiet: nothing in a legitimate lifecycle removes an active item from a full
+    // board scan without first classifying it to some terminal or blocked state, and the caller's own
+    // contract is a COMPLETE facts batch every read. Synthesizing an `Unreadable` entry for it keeps
+    // the ref out of `Active` — matching what a genuinely failed read on that item would render — while
+    // still emitting a transition (`alwaysReports`), so the rendered output is never the sterile "no
+    // material transitions / no active items" pair with zero signal that three live claims went
+    // unobserved. `cursor` is authoritative for "was this active", never `facts`, precisely because
+    // this case is defined by the ref's ABSENCE from `facts`.
+    // The cursor's last-known state, worded so it CANNOT be read as a current observation (.github#2525
+    // acceptance #5).
+    //
+    // The old spelling interpolated the union with `%A`, which renders `Claimed "curlew-307b"` — a bare
+    // present-tense claim — into a sentence about an item nobody could read this pass. In the measured
+    // incident that string named a worker who had already released cleanly, while a different worker
+    // actually held the row. The information is still worth reporting; asserting it as CURRENT is the
+    // defect. Two things make the stale value stick and neither is safe to leave implicit: the sticky
+    // cursor fold re-pins the original state for any ref that stays absent, and `alwaysReports` re-emits
+    // `Unreadable` on every read — so a name that goes stale here is repeated forever and can never be
+    // superseded, because the only thing that could supersede it is a fresh classification of a ref that
+    // by definition is not in the batch.
     let private lastKnownPhrase (state: MaterialState) : string =
         match state with
         | Claimed worker -> $"last known to be held by %s{worker}"
@@ -206,13 +206,13 @@ module DriverEvents =
               ObservedAt = observedAt
               SourceSha = fallbackSha })
 
-    /// Idempotency is suppression of REPEATED news: a stable `Claimed`/`Ready`/etc. state that has not
-    /// changed since the cursor is not worth re-announcing. `Unreadable` is the one state where that
-    /// reasoning inverts (independent review round 1, finding 1, .github#2135 repair round 1):
-    /// a PERSISTENT failure is itself the news, every read, for as long as it persists. Suppressing it
-    /// after cycle one makes a rotting item indistinguishable from a healthy one — a failed read must
-    /// never become an empty or successful result (issue acceptance #7), and "quiet because nothing
-    /// changed" is exactly that outcome for an item stuck broken.
+    // Idempotency is suppression of REPEATED news: a stable `Claimed`/`Ready`/etc. state that has not
+    // changed since the cursor is not worth re-announcing. `Unreadable` is the one state where that
+    // reasoning inverts (independent review round 1, finding 1, .github#2135 repair round 1):
+    // a PERSISTENT failure is itself the news, every read, for as long as it persists. Suppressing it
+    // after cycle one makes a rotting item indistinguishable from a healthy one — a failed read must
+    // never become an empty or successful result (issue acceptance #7), and "quiet because nothing
+    // changed" is exactly that outcome for an item stuck broken.
     let private alwaysReports (state: MaterialState) : bool =
         match state with
         | Unreadable _ -> true

@@ -1,0 +1,67 @@
+# Justified survivors and justified SKIPS of the mutation sweep in
+# `tests/signature-doc-siting/mutants.py` (.github#2730).
+#
+# NO SURVIVOR IS LISTED HERE, AND THAT IS THE POINT OF THE FILE RATHER THAN AN ACCIDENT OF IT. Every
+# mutation the sweep generates from the gate's own AST is killed by a fixture leg: 263 of 263 at the
+# head that introduced this file, and 432 of 432 at this one. An entry here is a written admission
+# that some dimension of `scripts/check-signature-doc-siting.py` is asserted by nothing, and it has
+# to name which and say why that is acceptable — so the file only ever shrinks, exactly like
+# `baseline.txt` beside it.
+#
+# ONE SKIP IS LISTED, AND A SKIP IS HELD TO THE SAME BAR AS A SURVIVOR. The sweep declines a
+# candidate site when the mutation it would generate does not change the bytes, does not compile, or
+# cannot be spliced back into the source; those sites are enumerated by a second reading of the gate
+# and subtracted from it by name, so a decline is arithmetic rather than an omission. But an
+# accounted-for decline is still a site nothing measured, which is a survivor wearing another name —
+# so it needs the same written justification, in the same shrink-only file. `skip:` entries are
+# spelled `skip:<site>` and the sweep prints the reason it declined beside the justification here,
+# so a justification that has stopped matching its reason is visible in the same log.
+#
+# WHY AN ALLOWLIST AT ALL, IF IT IS EMPTY. Because the alternative is worse in the direction this row
+# has already been burned by. `.github#2730`'s ordinary chain exhausted at round 3 with five instances
+# of one class: a declared arm no leg asserted, a leg that could not discriminate the thing it was
+# named for, two of four refusal arms unasserted, two finding branches separated only by a substring
+# both emit, and a subject population anchored to two of three projects. Every one of them was a
+# survivor nobody had a place to write down. A sweep with nowhere to record a survivor is a sweep
+# whose survivors get argued away in a review comment and then forgotten.
+#
+# FORMAT — one entry per line:
+#
+#     <mutant-id>  <the reason this mutant cannot be killed, and what a reader should check instead>
+#
+# The id is the one the sweep prints, e.g. `cond-false@312:17` or `dir-drop@FS.GG.Coord.Core`. Ids are
+# position-bearing, so they move when the gate moves; the sweep prints STALE entries (allowlisted ids
+# that no longer survive) and fails on them, so an entry cannot outlive the survivor it excuses.
+#
+# WHAT IS AND IS NOT A REASON. An equivalent mutant — one that provably cannot change the gate's
+# output for any input — is a reason, and it must carry the proof, not the assertion. "Hard to test",
+# "unlikely in practice", "the corpus does not contain one" and "covered by another leg" are NOT
+# reasons: the third is this gate's own subject (a precaution the corpus cannot exercise is a
+# precaution nothing proves) and the fourth is refuted by the survival itself.
+#
+# Two candidates were considered for this file at the head that introduced it, and BOTH were killed
+# with a leg instead, which is the disposition to prefer:
+#
+#   * `cond-true@200:15` — the escape-close search returning its first candidate. Argued equivalent on
+#     the ground that every F# escape but the numeric ones is exactly three characters wide. That is
+#     true and still not sufficient: `('A','"')` is valid F# and discriminates it, because
+#     stopping early leaves the pass to re-read the real closing quote as the opening quote of a `','`
+#     literal and open a string on the `"` that follows.
+#   * `num@199:41` — the search window's upper bound. Argued equivalent because F#'s longest escape
+#     closes eleven characters past the opening quote and the bound is twelve. Also true, and also not
+#     sufficient: the bound's stated job is to stop a stray `'` swallowing the line behind it, and
+#     `src/` holds 40 quotes that are not character literals, so what happens just past the bound is a
+#     property worth pinning rather than a number worth excusing.
+#
+# Both arguments were sound and both conclusions were wrong. That is the failure mode this file is
+# built to make expensive.
+#
+# AND THE ONE SKIP BELOW IS JUSTIFIED THE SAME WAY: BY MEASUREMENT, NOT BY ARGUMENT. "Covered by
+# another leg" is refused above as a reason for a SURVIVOR because the survival itself refutes it. It
+# is not automatically refuted for a skip — the mutant was never run, so there is nothing to refute —
+# and that makes it weaker, not stronger: nothing has been observed at all. So the entry below does
+# not claim coverage; it reports the mutation applied BY HAND, in the two physical pieces the
+# automatic splice cannot rewrite as one, run against the real fixture behind the same three
+# controls. What is skipped is the SPLICE, not the assertion.
+
+skip:str@484:69  The `not one has a sibling .fsi` refusal, whose two f-string pieces `ast` merges into one Constant; its raw span therefore covers the closing and opening quotes between them, and splicing over it unterminates the f-string (the sweep reports `mutant does not compile`, and reports it rather than dropping it). NOT an equivalence claim, and NOT "covered by another leg": applied BY HAND as two same-length sentinel substitutions, one per physical piece, the mutant is KILLED 84/2 — by `run.sh`'s `no verdict: .fs files exist but NOT ONE has a sibling .fsi` leg and by the byte-exact `the no-subject refusal names the ROOT it scanned` leg — behind controls unmutated 86/0 PASS, early-ok 1/85 KILLED, inert 86/0 SURVIVED. What is skipped is the SPLICE, not the assertion. Delete this line if the splice learns to rewrite a merged span, or if the gate stops concatenating there.

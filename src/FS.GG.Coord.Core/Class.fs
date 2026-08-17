@@ -6,41 +6,41 @@ module Class =
     open System.Text.RegularExpressions
     open Types
 
-    /// A `Class:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s `Paths:`
-    /// and `HumanBlock`'s `Blocked on:`, because #1103 decided one grammar for body-line sentinels and a
-    /// third spelling would be the drift ADR-0045 exists to prevent.
+    // A `Class:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s `Paths:`
+    // and `HumanBlock`'s `Blocked on:`, because #1103 decided one grammar for body-line sentinels and a
+    // third spelling would be the drift ADR-0045 exists to prevent.
     let private declRe =
         Regex(@"^ {0,3}[Cc]lass:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
-    /// The `[decision]` TITLE prefix, after leading space. Anchored, deliberately — see the .fsi.
+    // The `[decision]` TITLE prefix, after leading space. Anchored, deliberately — see the .fsi.
     let private titleRe =
         Regex(@"^\s*\[decision\]", RegexOptions.Compiled ||| RegexOptions.IgnoreCase)
 
-    /// The recognised values, normalised for case and surrounding space. Anything else is not a class —
-    /// a `Class: P1` or a `Class: blocker` somebody wrote by hand is a vocabulary this engine does not
-    /// speak, and mapping it onto the nearest of three would be the guess AC3 forbids. `itemClassOfWireName`
-    /// is the parse, DERIVED from the renderer, so the vocabulary is spelled exactly once (#1012).
+    // The recognised values, normalised for case and surrounding space. Anything else is not a class —
+    // a `Class: P1` or a `Class: blocker` somebody wrote by hand is a vocabulary this engine does not
+    // speak, and mapping it onto the nearest of three would be the guess AC3 forbids. `itemClassOfWireName`
+    // is the parse, DERIVED from the renderer, so the vocabulary is spelled exactly once (#1012).
     let private classify (value: string) : ItemClass option =
         itemClassOfWireName value
 
-    /// Every `ItemClass` case, by reflection — `Protocol.everyBlockerState`'s shape exactly, and for its
-    /// reason. All three cases are NULLARY, so the list can be DERIVED, and a list nobody writes is a
-    /// list that cannot omit a case. `Types.everyItemClass` is `private` and is the same derivation done
-    /// by hand behind a pin; this is the one the CHECKER reads, so .github#1651 AC5 is satisfied by
-    /// construction rather than by remembering. A fourth `ItemClass` reaches the diagnostic the day it
-    /// is declared, with no edit here and none in `lint`.
+    // Every `ItemClass` case, by reflection — `Protocol.everyBlockerState`'s shape exactly, and for its
+    // reason. All three cases are NULLARY, so the list can be DERIVED, and a list nobody writes is a
+    // list that cannot omit a case. `Types.everyItemClass` is `private` and is the same derivation done
+    // by hand behind a pin; this is the one the CHECKER reads, so .github#1651 AC5 is satisfied by
+    // construction rather than by remembering. A fourth `ItemClass` reaches the diagnostic the day it
+    // is declared, with no edit here and none in `lint`.
     let legalClasses: ItemClass list =
         FSharp.Reflection.FSharpType.GetUnionCases typeof<ItemClass>
         |> Array.map (fun c -> FSharp.Reflection.FSharpValue.MakeUnion(c, [||]) :?> ItemClass)
         |> Array.toList
 
-    /// The RAW value of every `Class:` line this body declares, outside fences, in body order.
-    ///
-    /// One reading of the grammar, shared by `fromBody` (which resolves the values) and `unrecognised`
-    /// (which reports the ones that do not resolve). A second regex for the second question is the copy
-    /// #972 measured, and it would drift in the direction that hurts: a checker whose idea of "a `Class:`
-    /// line is present" differed from the parser's would say "you wrote one and it is wrong" about a line
-    /// the parser never saw.
+    // The RAW value of every `Class:` line this body declares, outside fences, in body order.
+    //
+    // One reading of the grammar, shared by `fromBody` (which resolves the values) and `unrecognised`
+    // (which reports the ones that do not resolve). A second regex for the second question is the copy
+    // #972 measured, and it would drift in the direction that hurts: a checker whose idea of "a `Class:`
+    // line is present" differed from the parser's would say "you wrote one and it is wrong" about a line
+    // the parser never saw.
     let private declaredValues (body: string) : string list =
         // OUTSIDE fences, via the one `Markdown.unfenced` every body-line rule shares (#972) — a `Class:`
         // line quoted in a ``` block is documentation, exactly as a fenced `Paths:` is. This file's own

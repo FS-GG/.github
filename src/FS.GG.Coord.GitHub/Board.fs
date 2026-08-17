@@ -37,13 +37,13 @@ module Board =
 
     // ---- GraphQL responses -------------------------------------------------------------------------
 
-    /// Read a GraphQL response, distinguishing the four things it can be.
-    ///
-    /// **THE ORDER IS THE CONTRACT.** A rate limit is tested FIRST, before the errors are looked at as a
-    /// partial write — because GitHub reports an exhausted GraphQL budget as an HTTP **200** carrying
-    /// `errors`, exactly like a failed alias. Test the partial arm first and an exhausted budget is
-    /// misreported as *"the board is half-written"*: the caller would then refuse to queue it (a partial is
-    /// never queued), and the write would be silently lost on a condition that was only ever temporary.
+    // Read a GraphQL response, distinguishing the four things it can be.
+    //
+    // **THE ORDER IS THE CONTRACT.** A rate limit is tested FIRST, before the errors are looked at as a
+    // partial write — because GitHub reports an exhausted GraphQL budget as an HTTP **200** carrying
+    // `errors`, exactly like a failed alias. Test the partial arm first and an exhausted budget is
+    // misreported as *"the board is half-written"*: the caller would then refuse to queue it (a partial is
+    // never queued), and the write would be silently lost on a condition that was only ever temporary.
     let private query (document: string) (variables: (string * Var) list) (subject: string) =
         { Method = "POST"
           Path = "graphql"
@@ -63,8 +63,8 @@ module Board =
     let private FieldsDoc =
         "query($owner: String!, $number: Int!) { organization(login: $owner) { projectV2(number: $number) { fields(first: 50) { totalCount nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { id name dataType options { id name } } } } } } rateLimit { cost remaining } }"
 
-    /// `FieldsDoc`'s own window, as the guard must see it — the two MUST agree, and
-    /// `.github#2535 the connection windows in the documents agree with the guards` pins them together.
+    // `FieldsDoc`'s own window, as the guard must see it — the two MUST agree, and
+    // `.github#2535 the connection windows in the documents agree with the guards` pins them together.
     [<Literal>]
     let private FieldsWindow = 50
 
@@ -238,10 +238,10 @@ module Board =
         | Date -> "DATE"
         | Iteration -> "ITERATION"
 
-    /// The board map as JSON. This is BOTH the `board` command's machine contract AND the on-disk cache
-    /// format — one codec, so a `board` a human reads and a board `next` re-hydrates cannot drift. Written
-    /// with a real JSON writer; a project title carrying a quote cannot forge the document. F# `Map`
-    /// iterates in key order, so the output is deterministic.
+    // The board map as JSON. This is BOTH the `board` command's machine contract AND the on-disk cache
+    // format — one codec, so a `board` a human reads and a board `next` re-hydrates cannot drift. Written
+    // with a real JSON writer; a project title carrying a quote cannot forge the document. F# `Map`
+    // iterates in key order, so the output is deterministic.
     let boardToJson (board: BoardMap) : string =
         use stream = new MemoryStream()
         use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
@@ -275,8 +275,8 @@ module Board =
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())
 
-    /// Re-hydrate a board map from its JSON. `None` on anything we cannot walk — a cache we cannot parse is
-    /// a MISS, never a failure: the caller simply re-bootstraps.
+    // Re-hydrate a board map from its JSON. `None` on anything we cannot walk — a cache we cannot parse is
+    // a MISS, never a failure: the caller simply re-bootstraps.
     let private boardOfJson (json: string) : BoardMap option =
         try
             use doc = JsonDocument.Parse json
@@ -321,11 +321,11 @@ module Board =
         with _ ->
             None
 
-    /// `bootstrap`, served from the day-cache when it is warm (#418).
-    ///
-    /// This is the whole budget win: `bootstrap` is two GraphQL points, and it sits under EVERY worker
-    /// command. Uncached, five workers looping `take` re-paid it every invocation — the exact drain #418
-    /// is written about. A warm map costs zero, and the ids do not change under it.
+    // `bootstrap`, served from the day-cache when it is warm (#418).
+    //
+    // This is the whole budget win: `bootstrap` is two GraphQL points, and it sits under EVERY worker
+    // command. Uncached, five workers looping `take` re-paid it every invocation — the exact drain #418
+    // is written about. A warm map costs zero, and the ids do not change under it.
     let bootstrapCached (transport: IGitHubTransport) (owner: string) (title: string) : IoResult<BoardMap> =
         let resolveAndStore () =
             match bootstrap transport owner title with
@@ -347,10 +347,10 @@ module Board =
     let private ItemIdDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { id project { number } } } } } rateLimit { cost remaining } }"
 
-    /// The window EVERY issue-side `projectItems` selection in this module asks for — `ItemIdDoc` here,
-    /// `ItemStatusDoc` and `ItemBlockedByDoc` below — and therefore the one the guard must see. ONE literal
-    /// for all three: three copies is three chances for a document and its guard to disagree, and
-    /// `.github#2535 the connection windows in the documents agree with the guards` pins the whole set.
+    // The window EVERY issue-side `projectItems` selection in this module asks for — `ItemIdDoc` here,
+    // `ItemStatusDoc` and `ItemBlockedByDoc` below — and therefore the one the guard must see. ONE literal
+    // for all three: three copies is three chances for a document and its guard to disagree, and
+    // `.github#2535 the connection windows in the documents agree with the guards` pins the whole set.
     [<Literal>]
     let private ProjectItemsWindow = 20
 
@@ -445,14 +445,14 @@ module Board =
     let private ExternalItemIdDoc =
         "query($projectId: ID!, $cursor: String) { node(id: $projectId) { ... on ProjectV2 { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } totalCount nodes { id content { ... on Issue { number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
 
-    /// Resolve an issue owned outside the board owner from the board side of the relationship.
-    ///
-    /// GitHub can expose an external issue as a ProjectV2 item while omitting that placement from the
-    /// issue-side `repository.issue.projectItems` connection.  The issue-side query therefore answers a
-    /// false `None` for exactly the row that a fresh board scan can see (#2166).  Querying the project node
-    /// preserves both identities at the lookup boundary: the item's `id` and its content's canonical
-    /// `owner/repo#number`.  The full tuple is compared, so a default-owner twin cannot be selected merely
-    /// because it has the same repository name and number.
+    // Resolve an issue owned outside the board owner from the board side of the relationship.
+    //
+    // GitHub can expose an external issue as a ProjectV2 item while omitting that placement from the
+    // issue-side `repository.issue.projectItems` connection.  The issue-side query therefore answers a
+    // false `None` for exactly the row that a fresh board scan can see (#2166).  Querying the project node
+    // preserves both identities at the lookup boundary: the item's `id` and its content's canonical
+    // `owner/repo#number`.  The full tuple is compared, so a default-owner twin cannot be selected merely
+    // because it has the same repository name and number.
     let private externalItemId
         (transport: IGitHubTransport)
         (board: BoardMap)
@@ -521,12 +521,6 @@ module Board =
         else
             externalItemId transport board owner repo number
 
-    /// `itemId`, served from the forever-cache when it is warm.
-    ///
-    /// Item ids are stable, so a resolved id is kept forever — the second `item-id` for the same issue
-    /// costs zero GraphQL. Only a FOUND id is cached: `Ok None` (#421 — genuinely not on the board) and
-    /// `Error` are never memoised, because an item added later must still be found, and a failed read must
-    /// never wear an absence's clothes.
     let itemIdCached
         (transport: IGitHubTransport)
         (board: BoardMap)
@@ -554,7 +548,7 @@ module Board =
     let private AddItemDoc =
         "mutation($projectId: ID!, $contentId: ID!) { addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) { item { id } } }"
 
-    /// The issue's own node id — `addProjectV2ItemById`'s `contentId`, which is NOT the board item id.
+    // The issue's own node id — `addProjectV2ItemById`'s `contentId`, which is NOT the board item id.
     let private issueNodeId
         (transport: IGitHubTransport)
         (owner: string)
@@ -594,41 +588,41 @@ module Board =
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the issue lookup response is missing `repository.issue`"))
 
-    /// What `addItem` did. The caller needs to tell these apart: adding a second copy of an item is the
-    /// failure this whole function is shaped around, so "it was already there" is a SUCCESS worth naming.
+    // What `addItem` did. The caller needs to tell these apart: adding a second copy of an item is the
+    // failure this whole function is shaped around, so "it was already there" is a SUCCESS worth naming.
     type AddOutcome =
-        /// The issue was already on this board. Nothing was written.
+        // The issue was already on this board. Nothing was written.
         | AlreadyOnBoard of itemId: string
-        /// The issue was added. This is the only path that spends a mutation.
+        // The issue was added. This is the only path that spends a mutation.
         | AddedToBoard of itemId: string
 
-    /// Put an issue on the board, idempotently.
-    ///
-    /// #421 IS THE WHOLE FUNCTION, exactly as it is `itemId`'s: `Ok None` — a successful read that walked
-    /// the board and did not find this issue — is the only thing that licenses the mutation, and an
-    /// `Error` is a read that DID NOT HAPPEN. Unreachable is not absent. So the error propagates rather
-    /// than being folded into "not there", which is #266's class and the defect #421 actually reported.
-    ///
-    /// WHAT THE GUARD IS *NOT* FOR, because the next reader will assume it and be afraid to touch it:
-    /// it is not what stops a duplicate row. `addProjectV2ItemById` is idempotent SERVER-side — calling
-    /// it for an issue already on the board returns that item's existing id and adds nothing (measured
-    /// against the live board, #861). #421 said a duplicate "would have" been created had its remediation
-    /// been followed; that was a reasonable inference, and it does not reproduce.
-    ///
-    /// The guard earns its place anyway, for reasons that do hold: adding on a failed read would spend a
-    /// mutation on a budget that just refused a query, and it would report `AddedToBoard` for an issue
-    /// whose presence we never established — a definite answer built on no information, which is the
-    /// whole of #421.
-    ///
-    /// The lookup is deliberately the UNCACHED `itemId`: the forever-cache only ever memoises a FOUND id,
-    /// so a cache hit is already an `AlreadyOnBoard` answer and a miss proves nothing.
-    ///
-    /// COST: 3 GraphQL on a real add (lookup, node id, mutation), 1 when it is already there. Two would
-    /// do — `ItemIdDoc` already reads `repository.issue`, so `id` could ride along and retire
-    /// `issueNodeId`. It does not, on purpose: `itemId` owns the ONE implementation of "narrow to OUR
-    /// board", and an issue can sit on several. A second copy of that predicate to save a point on a
-    /// once-per-filing verb trades a cross-board write — a no-op here and vandalism over there — against
-    /// a rounding error on a 5,000/hr budget (#418).
+    // Put an issue on the board, idempotently.
+    //
+    // #421 IS THE WHOLE FUNCTION, exactly as it is `itemId`'s: `Ok None` — a successful read that walked
+    // the board and did not find this issue — is the only thing that licenses the mutation, and an
+    // `Error` is a read that DID NOT HAPPEN. Unreachable is not absent. So the error propagates rather
+    // than being folded into "not there", which is #266's class and the defect #421 actually reported.
+    //
+    // WHAT THE GUARD IS *NOT* FOR, because the next reader will assume it and be afraid to touch it:
+    // it is not what stops a duplicate row. `addProjectV2ItemById` is idempotent SERVER-side — calling
+    // it for an issue already on the board returns that item's existing id and adds nothing (measured
+    // against the live board, #861). #421 said a duplicate "would have" been created had its remediation
+    // been followed; that was a reasonable inference, and it does not reproduce.
+    //
+    // The guard earns its place anyway, for reasons that do hold: adding on a failed read would spend a
+    // mutation on a budget that just refused a query, and it would report `AddedToBoard` for an issue
+    // whose presence we never established — a definite answer built on no information, which is the
+    // whole of #421.
+    //
+    // The lookup is deliberately the UNCACHED `itemId`: the forever-cache only ever memoises a FOUND id,
+    // so a cache hit is already an `AlreadyOnBoard` answer and a miss proves nothing.
+    //
+    // COST: 3 GraphQL on a real add (lookup, node id, mutation), 1 when it is already there. Two would
+    // do — `ItemIdDoc` already reads `repository.issue`, so `id` could ride along and retire
+    // `issueNodeId`. It does not, on purpose: `itemId` owns the ONE implementation of "narrow to OUR
+    // board", and an issue can sit on several. A second copy of that predicate to save a point on a
+    // once-per-filing verb trades a cross-board write — a no-op here and vandalism over there — against
+    // a rounding error on a 5,000/hr budget (#418).
     let addItem
         (transport: IGitHubTransport)
         (board: BoardMap)
@@ -695,26 +689,26 @@ module Board =
     let private ExternalItemFieldDoc =
         "query($itemId: ID!, $field: String!) { node(id: $itemId) { ... on ProjectV2Item { fieldValueByName(name: $field) { ... on ProjectV2ItemFieldSingleSelectValue { name } ... on ProjectV2ItemFieldTextValue { text } } } } rateLimit { cost remaining } }"
 
-    /// Read ONE field of an issue owned OUTSIDE the board owner, from the BOARD side of the relationship.
-    ///
-    /// **THE ISSUE SIDE CANNOT ANSWER THIS QUESTION (#2166, #2204).** `repository.issue.projectItems` omits an
-    /// organization project's placement of an issue whose repository has a different owner — measured on
-    /// `EHotwagner/rogue3#96`, `EHotwagner/rogue3#75` and `EHotwagner/S.I.R.#138`, each of which returns only
-    /// its own user project while the FS-GG Coordination row demonstrably exists. Narrowing that connection to
-    /// `board.Number` therefore found nothing and reported `Ok None` — the DEFINITE "no column" — for a row
-    /// that carries one. `#2172` gave `itemId` the board-side branch; this is the same branch for the two
-    /// readers it did not reach, and both go through this ONE function so a future repair cannot land on
-    /// `itemStatus` and miss `itemBlockedBy`.
-    ///
-    /// **IT IS STILL A RESOLVER READ.** `itemIdCached` resolves the row once and keeps it forever (ids are
-    /// stable), so the field itself is one point on `node(id:)` — the #481/#418 thrift that keeps `take` →
-    /// `claim` off a full-board scan. Only the FIRST external lookup pages the project, and `claim`'s own
-    /// write resolves that id anyway.
-    ///
-    /// `Ok None` is a MEASURED absence with exactly two shapes: `itemId` walked the project to completion and
-    /// this row is not on it, or the row is on it with the field genuinely unset. Every other outcome is
-    /// `Error` — `itemId` already fails closed on an incomplete page (#2166), and a board item id that no
-    /// longer resolves to a node is unresolvable, not empty.
+    // Read ONE field of an issue owned OUTSIDE the board owner, from the BOARD side of the relationship.
+    //
+    // **THE ISSUE SIDE CANNOT ANSWER THIS QUESTION (#2166, #2204).** `repository.issue.projectItems` omits an
+    // organization project's placement of an issue whose repository has a different owner — measured on
+    // `EHotwagner/rogue3#96`, `EHotwagner/rogue3#75` and `EHotwagner/S.I.R.#138`, each of which returns only
+    // its own user project while the FS-GG Coordination row demonstrably exists. Narrowing that connection to
+    // `board.Number` therefore found nothing and reported `Ok None` — the DEFINITE "no column" — for a row
+    // that carries one. `#2172` gave `itemId` the board-side branch; this is the same branch for the two
+    // readers it did not reach, and both go through this ONE function so a future repair cannot land on
+    // `itemStatus` and miss `itemBlockedBy`.
+    //
+    // **IT IS STILL A RESOLVER READ.** `itemIdCached` resolves the row once and keeps it forever (ids are
+    // stable), so the field itself is one point on `node(id:)` — the #481/#418 thrift that keeps `take` →
+    // `claim` off a full-board scan. Only the FIRST external lookup pages the project, and `claim`'s own
+    // write resolves that id anyway.
+    //
+    // `Ok None` is a MEASURED absence with exactly two shapes: `itemId` walked the project to completion and
+    // this row is not on it, or the row is on it with the field genuinely unset. Every other outcome is
+    // `Error` — `itemId` already fails closed on an incomplete page (#2166), and a board item id that no
+    // longer resolves to a node is unresolvable, not empty.
     let private externalItemField
         (transport: IGitHubTransport)
         (board: BoardMap)
@@ -765,13 +759,13 @@ module Board =
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the external-owner field read response is missing `data.node`"))
 
-    /// The `Status` single-select value, read off a `fieldValueByName` node.
+    // The `Status` single-select value, read off a `fieldValueByName` node.
     let private statusOfFieldValue (fv: JsonElement) : BoardStatus option =
         match fv.TryGetProperty "name" with
         | true, nm when nm.ValueKind = JsonValueKind.String -> Reads.statusOfName (nm.GetString())
         | _ -> None
 
-    /// The `Blocked by` text value, read off a `fieldValueByName` node.
+    // The `Blocked by` text value, read off a `fieldValueByName` node.
     let private textOfFieldValue (fv: JsonElement) : string option =
         match fv.TryGetProperty "text" with
         | true, tx when tx.ValueKind = JsonValueKind.String -> Some(tx.GetString())
@@ -783,12 +777,12 @@ module Board =
         | _, (true, value) when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
         | _ -> None
 
-    /// Freshly resolve any projected single-select/text field from the board item itself. Intake uses
-    /// this after its batch so `projectionFresh` covers every field named in the receipt.
+    // Freshly resolve any projected single-select/text field from the board item itself. Intake uses
+    // this after its batch so `projectionFresh` covers every field named in the receipt.
     let itemFieldValue transport board owner repo number field =
         externalItemField transport board owner repo number field stringOfFieldValue
 
-    /// Is this issue's owner the board's own owner? Only then can the issue-side connection see the row.
+    // Is this issue's owner the board's own owner? Only then can the issue-side connection see the row.
     let private ownedByBoardOwner (board: BoardMap) (owner: string) =
         String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase)
 
@@ -796,24 +790,24 @@ module Board =
     let private ItemStatusDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { project { number } fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } rateLimit { cost remaining } }"
 
-    /// Read ONE item's `Status` column — the column a `claim` is about to overwrite, so `release` can put it
-    /// back rather than guess `Ready` (#481).
-    ///
-    /// **THIS IS A RESOLVER READ, NOT A SCAN.** `fieldValueByName` returns one value per item with no node
-    /// multiplication — the same thrifty selection `Scan` uses — so it costs one point for one item. Reaching
-    /// for `Scan.board` here instead would put a seven-point full-board read on the hottest path in the org
-    /// (`take` → `claim`, every worker, every round), against the one budget that dies first under fan-out.
-    /// That regression is exactly what #481 (with #418) is written not to cause, so it is a resolver read.
-    ///
-    /// `Ok None` is a real answer with two shapes: the issue is not on THIS board, or it is but its `Status`
-    /// is unset. Both mean "there is no column to record", and a claim that records none releases to `Ready`
-    /// — the pre-#481 behaviour, now scoped to the one case where there is genuinely nothing to restore. A
-    /// FAILED read is `Error`, never `Ok None`: the caller (`claim`) treats it as "recorded no column" too,
-    /// but it may not be manufactured into the definite absence that `None` asserts.
-    ///
-    /// **THIS ARM IS FOR THE BOARD OWNER'S OWN ISSUES ONLY.** For an external owner the connection filters
-    /// the row away and this reader would answer a false `Ok None` (#2204) — `itemStatus` routes those to
-    /// `externalItemField` instead.
+    // Read ONE item's `Status` column — the column a `claim` is about to overwrite, so `release` can put it
+    // back rather than guess `Ready` (#481).
+    //
+    // **THIS IS A RESOLVER READ, NOT A SCAN.** `fieldValueByName` returns one value per item with no node
+    // multiplication — the same thrifty selection `Scan` uses — so it costs one point for one item. Reaching
+    // for `Scan.board` here instead would put a seven-point full-board read on the hottest path in the org
+    // (`take` → `claim`, every worker, every round), against the one budget that dies first under fan-out.
+    // That regression is exactly what #481 (with #418) is written not to cause, so it is a resolver read.
+    //
+    // `Ok None` is a real answer with two shapes: the issue is not on THIS board, or it is but its `Status`
+    // is unset. Both mean "there is no column to record", and a claim that records none releases to `Ready`
+    // — the pre-#481 behaviour, now scoped to the one case where there is genuinely nothing to restore. A
+    // FAILED read is `Error`, never `Ok None`: the caller (`claim`) treats it as "recorded no column" too,
+    // but it may not be manufactured into the definite absence that `None` asserts.
+    //
+    // **THIS ARM IS FOR THE BOARD OWNER'S OWN ISSUES ONLY.** For an external owner the connection filters
+    // the row away and this reader would answer a false `Ok None` (#2204) — `itemStatus` routes those to
+    // `externalItemField` instead.
     let private repositoryItemStatus
         (transport: IGitHubTransport)
         (board: BoardMap)
@@ -900,11 +894,11 @@ module Board =
     let private ItemBlockedByDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
 
-    /// Read ONE item's live `Blocked by` column. `itemStatus`'s twin over the TEXT fragment — see the
-    /// `.fsi` for why this is a resolver read and what `Ok None` covers.
-    ///
-    /// **BOARD OWNER'S OWN ISSUES ONLY**, for `repositoryItemStatus`'s reason and by the same #2204
-    /// measurement; `itemBlockedBy` routes an external owner to `externalItemField`.
+    // Read ONE item's live `Blocked by` column. `itemStatus`'s twin over the TEXT fragment — see the
+    // `.fsi` for why this is a resolver read and what `Ok None` covers.
+    //
+    // **BOARD OWNER'S OWN ISSUES ONLY**, for `repositoryItemStatus`'s reason and by the same #2204
+    // measurement; `itemBlockedBy` routes an external owner to `externalItemField`.
     let private repositoryItemBlockedBy
         (transport: IGitHubTransport)
         (board: BoardMap)
@@ -985,17 +979,17 @@ module Board =
 
     // ---- one field write ----------------------------------------------------------------------------
 
-    /// GraphQL string syntax IS JSON string syntax, so a JSON encoder is a correct GraphQL string encoder.
-    /// The aliased batch document interpolates its values inline (it cannot use variables and aliases
-    /// together without naming N×4 of them), so this is what stands between a title containing a quote and
-    /// a document that does not parse.
+    // GraphQL string syntax IS JSON string syntax, so a JSON encoder is a correct GraphQL string encoder.
+    // The aliased batch document interpolates its values inline (it cannot use variables and aliases
+    // together without naming N×4 of them), so this is what stands between a title containing a quote and
+    // a document that does not parse.
     let private gqlStr (s: string) = JsonSerializer.Serialize s
 
-    /// The value clause, and the shape of the mutation, for one write.
-    ///
-    /// A NUMBER IS VALIDATED BY A REAL NUMERIC PARSE, not a character class. `1.2.3`, `e`, `+`, and `--`
-    /// are all made of legal numeric characters, and every one of them emits a document that does not
-    /// parse — a whole batch lost to a value nobody checked.
+    // The value clause, and the shape of the mutation, for one write.
+    //
+    // A NUMBER IS VALIDATED BY A REAL NUMERIC PARSE, not a character class. `1.2.3`, `e`, `+`, and `--`
+    // are all made of legal numeric characters, and every one of them emits a document that does not
+    // parse — a whole batch lost to a value nobody checked.
     let private valueClause (field: Field) (write: FieldWrite) : Result<string * (string * Var) list, string> =
         match write with
         | Clear -> Ok("", [])
@@ -1206,17 +1200,17 @@ module Board =
 
     // ---- THE ONE BOARD WRITE (#510) ------------------------------------------------------------------
 
-    /// ATTEMPT the write. No queue, no policy — just "did it land?".
-    ///
-    /// THE SPLIT IS THE POINT, AND IT IS NOT COSMETIC. `boardWrite` and `flush` want the same ATTEMPT and
-    /// opposite POLICIES: a first attempt that meets an exhausted budget should be QUEUED; a REPLAY of an
-    /// already-queued entry that meets an exhausted budget must NOT be — it is already in the queue, and
-    /// appending it again duplicates it.
-    ///
-    /// Folding the policy into the attempt is how `flush` came to re-queue every entry it replayed: each
-    /// pass under a dead budget doubled the queue, forever, while reporting that it had written nothing and
-    /// backing off from nothing. One function that both callers can share, and each adds its own policy on
-    /// top.
+    // ATTEMPT the write. No queue, no policy — just "did it land?".
+    //
+    // THE SPLIT IS THE POINT, AND IT IS NOT COSMETIC. `boardWrite` and `flush` want the same ATTEMPT and
+    // opposite POLICIES: a first attempt that meets an exhausted budget should be QUEUED; a REPLAY of an
+    // already-queued entry that meets an exhausted budget must NOT be — it is already in the queue, and
+    // appending it again duplicates it.
+    //
+    // Folding the policy into the attempt is how `flush` came to re-queue every entry it replayed: each
+    // pass under a dead budget doubled the queue, forever, while reporting that it had written nothing and
+    // backing off from nothing. One function that both callers can share, and each adds its own policy on
+    // top.
     let private attempt
         (transport: IGitHubTransport)
         (board: BoardMap)
@@ -1307,16 +1301,16 @@ module Board =
                 // REPORTED, NEVER SWALLOWED. A refusal nobody can read is a refusal that did not happen.
                 Error e
 
-    /// The batch sibling of `boardWrite` (#448): resolve the item, emit N fields in ONE aliased document,
-    /// and carry the SAME deferral policy the single write does.
-    ///
-    /// The policy differs from `boardWrite`'s in exactly one way, and it is forced by the transport: a batch
-    /// can fail HALF-WAY. So there are three post-conditions, not two:
-    ///   • an exhausted budget refused the WHOLE document — nothing landed — so EVERY pair is queued, the
-    ///     batch replays intact, and nothing is lost;
-    ///   • a `Partial` means some aliases DID land — it is NEVER queued (replaying rewrites the half that
-    ///     took effect), and it surfaces unchanged for the caller to render field-by-field;
-    ///   • any other permanent failure is reported, never swallowed.
+    // The batch sibling of `boardWrite` (#448): resolve the item, emit N fields in ONE aliased document,
+    // and carry the SAME deferral policy the single write does.
+    //
+    // The policy differs from `boardWrite`'s in exactly one way, and it is forced by the transport: a batch
+    // can fail HALF-WAY. So there are three post-conditions, not two:
+    //   • an exhausted budget refused the WHOLE document — nothing landed — so EVERY pair is queued, the
+    //     batch replays intact, and nothing is lost;
+    //   • a `Partial` means some aliases DID land — it is NEVER queued (replaying rewrites the half that
+    //     took effect), and it surfaces unchanged for the caller to render field-by-field;
+    //   • any other permanent failure is reported, never swallowed.
     let boardWriteBatch
         (transport: IGitHubTransport)
         (board: BoardMap)
@@ -1387,8 +1381,6 @@ module Board =
         { Queued: int
           Written: int
           Dropped: int
-          /// Entries queued against a DIFFERENT board, left in the queue untouched (#882). Distinct from
-          /// `Dropped` in the one way that matters: these writes are still owed, and still landable.
           Skipped: int
           Stopped: IoError option }
 

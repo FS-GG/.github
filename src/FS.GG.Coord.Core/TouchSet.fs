@@ -6,42 +6,26 @@ module TouchSet =
     open System.Text.RegularExpressions
     open Types
 
-    /// A `Paths:` line: up to three leading spaces, either case.
+    // A `Paths:` line: up to three leading spaces, either case.
     let private declRe = Regex(@"^ {0,3}[Pp]aths:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
-    /// The two reserved touch-set words, NORMALISED — or `None` for a real path token. There are two
-    /// (#1103 leg 8): `none` reserves nothing and is UNSCHEDULABLE (an epic/decision), `any` reserves
-    /// nothing and IS schedulable (a file-less chore). They are one word apart and one bit apart, and a
-    /// caller that treats them as one — `Writes.validate` canonicalising both to `none` — turns a chore
-    /// into an epic. So the discriminator is typed, not a bool.
-    ///
-    /// PUBLIC because the sentinels are part of the GRAMMAR, and the grammar lives here — in one place.
-    /// Re-deciding it elsewhere is #485's shape (one question, five implementations, agreeing in none)
-    /// reproduced inside its own remedy — the exact thing that file's own comment forbids.
     let sentinelToken (token: string) : string option =
         match token.Trim().ToLowerInvariant() with
         | "none"
         | "any" as s -> Some s
         | _ -> None
 
-    /// A reserved word (either sentinel), so it is NEVER a real path. `Writes.validate` and `classify`
-    /// both need "this is not a file to reserve"; `sentinelToken` says WHICH sentinel when that matters.
     let isSentinel (token: string) = (sentinelToken token).IsSome
 
-    /// FLAG-SHAPED: begins with `-`, so it is argv, not a repo-relative path (#1507).
-    ///
-    /// Trimmed first, because `parse` splits a declaration on commas AND spaces and hands the pieces over
-    /// with whatever whitespace the author left: ` --json` is the same mistake as `--json`, and a rule that
-    /// only caught the unpadded spelling would be a rule the next corrupt write walks around.
     let isFlagShaped (token: string) = token.Trim().StartsWith("-", StringComparison.Ordinal)
 
-    /// Lines OUTSIDE any fenced code block. A `Paths:` line inside a fence is a QUOTATION of the
-    /// grammar, not a use of it (#277) — and the protocol docs quote it constantly.
-    ///
-    /// ASKED, NOT DECIDED (#972). This was a private `inFence` toggle over a private `^ {0,3}(```|~~~)`,
-    /// and `Writes.rewrite` and `EpicBody.childRefs` each had their own — three answers to one question,
-    /// agreeing in none, which is the #485 shape this module's own header calls "reproduced inside its own
-    /// remedy". `Markdown` is the one place now; the threshold this used to get wrong is gone.
+    // Lines OUTSIDE any fenced code block. A `Paths:` line inside a fence is a QUOTATION of the
+    // grammar, not a use of it (#277) — and the protocol docs quote it constantly.
+    //
+    // ASKED, NOT DECIDED (#972). This was a private `inFence` toggle over a private `^ {0,3}(```|~~~)`,
+    // and `Writes.rewrite` and `EpicBody.childRefs` each had their own — three answers to one question,
+    // agreeing in none, which is the #485 shape this module's own header calls "reproduced inside its own
+    // remedy". `Markdown` is the one place now; the threshold this used to get wrong is gone.
     let private unfenced (body: string) : string list = Markdown.unfenced body
 
     let classify (token: string) : PathToken =
@@ -185,8 +169,6 @@ module TouchSet =
         | AllUnmatchable of tokens: string list
         | SomeUnmatchable of tokens: string list
 
-    /// THE USABILITY RULE (#864, #945). See the .fsi for the threshold and for why the every/some
-    /// distinction lives HERE rather than in the one caller that renders it.
     let usability (touchSet: TouchSet) : Usability =
         match unmatchable touchSet, touchSet with
         | [], _ -> Usable
@@ -199,12 +181,6 @@ module TouchSet =
             SomeUnmatchable bad
         | bad, _ -> AllUnmatchable bad
 
-    /// The token with its trailing `/**` or `/*` taken off — the SUBTREE it actually names.
-    ///
-    /// This is the form a collision is REPORTED in, not just the form it is matched in. `src/Off/Sub/**`
-    /// and `src/Off/Sub` name the same subtree, and printing the raw suffix beside a reservation that has
-    /// none reads as though the two tokens were different things. Bash has always reported the stem; the
-    /// engine must, or the flip silently rewords every collision line a worker has ever seen.
     let stem (t: string) =
         if t.EndsWith("/**", StringComparison.Ordinal) then t.Substring(0, t.Length - 3)
         elif t.EndsWith("/*", StringComparison.Ordinal) then t.Substring(0, t.Length - 2)
@@ -220,11 +196,11 @@ module TouchSet =
         || y.StartsWith(x + "/", StringComparison.Ordinal)
         || x.StartsWith(y + "/", StringComparison.Ordinal)
 
-    /// A touch-set we could not read yields NO tokens — so it would COLLIDE WITH NOTHING, and every
-    /// candidate would clear it. That is a fail-open, and it is why `Unreadable` may never reach here as
-    /// a RESERVATION: `Batch.schedule` refuses the whole batch on one (see `unusableReservation`), and
-    /// the scheduler rejects it as a CANDIDATE before disjointness is ever asked. This function is total
-    /// because the type demands it, not because an unreadable surface is safe to compare.
+    // A touch-set we could not read yields NO tokens — so it would COLLIDE WITH NOTHING, and every
+    // candidate would clear it. That is a fail-open, and it is why `Unreadable` may never reach here as
+    // a RESERVATION: `Batch.schedule` refuses the whole batch on one (see `unusableReservation`), and
+    // the scheduler rejects it as a CANDIDATE before disjointness is ever asked. This function is total
+    // because the type demands it, not because an unreadable surface is safe to compare.
     let covers (token: PathToken) (file: string) : bool =
         match token with
         // #273: reserves nothing, covers nothing.
@@ -268,12 +244,6 @@ module TouchSet =
                   if tokensOverlap x y then
                       yield (x, y) ]
 
-    /// Compare two touch-sets only when their declared paths live in the same repository.
-    ///
-    /// An issue's host repository and the repository its `Paths:` name are separate facts for a
-    /// cross-repository board item (#1732).  Keeping the scope test beside `conflicts` makes the safe
-    /// composition explicit: callers that have a repo scope must not first discard it and then compare
-    /// two otherwise-identical token lists as though they named one worktree.
     let scopedConflicts
         (leftOwner: string)
         (leftRepo: string)
@@ -306,45 +276,18 @@ module TouchSet =
     // over everything under it, generated or not, and must keep colliding. Only a token that names the
     // generated artifact ITSELF — the exact subtree a generator's `--list` names — is ever exempted.
 
-    /// The subset of `tokens` that EXACTLY name one of `generated`'s artifact paths (stemmed, so a
-    /// `foo.json/**`-shaped token still compares on the subtree it names). Never a directory prefix
-    /// that merely CONTAINS a generated artifact — see the section doc above.
-    ///
-    /// This is the `widen`/`set-paths` REFUSAL rule (#2305 PD-002): a non-empty result names tokens the
-    /// caller asked to declare that are not declarable at all under ADR-0044, and the whole update must
-    /// be refused before any PATCH — the same all-or-nothing shape `Writes.validate` already uses for a
-    /// flag-shaped or sentinel-mixed token, not a silent per-token drop (a silent drop would leave a
-    /// worker believing they declared something they did not).
     let generatedTokens (generated: Set<string>) (tokens: string list) : string list =
         tokens |> List.filter (fun t -> Set.contains (stem t) generated)
 
-    /// Drop a conflict PAIR — as `conflicts`/`scopedConflicts` report it — when BOTH sides stem to the
-    /// SAME generated artifact. An asymmetric pair (one side the exact generated file, the other a
-    /// directory prefix that merely covers it) is left exactly as `conflicts` reported it: see the
-    /// section doc above for why that asymmetry must keep colliding.
-    ///
-    /// This is the `activeCollisions`/`overlap` READ-SIDE rule (#2305 PD-003): it clears a collision
-    /// attributable solely to a generated token even for a declaration that predates `generatedTokens`'
-    /// refusal (a legacy `widen` written before this change), so an old declaration self-heals at the
-    /// next read rather than needing a repo-wide rewrite.
     let excludeGenerated (generated: Set<string>) (pairs: (string * string) list) : (string * string) list =
         pairs
         |> List.filter (fun (x, y) ->
             let sx, sy = stem x, stem y
             not (sx = sy && Set.contains sx generated))
 
-    /// Whether a proposed `Paths:` update — from `widen` or `set-paths` — may be committed.
     type UpdateDecision =
-        /// No requested path collided with a live claim: write the proposed declaration.
         | CommitUpdate
-        /// At least one requested path collided: write NOTHING.
         | RefuseUpdate
 
-    /// THE ALL-OR-NOTHING RULE (#2306) for whichever collision `hasCollision` answers for — see the
-    /// `.fsi` for why that is the CALLER's requested-paths attribution, not "any collision at all". A
-    /// caller that gates its one PATCH on this function cannot drift into a partial commit, because
-    /// there is no partial `UpdateDecision` for it to return: mirrors `usability`'s ANY-not-every rule
-    /// one level up in this same file, for the same reason — a threshold left to each call site is a
-    /// threshold free to disagree with itself (#485).
     let decideUpdate (hasCollision: bool) : UpdateDecision =
         if hasCollision then RefuseUpdate else CommitUpdate

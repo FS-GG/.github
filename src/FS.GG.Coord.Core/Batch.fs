@@ -23,9 +23,6 @@ module Batch =
         { Item: Item
           Result: Schedulability
           CollidedWith: Holder option
-          /// The derived priority this candidate was ORDERED by (.github#1598). Carried on the decision
-          /// rather than recomputed by the renderer: `--explain` must print the rank the fold actually
-          /// used, and a second derivation is a second answer waiting to disagree with the first.
           Rank: Rank.Rank }
 
     type BatchResult =
@@ -44,83 +41,80 @@ module Batch =
           WaveCapacity: int
           OpenSlots: int }
 
-    /// WHAT OCCUPIES AN IMPLEMENTER SLOT, AND WHAT MERELY LOOKS BUSY (.github#2678).
-    ///
-    /// An implementer slot models A WORKER THAT IS OCCUPIED. `waveOccupancy` below is correct given its
-    /// input and always was; the miscount lived entirely in what the caller handed it — a single flat ref
-    /// list built from a predicate that also admitted a row whose `item/<n>-*` PR is open but whose claim
-    /// is absent, and a reservation whose holder is by name `Unowned`. Measured on `FS-GG/.github` at
-    /// 2026-08-15T19:50Z: three live claims, three PR-only rows, `activeItems: 6`, `openSlots: 0` — while
-    /// three implementer slots were genuinely free and two other projections of the same board read said
-    /// so. `OpenSlots` is `max 0 (capacity - active)` and `waveShortfallHeadline` fires only above zero,
-    /// so once accumulated orphan PRs reach `WaveCapacity` the dispatch signal goes silent permanently —
-    /// silently, which is the failure mode #2096 added that line to prevent.
-    ///
-    /// THE TWO FIELDS ARE TWO FACTS AND THE FIX IS EXACTLY NOT COLLAPSING THEM. A row carrying work that
-    /// nobody holds is real — `.github#2642`, `#2581` and `#2645` were live instances at the moment of
-    /// filing — but it is a disagreement to reconcile, not an occupied slot, and folding it into
-    /// occupancy is precisely what made it invisible. It gets its own name here instead.
+    // WHAT OCCUPIES AN IMPLEMENTER SLOT, AND WHAT MERELY LOOKS BUSY (.github#2678).
+    //
+    // An implementer slot models A WORKER THAT IS OCCUPIED. `waveOccupancy` below is correct given its
+    // input and always was; the miscount lived entirely in what the caller handed it — a single flat ref
+    // list built from a predicate that also admitted a row whose `item/<n>-*` PR is open but whose claim
+    // is absent, and a reservation whose holder is by name `Unowned`. Measured on `FS-GG/.github` at
+    // 2026-08-15T19:50Z: three live claims, three PR-only rows, `activeItems: 6`, `openSlots: 0` — while
+    // three implementer slots were genuinely free and two other projections of the same board read said
+    // so. `OpenSlots` is `max 0 (capacity - active)` and `waveShortfallHeadline` fires only above zero,
+    // so once accumulated orphan PRs reach `WaveCapacity` the dispatch signal goes silent permanently —
+    // silently, which is the failure mode #2096 added that line to prevent.
+    //
+    // THE TWO FIELDS ARE TWO FACTS AND THE FIX IS EXACTLY NOT COLLAPSING THEM. A row carrying work that
+    // nobody holds is real — `.github#2642`, `#2581` and `#2645` were live instances at the moment of
+    // filing — but it is a disagreement to reconcile, not an occupied slot, and folding it into
+    // occupancy is precisely what made it invisible. It gets its own name here instead.
     type SlotOccupancy =
-        { /// The distinct items a worker is holding right now. This, and only this, is the list
-          /// `waveOccupancy` is entitled to count.
+        {
           Occupying: Ref list
 
-          /// The distinct items that show work with nobody holding them. Disjoint from `Occupying` by
-          /// construction below, so a reader may add the two without double-counting a ref.
           WorkWithoutClaim: Ref list }
 
-    /// Project the scheduler's own inputs onto the implementer-slot question (.github#2678).
-    ///
-    /// THE PREDICATE IS THE CLAIM MARKER, LIVE OR LAPSED. `Item.Claim` is `Reads.reserver`'s answer, and
-    /// a lapsed lease is still a lock that only `reap` breaks (#461/#581/#1792) — its holder is a worker
-    /// who has not gone anywhere.
-    ///
-    /// WHAT THE THREE PROJECTIONS SHARE IS THAT FIELD, NOT AN EQUALITY OF ANSWERS — and an earlier draft
-    /// of this comment asserted the equality, which is false in BOTH directions (.github#2678 review
-    /// round 1). `driver --events` reads the same `Item.Claim` (`DriverEvents.ItemFacts.ClaimWorker` IS
-    /// this field) and `who` classifies the same marker, so on the ORDINARY IN-FLIGHT POPULATION — an
-    /// open, readable, unparked, claimed row — all three agree, and restoring that agreement is what this
-    /// item did. Beyond that population they are different functions on purpose. Measured through the
-    /// built Release DLLs, one snapshot per row, `Occupying` vs `classify |> isActive`:
-    ///
-    ///   * `DriverEvents.deriveState` tests `ReadOk`, `HumanBlock` and `BoardStatus = Blocked` BEFORE it
-    ///     ever reaches the claim, and each outranks it. A CLAIMED row that is board-`Blocked`
-    ///     (`blocked:board status Blocked`), carries a `Blocked on: human/...` sentinel, or whose
-    ///     item-PR probe was unreadable (`unreadable:*`) is NOT active there — and occupies a slot HERE.
-    ///     This side is the right one for THIS question: a worker parked on a blocked row is still
-    ///     standing in its lane, and only `reap` frees it. These shapes reach the live board — `Scan`
-    ///     admits every non-PR row as a candidate without filtering on status, and `check-board`'s
-    ///     `BLOCKER-CLEARED` rule is conditioned on a `Blocked` row's claim precisely because a
-    ///     claimed-and-`Blocked` row exists.
-    ///   * IT RUNS THE OTHER WAY TOO. `MergedAwaitingObligations` is reached with no claim at all, so a
-    ///     merged, closed row with an unverified obligation and a released claim is ACTIVE to
-    ///     `driver --events` and occupies nothing here — correctly: nobody is holding it.
-    ///   * `who` SPLITS WHAT THIS JOINS. Its `held` is the live winner (`Reads.winner`) and its `stale`
-    ///     is a marker past its lease; `Occupying` is their UNION, because a lock is a lock. Only `who`'s
-    ///     `unclaimed` arm — a markerless `In progress` column — is left out, and that one is not
-    ///     discarded either: it is reported as `WorkWithoutClaim` below.
-    ///
-    /// Occupancy asks "is a worker's slot consumed", which is a narrower question than "what material
-    /// state is this item in". Anyone who finds the two disagreeing on a parked row should change this
-    /// sentence, not the code.
-    ///
-    /// `BatchMember` IS EXCLUDED, DELIBERATELY, AND THAT IS NOT AN OVERSIGHT. A batch member is an item
-    /// THIS run has just chosen and has NOT dispatched — by construction a member of the `Chosen` set the
-    /// caller passes `waveShortfallHeadline` as `schedulableItems`. Counting it as occupied would
-    /// subtract from `OpenSlots` exactly the items that headline exists to tell a host to dispatch INTO
-    /// those slots, double-counting every one of them and shrinking the deficit it is announcing. Nor is
-    /// it `WorkWithoutClaim`: nobody is working it yet, and reporting the scheduler's own answer back as
-    /// an unreconciled disagreement would manufacture an alarm out of a normal run.
-    ///
-    /// `UnknownHolder` asserts nothing about a worker — the token set and the holder set went out of step
-    /// — so it can neither prove a slot occupied nor prove work standing without a claim, and it appears
-    /// in neither list. It is reachable from the wire through ONE route, `Snapshot.parse`'s `"unknown"`
-    /// holder kind: measured, that document parses and the holder lands in neither list. It is NOT
-    /// reachable through that codec's malformed-`live-claim` fallback, which an earlier draft of this
-    /// comment also claimed (.github#2678 review round 1): the `Result.map (fun _ -> UnknownHolder)` there
-    /// is applied to a COLLECTED ERROR, so a `live-claim` holder missing `worker`/`ageSeconds` refuses the
-    /// whole snapshot instead — measured: `inFlight[0].holder.worker: required field is missing`. One
-    /// reachable route, not two; the conclusion is unchanged, the arm is live rather than defensive.
+    // Project the scheduler's own inputs onto the implementer-slot question (.github#2678).
+    //
+    // THE PREDICATE IS THE CLAIM MARKER, LIVE OR LAPSED. `Item.Claim` is `Reads.reserver`'s answer, and
+    // a lapsed lease is still a lock that only `reap` breaks (#461/#581/#1792) — its holder is a worker
+    // who has not gone anywhere.
+    //
+    // WHAT THE THREE PROJECTIONS SHARE IS THAT FIELD, NOT AN EQUALITY OF ANSWERS — and an earlier draft
+    // of this comment asserted the equality, which is false in BOTH directions (.github#2678 review
+    // round 1). `driver --events` reads the same `Item.Claim` (`DriverEvents.ItemFacts.ClaimWorker` IS
+    // this field) and `who` classifies the same marker, so on the ORDINARY IN-FLIGHT POPULATION — an
+    // open, readable, unparked, claimed row — all three agree, and restoring that agreement is what this
+    // item did. Beyond that population they are different functions on purpose. Measured through the
+    // built Release DLLs, one snapshot per row, `Occupying` vs `classify |> isActive`:
+    //
+    //   * `DriverEvents.deriveState` tests `ReadOk`, `HumanBlock` and `BoardStatus = Blocked` BEFORE it
+    //     ever reaches the claim, and each outranks it. A CLAIMED row that is board-`Blocked`
+    //     (`blocked:board status Blocked`), carries a `Blocked on: human/...` sentinel, or whose
+    //     item-PR probe was unreadable (`unreadable:*`) is NOT active there — and occupies a slot HERE.
+    //     This side is the right one for THIS question: a worker parked on a blocked row is still
+    //     standing in its lane, and only `reap` frees it. These shapes reach the live board — `Scan`
+    //     admits every non-PR row as a candidate without filtering on status, and `check-board`'s
+    //     `BLOCKER-CLEARED` rule is conditioned on a `Blocked` row's claim precisely because a
+    //     claimed-and-`Blocked` row exists.
+    //   * IT RUNS THE OTHER WAY TOO. `MergedAwaitingObligations` is reached with no claim at all, so a
+    //     merged, closed row with an unverified obligation and a released claim is ACTIVE to
+    //     `driver --events` and occupies nothing here — correctly: nobody is holding it.
+    //   * `who` SPLITS WHAT THIS JOINS. Its `held` is the live winner (`Reads.winner`) and its `stale`
+    //     is a marker past its lease; `Occupying` is their UNION, because a lock is a lock. Only `who`'s
+    //     `unclaimed` arm — a markerless `In progress` column — is left out, and that one is not
+    //     discarded either: it is reported as `WorkWithoutClaim` below.
+    //
+    // Occupancy asks "is a worker's slot consumed", which is a narrower question than "what material
+    // state is this item in". Anyone who finds the two disagreeing on a parked row should change this
+    // sentence, not the code.
+    //
+    // `BatchMember` IS EXCLUDED, DELIBERATELY, AND THAT IS NOT AN OVERSIGHT. A batch member is an item
+    // THIS run has just chosen and has NOT dispatched — by construction a member of the `Chosen` set the
+    // caller passes `waveShortfallHeadline` as `schedulableItems`. Counting it as occupied would
+    // subtract from `OpenSlots` exactly the items that headline exists to tell a host to dispatch INTO
+    // those slots, double-counting every one of them and shrinking the deficit it is announcing. Nor is
+    // it `WorkWithoutClaim`: nobody is working it yet, and reporting the scheduler's own answer back as
+    // an unreconciled disagreement would manufacture an alarm out of a normal run.
+    //
+    // `UnknownHolder` asserts nothing about a worker — the token set and the holder set went out of step
+    // — so it can neither prove a slot occupied nor prove work standing without a claim, and it appears
+    // in neither list. It is reachable from the wire through ONE route, `Snapshot.parse`'s `"unknown"`
+    // holder kind: measured, that document parses and the holder lands in neither list. It is NOT
+    // reachable through that codec's malformed-`live-claim` fallback, which an earlier draft of this
+    // comment also claimed (.github#2678 review round 1): the `Result.map (fun _ -> UnknownHolder)` there
+    // is applied to a COLLECTED ERROR, so a `live-claim` holder missing `worker`/`ageSeconds` refuses the
+    // whole snapshot instead — measured: `inFlight[0].holder.worker: required field is missing`. One
+    // reachable route, not two; the conclusion is unchanged, the arm is live rather than defensive.
     let implementerSlots (candidates: Item list) (reservations: Reservation list) : SlotOccupancy =
         let claimed =
             candidates
@@ -211,12 +205,6 @@ module Batch =
     let renderWaveOccupancy (occupancy: WaveOccupancy) : string =
         $"wave occupancy: {{\"activeItems\":%d{occupancy.ActiveItems},\"waveCapacity\":%d{occupancy.WaveCapacity},\"openSlots\":%d{occupancy.OpenSlots}}}"
 
-    /// The `work without claim` line, emitted only when the board actually carries one (.github#2678).
-    ///
-    /// ITS OWN LINE, BESIDE `renderWaveOccupancy` RATHER THAN A FOURTH KEY INSIDE IT. #2096 landed that
-    /// three-field object as a machine projection and its readers key on those fields; the new fact is
-    /// additive, so nothing that parses the old line has to change to keep working. Refs are `Canonical`
-    /// for #2155's reason — a machine line may not collapse two accounts' same-numbered rows.
     let renderWorkWithoutClaim (occupancy: SlotOccupancy) : string option =
         match occupancy.WorkWithoutClaim with
         | [] -> None
@@ -235,18 +223,18 @@ module Batch =
         else
             None
 
-    /// THE DECISION'S OWN WORDS — the only place a passed-over item is put into English.
-    ///
-    /// `Schedulability.explain` cannot do this alone: it sees the ITEM and the VERDICT, but a collision's
-    /// holder lives on the DECISION (`CollidedWith`), because "who reserved this path" is a fact about the
-    /// batch, not about the item. Rendering the verdict without it produces "overlaps in-flight work: a ⇄ b"
-    /// — true, useless, and a REGRESSION on bash, which has named the holder and its lease since #428.
-    ///
-    /// The distinction between a LIVE CLAIM and a BATCH MEMBER is the one that matters most and is the one
-    /// a holder-blind renderer destroys. They are the same verdict and two completely different instructions:
-    /// a batch member frees at the end of THIS run and has no lease; a live claim means go and talk to a
-    /// worker, or wait out a window. Collapsing them tells a worker to wait ~12m for a colleague who does
-    /// not exist.
+    // THE DECISION'S OWN WORDS — the only place a passed-over item is put into English.
+    //
+    // `Schedulability.explain` cannot do this alone: it sees the ITEM and the VERDICT, but a collision's
+    // holder lives on the DECISION (`CollidedWith`), because "who reserved this path" is a fact about the
+    // batch, not about the item. Rendering the verdict without it produces "overlaps in-flight work: a ⇄ b"
+    // — true, useless, and a REGRESSION on bash, which has named the holder and its lease since #428.
+    //
+    // The distinction between a LIVE CLAIM and a BATCH MEMBER is the one that matters most and is the one
+    // a holder-blind renderer destroys. They are the same verdict and two completely different instructions:
+    // a batch member frees at the end of THIS run and has no lease; a live claim means go and talk to a
+    // worker, or wait out a window. Collapsing them tells a worker to wait ~12m for a colleague who does
+    // not exist.
     let explainDecision (leaseMinutes: int) (d: Decision) : string =
         let id = d.Item.Ref.Short
 
@@ -278,10 +266,10 @@ module Batch =
 
         | result, _ -> Schedulability.explain leaseMinutes d.Item result
 
-    /// A passed-over candidate that is QUEUED BEHIND A LIVE CLAIM — a real marker holds it, or it overlaps
-    /// one. The age is the HOLDER's, so its lease window can be computed; `KnownLiveWork` is true only for a
-    /// claim whose own PR proves the work outlived its lease (#581), because a lapsed-but-alive lease is
-    /// evidence to talk, never a lease to reap.
+    // A passed-over candidate that is QUEUED BEHIND A LIVE CLAIM — a real marker holds it, or it overlaps
+    // one. The age is the HOLDER's, so its lease window can be computed; `KnownLiveWork` is true only for a
+    // claim whose own PR proves the work outlived its lease (#581), because a lapsed-but-alive lease is
+    // evidence to talk, never a lease to reap.
     type private QueuedClaim =
         { Worker: WorkerId
           Holder: Ref
@@ -293,12 +281,12 @@ module Batch =
         | Some(c, _) -> c.AgeSeconds
         | None -> -1
 
-    /// The passed-over items queued behind a LIVE CLAIM, in decision order — the ones for which "wait for a
-    /// worker" or "reap a dead lease" is a real instruction. A candidate qualifies when its own lock holds
-    /// it (`HeldBy`/`HeldByLiveWork`) or it overlaps one (`OverlapsInFlight` whose holder is a `LiveClaim`).
-    /// A markerless In-progress reserver (`Unowned`), a batch-member peer, or an unnameable holder is NOT
-    /// one: none has a worker to talk to or a lease to wait out, so folding them in would advertise a wait
-    /// that nothing ends (#428).
+    // The passed-over items queued behind a LIVE CLAIM, in decision order — the ones for which "wait for a
+    // worker" or "reap a dead lease" is a real instruction. A candidate qualifies when its own lock holds
+    // it (`HeldBy`/`HeldByLiveWork`) or it overlaps one (`OverlapsInFlight` whose holder is a `LiveClaim`).
+    // A markerless In-progress reserver (`Unowned`), a batch-member peer, or an unnameable holder is NOT
+    // one: none has a worker to talk to or a lease to wait out, so folding them in would advertise a wait
+    // that nothing ends (#428).
     let private queuedBehindClaims (result: BatchResult) : QueuedClaim list =
         result.Decisions
         |> List.choose (fun d ->
@@ -329,21 +317,21 @@ module Batch =
                       KnownLiveWork = Option.isSome livePr }
             | _ -> None)
 
-    /// A lease a `reap` would collect: expired by the clock, and NOT one whose PR proves the work is alive.
+    // A lease a `reap` would collect: expired by the clock, and NOT one whose PR proves the work is alive.
     let private leaseExpired (leaseMinutes: int) (q: QueuedClaim) =
         not q.KnownLiveWork && q.AgeSeconds >= 0 && q.AgeSeconds > leaseMinutes * 60
 
-    /// The candidates withheld AT THE COLUMN because the caller did not pass `--include-backlog` (#636).
-    ///
-    /// This is an OBSERVED fact, not an inference: `Schedulability.schedulable` yields `WrongStatus Backlog`
-    /// on one leg only — `Backlog when not allowBacklog`. WITH the flag a Backlog row falls straight through
-    /// to the blocker/touch-set/overlap checks like any Ready one, so this verdict cannot appear. Its presence
-    /// therefore means exactly "the flag was absent, and the scheduler stopped here".
-    ///
-    /// What it deliberately does NOT mean is "these are startable". The scheduler stopped at the column and
-    /// never asked whether they are blocked, declared, or disjoint — so the banner may not promise they would
-    /// be handed out. Asserting a cause we did not observe is the #440 defect, and this is the shape of queue
-    /// (starved, with a plausible story to tell) where it is most tempting.
+    // The candidates withheld AT THE COLUMN because the caller did not pass `--include-backlog` (#636).
+    //
+    // This is an OBSERVED fact, not an inference: `Schedulability.schedulable` yields `WrongStatus Backlog`
+    // on one leg only — `Backlog when not allowBacklog`. WITH the flag a Backlog row falls straight through
+    // to the blocker/touch-set/overlap checks like any Ready one, so this verdict cannot appear. Its presence
+    // therefore means exactly "the flag was absent, and the scheduler stopped here".
+    //
+    // What it deliberately does NOT mean is "these are startable". The scheduler stopped at the column and
+    // never asked whether they are blocked, declared, or disjoint — so the banner may not promise they would
+    // be handed out. Asserting a cause we did not observe is the #440 defect, and this is the shape of queue
+    // (starved, with a plausible story to tell) where it is most tempting.
     let private withheldAtBacklog (result: BatchResult) : Item list =
         result.Decisions
         |> List.choose (fun d ->
@@ -351,25 +339,25 @@ module Batch =
             | WrongStatus Backlog -> Some d.Item
             | _ -> None)
 
-    /// THE STARVED-QUEUE BANNER (#428). A batch that hands out NOTHING over a queue full of items QUEUED
-    /// BEHIND LIVE CLAIMS reads exactly like an empty backlog — and a worker who reads "nothing schedulable"
-    /// goes home from a repo with work in it. So when that is what happened, say the queue is BUSY, name
-    /// every holder (who to talk to), give the SOONEST lease (whether the wait is worth it at all), and —
-    /// for a lease that has already EXPIRED — point at `reap`, because a dead lease is the one blocker a
-    /// worker clears themselves, a collection rather than a wait.
-    ///
-    /// THE UNTRIAGED HALF (#636). The banner above answers "who do I wait for". It could not answer the other
-    /// way a full queue hands out nothing: every candidate sits in `Backlog`, and the caller did not ask for
-    /// Backlog. That queue is not busy — it is UNTRIAGED, and the difference is the remedy. A claim is a wait;
-    /// an untriaged column is a decision somebody can make right now.
-    ///
-    /// It had to be its own line rather than a wider `queuedBehindClaims`, because "BUSY" over an untriaged
-    /// queue would be false in the direction that matters: it would tell a worker to wait out a lease that
-    /// does not exist. That is the judgement the #428 tests already fixed for blockers ("a BUSY banner over
-    /// it would be a lie"), and it holds here — what changes is that a Backlog column, unlike a blocker, has
-    /// a remedy the worker can act on ALONE, and nothing named it.
-    ///
-    /// Silent when nothing was withheld at the column, so a genuinely Ready-starved queue gains no noise.
+    // THE STARVED-QUEUE BANNER (#428). A batch that hands out NOTHING over a queue full of items QUEUED
+    // BEHIND LIVE CLAIMS reads exactly like an empty backlog — and a worker who reads "nothing schedulable"
+    // goes home from a repo with work in it. So when that is what happened, say the queue is BUSY, name
+    // every holder (who to talk to), give the SOONEST lease (whether the wait is worth it at all), and —
+    // for a lease that has already EXPIRED — point at `reap`, because a dead lease is the one blocker a
+    // worker clears themselves, a collection rather than a wait.
+    //
+    // THE UNTRIAGED HALF (#636). The banner above answers "who do I wait for". It could not answer the other
+    // way a full queue hands out nothing: every candidate sits in `Backlog`, and the caller did not ask for
+    // Backlog. That queue is not busy — it is UNTRIAGED, and the difference is the remedy. A claim is a wait;
+    // an untriaged column is a decision somebody can make right now.
+    //
+    // It had to be its own line rather than a wider `queuedBehindClaims`, because "BUSY" over an untriaged
+    // queue would be false in the direction that matters: it would tell a worker to wait out a lease that
+    // does not exist. That is the judgement the #428 tests already fixed for blockers ("a BUSY banner over
+    // it would be a lie"), and it holds here — what changes is that a Backlog column, unlike a blocker, has
+    // a remedy the worker can act on ALONE, and nothing named it.
+    //
+    // Silent when nothing was withheld at the column, so a genuinely Ready-starved queue gains no noise.
     let private backlogSection (result: BatchResult) : string list =
         match withheldAtBacklog result with
         | [] -> []
@@ -393,23 +381,23 @@ module Batch =
                     for r in many -> $"    scripts/fsgg-coord take --repo %s{r} --include-backlog"
                 ])
 
-    /// THE DEADLOCK SECTION (#1092) — the one starved-queue cause that WAITING CANNOT FIX.
-    ///
-    /// Every other line this banner prints describes a queue that DRAINS: a lease frees, a column gets
-    /// triaged, a worker lands their PR. A `Blocked by` ring drains never — each item waits on the next
-    /// around a circle — and it used to print as `Status is Blocked`, per item, in the same five words
-    /// `Schedulability.explain` gives a block that clears in ten minutes. Three such items sat on this board
-    /// for two hours while `take` said `this queue is BUSY, not empty` over them, which was the most
-    /// confident wrong impression available: **BUSY implies it drains.**
-    ///
-    /// This is the AGGREGATE `explainDecision` cannot give, which is this banner's whole charter. The blocker
-    /// graph's four previous repairs (#343/#476/#602/#620) are every one of them per-item, and a ring passes
-    /// all four because each item on it is individually well-formed. `Blockers.cycles` owns the graph
-    /// question — including which edges are live — and this only puts its answer into English.
-    ///
-    /// It names each member WITH its in-ring blockers, because the remedy is to break ONE edge and a worker
-    /// has to pick which: the edges are the actionable part, not the membership. Blockers pointing OUT of the
-    /// ring are omitted — they are not what makes it a ring, and cutting one would free nothing.
+    // THE DEADLOCK SECTION (#1092) — the one starved-queue cause that WAITING CANNOT FIX.
+    //
+    // Every other line this banner prints describes a queue that DRAINS: a lease frees, a column gets
+    // triaged, a worker lands their PR. A `Blocked by` ring drains never — each item waits on the next
+    // around a circle — and it used to print as `Status is Blocked`, per item, in the same five words
+    // `Schedulability.explain` gives a block that clears in ten minutes. Three such items sat on this board
+    // for two hours while `take` said `this queue is BUSY, not empty` over them, which was the most
+    // confident wrong impression available: **BUSY implies it drains.**
+    //
+    // This is the AGGREGATE `explainDecision` cannot give, which is this banner's whole charter. The blocker
+    // graph's four previous repairs (#343/#476/#602/#620) are every one of them per-item, and a ring passes
+    // all four because each item on it is individually well-formed. `Blockers.cycles` owns the graph
+    // question — including which edges are live — and this only puts its answer into English.
+    //
+    // It names each member WITH its in-ring blockers, because the remedy is to break ONE edge and a worker
+    // has to pick which: the edges are the actionable part, not the membership. Blockers pointing OUT of the
+    // ring are omitted — they are not what makes it a ring, and cutting one would free nothing.
     let private cycleSection (result: BatchResult) : string list =
         let items =
             result.Decisions
@@ -452,12 +440,12 @@ module Batch =
                   "  edge to cut is the one whose premise is spent (the overlap was retracted, the work merged)."
                   "  scripts/fsgg-coord set-field <ref> 'Blocked by' ''" ]
 
-    /// Returns [] whenever the queue is NOT starved: work WAS handed out (a `chosen` batch is not starved),
-    /// or nothing is queued behind a live claim AND nothing was withheld at the column AND no `Blocked by`
-    /// RING was found. A queue starved by ordinary blockers is still #440's business, told per-item — but a
-    /// ring is not ordinary: no per-item verdict can see it, and it never clears (#1092), so it leads the
-    /// banner rather than staying silent. A banner on a healthy queue is noise that trains workers to skip
-    /// stderr — the very habit #440 was closed to break.
+    // Returns [] whenever the queue is NOT starved: work WAS handed out (a `chosen` batch is not starved),
+    // or nothing is queued behind a live claim AND nothing was withheld at the column AND no `Blocked by`
+    // RING was found. A queue starved by ordinary blockers is still #440's business, told per-item — but a
+    // ring is not ordinary: no per-item verdict can see it, and it never clears (#1092), so it leads the
+    // banner rather than staying silent. A banner on a healthy queue is noise that trains workers to skip
+    // stderr — the very habit #440 was closed to break.
     let starvedBanner (leaseMinutes: int) (result: BatchResult) : string list =
         if not (List.isEmpty result.Chosen) then
             []
@@ -547,7 +535,7 @@ module Batch =
             // leads, and it is the entire banner when it is the only cause.
             deadlock @ drainable
 
-    /// Reservations that name files in THIS repo. Tokens are repo-relative (#312, #353).
+    // Reservations that name files in THIS repo. Tokens are repo-relative (#312, #353).
     let private inRepo (owner: string) (repo: string) (reservations: Reservation list) =
         reservations |> List.filter (fun r -> r.Owner = owner && r.Repo = repo)
 
@@ -570,23 +558,20 @@ module Batch =
             | Unreadable _ -> false)
         |> Option.map (fun r -> r.Holder)
 
-    /// A reservation that reserves nothing is the one thing this scheduler may not tolerate — see the
-    /// `Red` leg on `schedule`. Returns the offending tokens, empty if the reservation is sound.
-    ///
-    /// AN UNREAD SURFACE RESERVES NOTHING, AND THAT IS EXACTLY THE FAIL-OPEN THIS FUNCTION EXISTS TO
-    /// CATCH. `TouchSet.unmatchable` answers `[]` for `Unreadable` — truthfully, because we know of no
-    /// bad tokens for the simple reason that we know of no tokens at all. Reading that `[]` as "the
-    /// reservation is sound" would let every candidate clear a lock over files nobody ever looked at,
-    /// and hand a second worker the tree its holder is standing in. Same shape as #273; different cause.
+    // A reservation that reserves nothing is the one thing this scheduler may not tolerate — see the
+    // `Red` leg on `schedule`. Returns the offending tokens, empty if the reservation is sound.
+    //
+    // AN UNREAD SURFACE RESERVES NOTHING, AND THAT IS EXACTLY THE FAIL-OPEN THIS FUNCTION EXISTS TO
+    // CATCH. `TouchSet.unmatchable` answers `[]` for `Unreadable` — truthfully, because we know of no
+    // bad tokens for the simple reason that we know of no tokens at all. Reading that `[]` as "the
+    // reservation is sound" would let every candidate clear a lock over files nobody ever looked at,
+    // and hand a second worker the tree its holder is standing in. Same shape as #273; different cause.
     let private unusableReservation (r: Reservation) =
         match r.Paths with
         | Unreadable reason ->
             [ $"the holder's issue body could not be read, so its touch-set is UNKNOWN (%s{reason})" ]
         | _ -> TouchSet.unmatchable r.Paths
 
-    /// `generated` (.github#2305/ADR-0044) is threaded straight to `Schedulability.schedulable`'s own
-    /// step 6 below — see its doc for the exact-stem-only exclusion rule. `Set.empty` reproduces the
-    /// pre-#2305 verdict exactly.
     let scheduleWith
         (generated: Set<string>)
         (boardCounts: Map<Ref, int>)
@@ -778,18 +763,18 @@ module Batch =
               Decisions = List.rev decisions
               Truncated = truncated }
 
-    /// `scheduleWith` when the candidate list IS the whole board — the counts are derived from it.
-    ///
-    /// This is the honest answer for a caller holding no wider view, and there is one: `decide --snapshot`
-    /// is handed a document and nothing else, exactly as it is already handed no `Phase` and no age
-    /// (.github#1598). It is `Rank`'s no-priority-data direction — an undercount can only sort an item
-    /// LATER, never promote one — which is the same fail-open-downward posture every other unread rank
-    /// input takes.
-    ///
-    /// **THE WORKER LOOP MUST NOT USE THIS** (.github#1628). `batch`/`next`/`take` scope their candidates
-    /// with `--repo`, and a scoped list is a projection of the graph rather than the graph — see
-    /// `Rank.blockingCounts`. Those paths hold the unscoped scan rows already and pass whole-board counts
-    /// to `scheduleWith`.
+    // `scheduleWith` when the candidate list IS the whole board — the counts are derived from it.
+    //
+    // This is the honest answer for a caller holding no wider view, and there is one: `decide --snapshot`
+    // is handed a document and nothing else, exactly as it is already handed no `Phase` and no age
+    // (.github#1598). It is `Rank`'s no-priority-data direction — an undercount can only sort an item
+    // LATER, never promote one — which is the same fail-open-downward posture every other unread rank
+    // input takes.
+    //
+    // **THE WORKER LOOP MUST NOT USE THIS** (.github#1628). `batch`/`next`/`take` scope their candidates
+    // with `--repo`, and a scoped list is a projection of the graph rather than the graph — see
+    // `Rank.blockingCounts`. Those paths hold the unscoped scan rows already and pass whole-board counts
+    // to `scheduleWith`.
     let schedule
         (generated: Set<string>)
         (allowBacklog: bool)
@@ -799,16 +784,6 @@ module Batch =
         : Verdict<BatchResult> =
         scheduleWith generated (Rank.blockingCounts candidates) allowBacklog limit inFlight candidates
 
-    /// How many candidates this batch member DISPLACED — passed over because they collided with IT, and
-    /// with it specifically.
-    ///
-    /// This is the number `--explain` owes a reader, and it is the cost side of priority-greedy packing:
-    /// one wide high-rank item can exclude several narrow ones that a maximal pack would have run
-    /// together. That is the correct trade — priority means the important thing runs — but a trade nobody
-    /// is told about is indistinguishable from a regression in parallelism, so it is REPORTED.
-    ///
-    /// A refused candidate names exactly one holder (`schedule` resolves the FIRST colliding reserved
-    /// token), so nothing is double counted.
     let displacedBy (result: BatchResult) (member': Ref) : int =
         result.Decisions
         |> List.filter (fun d ->
@@ -817,18 +792,18 @@ module Batch =
             | _ -> false)
         |> List.length
 
-    /// `batch --explain` (.github#1598 AC5) — the ordering, made INSPECTABLE.
-    ///
-    /// Before this the only way to learn why a P0 item was absent from a batch was to read refusal prose
-    /// and infer; there was no way at all to learn what ORDER the candidates were considered in, because
-    /// the order was the issue number and the issue number is not a priority. A scheduler whose ordering
-    /// cannot be inspected is one nobody trusts, and the driver that filed this item spent an afternoon
-    /// proving exactly that.
-    ///
-    /// One line per candidate IN DECISION ORDER — which is rank order, so the list itself is the ranking
-    /// — carrying the verdict, every rank input that produced its position, and for an admitted item the
-    /// number of lanes it displaced. Deliberately not a table: these lines are read on a terminal beside
-    /// stderr refusal prose, and a column layout that wraps is worse than a sentence that does not.
+    // `batch --explain` (.github#1598 AC5) — the ordering, made INSPECTABLE.
+    //
+    // Before this the only way to learn why a P0 item was absent from a batch was to read refusal prose
+    // and infer; there was no way at all to learn what ORDER the candidates were considered in, because
+    // the order was the issue number and the issue number is not a priority. A scheduler whose ordering
+    // cannot be inspected is one nobody trusts, and the driver that filed this item spent an afternoon
+    // proving exactly that.
+    //
+    // One line per candidate IN DECISION ORDER — which is rank order, so the list itself is the ranking
+    // — carrying the verdict, every rank input that produced its position, and for an admitted item the
+    // number of lanes it displaced. Deliberately not a table: these lines are read on a terminal beside
+    // stderr refusal prose, and a column layout that wraps is worse than a sentence that does not.
     let explainRanking (result: BatchResult) : string list =
         let header =
             [ "RANKING (.github#1598) — candidates in the order the scheduler considered them."

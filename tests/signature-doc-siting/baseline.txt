@@ -1,0 +1,92 @@
+# Baseline for scripts/check-signature-doc-siting.py (.github#2730).
+#
+# `<count> <path>` -- how many F# XML documentation comments (`///`) sit in that implementation
+# file, which has a sibling `.fsi` and therefore has every one of them discarded by the compiler.
+#
+# THIS FILE ONLY EVER SHRINKS, and the gate is what makes that true. The counts must match the tree
+# EXACTLY, not `<=`:
+#
+#   more than the number here  -> a new doc comment arrived. Move it to the `.fsi` if a caller can
+#                                 act on it, or write it `//` if it is about the implementation.
+#                                 Raising the number is not a remedy.
+#   fewer than the number here -> the baseline is STALE. Lower it in the same commit as the repair.
+#   a subject file with hits and no line here -> a new offender in a new file.
+#   a line here naming a path that is not a subject file -> delete the line.
+#
+# So a repair cannot land without its decrement, and a decrement cannot land without its repair.
+# The file is therefore always a true statement about the tree, which is the property that lets the
+# gate be believed at all. `tests/pipefail-assertions/baseline.txt` (.github#2689) is the same
+# mechanism over a different subject, and this one is spelled the same way on purpose.
+#
+# AND IT HAPPENED A SECOND TIME, TO THE SAME PROJECT, WHILE THIS ROW WAS STILL IN REVIEW — which is
+# the best evidence available that the mechanism below is doing its job rather than describing a
+# one-off. `.github#2725` merged at `0d238824` and EXTRACTED `src/FS.GG.Coord.Cli.Kernel`, moving
+# `Identity.fs`, `Options.fs` and `Render.fs` out of `src/FS.GG.Coord.Cli` verbatim, splitting
+# `Kernel.fs` out of `Client.fs`, and taking `src/` from three projects with subjects to FOUR. It
+# could not have updated this file, because this file does not exist on `main` yet: it arrives with
+# this PR. So the interaction is unavoidable rather than anyone's omission — two rows in flight, one
+# adding a PATH-KEYED artefact and one moving the paths — and the gate is what caught it, loudly and
+# with the exact remedy per line (four `no baseline entry`, three `delete this line`, one `write
+# 1527`), on a merge that was textually clean and semantically stale.
+#
+# WHAT CHANGED HERE IS A RE-SITING AND A DECREMENT, NOT A GRANT. The three moved files carry the
+# SAME counts at their new paths (58, 455, 159 — unchanged to the line). `Kernel.fs`'s 161 is not a
+# new offender: it is the part of `Client.fs`'s residue that travelled with the code, which is why
+# `Client.fs` drops 1,714 -> 1,527 in the same edit. The total goes 2,657 -> 2,631, so the residue
+# SHRANK by 26 across the move; the file count goes 13 -> 14 only because one file became two. The
+# invariant this header states is about the residue, and the residue shrank.
+# *Counted twice:* the gate's own report, and `grep -cE '^[[:space:]]*///'` over each of the five
+# files independently — 58, 161, 455, 159, 1527, agreeing exactly.
+#
+# WHY THESE LINES ARE HERE RATHER THAN SWEPT. `.github#2730` swept `src/FS.GG.Coord.Core`
+# (1,853 lines, 27 files) and `src/FS.GG.Coord.GitHub` (1,117 lines, 10 files) to zero. It did not
+# sweep `src/FS.GG.Coord.Cli`: those files were outside its declared `Paths:`, `.github#2724` held
+# `Client.fs`/`Client.fsi` while it ran, and the extraction programme (`.github#2724`,
+# `.github#2731` onward) gives each extracted module a proper `.fsi` with its prose moved as part of
+# that work. Sweeping them there would have collided with every extraction lane for no benefit.
+#
+# `Client.fs`'s original 1,714 WAS THE FIRST ROW THIS GATE ADDED RATHER THAN INHERITED, and it is worth saying
+# how it got here, because the mechanism above predicted it and then the prediction only half held.
+# `.github#2724` merged at `479d185a` while this row was in review, and it gave `Client.fs` the
+# sibling `Client.fsi` it had been waiting for. That made `Client.fs` a SUBJECT for the first time —
+# 61 subjects became 62 — and its 1,714 `///` lines, which the compiler had been keeping right up
+# until that merge, became discarded ones in the same commit. The prose was NOT moved as part of
+# that work: the signature was extracted and the implementation's doc comments were left where they
+# were. So the residue did not clear, it transferred, and this line records it at the size it
+# actually is rather than letting the count quietly grow.
+#
+# THIS ROW DID NOT SWEEP IT, AND DELIBERATELY SO. `src/FS.GG.Coord.Cli/Client.fs` is outside this
+# row's declared `Paths:`; its 1,527 remaining blocks are more than everything `.github#2730` swept in
+# `FS.GG.Coord.GitHub`, and each one needs the same caller-can-act-on-it judgement the rest of the
+# sweep got. Doing it here, unreviewed and out of touch-set, is exactly the collision the paragraph
+# above exists to avoid. It is recorded, visible, and shrinking, which is the whole point of the
+# mechanism. Filed as a finding packet against the extraction programme rather than silently absorbed.
+#
+# They are recorded rather than dropped so the residue is visible and shrinking. Each extraction
+# lane decrements its own line inside the touch-set it already holds, at zero marginal lane cost --
+# nobody has to reserve `src/FS.GG.Coord.Cli` to make this file smaller.
+#
+# THE SUBJECT IS NOT SHRUNK TO MATCH. The gate scans every `.fs` under `src/` with a sibling `.fsi`,
+# including these. A gate whose population is chosen so that it cannot fire is the #266 failure mode
+# in its purest form, and an exemption recorded as a number a future lane must decrement is not the
+# same thing as an exemption recorded as a directory nobody looks at again.
+#
+# TO CLEAR A LINE: ask of each `///` block whether a caller who never opens the `.fs` could act on
+# it. If yes it is contract prose and belongs in the sibling `.fsi`; if no it is prose about the
+# implementation, is correctly placed where it is, and becomes `//` with its wording unchanged.
+# Then write the new count here, or delete the line when it reaches zero.
+
+58 src/FS.GG.Coord.Cli.Kernel/Identity.fs
+161 src/FS.GG.Coord.Cli.Kernel/Kernel.fs
+455 src/FS.GG.Coord.Cli.Kernel/Options.fs
+159 src/FS.GG.Coord.Cli.Kernel/Render.fs
+1527 src/FS.GG.Coord.Cli/Client.fs
+10 src/FS.GG.Coord.Cli/CycleLedgerApplication.fs
+15 src/FS.GG.Coord.Cli/DeliveryApplication.fs
+3 src/FS.GG.Coord.Cli/DeliveryRouteApplication.fs
+2 src/FS.GG.Coord.Cli/FollowupAudit.fs
+31 src/FS.GG.Coord.Cli/Followups.fs
+73 src/FS.GG.Coord.Cli/KitDigest.fs
+83 src/FS.GG.Coord.Cli/LintApplication.fs
+37 src/FS.GG.Coord.Cli/ReviewApplication.fs
+17 src/FS.GG.Coord.Cli/Snapshot.fs

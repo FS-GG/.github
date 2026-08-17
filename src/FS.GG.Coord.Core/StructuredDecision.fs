@@ -25,8 +25,6 @@ module StructuredDecision =
     type ReviewKind = Initial | Confirmation | Escalation | RepairPhase | Acceptance
     type ReviewVerdict = Pass | ChangesRequired | Accepted
 
-    /// See `StructuredDecision.fsi` for why the grant lives in the record rather than beside it, and why
-    /// `GrantUrl` is required to be present but never resolved.
     type SuccessionGrant =
         { OriginalCritic: string
           GrantedBy: string
@@ -72,13 +70,13 @@ module StructuredDecision =
         | Acceptance -> "acceptance"
     let private verdictName = function Pass -> "pass" | ChangesRequired -> "changes-required" | Accepted -> "accepted"
 
-    /// APPENDED, and only when a grant is present (.github#2662). `digest` joins its fields with `|`, so
-    /// contributing NOTHING for an absent grant leaves the joined string — and therefore the digest —
-    /// byte-identical to what every record already written to a pull request recorded. Contributing the
-    /// three framed fields when present is what makes the grant tamper-evident, and is exactly what makes
-    /// an engine built before this field fail closed on a succession record: it ignores the unknown
-    /// `succession` key, recomputes over the eighteen fields it knows, and reports a digest mismatch
-    /// rather than accepting a record whose grant it cannot see.
+    // APPENDED, and only when a grant is present (.github#2662). `digest` joins its fields with `|`, so
+    // contributing NOTHING for an absent grant leaves the joined string — and therefore the digest —
+    // byte-identical to what every record already written to a pull request recorded. Contributing the
+    // three framed fields when present is what makes the grant tamper-evident, and is exactly what makes
+    // an engine built before this field fail closed on a succession record: it ignores the unknown
+    // `succession` key, recomputes over the eighteen fields it knows, and reports a digest mismatch
+    // rather than accepting a record whose grant it cannot see.
     let private successionFields =
         function
         | None -> []
@@ -106,11 +104,11 @@ module StructuredDecision =
     let private sha (value: string) =
         value.Length = 40 && value |> Seq.forall Uri.IsHexDigit
 
-    /// See `StructuredDecision.fsi`. The check is a PREFIX, not a fixed list, because the dispatch
-    /// convention (`fsgg-critic-<route>`) is what is actually stable — a route name this module has no
-    /// reason to enumerate. Moved here from `Driver.fs`'s private copy by .github#2662, because the
-    /// ledger validator needs the same rule and the module that owns the record should own the predicate
-    /// about its `critic` field; `Review.fs` keeps its own copy for the reason the signature file states.
+    // See `StructuredDecision.fsi`. The check is a PREFIX, not a fixed list, because the dispatch
+    // convention (`fsgg-critic-<route>`) is what is actually stable — a route name this module has no
+    // reason to enumerate. Moved here from `Driver.fs`'s private copy by .github#2662, because the
+    // ledger validator needs the same rule and the module that owns the record should own the predicate
+    // about its `critic` field; `Review.fs` keeps its own copy for the reason the signature file states.
     let isGenericCriticIdentity (identity: string) =
         not (String.IsNullOrWhiteSpace identity)
         && identity.Trim().StartsWith("fsgg-critic-", StringComparison.OrdinalIgnoreCase)

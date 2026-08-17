@@ -22,6 +22,8 @@ namespace FS.GG.Coord.GitHub
 /// budget that dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
 module Budget =
 
+    /// A reading from the response that actually served (or refused) a resource. The ledger retains no
+    /// credential: its filename is keyed by a one-way digest of the credential.
     type RestObservation =
         { Resource: string
           Limit: int option
@@ -53,6 +55,8 @@ module Budget =
         | Exhausted
         | Unknown
 
+    /// The pessimistic fleet projection. An exhausted resource always wins over a healthy sibling:
+    /// capacity is permission to add load, not an average of unrelated buckets.
     val fleetState: observations: RestObservation list -> FleetState
     val fleetStateText: state: FleetState -> string
 
@@ -135,6 +139,7 @@ module Budget =
     type Spend =
         { Points: int
           Calls: int
+          /// The meter's own `remaining` from the LAST billed call — GitHub's number, never our arithmetic.
           LastRemaining: int option }
 
     /// Record one 2xx GraphQL response's meter against this process's running total.

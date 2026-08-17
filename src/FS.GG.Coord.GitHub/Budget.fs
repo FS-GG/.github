@@ -19,8 +19,6 @@ module Budget =
     [<Literal>]
     let private UnixSecondsMax = 253402300799L
 
-    /// A reading from the response that actually served (or refused) a resource.  The ledger retains no
-    /// credential: its filename is keyed by a one-way digest of the credential.
     type RestObservation =
         { Resource: string
           Limit: int option
@@ -52,8 +50,8 @@ module Budget =
         header "X-RateLimit-Reset"
         |> Option.bind (fun raw -> match Int64.TryParse(raw.Trim()) with | true, epoch when epoch >= UnixSecondsMin && epoch <= UnixSecondsMax -> Some(DateTimeOffset.FromUnixTimeSeconds epoch) | _ -> None)
 
-    /// Record rate-limit headers from a real REST resource.  The latest live observation wins; callers
-    /// never manufacture a resource from a missing header.
+    // Record rate-limit headers from a real REST resource.  The latest live observation wins; callers
+    // never manufacture a resource from a missing header.
     let observeRestHeaders (token: string) (header: string -> string option) =
         match header "X-RateLimit-Resource" with
         | None -> ()
@@ -105,8 +103,8 @@ module Budget =
                         gate.ReleaseMutex()
             with :? IOException -> ()
 
-    /// Read the one credential-scoped authoritative resource observation, if any. A torn or unreadable
-    /// ledger is unknown rather than zero; dispatch must not turn a failed cache read into capacity.
+    // Read the one credential-scoped authoritative resource observation, if any. A torn or unreadable
+    // ledger is unknown rather than zero; dispatch must not turn a failed cache read into capacity.
     let readRestObservations (token: string) : RestObservation list =
         try
             let file = observationFile token
@@ -117,16 +115,16 @@ module Budget =
         | :? IOException
         | :? JsonException -> []
 
-    /// Compatibility projection for consumers that need a single most-conservative fact. New admission
-    /// gates inspect `readRestObservations` so one healthy bucket cannot hide another exhausted one.
+    // Compatibility projection for consumers that need a single most-conservative fact. New admission
+    // gates inspect `readRestObservations` so one healthy bucket cannot hide another exhausted one.
     let readRestObservation (token: string) : RestObservation option =
         readRestObservations token
         |> List.sortBy (fun observation -> observation.Remaining |> Option.defaultValue Int32.MaxValue)
         |> List.tryHead
 
-    /// The floor kept for work that finishes an already accepted item.  This is intentionally
-    /// configurable for a smaller installation, but never accepts zero or a malformed value: a
-    /// misspelled environment setting must not silently remove the fleet's escape hatch.
+    // The floor kept for work that finishes an already accepted item.  This is intentionally
+    // configurable for a smaller installation, but never accepts zero or a malformed value: a
+    // misspelled environment setting must not silently remove the fleet's escape hatch.
     let dispatchReserve () =
         match Environment.GetEnvironmentVariable "FSGG_COORD_REST_DISPATCH_RESERVE" with
         | null
@@ -142,8 +140,6 @@ module Budget =
         | Exhausted
         | Unknown
 
-    /// The pessimistic fleet projection.  An exhausted resource always wins over a healthy
-    /// sibling; capacity is permission to add load, not an average of unrelated buckets.
     let fleetState (observations: RestObservation list) =
         let remaining = observations |> List.choose _.Remaining
 
@@ -168,44 +164,44 @@ module Budget =
     [<Literal>]
     let WarnBelow = 500
 
-    /// The wordings GitHub actually uses. All of them, because it uses all of them.
-    ///
-    /// `rate limit exceeded` / `API rate limit` — the primary budget.
-    /// `secondary rate limit` / `submitted too quickly` — the abuse detector, which is a DIFFERENT
-    /// mechanism with a DIFFERENT remedy, and which `gh project` renders in its own words.
-    ///
-    /// "with the same remedy (wait)" is what this line used to say, and #1666 is the measured refutation.
-    /// Waiting is the primary limit's remedy. A secondary limit is triggered by burst CONCURRENCY, and a
-    /// fleet that waits out a nominal window and resumes at the same fan-out re-trips it immediately —
-    /// which is the loop that halted one six-worker run three times in a day. `isSecondaryLimit` keeps the
-    /// two apart; this predicate deliberately still answers only "is it a rate limit at all", because that
-    /// is the question the fail-closed ordering in `classify` needs.
-    ///
-    /// The corpus injects two distinct wordings on purpose (`GH_RATELIMIT` 403s the GraphQL path and the
-    /// `gh project` path differently) and asserts the client recognises BOTH. A classifier that matched
-    /// only the first would leave every board write mis-classified as a permanent refusal — and a
-    /// permanent refusal is never queued, so the write would be silently dropped. That is #510 arriving
-    /// through the classifier instead of through the queue.
-    /// `DateTimeOffset.FromUnixTimeSeconds`'s documented domain — 0001-01-01 to 9999-12-31. Outside it the
-    /// call THROWS rather than returning a sentinel, so the bound is checked before the conversion.
+    // The wordings GitHub actually uses. All of them, because it uses all of them.
+    //
+    // `rate limit exceeded` / `API rate limit` — the primary budget.
+    // `secondary rate limit` / `submitted too quickly` — the abuse detector, which is a DIFFERENT
+    // mechanism with a DIFFERENT remedy, and which `gh project` renders in its own words.
+    //
+    // "with the same remedy (wait)" is what this line used to say, and #1666 is the measured refutation.
+    // Waiting is the primary limit's remedy. A secondary limit is triggered by burst CONCURRENCY, and a
+    // fleet that waits out a nominal window and resumes at the same fan-out re-trips it immediately —
+    // which is the loop that halted one six-worker run three times in a day. `isSecondaryLimit` keeps the
+    // two apart; this predicate deliberately still answers only "is it a rate limit at all", because that
+    // is the question the fail-closed ordering in `classify` needs.
+    //
+    // The corpus injects two distinct wordings on purpose (`GH_RATELIMIT` 403s the GraphQL path and the
+    // `gh project` path differently) and asserts the client recognises BOTH. A classifier that matched
+    // only the first would leave every board write mis-classified as a permanent refusal — and a
+    // permanent refusal is never queued, so the write would be silently dropped. That is #510 arriving
+    // through the classifier instead of through the queue.
+    // `DateTimeOffset.FromUnixTimeSeconds`'s documented domain — 0001-01-01 to 9999-12-31. Outside it the
+    // call THROWS rather than returning a sentinel, so the bound is checked before the conversion.
     let private rateLimitPattern =
         Regex(
             @"rate limit (already )?exceeded|API rate limit|secondary rate limit|was submitted too quickly|abuse detection",
             RegexOptions.IgnoreCase ||| RegexOptions.Compiled
         )
 
-    /// The SECONDARY (abuse-detection) wordings, split out of the pattern above.
-    ///
-    /// These three phrases were always inside `rateLimitPattern`, matched, and then thrown away: the result
-    /// was a bool, so "which of the five wordings hit" was information the classifier computed and
-    /// discarded. `#1666` is the cost of discarding it — a secondary limit rendered as "REST budget
-    /// EXHAUSTED … resets in ~6m", with the primary reset attached to a limit that does not use it.
-    ///
-    /// TESTED BEFORE THE PRIMARY, and the order is the contract. "You have exceeded a secondary rate limit"
-    /// contains the word "exceeded" next to "rate limit", so a primary-first test can swallow it; and of the
-    /// two possible mistakes, calling a primary limit "secondary" merely over-advises (reduce concurrency
-    /// AND wait), while calling a secondary limit "primary" prints a reset that does not apply and sends the
-    /// fleet back in at full concurrency the moment it elapses. Ties go to `Secondary`.
+    // The SECONDARY (abuse-detection) wordings, split out of the pattern above.
+    //
+    // These three phrases were always inside `rateLimitPattern`, matched, and then thrown away: the result
+    // was a bool, so "which of the five wordings hit" was information the classifier computed and
+    // discarded. `#1666` is the cost of discarding it — a secondary limit rendered as "REST budget
+    // EXHAUSTED … resets in ~6m", with the primary reset attached to a limit that does not use it.
+    //
+    // TESTED BEFORE THE PRIMARY, and the order is the contract. "You have exceeded a secondary rate limit"
+    // contains the word "exceeded" next to "rate limit", so a primary-first test can swallow it; and of the
+    // two possible mistakes, calling a primary limit "secondary" merely over-advises (reduce concurrency
+    // AND wait), while calling a secondary limit "primary" prints a reset that does not apply and sends the
+    // fleet back in at full concurrency the moment it elapses. Ties go to `Secondary`.
     let private secondaryPattern =
         Regex(
             @"secondary rate limit|was submitted too quickly|abuse detection",
@@ -237,19 +233,18 @@ module Budget =
 
     // ---- what THIS invocation spent -------------------------------------------------------------------
 
-    /// GraphQL points this process has spent, and how many billed calls it took.
-    ///
-    /// `readMeter` parsed `rateLimit { cost }` correctly, was unit-tested, and — until #2418 — had NO
-    /// PRODUCTION CALLER. Fourteen query documents across four files select `rateLimit { cost remaining }`,
-    /// so the fleet PAID to transmit a number that was then dropped on the floor. The visible consequence
-    /// was not a wrong answer, it was the absence of one: when the budget died twice in a two-hour board
-    /// run, nobody could say what had spent it, and reading the source could not answer either — two
-    /// separate source-level hypotheses about the drain were wrong by 30x before the missing wiring was
-    /// found. An unattributable budget is diagnosed by guessing.
+    // GraphQL points this process has spent, and how many billed calls it took.
+    //
+    // `readMeter` parsed `rateLimit { cost }` correctly, was unit-tested, and — until #2418 — had NO
+    // PRODUCTION CALLER. Fourteen query documents across four files select `rateLimit { cost remaining }`,
+    // so the fleet PAID to transmit a number that was then dropped on the floor. The visible consequence
+    // was not a wrong answer, it was the absence of one: when the budget died twice in a two-hour board
+    // run, nobody could say what had spent it, and reading the source could not answer either — two
+    // separate source-level hypotheses about the drain were wrong by 30x before the missing wiring was
+    // found. An unattributable budget is diagnosed by guessing.
     type Spend =
         { Points: int
           Calls: int
-          /// The meter's own `remaining` from the LAST billed call — GitHub's number, never our arithmetic.
           LastRemaining: int option }
 
     let private spendGate = obj ()
@@ -263,13 +258,13 @@ module Budget =
         | "" -> false
         | value -> not (value.Equals("0", StringComparison.Ordinal))
 
-    /// Record one GraphQL response's meter.
-    ///
-    /// Called for every 2xx GraphQL body. A body with no `rateLimit` (every MUTATION — `rateLimit` is a
-    /// field of the query root) reads as `None` and is NOT counted: a mutation's cost is real but the
-    /// server does not report it here, and inventing the 1-point floor would make this ledger a mix of
-    /// measured and assumed numbers. `Calls` therefore means BILLED CALLS THE METER SPOKE FOR, and the
-    /// mutation gap is stated in `docs/coordination/graphql-budget.md` rather than papered over.
+    // Record one GraphQL response's meter.
+    //
+    // Called for every 2xx GraphQL body. A body with no `rateLimit` (every MUTATION — `rateLimit` is a
+    // field of the query root) reads as `None` and is NOT counted: a mutation's cost is real but the
+    // server does not report it here, and inventing the 1-point floor would make this ledger a mix of
+    // measured and assumed numbers. `Calls` therefore means BILLED CALLS THE METER SPOKE FOR, and the
+    // mutation gap is stated in `docs/coordination/graphql-budget.md` rather than papered over.
     let observeGraphQlBody (body: string) =
         match readMeter body with
         | None -> ()
@@ -286,14 +281,14 @@ module Budget =
             if debugEnabled () then
                 eprintfn "fsgg-coord-engine: graphql cost=%d remaining=%d" meter.Cost meter.Remaining
 
-    /// What this process has spent so far.
+    // What this process has spent so far.
     let graphQlSpend () : Spend =
         lock spendGate (fun () ->
             { Points = spentPoints
               Calls = spentCalls
               LastRemaining = lastRemaining })
 
-    /// Reset the counter. Tests only — a process spends once and exits.
+    // Reset the counter. Tests only — a process spends once and exits.
     let resetGraphQlSpend () =
         lock spendGate (fun () ->
             spentPoints <- 0
@@ -302,12 +297,12 @@ module Budget =
 
     // ---- the cross-process ledger ---------------------------------------------------------------------
 
-    /// One invocation's spend, appended when the process exits.
-    ///
-    /// A per-process counter alone cannot answer the question that matters, because the fleet is N SHORT-LIVED
-    /// PROCESSES sharing one budget: `take`, `claim`, `done` and the host's own `reconcile` each run, spend,
-    /// print, and die. "What drained the 5,000?" is a question ABOUT THE WINDOW, not about any one process, so
-    /// the number has to outlive the process that measured it.
+    // One invocation's spend, appended when the process exits.
+    //
+    // A per-process counter alone cannot answer the question that matters, because the fleet is N SHORT-LIVED
+    // PROCESSES sharing one budget: `take`, `claim`, `done` and the host's own `reconcile` each run, spend,
+    // print, and die. "What drained the 5,000?" is a question ABOUT THE WINDOW, not about any one process, so
+    // the number has to outlive the process that measured it.
     type SpendRecord =
         { Command: string
           Points: int
@@ -317,10 +312,10 @@ module Budget =
 
     let private spendLedgerFile () = Path.Combine(observationRoot (), "graphql-spend.jsonl")
 
-    /// Append this invocation's spend. NEVER throws and never fails a command: telemetry that can break the
-    /// tool it measures is worse than no telemetry. A zero-call invocation writes nothing — the overwhelming
-    /// majority of commands touch no GraphQL at all, and a ledger padded with zeroes buries the rows that
-    /// spent.
+    // Append this invocation's spend. NEVER throws and never fails a command: telemetry that can break the
+    // tool it measures is worse than no telemetry. A zero-call invocation writes nothing — the overwhelming
+    // majority of commands touch no GraphQL at all, and a ledger padded with zeroes buries the rows that
+    // spent.
     let recordSpend (command: string) =
         try
             let spend = graphQlSpend ()
@@ -353,11 +348,11 @@ module Budget =
         with _ ->
             ()
 
-    /// Read the ledger back, newest first, keeping only records inside `window`.
-    ///
-    /// Returns `[]` on any unreadable ledger rather than throwing — but note this is NOT the #266 shape it
-    /// resembles. An empty ledger is not being reported as a clean board; it is reported by `budget` as
-    /// "no attribution recorded", which is the honest reading of a file nobody has written yet.
+    // Read the ledger back, newest first, keeping only records inside `window`.
+    //
+    // Returns `[]` on any unreadable ledger rather than throwing — but note this is NOT the #266 shape it
+    // resembles. An empty ledger is not being reported as a clean board; it is reported by `budget` as
+    // "no attribution recorded", which is the honest reading of a file nobody has written yet.
     let recentSpend (window: TimeSpan) : SpendRecord list =
         try
             let file = spendLedgerFile ()
@@ -406,7 +401,6 @@ module Budget =
         with _ ->
             []
 
-    /// Aggregate a window's records by command, dearest first. This is the attribution answer.
     let spendByCommand (records: SpendRecord list) : (string * int * int) list =
         records
         |> List.groupBy (fun r -> r.Command)
@@ -414,10 +408,10 @@ module Budget =
             command, rows |> List.sumBy (fun r -> r.Points), rows |> List.sumBy (fun r -> r.Calls))
         |> List.sortByDescending (fun (_, points, _) -> points)
 
-    /// Pull the reset instant out of a rate-limit response BODY (a GraphQL `resetAt`).
-    ///
-    /// This is the FALLBACK. The header is the primary source and `readReset` below prefers it — this
-    /// arm only answers for a GraphQL 403 whose body carries `resetAt`.
+    // Pull the reset instant out of a rate-limit response BODY (a GraphQL `resetAt`).
+    //
+    // This is the FALLBACK. The header is the primary source and `readReset` below prefers it — this
+    // arm only answers for a GraphQL 403 whose body carries `resetAt`.
     let private readResetAtFromBody (body: string) =
         if String.IsNullOrWhiteSpace body then
             None
@@ -450,35 +444,35 @@ module Budget =
         with :? JsonException ->
             None
 
-    /// WHICH budget did GitHub say this was? Read, never inferred.
-    ///
-    /// `X-RateLimit-Resource` rides on the 403 itself, so it names the bucket that ACTUALLY refused the
-    /// call. That matters more than it sounds: on this account the free `/rate_limit` endpoint reports a
-    /// `core` counter that DISAGREES with the one real requests are billed against (measured 2026-07-16 —
-    /// `/rate_limit` said 2431/5000 remaining while every real read 403'd with `remaining: 0`, and the two
-    /// even named different reset instants). The failing response's own headers are the only reading that
-    /// is definitionally about the request that failed.
-    ///
-    /// The RAW resource name GitHub sent, trimmed — `core`, `search`, `code_search`, `graphql`, …
-    ///
-    /// `None` when the header is absent or blank. A secondary/abuse-detector 403 frequently carries none.
+    // WHICH budget did GitHub say this was? Read, never inferred.
+    //
+    // `X-RateLimit-Resource` rides on the 403 itself, so it names the bucket that ACTUALLY refused the
+    // call. That matters more than it sounds: on this account the free `/rate_limit` endpoint reports a
+    // `core` counter that DISAGREES with the one real requests are billed against (measured 2026-07-16 —
+    // `/rate_limit` said 2431/5000 remaining while every real read 403'd with `remaining: 0`, and the two
+    // even named different reset instants). The failing response's own headers are the only reading that
+    // is definitionally about the request that failed.
+    //
+    // The RAW resource name GitHub sent, trimmed — `core`, `search`, `code_search`, `graphql`, …
+    //
+    // `None` when the header is absent or blank. A secondary/abuse-detector 403 frequently carries none.
     let private readResourceName (header: string -> string option) =
         match header "X-RateLimit-Resource" with
         | Some r when not (String.IsNullOrWhiteSpace r) -> Some(r.Trim())
         | _ -> None
 
-    /// `Retry-After` — the ONLY reset that describes a secondary limit, and nothing in this codebase read
-    /// it until #1666.
-    ///
-    /// GitHub sends delta-SECONDS here (RFC 9110 also permits an HTTP-date, so that is accepted too and
-    /// converted to a delta). Guarded exactly like `X-RateLimit-Reset` below, and for the same reason: this
-    /// runs on the FAILURE path inside a transport `try` that catches only `HttpRequestException` and
-    /// `TaskCanceledException`, so an unguarded conversion would escape and kill the process in the code
-    /// whose whole job is to explain why nothing can run.
-    ///
-    /// A NEGATIVE or absurd value is NO reading, never a clamp to zero: "retry now" is the one answer
-    /// guaranteed to be wrong on a limit that just fired. The upper bound is a day — GitHub's secondary
-    /// back-offs are seconds to minutes, and a value beyond that is not a figure to hand a worker as fact.
+    // `Retry-After` — the ONLY reset that describes a secondary limit, and nothing in this codebase read
+    // it until #1666.
+    //
+    // GitHub sends delta-SECONDS here (RFC 9110 also permits an HTTP-date, so that is accepted too and
+    // converted to a delta). Guarded exactly like `X-RateLimit-Reset` below, and for the same reason: this
+    // runs on the FAILURE path inside a transport `try` that catches only `HttpRequestException` and
+    // `TaskCanceledException`, so an unguarded conversion would escape and kill the process in the code
+    // whose whole job is to explain why nothing can run.
+    //
+    // A NEGATIVE or absurd value is NO reading, never a clamp to zero: "retry now" is the one answer
+    // guaranteed to be wrong on a limit that just fired. The upper bound is a day — GitHub's secondary
+    // back-offs are seconds to minutes, and a value beyond that is not a figure to hand a worker as fact.
     let private readRetryAfter (header: string -> string option) =
         match header "Retry-After" with
         | Some v when not (String.IsNullOrWhiteSpace v) ->
@@ -517,17 +511,17 @@ module Budget =
                 | _ -> None
         | _ -> None
 
-    /// WHICH limit refused this call — the MECHANISM as well as the bucket.
-    ///
-    /// Every REST resource used to collapse into a bare `RestBudget` with its name discarded, on the
-    /// reasoning that "they share one remedy and one shape". #1666 measured the cost of that: they do not.
-    /// A `search` 403 announced itself as "REST budget EXHAUSTED", the operator checked `core`, saw 87%
-    /// free, and concluded the engine had an internal counter — a diagnosis filed, and withdrawn, three
-    /// separate times. The bucket name is carried now, so the reading is checkable.
-    ///
-    /// And a SECONDARY limit is not a budget at all. It is tested FIRST (see `secondaryPattern`) and never
-    /// receives a `resetAt`, because `X-RateLimit-Reset` describes the primary window and attaching it here
-    /// is what produced "resets in ~6m" in front of a retry that succeeded seconds later.
+    // WHICH limit refused this call — the MECHANISM as well as the bucket.
+    //
+    // Every REST resource used to collapse into a bare `RestBudget` with its name discarded, on the
+    // reasoning that "they share one remedy and one shape". #1666 measured the cost of that: they do not.
+    // A `search` 403 announced itself as "REST budget EXHAUSTED", the operator checked `core`, saw 87%
+    // free, and concluded the engine had an internal counter — a diagnosis filed, and withdrawn, three
+    // separate times. The bucket name is carried now, so the reading is checkable.
+    //
+    // And a SECONDARY limit is not a budget at all. It is tested FIRST (see `secondaryPattern`) and never
+    // receives a `resetAt`, because `X-RateLimit-Reset` describes the primary window and attaching it here
+    // is what produced "resets in ~6m" in front of a retry that succeeded seconds later.
     let private readResource (header: string -> string option) (body: string) =
         let name = readResourceName header
 
@@ -541,12 +535,12 @@ module Budget =
             // replaces — a confident budget name with nothing behind it.
             | None -> UnknownBudget
 
-    /// The reset instant — the HEADER first, then a GraphQL body's `resetAt`.
-    ///
-    /// `X-RateLimit-Reset` is epoch SECONDS. It was sitting on every REST 403 the whole time and nothing
-    /// ever read it, so a REST rate limit could only ever say "the reset time could not be read" — while
-    /// `/pnext-item` §1 told the worker to "back off until the reset it names". The tool was structurally
-    /// unable to name one.
+    // The reset instant — the HEADER first, then a GraphQL body's `resetAt`.
+    //
+    // `X-RateLimit-Reset` is epoch SECONDS. It was sitting on every REST 403 the whole time and nothing
+    // ever read it, so a REST rate limit could only ever say "the reset time could not be read" — while
+    // `/pnext-item` §1 told the worker to "back off until the reset it names". The tool was structurally
+    // unable to name one.
     let private readReset (header: string -> string option) (body: string) =
         let fromHeader =
             match header "X-RateLimit-Reset" with

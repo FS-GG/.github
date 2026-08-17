@@ -111,11 +111,15 @@ module Done =
     type ClosingPr =
         { Number: int
           Merged: bool
+          /// ISO-8601 merge time, "" if unknown — the LATEST-merged among true closers wins (#342), but only
+          /// among closers that share a repository preference tier (.github#2427).
           MergedAt: string
+          /// The merge commit's abbreviated oid, "" if unknown — named in the stamp.
           Oid: string
           /// This candidate's OWN `owner/repo`, "" if unknown — NOT the repository of an issue it claims to
           /// close. Lets a same-repository closer be preferred over a foreign one (.github#2427).
           Repo: string
+          /// Its own `closingIssuesReferences` names THIS issue (the `Closes #N` in the PR body).
           ClosesThis: bool }
 
     /// Everything the stamp needs, read in ONE query.

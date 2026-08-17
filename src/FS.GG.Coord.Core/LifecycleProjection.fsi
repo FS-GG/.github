@@ -46,7 +46,10 @@ module LifecycleProjection =
         /// wrote no Status and no watermark" from an assertion into a checked property.
         | Exempt of kind: ItemKind
 
-    /// Persisted ordering receipt for lifecycle projections.
+    /// Persisted ordering receipt for lifecycle projections. Callers persist this beside the status
+    /// write and feed it back on the next event; keeping the watermark in the typed boundary is what
+    /// makes an event that arrived late a no-op rather than an opportunity to re-derive an older
+    /// column value.
     type Watermark =
         { ObservedAt: int64
           Status: BoardStatus
@@ -80,7 +83,11 @@ module LifecycleProjection =
     /// argument, or default it; `Kind.govern` is the one place the `None`-means-`Work` reading is spelled.
     val reduce: PolicyVersion -> ItemKind -> SchedulingIntent -> Observation -> Result
 
-    /// Rejects stale or contradictory event observations against a persisted projection receipt.
+    /// Rejects stale or contradictory event observations against a persisted projection receipt: a newly
+    /// projected lifecycle result is accepted only when it is newer than the last applied one. EQUAL
+    /// timestamps are idempotent only when the two agree; different values at the same timestamp are
+    /// WITHHELD, because an ordering source that cannot separate them is not strong enough to decide
+    /// which event won.
     ///
     /// `kind` is tested BEFORE the watermark comparison, not merely before the projection: a standing row
     /// must not be able to reach a verdict *about* a watermark either, because the ordering refusals read

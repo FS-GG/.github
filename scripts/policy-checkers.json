@@ -114,6 +114,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/claim-fence/run.sh",
       "workflow": ".github/workflows/fsgg-claim-fence.yml"
+    },
+    {
+      "source": "scripts/check-signature-doc-siting.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/signature-doc-siting/run.sh",
+      "workflow": ".github/workflows/signature-doc-siting.yml"
     }
   ]
 }

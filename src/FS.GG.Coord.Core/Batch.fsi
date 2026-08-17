@@ -121,7 +121,8 @@ module Batch =
         { /// The distinct items a worker is holding right now — the only list `waveOccupancy` may count.
           Occupying: Ref list
 
-          /// The distinct items showing work that nobody holds. Disjoint from `Occupying`.
+          /// The distinct items showing work that nobody holds. Disjoint from `Occupying` by
+          /// construction, so a reader may add the two without double-counting a ref.
           WorkWithoutClaim: Ref list }
 
     /// Project a scheduler snapshot's candidates and reservations onto the implementer-slot question.
@@ -154,7 +155,8 @@ module Batch =
 
     /// The typed `work without claim` line, emitted only when such a row exists (.github#2678). A
     /// separate line rather than a fourth key on `renderWaveOccupancy`'s landed object, so no existing
-    /// reader of that projection changes.
+    /// reader of that projection changes. Refs are `Canonical` for .github#2155's reason: a machine line
+    /// may not collapse two accounts' same-numbered rows.
     val renderWorkWithoutClaim: occupancy: SlotOccupancy -> string option
 
     /// The explicit advisory emitted only when capacity and schedulable work coexist.
@@ -288,6 +290,9 @@ module Batch =
     ///
     /// The cost side of priority-greedy packing, made countable. A trade nobody is told about is
     /// indistinguishable from a regression in parallelism.
+    ///
+    /// A refused candidate names exactly one holder — `schedule` resolves the FIRST colliding reserved
+    /// token — so nothing is double counted.
     val displacedBy: result: BatchResult -> member': Ref -> int
 
     /// `batch --explain` — THE ORDERING, MADE INSPECTABLE (.github#1598 AC5).

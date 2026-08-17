@@ -1,71 +1,53 @@
 namespace FS.GG.Coord
 
-/// THE PROTOCOL, AS DATA — the source every projection is emitted FROM (ADR-0034 §4.5).
-///
-/// A coordination rule is currently stated in up to six places: the ADR, the canonical doc, the tool,
-/// and four `SKILL.md` bodies across two skill roots — then content-addressed into `repos.lock` and
-/// byte-copied into six receivers. **54 vendored copies of the protocol.** The propagation edge is a
-/// second issue and a second PR, every time (#309 → #502, #481 → #531), and the collision attractor was
-/// removed BY HAND twice (#532, #551) before #570 gated it.
-///
-/// The inversion is the whole of §4.5: `fsgg-coord` was ALREADY the model — it was simply not the
-/// SOURCE. In every drift that can be dated, the tool was right and the prose was wrong.
-/// `check-worker-id-attractor.py` even calls `parallel-work.md` *"the document those skills are a
-/// projection OF"*, and exists only because that projection is copied by hand.
-///
-/// So the rules live HERE, once, in the typed core that already enforces them, and the prose is
-/// GENERATED. A rule then cannot land in one tier and not the others, because there are no tiers — it
-/// is `repos.lock`'s discipline applied to the protocol itself: a generated, CI-gated artifact that
-/// nobody authors, where a collision is a rebase rather than a decision.
-///
-/// The proof this was needed arrived while the flip was being written: `TouchSetGrammar` was typed into
-/// F# by hand, byte-identical to bash's `TOUCHSET_GRAMMAR` purely by luck, with NOTHING holding the two
-/// in step. That is a seventh copy, added by the change that was fixing the copies.
+// THE PROTOCOL, AS DATA — the source every projection is emitted FROM (ADR-0034 §4.5).
+//
+// A coordination rule is currently stated in up to six places: the ADR, the canonical doc, the tool,
+// and four `SKILL.md` bodies across two skill roots — then content-addressed into `repos.lock` and
+// byte-copied into six receivers. **54 vendored copies of the protocol.** The propagation edge is a
+// second issue and a second PR, every time (#309 → #502, #481 → #531), and the collision attractor was
+// removed BY HAND twice (#532, #551) before #570 gated it.
+//
+// The inversion is the whole of §4.5: `fsgg-coord` was ALREADY the model — it was simply not the
+// SOURCE. In every drift that can be dated, the tool was right and the prose was wrong.
+// `check-worker-id-attractor.py` even calls `parallel-work.md` *"the document those skills are a
+// projection OF"*, and exists only because that projection is copied by hand.
+//
+// So the rules live HERE, once, in the typed core that already enforces them, and the prose is
+// GENERATED. A rule then cannot land in one tier and not the others, because there are no tiers — it
+// is `repos.lock`'s discipline applied to the protocol itself: a generated, CI-gated artifact that
+// nobody authors, where a collision is a rebase rather than a decision.
+//
+// The proof this was needed arrived while the flip was being written: `TouchSetGrammar` was typed into
+// F# by hand, byte-identical to bash's `TOUCHSET_GRAMMAR` purely by luck, with NOTHING holding the two
+// in step. That is a seventh copy, added by the change that was fixing the copies.
 module Protocol =
 
     open Types
 
-    /// One rule. `Id` is the anchor a projection references, so a doc can cite a rule without restating
-    /// it, and a reader can grep the id back to the code that enforces it.
     type Rule =
         { Id: string
           Title: string
-          /// The rule itself, in one paragraph. This is the text that lands in every projection.
           Statement: string
-          /// Why it is this way — the incident that bought it. Emitted into the canonical doc, and
-          /// omitted from the terse skill projections.
           Because: string }
 
-    /// A schedulability verdict, as the worker meets it.
     type VerdictDoc =
         { Kind: string
           Meaning: string }
 
-    /// One exit code, as the CALLER's contract — the fact a shell script reads without parsing prose.
     type ExitCodeDoc =
         { Code: int
-          /// The `EX_*` spelling, where the code has one a worker would recognise; `""` where it does
-          /// not. The name is a label on the number, never a second source for it.
           Name: string
-          /// What the code means the engine OBSERVED.
           Meaning: string
-          /// What the caller should DO about it. A code whose remedy is unstated is a code a worker
-          /// invents a remedy for.
           Action: string }
 
-    /// One row of `release`/`reap`'s column precedence — see `Protocol.fsi` for the shape and why it is
-    /// not an `ExitCodeDoc`.
     type ReleaseColumnDoc =
-        { /// The input, in PRECEDENCE ORDER — the first row whose condition holds wins.
+        {
           Condition: string
-          /// The column the item ends in.
           EndState: string
-          /// Whether `release` writes the column, or leaves it as it is — the #331 observable.
           Writes: bool
-          /// The stdout line — the tell, since exit 0 cannot confirm a park.
           Stdout: string }
 
-    /// The fixed fleet shape that a host declaration and the driver planner must agree on.
     type WavePolicyDoc =
         { Waves: int
           ImplementerSlotsPerWave: int
@@ -200,10 +182,6 @@ module Protocol =
                     Some(Live wireText))
             |> List.choose id
 
-    /// Reproduces the exact prose `d58577ec` projected for `QuotedMarkerRule`, dispatched over
-    /// `MarkerAnchor` rather than stored as a free string — so removing the field from
-    /// `ReviewPolicyDoc` moves no bytes `generate-projections` (out of this item's `Paths:`, left
-    /// unchanged) reads via the `reviewPolicy.quotedMarkerRule` JSON key.
     let renderMarkerAnchorRule (anchor: MarkerAnchor) : string =
         match anchor with
         | LeadingBlock ->
@@ -221,20 +199,17 @@ module Protocol =
             "A marker counts as any canonical whole line anywhere in the comment body. The same marker \
              occurring more than once anywhere in the body is a competing marker and is refused."
 
-    /// Structured-ledger vocabulary and bounded review policy enforced by `Driver`.
     type ReviewPolicyDoc =
         { Schema: string
           Kinds: string list
           MaxAutomatedRepairRounds: int
           RepairPhaseMaxRounds: int }
 
-    /// Facts that determine whether an item can move between lifecycle stages.
     type LifecyclePolicyDoc =
         { RequiredHousekeeping: string list
           TerminalActions: string list
           HostAcceptanceFields: string list }
 
-    /// The stable shape of the content-addressed planning ledger.
     type LedgerPolicyDoc =
         { Schema: string
           ObservationFields: string list
@@ -243,36 +218,22 @@ module Protocol =
           ReceiptFields: string list
           RequiredObservations: (string * string) list }
 
-    /// One `BlockerState`, as a reader of the scan's JSON meets it.
     type BlockerStateDoc =
-        { /// The string `scan` emits — `Types.blockerStateWireName`'s answer, never a second spelling.
+        {
           Wire: string
-          /// Whether the blocker HOLDS. The one bit a reconciler acts on, and the one the union's case
-          /// name does not carry: `unknown` and `unparseable` read like non-answers and BLOCK.
           Holds: bool
-          /// What the state says about the blocker, and why it holds or does not.
           Meaning: string }
 
-    /// One board `Status` option, as a filer meets it. See Protocol.fsi.
     type BoardStatusDoc =
-        { /// The Projects v2 option name — `Types.statusWireName`'s answer, never a second spelling.
+        {
           Wire: string
-          /// Whether a scheduler offers an item in this column — `columnStartability`'s answer, spelled by
-          /// `columnStartabilityWireName`. A string on `VerdictDoc.Kind`'s terms; see Protocol.fsi.
           Startable: string
-          /// What the column asserts, and why a scheduler does or does not offer it.
           Meaning: string }
 
-    /// One TOP-LEVEL key of the snapshot document, as a reader of `scan --json` meets it. See Protocol.fsi.
     type SnapshotKeyDoc =
-        { /// The key as it appears on the wire — `Scan.snapshot` writes this string.
+        {
           Key: string
-          /// Whether a RECONCILER acts on this key, or merely carries it. The one bit that decides
-          /// whether a `jq` filter has any business selecting on it, and the one a key NAME cannot
-          /// carry: `limit` and `leaseMinutes` are the scan's own parameters echoed back, not board
-          /// facts, so a pass that reconciles against them is reconciling against its own request.
           Reconciled: bool
-          /// What the key carries, and why a reconciler does or does not act on it.
           Meaning: string }
 
     // ---- the verdicts ------------------------------------------------------------------------------
@@ -301,13 +262,13 @@ module Protocol =
     // not carry — the MEANING — and it is a total match too, so a new case cannot reach the docs
     // undocumented. The build fails; nobody has to notice.
 
-    /// One value of each `Schedulability` case, as the subject the two matches below are applied to.
-    ///
-    /// THE ONE PART THE COMPILER CANNOT CHECK, and it is named rather than hidden. F# gives no
-    /// exhaustiveness property for a list literal — that was #865's defect, asserted in a comment as
-    /// though it were a guarantee. The samples' FIELDS are irrelevant (`kind` and `meaning` both ignore
-    /// them); only the set of CASES matters, and `ProtocolTests` pins that against the union by
-    /// reflection, which does not depend on anybody remembering this list.
+    // One value of each `Schedulability` case, as the subject the two matches below are applied to.
+    //
+    // THE ONE PART THE COMPILER CANNOT CHECK, and it is named rather than hidden. F# gives no
+    // exhaustiveness property for a list literal — that was #865's defect, asserted in a comment as
+    // though it were a guarantee. The samples' FIELDS are irrelevant (`kind` and `meaning` both ignore
+    // them); only the set of CASES matters, and `ProtocolTests` pins that against the union by
+    // reflection, which does not depend on anybody remembering this list.
     let private everyCase: Schedulability.Schedulability list =
         [ Schedulability.Startable
           Schedulability.NotAUnitOfWork Anchor
@@ -325,8 +286,8 @@ module Protocol =
           Schedulability.OverlapsInFlight []
           Schedulability.Undetermined "" ]
 
-    /// What the verdict MEANS to the worker who is handed it — the one fact the union does not carry.
-    /// A total match: a new case fails the build here rather than reaching a projection undocumented.
+    // What the verdict MEANS to the worker who is handed it — the one fact the union does not carry.
+    // A total match: a new case fails the build here rather than reaching a projection undocumented.
     let private meaning =
         function
         | Schedulability.Startable -> "Nothing holds it. It can be claimed now."
@@ -377,20 +338,20 @@ module Protocol =
     // five cases here would have been a THIRD copy wearing a generator's authority — #865's defect, and
     // the trap #916 wrote down. `Types.blockerStateWireName` owns the strings now; this module asks it.
 
-    /// Every `BlockerState` case, by reflection.
-    ///
-    /// NOT a hand-written list, and the asymmetry with `everyCase` above is the point rather than an
-    /// inconsistency. `everyCase` must be written out because `Schedulability`'s cases carry FIELDS, so
-    /// there is no value to build without inventing one — which is exactly why it needs `ProtocolTests`
-    /// to pin it by reflection, and why #865 got in. `BlockerState`'s five cases are all NULLARY, so the
-    /// list can be DERIVED, and a list nobody writes is a list that cannot omit a case. No pin is needed
-    /// here because there is no copy to pin — the defect is absent rather than tested for.
+    // Every `BlockerState` case, by reflection.
+    //
+    // NOT a hand-written list, and the asymmetry with `everyCase` above is the point rather than an
+    // inconsistency. `everyCase` must be written out because `Schedulability`'s cases carry FIELDS, so
+    // there is no value to build without inventing one — which is exactly why it needs `ProtocolTests`
+    // to pin it by reflection, and why #865 got in. `BlockerState`'s five cases are all NULLARY, so the
+    // list can be DERIVED, and a list nobody writes is a list that cannot omit a case. No pin is needed
+    // here because there is no copy to pin — the defect is absent rather than tested for.
     let private everyBlockerState: BlockerState list =
         FSharp.Reflection.FSharpType.GetUnionCases typeof<BlockerState>
         |> Array.map (fun c -> FSharp.Reflection.FSharpValue.MakeUnion(c, [||]) :?> BlockerState)
         |> Array.toList
 
-    /// What the state SAYS — a total match, on the same terms as `meaning` above.
+    // What the state SAYS — a total match, on the same terms as `meaning` above.
     let private blockerMeaning =
         function
         | BlockerOpen -> "The blocker is open. It HOLDS."
@@ -431,21 +392,21 @@ module Protocol =
     // state it here was to type the six answers out again — a copy with a generator's authority behind
     // it (#865, #916's trap 1). The fix was to name the fact, not to copy it carefully.
 
-    /// Every `BoardStatus` case, by reflection — nullary cases, so derivable on `everyBlockerState`'s
-    /// terms, and a list nobody writes is a list that cannot omit a case.
+    // Every `BoardStatus` case, by reflection — nullary cases, so derivable on `everyBlockerState`'s
+    // terms, and a list nobody writes is a list that cannot omit a case.
     let private everyBoardStatus: BoardStatus list =
         FSharp.Reflection.FSharpType.GetUnionCases typeof<BoardStatus>
         |> Array.map (fun c -> FSharp.Reflection.FSharpValue.MakeUnion(c, [||]) :?> BoardStatus)
         |> Array.toList
 
-    /// What the column ASSERTS — and, by returning an option, whether the board offers it as a column
-    /// option at all. ONE total match, deliberately: "is this a `Status` option?" and "what does it mean?"
-    /// are answered in the same place, so a new `BoardStatus` case must be classified exactly ONCE and
-    /// cannot be added to one list while being forgotten by the other.
-    ///
-    /// `NoStatus` is the only `None`, and it is not an omission. Its wire form is `""` — the ABSENCE of a
-    /// column, not an option a filer can select — and a document that published `""` as a settable option
-    /// would be inviting exactly #437: `NoStatus` read as though it were `Backlog`.
+    // What the column ASSERTS — and, by returning an option, whether the board offers it as a column
+    // option at all. ONE total match, deliberately: "is this a `Status` option?" and "what does it mean?"
+    // are answered in the same place, so a new `BoardStatus` case must be classified exactly ONCE and
+    // cannot be added to one list while being forgotten by the other.
+    //
+    // `NoStatus` is the only `None`, and it is not an omission. Its wire form is `""` — the ABSENCE of a
+    // column, not an option a filer can select — and a document that published `""` as a settable option
+    // would be inviting exactly #437: `NoStatus` read as though it were `Backlog`.
     let private boardOptionMeaning =
         function
         | NoStatus -> None
@@ -716,7 +677,6 @@ module Protocol =
           Because =
             "Epic #266, which has 51 children. #461: a failed claim scan read as \"nothing is claimed\", so `take` handed a held item to a second worker. #344: a rate-limited scan exited 0 with no verdict, and a worker read \"nothing to do\" off a board it never managed to read." }
 
-    /// Every rule, in the order a projection presents them.
     let rules: Rule list =
         [ touchSetDeclaration
           touchSetGrammar
@@ -726,95 +686,92 @@ module Protocol =
           leaseRule
           failClosed ]
 
-    /// The rules a worker FILING an item must satisfy — the subset `cross-repo-coordination` restates
-    /// (#889).
-    ///
-    /// A SUBSET OF `rules`, NEVER A SECOND LIST. Every member is the same value the canonical list holds,
-    /// so the two cannot disagree about what a rule SAYS — which is the only thing #731's mechanism was
-    /// built to guarantee. `ProtocolTests` pins the containment, because the failure this invites is a
-    /// rule authored straight into here and reaching a projection while the canonical doc never states it.
-    ///
-    /// WHY A SUBSET AT ALL, rather than emitting `rules`. `cross-repo-coordination` files work into
-    /// ANOTHER repo; it does not schedule, claim, or hold a lease, and it links to
-    /// `intra-repo-parallel-work` for all of that. Emitting the full block would bury the four lines it
-    /// needs under `check-order`, `claim-lock`, `claim-lease` and `fail-closed` — seventy lines of
-    /// scheduler internals a filer does not act on. That is the trap #916 named: a region carries what its
-    /// document is FOR, which is why the kinds exist.
-    ///
-    /// What a FILER acts on: how to declare a touch-set (`touch-set-declaration`), what the grammar will
-    /// actually accept (`touch-set-grammar`), and what `Blocked by` does once the edge is recorded
-    /// (`blocker-resolution`). Nothing else on this list is a decision they make.
+    // The rules a worker FILING an item must satisfy — the subset `cross-repo-coordination` restates
+    // (#889).
+    //
+    // A SUBSET OF `rules`, NEVER A SECOND LIST. Every member is the same value the canonical list holds,
+    // so the two cannot disagree about what a rule SAYS — which is the only thing #731's mechanism was
+    // built to guarantee. `ProtocolTests` pins the containment, because the failure this invites is a
+    // rule authored straight into here and reaching a projection while the canonical doc never states it.
+    //
+    // WHY A SUBSET AT ALL, rather than emitting `rules`. `cross-repo-coordination` files work into
+    // ANOTHER repo; it does not schedule, claim, or hold a lease, and it links to
+    // `intra-repo-parallel-work` for all of that. Emitting the full block would bury the four lines it
+    // needs under `check-order`, `claim-lock`, `claim-lease` and `fail-closed` — seventy lines of
+    // scheduler internals a filer does not act on. That is the trap #916 named: a region carries what its
+    // document is FOR, which is why the kinds exist.
+    //
+    // What a FILER acts on: how to declare a touch-set (`touch-set-declaration`), what the grammar will
+    // actually accept (`touch-set-grammar`), and what `Blocked by` does once the edge is recorded
+    // (`blocker-resolution`). Nothing else on this list is a decision they make.
     let filingRules: Rule list =
         [ touchSetDeclaration; touchSetGrammar; blockerResolution ]
 
-    /// The rules a RECONCILER must satisfy — the subset `check-board` restates (#889).
-    ///
-    /// A SUBSET OF `rules`, on exactly the terms `filingRules` is: same values, containment pinned, never
-    /// a second list. See that list's note for why the containment is the whole assertion.
-    ///
-    /// WHY THESE THREE. `check-board` answers two questions — "is the board in sync with the issues?" and
-    /// "do the recorded blockers still hold?" — and its own finding codes (`BLOCKER-CLEARED`,
-    /// `UNDECLARED-PATHS`, …) are PROCEDURE, not protocol: they are decisions that skill makes, and they
-    /// stay authored. What it may not restate is the protocol those decisions read:
-    ///
-    /// - `blocker-resolution` — §3 IS this rule. A reconciler that clears on CLOSED but not MERGED
-    ///   unblocks abandoned work and blocks finished work (#476).
-    /// - `fail-closed` — the reconciler's worst output is a FALSE CLEAN: a snapshot it could not read,
-    ///   reported as a board with nothing wrong. It buys confidence in the projection instead of
-    ///   correcting it, which is worse than not running (#266).
-    /// - `touch-set-declaration` — `UNDECLARED-PATHS` turns on the fence rule and the `Paths: none`
-    ///   sentinel. A hand-rolled `^Paths:` grep is a fourth parser of a grammar that has one, and it is
-    ///   the loosest: it reads a QUOTED line as a declaration (#277) and a deliberate epic as a
-    ///   forgotten touch-set (#496).
-    ///
-    /// NOT `claim-lock` or `claim-lease`, though this skill reports `STALE-CLAIM` and
-    /// `UNCLAIMED-IN-PROGRESS`: it does not TAKE the lock or hold a lease — it reads `who` and delegates
-    /// to `reap`. NOT `check-order`, which is the scheduler's internal order and not a fact a reconciler
-    /// acts on. NOT `touch-set-grammar`: this skill never authors a `Paths:` line — `UNDECLARED-PATHS` is
-    /// report-only precisely because the fix is an ISSUE edit, and it never writes to an issue.
+    // The rules a RECONCILER must satisfy — the subset `check-board` restates (#889).
+    //
+    // A SUBSET OF `rules`, on exactly the terms `filingRules` is: same values, containment pinned, never
+    // a second list. See that list's note for why the containment is the whole assertion.
+    //
+    // WHY THESE THREE. `check-board` answers two questions — "is the board in sync with the issues?" and
+    // "do the recorded blockers still hold?" — and its own finding codes (`BLOCKER-CLEARED`,
+    // `UNDECLARED-PATHS`, …) are PROCEDURE, not protocol: they are decisions that skill makes, and they
+    // stay authored. What it may not restate is the protocol those decisions read:
+    //
+    // - `blocker-resolution` — §3 IS this rule. A reconciler that clears on CLOSED but not MERGED
+    //   unblocks abandoned work and blocks finished work (#476).
+    // - `fail-closed` — the reconciler's worst output is a FALSE CLEAN: a snapshot it could not read,
+    //   reported as a board with nothing wrong. It buys confidence in the projection instead of
+    //   correcting it, which is worse than not running (#266).
+    // - `touch-set-declaration` — `UNDECLARED-PATHS` turns on the fence rule and the `Paths: none`
+    //   sentinel. A hand-rolled `^Paths:` grep is a fourth parser of a grammar that has one, and it is
+    //   the loosest: it reads a QUOTED line as a declaration (#277) and a deliberate epic as a
+    //   forgotten touch-set (#496).
+    //
+    // NOT `claim-lock` or `claim-lease`, though this skill reports `STALE-CLAIM` and
+    // `UNCLAIMED-IN-PROGRESS`: it does not TAKE the lock or hold a lease — it reads `who` and delegates
+    // to `reap`. NOT `check-order`, which is the scheduler's internal order and not a fact a reconciler
+    // acts on. NOT `touch-set-grammar`: this skill never authors a `Paths:` line — `UNDECLARED-PATHS` is
+    // report-only precisely because the fix is an ISSUE edit, and it never writes to an issue.
     let reconcileRules: Rule list =
         [ touchSetDeclaration; blockerResolution; failClosed ]
 
-    /// The rules a worker DRIVING an item must satisfy — the subset `pnext-item` restates (#889/#1059).
-    ///
-    /// A SUBSET OF `rules`, on exactly the terms `filingRules` is: same values, containment pinned, never a
-    /// second list. See that list's note for why the containment is the whole assertion.
-    ///
-    /// WHY THESE FOUR — and this list is the one whose subset is least obvious, because a driver does more
-    /// of the protocol than any other role. It files, it schedules, it claims, it holds a lease. So the
-    /// naive answer is "project `rules`", and `RuleSubsetTests` refuses that outright: a kind that covers
-    /// everything is not a kind. The question that actually cuts is not "what does a driver TOUCH" but
-    /// "what does a driver DECIDE" — the rest is the engine's, and a driver reads its verdict rather than
-    /// applying the rule themselves.
-    ///
-    /// - `claim-lock` — §0 IS this rule. A driver MINTS an id and takes a lock with it, and the two facts
-    ///   that make that safe are the total order and the distinctness of the id it is over (#419).
-    /// - `claim-lease` — §3. A driver HOLDS a lease and must heartbeat it; that an EXPIRED one cannot be
-    ///   renewed in place is the fact §3 and §6 disagreed about for as long as both were prose (#1059).
-    /// - `touch-set-declaration` — §3. A driver AUTHORS a `Paths:` line, with `widen`, mid-flight.
-    /// - `touch-set-grammar` — §3. A driver's `widen` is refused by this grammar, so it is the one role
-    ///   that meets it as an error message rather than a description.
-    ///
-    /// NOT `check-order`, for `reconcileRules`' reason exactly: it is the scheduler's internal order, and
-    /// `take` performs it FOR the driver. A worker acts on the one sentence it prints, never on the order
-    /// that produced it. NOT `blocker-resolution`: a driver RECORDS an edge (§4) but never resolves one —
-    /// that is `take`'s question on the way in and a reconciler's on the way back (`reconcileRules`), and a
-    /// driver who applied it by hand would be deciding their own item is startable. NOT `fail-closed`: it
-    /// is the engine's discipline about its own reads, and where a driver does meet it — `landable`'s
-    /// UNKNOWN, `take`'s read failure — the exit-code regions already carry it, stated as the code to act
-    /// on rather than as a principle to apply.
+    // The rules a worker DRIVING an item must satisfy — the subset `pnext-item` restates (#889/#1059).
+    //
+    // A SUBSET OF `rules`, on exactly the terms `filingRules` is: same values, containment pinned, never a
+    // second list. See that list's note for why the containment is the whole assertion.
+    //
+    // WHY THESE FOUR — and this list is the one whose subset is least obvious, because a driver does more
+    // of the protocol than any other role. It files, it schedules, it claims, it holds a lease. So the
+    // naive answer is "project `rules`", and `RuleSubsetTests` refuses that outright: a kind that covers
+    // everything is not a kind. The question that actually cuts is not "what does a driver TOUCH" but
+    // "what does a driver DECIDE" — the rest is the engine's, and a driver reads its verdict rather than
+    // applying the rule themselves.
+    //
+    // - `claim-lock` — §0 IS this rule. A driver MINTS an id and takes a lock with it, and the two facts
+    //   that make that safe are the total order and the distinctness of the id it is over (#419).
+    // - `claim-lease` — §3. A driver HOLDS a lease and must heartbeat it; that an EXPIRED one cannot be
+    //   renewed in place is the fact §3 and §6 disagreed about for as long as both were prose (#1059).
+    // - `touch-set-declaration` — §3. A driver AUTHORS a `Paths:` line, with `widen`, mid-flight.
+    // - `touch-set-grammar` — §3. A driver's `widen` is refused by this grammar, so it is the one role
+    //   that meets it as an error message rather than a description.
+    //
+    // NOT `check-order`, for `reconcileRules`' reason exactly: it is the scheduler's internal order, and
+    // `take` performs it FOR the driver. A worker acts on the one sentence it prints, never on the order
+    // that produced it. NOT `blocker-resolution`: a driver RECORDS an edge (§4) but never resolves one —
+    // that is `take`'s question on the way in and a reconciler's on the way back (`reconcileRules`), and a
+    // driver who applied it by hand would be deciding their own item is startable. NOT `fail-closed`: it
+    // is the engine's discipline about its own reads, and where a driver does meet it — `landable`'s
+    // UNKNOWN, `take`'s read failure — the exit-code regions already carry it, stated as the code to act
+    // on rather than as a principle to apply.
     let driverRules: Rule list =
         [ touchSetDeclaration; touchSetGrammar; claimLock; leaseRule ]
 
-    /// The two-wave fleet contract. `Batch.parseWaveModel` refuses declarations that disagree with it,
-    /// and `Driver.nextAction` consumes its consolidation threshold through the parsed model.
     let wavePolicy =
         { Waves = 2
           ImplementerSlotsPerWave = 3
           ReviewSlots = 2
           ConsolidationThreshold = 3 }
 
-    /// One structured review-ledger/round vocabulary.
     let reviewPolicy =
         { Schema = StructuredDecision.ReviewSchema
           Kinds = [ "initial"; "confirmation"; "escalation"; "repair-phase"; "acceptance" ]
@@ -842,20 +799,20 @@ module Protocol =
     // THE INVENTORY (#1027) — which facts the document states, and in what order.
     // ================================================================================================
 
-    /// One section of the facts document: a key, and the facts it states under that key.
-    ///
-    /// THE CASES ARE SHAPES, NOT FACTS. There is one case per JSON shape the writer knows how to emit —
-    /// not one per key — which is the whole distinction this type exists to draw. `rules`, `filingRules`
-    /// and `reconcileRules` are three keys of ONE shape, and `Snapshot` cannot tell them apart: it is
-    /// handed a key and a list, and writes what it is given. So a new Core-owned fact key is an edit to
-    /// `factsDocument` and nothing else, and a new fact SHAPE — rare, and genuinely a writer's concern —
-    /// is the only thing that reaches the Cli.
-    ///
-    /// EVERY CASE CARRIES ITS KEY, including the two that have exactly one member today. The asymmetry
-    /// is tempting — `Verdicts of VerdictDoc list` needs no key to be unambiguous — and it would put the
-    /// STRING `"verdicts"` back in `Snapshot.fs`, which is to say: half the inventory in the Cli again,
-    /// and no way to read the document's key list off this file. The inventory is either here or it is
-    /// not.
+    // One section of the facts document: a key, and the facts it states under that key.
+    //
+    // THE CASES ARE SHAPES, NOT FACTS. There is one case per JSON shape the writer knows how to emit —
+    // not one per key — which is the whole distinction this type exists to draw. `rules`, `filingRules`
+    // and `reconcileRules` are three keys of ONE shape, and `Snapshot` cannot tell them apart: it is
+    // handed a key and a list, and writes what it is given. So a new Core-owned fact key is an edit to
+    // `factsDocument` and nothing else, and a new fact SHAPE — rare, and genuinely a writer's concern —
+    // is the only thing that reaches the Cli.
+    //
+    // EVERY CASE CARRIES ITS KEY, including the two that have exactly one member today. The asymmetry
+    // is tempting — `Verdicts of VerdictDoc list` needs no key to be unambiguous — and it would put the
+    // STRING `"verdicts"` back in `Snapshot.fs`, which is to say: half the inventory in the Cli again,
+    // and no way to read the document's key list off this file. The inventory is either here or it is
+    // not.
     type FactSection =
         | Rules of key: string * Rule list
         | Verdicts of key: string * VerdictDoc list
@@ -867,66 +824,66 @@ module Protocol =
         | ReviewPolicy of key: string * ReviewPolicyDoc
         | LifecyclePolicy of key: string * LifecyclePolicyDoc
         | LedgerPolicy of key: string * LedgerPolicyDoc
-        /// The snapshot document's SHAPE. The only case carrying a scalar beside its list, because the
-        /// shape IS a schema string plus its keys — and a schema emitted as a one-member `keys` entry
-        /// would be a lie about what it is. See `snapshotSchema` in Protocol.fsi for the ownership call.
+        // The snapshot document's SHAPE. The only case carrying a scalar beside its list, because the
+        // shape IS a schema string plus its keys — and a schema emitted as a one-member `keys` entry
+        // would be a lie about what it is. See `snapshotSchema` in Protocol.fsi for the ownership call.
         | SnapshotShape of key: string * schema: string * keys: SnapshotKeyDoc list
 
-    /// The facts document's schema version — a fact about the document's SHAPE, so it lives with the
-    /// document rather than in the writer that renders it (#1027).
-    ///
-    /// /2 `takeExitCodes` (#889) · /3 `landableExitCodes` (#900) · /4 `filingRules` (#889) ·
-    /// /5 `reconcileRules` (#889) · /6 `blockerStates` (#889) · /8 `snapshotDocument` (#889/#1058) ·
-    /// /9 `driverRules` (#889/#1059) · /10 `releaseColumns` (#889/#1099) ·
-    /// /12 `reviewPolicy.markerAnchors`/`reviewPolicy.markerFieldGrammar` (.github#2399) — additive to
-    /// an EXISTING section rather than a new top-level key, but still a documented shape change: the
-    /// bump says the surface now states the anchor and field grammar, not merely that an old reader
-    /// (which ignores unknown members) survives it.
-    ///
-    /// Each bump is additive for a reader that ignores unknown members, and the number is bumped anyway:
-    /// it says what the surface IS, not merely whether an old reader survives it.
-    ///
-    /// A NUMBER A HUMAN REMEMBERS TO INCREMENT IS A NUMBER THAT DRIFTS, so nothing here relies on the
-    /// remembering: `ProtocolTests` pins this string against `factsDocument`'s key list, and a key added
-    /// without a bump reds that test. The pin cannot DERIVE the number — what a version increment means
-    /// is a judgement, and a schema computed from its own content would bump on a key RENAME and stay put
-    /// on a semantic change. So the test forces the decision rather than making it.
-    ///
-    /// NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
-    /// file too (FS0034), and nothing consumes this at compile time. The old one could afford the
-    /// attribute because it was `private` and had no signature entry to keep in step.
+    // The facts document's schema version — a fact about the document's SHAPE, so it lives with the
+    // document rather than in the writer that renders it (#1027).
+    //
+    // /2 `takeExitCodes` (#889) · /3 `landableExitCodes` (#900) · /4 `filingRules` (#889) ·
+    // /5 `reconcileRules` (#889) · /6 `blockerStates` (#889) · /8 `snapshotDocument` (#889/#1058) ·
+    // /9 `driverRules` (#889/#1059) · /10 `releaseColumns` (#889/#1099) ·
+    // /12 `reviewPolicy.markerAnchors`/`reviewPolicy.markerFieldGrammar` (.github#2399) — additive to
+    // an EXISTING section rather than a new top-level key, but still a documented shape change: the
+    // bump says the surface now states the anchor and field grammar, not merely that an old reader
+    // (which ignores unknown members) survives it.
+    //
+    // Each bump is additive for a reader that ignores unknown members, and the number is bumped anyway:
+    // it says what the surface IS, not merely whether an old reader survives it.
+    //
+    // A NUMBER A HUMAN REMEMBERS TO INCREMENT IS A NUMBER THAT DRIFTS, so nothing here relies on the
+    // remembering: `ProtocolTests` pins this string against `factsDocument`'s key list, and a key added
+    // without a bump reds that test. The pin cannot DERIVE the number — what a version increment means
+    // is a judgement, and a schema computed from its own content would bump on a key RENAME and stay put
+    // on a semantic change. So the test forces the decision rather than making it.
+    //
+    // NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
+    // file too (FS0034), and nothing consumes this at compile time. The old one could afford the
+    // attribute because it was `private` and had no signature entry to keep in step.
     let factsSchema = "fsgg.coord.protocol/12"
 
-    /// The snapshot document's schema string — the `schema` member `Scan.snapshot` writes and
-    /// `Snapshot.parse` refuses a document without.
-    ///
-    /// THIS IS A THIRD COPY, AND SAYING SO IS THE POINT (#865/#916 trap 1). `Scan.fs` writes the string,
-    /// `Snapshot.fs` reads it, and neither imports it from here — so this module states a fact it does
-    /// not itself render, which is exactly the cost #1058's ownership call accepted rather than hid. The
-    /// alternative — own it where it is rendered and project it from there — is the stricter reading and
-    /// was rejected on cost, not on principle.
-    ///
-    /// A DECISION LIKE THAT IS ONLY HONEST IF A TEST HOLDS IT. `ProtocolTests` pins this string against
-    /// `Scan`'s and `Snapshot`'s, so the drift the call accepts reds a test rather than rotting a doc.
-    /// Do not "tidy" the copies away without moving the ownership; the pin is what makes three copies
-    /// safe, and deleting it makes them three copies again.
+    // The snapshot document's schema string — the `schema` member `Scan.snapshot` writes and
+    // `Snapshot.parse` refuses a document without.
+    //
+    // THIS IS A THIRD COPY, AND SAYING SO IS THE POINT (#865/#916 trap 1). `Scan.fs` writes the string,
+    // `Snapshot.fs` reads it, and neither imports it from here — so this module states a fact it does
+    // not itself render, which is exactly the cost #1058's ownership call accepted rather than hid. The
+    // alternative — own it where it is rendered and project it from there — is the stricter reading and
+    // was rejected on cost, not on principle.
+    //
+    // A DECISION LIKE THAT IS ONLY HONEST IF A TEST HOLDS IT. `ProtocolTests` pins this string against
+    // `Scan`'s and `Snapshot`'s, so the drift the call accepts reds a test rather than rotting a doc.
+    // Do not "tidy" the copies away without moving the ownership; the pin is what makes three copies
+    // safe, and deleting it makes them three copies again.
     let snapshotSchema = "fsgg.coord.snapshot/1"
 
-    /// THE SNAPSHOT DOCUMENT'S TOP-LEVEL KEYS, in the order `Scan.snapshot` writes them.
-    ///
-    /// ORDER IS THE WRITER'S, NOT THE PROSE'S — and the literal this replaced had it wrong TWICE. It
-    /// spelled `leaseMinutes` before `limit`, and `inFlight` before `items`; the writer emits `limit`
-    /// first and `items` first. Nothing caught either, because nothing compared them.
-    ///
-    /// The second one was inherited straight into the FIRST DRAFT OF THIS LIST, by an author reading the
-    /// literal — and `ScanRoundTripTests` caught it on the first run. That is the argument for this whole
-    /// change, made by the change itself: a shape stated once and pinned to its writer, or a shape
-    /// re-typed by whoever is looking at the old copy.
-    ///
-    /// `Reconciled` IS THE LOAD-BEARING COLUMN. A reader of this table is a `jq` filter in `check-board`,
-    /// and the question it needs answered is not "what keys exist" but "which of them may I select on".
-    /// `limit` and `leaseMinutes` are the SCAN'S OWN PARAMETERS echoed back — a pass that reconciles
-    /// against them reconciles against its own request, and would report drift that is its own flag.
+    // THE SNAPSHOT DOCUMENT'S TOP-LEVEL KEYS, in the order `Scan.snapshot` writes them.
+    //
+    // ORDER IS THE WRITER'S, NOT THE PROSE'S — and the literal this replaced had it wrong TWICE. It
+    // spelled `leaseMinutes` before `limit`, and `inFlight` before `items`; the writer emits `limit`
+    // first and `items` first. Nothing caught either, because nothing compared them.
+    //
+    // The second one was inherited straight into the FIRST DRAFT OF THIS LIST, by an author reading the
+    // literal — and `ScanRoundTripTests` caught it on the first run. That is the argument for this whole
+    // change, made by the change itself: a shape stated once and pinned to its writer, or a shape
+    // re-typed by whoever is looking at the old copy.
+    //
+    // `Reconciled` IS THE LOAD-BEARING COLUMN. A reader of this table is a `jq` filter in `check-board`,
+    // and the question it needs answered is not "what keys exist" but "which of them may I select on".
+    // `limit` and `leaseMinutes` are the SCAN'S OWN PARAMETERS echoed back — a pass that reconciles
+    // against them reconciles against its own request, and would report drift that is its own flag.
     let snapshotKeys: SnapshotKeyDoc list =
         [ { Key = "schema"
             Reconciled = false
@@ -962,25 +919,25 @@ module Protocol =
                column to reconcile: `check-board` acts on the MARKER through `who`, which carries the \
                lease state this does not." } ]
 
-    /// THE INVENTORY — every fact the document states, under the key it states it, in document order.
-    ///
-    /// This list WAS `Snapshot.renderFacts`'s parameter list: one positional parameter per fact kind,
-    /// hand-maintained in the Cli, across three files, for facts this module owns outright. So the
-    /// inventory of facts was a second copy of this module's, hand-maintained, in the file whose whole
-    /// purpose is to end hand-maintained copies (#1027) — `rules` was emitted rather than authored, and
-    /// the LIST OF WHAT GETS EMITTED was authored. `render_filing_rules` in `scripts/generate-projections`
-    /// refuses to let the generator re-derive subset membership in a `jq` filter, for that reason exactly;
-    /// `Snapshot.fs` made the same argument, in the schema note this change replaced, and did not apply it
-    /// to itself.
-    ///
-    /// THE COST WAS A CHOKEPOINT, not an untidiness. Adding one Core-owned key took five edits across
-    /// four files, four of them pure ceremony — and one of them landed in `Snapshot.fs`, so every
-    /// remaining slice of #889 declared that file and serialised behind whoever held it. That is #428's
-    /// shape one file over, and #428 was not fixed by sequencing the items behind it.
-    ///
-    /// ORDER IS THE DOCUMENT'S ORDER. The writer folds this list in sequence, so the key order below IS
-    /// the JSON's key order — there is nowhere else it could be stated, and no second list to keep in
-    /// step with this one.
+    // THE INVENTORY — every fact the document states, under the key it states it, in document order.
+    //
+    // This list WAS `Snapshot.renderFacts`'s parameter list: one positional parameter per fact kind,
+    // hand-maintained in the Cli, across three files, for facts this module owns outright. So the
+    // inventory of facts was a second copy of this module's, hand-maintained, in the file whose whole
+    // purpose is to end hand-maintained copies (#1027) — `rules` was emitted rather than authored, and
+    // the LIST OF WHAT GETS EMITTED was authored. `render_filing_rules` in `scripts/generate-projections`
+    // refuses to let the generator re-derive subset membership in a `jq` filter, for that reason exactly;
+    // `Snapshot.fs` made the same argument, in the schema note this change replaced, and did not apply it
+    // to itself.
+    //
+    // THE COST WAS A CHOKEPOINT, not an untidiness. Adding one Core-owned key took five edits across
+    // four files, four of them pure ceremony — and one of them landed in `Snapshot.fs`, so every
+    // remaining slice of #889 declared that file and serialised behind whoever held it. That is #428's
+    // shape one file over, and #428 was not fixed by sequencing the items behind it.
+    //
+    // ORDER IS THE DOCUMENT'S ORDER. The writer folds this list in sequence, so the key order below IS
+    // the JSON's key order — there is nowhere else it could be stated, and no second list to keep in
+    // step with this one.
     let factsDocument: FactSection list =
         [ Rules("rules", rules)
           Rules("filingRules", filingRules)

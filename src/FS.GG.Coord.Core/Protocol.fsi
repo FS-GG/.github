@@ -27,8 +27,6 @@ module Protocol =
     /// A schedulability verdict, as the worker meets it.
     type VerdictDoc = { Kind: string; Meaning: string }
 
-    /// One board `Status` option, as a filer meets it: the option name the board stores, and whether the
-    /// scheduler hands the item out while it sits there.
     /// One TOP-LEVEL key of the snapshot document (`scan --json`), as the `jq` filters in `check-board`
     /// meet it. See `snapshotKeys`.
     type SnapshotKeyDoc =
@@ -45,6 +43,8 @@ module Protocol =
           /// What the key carries, and why a reconciler does or does not act on it.
           Meaning: string }
 
+    /// One board `Status` option, as a filer meets it: the option name the board stores, and whether the
+    /// scheduler hands the item out while it sits there.
     type BoardStatusDoc =
         { /// The Projects v2 option name — `Types.statusWireName`'s answer, never a second spelling. This
           /// is the string `set-field` accepts and a `jq` `.status` selector matches.
@@ -191,6 +191,7 @@ module Protocol =
           /// to tell a preserve from a set from a bare "no column was set" without re-reading the board.
           Stdout: string }
 
+    /// The fixed fleet shape that a host declaration and the driver planner must agree on.
     type WavePolicyDoc =
         { Waves: int
           ImplementerSlotsPerWave: int
@@ -301,17 +302,20 @@ module Protocol =
     /// `d58577ec` projected as `ReviewPolicyDoc.QuotedMarkerRule` — the removed field's replacement.
     val renderMarkerAnchorRule: MarkerAnchor -> string
 
+    /// Structured-ledger vocabulary and bounded review policy enforced by `Driver`.
     type ReviewPolicyDoc =
         { Schema: string
           Kinds: string list
           MaxAutomatedRepairRounds: int
           RepairPhaseMaxRounds: int }
 
+    /// Facts that determine whether an item can move between lifecycle stages.
     type LifecyclePolicyDoc =
         { RequiredHousekeeping: string list
           TerminalActions: string list
           HostAcceptanceFields: string list }
 
+    /// The stable shape of the content-addressed planning ledger.
     type LedgerPolicyDoc =
         { Schema: string
           ObservationFields: string list
@@ -362,7 +366,11 @@ module Protocol =
     /// then the `unclaimColumn` arms. `ProtocolTests` pins what the rows SAY — that the `--status` row
     /// leads, and that a preserve writes nothing.
     val releaseColumns: ReleaseColumnDoc list
+    /// The two-wave fleet contract. `Batch.parseWaveModel` refuses declarations that disagree with it, and
+    /// `Driver.nextAction` consumes its consolidation threshold through the parsed model.
     val wavePolicy: WavePolicyDoc
+
+    /// One structured review-ledger/round vocabulary.
     val reviewPolicy: ReviewPolicyDoc
     val lifecyclePolicy: LifecyclePolicyDoc
     val ledgerPolicy: LedgerPolicyDoc

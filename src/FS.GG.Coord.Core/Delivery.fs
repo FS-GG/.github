@@ -23,17 +23,6 @@ module Delivery =
           HeadSha: string
           Verified: bool }
 
-    /// A decision-boundary touch-set fact, carrying the SAME three-way distinction
-    /// `Schedulability.NoTouchSet` / `DeliberatelyNoTouchSet` already draws for scheduling, so a
-    /// consumer of `Delivery`'s own output does not have to open the issue body to tell them apart
-    /// (.github#2233 acceptance 4):
-    ///   - `Known` — tokens actually declared and read (includes the `any` chore sentinel).
-    ///   - `DeclaredNone` — an explicit, read `Paths: none`: a DELIBERATE empty reservation.
-    ///   - `Undeclared` — a read body with no `Paths:` line at all: nobody ever declared one.
-    ///   - `Unread` — the body was never read. This is UNKNOWN, not absent, and must never be supplied
-    ///     as any of the three read cases above — see `.github#2233`: an `Unreadable` touch-set used to
-    ///     collapse to the SAME `[]` a genuine omission answered, letting a fact nobody looked at answer
-    ///     a scheduling verdict as if it were read.
     type DeclaredPaths =
         | Known of string list
         | DeclaredNone
@@ -58,8 +47,6 @@ module Delivery =
           PathsVerified: bool
           InReview: bool
           Review: Driver.ReviewChain option
-          /// Parser failures are evidence that review was attempted but is malformed; retaining the
-          /// diagnostic keeps delivery from misdirecting the holder to wait for a review that exists.
           ReviewProblem: string option
           Landable: bool
           Merged: bool
@@ -103,10 +90,10 @@ module Delivery =
         |> Convert.ToHexString
         |> fun hash -> hash.ToLowerInvariant()
 
-    /// Folds the CASE in as well as the tokens, so none of the four cases can hash to the same token as
-    /// another — `Unread "x"` cannot collide with `Known [ "x" ]`, and `DeclaredNone` cannot collide
-    /// with `Undeclared` or an empty `Known []` — a receipt minted from one fact must never be
-    /// redeemable against a differently-cased one (.github#2233 scope item 3).
+    // Folds the CASE in as well as the tokens, so none of the four cases can hash to the same token as
+    // another — `Unread "x"` cannot collide with `Known [ "x" ]`, and `DeclaredNone` cannot collide
+    // with `Undeclared` or an empty `Known []` — a receipt minted from one fact must never be
+    // redeemable against a differently-cased one (.github#2233 scope item 3).
     let private declaredPathsToken =
         function
         | Known paths -> "known\n" + String.concat "\n" paths
@@ -130,19 +117,19 @@ module Delivery =
     let private missing value label =
         if String.IsNullOrWhiteSpace value then Some label else None
 
-    /// The reason a decision cannot proceed for the touch-set fact alone. Each of the three empty-ish
-    /// cases gets its OWN reason text, so a worker reading a `noVerdict` can tell which one it is
-    /// without opening the issue body (.github#2233 acceptance 4): `Unread` NAMES THE READ as the
-    /// failure and never the item's own declaration — the reader is at fault, not the item (acceptance
-    /// 2) — while `DeclaredNone` and `Undeclared` are both facts genuinely read off the body, so they
-    /// name the item's own state rather than a reader failure, and each keeps the "declared paths"
-    /// family wording so the omission is still recognizable as the same KIND of gap this validator has
-    /// always reported (acceptance 2's "the omission reason it answers today").
-    ///
-    /// Skipped entirely once the snapshot is `CleanupEligible`: a terminal item (stamped, closed, claim
-    /// released, nothing pending) has nothing left to touch, so `CleanupWorktree` does not need to know
-    /// what it once reserved — demanding the field here would block a stamped item's cleanup transition
-    /// forever on a residual empty fact (.github#2233, the measured `#2225` residue).
+    // The reason a decision cannot proceed for the touch-set fact alone. Each of the three empty-ish
+    // cases gets its OWN reason text, so a worker reading a `noVerdict` can tell which one it is
+    // without opening the issue body (.github#2233 acceptance 4): `Unread` NAMES THE READ as the
+    // failure and never the item's own declaration — the reader is at fault, not the item (acceptance
+    // 2) — while `DeclaredNone` and `Undeclared` are both facts genuinely read off the body, so they
+    // name the item's own state rather than a reader failure, and each keeps the "declared paths"
+    // family wording so the omission is still recognizable as the same KIND of gap this validator has
+    // always reported (acceptance 2's "the omission reason it answers today").
+    //
+    // Skipped entirely once the snapshot is `CleanupEligible`: a terminal item (stamped, closed, claim
+    // released, nothing pending) has nothing left to touch, so `CleanupWorktree` does not need to know
+    // what it once reserved — demanding the field here would block a stamped item's cleanup transition
+    // forever on a residual empty fact (.github#2233, the measured `#2225` residue).
     let private declaredPathsProblem snapshot =
         if snapshot.CleanupEligible then
             None
@@ -180,35 +167,35 @@ module Delivery =
         elif not snapshot.PathsVerified then Some "declared paths are not verified"
         else None
 
-    /// The round ceiling this chain is judged against, read from the ONE policy record that defines
-    /// both literals (`Protocol.reviewPolicy`) rather than restated here. It was spelled `if
-    /// review.RepairPhase then 10 else 3` for as long as this function existed, which is the same
-    /// second-copy-of-one-rule shape `.github#2575` acceptance 2 names — `Driver.receiptFresh` already
-    /// reads the policy record for exactly this quantity, so the two spellings were one silent reword
-    /// away from disagreeing. The values are identical today (`MaxAutomatedRepairRounds = 3`,
-    /// `RepairPhaseMaxRounds = 10`), so this is behaviour-preserving by construction.
+    // The round ceiling this chain is judged against, read from the ONE policy record that defines
+    // both literals (`Protocol.reviewPolicy`) rather than restated here. It was spelled `if
+    // review.RepairPhase then 10 else 3` for as long as this function existed, which is the same
+    // second-copy-of-one-rule shape `.github#2575` acceptance 2 names — `Driver.receiptFresh` already
+    // reads the policy record for exactly this quantity, so the two spellings were one silent reword
+    // away from disagreeing. The values are identical today (`MaxAutomatedRepairRounds = 3`,
+    // `RepairPhaseMaxRounds = 10`), so this is behaviour-preserving by construction.
     let private reviewCeiling (review: Driver.ReviewChain) =
         if review.RepairPhase then Protocol.reviewPolicy.RepairPhaseMaxRounds
         else Protocol.reviewPolicy.MaxAutomatedRepairRounds
 
-    /// What is wrong with the review EVIDENCE — and only that (.github#2575).
-    ///
-    /// This reads `Driver.validateReviewChainStructure`, not `Driver.validateReviewChain`. The full
-    /// list also carries one LIVENESS clause, "review checks are not green", which is a fact about a CI
-    /// run that has not reported yet rather than anything wrong with what the critic and host durably
-    /// wrote. Folding it in here made a complete, host-accepted chain report `stage: reviewActive,
-    /// action: refreshReview` — the state whose taught recovery is to go looking for a repair round
-    /// that does not exist. `.github#2549` removed exactly that conflation from `review`; leaving it
-    /// here meant the verb `review`'s own `authorizeDelivery` action routes to answered the corrected
-    /// question with the uncorrected answer.
-    ///
-    /// Worse, the check it fell over was structurally unable to be green yet: `claim-generation` cannot
-    /// report until the live `delivery` call PATCHes `fsgg:pr-authorization` onto the head
-    /// (`.github#2504`), and that call is the very one whose output this is.
-    ///
-    /// `Driver.validateReviewChain` is untouched and remains the single definition of chain validity;
-    /// the structural/liveness split lives once, at its source, in `Driver.reviewChainProblems`
-    /// (acceptance 2). Delivery does not fork a second copy and cannot drift from it.
+    // What is wrong with the review EVIDENCE — and only that (.github#2575).
+    //
+    // This reads `Driver.validateReviewChainStructure`, not `Driver.validateReviewChain`. The full
+    // list also carries one LIVENESS clause, "review checks are not green", which is a fact about a CI
+    // run that has not reported yet rather than anything wrong with what the critic and host durably
+    // wrote. Folding it in here made a complete, host-accepted chain report `stage: reviewActive,
+    // action: refreshReview` — the state whose taught recovery is to go looking for a repair round
+    // that does not exist. `.github#2549` removed exactly that conflation from `review`; leaving it
+    // here meant the verb `review`'s own `authorizeDelivery` action routes to answered the corrected
+    // question with the uncorrected answer.
+    //
+    // Worse, the check it fell over was structurally unable to be green yet: `claim-generation` cannot
+    // report until the live `delivery` call PATCHes `fsgg:pr-authorization` onto the head
+    // (`.github#2504`), and that call is the very one whose output this is.
+    //
+    // `Driver.validateReviewChain` is untouched and remains the single definition of chain validity;
+    // the structural/liveness split lives once, at its source, in `Driver.reviewChainProblems`
+    // (acceptance 2). Delivery does not fork a second copy and cannot drift from it.
     let private reviewProblem snapshot =
         match snapshot.ReviewProblem, snapshot.Review with
         | Some problem, _ when not (System.String.IsNullOrWhiteSpace problem) -> Some problem
@@ -220,22 +207,20 @@ module Delivery =
             | [] -> None
             | errors -> Some(String.concat "; " errors)
 
-    /// The one liveness fact `reviewProblem` above deliberately no longer reports, kept as a SEPARATE
-    /// question so that dropping it from the review problem list cannot loosen what may merge.
-    ///
-    /// This guard is load-bearing rather than defensive. In the live adapter `Landable` and the chain's
-    /// `ChecksGreen` are both derived from the same `landable = PrGreen` read, so they cannot disagree
-    /// there — but a SUPPLIED snapshot carries them as two independent fields, and host-measured
-    /// against the pre-fix engine, `landable=true` with `checksGreen=false` was held short of
-    /// `GuardedLand` by the checks clause inside `reviewProblem` and by nothing else. Removing that
-    /// clause without this guard would have made that combination authorize a merge on a chain whose
-    /// own checks are not green, which is the one thing `.github#2575` acceptance 6 forbids. The
-    /// answer stays `Landable`/`AwaitLandability`: fail-closed, and no new merge authority anywhere.
+    // The one liveness fact `reviewProblem` above deliberately no longer reports, kept as a SEPARATE
+    // question so that dropping it from the review problem list cannot loosen what may merge.
+    //
+    // This guard is load-bearing rather than defensive. In the live adapter `Landable` and the chain's
+    // `ChecksGreen` are both derived from the same `landable = PrGreen` read, so they cannot disagree
+    // there — but a SUPPLIED snapshot carries them as two independent fields, and host-measured
+    // against the pre-fix engine, `landable=true` with `checksGreen=false` was held short of
+    // `GuardedLand` by the checks clause inside `reviewProblem` and by nothing else. Removing that
+    // clause without this guard would have made that combination authorize a merge on a chain whose
+    // own checks are not green, which is the one thing `.github#2575` acceptance 6 forbids. The
+    // answer stays `Landable`/`AwaitLandability`: fail-closed, and no new merge authority anywhere.
     let private reviewChecksPending snapshot =
         snapshot.Review |> Option.exists (fun review -> not review.ChecksGreen)
 
-    /// See `Delivery.fsi` — folds a `Review.AcceptedReceipt` into the `Driver.ReviewChain` shape this
-    /// module has always consumed, so `inspect`/`reviewProblem` need no changes to read it.
     let fromReviewAcceptance (receipt: Review.AcceptedReceipt) (snapshot: Snapshot) : Snapshot =
         let chain: Driver.ReviewChain =
             { MarkerValid = true

@@ -1,0 +1,250 @@
+# signature-doc-siting — no F# XML documentation comment may sit in an implementation file whose
+# sibling signature file makes the compiler discard it.
+#
+# .github#2730, epic #266 (the rule nothing asserts).
+#
+# When an F# module has a signature file, the `///` comments in the IMPLEMENTATION are discarded: the
+# signature's documentation is what reaches the generated XML file, the IDE tooltip, and every
+# downstream reader. Measured at `0ddd4b88`: 2,511 substantive doc-comment lines were written only in
+# implementation files that had a sibling `.fsi`, and NOT ONE reached a consumer. The compiler cannot
+# warn — `///` binds silently to the next declaration, so a block whose subject moved re-binds to
+# whatever now follows it, and the Release build of all three projects emitted zero warnings over
+# 3,913 such lines.
+#
+# THE GATE DECIDES ON THE MARKER, NEVER THE CONTENT, and that is what makes it safe to enforce. It
+# never asks what a comment says, so it can form no opinion about whether a sentence is contract prose
+# or prose about the implementation — and a `//` comment is invisible to it entirely. Prose explaining
+# why THIS loop, this ordering constraint, the incident that produced this branch, is correctly placed
+# in the `.fs` and is never reported. The only thing refused is a `///` whose content the compiler
+# provably discards, which is wrong independently of what it says. A gate that had to classify prose
+# would be one contributors learn to suppress; this one has nothing to suppress.
+#
+# NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision, for the same reason, that
+# `.github/workflows/pipefail-assertions.yml` and `.github/workflows/shell-lint.yml` make. This gate's
+# subject is every `.fs` under `src/` that has a sibling `.fsi`, and BOTH halves of that membership
+# test can be changed by a commit that touches no `.fs` at all: ADDING a `Foo.fsi` beside an existing
+# `Foo.fs` silently converts that file's whole doc-comment population into offenders. A filter over
+# `src/**/*.fs` would not fire on such a commit, and a gate that does not run reports nothing while
+# looking exactly like one that passed.
+#
+# No `schedule:` — the subject is committed files in this repository, so every change that could
+# falsify the verdict arrives as a push or a pull request. A nightly re-run would prove only that the
+# tree did not change on its own.
+name: signature-doc-siting
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signature-doc-siting-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO — and can still decline to say YES — before
+  # believing it when it says yes. The fixture plants an offender, exercises every no-verdict leg,
+  # exercises the four shapes the gate must NOT report (no sibling `.fsi`, four slashes, `///` inside
+  # a string or a nested block comment), moves the baseline in both directions, and finally runs the
+  # gate over the repository's own content, once read-only and once with an offender planted into a
+  # copy. A fixture green on synthetic strings while the shipped baseline rots is not reachable.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Run the signature-doc-siting fixture (no network)
+        run: bash tests/signature-doc-siting/run.sh
+
+  # THE FIXTURE ABOVE PROVES THE GATE CAN SAY NO. THIS JOB PROVES THE FIXTURE CAN. It enumerates
+  # mutations from the gate's own AST — every branch condition, every comparison, every numeric,
+  # string and boolean literal, every two-operand `and`/`or`, every `len(...)`, every quantity a
+  # `print` reports, and one per project directory under `src/` — and requires the fixture to fail on
+  # each. A mutation the fixture survives is a dimension of the gate that nothing asserts, which
+  # `independent-review.md` calls material by definition.
+  #
+  # AND IT PROVES ITS OWN ENUMERATION IS WHOLE, which is not the same claim and was the one this job
+  # shipped without. `mutants.py` reads the gate a SECOND time through `tokenize` and requires
+  # `enumerated + skipped == that reading` for every one of its ten operators, in both directions.
+  # Before that, three operators had no floor at all and four had the literal `1`: suppressing 282 of
+  # 385 mutants left this required check green, silent and exit 0 (.github#2730 repair phase).
+  #
+  # AND THE EQUALITY IS NOT SUFFICIENT EITHER, BECAUSE `0 + 0 == 0` SOLVES IT. An operator that
+  # enumerates nothing and is read nowhere satisfies the relation exactly, in both directions.
+  # Measured through the shipped `main()`: `bool-flip` suppressed on both sides printed `423 mutants`
+  # and `bool-flip 0 + 0 == 0` as ACCOUNTED FOR, refused nothing, landed all three controls and
+  # exited 0. So the registry is additionally quantified over: every operator in `OPERATORS` must be
+  # READ AT A NON-ZERO COUNT, one predicate naming no operator, covering any operator added later.
+  # It matters because the trigger is one edit to the GATE, not two to the harness -- `report-swap`
+  # and `len-pin` resolve `print` and `len` BY NAME in both readings, so routing this gate's output
+  # through a `report()` helper would zero both of `report-swap`'s terms at a single site, 119 of 432
+  # mutants. Independence here is in the KEY, not in the library (.github#2730 repair phase, round 2).
+  #
+  # IT IS HERE BECAUSE THE SWEEP MUST OUTLIVE THE PEOPLE WHO RAN IT ONCE. .github#2730's ordinary
+  # review chain exhausted at round 3 with five instances of one class, each found by the next critic
+  # and invisible to the previous round's sweep, because every sweep was drawn from its author's own
+  # model of what the gate does. A branch added to this gate later, with no leg, is the NEXT
+  # instance; run here, it is a red check instead of a review round. Survivors are justified, one per
+  # line and with a proof, in `tests/signature-doc-siting/mutants-allowed.txt` — a file that only ever
+  # shrinks. It records NO survivor today and exactly one SKIP: a candidate site the sweep declined
+  # to splice, held to the same bar as a survivor and justified by running that mutation by hand.
+  #
+  # It runs in parallel with `fixture` rather than after it: its own first control is that the
+  # UNMUTATED fixture passes, so it already refuses to report anything if the fixture is broken.
+  #
+  # WHY IT LIVES IN THIS WORKFLOW, WITH NO `paths:` FILTER OF ITS OWN, AND THAT IS NOT LAZINESS.
+  # `scripts/test` selects suites by their workflow's `paths:` filter, so a sweep sited here runs on
+  # every local `scripts/test` and every PR — a real cost, and the obvious fix is a separate,
+  # narrowly filtered workflow naming only the gate and the fixture. That fix is WRONG, for the same
+  # reason the header above gives for the gate itself: this sweep's subject includes `src/`. Its
+  # `dir-drop` mutations are enumerated from the project directories actually present under `src/`,
+  # and the fixture legs it runs include three that read the real tree. Adding a fourth project, or
+  # giving an existing file a sibling `.fsi`, changes what this sweep measures without touching
+  # either file a narrow filter would name — and it would then not run, reporting nothing while
+  # looking exactly like a pass. A gate whose population is chosen so that it cannot fire is the
+  # #266 failure mode, and a sweep filtered so it cannot run is the same mistake one level up.
+  #
+  # It is a REQUIRED context here, unlike the shared on-demand sweep `scripts/gate-mutate.py`
+  # (.github#1838). That decision turned on the shared sweep mutating the working tree in place;
+  # this one gives every mutant a private copy of `scripts/`, `src/` and this fixture and never
+  # writes into the checkout, so the reason does not carry over.
+  mutation-sweep:
+    runs-on: ubuntu-latest
+    # 30, not 20, and the margin is measured rather than guessed: the first CI run of this job took
+    # 15m11s for 385 mutants on a 4-vCPU runner, against 2m locally at `--jobs 16`. A required check
+    # sitting four minutes under its own timeout is a check that will one day fail for a reason that
+    # is about the runner, and a flaky required context teaches people to re-run rather than to read.
+    #
+    # THE SWEEP IS NOW 432 MUTANTS OVER A 90-LEG FIXTURE, not 385 over 86: the `str` operator stopped
+    # skipping literals with no alphanumeric character in them, which is the gate's entire lexical
+    # vocabulary (.github#2730 repair phase). Measured here, not projected: 19m3s in CI at `--jobs 8`
+    # (PR #2748, head b1bbe2e7), against 15m11s for 385 — and 2m21s locally at `--jobs 16` against
+    # 2m16s for 385, which is what a 24-core machine hides about a 4-vCPU runner. So the margin is
+    # eleven minutes rather than fifteen, and the timeout stays 30 on that measurement rather than on
+    # the older one. Raise it here WITH the run that measured it if this job ever approaches 30m;
+    # trimming the sweep to fit its own timeout would be the vacuity this whole job exists to refuse.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      # `--jobs 8` on a 4-vCPU runner deliberately oversubscribes: each mutant is one `bash` fixture
+      # that spends most of its wall clock waiting on ~100 short-lived `python3` spawns rather than
+      # computing, so more in-flight work than cores is the right shape here. The default is
+      # `min(16, cpu_count)`, which would be 4.
+      - name: Assert the fixture fails on every mutation of the gate (no network)
+        run: python tests/signature-doc-siting/mutants.py --jobs 8
+
+  no-discarded-doc-comments:
+    runs-on: ubuntu-latest
+    needs: [fixture, mutation-sweep]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Assert no implementation file with a signature file carries a doc comment
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-signature-doc-siting.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the contract;
+      # nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network, no
+      # build — so it has no retryable failure to report. A leg for a verdict the gate can never mean
+      # would be a lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever appears.
+      - name: 'OK: every implementation file matches its baseline exactly'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "signature-doc-siting: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a doc comment the compiler discards, or a stale baseline'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### signature-doc-siting: a doc comment sits where the compiler discards it"
+            echo
+            echo "An \`.fs\` file with a sibling \`.fsi\` gained an F# XML documentation comment"
+            echo "(\`///\`) — or the baseline still claims comments that are no longer there."
+            echo
+            echo "When a module has a signature file, the signature's documentation is what reaches"
+            echo "the generated XML, the IDE tooltip, and every downstream reader. The"
+            echo "implementation's is **discarded**, and the compiler cannot warn: \`///\` binds"
+            echo "silently to the next declaration (.github#2730)."
+            echo
+            echo "Ask one question of the comment: **could a caller who never opens the \`.fs\` act"
+            echo "on this sentence?**"
+            echo
+            echo "* **Yes** — it is contract prose. Move it to the sibling \`.fsi\`, where the"
+            echo "  compiler keeps it. If the \`.fsi\` already says it, delete the duplicate."
+            echo "* **No** — it is about *this* implementation (the ordering constraint, the"
+            echo "  fail-closed branch, the API quirk being worked around, the incident that produced"
+            echo "  this branch). It is correctly placed exactly where it is. Write it \`//\`, with"
+            echo "  its wording unchanged. This gate never looks at a \`//\` comment."
+            echo
+            echo "If the baseline is **stale**, the gate prints the number to write — write it in the"
+            echo "same commit as the repair. The baseline only ever shrinks, and that is what makes"
+            echo "it a true statement about the tree rather than a list nobody maintains."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=signature-doc-siting: a doc comment the compiler discards::A new doc comment in an implementation file that has a signature file, or a stale baseline. See the job log."
+          exit 1
+
+      # "FIVE causes" IS READER-FACING AND CORRECT; the gate has SIX `EX_NO_VERDICT` returns, and the
+      # sixth is deliberately folded rather than missing. `main` refuses separately when `src/` is not
+      # a directory at all and when it is one holding no `.fs` file, but those are one cause to the
+      # person reading this summary — discovery did not find a subject set — with one repair, the
+      # harness or the checkout. Splitting them here would make the reader choose between two rows
+      # that lead to the same place. The five named causes cover all six returns; the job log still
+      # prints the exact one. Recorded at .github#2730 round 3 so the count is not re-raised as a
+      # defect: it was checked, and the grouping is the intent.
+      - name: 'NO VERDICT (permanent): the gate could not read or lex a valid subject'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### signature-doc-siting: no verdict"
+            echo
+            echo "Exit 3 has **five** causes. The gate found no \`.fs\` file under \`src/\`, found"
+            echo "none with a sibling \`.fsi\`, could not **read** a subject file, could not **lex**"
+            echo "one, or could not read/parse \`tests/signature-doc-siting/baseline.txt\`."
+            echo
+            echo "**Which one it was is in the job log**, naming the cause and the file. They fall"
+            echo "into two groups, and they need different repairs:"
+            echo
+            echo "* **Discovery or the baseline broke.** This repository demonstrably contains 66"
+            echo "  \`.fs\` files under \`src/\`, 62 of them with a sibling \`.fsi\`, so an empty"
+            echo "  subject set is a break in the harness rather than a fact about the tree."
+            echo "  Scanning nothing is a failure to scan, and without the baseline the gate cannot"
+            echo "  tell a recorded residue from a new offender."
+            echo "* **A subject file could not be read, or could not be lexed.** That one is a fact"
+            echo "  about the *source*, and the named file is the repair: it is not valid UTF-8, or"
+            echo "  it ends inside an unterminated string or an unclosed block comment, so the pass"
+            echo "  lost its place and every line after that point was scanned in the wrong state."
+            echo "  A count taken after a mis-parse is worse than no count, because it looks like"
+            echo "  one — which is why the gate refuses here rather than resetting and carrying on."
+            echo
+            echo "In none of the five does this mean the tree is clean, and in none of them will"
+            echo "retrying help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=signature-doc-siting: no verdict (permanent)::The gate could not reach a verdict it can trust — discovery, the baseline, or a subject file it could not read or lex. See the job log for which."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=signature-doc-siting: inconclusive::check-signature-doc-siting.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

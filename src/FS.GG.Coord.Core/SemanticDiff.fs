@@ -45,21 +45,8 @@ module SemanticDiff =
           Required: bool
           Occurrences: Occurrence list }
 
-    /// What the ENGINE independently established about the diff, for a chain that submits receipts.
-    ///
-    /// A receipt carries ONE rename pair, so a diff containing two distinct renames cannot be covered by
-    /// one receipt.  Checking a submitted receipt only against a recomputation of its own pair therefore
-    /// proved it honest about itself and nothing more: a receipt for 6 of 12 discovered occurrences,
-    /// over 1 of 2 changed paths, validated (.github#2144 repair-phase round 2). The author still chose
-    /// how much of the diff the gate applied to — the same class as the escalated finding.
-    ///
-    /// So both halves are carried. `Expected` proves each submitted receipt HONEST about the pair it
-    /// names; `Discovered` proves the submitted receipts COMPLETE against the population the engine
-    /// found for itself. Neither alone is sufficient and they fail with different messages.
     type TrustedAudit =
-        { /// One engine recomputation per submitted receipt, matched by rename pair and declared paths.
-          Expected: Receipt list
-          /// Every occurrence the engine discovered across the whole diff, receipts notwithstanding.
+        { Expected: Receipt list
           Discovered: Occurrence list }
 
     let classificationName =
@@ -124,9 +111,6 @@ module SemanticDiff =
     let private renameProjection (oldToken: string) (newToken: string) (line: string) =
         Regex.Replace(line, $@"(?<![A-Za-z0-9_]){Regex.Escape oldToken}(?![A-Za-z0-9_])", newToken)
 
-    /// Aligns rename-shaped lines by their token-substituted content instead of line number.  Insertions
-    /// and deletions elsewhere in a file therefore cannot hide a semantic occurrence.  Repeated equal
-    /// lines are paired first-to-first, which keeps the inventory deterministic.
     let inventory (path: string) (before: string) (after: string) (oldToken: string) (newToken: string) =
         let oldLines = before.Replace("\r\n", "\n").Split '\n'
         let newLines = after.Replace("\r\n", "\n").Split '\n'
@@ -166,9 +150,9 @@ module SemanticDiff =
                                 Disposition = Unresolved }
                   | None -> () ]
 
-    /// Every maximal word run and separator run of a line, in order.  Word runs use exactly the
-    /// character class `containsToken`'s look-arounds use, so a run boundary here IS a rename boundary
-    /// there — the discovery below and the inventory above cannot disagree about what a token is.
+    // Every maximal word run and separator run of a line, in order.  Word runs use exactly the
+    // character class `containsToken`'s look-arounds use, so a run boundary here IS a rename boundary
+    // there — the discovery below and the inventory above cannot disagree about what a token is.
     let private runs (line: string) =
         Regex.Matches(line, @"[A-Za-z0-9_]+|[^A-Za-z0-9_]+")
         |> Seq.map (fun m -> m.Value)
@@ -176,22 +160,22 @@ module SemanticDiff =
 
     let private isWordRun (value: string) = Regex.IsMatch(value, @"^[A-Za-z0-9_]+$")
 
-    /// The line with every word run blanked and every separator run kept verbatim.
-    ///
-    /// A single word substitution preserves this exactly, so two lines can only be a rename pair if
-    /// their skeletons are equal.  That makes it a sound bucket key: pairing may scan one bucket
-    /// instead of every added line, which matters because the diff shape this module exists for — a
-    /// BULK rename — is precisely the one where both sides are large and a quadratic scan would not
-    /// finish.
+    // The line with every word run blanked and every separator run kept verbatim.
+    //
+    // A single word substitution preserves this exactly, so two lines can only be a rename pair if
+    // their skeletons are equal.  That makes it a sound bucket key: pairing may scan one bucket
+    // instead of every added line, which matters because the diff shape this module exists for — a
+    // BULK rename — is precisely the one where both sides are large and a quadratic scan would not
+    // finish.
     let private skeleton (parts: string[]) =
         parts
         |> Array.map (fun run -> if isWordRun run then "\000" else run)
         |> String.concat "\001"
 
-    /// The one word substitution that turns `before` into `after`, when the two lines have the rename
-    /// shape and nothing else: identical run structure, differing only at word runs, and every differing
-    /// position carrying the SAME old/new pair.  A line that changed in two unrelated ways is not a
-    /// rename and is deliberately not guessed at.
+    // The one word substitution that turns `before` into `after`, when the two lines have the rename
+    // shape and nothing else: identical run structure, differing only at word runs, and every differing
+    // position carrying the SAME old/new pair.  A line that changed in two unrelated ways is not a
+    // rename and is deliberately not guessed at.
     let private singleSubstitution (before: string) (after: string) =
         let left = runs before
         let right = runs after
@@ -209,34 +193,34 @@ module SemanticDiff =
                 Some(oldToken, newToken)
             | _ -> None
 
-    /// A token pair is only a rename candidate when both sides could plausibly BE an identifier or a
-    /// piece of authored text.  Two classes of word run are structurally indistinguishable from a rename
-    /// and are never one:
-    ///
-    ///   * a content-addressed digest — every kit change rewrites `sha256`/`tree-sha256` values, and
-    ///     `"3e73eb76…"` -> `"f7e1d784…"` is a perfectly formed single word substitution on an ALIGNED
-    ///     line, so alignment alone cannot reject it (.github#2144 repair-phase round 1, finding 1);
-    ///   * a run with no letter at all — a version bump or a count is a value edit, not a rename.
-    ///
-    /// This is a plausibility filter, not a taste filter: it rejects only what cannot be a renamed name.
+    // A token pair is only a rename candidate when both sides could plausibly BE an identifier or a
+    // piece of authored text.  Two classes of word run are structurally indistinguishable from a rename
+    // and are never one:
+    //
+    //   * a content-addressed digest — every kit change rewrites `sha256`/`tree-sha256` values, and
+    //     `"3e73eb76…"` -> `"f7e1d784…"` is a perfectly formed single word substitution on an ALIGNED
+    //     line, so alignment alone cannot reject it (.github#2144 repair-phase round 1, finding 1);
+    //   * a run with no letter at all — a version bump or a count is a value edit, not a rename.
+    //
+    // This is a plausibility filter, not a taste filter: it rejects only what cannot be a renamed name.
     let private plausibleRenameToken (token: string) =
         let digestLike = token.Length >= 16 && Regex.IsMatch(token, @"^[0-9a-fA-F]+$")
         let hasLetter = token |> Seq.exists Char.IsLetter
         hasLetter && not digestLike
 
-    /// What alignment treats as "the same line".
-    ///
-    /// Indentation is deliberately not part of it.  Wrapping a block in a new scope re-indents every
-    /// line, which under exact equality makes the whole block one enormous replace region — and then
-    /// `contexts` at one indent pairs with `checks` at another and is reported as a rename at confidence
-    /// 90, which is exactly what happened to `Reads.fs` (.github#2144 repair-phase round 1, finding 1).
-    /// Two lines differing ONLY by indentation cannot be a rename anyway: `singleSubstitution` requires
-    /// every differing run to be a word run, and leading whitespace is not one.  So ignoring indentation
-    /// here removes false regions without hiding a single real rename.
+    // What alignment treats as "the same line".
+    //
+    // Indentation is deliberately not part of it.  Wrapping a block in a new scope re-indents every
+    // line, which under exact equality makes the whole block one enormous replace region — and then
+    // `contexts` at one indent pairs with `checks` at another and is reported as a rename at confidence
+    // 90, which is exactly what happened to `Reads.fs` (.github#2144 repair-phase round 1, finding 1).
+    // Two lines differing ONLY by indentation cannot be a rename anyway: `singleSubstitution` requires
+    // every differing run to be a word run, and leading whitespace is not one.  So ignoring indentation
+    // here removes false regions without hiding a single real rename.
     let private alignKey (line: string) = line.Trim()
 
-    /// The lines occurring exactly once in BOTH slices.  Patience diff's insight: a line that is unique
-    /// on each side is an anchor no plausible alignment moves past, so it can be matched with no search.
+    // The lines occurring exactly once in BOTH slices.  Patience diff's insight: a line that is unique
+    // on each side is an anchor no plausible alignment moves past, so it can be matched with no search.
     let private uniqueCommon (oldLines: string[]) (newLines: string[]) oldLo oldHi newLo newHi =
         let count (lines: string[]) lo hi =
             let counts = Collections.Generic.Dictionary<string, int>()
@@ -273,8 +257,8 @@ module SemanticDiff =
                    | _ -> () |]
         |> Array.sortBy fst
 
-    /// The longest strictly increasing subsequence by second coordinate, over anchors already sorted by
-    /// the first.  Anchors that survive are a consistent, non-crossing alignment.
+    // The longest strictly increasing subsequence by second coordinate, over anchors already sorted by
+    // the first.  Anchors that survive are a consistent, non-crossing alignment.
     let private longestIncreasing (anchors: (int * int)[]) =
         if anchors.Length = 0 then
             [||]
@@ -304,16 +288,16 @@ module SemanticDiff =
             result.Reverse()
             result.ToArray()
 
-    /// The diff's REPLACE regions: maximal runs of removed lines paired with the added lines that took
-    /// their place, as `removed, added`.
-    ///
-    /// This is the fact the module was missing.  Discovery used to take the whole-file multiset
-    /// difference and let ANY removed line pair with ANY added line sharing its skeleton, so a bare
-    /// `else` deleted at line 667 paired with a bare `Some` added at line 1057, and a block that merely
-    /// changed indentation re-paired against unrelated neighbours — both reported at confidence 90
-    /// (.github#2144 repair-phase round 1, finding 1).  Restricting pairing to lines the diff actually
-    /// puts opposite each other removes that entire class without weakening real discovery, because a
-    /// rename's two lines are opposite each other by construction.
+    // The diff's REPLACE regions: maximal runs of removed lines paired with the added lines that took
+    // their place, as `removed, added`.
+    //
+    // This is the fact the module was missing.  Discovery used to take the whole-file multiset
+    // difference and let ANY removed line pair with ANY added line sharing its skeleton, so a bare
+    // `else` deleted at line 667 paired with a bare `Some` added at line 1057, and a block that merely
+    // changed indentation re-paired against unrelated neighbours — both reported at confidence 90
+    // (.github#2144 repair-phase round 1, finding 1).  Restricting pairing to lines the diff actually
+    // puts opposite each other removes that entire class without weakening real discovery, because a
+    // rename's two lines are opposite each other by construction.
     let private replaceRegions (oldLines: string[]) (newLines: string[]) =
         let regions = ResizeArray<string list * string list>()
         let work = Collections.Generic.Stack<int * int * int * int>()
@@ -363,17 +347,6 @@ module SemanticDiff =
 
         regions
 
-    /// Recovers the rename tokens from the live diff itself, for the delivery path where no receipt
-    /// supplies them.
-    ///
-    /// This exists because the configured threshold counts semantic OCCURRENCES, and the only other
-    /// number available without a receipt — the changed-FILE count — is a different quantity that is
-    /// always a lower bound.  Substituting it let a one-file rename with six quoted occurrences report
-    /// `1`, fall under the default threshold of 5, and keep the receipt mechanically optional
-    /// (.github#2144); an omitted receipt must not be able to answer the question it exists to answer.
-    ///
-    /// Each element of `files` is `path, contentAtBase, contentAtHead`.  The result is deduplicated and
-    /// ordered, so the same diff always yields the same tokens in the same order.
     let discoverRenames (files: (string * string * string) list) =
         [ for _, before, after in files do
               let oldLines = before.Replace("\r\n", "\n").Split '\n'
@@ -428,8 +401,6 @@ module SemanticDiff =
         |> List.distinct
         |> List.sort
 
-    /// Every occurrence the discovered renames account for across the same live files.  This is the
-    /// occurrence count the threshold is measured against when no receipt was submitted.
     let discoveredOccurrences (files: (string * string * string) list) =
         let pairs = discoverRenames files
 

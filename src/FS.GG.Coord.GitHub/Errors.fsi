@@ -68,7 +68,9 @@ module Errors =
         /// out, the advice it renders is the conservative union — reduce concurrency *and* back off.
         | UnknownBudget
 
-    /// The machine-readable remedy class for a rate-limit refusal (#1892).
+    /// The machine-readable remedy class for a rate-limit refusal (#1892). It is deliberately
+    /// INDEPENDENT of the exit code: both cases remain `EX_RATE`, while a driver chooses between draining
+    /// the fleet and reducing its fan-out.
     type RateLimitKind =
         | Primary
         | Secondary

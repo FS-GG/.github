@@ -5,29 +5,26 @@ module Kind =
     open System.Text.RegularExpressions
     open Types
 
-    /// A `Kind:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s `Paths:`,
-    /// `Class`'s `Class:` and `HumanBlock`'s `Blocked on:`, because #1103 decided one grammar for
-    /// body-line sentinels and a fourth spelling would be the drift ADR-0045 exists to prevent.
+    // A `Kind:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s `Paths:`,
+    // `Class`'s `Class:` and `HumanBlock`'s `Blocked on:`, because #1103 decided one grammar for
+    // body-line sentinels and a fourth spelling would be the drift ADR-0045 exists to prevent.
     let private declRe =
         Regex(@"^ {0,3}[Kk]ind:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
-    /// The recognised values, normalised for case and surrounding space. `itemKindOfWireName` IS the
-    /// parse, derived from the renderer, so the vocabulary is spelled exactly once (#1012).
+    // The recognised values, normalised for case and surrounding space. `itemKindOfWireName` IS the
+    // parse, derived from the renderer, so the vocabulary is spelled exactly once (#1012).
     let private classify (value: string) : ItemKind option = itemKindOfWireName value
 
-    /// Every `ItemKind` case, by reflection — `Class.legalClasses`' shape exactly, and for its reason.
-    /// All four cases are NULLARY, so the list can be DERIVED, and a list nobody writes cannot omit a
-    /// case. A fifth `ItemKind` reaches every diagnostic the day it is declared, with no edit here.
     let legalKinds: ItemKind list =
         FSharp.Reflection.FSharpType.GetUnionCases typeof<ItemKind>
         |> Array.map (fun c -> FSharp.Reflection.FSharpValue.MakeUnion(c, [||]) :?> ItemKind)
         |> Array.toList
 
-    /// The RAW value of every `Kind:` line this body declares, outside fences, in body order.
-    ///
-    /// ONE reading of the grammar, shared by `fromBody` (which resolves the values) and `unrecognised`
-    /// (which reports the ones that do not). A second regex for the second question is the copy #972
-    /// measured, and it drifts in the direction that hurts.
+    // The RAW value of every `Kind:` line this body declares, outside fences, in body order.
+    //
+    // ONE reading of the grammar, shared by `fromBody` (which resolves the values) and `unrecognised`
+    // (which reports the ones that do not). A second regex for the second question is the copy #972
+    // measured, and it drifts in the direction that hurts.
     let private declaredValues (body: string) : string list =
         // OUTSIDE fences, via the one `Markdown.unfenced` every body-line rule shares (#972). A `Kind:`
         // line quoted in a ``` block is documentation — and this module's own .fsi and the board-schema

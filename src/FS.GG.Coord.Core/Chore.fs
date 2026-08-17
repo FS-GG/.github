@@ -13,13 +13,10 @@ module Chore =
             | Quick -> "quick"
             | Involved -> "involved"
 
-    /// Maintenance that is not part of lifecycle Status reduction.
     type ChoreKind =
         | StaleClaim of holder: WorkerId
         | LifecycleProjectionLag of destination: BoardStatus
         | ClassProjectionLag of declared: ItemClass
-        /// The board's `Kind` column disagrees with the item's own `Kind:` line (.github#2712) — the same
-        /// projection shape as `ClassProjectionLag`, on the same authority direction (ADR-0066).
         | KindProjectionLag of declared: ItemKind
 
         member this.RuleId =
@@ -88,8 +85,8 @@ module Chore =
         | Whole items when items |> List.exists (holdsLock worker) -> None
         | Whole _ -> Some(SafePoint(boundary, worker, subject))
 
-    /// Derive non-lifecycle maintenance only. Status has exactly one authority:
-    /// `LifecycleProjection`, exposed through `lifecycleProjection` below.
+    // Derive non-lifecycle maintenance only. Status has exactly one authority:
+    // `LifecycleProjection`, exposed through `lifecycleProjection` below.
     let private choresFor (item: Item) =
         match item.Claim with
         | Some(claim, LeaseExpiredNoPr) ->
@@ -117,7 +114,6 @@ module Chore =
 
     let derive items = items |> List.collect choresFor
 
-    /// Convert the single intent reducer's verified destination into its bounded Status repair.
     let lifecycleProjection (item: Item) destination =
         if item.Status = destination || destination = NoStatus then None
         else Some(Chore(item.Ref, LifecycleProjectionLag destination, Quick))

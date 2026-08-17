@@ -2,9 +2,9 @@ namespace FS.GG.Coord
 
 module Kit =
 
-    /// `read -r want src` splits a lock line on IFS whitespace: the first token is the digest, the rest is
-    /// the source path (which carries no spaces here). A `#`-prefixed first token is a comment; a blank
-    /// line or one with no second field is skipped.
+    // `read -r want src` splits a lock line on IFS whitespace: the first token is the digest, the rest is
+    // the source path (which carries no spaces here). A `#`-prefixed first token is a comment; a blank
+    // line or one with no second field is skipped.
     let parseLock (content: string) : (string * string) list =
         content.Replace("\r\n", "\n").Split('\n')
         |> Array.toList

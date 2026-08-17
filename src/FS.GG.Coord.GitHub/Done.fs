@@ -23,36 +23,17 @@ module Done =
         )
 
     type Closure =
-        /// `passedOverForeign`: a foreign-repository true closer that existed but was NOT chosen, because a
-        /// same-repository closer is preferred regardless of merge time (.github#2427) — `Some(pr, repo)`
-        /// names it so the cross-repo link stays visible rather than silently dropped.
         | ClosedByPullRequest of pr: int * oid: string * day: string * passedOverForeign: (int * string) option
         | ResolvedWithoutPr of evidence: string
         | ClosedByNobody
         | StillOpen
 
-    /// A candidate pull request, with the merge facts the stamp needs and the provenance `verify` judges it
-    /// by. It reaches us from either of GitHub's two records — `closedByPullRequestsReferences` (a SUPERSET:
-    /// it also carries PRs that merely MENTION the issue in prose) or the issue's own CLOSED_EVENT — and
-    /// which of them CLOSED the issue is decided by `ClosesThis` OR membership of `Facts.CloserPrs`.
-    ///
-    /// The merge facts travel WITH the candidate, from whichever record produced it. They are not decoration:
-    /// a closer named by the CLOSED_EVENT is still held to `Merged`, so the union below cannot launder an
-    /// unmerged PR into a stamp (#543 leg 2).
     type ClosingPr =
         { Number: int
           Merged: bool
-          /// ISO-8601 merge time, "" if unknown — the LATEST-merged among true closers wins (#342), but only
-          /// among closers that share a repository preference tier (.github#2427).
           MergedAt: string
-          /// The merge commit's abbreviated oid, "" if unknown — named in the stamp.
           Oid: string
-          /// This candidate's OWN `owner/repo` (nameWithOwner), "" if unknown. NOT the repository of an issue
-          /// it claims to close (that is what `ClosesThis` checks) — the repository the PR itself lives in,
-          /// so a same-repository closer can be preferred over a foreign one (.github#2427: a cross-repo
-          /// retrofit PR merged 13 minutes after the source fix outranked it under pure latest-merged).
           Repo: string
-          /// Its own `closingIssuesReferences` names THIS issue (the `Closes #N` in the PR body).
           ClosesThis: bool }
 
     type Children =
@@ -68,15 +49,7 @@ module Done =
     type Facts =
         { Ref: Ref
           State: IssueState
-          /// Every PR GitHub associates with closing this issue — a superset that also lists mentions.
           ClosingPrs: ClosingPr list
-          /// The PRs GitHub's own `CLOSED_EVENT` names as the closer: a PullRequest closer directly, or the
-          /// PR(s) associated with the Commit that closed it (#558 — a commit-subject keyword).
-          ///
-          /// This is a SOURCE of candidates, not merely a filter over `ClosingPrs` (#928). The two records
-          /// overlap but NEITHER contains the other: a PR whose body never named the issue is absent from
-          /// `ClosingPrs` entirely, because GitHub builds that connection FROM the body linkage — so the one
-          /// case leg (B) exists for is exactly the case where `ClosingPrs` is empty.
           CloserPrs: ClosingPr list
           Children: Children
           BoardStatus: BoardStatus
@@ -87,9 +60,6 @@ module Done =
         | ParentLeftOpen of Ref * reasons: string list
         | NoParent
 
-    /// A closed issue is not terminal evidence.  This marker is written by `doneCmd` only after `verify`
-    /// is green, and lets an event/scheduled projector distinguish a verified completion from an ordinary
-    /// issue close without treating the mutable Project column as proof of itself.
     let hasReceipt (comments: string list) =
         comments
         |> List.exists (fun body -> body.StartsWith("<!-- fsgg:done-receipt v=1 -->", StringComparison.Ordinal))
@@ -270,10 +240,6 @@ module Done =
                         [ why
                           "If it was resolved WITHOUT a pull request (obsolete, a duplicate, resolved by other work, a decision recorded elsewhere), say so with evidence — that is a green path, not a workaround (#600)." ]
 
-    /// The bare passed-over-foreign-closer sentence (.github#2427), with no leading newline or indent — the
-    /// caller decides which channel it rides. `None` unless a foreign-repository true closer existed and
-    /// was passed over in favor of a same-repository one (`Done.verify` never sets this from an explicit
-    /// `--pr` override, which is a choice, not a silent one).
     let passedOverForeignNote (ref: Ref) (verdict: Verdict<Closure>) =
         match verdict with
         | Green(ClosedByPullRequest(pr, _, _, Some(foreignPr, foreignRepo))) ->
@@ -281,15 +247,6 @@ module Done =
                 $"a foreign-repository closer was passed over: %s{foreignRepo}#%d{foreignPr} also closes this issue, but %s{ref.Owner}/%s{ref.Repo}'s own PR #%d{pr} is preferred (.github#2427)."
         | _ -> None
 
-    /// The one-line stamp a worker reads. Green stamps and red stamps do not look alike, on purpose.
-    ///
-    /// .github#2444 — restored to naming ONLY the winning PR, its shape from before #2427. `.github#2427`'s
-    /// own acceptance criteria put the passed-over-foreign-closer note on STDERR, never folded into this
-    /// stdout value: `stamp`'s stdout print is a single-line value some caller may `grep` or diff exactly
-    /// (the same rule #733's `AfterDone` chore offer keeps, `tests/coord-engine-e2e/writes.sh:456-462` — a
-    /// candidate that existed but was not chosen rides stderr, and the verdict a caller depends on does
-    /// not). `passedOverForeignNote` above carries the note for a caller that wants it printed once on
-    /// stderr; `renderReceipt` below carries it for the durable receipt comment.
     let render (ref: Ref) (verdict: Verdict<Closure>) =
         match verdict with
         | Green(ClosedByPullRequest(pr, oid, day, _)) ->
@@ -309,11 +266,6 @@ module Done =
 
         | NoVerdict reason -> $"?? FSGG-UNVERIFIED %s{ref.Short}\n  %s{reason}"
 
-    /// The durable `done-receipt` comment's text (.github#2444) — DELIBERATELY DIVERGES from `render`'s
-    /// stdout stamp when a foreign closer was passed over. The issue's own comment thread is not the
-    /// single-line-value channel `render` protects; it is the item's durable provenance record, so the
-    /// cross-repo link .github#2427 wanted visible stays there even though it no longer doubles up on the
-    /// console line or repeats via a second stderr print.
     let renderReceipt (ref: Ref) (verdict: Verdict<Closure>) =
         let stamp = render ref verdict
 
@@ -417,19 +369,19 @@ module Done =
                 | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "abbreviatedOid"
                 | _ -> ""
 
-            /// .github#2427 — the candidate's OWN `owner/repo`, read off its OWN `repository` field (a
-            /// PullRequest node, not the nested `closingIssuesReferences` used for `ClosesThis`). "" if
-            /// unknown, which `verify` treats as not-same-repo — never as a crash or a silent wrong repo.
+            // .github#2427 — the candidate's OWN `owner/repo`, read off its OWN `repository` field (a
+            // PullRequest node, not the nested `closingIssuesReferences` used for `ClosesThis`). "" if
+            // unknown, which `verify` treats as not-same-repo — never as a crash or a silent wrong repo.
             let repoOf (n: JsonElement) =
                 match n.TryGetProperty "repository" with
                 | true, r when r.ValueKind = JsonValueKind.Object -> strOf r "nameWithOwner"
                 | _ -> ""
 
-            /// A PR node named by the CLOSED_EVENT, WITH its merge facts (#928). `ClosesThis` is false by
-            /// construction: this PR's claim on the issue is the close EVENT, not its own body — that is the
-            /// entire case leg (B) exists for — and `verify` reads that claim out of `CloserPrs`, not here.
-            ///
-            /// A Commit closer has no `number`, which is how it is told from a PullRequest closer.
+            // A PR node named by the CLOSED_EVENT, WITH its merge facts (#928). `ClosesThis` is false by
+            // construction: this PR's claim on the issue is the close EVENT, not its own body — that is the
+            // entire case leg (B) exists for — and `verify` reads that claim out of `CloserPrs`, not here.
+            //
+            // A Commit closer has no `number`, which is how it is told from a PullRequest closer.
             let closerPrOf (n: JsonElement) =
                 match n.TryGetProperty "number" with
                 | true, num when num.ValueKind = JsonValueKind.Number ->
@@ -649,11 +601,11 @@ module Done =
 
     // ---- closing an issue ---------------------------------------------------------------------------
 
-    /// CLOSE the issue, as COMPLETED.
-    ///
-    /// `state_reason` matters: an issue closed as `not_planned` is not the same fact as one completed, and
-    /// the roll-up above reads `state` alone — so a parent closed the wrong way would still read as
-    /// "resolved" to every ancestor.
+    // CLOSE the issue, as COMPLETED.
+    //
+    // `state_reason` matters: an issue closed as `not_planned` is not the same fact as one completed, and
+    // the roll-up above reads `state` alone — so a parent closed the wrong way would still read as
+    // "resolved" to every ancestor.
     let private closeIssue (transport: IGitHubTransport) (ref: Ref) : IoResult<unit> =
         let payload = """{"state":"closed","state_reason":"completed"}"""
 
@@ -713,7 +665,7 @@ module Done =
     [<Literal>]
     let private MaxHops = 10
 
-    /// Strip the owner from an `owner/repo#n` ref → `repo#n`, the form a reason NAMES a ref in.
+    // Strip the owner from an `owner/repo#n` ref → `repo#n`, the form a reason NAMES a ref in.
     let private shortRef (r: string) =
         match r.IndexOf '/' with
         | i when i >= 0 -> r.Substring(i + 1)
