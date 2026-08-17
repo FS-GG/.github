@@ -6,9 +6,6 @@ open System.Text.Json
 open FS.GG.Coord
 open FS.GG.Coord.Cli.Options
 
-/// The local half of `route validate`.  It deliberately has no fallback route: a caller must supply a
-/// complete versioned receipt and the live Client boundary will later bind the same decoded shape to an
-/// issue comment before it is permitted to claim or project a Ready row.
 module DeliveryRouteApplication =
     let private requiredString (root: JsonElement) (name: string) =
         match root.TryGetProperty name with

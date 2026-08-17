@@ -3,8 +3,19 @@ namespace FS.GG.Coord.Cli
 /// JSON snapshot boundary for the pure claim-to-done lifecycle decision.
 module DeliveryApplication =
     /// Whether a consumed delivery receipt still authorizes the live adapter to issue its merge request.
+    ///
+    /// This is a two-case answer on purpose: there is no "probably", and no case that carries a
+    /// merge alongside a caveat. `authorizeGuardedLanding` re-reads the winning claim generation at
+    /// the moment of asking, so an authorization is a statement about NOW and cannot be cached
+    /// across a head or claim change.
     type LandingAuthorization =
+        /// The receipt, the freshness token, the action key and the currently winning claim
+        /// generation all still agree; the adapter may issue its merge request.
         | MergeAuthorized
+        /// Refused, with the specific disagreement named. Every path that is not a full agreement
+        /// lands here — a stale freshness token, a different action, an absent or changed claim
+        /// generation, or any action other than `Delivery.GuardedLand` — so a caller can report why
+        /// rather than retrying blindly.
         | MergeRefused of reason: string
 
     /// Render one lifecycle verdict from facts observed by either the snapshot or live adapter.
@@ -60,4 +71,12 @@ module DeliveryApplication =
         merge: (unit -> 'result) ->
             Result<'result, string>
 
+    /// Run `delivery --snapshot FILE` — the PURE, IO-free form, which reads a supplied lifecycle
+    /// snapshot and prints one freshness-bound action.
+    ///
+    /// THIS IS NOT THE FORM THAT WRITES. The live `delivery <ref> --pr N` path is `Client`'s, and it
+    /// is the only one that PATCHes a pull request's `fsgg:pr-authorization` marker; the distinction
+    /// is load-bearing, because a worker who runs this form believing it authorized a merge has
+    /// performed no write at all (.github#2488). Nothing reachable from here touches the board or
+    /// the network.
     val run: Options.Options -> int
