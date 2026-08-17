@@ -1,0 +1,46 @@
+# Justified survivors of the mutation sweep in `tests/signature-doc-siting/mutants.py` (.github#2730).
+#
+# THERE ARE NONE, AND THAT IS THE POINT OF THE FILE RATHER THAN AN ACCIDENT OF IT. Every mutation the
+# sweep generates from the gate's own AST is killed by a fixture leg: 263 of 263 at the head that
+# introduced this file. An entry here is a written admission that some dimension of
+# `scripts/check-signature-doc-siting.py` is asserted by nothing, and it has to name which and say why
+# that is acceptable — so the file only ever shrinks, exactly like `baseline.txt` beside it.
+#
+# WHY AN ALLOWLIST AT ALL, IF IT IS EMPTY. Because the alternative is worse in the direction this row
+# has already been burned by. `.github#2730`'s ordinary chain exhausted at round 3 with five instances
+# of one class: a declared arm no leg asserted, a leg that could not discriminate the thing it was
+# named for, two of four refusal arms unasserted, two finding branches separated only by a substring
+# both emit, and a subject population anchored to two of three projects. Every one of them was a
+# survivor nobody had a place to write down. A sweep with nowhere to record a survivor is a sweep
+# whose survivors get argued away in a review comment and then forgotten.
+#
+# FORMAT — one entry per line:
+#
+#     <mutant-id>  <the reason this mutant cannot be killed, and what a reader should check instead>
+#
+# The id is the one the sweep prints, e.g. `cond-false@312:17` or `dir-drop@FS.GG.Coord.Core`. Ids are
+# position-bearing, so they move when the gate moves; the sweep prints STALE entries (allowlisted ids
+# that no longer survive) and fails on them, so an entry cannot outlive the survivor it excuses.
+#
+# WHAT IS AND IS NOT A REASON. An equivalent mutant — one that provably cannot change the gate's
+# output for any input — is a reason, and it must carry the proof, not the assertion. "Hard to test",
+# "unlikely in practice", "the corpus does not contain one" and "covered by another leg" are NOT
+# reasons: the third is this gate's own subject (a precaution the corpus cannot exercise is a
+# precaution nothing proves) and the fourth is refuted by the survival itself.
+#
+# Two candidates were considered for this file at the head that introduced it, and BOTH were killed
+# with a leg instead, which is the disposition to prefer:
+#
+#   * `cond-true@200:15` — the escape-close search returning its first candidate. Argued equivalent on
+#     the ground that every F# escape but the numeric ones is exactly three characters wide. That is
+#     true and still not sufficient: `('A','"')` is valid F# and discriminates it, because
+#     stopping early leaves the pass to re-read the real closing quote as the opening quote of a `','`
+#     literal and open a string on the `"` that follows.
+#   * `num@199:41` — the search window's upper bound. Argued equivalent because F#'s longest escape
+#     closes eleven characters past the opening quote and the bound is twelve. Also true, and also not
+#     sufficient: the bound's stated job is to stop a stray `'` swallowing the line behind it, and
+#     `src/` holds 40 quotes that are not character literals, so what happens just past the bound is a
+#     property worth pinning rather than a number worth excusing.
+#
+# Both arguments were sound and both conclusions were wrong. That is the failure mode this file is
+# built to make expensive.

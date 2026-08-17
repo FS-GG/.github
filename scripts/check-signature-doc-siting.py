@@ -129,7 +129,25 @@ EXIT CODES -- three, and no fourth:
        "I checked, and it is fine" (#266) nor for "I checked, and it is broken" (#320).
 
 The discovered counts are printed on EVERY run, green ones included, so a subject that silently
-shrank is visible in the log rather than inferred from a pass.
+shrank is visible in the log rather than inferred from a pass. THAT SENTENCE WAS TRUE AND NOT
+SUFFICIENT, and the difference cost this row its ordinary review chain. An AGGREGATE count is
+exactly what a gate whose subject silently emptied would also print, and the exact-match baseline
+check cannot miss a file it never opened: every baselined line here is in `src/FS.GG.Coord.Cli`, so
+narrowing `discover()` to drop `src/FS.GG.Coord.GitHub` left this gate printing `OK: every subject
+file matches its baseline entry exactly` at exit 0 over 49 of 62 subjects, with its fixture fully
+green. So the population is also printed the way it is CONSTITUTED -- per project, see
+`subject_breakdown` -- and the fixture compares that line against a count it derives independently
+with `find`, because the leg written for exactly this property had asserted a regex, which a
+fabricated count satisfies as readily as a real one.
+
+WHAT ASSERTS THIS GATE, AND WHY IT IS NOT ONLY THE FIXTURE. `tests/signature-doc-siting/run.sh`
+proves the gate can say NO; `tests/signature-doc-siting/mutants.py` proves the FIXTURE can, by
+enumerating mutations from this module's own abstract syntax tree -- every branch condition, every
+comparison, every numeric and string literal, every `len(...)`, and one per project directory under
+`src/` -- and requiring the fixture to fail on each. Five separate defects in this file's review
+history were survivors of a hand-written sweep drawn from its author's model of what this gate does;
+a mutation set read off the AST covers the branches the author did not think of, including the ones
+added after the sweep was written. A branch added below without a fixture leg is a red check.
 
 Pure stdlib. No network, no build, no `dotnet`: the verdict is a function of the committed tree.
 """
@@ -147,6 +165,14 @@ EX_NO_VERDICT = 3
 DEFAULT_BASELINE = os.path.join("tests", "signature-doc-siting", "baseline.txt")
 SOURCE_ROOT = "src"
 
+# Named once, because it is printed from two places and one of them cannot reach the general path.
+# On the `not subjects` branch the subject list is empty BY THE BRANCH CONDITION, so
+# `subject_breakdown`'s `src_root` argument is dead there and any value at all produces this same
+# string -- an equivalence no test can distinguish, and therefore a site the mutation sweep in
+# `tests/signature-doc-siting/mutants.py` reports as an unassertable survivor. Removing the site is
+# better than writing down why it may stay.
+NO_SUBJECTS = "subjects by project: (none)"
+
 
 def char_literal_end(line: str, i: int) -> int | None:
     """Index just past the F# character literal starting at `line[i] == "'"`, or None if it is not one.
@@ -159,10 +185,14 @@ def char_literal_end(line: str, i: int) -> int | None:
     THE POPULATION, MEASURED THE WAY THIS FUNCTION SEES IT. Replay `doc_comment_lines`' pass over
     `discover()`'s output and tally every `'` it reaches AT CODE LEVEL -- outside strings and block
     comments, the only place this function is consulted -- and today's `src/` gives 106 character
-    literals against 40 `'` that are not one, over the 66 `.fs` files; 81 against 36 over the 61 with
-    a sibling `.fsi`. The literals span 25 distinct spellings, `'"'` among them; the non-literals are
-    type parameters (`'a`, `'item`, `'value`) and primed identifiers (`done'`, `member'`, `base'`,
-    `inline'`, `o'`).
+    literals against 40 `'` that are not one, over the 66 `.fs` files; 104 against 40 over the 62
+    with a sibling `.fsi`. (An earlier version of this sentence said `81 against 36 over the 61`,
+    which was true at `0ddd4b88` and was left behind when `.github#2724` gave `Cli/Client.fs` a
+    sibling `.fsi` at `479d185a`: the subject population went 61 -> 62 and that one file carried the
+    difference. The all-66 figure beside it was unaffected, which is exactly why a count is named
+    for the population it was taken over rather than quoted bare.) The literals span 25 distinct
+    spellings, `'"'` among them; the non-literals are type parameters (`'a`, `'item`, `'value`) and
+    primed identifiers (`done'`, `member'`, `base'`, `inline'`, `o'`).
 
     AN EARLIER VERSION OF THIS PARAGRAPH SAID "1,933 of those against 29 character literals", and
     neither number survived re-derivation at review. `29` reproduces under no scoping tried: this
@@ -338,6 +368,43 @@ def discover(root: str) -> tuple[list[str], list[str]]:
     return sources, subjects
 
 
+def project_of(path: str, src_root: str) -> str:
+    """The immediate child of `src/` that `path` lives under, or `(root)` for a file directly in it."""
+    # `partition` rather than `split(sep, 1)`: the maxsplit argument would be a constant whose value
+    # cannot change this function's result for any input (`split(sep, k)[0]` is the same for every
+    # k >= 1), and a constant nothing can distinguish is a constant no test can assert. Removing the
+    # site is better than justifying it.
+    head, separator, _ = os.path.relpath(path, src_root).replace(os.sep, "/").partition("/")
+    return head if separator else "(root)"
+
+
+def subject_breakdown(subjects: list[str], src_root: str) -> str:
+    """`<project> <n>` for every project holding a subject, comma-separated and sorted by project.
+
+    THE AGGREGATE COUNT IS NOT ENOUGH, AND THIS ROW PAID FOR THAT FIVE TIMES OVER. `main` prints how
+    many subjects discovery found, which is exactly the reassurance a gate whose subject silently
+    emptied would also print: `.github#2730`'s round-3 review measured that narrowing `discover()` to
+    drop `src/FS.GG.Coord.GitHub` -- the project the row had just emptied of 1,117 doc-comment lines
+    -- left the gate reporting `OK: every subject file matches its baseline entry exactly` at exit 0
+    over 49 of the 62 subjects, with the fixture fully green, because every baselined file is in a
+    DIFFERENT project and a project with no baseline entry contributes nothing an exact-match check
+    can miss. `0 findings` and `0 files scanned` are the same bytes; that is #266's whole subject.
+
+    So the population is reported the way it is actually constituted -- per project -- and
+    `tests/signature-doc-siting/run.sh` compares this line against a count it derives INDEPENDENTLY,
+    with `find`, rather than against a regex. A regex was the other half of the same finding: the leg
+    written for exactly this property asserted `discovered: [0-9]+ \\.fs file\\(s\\)`, so pinning the
+    subject count to a literal `999` satisfied it too.
+    """
+    counts: dict[str, int] = {}
+    for path in subjects:
+        project = project_of(path, src_root)
+        counts[project] = counts.get(project, 0) + 1
+    if not counts:
+        return NO_SUBJECTS
+    return "subjects by project: " + ", ".join(f"{k} {counts[k]}" for k in sorted(counts))
+
+
 def read_baseline(path: str) -> tuple[dict[str, int] | None, str | None]:
     """(counts keyed by repo-relative POSIX path, error). Exactly one of the two is None."""
     try:
@@ -402,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
             f"discovered: {len(sources)} .fs file(s) under {src_root}, "
             f"{len(subjects)} with a sibling .fsi"
         )
+        print(subject_breakdown(subjects, src_root))
         return EX_NO_VERDICT
 
     if not sources:
@@ -413,6 +481,7 @@ def main(argv: list[str] | None = None) -> int:
             f"NO VERDICT: {len(sources)} .fs file(s) under {src_root}, but not one has a sibling "
             ".fsi. Scanning nothing is a failure to scan, not a clean tree."
         )
+        print(NO_SUBJECTS)
         return EX_NO_VERDICT
 
     observed: dict[str, list[int]] = {}
@@ -454,6 +523,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(observed)} carrying {total_hits} XML documentation comment line(s); "
         f"baseline records {len(baseline)} file(s), {sum(baseline.values())} line(s)"
     )
+    print(subject_breakdown(subjects, src_root))
 
     findings: list[str] = []
 

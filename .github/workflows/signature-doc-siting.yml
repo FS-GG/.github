@@ -63,9 +63,61 @@ jobs:
       - name: Run the signature-doc-siting fixture (no network)
         run: bash tests/signature-doc-siting/run.sh
 
+  # THE FIXTURE ABOVE PROVES THE GATE CAN SAY NO. THIS JOB PROVES THE FIXTURE CAN. It enumerates
+  # mutations from the gate's own AST — every branch condition, every comparison, every numeric and
+  # string literal, every `len(...)`, and one per project directory under `src/` — and requires the
+  # fixture to fail on each. A mutation the fixture survives is a dimension of the gate that nothing
+  # asserts, which `independent-review.md` calls material by definition.
+  #
+  # IT IS HERE BECAUSE THE SWEEP MUST OUTLIVE THE PEOPLE WHO RAN IT ONCE. .github#2730's ordinary
+  # review chain exhausted at round 3 with five instances of one class, each found by the next critic
+  # and invisible to the previous round's sweep, because every sweep was drawn from its author's own
+  # model of what the gate does. A branch added to this gate later, with no leg, is that sixth
+  # instance; run here, it is a red check instead of a review round. Survivors are justified, one per
+  # line and with a proof, in `tests/signature-doc-siting/mutants-allowed.txt` — a file that only ever
+  # shrinks, and that is empty today.
+  #
+  # It runs in parallel with `fixture` rather than after it: its own first control is that the
+  # UNMUTATED fixture passes, so it already refuses to report anything if the fixture is broken.
+  #
+  # WHY IT LIVES IN THIS WORKFLOW, WITH NO `paths:` FILTER OF ITS OWN, AND THAT IS NOT LAZINESS.
+  # `scripts/test` selects suites by their workflow's `paths:` filter, so a sweep sited here runs on
+  # every local `scripts/test` and every PR — a real cost, and the obvious fix is a separate,
+  # narrowly filtered workflow naming only the gate and the fixture. That fix is WRONG, for the same
+  # reason the header above gives for the gate itself: this sweep's subject includes `src/`. Its
+  # `dir-drop` mutations are enumerated from the project directories actually present under `src/`,
+  # and the fixture legs it runs include three that read the real tree. Adding a fourth project, or
+  # giving an existing file a sibling `.fsi`, changes what this sweep measures without touching
+  # either file a narrow filter would name — and it would then not run, reporting nothing while
+  # looking exactly like a pass. A gate whose population is chosen so that it cannot fire is the
+  # #266 failure mode, and a sweep filtered so it cannot run is the same mistake one level up.
+  #
+  # It is a REQUIRED context here, unlike the shared on-demand sweep `scripts/gate-mutate.py`
+  # (.github#1838). That decision turned on the shared sweep mutating the working tree in place;
+  # this one gives every mutant a private copy of `scripts/`, `src/` and this fixture and never
+  # writes into the checkout, so the reason does not carry over.
+  mutation-sweep:
+    runs-on: ubuntu-latest
+    # 30, not 20, and the margin is measured rather than guessed: the first CI run of this job took
+    # 15m11s for 385 mutants on a 4-vCPU runner, against 2m locally at `--jobs 16`. A required check
+    # sitting four minutes under its own timeout is a check that will one day fail for a reason that
+    # is about the runner, and a flaky required context teaches people to re-run rather than to read.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      # `--jobs 8` on a 4-vCPU runner deliberately oversubscribes: each mutant is one `bash` fixture
+      # that spends most of its wall clock waiting on ~100 short-lived `python3` spawns rather than
+      # computing, so more in-flight work than cores is the right shape here. The default is
+      # `min(16, cpu_count)`, which would be 4.
+      - name: Assert the fixture fails on every mutation of the gate (no network)
+        run: python tests/signature-doc-siting/mutants.py --jobs 8
+
   no-discarded-doc-comments:
     runs-on: ubuntu-latest
-    needs: fixture
+    needs: [fixture, mutation-sweep]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -146,7 +198,7 @@ jobs:
             echo "into two groups, and they need different repairs:"
             echo
             echo "* **Discovery or the baseline broke.** This repository demonstrably contains 66"
-            echo "  \`.fs\` files under \`src/\`, 61 of them with a sibling \`.fsi\`, so an empty"
+            echo "  \`.fs\` files under \`src/\`, 62 of them with a sibling \`.fsi\`, so an empty"
             echo "  subject set is a break in the harness rather than a fact about the tree."
             echo "  Scanning nothing is a failure to scan, and without the baseline the gate cannot"
             echo "  tell a recorded residue from a new offender."
