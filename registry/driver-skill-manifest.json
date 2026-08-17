@@ -309,12 +309,12 @@
     {
       "id": "board-analyst",
       "scope": "operator",
-      "sha256": "54a78a2b5f66c8b2c5975f892df67a5dcae6e787c35dd4c000d02b1a070b93cb",
-      "tree-sha256": "117aaa681c6a0623dfc51517f895c2587d7d4afc05f9b271f966e1a297612096",
+      "sha256": "17b6c1b045b65ad22331461fbe13b031e36ff4a741e7657a4118ab4104f32efe",
+      "tree-sha256": "df8399537ba31e1329ff993a63f09406f7a071ff9b2ffb5dd58d940c7d01266f",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "54a78a2b5f66c8b2c5975f892df67a5dcae6e787c35dd4c000d02b1a070b93cb",
+          "sha256": "17b6c1b045b65ad22331461fbe13b031e36ff4a741e7657a4118ab4104f32efe",
           "executable": false
         },
         {
@@ -324,7 +324,7 @@
         },
         {
           "path": "references/churn-reading.md",
-          "sha256": "fdf2507dbb3160626b31519e88803039369d7589dff7f94a9eb9272e2d704f8e",
+          "sha256": "4d18efe4ff85c055732579600a5aa4d9b7b6fca40f48a9b3cf4b0f70b0958d9e",
           "executable": false
         },
         {

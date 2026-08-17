@@ -104,7 +104,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-08-16"
+updated: "2026-08-17"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -383,4 +383,4 @@ skills:
   # board-analyst — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: board-analyst,          scope: operator,owner: .github,         source: .github/.claude/skills/board-analyst/SKILL.md, sha256: 54a78a2b5f66c8b2c5975f892df67a5dcae6e787c35dd4c000d02b1a070b93cb, materializes-when: "false" }
+  - { id: board-analyst,          scope: operator,owner: .github,         source: .github/.claude/skills/board-analyst/SKILL.md, sha256: 17b6c1b045b65ad22331461fbe13b031e36ff4a741e7657a4118ab4104f32efe, materializes-when: "false" }
