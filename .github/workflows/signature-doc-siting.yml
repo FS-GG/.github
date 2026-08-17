@@ -64,10 +64,17 @@ jobs:
         run: bash tests/signature-doc-siting/run.sh
 
   # THE FIXTURE ABOVE PROVES THE GATE CAN SAY NO. THIS JOB PROVES THE FIXTURE CAN. It enumerates
-  # mutations from the gate's own AST — every branch condition, every comparison, every numeric and
-  # string literal, every `len(...)`, and one per project directory under `src/` — and requires the
-  # fixture to fail on each. A mutation the fixture survives is a dimension of the gate that nothing
-  # asserts, which `independent-review.md` calls material by definition.
+  # mutations from the gate's own AST — every branch condition, every comparison, every numeric,
+  # string and boolean literal, every two-operand `and`/`or`, every `len(...)`, every quantity a
+  # `print` reports, and one per project directory under `src/` — and requires the fixture to fail on
+  # each. A mutation the fixture survives is a dimension of the gate that nothing asserts, which
+  # `independent-review.md` calls material by definition.
+  #
+  # AND IT PROVES ITS OWN ENUMERATION IS WHOLE, which is not the same claim and was the one this job
+  # shipped without. `mutants.py` reads the gate a SECOND time through `tokenize` and requires
+  # `enumerated + skipped == that reading` for every one of its ten operators, in both directions.
+  # Before that, three operators had no floor at all and four had the literal `1`: suppressing 282 of
+  # 385 mutants left this required check green, silent and exit 0 (.github#2730 repair phase).
   #
   # IT IS HERE BECAUSE THE SWEEP MUST OUTLIVE THE PEOPLE WHO RAN IT ONCE. .github#2730's ordinary
   # review chain exhausted at round 3 with five instances of one class, each found by the next critic
@@ -75,7 +82,8 @@ jobs:
   # model of what the gate does. A branch added to this gate later, with no leg, is that sixth
   # instance; run here, it is a red check instead of a review round. Survivors are justified, one per
   # line and with a proof, in `tests/signature-doc-siting/mutants-allowed.txt` — a file that only ever
-  # shrinks, and that is empty today.
+  # shrinks. It records NO survivor today and exactly one SKIP: a candidate site the sweep declined
+  # to splice, held to the same bar as a survivor and justified by running that mutation by hand.
   #
   # It runs in parallel with `fixture` rather than after it: its own first control is that the
   # UNMUTATED fixture passes, so it already refuses to report anything if the fixture is broken.
@@ -102,6 +110,14 @@ jobs:
     # 15m11s for 385 mutants on a 4-vCPU runner, against 2m locally at `--jobs 16`. A required check
     # sitting four minutes under its own timeout is a check that will one day fail for a reason that
     # is about the runner, and a flaky required context teaches people to re-run rather than to read.
+    #
+    # THE SWEEP IS NOW 432 MUTANTS OVER A 90-LEG FIXTURE, not 385 over 86: the `str` operator stopped
+    # skipping literals with no alphanumeric character in them, which is the gate's entire lexical
+    # vocabulary (.github#2730 repair phase). Measured at 2m17s locally at `--jobs 16`, against 2m16s
+    # for 385 before the change. The CI figure above is NOT re-measured here and is left as the
+    # historical measurement it was; scaled by mutant count it projects to about 17m, which is why
+    # the timeout is unchanged rather than raised. If this job ever approaches 30m, raise it here
+    # with the run that measured it rather than trimming the sweep.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7

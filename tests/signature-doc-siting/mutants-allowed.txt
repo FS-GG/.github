@@ -1,10 +1,21 @@
-# Justified survivors of the mutation sweep in `tests/signature-doc-siting/mutants.py` (.github#2730).
+# Justified survivors and justified SKIPS of the mutation sweep in
+# `tests/signature-doc-siting/mutants.py` (.github#2730).
 #
-# THERE ARE NONE, AND THAT IS THE POINT OF THE FILE RATHER THAN AN ACCIDENT OF IT. Every mutation the
-# sweep generates from the gate's own AST is killed by a fixture leg: 263 of 263 at the head that
-# introduced this file. An entry here is a written admission that some dimension of
-# `scripts/check-signature-doc-siting.py` is asserted by nothing, and it has to name which and say why
-# that is acceptable — so the file only ever shrinks, exactly like `baseline.txt` beside it.
+# NO SURVIVOR IS LISTED HERE, AND THAT IS THE POINT OF THE FILE RATHER THAN AN ACCIDENT OF IT. Every
+# mutation the sweep generates from the gate's own AST is killed by a fixture leg: 263 of 263 at the
+# head that introduced this file, and 432 of 432 at this one. An entry here is a written admission
+# that some dimension of `scripts/check-signature-doc-siting.py` is asserted by nothing, and it has
+# to name which and say why that is acceptable — so the file only ever shrinks, exactly like
+# `baseline.txt` beside it.
+#
+# ONE SKIP IS LISTED, AND A SKIP IS HELD TO THE SAME BAR AS A SURVIVOR. The sweep declines a
+# candidate site when the mutation it would generate does not change the bytes, does not compile, or
+# cannot be spliced back into the source; those sites are enumerated by a second reading of the gate
+# and subtracted from it by name, so a decline is arithmetic rather than an omission. But an
+# accounted-for decline is still a site nothing measured, which is a survivor wearing another name —
+# so it needs the same written justification, in the same shrink-only file. `skip:` entries are
+# spelled `skip:<site>` and the sweep prints the reason it declined beside the justification here,
+# so a justification that has stopped matching its reason is visible in the same log.
 #
 # WHY AN ALLOWLIST AT ALL, IF IT IS EMPTY. Because the alternative is worse in the direction this row
 # has already been burned by. `.github#2730`'s ordinary chain exhausted at round 3 with five instances
@@ -44,3 +55,13 @@
 #
 # Both arguments were sound and both conclusions were wrong. That is the failure mode this file is
 # built to make expensive.
+#
+# AND THE ONE SKIP BELOW IS JUSTIFIED THE SAME WAY: BY MEASUREMENT, NOT BY ARGUMENT. "Covered by
+# another leg" is refused above as a reason for a SURVIVOR because the survival itself refutes it. It
+# is not automatically refuted for a skip — the mutant was never run, so there is nothing to refute —
+# and that makes it weaker, not stronger: nothing has been observed at all. So the entry below does
+# not claim coverage; it reports the mutation applied BY HAND, in the two physical pieces the
+# automatic splice cannot rewrite as one, run against the real fixture behind the same three
+# controls. What is skipped is the SPLICE, not the assertion.
+
+skip:str@484:69  The `not one has a sibling .fsi` refusal, whose two f-string pieces `ast` merges into one Constant; its raw span therefore covers the closing and opening quotes between them, and splicing over it unterminates the f-string (the sweep reports `mutant does not compile`, and reports it rather than dropping it). NOT an equivalence claim, and NOT "covered by another leg": applied BY HAND as two same-length sentinel substitutions, one per physical piece, the mutant is KILLED 84/2 — by `run.sh`'s `no verdict: .fs files exist but NOT ONE has a sibling .fsi` leg and by the byte-exact `the no-subject refusal names the ROOT it scanned` leg — behind controls unmutated 86/0 PASS, early-ok 1/85 KILLED, inert 86/0 SURVIVED. What is skipped is the SPLICE, not the assertion. Delete this line if the splice learns to rewrite a merged span, or if the gate stops concatenating there.

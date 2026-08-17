@@ -46,11 +46,30 @@ THE OPERATORS, and each is mechanical rather than chosen:
   len-pin                 every `len(...)`, pinned to the literal 999. M5's second half: a leg that
                           asserts a printed count with `[0-9]+` cannot tell a real count from a
                           fabricated one.
+  bool-flip               every `True`/`False` literal, inverted. Nine today, and not one of them is
+                          decorative: each is a flag some caller of the gate's own functions reads.
+  boolop-flip             every two-operand `and`/`or`, swapped. `cond-false`/`cond-true` replace a
+                          whole test and `cmp-flip` rewrites one comparison, so neither reaches the
+                          connective BETWEEN two comparisons; see its generation site below for the
+                          `//`-vs-`////` guard that is exactly that shape.
+  report-swap             within one `print(...)`, every reported name substituted for every other
+                          name in the SAME call -- the largest operator here (119 today) and the one
+                          with the measured provenance: two quantities printed side by side are
+                          usually EQUAL in the green case, so a leg that only ever sees a green tree
+                          cannot tell which of the two it is reading. See its generation site for the
+                          bound and the measurement that chose it.
   dir-drop                one mutation PER PROJECT DIRECTORY UNDER `src/` that holds a subject,
                           enumerated from the filesystem rather than named here, each narrowing
                           `discover()` to exclude that project. This is M5 itself, generalised: it
                           extends to a fourth project on the day one is added, with no edit here.
   early-ok                `main` returns `EX_OK` before doing anything. The unconditional pass.
+
+TEN OPERATORS, AND THE LIST ABOVE IS NOT THE AUTHORITY -- `OPERATORS` below is, and the enumeration,
+the second reading and the accounting are all checked against it. An earlier version of this header
+named seven of the ten, omitting `bool-flip`, `boolop-flip` and `report-swap`, which between them
+generate 131 of 385 mutants; the same three were the ones with no floor entry at all. A prose list
+and a predicate that drift apart is how a guard becomes decorative, so neither is now allowed to be
+the only place an operator is named.
 
 CONTROLS, BECAUSE AN INSTRUMENT'S SILENCE PROVES NOTHING (#266, and seven instrument faults measured
 in this row's own session -- a `dotnet test` that exited 0 while running nothing, a gate graded
@@ -67,6 +86,21 @@ on their expected side or this program refuses to report at all:
 Each mutant is additionally verified to have CHANGED THE FILE BYTES and to still COMPILE before it
 is run, so "SURVIVED" can never mean "was never applied" and never means "did not parse".
 
+AND THE ENUMERATION IS ITSELF ACCOUNTED FOR, SITE BY SITE, because the controls above prove the
+sweep can SPEAK and prove nothing about whether it SAW. `token_reading` reads the same gate a second
+time through `tokenize` -- the CPython lexer, which shares no code with the `ast` walk above -- and
+counts the candidate sites of every one of the ten operators. `main` then asserts an EQUALITY rather
+than a floor:
+
+    enumerated(op) + skipped(op) == second reading(op),   for every operator, both directions
+
+Every site the AST walk declines is therefore REPORTED (there is no `continue` that drops one in
+silence), and every reported skip must additionally carry a written justification in
+`mutants-allowed.txt`, exactly as a survivor must -- because a site the sweep does not measure and a
+mutant nothing kills are the same fact about coverage. A silent loss breaks the equality; a loud but
+unaccounted loss is an unjustified skip and fails the run. See the block above the check in `main`
+for the measurement that made this necessary and for what each direction of the inequality means.
+
 Pure stdlib. No network, no build, no `dotnet`. Each mutant runs against its own private copy of
 `scripts/`, `src/` and `tests/signature-doc-siting/`, so the sweep never writes into the repository
 it is invoked from.
@@ -81,6 +115,7 @@ from __future__ import annotations
 import argparse
 import ast
 import concurrent.futures
+import io
 import os
 import queue
 import re
@@ -88,12 +123,31 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import token as token_module
+import tokenize
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 GATE_REL = os.path.join("scripts", "check-signature-doc-siting.py")
 FIXTURE_REL = os.path.join("tests", "signature-doc-siting", "run.sh")
 ALLOWED = os.path.join(HERE, "mutants-allowed.txt")
+
+# THE CLOSED SET OF OPERATORS, named once. `enumerate_mutants` may emit only these, `token_reading`
+# must count sites for exactly these, and `main` refuses if either disagrees with this tuple -- so an
+# operator added to one and not the other is a red check rather than an operator with no floor, which
+# is the shape of the defect this file's own guard shipped with.
+OPERATORS = (
+    "bool-flip",
+    "boolop-flip",
+    "cmp-flip",
+    "cond-false",
+    "cond-true",
+    "dir-drop",
+    "len-pin",
+    "num",
+    "report-swap",
+    "str",
+)
 
 # An alphabetic run of two or more characters, not immediately preceded by a backslash -- so `\n`,
 # `\t` and `A` inside a literal keep their escape meaning while `src`, `obj` and `fs` do not.
@@ -132,13 +186,29 @@ def _span(text: str, node: ast.AST) -> str:
 
 
 def sentinel(value: str) -> str | None:
-    """`value` with its alphabetic runs replaced by same-length `X`s, or None if nothing changed."""
+    """`value` with its alphabetic runs replaced by same-length `X`s, or None for the empty literal.
+
+    THE `any(c.isalnum())` GUARD THIS USED TO CARRY DROPPED 47 SITES, and they were the gate's entire
+    lexical vocabulary: every slash run it tests for, the block-comment opener and closer, all three
+    string openers (ordinary, verbatim and triple-quoted), the bare quote and the bare apostrophe,
+    the doubled quote, the backslash -- plus the separators and indents of the gate's own messages.
+    A gate whose subject is a comment MARKER cannot have its markers be the one class of constant
+    its sweep does not mutate. Measured when they were first generated: 47 mutants, 41 killed, 6
+    survived, every load-bearing delimiter among the killed -- the three-slash doc marker (47/39),
+    the two-slash ordinary comment (82/4), the disqualifying fourth slash (84/2), the block-comment
+    opener (79/7) and its closer (80/6), the string opener (79/7) and the character-literal quote
+    (81/5). Named by construct rather than by line, because a line number for a site in ANOTHER file
+    rots silently and this file's whole subject is a claim that rotted. The six survivors were the
+    gate's own message separators and indents, and `run.sh` now pins all six. So the guard is gone
+    and only the empty literal is left, which has no same-length sentinel to replace it with.
+    """
     mutated = ALPHA_RUN.sub(lambda m: "X" * len(m.group(0)), value)
     if mutated != value:
         return mutated
-    # A literal with no run of two letters -- `"i"`, `"#"`, `"/"`. If it has any alphanumeric at all
-    # it is still a behavioural constant worth mutating; `p + "i"` is the whole sibling `.fsi` test.
-    if value and any(c.isalnum() for c in value):
+    # A literal with no run of two letters -- `"i"`, `"#"`, `"///"`, `'"'`. Every one of them is a
+    # behavioural constant: `p + "i"` is the whole sibling `.fsi` test, and `"///"` is the gate's
+    # subject. `X * len(value)` keeps the length, so a raw f-string span stays the width it was.
+    if value:
         return "X" * len(value)
     return None
 
@@ -173,12 +243,30 @@ def docstring_spans(tree: ast.AST) -> set[tuple[int, int]]:
     return out
 
 
-def enumerate_mutants(gate_source: str, projects: list[str]) -> tuple[list[Mutant], list[str]]:
+class Skip:
+    """One candidate site the enumeration declined, named so the accounting can subtract it.
+
+    EVERY declined site becomes one of these. There is no `continue` left in `enumerate_mutants`
+    that drops a site without recording it: the repair-phase critic measured that `sentinel()`
+    returning None was dropped by a bare `continue` that never reached this list, so the program
+    printed `sites SKIPPED (reported, never silent): 1` when the truth was 48.
+    """
+
+    def __init__(self, operator: str, site: str, reason: str) -> None:
+        self.operator = operator
+        self.site = site
+        self.reason = reason
+
+    def __str__(self) -> str:
+        return f"{self.site}: {self.reason}"
+
+
+def enumerate_mutants(gate_source: str, projects: list[str]) -> tuple[list[Mutant], list[Skip]]:
     """(mutants, skipped) enumerated from the gate's AST and from the discovered project list."""
     tree = ast.parse(gate_source)
     docs = docstring_spans(tree)
     mutants: list[Mutant] = []
-    skipped: list[str] = []
+    skipped: list[Skip] = []
     seen: set[str] = set()
 
     def add(operator: str, node: ast.AST, new: str, note: str = "", tag: str = "") -> None:
@@ -188,18 +276,22 @@ def enumerate_mutants(gate_source: str, projects: list[str]) -> tuple[list[Mutan
         # same site, and without this only one of them would ever run.
         mid = f"{operator}@{node.lineno}:{node.col_offset}" + (f"={tag}" if tag else "")
         if mid in seen:
+            # A COLLIDING ID IS A DROPPED SITE, and it used to return here in silence. No collision
+            # occurs at today's head; it is reachable through a `print(...)` nested inside another,
+            # whose names `ast.walk` reaches from both calls.
+            skipped.append(Skip(operator, mid, "duplicate mutant id, already enumerated"))
             return
         seen.add(mid)
         mutated = splice(
             gate_source, node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, new
         )
         if mutated == gate_source:
-            skipped.append(f"{mid}: replacement is a no-op")
+            skipped.append(Skip(operator, mid, "replacement is a no-op"))
             return
         try:
             compile(mutated, "<mutant>", "exec")
         except SyntaxError as exc:
-            skipped.append(f"{mid}: mutant does not compile ({exc.msg})")
+            skipped.append(Skip(operator, mid, f"mutant does not compile ({exc.msg})"))
             return
         mutants.append(Mutant(mid, operator, where + (f" {note}" if note else ""), mutated))
 
@@ -208,41 +300,83 @@ def enumerate_mutants(gate_source: str, projects: list[str]) -> tuple[list[Mutan
         if isinstance(node, (ast.If, ast.While)):
             add("cond-false", node.test, "False")
             add("cond-true", node.test, "True")
-        # COMPARISONS.
-        if isinstance(node, ast.Compare) and len(node.ops) == 1:
-            flip = CMP_FLIP.get(type(node.ops[0]))
-            if flip is not None:
-                left = _span(gate_source, node.left)
-                right = _span(gate_source, node.comparators[0])
-                add("cmp-flip", node, f"{left} {flip} {right}")
+        # COMPARISONS. The second reading counts comparison OPERATORS, so a chain contributes one
+        # per operator there and must contribute one skip per operator here, or the two readings
+        # would disagree for a reason that is about neither of them.
+        if isinstance(node, ast.Compare):
+            site = f"cmp-flip@{node.lineno}:{node.col_offset}"
+            if len(node.ops) != 1:
+                for _ in node.ops:
+                    skipped.append(
+                        Skip(
+                            "cmp-flip",
+                            site,
+                            f"chained comparison ({len(node.ops)} operators); this operator rewrites "
+                            f"a single comparison only",
+                        )
+                    )
+            else:
+                flip = CMP_FLIP.get(type(node.ops[0]))
+                if flip is None:
+                    skipped.append(
+                        Skip("cmp-flip", site, f"{type(node.ops[0]).__name__} has no flip in CMP_FLIP")
+                    )
+                else:
+                    left = _span(gate_source, node.left)
+                    right = _span(gate_source, node.comparators[0])
+                    add("cmp-flip", node, f"{left} {flip} {right}")
         # CONSTANTS: numbers, then non-docstring strings.
         if isinstance(node, ast.Constant):
             if (node.lineno, node.col_offset) in docs:
                 continue
+            site = f"str@{node.lineno}:{node.col_offset}"
             if isinstance(node.value, bool):
                 add("bool-flip", node, "False" if node.value else "True")
             elif isinstance(node.value, int):
                 add("num", node, str(node.value + 1))
             elif isinstance(node.value, str):
                 new_value = sentinel(node.value)
-                if new_value is None:
-                    continue
                 raw = _span(gate_source, node)
-                if raw[:1] in ("'", '"') or raw[:2].lower() in ("r'", 'r"', "f'", 'f"', "b'", 'b"'):
+                if new_value is None:
+                    skipped.append(Skip("str", site, "empty literal has no same-length sentinel"))
+                elif raw[:1] in ("'", '"') or raw[:2].lower() in ("r'", 'r"', "f'", 'f"', "b'", 'b"'):
                     add("str", node, repr(new_value))
                 elif "{" not in raw and "}" not in raw and "\\" not in raw:
                     # A literal segment inside an f-string: its span is the raw text, unquoted.
+                    #
+                    # A SPAN MAY CROSS AN IMPLICIT CONCATENATION, because `ast` merges the segments
+                    # either side of one into a single `Constant` whose span then covers the closing
+                    # and opening quotes between them. Most such splices are still well formed -- the
+                    # two physical lines collapse into one valid f-string -- and five of this gate's
+                    # literals are mutated exactly that way. Where the result is not well formed,
+                    # `compile()` in `add` catches it and records the skip; guarding here on a quote
+                    # in the raw span would be tighter than the truth and cost those five mutants.
                     add("str", node, new_value)
                 else:
-                    skipped.append(f"str@{node.lineno}:{node.col_offset}: unrewritable literal span")
+                    skipped.append(
+                        Skip("str", site, "unrewritable raw span (brace or backslash in an f-string segment)")
+                    )
         # CONNECTIVES. `cond-false`/`cond-true` replace a whole test and `cmp-flip` rewrites one
         # comparison, so neither can reach the `and`/`or` BETWEEN two comparisons -- and a guard
         # written `A and B` whose fixture only ever exercises inputs where A and B agree is a guard
         # with an unasserted half. `//`-vs-`////` is exactly that shape (`i + 3 < n and line[i + 3]`).
-        if isinstance(node, ast.BoolOp) and len(node.values) == 2:
-            parts = [_span(gate_source, value) for value in node.values]
-            flip = "or" if isinstance(node.op, ast.And) else "and"
-            add("boolop-flip", node, f"{parts[0]} {flip} {parts[1]}")
+        if isinstance(node, ast.BoolOp):
+            if len(node.values) == 2:
+                parts = [_span(gate_source, value) for value in node.values]
+                flip = "or" if isinstance(node.op, ast.And) else "and"
+                add("boolop-flip", node, f"{parts[0]} {flip} {parts[1]}")
+            else:
+                # As with a chained comparison: the second reading counts `and`/`or` TOKENS, and a
+                # k-operand connective carries k-1 of them.
+                for _ in range(len(node.values) - 1):
+                    skipped.append(
+                        Skip(
+                            "boolop-flip",
+                            f"boolop-flip@{node.lineno}:{node.col_offset}",
+                            f"{len(node.values)}-operand connective; this operator rewrites a "
+                            f"two-operand one only",
+                        )
+                    )
         # COUNT PINNING.
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len":
             add("len-pin", node, "999")
@@ -277,8 +411,11 @@ def enumerate_mutants(gate_source: str, projects: list[str]) -> tuple[list[Mutan
     anchor = "    subjects = [p for p in sources if os.path.exists(p + \"i\")]"
     for project in projects:
         if anchor not in gate_source:
-            skipped.append(f"dir-drop/{project}: discover() anchor not found")
-            break
+            # One skip PER PROJECT, not one and a `break`: the second reading counts projects on the
+            # filesystem, so a lost anchor has to account for every one of them or the equality would
+            # read as a silent loss of two and a reported loss of one.
+            skipped.append(Skip("dir-drop", f"dir-drop@{project}", "discover() anchor not found"))
+            continue
         injected = (
             f'    sources = [p for p in sources if "/{project}/" not in p.replace(os.sep, "/")]\n'
             + anchor
@@ -293,6 +430,246 @@ def enumerate_mutants(gate_source: str, projects: list[str]) -> tuple[list[Mutan
         )
 
     return mutants, skipped
+
+
+# ---- THE SECOND READING ---------------------------------------------------------------------------
+#
+# Everything above reads the gate through `ast`. Everything below reads the SAME BYTES through
+# `tokenize`, which shares no code with the parser's tree walk: it is the CPython lexer, so a change
+# to `ast`, a walk that silently yields nothing, or a refactor that renames an anchor cannot move
+# both readings the same way. That is the whole point -- a floor derived from the reading it is
+# supposed to check is not a check.
+#
+# WHY A LEXER AND NOT A REGEX. A regex over lines cannot tell a `==` in code from a `==` inside this
+# gate's own 150-line docstring, and this gate is mostly prose: its docstrings hold `'` , `///`,
+# `while`, `and` and `!=` in quantity. `tokenize` classifies each of those as STRING and the guard
+# never sees them. The `if|elif|while` line count this file used to carry for `cond-*` had exactly
+# that exposure and was the only floor here that was ever real.
+
+_STMT_BOUNDARY = (token_module.NEWLINE, token_module.INDENT, token_module.DEDENT)
+_CMP_OP_TOKENS = frozenset({"==", "!=", "<", "<=", ">", ">="})
+_OPENERS = frozenset("([{")
+_CLOSERS = frozenset(")]}")
+# Names that are keywords, so never an `ast.Name` a `report-swap` could substitute.
+_KEYWORDS = frozenset(
+    """and as assert async await break class continue def del elif else except finally for from
+    global if import in is lambda nonlocal not or pass raise return try while with yield
+    None True False""".split()
+)
+_FSTRING_MIDDLE = getattr(token_module, "FSTRING_MIDDLE", None)
+_FSTRING_START = getattr(token_module, "FSTRING_START", None)
+_FSTRING_END = getattr(token_module, "FSTRING_END", None)
+
+
+def _significant_tokens(gate_source: str) -> list[tokenize.TokenInfo]:
+    """The gate's token stream, less the tokens that carry no syntax (comments and blank lines)."""
+    return [
+        tok
+        for tok in tokenize.generate_tokens(io.StringIO(gate_source).readline)
+        if tok.type not in (token_module.COMMENT, token_module.NL, token_module.ENCODING)
+    ]
+
+
+def _is_integer_literal(text: str) -> bool:
+    """A NUMBER token that `ast` renders as `Constant(int)` -- not a float, not complex."""
+    lowered = text.replace("_", "").lower()
+    if lowered.endswith("j"):
+        return False
+    if lowered.startswith(("0x", "0o", "0b")):
+        return True
+    return "." not in lowered and "e" not in lowered
+
+
+def _string_groups(toks: list[tokenize.TokenInfo]) -> list[tuple[int, int]]:
+    """Half-open index ranges of maximal adjacent string literals -- one per implicit concatenation.
+
+    `"a" "b"` is TWO tokens and ONE `ast.Constant`, so a reading that counted tokens would over-count
+    the very operator it is checking. An f-string's interior travels inside its group.
+    """
+    groups: list[tuple[int, int]] = []
+    index = 0
+    while index < len(toks):
+        if toks[index].type != token_module.STRING and toks[index].type != _FSTRING_START:
+            index += 1
+            continue
+        start = index
+        depth = 0
+        while index < len(toks):
+            kind = toks[index].type
+            if kind == _FSTRING_START:
+                depth += 1
+            elif kind == _FSTRING_END:
+                depth -= 1
+            elif depth == 0 and kind != token_module.STRING:
+                break
+            index += 1
+        groups.append((start, index))
+    return groups
+
+
+def _literal_segment_runs(toks: list[tokenize.TokenInfo], start: int, end: int) -> int:
+    """`ast.Constant` string nodes inside one group: maximal runs of adjacent literal segments.
+
+    `f"a{x}b"` is two constants because the replacement field separates them; `f"a{x}b" f"c"` is
+    three tokens' worth of literal but only THREE constants, because `b` and `c` are adjacent across
+    the concatenation and `ast` merges them. Runs reproduce that exactly.
+    """
+    runs = 0
+    previous_was_segment = False
+    for index in range(start, end):
+        kind = toks[index].type
+        if kind in (_FSTRING_START, _FSTRING_END):
+            continue  # a quote boundary does not separate two literal segments
+        is_segment = kind == token_module.STRING or kind == _FSTRING_MIDDLE
+        if is_segment and not previous_was_segment:
+            runs += 1
+        previous_was_segment = is_segment
+    return runs
+
+
+def _is_docstring_group(toks: list[tokenize.TokenInfo], start: int, end: int) -> bool:
+    """Is this group an expression statement consisting of nothing but the literal?
+
+    That is `docstring_spans`' subject read textually. It also catches a bare string statement that
+    is not a docstring, which `ast` would mutate -- an over-count in the direction that LOWERS this
+    reading, and the gate holds none.
+    """
+    before = toks[start - 1] if start else None
+    after = toks[end] if end < len(toks) else None
+    at_statement_start = before is None or before.type in _STMT_BOUNDARY
+    is_whole_statement = after is not None and after.type == token_module.NEWLINE
+    return at_statement_start and is_whole_statement
+
+
+def token_reading(gate_source: str, projects: list[str]) -> dict[str, int]:
+    """Candidate sites per operator, counted from the token stream and the filesystem.
+
+    Raises `SystemExit` on an interpreter whose `tokenize` cannot see inside an f-string, because
+    such a reading would under-count `report-swap`, `len-pin` and `str` without saying so -- a
+    silently loose floor, which is the defect being repaired.
+    """
+    if _FSTRING_MIDDLE is None:
+        raise SystemExit(
+            "harness: this interpreter's `tokenize` does not emit FSTRING_* tokens (Python < 3.12), "
+            "so the second reading cannot see the names and literals inside an f-string and would "
+            "under-count them in silence. Run this sweep on Python 3.12 or newer."
+        )
+
+    toks = _significant_tokens(gate_source)
+    counts = {operator: 0 for operator in OPERATORS}
+
+    # DISCOVERY: the filesystem is the second reading, exactly as it is the first one.
+    counts["dir-drop"] = len(projects)
+
+    depth = 0
+    pending_for_at: set[int] = set()
+    for index, tok in enumerate(toks):
+        previous = toks[index - 1] if index else None
+        following = toks[index + 1] if index + 1 < len(toks) else None
+
+        if tok.type == token_module.OP:
+            if tok.string in _OPENERS:
+                depth += 1
+            elif tok.string in _CLOSERS:
+                pending_for_at.discard(depth)
+                depth -= 1
+            elif tok.string in _CMP_OP_TOKENS:
+                counts["cmp-flip"] += 1
+            continue
+
+        if tok.type == token_module.NUMBER:
+            if _is_integer_literal(tok.string):
+                counts["num"] += 1
+            continue
+
+        if tok.type != token_module.NAME:
+            continue
+
+        if tok.string in ("True", "False"):
+            counts["bool-flip"] += 1
+        elif tok.string in ("and", "or"):
+            counts["boolop-flip"] += 1
+        elif tok.string == "for":
+            pending_for_at.add(depth)
+        elif tok.string == "in":
+            # `for x in xs` is not a comparison. Its `in` is the only one that is not, and it is
+            # told apart by the `for` that opened the clause at this bracket depth.
+            if depth in pending_for_at:
+                pending_for_at.discard(depth)
+            else:
+                counts["cmp-flip"] += 1
+        elif tok.string == "is":
+            counts["cmp-flip"] += 1  # `is not` is ONE operator; its `not` is counted nowhere
+        elif tok.string == "len":
+            is_call = following is not None and following.type == token_module.OP and following.string == "("
+            is_attribute = previous is not None and previous.type == token_module.OP and previous.string == "."
+            if is_call and not is_attribute:
+                counts["len-pin"] += 1
+        elif tok.string in ("if", "elif", "while") and depth == 0:
+            # A statement, not a ternary and not a comprehension guard: those sit at depth > 0 or
+            # follow an expression rather than a statement boundary, and neither is an `ast.If`.
+            at_statement_start = previous is None or previous.type in _STMT_BOUNDARY or (
+                previous.type == token_module.OP and previous.string in (":", ";")
+            )
+            if at_statement_start:
+                counts["cond-false"] += 1
+                counts["cond-true"] += 1
+
+    for start, end in _string_groups(toks):
+        if not _is_docstring_group(toks, start, end):
+            counts["str"] += _literal_segment_runs(toks, start, end)
+
+    counts["report-swap"] = _report_swap_sites(toks)
+    return counts
+
+
+def _report_swap_sites(toks: list[tokenize.TokenInfo]) -> int:
+    """Substitutions `report-swap` must generate: for each `print(...)`, occurrences x (distinct - 1).
+
+    The names counted are the ones `ast` reports as `Name` in Load context: an attribute's leading
+    name (`os` in `os.path.exists`) counts, the attribute itself does not; a keyword argument's name
+    is not a `Name`; a comprehension target is Store context, not Load.
+    """
+    total = 0
+    for index, tok in enumerate(toks):
+        if not (tok.type == token_module.NAME and tok.string == "print"):
+            continue
+        opener = toks[index + 1] if index + 1 < len(toks) else None
+        if opener is None or opener.type != token_module.OP or opener.string != "(":
+            continue
+        depth = 0
+        names: list[str] = []
+        in_for_target = False
+        cursor = index + 1
+        while cursor < len(toks):
+            inner = toks[cursor]
+            if inner.type == token_module.OP and inner.string in _OPENERS:
+                depth += 1
+            elif inner.type == token_module.OP and inner.string in _CLOSERS:
+                depth -= 1
+                if depth == 0:
+                    break
+            elif inner.type == token_module.NAME:
+                if inner.string == "for":
+                    in_for_target = True
+                elif inner.string == "in":
+                    in_for_target = False
+                elif inner.string not in _KEYWORDS and inner.string != "print" and not in_for_target:
+                    previous = toks[cursor - 1]
+                    following = toks[cursor + 1] if cursor + 1 < len(toks) else None
+                    is_attribute = previous.type == token_module.OP and previous.string == "."
+                    is_keyword_argument = (
+                        following is not None
+                        and following.type == token_module.OP
+                        and following.string == "="
+                    )
+                    if not is_attribute and not is_keyword_argument:
+                        names.append(inner.string)
+            cursor += 1
+        distinct = len(set(names))
+        if distinct > 1:
+            total += len(names) * (distinct - 1)
+    return total
 
 
 def control_early_ok(gate_source: str) -> str:
@@ -427,10 +804,12 @@ def main(argv: list[str] | None = None) -> int:
         by_operator[mutant.operator] = by_operator.get(mutant.operator, 0) + 1
     for operator in sorted(by_operator):
         print(f"  {operator}: {by_operator[operator]}")
-    if skipped:
-        print(f"sites SKIPPED (reported, never silent): {len(skipped)}")
-        for entry in skipped:
-            print(f"  {entry}")
+    skipped_by_operator: dict[str, int] = {}
+    for skip in skipped:
+        skipped_by_operator[skip.operator] = skipped_by_operator.get(skip.operator, 0) + 1
+    print(f"sites SKIPPED (reported, never silent): {len(skipped)}")
+    for skip in skipped:
+        print(f"  {skip}")
 
     if args.list:
         for mutant in mutants:
@@ -440,39 +819,81 @@ def main(argv: list[str] | None = None) -> int:
     # A SWEEP THAT ENUMERATED NOTHING WOULD REPORT `0 mutants, 0 killed, 0 survived` AND EXIT 0.
     # That is this row's own subject turned on its own instrument -- "0 survivors" and "0 mutants"
     # are the same bytes -- and it is reachable for real: an `ast` change, a parse that silently
-    # yields an empty tree, or a refactor that renames the anchors below would each produce it. So
-    # the floor is checked, and it is checked against a SECOND, textual reading of the same file
+    # yields an empty tree, or a refactor that renames the anchors would each produce it. So the
+    # enumeration is checked against a SECOND reading of the same file, through a different reader,
     # rather than against a number typed here.
+    #
+    # THAT SENTENCE WAS TRUE OF THREE OPERATORS AND FALSE OF SEVEN, and the repair phase's critic
+    # measured what the difference bought. `report-swap` (119 mutants), `bool-flip` (9) and
+    # `boolop-flip` (3) had no entry at all; `num`, `str`, `len-pin` and `cmp-flip` had the literal
+    # `1`. Executed through this `main()` with all three controls landing: suppressing the first
+    # three printed `254 mutants, 254 killed, 0 survived, 0 UNJUSTIFIED` at exit 0 with no
+    # `REFUSING:` line, and additionally capping the other four at one each printed `103 mutants,
+    # 103 killed` -- 282 of 385, 73% of the sweep, able to vanish with this required check green and
+    # this guard silent. A floor of `1` for an operator that generates 59 is a number typed here
+    # wearing a predicate's clothes.
+    #
+    # SO THE RELATION IS AN EQUALITY, PER OPERATOR, IN BOTH DIRECTIONS:
+    #
+    #     enumerated(op) + skipped(op) == token_reading(op)
+    #
+    #   * enumerated + skipped BELOW the reading is a site that vanished without being reported.
+    #     That is the vacuity this whole file exists to refuse, and it is the direction the old
+    #     floor was aimed at.
+    #   * ABOVE it is the second reading under-counting -- which does not fabricate coverage, but
+    #     does make the guard loose in exactly the way that let 73% through, so it refuses too. The
+    #     remedy is to teach `token_reading` the construct, or to record the skip that explains it.
+    #
+    # Both remedies are cheap and both are visible; a guard that quietly tolerates disagreement
+    # between its two readings has stopped being a second reading at all.
     if not projects:
         print("REFUSING: no project under src/ holds a subject, so dir-drop asserts nothing.")
         return 3
 
-    textual_conditions = sum(
-        1
-        for raw in gate_source.split("\n")
-        if re.match(r"\s*(if|elif|while)\s", raw) and not raw.lstrip().startswith("#")
-    )
-    required = {
-        "cond-false": textual_conditions,
-        "cond-true": textual_conditions,
-        "num": 1,
-        "str": 1,
-        "len-pin": 1,
-        "cmp-flip": 1,
-        "dir-drop": len(projects),
-    }
-    shortfall = [
-        f"{operator}: enumerated {by_operator.get(operator, 0)}, expected at least {floor}"
-        for operator, floor in sorted(required.items())
-        if by_operator.get(operator, 0) < floor
-    ]
-    if shortfall:
-        print("REFUSING: the enumeration is smaller than a second reading of the same gate says it")
-        print("should be, so a green sweep below would mean 'nothing was measured', not 'nothing")
-        print("survived'. The AST walk and the textual count disagree:")
-        for entry in shortfall:
+    reading = token_reading(gate_source, projects)
+
+    # AND NEITHER SIDE MAY GROW AN OPERATOR THE OTHER HAS NEVER HEARD OF. This is the guard that
+    # keeps the finding above from regenerating: the three operators with no floor were added to the
+    # AST walk and nobody added them here, and nothing said so.
+    unknown_enumerated = sorted(set(by_operator) - set(OPERATORS))
+    unknown_skipped = sorted(set(skipped_by_operator) - set(OPERATORS))
+    unread = sorted(set(OPERATORS) - set(reading))
+    if unknown_enumerated or unknown_skipped or unread:
+        print("REFUSING: the operator registry, the enumeration and the second reading disagree.")
+        for operator in unknown_enumerated:
+            print(f"  {operator}: enumerated, but not in OPERATORS -- it would have no second reading")
+        for operator in unknown_skipped:
+            print(f"  {operator}: skipped, but not in OPERATORS -- its losses would be unaccounted")
+        for operator in unread:
+            print(f"  {operator}: in OPERATORS, but `token_reading` counts no sites for it")
+        return 3
+
+    disagreements = []
+    for operator in OPERATORS:
+        enumerated = by_operator.get(operator, 0)
+        dropped = skipped_by_operator.get(operator, 0)
+        expected = reading[operator]
+        if enumerated + dropped != expected:
+            direction = "fewer" if enumerated + dropped < expected else "more"
+            disagreements.append(
+                f"{operator}: enumerated {enumerated} + skipped {dropped} = {enumerated + dropped}, "
+                f"but a second reading of the same gate finds {expected} candidate site(s) "
+                f"-- {direction} than the tree walk accounted for"
+            )
+    if disagreements:
+        print("REFUSING: the AST enumeration and the token-stream reading of the same gate disagree,")
+        print("so a green sweep below would mean 'nothing was measured' rather than 'nothing")
+        print("survived'. Per operator:")
+        for entry in disagreements:
             print(f"  {entry}")
         return 3
+
+    print()
+    print("enumeration accounted for, per operator (enumerated + skipped == second reading):")
+    for operator in OPERATORS:
+        enumerated = by_operator.get(operator, 0)
+        dropped = skipped_by_operator.get(operator, 0)
+        print(f"  {operator:<14} {enumerated:>4} + {dropped:>2} == {reading[operator]:>4}")
 
     jobs = max(1, args.jobs)
     tmp = tempfile.mkdtemp(prefix="signature-doc-siting-mutants.")
@@ -562,23 +983,41 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  killed   ({counts:>7}) {mutant.mid:<28} {mutant.where}")
 
     unjustified = [m for m in survivors if m.mid not in allowed]
+
+    # A SKIPPED SITE IS A SURVIVOR'S TWIN AND IS HELD TO THE SAME BAR. The equality above proves
+    # every declined site was REPORTED; it cannot prove any of them was harmless, and a broken
+    # `splice` that made every mutation fail to compile would satisfy it perfectly while enumerating
+    # nothing. So each skip carries a `skip:<site>` line in `mutants-allowed.txt` with its written
+    # justification, in the same shrink-only file, for the same reason: a site the sweep does not
+    # measure and a mutant nothing kills are one fact about coverage wearing two names.
+    unjustified_skips = [s for s in skipped if f"skip:{s.site}" not in allowed]
+    justified_skips = [s for s in skipped if f"skip:{s.site}" in allowed]
+
     print()
     print(
         f"signature-doc-siting mutation sweep: {len(mutants)} mutants, {killed} killed, "
         f"{len(survivors)} survived ({len(survivors) - len(unjustified)} justified), "
-        f"{len(unjustified)} UNJUSTIFIED"
+        f"{len(unjustified)} UNJUSTIFIED; {len(skipped)} site(s) skipped "
+        f"({len(justified_skips)} justified), {len(unjustified_skips)} UNJUSTIFIED"
     )
-    stale = sorted(set(allowed) - {m.mid for m in survivors})
+    live = {m.mid for m in survivors} | {f"skip:{s.site}" for s in skipped}
+    stale = sorted(set(allowed) - live)
     if stale:
-        print(f"stale entries in {os.path.relpath(ALLOWED, REPO)} -- these mutants no longer survive, delete them:")
+        print(f"stale entries in {os.path.relpath(ALLOWED, REPO)} -- these mutants no longer survive")
+        print("and these sites are no longer skipped, so delete them:")
         for mid in stale:
             print(f"  {mid}")
+    if unjustified_skips:
+        print()
+        print("Each UNJUSTIFIED skip is a candidate site this sweep declined to measure.")
+        print("Make it mutatable, or justify it in mutants-allowed.txt as `skip:<site> <why>`:")
+        for skip in unjustified_skips:
+            print(f"  skip:{skip.site}  ({skip.reason})")
     if unjustified:
         print()
         print("Each UNJUSTIFIED mutant is a dimension of the gate the fixture does not assert.")
         print("Add a fixture leg that reds on it, or justify it in mutants-allowed.txt.")
-        return 1
-    if stale:
+    if unjustified or unjustified_skips or stale:
         return 1
     return 0
 

@@ -101,8 +101,8 @@ safely.
 THE BASELINE, AND WHY IT IS EXACT IN BOTH DIRECTIONS. `src/FS.GG.Coord.Cli` was outside .github#2730's
 lane -- .github#2724 held `Client.fs`/`Client.fsi` while it ran, and the extraction programme gives
 each extracted module a proper `.fsi` with its prose moved as part of that work. Sweeping it there
-would have collided with every extraction lane for no benefit. So its 943 lines across 12 files are
-RECORDED rather than dropped, as `<count> <path>` lines whose counts must match the tree EXACTLY:
+would have collided with every extraction lane for no benefit. So its 2,657 lines across 13 files
+are RECORDED rather than dropped, as `<count> <path>` lines whose counts must match the tree EXACTLY:
 
     more than the number here  -> a new doc comment arrived. Repair it; raising the number is not a
                                   remedy.
@@ -143,11 +143,14 @@ fabricated count satisfies as readily as a real one.
 WHAT ASSERTS THIS GATE, AND WHY IT IS NOT ONLY THE FIXTURE. `tests/signature-doc-siting/run.sh`
 proves the gate can say NO; `tests/signature-doc-siting/mutants.py` proves the FIXTURE can, by
 enumerating mutations from this module's own abstract syntax tree -- every branch condition, every
-comparison, every numeric and string literal, every `len(...)`, and one per project directory under
-`src/` -- and requiring the fixture to fail on each. Five separate defects in this file's review
-history were survivors of a hand-written sweep drawn from its author's model of what this gate does;
-a mutation set read off the AST covers the branches the author did not think of, including the ones
-added after the sweep was written. A branch added below without a fixture leg is a red check.
+comparison, every numeric, string and boolean literal, every two-operand `and`/`or`, every
+`len(...)`, every quantity a `print` reports, and one per project directory under `src/` -- and
+requiring the fixture to fail on each. Five separate defects in this file's review history were
+survivors of a hand-written sweep drawn from its author's model of what this gate does; a mutation
+set read off the AST covers what the author did not think of, including what is added later. And
+that sweep's own enumeration is checked against a second, independent reading of this file, operator
+by operator, because a sweep that measured nothing would otherwise report the same green as one that
+measured everything. A branch added below without a fixture leg is a red check.
 
 Pure stdlib. No network, no build, no `dotnet`: the verdict is a function of the committed tree.
 """

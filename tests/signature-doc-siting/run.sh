@@ -97,6 +97,27 @@ must_line() {
   fi
 }
 
+# must_text <name> <exact-text> <root> [<baseline>] — the gate's output must CONTAIN this text byte
+# for byte, as a FIXED STRING (`grep -F`) rather than a pattern.
+#
+# `must_line` is the stronger form and stays the default. This one exists for the two lines whose
+# tail is the OPERATING SYSTEM's own words — an `OSError` or a `UnicodeDecodeError` message — which
+# this fixture must not pin, because the assertion would then be about the C library and the Python
+# version rather than about the gate. Everything the GATE contributes to those lines is still
+# asserted by value: its sentence, the path it names, its `: ` separator and its two-space indent.
+# Those separators and indents were what nothing asserted (.github#2730 repair phase): the sweep's
+# `str` operator could not reach them at all until it stopped skipping literals with no alphanumeric
+# character in them, and the first sweep that could reach them found five survivors here.
+must_text() {
+  local name="$1" want="$2" root="$3" baseline="${4:-}"
+  run_gate "$root" "$baseline"
+  if grep -qF -- "$want" <<<"$OUT"; then
+    ok "$name"
+  else
+    bad "$name (no text equal to: $want)" "$OUT"
+  fi
+}
+
 # THE EXPECTED VALUES ARE DERIVED INDEPENDENTLY, WITH `find` AND THE SHELL — never by asking the
 # gate. A leg that checks the gate's count against the gate's own idea of the count asserts nothing,
 # and this row has already shipped one assertion that could not fail. These two functions are a
@@ -167,6 +188,21 @@ FS
 GREEN="$(mktree green)"
 write_clean_pair "$GREEN"
 must_exit "green: an implementation with a sibling .fsi and no doc comment" 0 "OK: every subject file matches" "$GREEN"
+
+# AND THE `--root` DEFAULT ITSELF, WHICH EVERY OTHER LEG IN THIS FILE ROUTES AROUND. `run_gate`
+# always passes `--root`, and so does production (`signature-doc-siting.yml:132` passes `--root .`),
+# so `argparse`'s default was a constant no leg could reach: mutating it survived the whole mutation
+# sweep. It is not dead code, though — a contributor debugging this gate runs it with no arguments
+# from the repository root, and that is the path exercised here.
+set +e
+NOFLAG_OUT="$(cd "$GREEN" && python3 "$GATE" 2>&1)"
+NOFLAG_RC=$?
+set -e
+if [ "$NOFLAG_RC" -eq 0 ] && grep -qxF -- "OK: every subject file matches its baseline entry exactly." <<<"$NOFLAG_OUT"; then
+  ok "green: with NO --root at all, the default resolves to the working directory"
+else
+  bad "green: with NO --root at all, the default resolves to the working directory (exit $NOFLAG_RC)" "$NOFLAG_OUT"
+fi
 
 # The green run must still SAY what it looked at. A gate that reports a pass without naming its
 # subject cannot be distinguished from one whose subject silently emptied.
@@ -525,6 +561,13 @@ must_line "the no-subject refusal names the ROOT it scanned, not merely somethin
 
 must_exit "no verdict: the baseline cannot be read" 3 "NO VERDICT: cannot read the baseline .*absent-baseline" "$GREEN" "$WORK/absent-baseline.txt"
 
+# ...and it says WHICH file and WHY, with a separator between them. The leg above spends a `.*`
+# across both, so the sentence, the path and the OS reason could run together into one word and it
+# would still pass. Everything up to and including the `: ` is the gate's own text; what follows is
+# the operating system's, and pinning that would be an assertion about the C library.
+must_text "the baseline-unreadable refusal separates the path it names from the reason" \
+  "NO VERDICT: cannot read the baseline $WORK/absent-baseline.txt: " "$GREEN" "$WORK/absent-baseline.txt"
+
 # EVERY NO-VERDICT PATH THAT PRINTS A POPULATION PRINTS THE WHOLE OF IT. `main` reports its discovered
 # counts on the baseline-unreadable path as well as on the green one, and a refusal that misdescribes
 # what it was looking at sends the reader to repair the wrong thing.
@@ -568,6 +611,12 @@ FSI
 # Not valid UTF-8 in any position, so `open(..., encoding="utf-8").read()` raises.
 printf 'namespace Proj\n\xff\xfe\x00garbage\n' >"$UNREADABLE/src/Proj/Undecodable.fs"
 must_exit "no verdict: a subject file cannot be decoded" 3 "NO VERDICT: a subject file could not be read, so the scan is incomplete:" "$UNREADABLE"
+# ...and the ENTRY under that sentence names the file, indented, with a separator before the reason.
+# The leg above asserts only the heading, so the listing beneath it could have lost its indent or run
+# the path into the decoder's message and nothing would have noticed. Both were measured surviving
+# the sweep before this leg existed.
+must_text "the unreadable listing indents its entry and separates the path from the reason" \
+  "  $UNREADABLE/src/Proj/Undecodable.fs: " "$UNREADABLE"
 
 # A SUBJECT FILE THAT CANNOT BE LEXED. Carrying string state across lines is what makes this gate
 # see a multi-line string at all, and it restores the original author's real fear: a construct
@@ -675,6 +724,17 @@ must_exit "no verdict: a subject file ends inside ONE unclosed block comment" 3 
 # leg at all. Replacing it wholesale left the fixture green.
 must_line "the lexer refusal states the caller's reason, not only the arm's words" \
   "NO VERDICT: a subject file could not be lexed, so its count cannot be trusted:" "$UNCLOSEDCOMMENT"
+
+# ...AND THE ENTRY BENEATH IT, WHOLE. Every leg above asserts either the heading or the arm's own
+# sentence; not one asserts the line that joins them, so the indent and the `: ` between the path and
+# the reason were unasserted in both listings. The FINDINGS listing's identical indent IS asserted
+# (`the green run states its observed and baseline totals by value` reaches it), which is what makes
+# this a gap rather than a convention: the same two characters were pinned in one place and free in
+# two others. Here the whole line is the gate's own text — the arm supplies the reason — so this one
+# is `must_line` rather than `must_text`.
+must_line "the unlexable listing indents its entry and separates the path from the arm's reason" \
+  "  $UNCLOSEDCOMMENT/src/Proj/Dangling.fs: reached end of file inside 1 unclosed block comment(s)" \
+  "$UNCLOSEDCOMMENT"
 
 # The depth is a COUNT, and the leg above holds it at 1 forever. `(*` NESTS in F#, so a file may end
 # two deep, and a refusal that says `1` when the truth is `2` is a refusal that lost the very state
