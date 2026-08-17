@@ -19,6 +19,85 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-17** — **coherent set `github:0.61.0` published; `coord-engine` flipped `0.60.0` → `0.61.0`**
+  (github; [.github#2743](https://github.com/FS-GG/.github/issues/2743),
+  [.github#2712](https://github.com/FS-GG/.github/issues/2712),
+  [.github#2648](https://github.com/FS-GG/.github/issues/2648),
+  [.github#1772](https://github.com/FS-GG/.github/issues/1772);
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.61.0)): `FS.GG.Kit`,
+  `FS.GG.Drivers` and `FS.GG.Coord.Cli` all serve `0.61.0` on the org feed and nuget.org, cut from
+  `e0b32e140bfeffcba6f996f155bc1630603033ed`, content
+  `sha256:cd8a7d06b1d80391090c886d8f613a7489fdcf6bc9f5dba890f246799ce7dad8`.
+  **A MINOR by the written rule**, on two receiver-observable legs from `.github#2712`/PR
+  [#2745](https://github.com/FS-GG/.github/pull/2745), either of which carries the line: the board
+  gains a `Kind:` body-line sentinel with a closed four-value vocabulary — `work`, `anchor`,
+  `register`, `directive` — in the same grammar as `Paths:` and `Class:`, and a row declaring a
+  non-`work` kind is **exempt from the lifecycle reducer entirely** (no projected `Status`, no
+  persisted watermark, no park, no promotion, no `Done`), which the scheduler reports through a new
+  verdict `not-a-unit-of-work` that names the kind rather than the row's column; and `ready --json`
+  and the board reads gain two per-row fields, `kind` and `commentCount` — observable register depth,
+  riding the existing board page query as a connection `totalCount` and selecting no nodes, so the
+  board read costs what it did before. **An absent `Kind:` line means `work`**, so every row that
+  existed at `0.60.0` behaves exactly as it did — the opposite default from an absent `Class:` line,
+  deliberately.
+  **The wire surface DID move here, and additively** — the honest difference from the `0.59.0` and
+  `0.60.0` entries, both of which recorded it unchanged. `src/FS.GG.Coord.Core/Protocol.fs` is 214
+  insertions / 254 deletions across `coord-engine/v0.60.0..v0.61.0`; classifying that diff line by
+  line finds **zero** removed `type`/DU-case/`let`/`member` definitions and exactly **one** added
+  case, `Schedulability.NotAUnitOfWork`. The churn is the projected rule *prose*, not surface
+  removal — so this is a minor by addition, and not a major.
+  **The span is 32 commits, of which 15 touch the engine paths under `git rev-list --full-history`
+  and only 12 under default history simplification.** Both numbers are recorded because the smaller
+  one is what a reader gets by default, and `.github#2743` — the row that ordered this cut — names
+  exactly that merge-vs-squash sensitivity as a real defect in `check-engine-freshness.py`'s
+  defect-class arm. The row's own body listed four unreleased commits measured on 2026-08-16; the
+  cut actually made carries those four **and eleven more**.
+  **The three sibling tags were pushed in one `git push`** and `kit/v0.61.0`, `drivers/v0.61.0` and
+  `coord-engine/v0.61.0` all resolve to that one commit; a partial push is how `0.50.1`, `0.50.5`
+  and `0.52.0` became permanent two-of-three sets.
+  **Byte identity is proven, not assumed:** the prepared manifest's `contentId` is unchanged between
+  preparation (18:41:35Z) and promotion (18:54:12Z), so the published bytes are the packed bytes.
+  **The distributed dotnet-tool manifest moves `0.60.0` → `0.61.0` in the same flip**, only after
+  stable promotion (`dist/dotnet/.config/dotnet-tools.json`). That pin is not a coordination-kit
+  member — `src/FS.GG.Kit/stage-kit.sh` excludes `.config/dotnet-tools.json` explicitly — so it is
+  `check-engine-pin.py`, not `check-kit-published-coherence.py`, that owns it. The gate was **red on
+  `main`** from the moment `0.61.0` was served (*"canonical engine pin is BEHIND the published
+  engine … pins fs.gg.coord.cli at '0.60.0' but the newest … is '0.61.0'"*), its own remedy names
+  "the release PR", and no `renovate/fs.gg.coord.cli-*` PR was open to do it instead.
+  Prepare `32056012071`; publishers `32056459887` (Kit) / `32056459806` (Drivers) / `32056460685`
+  (Coord.Cli); manifest-bound resumptions `32057173111` / `32057176214` / `32057179471` re-observed
+  with **no repack and no re-push**; external observation run `32057300565` re-read both feeds, and
+  promotion sealed the release at `2026-08-17T18:54:12Z` with 8 assets.
+  **The evidence is feed reads, never run conclusions**, and this cut is the third in a row that
+  proves why: **all three publishers reported `failure`** at `Record externally served public
+  package` with *"nuget.org accepted the push but has not served it yet"* — both feed pushes had
+  already succeeded, and `release-saga-ci.sh`'s 24×5s = 120s budget is shorter than nuget.org's
+  indexing (Drivers and Coord.Cli served at ~2 min, Kit at ~3 min). `0.59.0`, `0.60.0` and `0.61.0`
+  have now each reproduced it; [`.github#2648`](https://github.com/FS-GG/.github/issues/2648) owns
+  the cause and no new row is filed for it. The operational cost is not zero: a red publisher is
+  indistinguishable at a glance from a genuinely failed release, and the correct response — wait for
+  the feed, then resume manifest-bound — is the opposite of the instinctive one.
+  Final state is `phase: promoted` with **both feeds `verified` for all three packages**, and
+  `api.nuget.org/v3-flatcontainer/{fs.gg.kit,fs.gg.drivers,fs.gg.coord.cli}/index.json` each serve
+  `0.61.0` as the newest version.
+  **Org / nuget.org archive SHA-256:** Coord.Cli
+  `aefaaa630be45fac9b45e186e62106352183f75a6795a76ed855750a23839b15` /
+  `03d7bf4aaf4b62530ecfc88887cb8402fa292c99b567a5133934f14fa451a550`; Drivers
+  `eb027984fc813c09bb32cfc0d7c1e46ab8b95ce7aff0fe0e1abd8d127b16931f` /
+  `f6c9a6caf8503fa2b6087b3f34aeb239c56e63a89add7d662138bf38206f0c6c`; Kit
+  `c96493639d413e14c4cc396b7ed69977188d9067af27c05a8d8e44b9aaf35ff9` /
+  `148f84fea91f62fae093a1704d42ec657a19c3cb6309b37e0e3f1cb6506abf93`. The org-feed archive hash
+  **equals** the prepared `inputSha256` for all three, and the nuget.org archive differs only by that
+  feed's added `.signature.p7s`. **Payload hashes are identical across both feeds:** Coord.Cli
+  `sha256:e894df9af85c916d7c6792226671675476decbbb8705e8c6a6e893c03b6db2d5`; Drivers
+  `sha256:adc4ff9375bb856a4e1ff8ee959da72e603a738e09c1e5e3765a89c9e2c3363a`; Kit
+  `sha256:9fede05c6d75ef2c40a8aea132c21a0bfbfd33f12edf76f1324fc02c94d7a4c4`. Manifest SHA-256
+  `4005aef8ef7cd11b49f4554041584d927b38ead7d7663332b12e34171843a9cd`; stable-channel SHA-256
+  `93a9a912c40fd329809641788baa64eaf3976db0cdec6bf5a44008bb31bd3539`.
+  **Every hash above is read from the shipped `coherent-set/v0.61.0` assets** — `release-manifest.json`
+  and the three per-package journals — and none is re-derived from a local pack: a local pack is not
+  the artifact that shipped, and that substitution is what makes a hash record worthless.
+
 - **2026-08-16** — **coherent set `github:0.60.0` published; `coord-engine` flipped `0.59.0` → `0.60.0`**
   (github; [.github#2713](https://github.com/FS-GG/.github/issues/2713),
   [.github#2645](https://github.com/FS-GG/.github/issues/2645),
