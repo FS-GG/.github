@@ -381,7 +381,7 @@
 
        NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason every entry above records. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.61.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.62.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
