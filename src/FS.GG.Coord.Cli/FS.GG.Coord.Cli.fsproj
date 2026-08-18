@@ -167,7 +167,45 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.61.0 — a `Kind` dimension separating closeable work from standing items, and a lifecycle-reducer exemption for every non-`work` kind.
+    <PackageReleaseNotes>0.62.0 — the per-receiver operation lock gains a production caller, and `delivery` posts the merge election it grounds the authorization in.
+
+WHAT MOVED, AND WHY IT IS A MINOR. Measured against 0.61.0, the newest version any consumer can
+actually restore. `src/FS.GG.Coord.Core/Protocol.fs` is BYTE-IDENTICAL across the span, so no reported
+field, result name or exit code changes meaning. Two receiver-observable things move, both purely
+additive, and either alone would carry the line.
+
+First, the CLI verb surface gains `op-lock acquire &lt;item&gt; &lt;generation&gt; &lt;receiver&gt; &lt;op&gt;` and
+`op-lock release &lt;receiver&gt;` (.github#2312). This is the half of the per-receiver dispatch lock that
+did not exist: at 0.61.0 `OpLock.acquire` had ZERO production callers and `OpLock.release` was absent
+from the signature file and therefore private, so the dispatch broker's step-5 refusal was unreachable
+BY CONSTRUCTION rather than by policy. The four positionals are `Operation.compose`'s own arguments;
+the `dispatch:` prefix is derived from `Operation.wire` and round-tripped rather than spelled twice;
+grant and opkey come from one `compose` call; the key is composed BEFORE the lock is taken; contended
+exits 6 and every other failure exits 1; `release` verifies the holder rather than re-deriving a
+winner. `FSGG_COORD_OP_LOCKS` selects the lock subjects, mirroring `FSGG_COORD_CHORE_LOCKS`.
+
+Second, `delivery` now POSTS a `fsgg:merge-election` marker and writes an authorization GROUNDED in it,
+carrying six fields rather than four — `opkey` and `grant` join `v`, `item`, `gen` and `head`
+(.github#2395). The election is append-only and never deleted, so a transport failure between the two
+writes leaves a durable fact the next call reuses rather than a half-taken lease. The receiver-visible
+consequence is that `check-claim-fence`'s check 4 — the lowest-id election bearing this operation key —
+IS NOW REACHED. It was not merely failing before: a four-field authorization was refused at check 1
+for missing fields, so control never arrived at check 4, and the workflow's own operator note predicted
+a red that could not occur. Both halves are observed in production on a real pull request.
+
+ALSO SHIPPED, NOT YET REACHABLE. `FS.GG.Coord.Core` gains `fsgg.coord.churn-reading/v1` — a schema and
+validator for the board-churn reading's six required elements, with the four pathology fields as tagged
+unions so `searchedNotFound` (carrying the search performed) cannot be confused with `notSearched`
+(carrying why not). Its `scripts/fsgg-coord` verb is NOT wired in this release and the shipped docs say
+so plainly; .github#2774 tracks it. Nothing consumes the validator through the CLI at 0.62.0.
+
+REPO-INTERNAL, RECORDED FOR COMPLETENESS: a signature-coverage gate that scores existence as an error
+and substance as a warning (.github#2731), the merge-gate producer's observe-only reporting corrected to
+derive which check fired rather than predict it (.github#2719), and a dispatch-broker transcription
+differential executing the engine and the workflow over 48 vectors (.github#2720). None changes a
+published surface.
+
+PRIOR 0.61.0 — a `Kind` dimension separating closeable work from standing items, and a lifecycle-reducer exemption for every non-`work` kind.
 
 WHAT MOVED, AND WHY IT IS A MINOR. Measured against 0.60.0, the newest version any consumer can actually
 restore. Two receiver-observable things move, and either alone would carry the line.
