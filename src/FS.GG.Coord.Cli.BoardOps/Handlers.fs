@@ -800,6 +800,12 @@ module Handlers =
     // open issue in the repos in scope (arm B — paginated, and never conditional, so a 304 cannot hide a
     // message the way it must never hide a lock).
     let inbox (ctx: Context) (opts: Options) : int =
+        // Inbox is a worker-scoped family command, so its checkout default belongs with the
+        // family-owned handler.  The central Client dispatcher must not know that one listed
+        // BoardOps verb needs repository defaulting while another does not.
+        let opts =
+            if opts.AllRepos then opts else { opts with Repo = scopedRepo opts }
+
         match worker opts with
         | Error c -> c
         | Ok w ->
@@ -1773,15 +1779,14 @@ module Handlers =
     // from a later board result.
     let intakeCmd (ctx: Context) (opts: Options) : int =
         match opts.Args with
+        | [ "validate"; _ ] ->
+            // Keep the pure, token-free production route behind the registered family handler.
+            // `programHandlers` supplies a no-I/O context and this arm delegates to the existing
+            // pure application boundary, preserving its stdout receipt/refusal contract.
+            IntakeApplication.run opts
         | [ action; path ] ->
             match IntakeApplication.readDraft path, action with
             | Error reason, _ -> eprint $"fsgg-coord-engine: intake: %s{reason}"; ExitError
-            | Ok draft, "validate" ->
-                match Intake.validate draft with
-                | Ok _ ->
-                    printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"validated\",\"draftId\":%s,\"writes\":0}" (JsonSerializer.Serialize draft.Id)
-                    ExitGreen
-                | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
             | Ok draft, "apply" ->
                 match Intake.validate draft |> Result.bind (fun valid -> IntakeApplication.validateLivePaths valid |> Result.map (fun () -> valid) |> Result.mapError (fun reason -> [ { Intake.Finding.Field = "paths"; Detail = reason } ])) with
                 | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
@@ -1956,3 +1961,9 @@ module Handlers =
               Say = say
               Inbox = inbox
               RoomOpen = roomOpen }
+
+    // Program-level registrations are also a BoardOps-family product. Every family command enters
+    // through Client's context-owning dispatcher and its validated handler map; no listed verb has a
+    // central special case or a second implementation route.
+    let programHandlers (runWithContext: Options -> int) : (Command * (Options -> int)) list =
+        handlers |> List.map (fun (command, _) -> command, runWithContext)

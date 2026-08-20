@@ -20,3 +20,4 @@ module Handlers =
     val issues: Context -> Options.Options -> int
     val intakeCmd: Context -> Options.Options -> int
     val handlers: (Options.Command * HandlerRegistration.Handler) list
+    val programHandlers: runWithContext: (Options.Options -> int) -> (Options.Command * (Options.Options -> int)) list

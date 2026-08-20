@@ -310,14 +310,6 @@ let private decide (opts: Options) =
         | Red _ -> ExitRed
         | NoVerdict _ -> ExitNoVerdict
 
-let private intakeProgramHandler opts =
-    // `validate` is pure, but `apply` is the receipt-bound live transaction in the BoardOps handler.
-    // Keep that distinction in the family's composed entry without reintroducing a command match.
-    if opts.Args |> List.tryHead = Some "validate" then
-        IntakeApplication.run opts
-    else
-        runClient opts
-
 let private legacyHandler (opts: Options) =
     match opts.Command with
     | Help ->
@@ -378,13 +370,7 @@ let private legacyHandler (opts: Options) =
     | OpLockRelease -> runClient opts
     | command -> failwith $"legacy handler received family-owned command: %A{command}"
 
-let private boardOpsProgramRegistrations =
-    HandlerRegistration.commands
-    |> List.map (fun command ->
-        let handler =
-            if command = IntakeCmd then intakeProgramHandler else runClient
-
-        command, handler)
+let private boardOpsProgramRegistrations = Handlers.programHandlers runClient
 
 /// The production-owned legacy inventory. This is deliberately explicit and independent of
 /// `Options.allCommands`: validation must detect a newly parsed command that no production family

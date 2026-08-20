@@ -10,6 +10,11 @@
     <Compile Include="../FS.GG.Coord.Cli.Tests/StructuredFixtures.fs" Link="StructuredFixtures.fs" />
     <Compile Include="HandlerRegistrationTests.fs" />
     <Compile Include="AddStatusDefaultTests.fs" />
+    <Compile Include="IntakeCliTests.fs" />
+    <Compile Include="IntakeTransactionTests.fs" />
+    <Compile Include="ApplicationServiceTests.fs" />
+    <Compile Include="WidenRefusalTests.fs" />
+    <Compile Include="BlockerLintTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj" />
