@@ -37,6 +37,7 @@ on:
     paths:
       - "src/**"
       - "scripts/check-repo-filter-monopoly.py"
+      - "scripts/lib/gate.py"
       - "tests/repo-filter-monopoly/**"
       - ".github/workflows/repo-filter-monopoly.yml"
   push:
@@ -44,6 +45,7 @@ on:
     paths:
       - "src/**"
       - "scripts/check-repo-filter-monopoly.py"
+      - "scripts/lib/gate.py"
       - "tests/repo-filter-monopoly/**"
       - ".github/workflows/repo-filter-monopoly.yml"
   workflow_dispatch:
@@ -127,21 +129,19 @@ jobs:
           echo "::error title=repo-filter-monopoly: a verb hand-rolls the --repo filter::Scope through Scan.scope instead. See the job log."
           exit 1
 
-      - name: 'NO VERDICT (permanent): the gate audited NOTHING'
+      - name: 'NO VERDICT (permanent): the subject census is incomplete'
         if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
         run: |
           {
             echo "### repo-filter-monopoly: no verdict"
             echo
-            echo 'The gate found **zero** `.Ref.Repo` comparisons across `src/`. `Scan.scope` carries'
-            echo 'one **by construction**, so this means the **walker broke** — not that the tree is'
-            echo 'clean. Examining nothing is a failure to audit, not a clean audit (#266): if the'
-            echo 'walker breaks, every verb reads as clean and this gate goes green while the'
-            echo 'fail-open it exists to catch goes on happening.'
+            echo 'The gate could not resolve every path in its revision-bound `PATHS_SUBJECT` census.'
+            echo 'That includes an empty walk and a moved `Scan.scope` home even when other comparisons'
+            echo 'remain. A count is not a census: partial input cannot support a clean verdict (#266).'
             echo
             echo 'Retrying will not help — fix the walker or the surface list.'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=repo-filter-monopoly: no verdict (permanent)::The gate audited zero subjects. See the job log."
+          echo "::error title=repo-filter-monopoly: no verdict (permanent)::The subject census is incomplete. See the job log."
           exit 1
 
       - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'

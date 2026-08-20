@@ -28,12 +28,14 @@ sys.path.insert(0, _SCRIPTS)
 from lib.gate import (  # noqa: E402 — deliberate: the path insert above is the point.
     ExitCode,
     GateError,
+    SubjectCensus,
     Unreachable,
     base_parser,
     load_yaml,
     read_text,
     report_findings,
     report_ok,
+    resolve_path_census,
     run,
     triggers,
     workflow_files,
@@ -155,8 +157,22 @@ with tempfile.TemporaryDirectory() as d:
     )
 
 # ── 5. reporting + argparse helpers ─────────────────────────────────────────────────────────────────
-rc, out, _e = capturing(lambda: report_ok("check-x", "37 files clean"))
-check("report_ok returns OK and prints the clean line", rc == 0 and "check-x: OK — 37 files clean" in out)
+with tempfile.TemporaryDirectory() as d:
+    open(os.path.join(d, "subject.txt"), "w").close()
+    complete = resolve_path_census(d, ("subject.txt",), authority_revision="fixture/v1")
+    rc, out, _e = capturing(lambda: report_ok("check-x", "1 file clean", complete))
+    check("report_ok returns OK only for a complete census", rc == 0 and "check-x: OK — 1 file clean" in out)
+
+    partial = resolve_path_census(d, ("subject.txt", "moved.txt"), authority_revision="fixture/v1")
+    rc, _out, err = capturing(lambda: report_ok("check-x", "1 file clean", partial))
+    check("report_ok refuses a census with an unresolved declared subject", rc == 3 and "moved.txt" in err)
+
+rc, _out, err = capturing(lambda: report_ok("check-x", "nothing examined"))
+check("report_ok refuses a prose-only green with no census", rc == 3 and "no subject census" in err)
+rc, _out, err = capturing(lambda: report_ok("check-x", "nothing examined", SubjectCensus((), (), "fixture/v1", "digest")))
+check("report_ok refuses an empty census", rc == 3 and "incomplete" in err)
+rc, _out, err = capturing(lambda: report_ok("check-x", "1 file clean", SubjectCensus(("x",), ("x",), "", "")))
+check("report_ok refuses a census without authority bindings", rc == 3 and "authority revision: <missing>" in err)
 rc, _o, err = capturing(lambda: report_findings("check-x", ["thing A", "thing B"]))
 check("report_findings returns FINDING and annotates each", rc == 1 and "::error::thing A" in err and "FAILED" in err)
 check("base_parser gives --root defaulting to '.'", base_parser("d").parse_args([]).root == ".")

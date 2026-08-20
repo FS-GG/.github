@@ -163,6 +163,15 @@ rc="$(run "$t")"
   || bad "an empty tree must be NO_VERDICT, not green" "exit $rc"
 rm -rf "$t"
 
+# 7b. A COUNT IS NOT A CENSUS. Keep other source subjects present but move the declared HOME: the
+#     walker can still examine comparisons, yet the declared monopoly authority is unresolved.
+t="$(mktree)"
+mv "$t/src/FS.GG.Coord.GitHub/Scan.fs" "$t/src/FS.GG.Coord.GitHub/Scan.MOVED.fs"
+rc="$(run "$t")"
+[ "$rc" = "3" ] && ok "a moved declared HOME is NO_VERDICT even while other subjects remain" \
+  || bad "a non-empty scan with an unresolved declared HOME must not report green" "exit $rc"
+rm -rf "$t"
+
 # 8. BUILD OUTPUT IS NOT SOURCE. A stale obj/ copy of a since-fixed file must not red the tree.
 t="$(mktree)"
 mkdir -p "$t/src/FS.GG.Coord.Cli/obj/Release"
