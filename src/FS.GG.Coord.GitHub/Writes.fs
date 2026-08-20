@@ -88,6 +88,16 @@ module Writes =
     let private encodeStatus (s: string) =
         s.Replace("%", "%25").Replace(" ", "%20")
 
+    let private agentContractPart () =
+        match Environment.GetEnvironmentVariable "FSGG_AGENT_CONTRACT_VERSION" with
+        | null | "" -> ""
+        | version when version.Length = 64 && version |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f') ->
+            $" agentContract=%s{version}"
+        | invalid ->
+            invalidArg
+                "FSGG_AGENT_CONTRACT_VERSION"
+                $"agent contract version must be one lowercase SHA-256 digest, got '%s{invalid}'"
+
     // THE MARKER. `worker=` MUST stay the first key — the parser anchors on it, and the anchor is what
     // stops a `say` message that merely QUOTES a marker from forging a lock.
     let private markerBody
@@ -111,6 +121,7 @@ module Writes =
             | None -> ""
 
         let pathRepoPart = pathRepo |> Option.map (fun p -> $" pathRepo=%s{p}") |> Option.defaultValue ""
+        let agentContract = agentContractPart ()
 
         // GitHub only advances an issue comment's `updated_at` when its body actually changes.  Lease age
         // is measured from that server timestamp, so re-sending the byte-identical marker made a green
@@ -118,7 +129,7 @@ module Writes =
         // PATCH a real server-side update; readers deliberately do not need to interpret it.
         let renewalToken = DateTimeOffset.UtcNow.Ticks
 
-        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes} renewed=%d{renewalToken}%s{sessionPart}%s{prevPart}%s{pathRepoPart} -->"
+        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes} renewed=%d{renewalToken}%s{sessionPart}%s{prevPart}%s{pathRepoPart}%s{agentContract} -->"
 
     // IS A MARKER BEARING OUR WORKER ID ACTUALLY A TWIN'S? Returns the OTHER session when it is.
     //

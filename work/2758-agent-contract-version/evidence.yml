@@ -46,13 +46,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [scripts/generate-projections, tests/projection/run.sh]
+    artifacts: [scripts/fsgg-coord, scripts/generate-projections, src/FS.GG.Coord.GitHub/Writes.fs, tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs, tests/projection/run.sh]
     sourceRefs:
       - kind: verification
         path: tests/projection/run.sh
     result: pass
     synthetic: false
-    notes: ["Focused fixture passed 32 of 32 assertions; subject-byte inversion produced the named red witness."]
+    observedRun:
+      source: readiness/2758-agent-contract-version/projection.junit.xml
+      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: ["Focused fixture passed 34 of 34 assertions; dispatch exports the sole producer digest into the durable claim marker; subject-byte and empty-root inversions produced named red witnesses."]
   - id: EV002
     kind: verification
     subject:
@@ -71,6 +79,14 @@ evidence:
         path: tests/projection/run.sh
     result: pass
     synthetic: false
+    observedRun:
+      source: readiness/2758-agent-contract-version/projection.junit.xml
+      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
     notes: [Projection report recorded the exact digest emitted by the sole producer.]
   - id: EV003
     kind: verification
@@ -90,7 +106,15 @@ evidence:
         path: tests/projection/run.sh
     result: pass
     synthetic: false
-    notes: ["Both required mutation directions passed; both new gate inversions turned the focused suite red."]
+    observedRun:
+      source: readiness/2758-agent-contract-version/projection.junit.xml
+      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: ["Both digest mutation directions and the named empty-root control passed; the exact empty-root raise-to-continue inversion turned only that assertion red."]
   - id: EV004
     kind: verification
     subject:
@@ -109,6 +133,14 @@ evidence:
         path: tests/projection/run.sh
     result: pass
     synthetic: false
+    observedRun:
+      source: readiness/2758-agent-contract-version/projection.junit.xml
+      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
     notes: ["The version is derived on every invocation; there is no hand-maintained migration or release step."]
   - id: EV005
     kind: verification
@@ -122,12 +154,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV005]
-    artifacts: [scripts/check-projection.py, tests/projection/run.sh]
+    artifacts: [scripts/check-projection.py, scripts/fsgg-coord, src/FS.GG.Coord.GitHub/Writes.fs, tests/projection/run.sh]
     sourceRefs:
       - kind: verification
         path: tests/projection/run.sh
     result: pass
     synthetic: false
-    notes: ["Existing projection report gained one additive field; no new artifact class was introduced."]
+    observedRun:
+      source: readiness/2758-agent-contract-version/projection.junit.xml
+      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: ["Existing projection report gained one additive field and the existing dispatched-work claim marker gained agentContract attribution; no second digest producer was introduced."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

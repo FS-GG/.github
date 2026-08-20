@@ -37,7 +37,9 @@ CONTRACT_REPO="$WORK/contract-repo"
 mkdir -p "$CONTRACT_REPO/scripts" \
   "$CONTRACT_REPO/.agents/skills/demo" \
   "$CONTRACT_REPO/.claude/skills/demo"
+git -C "$CONTRACT_REPO" init -q
 cp "$REPO_ROOT/scripts/generate-projections" "$CONTRACT_REPO/scripts/generate-projections"
+cp "$REPO_ROOT/scripts/fsgg-coord" "$CONTRACT_REPO/scripts/fsgg-coord"
 printf '%s\n' 'demo contract' > "$CONTRACT_REPO/.agents/skills/demo/SKILL.md"
 cp "$CONTRACT_REPO/.agents/skills/demo/SKILL.md" \
   "$CONTRACT_REPO/.claude/skills/demo/SKILL.md"
@@ -209,6 +211,33 @@ else
     "mutation survived with version $contract_changed"
 fi
 
+rm "$CONTRACT_REPO/.claude/skills/demo/SKILL.md"
+rmdir "$CONTRACT_REPO/.claude/skills/demo"
+empty_root_out=""
+empty_root_rc=0
+empty_root_out="$("$CONTRACT_REPO/scripts/generate-projections" --contract-version 2>&1)" \
+  || empty_root_rc=$?
+if [ "$empty_root_rc" -ne 0 ] && [[ "$empty_root_out" == *"root contains no files"* ]]; then
+  ok "agent contract version refuses an empty skill root"
+else
+  bad "agent contract version refuses an empty skill root" "exit $empty_root_rc: $empty_root_out"
+fi
+mkdir -p "$CONTRACT_REPO/.claude/skills/demo"
+cp "$CONTRACT_REPO/.agents/skills/demo/SKILL.md" \
+  "$CONTRACT_REPO/.claude/skills/demo/SKILL.md"
+
+FAKE_ENGINE="$WORK/contract-env-engine"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "${FSGG_AGENT_CONTRACT_VERSION:-missing}"' > "$FAKE_ENGINE"
+chmod +x "$FAKE_ENGINE"
+shim_version="$(cd "$CONTRACT_REPO" && FSGG_COORD_ENGINE_BIN="$FAKE_ENGINE" scripts/fsgg-coord probe)"
+producer_version="$("$CONTRACT_REPO/scripts/generate-projections" --contract-version)"
+if [ "$shim_version" = "$producer_version" ]; then
+  ok "coordination dispatch exports the sole producer's agent contract version"
+else
+  bad "coordination dispatch exports the sole producer's agent contract version" \
+    "shim $shim_version, producer $producer_version"
+fi
+
 # --- happy path ---
 expect_pass "well-formed projection passes" "$BASE"
 
@@ -318,5 +347,15 @@ else
 fi
 
 echo "projection fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
+if [ -n "${FSGG_JUNIT_OUTPUT:-}" ]; then
+  mkdir -p "$(dirname "$FSGG_JUNIT_OUTPUT")"
+  if [ "$failcount" -eq 0 ]; then
+    printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="projection" tests="%s" failures="0" skipped="0"><testcase classname="projection" name="agent contract attribution"/></testsuite>\n' \
+      "$pass" > "$FSGG_JUNIT_OUTPUT"
+  else
+    printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="projection" tests="%s" failures="1" skipped="0"><testcase classname="projection" name="agent contract attribution"><failure message="projection fixture failed"/></testcase></testsuite>\n' \
+      "$((pass + failcount))" > "$FSGG_JUNIT_OUTPUT"
+  fi
+fi
 [ "$failcount" -eq 0 ] || { echo "::error::projection fixture FAILED"; exit 1; }
 echo "projection fixture — OK"

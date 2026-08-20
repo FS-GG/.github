@@ -193,6 +193,51 @@ let ``#1732 a scoped claim records its path repository in the marker`` () =
     | other -> failwith $"the scoped claim must win and carry its path repository — got %A{other}"
 
 [<Fact>]
+let ``#2758 a claim marker records the dispatched agent contract version`` () =
+    let variable = "FSGG_AGENT_CONTRACT_VERSION"
+    let before = System.Environment.GetEnvironmentVariable variable
+    let version = System.String('a', 64)
+
+    try
+        System.Environment.SetEnvironmentVariable(variable, version)
+
+        let responses =
+            System.Collections.Generic.Queue<IoResult<Response>>(
+                [ ok "[]"
+                  ok """{"id":901}"""
+                  ok (comments [ marker 901 "vole-418" $" agentContract=%s{version}" ]) ]
+            )
+
+        let bodies = System.Collections.Generic.List<string>()
+
+        let transport =
+            Fake.Recorder(fun req ->
+                match req.Body with
+                | Json body -> bodies.Add body
+                | _ -> ()
+
+                responses.Dequeue())
+
+        match
+            claimScoped
+                transport
+                120
+                RefuseLiveHolder
+                ignore
+                me
+                itsMe
+                None
+                aRef
+                (fun () -> None)
+                (fun () -> Some "FS.GG.Rendering")
+                (fun () -> Ok())
+        with
+        | Ok(Won _) -> Assert.Contains($"agentContract=%s{version}", Seq.last bodies)
+        | other -> failwith $"the attributed claim must win — got %A{other}"
+    finally
+        System.Environment.SetEnvironmentVariable(variable, before)
+
+[<Fact>]
 let ``a rejected new force admission evicts nothing and posts no marker`` () =
     let mutable admissions = 0
     let transport = scripted [ ok (comments [ marker 901 "kite-461" "" ]) ]

@@ -8,8 +8,8 @@
   "verificationReadiness": {
     "status": "verificationReady",
     "evidenceSupportedCount": 5,
-    "evidenceSelfAttestedCount": 5,
-    "evidenceObservedCount": 0
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 5
   },
   "disposition": {
     "state": "shipReady",

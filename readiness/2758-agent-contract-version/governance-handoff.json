@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2758-agent-contract-version/ship.json",
-      "digest": "sha256:d205206deaada77943859538a1c9cd292fca7b1a30eeb777214705687334a4a1",
+      "digest": "sha256:e46dfbc9b80a9deed1626819ca5730abcc91200c296ba0bdfede185d0eeae95e",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2758-agent-contract-version/verify.json",
-      "digest": "sha256:79e7e97ae5c47be3484dc56830f000f190af6147fb96338d011a2b48061c42f1",
+      "digest": "sha256:8b310d796e0adf8382aa4f8cd53c95352ca9fd263c7ea427c564fb35eca969f6",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2758-agent-contract-version/work-model.json",
-      "digest": "sha256:805172b7aafff78d932bf5e1bb94760d0f7829826ceee8853a1080ac1363489e",
+      "digest": "sha256:317e0432f0e936a4275d82972a0872215315f06a5f4f55e4647159d437a47f46",
       "schemaVersion": 1
     }
   ],

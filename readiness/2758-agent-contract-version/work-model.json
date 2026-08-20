@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "69af7860ac6c613359751701b9c657705e5edc8741d5e0e101d172465597e999"
+        "value": "4db853150bb7526076c624f9f476d4731eca05df664184593921633c60fc4208"
       }
     },
     {
@@ -298,7 +298,10 @@
         "FR-001"
       ],
       "artifactRefs": [
+        "scripts/fsgg-coord",
         "scripts/generate-projections",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
         "tests/projection/run.sh"
       ],
       "result": "pass",
@@ -396,6 +399,8 @@
       "requirementRefs": [],
       "artifactRefs": [
         "scripts/check-projection.py",
+        "scripts/fsgg-coord",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/projection/run.sh"
       ],
       "result": "pass",
@@ -465,7 +470,7 @@
           "path": "work/2758-agent-contract-version/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "69af7860ac6c613359751701b9c657705e5edc8741d5e0e101d172465597e999"
+            "value": "4db853150bb7526076c624f9f476d4731eca05df664184593921633c60fc4208"
           },
           "schemaVersion": 1
         },
@@ -496,7 +501,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "069f547dfb1f30a1e52060b1104b5ade85002b87669c4f9fe9fe27791737ad85"
+        "value": "85b2380600adee10766e99a26ce572123c1975140c5c7c41aef76e32d749b6ef"
       },
       "currency": "current"
     }
