@@ -29,6 +29,19 @@ REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/projection-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
+# The contract-version producer is exercised from a throwaway repository-shaped tree. Copying the
+# producer keeps the fixture off the live skill roots while still executing the exact shipped command.
+# The two comparisons are the acceptance boundary: changing canonical skill bytes MUST move the
+# version, while re-running after an unchanged-source regeneration MUST preserve it.
+CONTRACT_REPO="$WORK/contract-repo"
+mkdir -p "$CONTRACT_REPO/scripts" \
+  "$CONTRACT_REPO/.agents/skills/demo" \
+  "$CONTRACT_REPO/.claude/skills/demo"
+cp "$REPO_ROOT/scripts/generate-projections" "$CONTRACT_REPO/scripts/generate-projections"
+printf '%s\n' 'demo contract' > "$CONTRACT_REPO/.agents/skills/demo/SKILL.md"
+cp "$CONTRACT_REPO/.agents/skills/demo/SKILL.md" \
+  "$CONTRACT_REPO/.claude/skills/demo/SKILL.md"
+
 REG="$WORK/registry.yml"
 cat > "$REG" <<'YAML'
 schemaVersion: 2
@@ -155,6 +168,47 @@ pin the .github#268 regression. Pick a case the substring gate waved through."
 
 echo "projection fixture"
 
+contract_base="$("$CONTRACT_REPO/scripts/generate-projections" --contract-version)"
+# Model the generator's write boundary: replace a canonical skill with freshly emitted, byte-identical
+# content. Metadata may move; the contract bytes and therefore the version must not.
+cp "$CONTRACT_REPO/.agents/skills/demo/SKILL.md" "$WORK/regenerated-skill.md"
+cp "$WORK/regenerated-skill.md" "$CONTRACT_REPO/.agents/skills/demo/SKILL.md"
+contract_regenerated="$("$CONTRACT_REPO/scripts/generate-projections" --contract-version)"
+if [ "$contract_regenerated" = "$contract_base" ]; then
+  ok "agent contract version is stable under unchanged-source regeneration"
+else
+  bad "agent contract version is stable under unchanged-source regeneration" \
+    "baseline $contract_base, regenerated $contract_regenerated"
+fi
+
+mv "$CONTRACT_REPO/.claude/skills" "$CONTRACT_REPO/.claude/skills-missing"
+contract_missing_out=""
+contract_missing_rc=0
+contract_missing_out="$("$CONTRACT_REPO/scripts/generate-projections" --contract-version 2>&1)" \
+  || contract_missing_rc=$?
+if [ "$contract_missing_rc" -ne 0 ] && [[ "$contract_missing_out" == *"root is missing or unreadable"* ]]; then
+  ok "agent contract version refuses an unreadable skill root"
+else
+  bad "agent contract version refuses an unreadable skill root" \
+    "exit $contract_missing_rc: $contract_missing_out"
+fi
+mv "$CONTRACT_REPO/.claude/skills-missing" "$CONTRACT_REPO/.claude/skills"
+
+if [[ "$contract_base" =~ ^[0-9a-f]{64}$ ]]; then
+  ok "agent contract version is one lowercase SHA-256 digest"
+else
+  bad "agent contract version is one lowercase SHA-256 digest" "$contract_base"
+fi
+
+printf '%s\n' 'canonical byte mutation' >> "$CONTRACT_REPO/.agents/skills/demo/SKILL.md"
+contract_changed="$("$CONTRACT_REPO/scripts/generate-projections" --contract-version)"
+if [ "$contract_changed" != "$contract_base" ]; then
+  ok "agent contract version moves when a canonical skill root changes"
+else
+  bad "agent contract version moves when a canonical skill root changes" \
+    "mutation survived with version $contract_changed"
+fi
+
 # --- happy path ---
 expect_pass "well-formed projection passes" "$BASE"
 
@@ -253,6 +307,15 @@ expect_pass "escaped pipe in a cell does not shift columns" \
 # --- the gate on the real files (CI guard, mirrors tests/repos-registry/run.sh) -------------
 expect_pass "checked-in registry projects cleanly" \
   "$REPO_ROOT/docs/registry/compatibility.md" "$REPO_ROOT/registry/dependencies.yml"
+
+reported_version="$(PATH="${PATH}" python3 "$CHECK" \
+  "$REPO_ROOT/registry/dependencies.yml" "$REPO_ROOT/docs/registry/compatibility.md")"
+producer_version="$("$REPO_ROOT/scripts/generate-projections" --contract-version)"
+if [[ "$reported_version" == *"agentContractVersion=$producer_version"* ]]; then
+  ok "projection report records the sole producer's agent contract version"
+else
+  bad "projection report records the sole producer's agent contract version" "$reported_version"
+fi
 
 echo "projection fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::projection fixture FAILED"; exit 1; }

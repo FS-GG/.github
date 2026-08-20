@@ -26,18 +26,65 @@
 #   scripts/generate-projections            # rewrite every generated region in place
 #   scripts/generate-projections --check    # verify they are current; exit 1 on any drift (the GATE)
 #   scripts/generate-projections --list     # print `kind<TAB>path<TAB>BEGIN-marker` per region; the gate's subject list
+#   scripts/generate-projections --contract-version
+#                                           # print the derived version of the agent contract
 #
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 CHECK=""
 LIST=""
+CONTRACT_VERSION=""
 case "${1:-}" in
   --check) CHECK=1 ;;
   --list)  LIST=1 ;;
+  --contract-version) CONTRACT_VERSION=1 ;;
   "") ;;
-  *) echo "::error::unknown argument: $1 (expected --check, --list, or nothing)" >&2; exit 2 ;;
+  *) echo "::error::unknown argument: $1 (expected --check, --list, --contract-version, or nothing)" >&2; exit 2 ;;
 esac
+
+# The operator's agent contract is the complete byte surface under both live skill roots. Its version
+# is derived from one canonical stream: sorted root-relative path, byte length, then bytes, for every
+# regular file. Paths and lengths make the encoding injective without assuming skill files contain no
+# NUL bytes. This function is the ONE spelling of that stream; tests and callers consume the command's
+# result rather than reimplementing it. A root that cannot be read or contains no files is a non-answer,
+# never the digest of an accidentally empty contract.
+agent_contract_version() {
+  python3 - "$HERE" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+repo = pathlib.Path(sys.argv[1])
+roots = (pathlib.Path(".agents/skills"), pathlib.Path(".claude/skills"))
+entries: list[tuple[str, pathlib.Path]] = []
+
+for root in roots:
+    absolute = repo / root
+    if not absolute.is_dir():
+        raise SystemExit(f"::error::agent contract root is missing or unreadable: {root}")
+    files = [path for path in absolute.rglob("*") if path.is_file()]
+    if not files:
+        raise SystemExit(f"::error::agent contract root contains no files: {root}")
+    entries.extend((path.relative_to(repo).as_posix(), path) for path in files)
+
+digest = hashlib.sha256()
+for relative, path in sorted(entries):
+    name = relative.encode("utf-8")
+    body = path.read_bytes()
+    digest.update(len(name).to_bytes(8, "big"))
+    digest.update(name)
+    digest.update(len(body).to_bytes(8, "big"))
+    digest.update(body)
+
+print(digest.hexdigest())
+PY
+}
+
+if [ -n "$CONTRACT_VERSION" ]; then
+  agent_contract_version
+  exit 0
+fi
 
 # ---- the targets ---------------------------------------------------------------------------------
 # Each target names the region kind it carries. The canonical doc and the skill that OWNS the protocol

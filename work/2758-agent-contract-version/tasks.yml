@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 2758-agent-contract-version
+  title: "Agent contract versioning"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2758-agent-contract-version/spec.md
+  sourceClarifications: work/2758-agent-contract-version/clarifications.md
+  sourceChecklist: work/2758-agent-contract-version/checklist.md
+  sourcePlan: work/2758-agent-contract-version/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2758-agent-contract-version/spec.md
+    digest: 6cf6b4f77e809e2f8e9c6bf4bd7d2be09c8dddf8b729b6afe5683bc3179120c4
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2758-agent-contract-version/clarifications.md
+    digest: 20eb643d1846d22a353c49009874842ad78ec8a37e64db72911df2ba15b1942d
+    schemaVersion: 1
+  - label: checklist
+    path: work/2758-agent-contract-version/checklist.md
+    digest: dbaebf950cd174c5d50d9e86af03d833f9ce11b9b15852fb8b14ffe8ff85116c
+    schemaVersion: 1
+  - label: plan
+    path: work/2758-agent-contract-version/plan.md
+    digest: 4d393e11c316fa05a57c39b12b1f43a34baa3539f91080e1b3812f79e1133ce1
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2758-agent-contract-version."
