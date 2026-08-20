@@ -19,6 +19,17 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-20** — **coherent set `github:0.64.0` source prepared; publication owed**
+  (github; [.github#2758](https://github.com/FS-GG/.github/issues/2758),
+  [PR #2782](https://github.com/FS-GG/.github/pull/2782)): `FS.GG.Kit`, `FS.GG.Drivers`, and
+  `FS.GG.Coord.Cli` move together from the independently verified `0.63.0` source/tag/feed/registry
+  frontier to source `0.64.0`; `package-version` remains `0.63.0` until the post-merge release saga
+  publishes and verifies the exact coherent bytes on GitHub Packages and nuget.org. **MINOR on the
+  stable 0.x line:** the packed coordination shim captures the agent-contract digest at dispatch and
+  the claim capability preserves that original attribution across re-claim and heartbeat. The marker
+  grammar is additive, legacy absence remains valid, and no package member, destination, command,
+  flag, or identity is removed.
+
 - **2026-08-17** — **coherent set `github:0.61.0` published; `coord-engine` flipped `0.60.0` → `0.61.0`**
   (github; [.github#2743](https://github.com/FS-GG/.github/issues/2743),
   [.github#2712](https://github.com/FS-GG/.github/issues/2712),

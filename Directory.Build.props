@@ -380,8 +380,16 @@
        `withheld` case on the existing claim-receipt type.
 
        NOTES AND SCALAR MOVE IN THIS SAME COMMIT, for the reason every entry above records. -->
+  <!-- 0.63.0 -> 0.64.0 (.github#2758): MINOR on the stable 0.x line. The packed
+       `scripts/fsgg-coord` now stamps the dispatch-time agent-contract digest into a claim, while
+       heartbeat and re-claim preserve that original attribution instead of replacing it with the
+       contract active in a later process. A receiver therefore gets changed coordination behavior,
+       not a prose correction. The marker grammar is additive, the legacy absence remains accepted,
+       and no command, flag, member, destination, or package identity is removed, so this is not a
+       major. Main, all four immutable tag namespaces, GitHub Packages, nuget.org, and the registry
+       independently put the previous coherent release at 0.63.0 before this move. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.63.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.64.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

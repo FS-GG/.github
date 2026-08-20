@@ -1547,6 +1547,7 @@ module Client =
                AgeSeconds = -1
                PreviousStatus = None
                PathRepo = None
+               AgentContract = None
                Raw = "" }: Reads.Marker))
         |> Reads.lowestId
         |> Option.bind (fun winner -> elections |> List.tryFind (fun election -> election.Id = winner.Id))

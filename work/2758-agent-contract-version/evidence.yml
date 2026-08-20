@@ -46,21 +46,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [scripts/fsgg-coord, scripts/generate-projections, src/FS.GG.Coord.GitHub/Writes.fs, tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs, tests/projection/run.sh]
+    artifacts: [scripts/fsgg-coord, scripts/generate-projections, src/FS.GG.Coord.GitHub/Reads.fs, src/FS.GG.Coord.GitHub/Writes.fs, tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs, tests/projection/run.sh]
     sourceRefs:
       - kind: verification
         path: tests/projection/run.sh
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/projection.junit.xml
-      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      source: readiness/2758-agent-contract-version/github-write.trx
+      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 34
+      passed: 633
       failed: 0
       skipped: 0
-    notes: ["Focused fixture passed 34 of 34 assertions; dispatch exports the sole producer digest into the durable claim marker; subject-byte and empty-root inversions produced named red witnesses."]
+    notes: ["The observed GitHub corpus passed 633 of 633 tests; dispatch exports the sole producer digest into the durable claim marker, claim readback stores that dispatch-time value in the held capability, and heartbeat re-emits the original after the producer environment changes. The exact heartbeat-current-environment inversion turned the named preservation test red."]
   - id: EV002
     kind: verification
     subject:
@@ -80,14 +80,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/projection.junit.xml
-      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      source: readiness/2758-agent-contract-version/github-write.trx
+      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 34
+      passed: 633
       failed: 0
       skipped: 0
-    notes: [Projection report recorded the exact digest emitted by the sole producer.]
+    notes: ["The observed GitHub corpus proves the claim-marker contract is additive and receiver-readable; the separate projection fixture passed 34 of 34 assertions and records the exact digest emitted by the sole producer."]
   - id: EV003
     kind: verification
     subject:
@@ -107,14 +107,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/projection.junit.xml
-      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      source: readiness/2758-agent-contract-version/github-write.trx
+      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 34
+      passed: 633
       failed: 0
       skipped: 0
-    notes: ["Both digest mutation directions and the named empty-root control passed; the exact empty-root raise-to-continue inversion turned only that assertion red."]
+    notes: ["The observed GitHub corpus passed 633 of 633 tests. Separately, both digest mutation directions and the named empty-root control passed; the exact empty-root raise-to-continue inversion turned the named assertion red, and the heartbeat-current-environment inversion turned the named dispatch-time preservation test red."]
   - id: EV004
     kind: verification
     subject:
@@ -127,21 +127,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV004]
-    artifacts: [scripts/generate-projections]
+    artifacts: [Directory.Build.props, registry/dependencies.yml, registry/repos.lock, scripts/check-coherent-set-version.py, scripts/check-kit-published-coherence.py, scripts/check-release-coherence.py, scripts/generate-projections, src/FS.GG.Kit/FS.GG.Kit.csproj]
     sourceRefs:
       - kind: verification
         path: tests/projection/run.sh
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/projection.junit.xml
-      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      source: readiness/2758-agent-contract-version/github-write.trx
+      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 34
+      passed: 633
       failed: 0
       skipped: 0
-    notes: ["The version is derived on every invocation; there is no hand-maintained migration or release step."]
+    notes: ["The digest is derived on every invocation with no hand-maintained digest migration. Because the Kit carries the changed dispatch contract to receivers, the coherent source set advances from published 0.63.0 to 0.64.0 and leaves a typed coherent-set-release delivery obligation for the host; live release coherence, tag arm, package verification, and fixture gates are green."]
   - id: EV005
     kind: verification
     subject:
@@ -154,20 +154,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV005]
-    artifacts: [scripts/check-projection.py, scripts/fsgg-coord, src/FS.GG.Coord.GitHub/Writes.fs, tests/projection/run.sh]
+    artifacts: [registry/repos.lock, scripts/check-projection.py, scripts/fsgg-coord, src/FS.GG.Coord.GitHub/Reads.fs, src/FS.GG.Coord.GitHub/Writes.fs, tests/projection/run.sh]
     sourceRefs:
       - kind: verification
         path: tests/projection/run.sh
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/projection.junit.xml
-      digest: "sha256:a6a88371168dcab42d2711f1746f0e8535c32d9c7af4647db069bc72ba1a14f1"
+      source: readiness/2758-agent-contract-version/github-write.trx
+      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 34
+      passed: 633
       failed: 0
       skipped: 0
-    notes: ["Existing projection report gained one additive field and the existing dispatched-work claim marker gained agentContract attribution; no second digest producer was introduced."]
+    notes: ["Existing projection report gained one additive field and the existing dispatched-work claim marker gained dispatch-time agentContract attribution that survives renewal; generated projections and registry lock are current and no second digest producer was introduced."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

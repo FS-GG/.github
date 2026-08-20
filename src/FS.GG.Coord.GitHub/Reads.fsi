@@ -97,6 +97,9 @@ module Reads =
             /// guessing `Ready` (#481). A value nobody recorded cannot be restored.
             PreviousStatus: BoardStatus option
             PathRepo: string option
+            /// The agent-contract digest captured when this work was dispatched. Renewals preserve the
+            /// marker's value; `None` is a legacy claim that recorded no dispatch contract.
+            AgentContract: string option
             /// The raw comment body — kept so that a heartbeat can rewrite the WHOLE marker without
             /// forgetting a field it never parsed (#550).
             Raw: string

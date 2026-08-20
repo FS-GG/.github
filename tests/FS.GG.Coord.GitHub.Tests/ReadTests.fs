@@ -680,6 +680,7 @@ let ``the CAS winner is the LOWEST LIVE comment id`` () =
             Reads.AgeSeconds = 10
             Reads.PreviousStatus = None
             Reads.PathRepo = None
+            Reads.AgentContract = None
             Reads.Raw = "" }
           { Reads.Id = 901L
             Reads.Worker = WorkerId "first"
@@ -687,6 +688,7 @@ let ``the CAS winner is the LOWEST LIVE comment id`` () =
             Reads.AgeSeconds = 10
             Reads.PreviousStatus = None
             Reads.PathRepo = None
+            Reads.AgentContract = None
             Reads.Raw = "" } ]
 
     match Reads.winner 120 markers with
@@ -705,6 +707,7 @@ let ``a STALE marker does not win - but an unreadable AGE is not stale`` () =
           Reads.AgeSeconds = 99999
           Reads.PreviousStatus = None
           Reads.PathRepo = None
+          Reads.AgentContract = None
           Reads.Raw = "" }
 
     let ageUnknown =
