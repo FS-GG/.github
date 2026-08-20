@@ -56,3 +56,15 @@ module HandlerRegistrationTests =
         let result = HandlerRegistration.validate Options.allCommands registrations
         Assert.True(Result.isOk result)
         Assert.Equal(Options.allCommands.Length, registrations.Length)
+
+    [<Fact>]
+    let ``production inventory rejects a parsed command with no registered producer`` () =
+        let registrations =
+            Program.commandRegistrations
+            |> List.filter (fst >> ((<>) Options.Help))
+
+        let result = HandlerRegistration.validate Options.allCommands registrations
+
+        match result with
+        | Error errors -> Assert.Contains("missing handlers: [Help]", errors)
+        | Ok _ -> failwith "a parsed command with no production registration was admitted"

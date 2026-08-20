@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      digest: "sha256:d01063162c039951d5d7d99208ec99556b0ccf31389135d16f09e5e20830bc84"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 46
       failed: 0
       skipped: 0
-    notes: ["The 45-test BoardOps report exercises the extracted implementations and forwarding compatibility seams; the implementation files are the separately reviewed ownership evidence."]
+    notes: ["The 46-test BoardOps report exercises the extracted implementations directly; the legacy CLI suite now reaches only the forwarding compatibility seams."]
   - id: EV002
     kind: verification
     subject:
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      digest: "sha256:d01063162c039951d5d7d99208ec99556b0ccf31389135d16f09e5e20830bc84"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 46
       failed: 0
       skipped: 0
-    notes: [The production agreement test derives the expected inventory from Options.allCommands and validates the exact Program.commandRegistrations composition.]
+    notes: ["The production agreement test compares the reflection-derived Options.allCommands oracle with Program.commandRegistrations assembled from two independently authored family inventories."]
   - id: EV003
     kind: verification
     subject:
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      digest: "sha256:d01063162c039951d5d7d99208ec99556b0ccf31389135d16f09e5e20830bc84"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 46
       failed: 0
       skipped: 0
     notes: ["The observed BoardOps run loads the family through the public signatures and the CLI project reference; Release build success is recorded separately in the PR verification."]
@@ -134,14 +134,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      source: readiness/2726-boardops-handler-registration/test-results/determinism.junit.xml
+      digest: "sha256:4df0d9b798c757db07dbdd0904c720bb419bbec36a05dbdedf462afecef856f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 6
       failed: 0
       skipped: 0
-    notes: ["The observed unit report establishes the family payload is buildable; bash tests/engine-build-determinism/run.sh separately passed 4/4 including ten per-entry mutation witnesses and a missing-BoardOps producer-agreement refusal."]
+    notes: ["The observed six-arm determinism receipt derives the five-project/ten-entry inventory from the production CLI ProjectReferences, proves both producer-to-payload and payload-to-producer agreement, refuses an empty producer inventory and empty payload, and records per-entry path mutations."]
   - id: EV005
     kind: verification
     subject:
@@ -162,13 +162,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      digest: "sha256:d01063162c039951d5d7d99208ec99556b0ccf31389135d16f09e5e20830bc84"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 46
       failed: 0
       skipped: 0
-    notes: ["Five registration tests passed: production union agreement plus duplicate, missing, unexpected, and family exactly-once controls. A temporary duplicate Help registration made the focused suite red and was then removed."]
+    notes: ["Six registration tests passed: independent production-union agreement, a permanent missing-production-command control, duplicate, missing, unexpected, and family exactly-once controls. Removing Help from Program's real legacy inventory made module initialization red with 'missing handlers: [Help]'; restoring it returned the suite green."]
   - id: EV006
     kind: verification
     subject:
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/cli.trx
-      digest: "sha256:eb98b41670fb5d56290dc02953423b52a8ef73c9878601e5ebb5b7187acfe31c"
+      digest: "sha256:ad942776b9424ad2c5db6cd1abe489665fe5e1bb3e685692971ebdc5c329381a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 671
       failed: 0
       skipped: 0
-    notes: ["This receipt is the 671-test CLI run. The separately parsed boardops.trx report passed 45 tests, and the Release CLI build completed with zero warnings and errors."]
+    notes: ["This receipt is the 671-test compatibility run. The separately parsed boardops.trx report passed 46 tests, both test projects restored in locked mode, and the Release CLI build completed with zero warnings and errors."]
   - id: EV007
     kind: verification
     subject:
@@ -215,14 +215,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      source: readiness/2726-boardops-handler-registration/test-results/determinism.junit.xml
+      digest: "sha256:4df0d9b798c757db07dbdd0904c720bb419bbec36a05dbdedf462afecef856f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 6
       failed: 0
       skipped: 0
-    notes: ["Packing was exercised by the four-arm determinism harness: production green, DeterministicSourcePaths inversion red for all ten entries, missing BoardOps payload red by name, and empty payload red."]
+    notes: ["The exact determinism JUnit receipt contains six green arms: production, ten-entry path mutation, missing BoardOps payload, unreferenced BoardOps payload, empty production inventory, and empty package inventory."]
   - id: EV008
     kind: verification
     subject:
@@ -239,17 +239,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/coord-engine-e2e/run.sh
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      source: readiness/2726-boardops-handler-registration/test-results/e2e.junit.xml
+      digest: "sha256:b3f502728f00a02810c5f84562916b639dcead90b65556bc620513fde7c8d39c"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 185
       failed: 0
       skipped: 0
-    notes: ["The 671-test compatibility report passed; the compiled production route additionally passed all 24 coord-engine-e2e read assertions and exercised the stateful write-command corpus."]
+    notes: ["The combined JUnit receipt embeds the actual compiled-engine transcripts for all 24 read assertions and all 161 stateful write assertions, run hermetically; the write leg used the workflow-pinned FS.GG.SDD.Cli 1.0.0."]
   - id: EV009
     kind: verification
     subject:
@@ -270,10 +272,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      digest: "sha256:d01063162c039951d5d7d99208ec99556b0ccf31389135d16f09e5e20830bc84"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 46
       failed: 0
       skipped: 0
     notes: ["The exact Program composition and separately wired BoardOps suite land atomically; Client retains forwarding seams only and no BoardOps dispatch cases."]
@@ -297,10 +299,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
+      digest: "sha256:d01063162c039951d5d7d99208ec99556b0ccf31389135d16f09e5e20830bc84"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 45
+      passed: 46
       failed: 0
       skipped: 0
     notes: ["The observed family report anchors the refreshed evidence; fsgg-sdd verify and ship regenerate the deterministic readiness views from these exact sources."]

@@ -386,12 +386,51 @@ let private boardOpsProgramRegistrations =
 
         command, handler)
 
-let private legacyProgramRegistrations =
-    let boardOpsCommands = HandlerRegistration.commands |> Set.ofList
+/// The production-owned legacy inventory. This is deliberately explicit and independent of
+/// `Options.allCommands`: validation must detect a newly parsed command that no production family
+/// registered, rather than auto-registering it through the same reflected inventory used as oracle.
+let private legacyCommands =
+    [ Help
+      Version
+      Scan
+      Decide
+      DeliveryCmd
+      ReviewCmd
+      LanesView
+      Facts
+      CommandContractCmd
+      PacketCmd
+      RouteCmd
+      DriverCmd
+      CycleCmd
+      WhoAmI
+      Followup
+      Predicate
+      DiffAudit
+      Next
+      BatchCmd
+      Ready
+      Reconcile
+      Who
+      Reap
+      Budget
+      Claim
+      Adopt
+      Landable
+      Take
+      Release
+      Heartbeat
+      Widen
+      SetPaths
+      Overlap
+      DoneCmd
+      VerifyPaths
+      GraphQlOps
+      LintCmd
+      OpLockAcquire
+      OpLockRelease ]
 
-    Options.allCommands
-    |> List.filter (fun command -> not (Set.contains command boardOpsCommands))
-    |> List.map (fun command -> command, legacyHandler)
+let private legacyProgramRegistrations = legacyCommands |> List.map (fun command -> command, legacyHandler)
 
 /// The production composition subject used by the producer-agreement test. Each family contributes
 /// registrations; the reflection-derived command inventory remains the independent expected set.

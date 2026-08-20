@@ -12,9 +12,13 @@
 #          of the ten packed entries as embedding the build root. This is the leg that shows the gate
 #          measures the artifact rather than the project files: nothing in the tree changes between
 #          arm 1 and arm 2 except the property MSBuild resolves.
-#   arm 3  PRODUCER AGREEMENT: remove BoardOps from an otherwise real package and require the gate to
-#          name both missing entries rather than grading the remaining payload green.
-#   arm 4  NON-VACUITY: hand the gate a package with none of the five coord assemblies in it. "Found
+#   arm 3  PRODUCER → PAYLOAD: remove BoardOps from an otherwise real package and require the gate to
+#          name both missing entries derived from the live production ProjectReference inventory.
+#   arm 4  PAYLOAD → PRODUCER: remove BoardOps only from a scratch copy of that inventory and require
+#          the real package's two now-unbacked entries to be refused by name.
+#   arm 5  INVENTORY LIVENESS: remove every ProjectReference from the scratch producer and require a
+#          refusal rather than letting the primary output alone masquerade as a complete graph.
+#   arm 6  PAYLOAD NON-VACUITY: hand the gate a package with none of the five coord assemblies in it. "Found
 #          no leak" and "graded no entries" must not share an exit code. Expect a non-zero exit.
 #
 # Arms 1 and 2 each pack from a clean obj/ and bin/ — the checker does that itself, and must, because
@@ -82,8 +86,65 @@ grep -q "FS.GG.Coord.Cli.BoardOps.pdb" "$work/arm3.err" \
   || fail "arm 3 did not name the missing BoardOps symbols"
 echo "   ok"
 
-# ── arm 4 — a package it cannot grade is a refusal, not a pass ───────────────────────────────────
-echo "== arm 4: a package carrying none of the coord assemblies must be refused"
+# ── arm 4 — packed repository outputs must all be backed by the production graph ─────────────────
+echo "== arm 4: a packed BoardOps output with no production reference must be refused"
+inventory_root="$work/inventory-root"
+while IFS= read -r project; do
+  destination="$inventory_root/${project#"$root/"}"
+  mkdir -p "$(dirname "$destination")"
+  cp "$project" "$destination"
+done < <(find "$root/src" -mindepth 2 -maxdepth 2 -name '*.fsproj' -print)
+python3 - "$inventory_root/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+path = sys.argv[1]
+tree = ET.parse(path)
+root = tree.getroot()
+for group in root.findall("ItemGroup"):
+    for node in list(group.findall("ProjectReference")):
+        if "FS.GG.Coord.Cli.BoardOps" in node.attrib.get("Include", ""):
+            group.remove(node)
+tree.write(path, encoding="unicode")
+PY
+if python3 "$gate" --repo "$inventory_root" --package "$package" \
+     >"$work/arm4.out" 2>"$work/arm4.err"; then
+  fail "the gate PASSED packed BoardOps entries with no production ProjectReference"
+fi
+grep -q "packed coord entries have no production ProjectReference" "$work/arm4.err" \
+  || fail "arm 4 red for the wrong reason; expected reverse producer-agreement refusal"
+grep -q "FS.GG.Coord.Cli.BoardOps.dll" "$work/arm4.err" \
+  || fail "arm 4 did not name the unbacked BoardOps assembly"
+grep -q "FS.GG.Coord.Cli.BoardOps.pdb" "$work/arm4.err" \
+  || fail "arm 4 did not name the unbacked BoardOps symbols"
+echo "   ok"
+
+# ── arm 5 — an empty producer graph is a refusal, not a smaller expected set ─────────────────────
+echo "== arm 5: an empty production ProjectReference inventory must be refused"
+empty_inventory_root="$work/empty-inventory-root"
+mkdir -p "$empty_inventory_root/src/FS.GG.Coord.Cli"
+cp "$root/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" \
+   "$empty_inventory_root/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+python3 - "$empty_inventory_root/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+path = sys.argv[1]
+tree = ET.parse(path)
+root = tree.getroot()
+for group in root.findall("ItemGroup"):
+    for node in list(group.findall("ProjectReference")):
+        group.remove(node)
+tree.write(path, encoding="unicode")
+PY
+if python3 "$gate" --repo "$empty_inventory_root" --package "$package" \
+     >"$work/arm5.out" 2>"$work/arm5.err"; then
+  fail "the gate PASSED an empty production ProjectReference inventory"
+fi
+grep -q "production project-reference inventory is empty" "$work/arm5.err" \
+  || fail "arm 5 red for the wrong reason; expected inventory-liveness refusal"
+echo "   ok"
+
+# ── arm 6 — a package it cannot grade is a refusal, not a pass ───────────────────────────────────
+echo "== arm 6: a package carrying none of the coord assemblies must be refused"
 python3 - "$work/empty.nupkg" <<'PY'
 import sys, zipfile
 with zipfile.ZipFile(sys.argv[1], "w") as z:
@@ -91,11 +152,11 @@ with zipfile.ZipFile(sys.argv[1], "w") as z:
     z.writestr("tools/net10.0/any/FSharp.Core.dll", b"not a coord assembly")
 PY
 if python3 "$gate" --repo "$root" --package "$work/empty.nupkg" \
-     >"$work/arm4.out" 2>"$work/arm4.err"; then
+     >"$work/arm6.out" 2>"$work/arm6.err"; then
   fail "the gate PASSED a package it graded nothing in — 'found nothing' and 'looked at nothing' share an exit code"
 fi
-grep -q "graded nothing" "$work/arm4.err" \
-  || fail "arm 4 red for the wrong reason; expected the empty-selection refusal"
+grep -q "graded nothing" "$work/arm6.err" \
+  || fail "arm 6 red for the wrong reason; expected the empty-selection refusal"
 echo "   ok"
 
-echo "engine-build-determinism: 4/4 arms as expected"
+echo "engine-build-determinism: 6/6 arms as expected"
