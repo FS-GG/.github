@@ -19,6 +19,26 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-20** — **coherent set `github:0.65.0` published; `coord-engine` flipped `0.64.0` → `0.65.0`**
+  (github; [.github#2770](https://github.com/FS-GG/.github/issues/2770),
+  [PR #2786](https://github.com/FS-GG/.github/pull/2786),
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.65.0)): the immutable
+  release was prepared from merge commit `595bf498593e8a20e475006c1b04fe7a89c63637` with
+  `previousStableVersion=0.64.0` and content
+  `sha256:884342a9340e13b3f25aca270a4a3f83b92109276f6e6f9bd2e30d71948129a9`.
+  All three sibling tags resolve to that commit, and the promoted manifest verifies `FS.GG.Kit`,
+  `FS.GG.Drivers`, and `FS.GG.Coord.Cli` at `0.65.0` on GitHub Packages and nuget.org with identical
+  payload hashes: Kit `sha256:68280f959cf7142b6cecac8ed5ffff532c973b1b288740f0d326fe87020ed140`,
+  Drivers `sha256:3abc2c16365385ccbc7e1e45e676255129cd9ca49da2b082d03447e2db0967b5`,
+  and Coord.Cli `sha256:51a243429f3490a6677582e854a552e713beb7d5ad831bb9efb3e7637038b249`.
+  Prepare run [32409031566](https://github.com/FS-GG/.github/actions/runs/32409031566) packed and
+  preflighted the three artifacts once. Initial publishers reached both feeds and timed out waiting
+  for nuget.org indexing; manifest-bound resumptions observed the immutable packages without a blind
+  duplicate push, and promotion run
+  [32410293269](https://github.com/FS-GG/.github/actions/runs/32410293269) re-read both feeds and sealed
+  the release. A later Coord.Cli journal upload correctly failed after promotion because GitHub refuses
+  asset replacement on an immutable release; the promoted manifest is the terminal authority.
+
 - **2026-08-20** — **coherent set `github:0.64.0` published; `coord-engine` flipped `0.63.0` → `0.64.0`**
   (github; [.github#2758](https://github.com/FS-GG/.github/issues/2758),
   [PR #2782](https://github.com/FS-GG/.github/pull/2782),
