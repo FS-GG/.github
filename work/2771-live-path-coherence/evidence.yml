@@ -1,0 +1,281 @@
+schemaVersion: 1
+workId: 2771-live-path-coherence
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2771-live-path-coherence/spec.md
+sourceClarifications: work/2771-live-path-coherence/clarifications.md
+sourceChecklist: work/2771-live-path-coherence/checklist.md
+sourcePlan: work/2771-live-path-coherence/plan.md
+sourceTasks: work/2771-live-path-coherence/tasks.yml
+sourceAnalysis: readiness/2771-live-path-coherence/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2771-live-path-coherence/analysis.json
+    digest: 308b46a1c8f9459c3ca430a7d77817c5de05b0a2f6a1940b0bfec7cb02c5c53b
+    schemaVersion: 1
+  - label: checklist
+    path: work/2771-live-path-coherence/checklist.md
+    digest: 3aa6ce5c3120edd69ed86a1ab5bdc5f3fac10eb43b4240303760576d15aff418
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2771-live-path-coherence/clarifications.md
+    digest: 9c1862ea2d31ad209c9e4ab4b0a0094700142d6e845759b493e4f066f444e079
+    schemaVersion: 1
+  - label: plan
+    path: work/2771-live-path-coherence/plan.md
+    digest: f83a3406b998d99be94939d7bda2f6db33a9ad05cdc5f3a2baddf3c33c73c9b2
+    schemaVersion: 1
+  - label: spec
+    path: work/2771-live-path-coherence/spec.md
+    digest: 4781c55f6aeab32228fd14ac0e226b1c91550bd4ea55299a2fa1962f814e650b
+    schemaVersion: 1
+  - label: tasks
+    path: work/2771-live-path-coherence/tasks.yml
+    digest: 5c3182598fc7f1a0b9fea7e55d342842a264b34e6936b3262b80df7ef9f3af4a
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/board-paths-live/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2771-live-path-coherence/verification/junit.xml
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

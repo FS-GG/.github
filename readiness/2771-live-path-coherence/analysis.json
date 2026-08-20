@@ -1,0 +1,442 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2771-live-path-coherence",
+  "stage": "analyze",
+  "status": "implementationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2771-live-path-coherence/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "99a50ce80ea5ad5db1d255ea41da22294013bc99ec9e41583e9c23444fb3e1c0"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2771-live-path-coherence/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "3aa6ce5c3120edd69ed86a1ab5bdc5f3fac10eb43b4240303760576d15aff418"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2771-live-path-coherence/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "9c1862ea2d31ad209c9e4ab4b0a0094700142d6e845759b493e4f066f444e079"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2771-live-path-coherence/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "f83a3406b998d99be94939d7bda2f6db33a9ad05cdc5f3a2baddf3c33c73c9b2"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2771-live-path-coherence/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "4781c55f6aeab32228fd14ac0e226b1c91550bd4ea55299a2fa1962f814e650b"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2771-live-path-coherence/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "5c3182598fc7f1a0b9fea7e55d342842a264b34e6936b3262b80df7ef9f3af4a"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "sourceRelationships": [
+    {
+      "id": "AR001",
+      "sourcePath": "work/2771-live-path-coherence/checklist.md",
+      "targetPath": "work/2771-live-path-coherence/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR002",
+      "sourcePath": "work/2771-live-path-coherence/checklist.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR003",
+      "sourcePath": "work/2771-live-path-coherence/clarifications.md",
+      "targetPath": "work/2771-live-path-coherence/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR004",
+      "sourcePath": "work/2771-live-path-coherence/clarifications.md",
+      "targetPath": "work/2771-live-path-coherence/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR005",
+      "sourcePath": "work/2771-live-path-coherence/clarifications.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR006",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "PC-001",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR007",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "GV-001",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "PM-001",
+      "targetId": null,
+      "relationship": "migrationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "PD-001",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "PD-005",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourcePlan",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR015",
+      "sourcePath": "work/2771-live-path-coherence/plan.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "VO-001",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "AC-001",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "FR-001",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR021",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "FR-003",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "FR-005",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/clarifications.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "sourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR025",
+      "sourcePath": "work/2771-live-path-coherence/spec.md",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
+      "sourcePath": "work/2771-live-path-coherence/tasks.yml",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "T006",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR027",
+      "sourcePath": "work/2771-live-path-coherence/tasks.yml",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "T007",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR028",
+      "sourcePath": "work/2771-live-path-coherence/tasks.yml",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "T008",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
+      "sourcePath": "work/2771-live-path-coherence/tasks.yml",
+      "targetPath": "work/2771-live-path-coherence/tasks.yml",
+      "sourceId": "T009",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "readiness": {
+    "status": "implementationReady",
+    "readyCount": 29,
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0
+  },
+  "findings": [],
+  "generatedViews": [
+    {
+      "path": "readiness/2771-live-path-coherence/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "optionalBoundaryFacts": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "reason": "Lifecycle sources are current and ready for implementation."
+  }
+}
