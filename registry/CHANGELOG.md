@@ -19,6 +19,25 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-20** — **coherent set `github:0.64.0` published; `coord-engine` flipped `0.63.0` → `0.64.0`**
+  (github; [.github#2758](https://github.com/FS-GG/.github/issues/2758),
+  [PR #2782](https://github.com/FS-GG/.github/pull/2782),
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.64.0)): the immutable
+  release was prepared from merge commit `be4e1d5c731163eff0922b0c69e7fc26f05eb2bd` with
+  `previousStableVersion=0.63.0` and content
+  `sha256:a94ee22f239a52bab470faafdb5c1ca927d2f91f8ececdffe31170c3427cc1f5`.
+  All three sibling tags resolve to that commit, both GitHub Packages and nuget.org serve
+  `FS.GG.Kit`, `FS.GG.Drivers`, and `FS.GG.Coord.Cli` at `0.64.0`, and the promoted manifest records
+  matching payload hashes across both feeds: Coord.Cli
+  `sha256:4a192e780d94c2dbeed27da1a5cf9946af7bada6e1d2e352712056806d0d0352`, Drivers
+  `sha256:de3c6d26e92ef9570edb7c5c113fa51f55fc971d30919f064c40c0faeab51af1`, and Kit
+  `sha256:36bc48a22943c47e91b794e9095beb901deb50bb9ef88162c6e2fd00e60b0ee0`.
+  Initial publishers reached both pushes and timed out waiting for nuget.org indexing; exact-source
+  recovery run [32402061673](https://github.com/FS-GG/.github/actions/runs/32402061673) observed the
+  already-served Drivers package and skipped both OIDC and push, then promotion run
+  [32402153642](https://github.com/FS-GG/.github/actions/runs/32402153642) re-read both feeds and sealed
+  the release. This discharges the publication owed by the source-prepared entry immediately below.
+
 - **2026-08-20** — **coherent set `github:0.64.0` source prepared; publication owed**
   (github; [.github#2758](https://github.com/FS-GG/.github/issues/2758),
   [PR #2782](https://github.com/FS-GG/.github/pull/2782)): `FS.GG.Kit`, `FS.GG.Drivers`, and
