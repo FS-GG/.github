@@ -881,6 +881,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
           AgeSeconds = 30
           PreviousStatus = None
           PathRepo = None
+          AgentContract = None
           Raw = "<!-- fsgg:claim worker=smew-f1e2 lease=120 -->" }
 
     let private ensureAuthorizationContext (transport: Fake.Recorder) : Kernel.Context =
