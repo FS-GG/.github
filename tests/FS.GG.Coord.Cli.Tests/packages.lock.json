@@ -126,6 +126,8 @@
         "type": "Project",
         "dependencies": {
           "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FS.GG.Coord.GitHub": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },
