@@ -53,14 +53,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:0218e271658186f18826b5f6f5f7e88f5d779872826dd0940812f91dcbdb3db9"
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 229
+      passed: 1
       failed: 0
       skipped: 0
-    notes: ["The 229-test BoardOps report owns the physically moved application-service, intake, set-field/blocker, and widen fixture files and exercises family handlers directly; the 488-test legacy CLI project contains no listed-family behavior fixture."]
+    notes: ["The command-produced JUnit receipt embeds the passing 229-test BoardOps output for the physically moved application-service, intake, set-field/blocker, and widen fixture files. The repository's observed-command-report producer propagates a failing command and emits failures=1, with positive, negative, and missing-command controls in its wired self-test."]
   - id: EV002
     kind: verification
     subject:
@@ -80,14 +80,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:0218e271658186f18826b5f6f5f7e88f5d779872826dd0940812f91dcbdb3db9"
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 229
+      passed: 1
       failed: 0
       skipped: 0
-    notes: ["The production agreement test compares the reflection-derived Options.allCommands oracle with Program.commandRegistrations assembled from two independently authored family inventories."]
+    notes: [The production agreement test compares the reflection-derived Options.allCommands oracle with Program.commandRegistrations assembled from two independently authored family inventories.]
   - id: EV003
     kind: verification
     subject:
@@ -107,11 +107,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:0218e271658186f18826b5f6f5f7e88f5d779872826dd0940812f91dcbdb3db9"
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 229
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["The observed BoardOps run loads the family through the public signatures and the CLI project reference; Release build success is recorded separately in the PR verification."]
@@ -161,11 +161,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:0218e271658186f18826b5f6f5f7e88f5d779872826dd0940812f91dcbdb3db9"
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 229
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["Six registration tests passed: independent production-union agreement, a permanent missing-production-command control, duplicate, missing, unexpected, and family exactly-once controls. Removing Help from Program's real legacy inventory made module initialization red with 'missing handlers: [Help]'; restoring it returned the suite green."]
@@ -184,18 +184,18 @@ evidence:
     artifacts: [src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj, tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj]
     sourceRefs:
       - kind: verification
-        path: readiness/2726-boardops-handler-registration/test-results/cli.trx
+        path: readiness/2726-boardops-handler-registration/test-results/cli.junit.xml
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/cli.trx
-      digest: "sha256:2095d137a02226fb30af15e4e834a13b19721eaedc737f4d667eac3add90a4f6"
+      source: readiness/2726-boardops-handler-registration/test-results/cli.junit.xml
+      digest: "sha256:bcded273bfcf22fb802c741c5b479f62a90bc65579c85b23226d3e8ba1eb7771"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 488
+      passed: 1
       failed: 0
       skipped: 0
-    notes: ["This receipt is the 488-test legacy CLI run after physical fixture ownership moved. The separately parsed boardops.trx report passed 229 tests, both test projects restored in locked mode, and the Release CLI build completed with zero warnings and errors."]
+    notes: ["This command-produced JUnit receipt embeds the passing 488-test legacy CLI run after physical fixture ownership moved. The separate BoardOps command receipt embeds 229 passing tests; both reports are emitted by the inversion-controlled observed-command-report producer after locked restore."]
   - id: EV007
     kind: verification
     subject:
@@ -271,11 +271,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:0218e271658186f18826b5f6f5f7e88f5d779872826dd0940812f91dcbdb3db9"
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 229
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["The exact Program composition and separately wired BoardOps suite land atomically; Client retains forwarding seams only and no BoardOps dispatch cases."]
@@ -298,11 +298,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:0218e271658186f18826b5f6f5f7e88f5d779872826dd0940812f91dcbdb3db9"
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 229
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["The observed family report anchors the refreshed evidence; fsgg-sdd verify and ship regenerate the deterministic readiness views from these exact sources."]

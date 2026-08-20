@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "8c9862456eff7734e3734df4beb2e6e80dae084215e405f71d1c402f635988e2"
+        "value": "8a343b7aba9312be237d762e90b642f743926947b2afc2799afe52372b7153d8"
       }
     },
     {
@@ -752,7 +752,7 @@
           "path": "work/2726-boardops-handler-registration/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "8c9862456eff7734e3734df4beb2e6e80dae084215e405f71d1c402f635988e2"
+            "value": "8a343b7aba9312be237d762e90b642f743926947b2afc2799afe52372b7153d8"
           },
           "schemaVersion": 1
         },
@@ -783,7 +783,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "d337170b535b9871ca521107e1655b5cc90a68622e9a3580cf0dde66a12c3bea"
+        "value": "7a3e4b655563a9d45aa1765d1da05f88028fc26138658807bffebc9a33eed1db"
       },
       "currency": "current"
     }
