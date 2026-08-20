@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "1fc7b1269d73c7b419a13e8b0a327c9ba119d5f8fbf5b5299ade5fc1a84816bd"
+        "value": "a5539c0a951018588e01ee087eb9232b638cb266e6f0f5860a66724dbef41854"
       }
     },
     {
@@ -1034,7 +1034,7 @@
           "path": "work/2760-gate-subject-census/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "1fc7b1269d73c7b419a13e8b0a327c9ba119d5f8fbf5b5299ade5fc1a84816bd"
+            "value": "a5539c0a951018588e01ee087eb9232b638cb266e6f0f5860a66724dbef41854"
           },
           "schemaVersion": 1
         },
@@ -1065,7 +1065,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "951a300db0af06af8d757a77d1a548deae4e38624a023049d52cc8ba6189b016"
+        "value": "c7b115fa456be3bdd5f23671123527d187087903e98806392d1d96c14a7005e9"
       },
       "currency": "current"
     }

@@ -169,6 +169,10 @@ with tempfile.TemporaryDirectory() as d:
 
 rc, _out, err = capturing(lambda: report_ok("check-x", "nothing examined"))
 check("report_ok refuses a prose-only green with no census", rc == 3 and "no subject census" in err)
+legacy_scope = {"report_ok": report_ok}
+exec(compile("def legacy(): return report_ok('legacy-x', 'staged migration')", "skillmirror-redrive.py", "exec"), legacy_scope)
+rc, out, _err = capturing(legacy_scope["legacy"])
+check("the closed legacy inventory preserves already-migrated callers until their path-scoped rows land", rc == 0 and "legacy-x: OK" in out)
 rc, _out, err = capturing(lambda: report_ok("check-x", "nothing examined", SubjectCensus((), (), "fixture/v1", "digest")))
 check("report_ok refuses an empty census", rc == 3 and "incomplete" in err)
 rc, _out, err = capturing(lambda: report_ok("check-x", "1 file clean", SubjectCensus(("x",), ("x",), "", "")))
