@@ -53,8 +53,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/github-write.trx
-      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
+      source: readiness/2758-agent-contract-version/github-write.junit.xml
+      digest: "sha256:edcc459bcf9dcc14afd5dfab38dee1d7515bcb9e5b82432b73380f2682cf32e8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 633
@@ -80,8 +80,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/github-write.trx
-      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
+      source: readiness/2758-agent-contract-version/github-write.junit.xml
+      digest: "sha256:edcc459bcf9dcc14afd5dfab38dee1d7515bcb9e5b82432b73380f2682cf32e8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 633
@@ -107,8 +107,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/github-write.trx
-      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
+      source: readiness/2758-agent-contract-version/github-write.junit.xml
+      digest: "sha256:edcc459bcf9dcc14afd5dfab38dee1d7515bcb9e5b82432b73380f2682cf32e8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 633
@@ -134,8 +134,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/github-write.trx
-      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
+      source: readiness/2758-agent-contract-version/github-write.junit.xml
+      digest: "sha256:edcc459bcf9dcc14afd5dfab38dee1d7515bcb9e5b82432b73380f2682cf32e8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 633
@@ -161,8 +161,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2758-agent-contract-version/github-write.trx
-      digest: "sha256:c1679959eb7054d986620713effe1b029f4cb80230e1a5f300e3445cde64d2bc"
+      source: readiness/2758-agent-contract-version/github-write.junit.xml
+      digest: "sha256:edcc459bcf9dcc14afd5dfab38dee1d7515bcb9e5b82432b73380f2682cf32e8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 633
