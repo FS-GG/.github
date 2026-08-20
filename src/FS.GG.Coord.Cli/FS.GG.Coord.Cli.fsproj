@@ -130,7 +130,19 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.65.0 — measurement evidence names its exact subject and proves the instrument can observe the opposite.
+    <PackageReleaseNotes>0.66.0 — disclosed residuals become an explicit, bounded stopping decision.
+
+WHAT MOVED, AND WHY IT IS A MINOR. The packed Kit's pnext-item findings contract adds a terminal
+disposition that receivers did not previously have: a limitation may stop only when its bound is
+measured, disclosed at the caller-facing contract, pinned by an executable assertion with observed
+red evidence, and recorded by the actor who owns disposition at that workflow boundary (.github#2757).
+Those four conditions are conjunctive, and the contract explicitly excludes checks that cannot fail
+under .github#266. This changes receiver-visible worker, critic, analyst, and human decision behavior;
+it is not a correction to prose describing an existing action. The change is additive and removes no
+command, package member, destination, or runtime implementation, so the coherent set advances from
+the complete 0.65.0 frontier to the next minor, 0.66.0.
+
+0.65.0 — measurement evidence names its exact subject and proves the instrument can observe the opposite.
 
 WHAT MOVED, AND WHY IT IS A MINOR. The packed Kit gains a required pnext-item
 measurement-discipline action and its linked reference from .github#2770. Receivers must now bind
