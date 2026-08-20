@@ -19,6 +19,27 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-21** — **coherent set `github:0.66.0` published; `coord-engine` flipped to `0.66.0`**
+  (github; [.github#2757](https://github.com/FS-GG/.github/issues/2757),
+  [PR #2789](https://github.com/FS-GG/.github/pull/2789),
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.66.0)): prepare run
+  [32422535032](https://github.com/FS-GG/.github/actions/runs/32422535032) packed the three
+  coherent artifacts once from merge `053df32398037c75e90ed07c2224d9084000a2b0`; all sibling tags
+  resolve there. The Kit, Drivers, and Coord.Cli publishers
+  ([32422756527](https://github.com/FS-GG/.github/actions/runs/32422756527),
+  [32422756776](https://github.com/FS-GG/.github/actions/runs/32422756776), and
+  [32422757553](https://github.com/FS-GG/.github/actions/runs/32422757553)) pushed the prepared bytes
+  to both feeds, persisted the bounded nuget.org indexing wait, then resumed by observing the immutable
+  versions without a duplicate push. Promotion run
+  [32423266088](https://github.com/FS-GG/.github/actions/runs/32423266088) re-read both registries and
+  sealed content `sha256:5c9d413370cd5cf4bc5b339dbdbb6e205af3ec577d959e902c054015f4c98782`.
+  Independently downloaded payloads match across GitHub Packages and nuget.org: Coord.Cli
+  `sha256:79ddf45afd416fa1f444739b104595d997b04b2c12490230355bb7d77134c9cc`, Drivers
+  `sha256:b82f952c5ec6f932ee25da62d745bca43e63508c94d24623297854cc4950f4c3`, and Kit
+  `sha256:b1542451c4a4a64623aedb2fc48a4c7ee4acd0f110cc15ad237efef38bad1826`.
+  A clean nuget.org tool install reported `0.66.0.0` and emitted the command contract; a clean
+  Kit/Drivers consumer restore resolved both public content roots. Architecture shape is unaffected.
+
 - **2026-08-20** — **coherent set `github:0.65.0` published; `coord-engine` flipped `0.64.0` → `0.65.0`**
   (github; [.github#2770](https://github.com/FS-GG/.github/issues/2770),
   [PR #2786](https://github.com/FS-GG/.github/pull/2786),
