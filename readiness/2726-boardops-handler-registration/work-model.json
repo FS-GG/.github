@@ -1,0 +1,792 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2726-boardops-handler-registration",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "9ccd274e213c03111ca11bebe7c544e210ae563492ae08a0ac8c0a1f2cb811dc"
+      }
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "31ece806d391c02ee8a23186d4dbdd7abae6a74774755b7fdeaa26e597e95c4b"
+      }
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "d62ac9036a58082f15bc7877d9fcd6a38e3498dac5bcb271350dc1ae187bc475"
+      }
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "25f548584c5c27c3f175d4cedc86df91e8a6b078f35818097e6cfc4fec0ff425"
+      }
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ee53d1f2c33c48c72755bdebbb3bedd2ad774b656bf9cb71efaedf7e44657b3a"
+      }
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "5dc4254bcef8ea8e2db03ed2e3f84841e14c315569577c19993c8f41a6e2af02"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2726-boardops-handler-registration",
+    "title": "Extract FS.GG.Coord.Cli.BoardOps and establish handler registration",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "all Options.Command cases resolve to exactly one composed handler and all existing BoardOps behavior, exit-code, pack, and release-payload tests pass (Stories: US-001; Acceptance: AC-001)",
+      "text": "all Options.Command cases resolve to exactly one composed handler and all existing BoardOps behavior, exit-code, pack, and release-payload tests pass (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2726-boardops-handler-registration/spec.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    }
+  ],
+  "decisions": [],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001",
+        "PD-002",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Update contract surface PC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Update contract surface PC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Update contract surface PC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Record verification evidence VO-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Record verification evidence VO-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-002",
+        "VO-002"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Record verification evidence VO-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-003",
+        "VO-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Record verification evidence VO-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-004"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Handle migration posture PM-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Refresh generated view impact GV-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2726-boardops-handler-registration/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+        "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2726-boardops-handler-registration/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2726-boardops-handler-registration/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.1.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2726-boardops-handler-registration/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "9ccd274e213c03111ca11bebe7c544e210ae563492ae08a0ac8c0a1f2cb811dc"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2726-boardops-handler-registration/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "31ece806d391c02ee8a23186d4dbdd7abae6a74774755b7fdeaa26e597e95c4b"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2726-boardops-handler-registration/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "d62ac9036a58082f15bc7877d9fcd6a38e3498dac5bcb271350dc1ae187bc475"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2726-boardops-handler-registration/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "25f548584c5c27c3f175d4cedc86df91e8a6b078f35818097e6cfc4fec0ff425"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2726-boardops-handler-registration/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ee53d1f2c33c48c72755bdebbb3bedd2ad774b656bf9cb71efaedf7e44657b3a"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2726-boardops-handler-registration/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "5dc4254bcef8ea8e2db03ed2e3f84841e14c315569577c19993c8f41a6e2af02"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "0648828926928037d171f88a97e06214ab35c5a5feaeb36a02f93fc6b5bdb86f"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

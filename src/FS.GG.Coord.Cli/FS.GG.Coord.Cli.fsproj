@@ -398,6 +398,7 @@ the standing safety advisories carry forward.
          What a separate project buys is that .github#2726–#2729 can each add a family project without any
          of them editing THIS file to reach the shared base. -->
     <ProjectReference Include="../FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2726-boardops-handler-registration",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2726-boardops-handler-registration/analysis.json",
+      "kind": "analysis",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c8165e839bc06f3b1d91c274cf12f11a05f59895dd2c9988034cb1f61c2b344e"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2726-boardops-handler-registration/verify.json",
+      "kind": "source",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "2bf7662ba62647007353e9fb59ac2b909ad115537465e1f2ee934fd7482f07c2"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2726-boardops-handler-registration/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "7891610146775e1cca7c665ea0921f1d2cafc20e2abec44e7f756cf77d264265"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "9ccd274e213c03111ca11bebe7c544e210ae563492ae08a0ac8c0a1f2cb811dc"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "31ece806d391c02ee8a23186d4dbdd7abae6a74774755b7fdeaa26e597e95c4b"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/evidence.yml",
+      "kind": "evidence",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "9357ce23f8081b8f7f2105ad4b3ef3a1d6cf30b6be67d0466ea661a0d9ca62f5"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "25f548584c5c27c3f175d4cedc86df91e8a6b078f35818097e6cfc4fec0ff425"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ee53d1f2c33c48c72755bdebbb3bedd2ad774b656bf9cb71efaedf7e44657b3a"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2726-boardops-handler-registration/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "5dc4254bcef8ea8e2db03ed2e3f84841e14c315569577c19993c8f41a6e2af02"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "lifecycleReadiness": {
+    "status": "shipReady",
+    "stages": [
+      {
+        "stage": "analyze",
+        "status": "ready"
+      },
+      {
+        "stage": "checklist",
+        "status": "ready"
+      },
+      {
+        "stage": "clarify",
+        "status": "ready"
+      },
+      {
+        "stage": "evidence",
+        "status": "ready"
+      },
+      {
+        "stage": "plan",
+        "status": "ready"
+      },
+      {
+        "stage": "specify",
+        "status": "ready"
+      },
+      {
+        "stage": "tasks",
+        "status": "ready"
+      },
+      {
+        "stage": "verify",
+        "status": "ready"
+      }
+    ]
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "blockingFindingIds": [],
+    "evidenceSupportedCount": 10,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 10,
+    "evidenceDeferredCount": 0,
+    "evidenceMissingCount": 0,
+    "evidenceStaleCount": 0,
+    "evidenceSyntheticCount": 0,
+    "evidenceInvalidCount": 0
+  },
+  "evidenceDispositions": [
+    {
+      "id": "ED-EV001",
+      "obligationId": "EV001",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV002",
+      "obligationId": "EV002",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV003",
+      "obligationId": "EV003",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV004",
+      "obligationId": "EV004",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV005",
+      "obligationId": "EV005",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV006",
+      "obligationId": "EV006",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV007",
+      "obligationId": "EV007",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV008",
+      "obligationId": "EV008",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV009",
+      "obligationId": "EV009",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV010",
+      "obligationId": "EV010",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2726-boardops-handler-registration/analysis.json",
+      "kind": "analysis",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2726-boardops-handler-registration/verify.json",
+      "kind": "verification",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2726-boardops-handler-registration/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": [],
+    "warningFindingIds": [],
+    "advisoryFindingIds": [],
+    "contributingStages": [],
+    "classifiedObligationsUnmetCount": 0,
+    "journeyObligationsUnmetCount": 0,
+    "correction": ""
+  },
+  "findings": [],
+  "governanceCompatibility": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "readiness": "shipReady",
+  "nextAction": {
+    "actionId": "ship.next.protectedBoundary",
+    "command": null,
+    "reason": "Ship readiness is current and ready for the protected-boundary handoff."
+  }
+}

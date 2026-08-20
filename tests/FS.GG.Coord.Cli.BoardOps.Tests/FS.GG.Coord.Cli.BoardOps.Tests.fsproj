@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>true</GenerateProgramFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../FS.GG.Coord.Cli.Tests/StructuredFixtures.fs" Link="StructuredFixtures.fs" />
+    <Compile Include="HandlerRegistrationTests.fs" />
+    <Compile Include="AddStatusDefaultTests.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+</Project>
