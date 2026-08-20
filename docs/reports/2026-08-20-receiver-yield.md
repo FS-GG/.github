@@ -114,7 +114,7 @@ consumes a package when its own main branch accepts the pin.
   0.51.1, 0.52.0, 0.57.0, 0.58.0, 0.60.0.
   Verification: run the kit-history program above with an FS.GG.Governance
   checkout; the terminal pin commit is
-  `1f70698db1793894577093bf1b61e15d2028fe01`.
+  `1f70698699474efa43ee7b73b0d07758989e2071`.
 - **FS.GG.Templates (18):** 0.1.0, 0.2.2, 0.2.3, 0.4.0, 0.6.0, 0.8.0,
   0.15.0, 0.17.0, 0.18.0, 0.21.0, 0.22.0, 0.23.1, 0.23.2, 0.23.3, 0.24.0,
   0.26.0, 0.47.0, 0.58.0.
@@ -137,7 +137,7 @@ consumes a package when its own main branch accepts the pin.
   0.57.0.
   Verification: run the kit-history program above with an FS.GG.Net checkout;
   the terminal pin commit is
-  `53624048319ee1d906d6b24c39a35a7605d1314c`.
+  `53624045d96559da83d2da77265476d0fcdb12af`.
 
 ## Prevention yield and escaped incidents
 
