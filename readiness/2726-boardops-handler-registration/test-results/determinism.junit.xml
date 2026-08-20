@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="engine-build-determinism" tests="6" failures="0" errors="0" skipped="0"><testcase classname="fsgg.receipt" name="1: the repository's own configuration must pass" /><testcase classname="fsgg.receipt" name="2: DeterministicSourcePaths=false must be refused, entry by entry" /><testcase classname="fsgg.receipt" name="3: a package missing BoardOps must be refused by name" /><testcase classname="fsgg.receipt" name="4: a packed BoardOps output with no production reference must be refused" /><testcase classname="fsgg.receipt" name="5: an empty production ProjectReference inventory must be refused" /><testcase classname="fsgg.receipt" name="6: a package carrying none of the coord assemblies must be refused" /><system-out>== arm 1: the repository's own configuration must pass
+   ok
+== arm 2: DeterministicSourcePaths=false must be refused, entry by entry
+   ok — all ten packed coord entries named
+== arm 3: a package missing BoardOps must be refused by name
+   ok
+== arm 4: a packed BoardOps output with no production reference must be refused
+   ok
+== arm 5: an empty production ProjectReference inventory must be refused
+   ok
+== arm 6: a package carrying none of the coord assemblies must be refused
+   ok
+engine-build-determinism: 6/6 arms as expected
+</system-out></testsuite>

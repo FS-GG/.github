@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f693f3ef928818a8216fffa07afdf731025630976cb89a6469bd519557ad725f"
+        "value": "8c9862456eff7734e3734df4beb2e6e80dae084215e405f71d1c402f635988e2"
       }
     },
     {
@@ -626,7 +626,7 @@
       "requirementRefs": [],
       "artifactRefs": [
         "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs",
-        "tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs",
+        "tests/FS.GG.Coord.Cli.BoardOps.Tests/ApplicationServiceTests.fs",
         "tests/coord-engine-e2e/run.sh",
         "tests/coord-engine-e2e/writes.sh"
       ],
@@ -752,7 +752,7 @@
           "path": "work/2726-boardops-handler-registration/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "f693f3ef928818a8216fffa07afdf731025630976cb89a6469bd519557ad725f"
+            "value": "8c9862456eff7734e3734df4beb2e6e80dae084215e405f71d1c402f635988e2"
           },
           "schemaVersion": 1
         },
@@ -783,7 +783,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "f11e642ce2387f5a0094a1d54d1df9f410f58278b2f7f38f7c34701cbf1656a4"
+        "value": "d337170b535b9871ca521107e1655b5cc90a68622e9a3580cf0dde66a12c3bea"
       },
       "currency": "current"
     }

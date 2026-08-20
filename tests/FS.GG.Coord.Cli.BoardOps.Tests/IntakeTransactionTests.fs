@@ -8,6 +8,7 @@ open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
+open FS.GG.Coord.Cli.BoardOps
 
 /// Transaction fixtures deliberately stop immediately after the receipt boundary.  The recording
 /// transport makes the invariant observable: a retry may repair projection, but it cannot issue a
@@ -29,7 +30,7 @@ module IntakeTransactionTests =
         match IntakeApplication.readDraft path with
         | Error error -> failwith error
         | Ok _ -> ()
-        Client.intakeCmd (context transport) (options path)
+        Handlers.intakeCmd (context transport) (options path)
 
     let private invoke cache transport = invokeDraft cache draft transport
 

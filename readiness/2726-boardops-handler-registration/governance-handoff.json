@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2726-boardops-handler-registration/ship.json",
-      "digest": "sha256:6410e4a3b91f62af7173baf638af2c3eda67efb8e8334bd0e8e38b018a6f4221",
+      "digest": "sha256:4740a1e2b4304c7f6f9c97ded3ae08c61acda880a23561619a3f2360439c151f",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2726-boardops-handler-registration/verify.json",
-      "digest": "sha256:028830421dded2eedfa33bcc0939edafc6a8defa924b158e613add27b6d9deb9",
+      "digest": "sha256:155668d90f38089a0122999fa4836e4f86a533cc59121fb5339838f94b9508df",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2726-boardops-handler-registration/work-model.json",
-      "digest": "sha256:4383ef37b846d112709c357144ef31c6dd228519c7dd729e97a0473b24c87615",
+      "digest": "sha256:489aca1496ac0925d3ff6f67d8f47b689961212012b691d892227e389a872b7c",
       "schemaVersion": 1
     }
   ],

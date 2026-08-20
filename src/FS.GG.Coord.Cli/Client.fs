@@ -9677,7 +9677,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Next
             | BatchCmd
             | Reap
-            | Inbox
             | Landable
             | Take -> { opts with Repo = scopedRepo opts }
             | _ -> opts
