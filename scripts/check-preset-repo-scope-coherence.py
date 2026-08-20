@@ -124,6 +124,7 @@ from lib.gate import (  # noqa: E402
     report_findings,
     report_ok,
     run,
+    subject_census,
 )
 
 NAME = "check-preset-repo-scope-coherence"
@@ -415,6 +416,13 @@ def main(argv) -> int:
         NAME,
         f"{len(rules)} file-scoped disable rule(s) in {os.path.abspath(preset_path)}, each scoped to "
         f"exactly the {ROSTER} receivers of the capability it declares — " + "; ".join(graded),
+        subject_census(
+            declared=(preset_path, roster_path),
+            resolved=tuple(path for path in (preset_path, roster_path) if os.path.exists(path)),
+            examined=graded,
+            producers=graded,
+            authority_revision="PATHS_SUBJECT/v1",
+        ),
     )
 
 

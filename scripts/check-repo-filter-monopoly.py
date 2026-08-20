@@ -65,20 +65,21 @@ import re
 import sys
 from pathlib import Path
 
-NO_VERDICT_PERMANENT = 3
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.gate import report_findings, report_ok, run, subject_census  # noqa: E402
 
 # The engine's F# source. The gate walks `.fs`; `.fsi` files are signatures and carry no filter.
 SURFACES = ["src"]
+
+# THE HOME. The one file allowed to compare a row's repo against a `--repo` — `Scan.scope`, the funnel
+# every verb now routes through. A path, because the F# module boundary IS the unit of the monopoly.
+HOME = "src/FS.GG.Coord.GitHub/Scan.fs"
 
 # WHAT THIS GATE READS, FOR THE WORKFLOW THAT RUNS IT (#996, epic #266). `check-paths-coherence.py`
 # reads this BY AST and reds `repo-filter-monopoly.yml` if its `paths:` does not select every entry.
 # It is the SURFACES list itself, not a copy: the thing this gate walks is the thing the filter is
 # checked against, so widening one widens the other.
-PATHS_SUBJECT = SURFACES
-
-# THE HOME. The one file allowed to compare a row's repo against a `--repo` — `Scan.scope`, the funnel
-# every verb now routes through. A path, because the F# module boundary IS the unit of the monopoly.
-HOME = "src/FS.GG.Coord.GitHub/Scan.fs"
+PATHS_SUBJECT = SURFACES + [HOME]
 
 # The shape every one of the five copies had. `String.Equals(r.Ref.Repo, name, StringComparison…)`.
 EQUALS = re.compile(r"String\.Equals\(\s*[A-Za-z_][\w.]*\.Ref\.Repo\s*,")
@@ -88,7 +89,37 @@ EQUALS = re.compile(r"String\.Equals\(\s*[A-Za-z_][\w.]*\.Ref\.Repo\s*,")
 # `.Repo` — that guess is what let `r.Ref.Repo = opts.Repo`, a real `--repo` filter, through (#1161).
 BARE = re.compile(r"\.Ref\.Repo\s*(?:=|<>)")
 
+# The funnel first resolves `PathRepo` and therefore no longer compares `.Ref.Repo` directly. This
+# is the actual production spelling the monopoly permits, separate from the known hand-rolled shape.
+HOME_EQUALS = re.compile(
+    r"RepoScope\.Repository\s+(?P<resolved>[A-Za-z_]\w*)\s*->\s*String\.Equals\(\s*(?P=resolved)\s*,\s*name\s*,"
+)
+
 EXEMPT = re.compile(r"//\s*repo-filter-monopoly:\s*exempt\b")
+
+
+def producer_subjects(root: Path) -> tuple[str, ...]:
+    """Independently enumerate `String.Equals` calls emitted inside production `Scan.scope`.
+
+    This parser knows only the F# function boundary and the call name. It does not consume EQUALS,
+    BARE, HOME_EQUALS, or the walker's output, so a broken semantic matcher cannot zero both sides.
+    """
+
+    path = root / HOME
+    if not path.is_file():
+        return ()
+    lines = path.read_text(encoding="utf-8").splitlines()
+    in_scope = False
+    produced: list[str] = []
+    for n, line in enumerate(lines, 1):
+        if re.match(r"^    let scope\b", line):
+            in_scope = True
+            continue
+        if in_scope and re.match(r"^    let\s+", line):
+            break
+        if in_scope and "String.Equals(" in line:
+            produced.append(f"{HOME}:{n}")
+    return tuple(produced)
 
 
 def main(argv=None) -> int:
@@ -98,7 +129,7 @@ def main(argv=None) -> int:
         root = Path(argv[argv.index("--root") + 1]).resolve()
 
     findings = []
-    subjects = 0
+    subjects: list[str] = []
 
     for surface in SURFACES:
         base = root / surface
@@ -118,14 +149,14 @@ def main(argv=None) -> int:
                     pending_exempt = True
                     continue
 
-                hit = EQUALS.search(line) or BARE.search(line)
+                hit = EQUALS.search(line) or BARE.search(line) or (rel == HOME and HOME_EQUALS.search(line))
                 if not hit:
                     # A blank line does not carry an exemption across to the next statement.
                     if line.strip() and not line.strip().startswith("//"):
                         pending_exempt = False
                     continue
 
-                subjects += 1
+                subjects.append(f"{rel}:{n}")
 
                 if rel == HOME:
                     pending_exempt = False
@@ -141,28 +172,32 @@ def main(argv=None) -> int:
                     f"matched nothing, in one breath (#979).\n    {line.strip()}"
                 )
 
-    if subjects == 0:
-        print(
-            "repo-filter-monopoly: NO VERDICT — the walker found zero `.Ref.Repo` comparisons "
-            f"across {SURFACES}. `{HOME}` contains one by construction, so the walker is broken, "
-            "not the tree. Examining nothing is a failure to audit, not a clean audit (#266).",
-            file=sys.stderr,
+    census = subject_census(
+        declared=PATHS_SUBJECT,
+        resolved=tuple(subject for subject in PATHS_SUBJECT if (root / subject).exists()),
+        examined=subjects,
+        producers=producer_subjects(root),
+        authority_revision="PATHS_SUBJECT/v2-semantic-census",
+    )
+
+    # Completeness is decided before the monopoly predicate: a moved HOME can itself look like a
+    # hand-rolled filter, but the stronger fact is that the declared authority did not resolve.
+    if not census.complete:
+        return report_ok(
+            "repo-filter-monopoly",
+            f"{len(subjects)} comparison subject(s) examined",
+            census,
         )
-        return NO_VERDICT_PERMANENT
 
     if findings:
-        print(
-            f"repo-filter-monopoly: {len(findings)} hand-rolled `--repo` filter(s) "
-            f"({subjects} subject(s) examined).\n",
-            file=sys.stderr,
-        )
-        for f in findings:
-            print(f"  {f}", file=sys.stderr)
-        return 1
+        return report_findings("repo-filter-monopoly", findings)
 
-    print(f"repo-filter-monopoly: OK — {subjects} subject(s) examined; the filter lives only in {HOME}.")
-    return 0
+    return report_ok(
+        "repo-filter-monopoly",
+        f"{len(subjects)} comparison subject(s) examined; the filter lives only in {HOME}.",
+        census,
+    )
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run(main, sys.argv[1:], name="repo-filter-monopoly"))

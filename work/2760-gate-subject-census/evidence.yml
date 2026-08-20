@@ -1,0 +1,416 @@
+schemaVersion: 1
+workId: 2760-gate-subject-census
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2760-gate-subject-census/spec.md
+sourceClarifications: work/2760-gate-subject-census/clarifications.md
+sourceChecklist: work/2760-gate-subject-census/checklist.md
+sourcePlan: work/2760-gate-subject-census/plan.md
+sourceTasks: work/2760-gate-subject-census/tasks.yml
+sourceAnalysis: readiness/2760-gate-subject-census/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2760-gate-subject-census/analysis.json
+    digest: 652c65980b3c5182fa16dcef32552d11d19fa713d1bcfadbf535207c5c8bb032
+    schemaVersion: 1
+  - label: checklist
+    path: work/2760-gate-subject-census/checklist.md
+    digest: ebac0d1e549de10a70266cdc3fd1fdd627bcb28b2584d2971406892a0b093c4e
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2760-gate-subject-census/clarifications.md
+    digest: f2d071dcf0b625e7bff871ed4a17a519d93ada607e9a386cc6c48d99be63da24
+    schemaVersion: 1
+  - label: plan
+    path: work/2760-gate-subject-census/plan.md
+    digest: 3f61da8e1e36a2f15f080948ae9f5303a187948e3213d817ef8a0c6becc577ee
+    schemaVersion: 1
+  - label: spec
+    path: work/2760-gate-subject-census/spec.md
+    digest: 5980faaa43676b63ac91b0f18445ef3a9fff4840fedf4726f2561a58fa3b5033
+    schemaVersion: 1
+  - label: tasks
+    path: work/2760-gate-subject-census/tasks.yml
+    digest: 7940339f2946f8fee1348d657a0d0780df1ca227f31b8a6e84c62d2df4026b2a
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV006]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV007]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV008]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV010]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV011]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml", scripts/check-repo-filter-monopoly.py, scripts/lib/gate.py, tests/gate-harness/selftest.py, tests/repo-filter-monopoly/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV014]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml"]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused workflow and harness verification cover this completed requirement.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

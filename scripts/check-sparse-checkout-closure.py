@@ -198,6 +198,7 @@ from lib.gate import (  # noqa: E402  (path shim above must run first)
     report_findings,
     report_ok,
     run,
+    subject_census,
     workflow_files,
 )
 
@@ -597,6 +598,13 @@ def main(argv: list[str]) -> int:
         f"checkout(s) in {len(workflows)} workflow(s) of {ours or root}; {full_clones} full "
         f"clone(s) not graded; {len(ungraded)} step(s) UNGRADED; {len(unresolved)} step(s) without "
         f"rule (4). Says nothing about any other repository — see THE REACH OF THIS GATE.",
+        subject_census(
+            declared=PATHS_SUBJECT,
+            resolved=tuple(path for path in PATHS_SUBJECT if os.path.exists(os.path.join(root, path))),
+            examined=tuple(f"cross-repo-step:{i}" for i in range(cross_repo_steps)),
+            producers=tuple(f"cross-repo-step:{i}" for i in range(cross_repo_steps)),
+            authority_revision="PATHS_SUBJECT/v1",
+        ),
     )
 
 

@@ -118,6 +118,7 @@ from lib.gate import (  # noqa: E402  (path shim above must run first)
     report_findings,
     report_ok,
     run,
+    subject_census,
 )
 
 NAME = "check-skillmirror-freshness"
@@ -425,7 +426,19 @@ def main(argv: list[str]) -> int:
             findings.append(stale(where, file_fields, live))
     if findings:
         return report_findings(NAME, findings)
-    return report_ok(NAME, f"{repo}: every recorded SkillMirror library file still hashes to its measured digest (BYTES, not behaviour).")
+    examined = tuple(sorted(files))
+    fixtures_path = args.fixtures or os.path.join(args.root, FIXTURES)
+    return report_ok(
+        NAME,
+        f"{repo}: every recorded SkillMirror library file still hashes to its measured digest (BYTES, not behaviour).",
+        subject_census(
+            declared=(fixtures_path,),
+            resolved=(fixtures_path,) if os.path.isfile(fixtures_path) else (),
+            examined=examined,
+            producers=examined,
+            authority_revision="PATHS_SUBJECT/v1",
+        ),
+    )
 
 
 if __name__ == "__main__":

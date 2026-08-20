@@ -99,6 +99,7 @@ from lib.gate import (  # noqa: E402  (path shim above must run first)
     report_findings,
     report_ok,
     run,
+    subject_census,
 )
 
 NAME = "skillmirror-redrive"
@@ -460,6 +461,17 @@ def main(argv: list[str]) -> int:
 
     table_path, raw, document = load_table(args.root)
     derived = block(document, "derivedFrom")
+    library_files = derived.get("libraryFiles")
+    if not isinstance(library_files, dict) or not library_files:
+        raise GateError(f"{TABLE}: `derivedFrom.libraryFiles` is not a non-empty object.")
+    examined = tuple(sorted(library_files))
+    census = subject_census(
+        declared=PATHS_SUBJECT,
+        resolved=tuple(path for path in PATHS_SUBJECT if os.path.exists(os.path.join(args.root, path))),
+        examined=examined,
+        producers=examined,
+        authority_revision="PATHS_SUBJECT/v1",
+    )
     lib_dir = os.path.join(checkout, os.path.dirname(derived["path"]))
     if not os.path.isdir(lib_dir):
         raise GateError(
@@ -499,6 +511,7 @@ def main(argv: list[str]) -> int:
             NAME,
             f"{derived['repo']} @ {args.commit}: every measured column, and both provenance records, "
             f"are what the library at the RECORDED revision returns.",
+            census,
         )
 
     code, before = run_oracle(args.root, lib_dir)
@@ -604,6 +617,7 @@ def main(argv: list[str]) -> int:
             if reconciled
             else ("; provenance is current" if not changes else "; provenance is stale (dry run)")
         ),
+        census,
     )
 
 

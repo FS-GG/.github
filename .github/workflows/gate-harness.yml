@@ -2,8 +2,8 @@
 #
 # scripts/lib/gate.py is the one place the check-*.py gates get their ExitCode contract, their
 # GateError, the cli() broad-except wrapper, and the on:->True PyYAML normaliser — hoisted so those
-# four things cannot drift across ~25 copies (#485). It has no gate consumers yet; they migrate onto it
-# in #1160 and its followups. Until then this fixture is the only thing that keeps the harness honest,
+# four things cannot drift across ~25 copies (#485). Consumers migrate onto it in bounded follow-ups;
+# this fixture keeps the shared contract honest while that migration proceeds,
 # so it must run on any change to the harness OR its selftest.
 #
 # THE `paths:` FILTER IS PART OF THE GATE. The two lists are IDENTICAL on purpose — a push copy that

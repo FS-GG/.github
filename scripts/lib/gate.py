@@ -9,10 +9,9 @@ what the disagreements cost. Hoisting the shared body here makes the contract un
 a gate that imports :data:`ExitCode` and :func:`run` physically cannot invent an ad-hoc code, and the
 one ``on:`` normaliser cannot disagree with itself.
 
-WHAT IS AND IS NOT HERE. This module is the harness only. It does not migrate any gate — that is the
-staged follow-up work (#1160 pin-coherence and the two network gates first, the rest opportunistically)
-— so it ships with a selftest (``tests/gate-harness/``) and no consumers yet. The migration items block
-on this landing.
+WHAT IS AND IS NOT HERE. This module is the harness. Gates migrate onto it in bounded follow-ups
+(#1160 began with pin-coherence), and ``tests/gate-harness/`` protects the shared contract while that
+migration proceeds. A shared helper landing does not silently migrate unrelated consumers.
 
 THE ONE INVARIANT EVERYTHING HERE SERVES: "I could not look" and "I looked, and it is clean" must never
 share an exit code (#266, #320). Python exits 1 on any uncaught exception, and 1 is the FINDING code —
@@ -25,7 +24,7 @@ all this needs::
 
     import os, sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from lib.gate import ExitCode, GateError, Unreachable, run, triggers, load_yaml, read_text, workflow_files
+    from lib.gate import ExitCode, GateError, SubjectCensus, Unreachable, run, triggers, load_yaml, read_text, workflow_files
 
 ``lib`` is a namespace package (no ``__init__.py``); ``scripts/`` on the path is the whole contract.
 """
@@ -34,9 +33,12 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
+import json
 import os
 import sys
 import traceback
+from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
 from typing import Callable, Sequence
@@ -44,6 +46,7 @@ from typing import Callable, Sequence
 __all__ = [
     "ExitCode",
     "GateError",
+    "SubjectCensus",
     "Unreachable",
     "run",
     "triggers",
@@ -53,6 +56,7 @@ __all__ = [
     "base_parser",
     "report_ok",
     "report_findings",
+    "subject_census",
 ]
 
 
@@ -105,6 +109,82 @@ class Unreachable(GateError):
     later run might resolve; use plain :class:`GateError` for the permanent one. A 404 or a 403 is a
     real answer from the API, not an unreachable one, and should not be raised as this.
     """
+
+
+@dataclass(frozen=True)
+class SubjectCensus:
+    """Revision-bound evidence that a gate resolved every subject it declared.
+
+    The declaration and resolution stay separate until the shared reporting boundary.  A caller
+    therefore cannot turn ``some paths existed`` into ``the declared subject was complete`` with a
+    local Boolean.  ``authority_revision`` identifies the declaration contract; ``authority_digest``
+    binds its exact ordered contents at resolution time.
+    """
+
+    declared: tuple[str, ...]
+    resolved: tuple[str, ...]
+    examined: tuple[str, ...]
+    producers: tuple[str, ...]
+    authority_revision: str
+    authority_digest: str
+
+    @property
+    def unresolved(self) -> tuple[str, ...]:
+        resolved = set(self.resolved)
+        return tuple(subject for subject in self.declared if subject not in resolved)
+
+    @property
+    def unexamined_producers(self) -> tuple[str, ...]:
+        examined = set(self.examined)
+        return tuple(subject for subject in self.producers if subject not in examined)
+
+    @property
+    def complete(self) -> bool:
+        return bool(
+            self.declared
+            and self.resolved
+            and self.examined
+            and self.producers
+            and self.authority_revision.strip()
+            and self.authority_digest.strip()
+            and not self.unresolved
+            and not self.unexamined_producers
+            and set(self.resolved) == set(self.declared)
+        )
+
+
+def subject_census(
+    *,
+    declared: Sequence[str],
+    resolved: Sequence[str],
+    examined: Sequence[str],
+    producers: Sequence[str],
+    authority_revision: str,
+) -> SubjectCensus:
+    """Build a census from explicit declaration, resolution, enumeration, and producer facts."""
+
+    declaration = tuple(str(subject) for subject in declared)
+    producer_facts = tuple(str(subject) for subject in producers)
+    authority_digest = hashlib.sha256(
+        json.dumps(
+            {
+                "revision": authority_revision,
+                "declared": declaration,
+                "producers": producer_facts,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    return SubjectCensus(
+        declaration,
+        tuple(str(subject) for subject in resolved),
+        tuple(str(subject) for subject in examined),
+        producer_facts,
+        authority_revision,
+        authority_digest,
+    )
 
 
 def run(main: Callable[[Sequence[str]], int], argv: Sequence[str], *, name: str) -> int:
@@ -236,8 +316,22 @@ def base_parser(description: str, *, root: bool = True) -> argparse.ArgumentPars
     return ap
 
 
-def report_ok(name: str, summary: str) -> int:
-    """Print the de-facto clean line — ``<name>: OK — <summary>`` on stdout — and return :attr:`ExitCode.OK`."""
+def report_ok(name: str, summary: str, census: SubjectCensus) -> int:
+    """Report green only for a complete, revision-bound subject census.
+
+    The census is structurally required: omission is a Python call error which :func:`run` maps to a
+    permanent no-verdict, never a compatibility green.
+    """
+    if not census.complete:
+        missing = ", ".join(census.unresolved) or "<none>"
+        unexamined = ", ".join(census.unexamined_producers) or "<none>"
+        print(
+            f"{name}: NO VERDICT — subject census is incomplete; unresolved declarations: {missing}; "
+            f"unexamined producer subjects: {unexamined}; examined={len(census.examined)}; "
+            f"authority revision: {census.authority_revision or '<missing>'}.",
+            file=sys.stderr,
+        )
+        return int(ExitCode.NO_VERDICT_PERMANENT)
     print(f"{name}: OK — {summary}")
     return int(ExitCode.OK)
 
