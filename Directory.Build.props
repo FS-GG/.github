@@ -388,8 +388,15 @@
        and no command, flag, member, destination, or package identity is removed, so this is not a
        major. Main, all four immutable tag namespaces, GitHub Packages, nuget.org, and the registry
        independently put the previous coherent release at 0.63.0 before this move. -->
+  <!-- 0.64.0 -> 0.65.0 (.github#2770): MINOR on the stable 0.x line. The packed pnext-item
+       skill gains a new required worker action and a new linked measurement-discipline member for
+       evidence assertions. That is the same additive required-action shape classified as MINOR by
+       the Kit's 0.20.0 -> 0.21.0 precedent, not a prose-only correction. No command, wire value,
+       existing package member destination, or runtime behavior is removed, so this is not a major.
+       Main, all four immutable tag namespaces, GitHub Packages, nuget.org, and the registry
+       independently put the complete predecessor at 0.64.0 before this next-minor move. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.64.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.65.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

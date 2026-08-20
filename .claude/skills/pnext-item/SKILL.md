@@ -127,6 +127,8 @@ touch-set before editing. Heartbeat during long work.
 ## 3. Implement and verify
 
 Change only the declared paths. If scope must grow, use `widen` before touching it; stop on overlap.
+Apply the shared [measurement discipline](references/measurement-discipline.md) to every absence,
+count, or unchanged assertion in implementation evidence and review handoffs.
 Before implementing interactive/game work, run the
 [performance-first planning gate](references/performance-first.md). Then fix causes, add focused
 regression coverage, and run proportionate build/test/format gates. Poll inbox at phase boundaries.

@@ -167,7 +167,19 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.64.0 — dispatched work keeps the canonical agent-contract attribution captured when its claim was created.
+    <PackageReleaseNotes>0.65.0 — measurement evidence names its exact subject and proves the instrument can observe the opposite.
+
+WHAT MOVED, AND WHY IT IS A MINOR. The packed Kit gains a required pnext-item
+measurement-discipline action and its linked reference from .github#2770. Receivers must now bind
+absence, count, and unchanged assertions to subject, authority, immutable revision, census
+completeness, and positive-control evidence; the reference also records merge-base, stale-base,
+pagination, parser, and negative-control examples. Adding a required worker action is the same shape
+as the Kit's explicit 0.20.0 -> 0.21.0 MINOR precedent, not a prose-only PATCH. The coordination
+engine, command and wire surfaces, package identities, and existing packed destinations remain
+compatible. The coherent scalar advances all three packages together from the complete dual-feed
+0.64.0 frontier to its next minor, 0.65.0.
+
+0.64.0 — dispatched work keeps the canonical agent-contract attribution captured when its claim was created.
 
 WHAT MOVED, AND WHY IT IS A MINOR. The packed coordination shim obtains the sole canonical
 agent-contract digest producer and stamps that value into each new durable claim marker (.github#2758).
