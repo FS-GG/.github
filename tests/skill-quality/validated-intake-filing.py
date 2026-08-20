@@ -26,7 +26,10 @@ SCOPED_SKILLS = ("p-add", "padd-item", "check-board", "cross-repo-coordination",
 FILING_SKILLS = ("p-add", "padd-item", "cross-repo-coordination", "pnext-item")
 ISSUE_CREATE = re.compile(r"\bgh\s+issue\s+create\b")
 API_CALL = re.compile(r"\bgh\s+api\b(?P<args>[^\n;]*)")
-COMMAND_GH = re.compile(r"(?:^|\||\$\()\s*gh\s+(?:issue\s+create|api)\b")
+COMMAND_GH = re.compile(r"(?:^|\||\$\()\s*(?:command\s+)?gh\s+(?:issue\s+create|api)\b")
+INTAKE_COMMAND = re.compile(
+    r"(?:^|\||\$\()\s*(?:command\s+)?scripts/fsgg-coord\s+intake\s+(validate|apply)\b"
+)
 ISSUES_COLLECTION = re.compile(r"(?:^|[\s'\"])(?:/)?repos/[^\s/'\"]+/[^\s/'\"]+/issues(?=$|[?\s'\"\\])")
 POST_ARGUMENT = re.compile(r"(?:^|\s)(?:(?:-X|--method)\s+POST|-[fF]\b|--(?:raw-)?field\b|--input\b)")
 BREAK_GLASS = re.compile(r"fsgg:intake-break-glass:\s*\S.*")
@@ -61,6 +64,25 @@ def direct_creations(text: str) -> list[tuple[int, str]]:
             continue
         findings.append((offset + 1, stripped))
     return findings
+
+
+def intake_actions(text: str) -> list[str]:
+    """Return executable intake actions in recipe order, excluding prose/backtick mentions."""
+
+    actions: list[str] = []
+    for raw in text.replace("\\\n", " ").splitlines():
+        line = re.sub(r"^\s*(?:>\s*)?(?:\$\s+)?", "", raw)
+        match = INTAKE_COMMAND.search(line)
+        if match:
+            actions.append(match.group(1))
+    return actions
+
+
+def valid_validate_apply_order(actions: list[str]) -> bool:
+    return bool(actions) and len(actions) % 2 == 0 and all(
+        actions[index : index + 2] == ["validate", "apply"]
+        for index in range(0, len(actions), 2)
+    )
 
 
 def audit(root: Path) -> list[str]:
@@ -98,6 +120,13 @@ def audit(root: Path) -> list[str]:
                     errors.append(
                         f"{skill.relative_to(root)}: filing contract does not prescribe `{required}`"
                     )
+            actions = intake_actions(combined)
+            if not valid_validate_apply_order(actions):
+                rendered = " -> ".join(actions) if actions else "no executable intake commands"
+                errors.append(
+                    f"{skill.relative_to(root)}: executable intake recipes must pair `validate` "
+                    f"before `apply`; observed {rendered}"
+                )
 
     workflow = root / WORKFLOW
     if not workflow.is_file():
@@ -112,11 +141,19 @@ def audit(root: Path) -> list[str]:
 
 def prove_negative_fixture() -> None:
     fixture = """```sh
-gh api -X POST repos/FS-GG/FS.GG.Game/issues -f title=escaped -f body=unvalidated
+command gh api -X POST repos/FS-GG/FS.GG.Game/issues -f title=escaped -f body=unvalidated
 ```"""
     findings = direct_creations(fixture)
-    if len(findings) != 1 or "gh api" not in findings[0][1]:
-        raise Finding("negative fixture escaped: a direct REST issue creation recipe was accepted")
+    if len(findings) != 1 or "command gh api" not in findings[0][1]:
+        raise Finding("negative fixture escaped: a command-wrapped REST issue creation was accepted")
+
+    inverted = """```sh
+scripts/fsgg-coord intake apply intake.json --json
+scripts/fsgg-coord intake validate intake.json --json
+```"""
+    actions = intake_actions(inverted)
+    if valid_validate_apply_order(actions):
+        raise Finding("negative fixture escaped: intake apply before validate was accepted")
 
     marked = """```sh
 # fsgg:intake-break-glass: intake is unavailable and the operator records the owed projection
@@ -142,7 +179,10 @@ def main() -> int:
         for error in errors:
             print(f"validated-intake-filing: {error}", file=sys.stderr)
         return 1
-    print("validated-intake-filing: OK — validated filing prescribed; negative bypass rejected")
+    print(
+        "validated-intake-filing: OK — validated filing prescribed; command-wrapped bypass and "
+        "inverted validate/apply order rejected"
+    )
     return 0
 
 
