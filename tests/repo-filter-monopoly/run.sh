@@ -163,12 +163,27 @@ rc="$(run "$t")"
   || bad "an empty tree must be NO_VERDICT, not green" "exit $rc"
 rm -rf "$t"
 
-# 7b. A COUNT IS NOT A CENSUS. Keep other source subjects present but move the declared HOME: the
+# 7a. NAMED ZERO-SUBJECT CONTROL. Production `Scan.scope` still emits a `String.Equals`, so the
+#     independent producer reader is live, but the semantic matcher recognises no monopoly subject.
+t="$(mktree)"
+cat >"$t/src/FS.GG.Coord.GitHub/Scan.fs" <<'FS'
+module Scan =
+    let scope (repo: string option) (rows: Row list) : Scoped =
+        let normalized = normalize rows
+        let kept = normalized |> List.filter (fun n -> String.Equals(n, name, StringComparison.OrdinalIgnoreCase))
+        { Rows = kept; Advisory = None }
+FS
+rc="$(run "$t")"
+[ "$rc" = "3" ] && ok "zero semantic subjects is NO_VERDICT while the independent producer remains live" \
+  || bad "a live producer with zero enumerated semantic subjects must not report green" "exit $rc"
+rm -rf "$t"
+
+# 7b. NAMED HOME-REMOVAL CONTROL. Keep other source subjects present but move the declared HOME: the
 #     walker can still examine comparisons, yet the declared monopoly authority is unresolved.
 t="$(mktree)"
 mv "$t/src/FS.GG.Coord.GitHub/Scan.fs" "$t/src/FS.GG.Coord.GitHub/Scan.MOVED.fs"
 rc="$(run "$t")"
-[ "$rc" = "3" ] && ok "a moved declared HOME is NO_VERDICT even while other subjects remain" \
+[ "$rc" = "3" ] && ok "HOME removal is NO_VERDICT even while other subjects remain" \
   || bad "a non-empty scan with an unresolved declared HOME must not report green" "exit $rc"
 rm -rf "$t"
 

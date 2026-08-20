@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d5e5f25fd26b457b975829d8d324253b2e5a5cafadc2b4cb418d6a5005a1f348"
+        "value": "ebac0d1e549de10a70266cdc3fd1fdd627bcb28b2584d2971406892a0b093c4e"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a5539c0a951018588e01ee087eb9232b638cb266e6f0f5860a66724dbef41854"
+        "value": "c5cbe384eec152ce1b37d32a0c6143c29f65450afa745d441e17499741cc2916"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bd19129fd19a94b9104e840e11552e7c08ff2613135b9cf1b9d056ea7df15269"
+        "value": "3f61da8e1e36a2f15f080948ae9f5303a187948e3213d817ef8a0c6becc577ee"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "7d7ee307646c4ecd8eac1c1406de1d1c325587bfef5aad6425de1ba3ad2818e8"
+        "value": "5980faaa43676b63ac91b0f18445ef3a9fff4840fedf4726f2561a58fa3b5033"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f0f5e937e2284f1a279e61d86815d6646f2fecdab9a72bd77bd216d678709c44"
+        "value": "7940339f2946f8fee1348d657a0d0780df1ca227f31b8a6e84c62d2df4026b2a"
       }
     }
   ],
@@ -128,8 +128,8 @@
   "requirements": [
     {
       "id": "FR-001",
-      "title": "report_ok consumes a structured census and returns NO_VERDICT_PERMANENT for an empty census, an unresolved declared subject, or a census whose authority revision or digest is absent. (Stories: US-001; Acceptance: AC-001)",
-      "text": "report_ok consumes a structured census and returns NO_VERDICT_PERMANENT for an empty census, an unresolved declared subject, or a census whose authority revision or digest is absent. (Stories: US-001; Acceptance: AC-001)",
+      "title": "report_ok structurally requires a SubjectCensus and returns NO_VERDICT_PERMANENT for an empty census, an unresolved declared subject, an empty semantic examination, missing independent producer agreement, producer/examination disagreement, or absent authority provenance. (Stories: US-001; Acceptance: AC-001)",
+      "text": "report_ok structurally requires a SubjectCensus and returns NO_VERDICT_PERMANENT for an empty census, an unresolved declared subject, an empty semantic examination, missing independent producer agreement, producer/examination disagreement, or absent authority provenance. (Stories: US-001; Acceptance: AC-001)",
       "acceptanceCriteria": [
         "AC-001"
       ],
@@ -149,8 +149,8 @@
     },
     {
       "id": "FR-002",
-      "title": "PATHS_SUBJECT remains the single machine-readable declaration convention and the migrated monopoly gate resolves it without a Boolean reduction. (Stories: US-001; Acceptance: AC-001)",
-      "text": "PATHS_SUBJECT remains the single machine-readable declaration convention and the migrated monopoly gate resolves it without a Boolean reduction. (Stories: US-001; Acceptance: AC-001)",
+      "title": "PATHS_SUBJECT remains the single machine-readable declaration convention and check-repo-filter-monopoly binds its census to the resolved files, the enumerated semantic comparison subjects, and a separately enumerated set of live comparison producers. (Stories: US-001; Acceptance: AC-001)",
+      "text": "PATHS_SUBJECT remains the single machine-readable declaration convention and check-repo-filter-monopoly binds its census to the resolved files, the enumerated semantic comparison subjects, and a separately enumerated set of live comparison producers. (Stories: US-001; Acceptance: AC-001)",
       "acceptanceCriteria": [
         "AC-001"
       ],
@@ -170,8 +170,8 @@
     },
     {
       "id": "FR-003",
-      "title": "a project-present moved declared subject makes check-repo-filter-monopoly red while a project-absent fixture stays honestly silent. (Stories: US-001; Acceptance: AC-001)",
-      "text": "a project-present moved declared subject makes check-repo-filter-monopoly red while a project-absent fixture stays honestly silent. (Stories: US-001; Acceptance: AC-001)",
+      "title": "a project-present moved declared subject or removed monopoly HOME makes check-repo-filter-monopoly no-verdict while a project-absent fixture stays honestly silent. (Stories: US-001; Acceptance: AC-001)",
+      "text": "a project-present moved declared subject or removed monopoly HOME makes check-repo-filter-monopoly no-verdict while a project-absent fixture stays honestly silent. (Stories: US-001; Acceptance: AC-001)",
       "acceptanceCriteria": [
         "AC-001"
       ],
@@ -191,8 +191,8 @@
     },
     {
       "id": "FR-004",
-      "title": "the meta-gate reds when a consumer reports OK with no examined subjects and admits a known complete census. (Stories: US-001; Acceptance: AC-001)",
-      "text": "the meta-gate reds when a consumer reports OK with no examined subjects and admits a known complete census. (Stories: US-001; Acceptance: AC-001)",
+      "title": "the meta-gate refuses empty, partial, authority-unbound, zero-semantic, producerless, and producer-mismatched censuses, and every former compatibility caller that omits the required census. (Stories: US-001; Acceptance: AC-001)",
+      "text": "the meta-gate refuses empty, partial, authority-unbound, zero-semantic, producerless, and producer-mismatched censuses, and every former compatibility caller that omits the required census. (Stories: US-001; Acceptance: AC-001)",
       "acceptanceCriteria": [
         "AC-001"
       ],
@@ -212,8 +212,8 @@
     },
     {
       "id": "FR-005",
-      "title": "the workflow description derives or omits its consumer count rather than claiming there are no consumers. (Stories: US-001; Acceptance: AC-001)",
-      "text": "the workflow description derives or omits its consumer count rather than claiming there are no consumers. (Stories: US-001; Acceptance: AC-001)",
+      "title": "every current report_ok caller supplies a census derived from its own resolved and examined subjects; no basename whitelist or default census remains. (Stories: US-001; Acceptance: AC-001)",
+      "text": "every current report_ok caller supplies a census derived from its own resolved and examined subjects; no basename whitelist or default census remains. (Stories: US-001; Acceptance: AC-001)",
       "acceptanceCriteria": [
         "AC-001"
       ],
@@ -229,6 +229,27 @@
       ],
       "linkedEvidenceIds": [
         "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "the workflow description derives or omits its consumer count rather than claiming there are no consumers. (Stories: US-001; Acceptance: AC-001)",
+      "text": "the workflow description derives or omits its consumer count rather than claiming there are no consumers. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2760-gate-subject-census/spec.md",
+      "sourceLocation": {
+        "line": 36,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T014"
+      ],
+      "linkedEvidenceIds": [
+        "EV014"
       ]
     }
   ],
@@ -387,7 +408,8 @@
       "sourceIds": [
         "PC-001",
         "PD-001",
-        "PD-002"
+        "PD-002",
+        "PD-005"
       ],
       "requiredSkills": [
         "fsharp"
@@ -496,6 +518,7 @@
       "decisions": [],
       "sourceIds": [
         "PD-004",
+        "PD-005",
         "VO-003"
       ],
       "requiredSkills": [
@@ -523,6 +546,7 @@
       "decisions": [],
       "sourceIds": [
         "PD-005",
+        "PD-006",
         "VO-004"
       ],
       "requiredSkills": [
@@ -587,6 +611,34 @@
       "source": "work/2760-gate-subject-census/tasks.yml",
       "sourceLocation": {
         "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Implement requirement FR-006",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/2760-gate-subject-census/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
         "column": 1
       }
     }
@@ -978,6 +1030,33 @@
         "line": 13,
         "column": 1
       }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        ".github/workflows/gate-harness.yml",
+        ".github/workflows/repo-filter-monopoly.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2760-gate-subject-census/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
     }
   ],
   "generatedViews": [
@@ -1018,7 +1097,7 @@
           "path": "work/2760-gate-subject-census/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "d5e5f25fd26b457b975829d8d324253b2e5a5cafadc2b4cb418d6a5005a1f348"
+            "value": "ebac0d1e549de10a70266cdc3fd1fdd627bcb28b2584d2971406892a0b093c4e"
           },
           "schemaVersion": 1
         },
@@ -1034,7 +1113,7 @@
           "path": "work/2760-gate-subject-census/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "a5539c0a951018588e01ee087eb9232b638cb266e6f0f5860a66724dbef41854"
+            "value": "c5cbe384eec152ce1b37d32a0c6143c29f65450afa745d441e17499741cc2916"
           },
           "schemaVersion": 1
         },
@@ -1042,7 +1121,7 @@
           "path": "work/2760-gate-subject-census/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "bd19129fd19a94b9104e840e11552e7c08ff2613135b9cf1b9d056ea7df15269"
+            "value": "3f61da8e1e36a2f15f080948ae9f5303a187948e3213d817ef8a0c6becc577ee"
           },
           "schemaVersion": 1
         },
@@ -1050,7 +1129,7 @@
           "path": "work/2760-gate-subject-census/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "7d7ee307646c4ecd8eac1c1406de1d1c325587bfef5aad6425de1ba3ad2818e8"
+            "value": "5980faaa43676b63ac91b0f18445ef3a9fff4840fedf4726f2561a58fa3b5033"
           },
           "schemaVersion": 1
         },
@@ -1058,14 +1137,14 @@
           "path": "work/2760-gate-subject-census/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "f0f5e937e2284f1a279e61d86815d6646f2fecdab9a72bd77bd216d678709c44"
+            "value": "7940339f2946f8fee1348d657a0d0780df1ca227f31b8a6e84c62d2df4026b2a"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "c7b115fa456be3bdd5f23671123527d187087903e98806392d1d96c14a7005e9"
+        "value": "8c6f3ac23f9fc7f7f3fea98294f95c3a62612705a7a7c582fc005ee083a1f2ec"
       },
       "currency": "current"
     }

@@ -28,15 +28,14 @@ sys.path.insert(0, _SCRIPTS)
 from lib.gate import (  # noqa: E402 — deliberate: the path insert above is the point.
     ExitCode,
     GateError,
-    SubjectCensus,
     Unreachable,
     base_parser,
     load_yaml,
     read_text,
     report_findings,
     report_ok,
-    resolve_path_census,
     run,
+    subject_census,
     triggers,
     workflow_files,
 )
@@ -159,24 +158,56 @@ with tempfile.TemporaryDirectory() as d:
 # ── 5. reporting + argparse helpers ─────────────────────────────────────────────────────────────────
 with tempfile.TemporaryDirectory() as d:
     open(os.path.join(d, "subject.txt"), "w").close()
-    complete = resolve_path_census(d, ("subject.txt",), authority_revision="fixture/v1")
+    complete = subject_census(
+        declared=("subject.txt",),
+        resolved=("subject.txt",),
+        examined=("semantic:1",),
+        producers=("semantic:1",),
+        authority_revision="fixture/v1",
+    )
     rc, out, _e = capturing(lambda: report_ok("check-x", "1 file clean", complete))
     check("report_ok returns OK only for a complete census", rc == 0 and "check-x: OK — 1 file clean" in out)
 
-    partial = resolve_path_census(d, ("subject.txt", "moved.txt"), authority_revision="fixture/v1")
+    partial = subject_census(
+        declared=("subject.txt", "moved.txt"),
+        resolved=("subject.txt",),
+        examined=("semantic:1",),
+        producers=("semantic:1",),
+        authority_revision="fixture/v1",
+    )
     rc, _out, err = capturing(lambda: report_ok("check-x", "1 file clean", partial))
     check("report_ok refuses a census with an unresolved declared subject", rc == 3 and "moved.txt" in err)
 
-rc, _out, err = capturing(lambda: report_ok("check-x", "nothing examined"))
-check("report_ok refuses a prose-only green with no census", rc == 3 and "no subject census" in err)
-legacy_scope = {"report_ok": report_ok}
-exec(compile("def legacy(): return report_ok('legacy-x', 'staged migration')", "skillmirror-redrive.py", "exec"), legacy_scope)
-rc, out, _err = capturing(legacy_scope["legacy"])
-check("the closed legacy inventory preserves already-migrated callers until their path-scoped rows land", rc == 0 and "legacy-x: OK" in out)
-rc, _out, err = capturing(lambda: report_ok("check-x", "nothing examined", SubjectCensus((), (), "fixture/v1", "digest")))
+former_legacy_callers = (
+    "check-harness-identity.py",
+    "check-ignored-author-coherence.py",
+    "check-preset-repo-scope-coherence.py",
+    "check-retirement-order-coherence.py",
+    "check-skillmirror-freshness.py",
+    "check-sparse-checkout-closure.py",
+    "skillmirror-redrive.py",
+)
+for caller in former_legacy_callers:
+    scope = {"report_ok": report_ok}
+    exec(compile("def omitted(argv): return report_ok('legacy-x', 'omitted census')", caller, "exec"), scope)
+    rc, _out, err = capturing(lambda scope=scope, caller=caller: run(scope["omitted"], [], name=caller))
+    check(f"{caller} cannot omit its census", rc == 3 and "CRASHED" in err)
+
+empty = subject_census(declared=(), resolved=(), examined=(), producers=(), authority_revision="fixture/v1")
+rc, _out, err = capturing(lambda: report_ok("check-x", "nothing examined", empty))
 check("report_ok refuses an empty census", rc == 3 and "incomplete" in err)
-rc, _out, err = capturing(lambda: report_ok("check-x", "1 file clean", SubjectCensus(("x",), ("x",), "", "")))
+unbound = subject_census(declared=("x",), resolved=("x",), examined=("s",), producers=("s",), authority_revision="")
+rc, _out, err = capturing(lambda: report_ok("check-x", "1 file clean", unbound))
 check("report_ok refuses a census without authority bindings", rc == 3 and "authority revision: <missing>" in err)
+zero_subjects = subject_census(declared=("x",), resolved=("x",), examined=(), producers=("s",), authority_revision="fixture/v1")
+rc, _out, err = capturing(lambda: report_ok("check-x", "nothing examined", zero_subjects))
+check("report_ok refuses a zero-semantic-subject census", rc == 3 and "examined=0" in err)
+no_producer = subject_census(declared=("x",), resolved=("x",), examined=("s",), producers=(), authority_revision="fixture/v1")
+rc, _out, err = capturing(lambda: report_ok("check-x", "1 subject", no_producer))
+check("report_ok refuses a census with no producer subject", rc == 3 and "incomplete" in err)
+producer_miss = subject_census(declared=("x",), resolved=("x",), examined=("other",), producers=("s",), authority_revision="fixture/v1")
+rc, _out, err = capturing(lambda: report_ok("check-x", "wrong subject", producer_miss))
+check("report_ok refuses when the independent producer subject was not examined", rc == 3 and "s" in err)
 rc, _o, err = capturing(lambda: report_findings("check-x", ["thing A", "thing B"]))
 check("report_findings returns FINDING and annotates each", rc == 1 and "::error::thing A" in err and "FAILED" in err)
 check("base_parser gives --root defaulting to '.'", base_parser("d").parse_args([]).root == ".")

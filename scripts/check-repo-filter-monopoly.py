@@ -66,7 +66,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.gate import report_findings, report_ok, resolve_path_census, run  # noqa: E402
+from lib.gate import report_findings, report_ok, run, subject_census  # noqa: E402
 
 # The engine's F# source. The gate walks `.fs`; `.fsi` files are signatures and carry no filter.
 SURFACES = ["src"]
@@ -89,7 +89,37 @@ EQUALS = re.compile(r"String\.Equals\(\s*[A-Za-z_][\w.]*\.Ref\.Repo\s*,")
 # `.Repo` — that guess is what let `r.Ref.Repo = opts.Repo`, a real `--repo` filter, through (#1161).
 BARE = re.compile(r"\.Ref\.Repo\s*(?:=|<>)")
 
+# The funnel first resolves `PathRepo` and therefore no longer compares `.Ref.Repo` directly. This
+# is the actual production spelling the monopoly permits, separate from the known hand-rolled shape.
+HOME_EQUALS = re.compile(
+    r"RepoScope\.Repository\s+(?P<resolved>[A-Za-z_]\w*)\s*->\s*String\.Equals\(\s*(?P=resolved)\s*,\s*name\s*,"
+)
+
 EXEMPT = re.compile(r"//\s*repo-filter-monopoly:\s*exempt\b")
+
+
+def producer_subjects(root: Path) -> tuple[str, ...]:
+    """Independently enumerate `String.Equals` calls emitted inside production `Scan.scope`.
+
+    This parser knows only the F# function boundary and the call name. It does not consume EQUALS,
+    BARE, HOME_EQUALS, or the walker's output, so a broken semantic matcher cannot zero both sides.
+    """
+
+    path = root / HOME
+    if not path.is_file():
+        return ()
+    lines = path.read_text(encoding="utf-8").splitlines()
+    in_scope = False
+    produced: list[str] = []
+    for n, line in enumerate(lines, 1):
+        if re.match(r"^    let scope\b", line):
+            in_scope = True
+            continue
+        if in_scope and re.match(r"^    let\s+", line):
+            break
+        if in_scope and "String.Equals(" in line:
+            produced.append(f"{HOME}:{n}")
+    return tuple(produced)
 
 
 def main(argv=None) -> int:
@@ -98,9 +128,8 @@ def main(argv=None) -> int:
     if "--root" in argv:
         root = Path(argv[argv.index("--root") + 1]).resolve()
 
-    census = resolve_path_census(root, PATHS_SUBJECT, authority_revision="PATHS_SUBJECT/v1")
     findings = []
-    subjects = 0
+    subjects: list[str] = []
 
     for surface in SURFACES:
         base = root / surface
@@ -120,14 +149,14 @@ def main(argv=None) -> int:
                     pending_exempt = True
                     continue
 
-                hit = EQUALS.search(line) or BARE.search(line)
+                hit = EQUALS.search(line) or BARE.search(line) or (rel == HOME and HOME_EQUALS.search(line))
                 if not hit:
                     # A blank line does not carry an exemption across to the next statement.
                     if line.strip() and not line.strip().startswith("//"):
                         pending_exempt = False
                     continue
 
-                subjects += 1
+                subjects.append(f"{rel}:{n}")
 
                 if rel == HOME:
                     pending_exempt = False
@@ -143,12 +172,20 @@ def main(argv=None) -> int:
                     f"matched nothing, in one breath (#979).\n    {line.strip()}"
                 )
 
+    census = subject_census(
+        declared=PATHS_SUBJECT,
+        resolved=tuple(subject for subject in PATHS_SUBJECT if (root / subject).exists()),
+        examined=subjects,
+        producers=producer_subjects(root),
+        authority_revision="PATHS_SUBJECT/v2-semantic-census",
+    )
+
     # Completeness is decided before the monopoly predicate: a moved HOME can itself look like a
     # hand-rolled filter, but the stronger fact is that the declared authority did not resolve.
     if not census.complete:
         return report_ok(
             "repo-filter-monopoly",
-            f"{subjects} comparison subject(s) examined",
+            f"{len(subjects)} comparison subject(s) examined",
             census,
         )
 
@@ -157,7 +194,7 @@ def main(argv=None) -> int:
 
     return report_ok(
         "repo-filter-monopoly",
-        f"{subjects} comparison subject(s) examined; the filter lives only in {HOME}.",
+        f"{len(subjects)} comparison subject(s) examined; the filter lives only in {HOME}.",
         census,
     )
 

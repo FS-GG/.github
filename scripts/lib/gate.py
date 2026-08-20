@@ -34,7 +34,6 @@ from __future__ import annotations
 import argparse
 import glob
 import hashlib
-import inspect
 import json
 import os
 import sys
@@ -57,23 +56,8 @@ __all__ = [
     "base_parser",
     "report_ok",
     "report_findings",
-    "resolve_path_census",
+    "subject_census",
 ]
-
-# Existing harness consumers predate the census contract and migrate in separate path-scoped rows.
-# This closed inventory keeps those already-green call sites compatible without making omission an
-# open-ended API: a new caller not named here fails closed, and deleting an entry is the migration.
-_LEGACY_REPORT_OK_CALLERS = frozenset(
-    {
-        "check-harness-identity.py",
-        "check-ignored-author-coherence.py",
-        "check-preset-repo-scope-coherence.py",
-        "check-retirement-order-coherence.py",
-        "check-skillmirror-freshness.py",
-        "check-sparse-checkout-closure.py",
-        "skillmirror-redrive.py",
-    }
-)
 
 
 class ExitCode(IntEnum):
@@ -139,6 +123,8 @@ class SubjectCensus:
 
     declared: tuple[str, ...]
     resolved: tuple[str, ...]
+    examined: tuple[str, ...]
+    producers: tuple[str, ...]
     authority_revision: str
     authority_digest: str
 
@@ -148,32 +134,57 @@ class SubjectCensus:
         return tuple(subject for subject in self.declared if subject not in resolved)
 
     @property
+    def unexamined_producers(self) -> tuple[str, ...]:
+        examined = set(self.examined)
+        return tuple(subject for subject in self.producers if subject not in examined)
+
+    @property
     def complete(self) -> bool:
         return bool(
             self.declared
             and self.resolved
+            and self.examined
+            and self.producers
             and self.authority_revision.strip()
             and self.authority_digest.strip()
             and not self.unresolved
+            and not self.unexamined_producers
             and set(self.resolved) == set(self.declared)
         )
 
 
-def resolve_path_census(
-    root: str | os.PathLike[str],
-    declared: Sequence[str],
+def subject_census(
     *,
+    declared: Sequence[str],
+    resolved: Sequence[str],
+    examined: Sequence[str],
+    producers: Sequence[str],
     authority_revision: str,
 ) -> SubjectCensus:
-    """Resolve a machine-readable path declaration without collapsing completeness to a Boolean."""
+    """Build a census from explicit declaration, resolution, enumeration, and producer facts."""
 
     declaration = tuple(str(subject) for subject in declared)
+    producer_facts = tuple(str(subject) for subject in producers)
     authority_digest = hashlib.sha256(
-        json.dumps(declaration, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        json.dumps(
+            {
+                "revision": authority_revision,
+                "declared": declaration,
+                "producers": producer_facts,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
     ).hexdigest()
-    base = Path(root)
-    resolved = tuple(subject for subject in declaration if (base / subject).exists())
-    return SubjectCensus(declaration, resolved, authority_revision, authority_digest)
+    return SubjectCensus(
+        declaration,
+        tuple(str(subject) for subject in resolved),
+        tuple(str(subject) for subject in examined),
+        producer_facts,
+        authority_revision,
+        authority_digest,
+    )
 
 
 def run(main: Callable[[Sequence[str]], int], argv: Sequence[str], *, name: str) -> int:
@@ -305,28 +316,18 @@ def base_parser(description: str, *, root: bool = True) -> argparse.ArgumentPars
     return ap
 
 
-def report_ok(name: str, summary: str, census: SubjectCensus | None = None) -> int:
+def report_ok(name: str, summary: str, census: SubjectCensus) -> int:
     """Report green only for a complete, revision-bound subject census.
 
-    ``census`` is temporarily optional at the Python call boundary so existing consumers fail closed
-    with the gate protocol's permanent no-verdict instead of crashing as their staged migrations land.
-    Omission is never treated as evidence.
+    The census is structurally required: omission is a Python call error which :func:`run` maps to a
+    permanent no-verdict, never a compatibility green.
     """
-    if census is None:
-        caller = Path(inspect.currentframe().f_back.f_code.co_filename).name
-        if caller in _LEGACY_REPORT_OK_CALLERS:
-            print(f"{name}: OK — {summary}")
-            return int(ExitCode.OK)
-        print(
-            f"{name}: NO VERDICT — report_ok received no subject census; a prose summary is not "
-            "evidence that anything was examined.",
-            file=sys.stderr,
-        )
-        return int(ExitCode.NO_VERDICT_PERMANENT)
     if not census.complete:
-        missing = ", ".join(census.unresolved) or "<empty declaration or authority binding>"
+        missing = ", ".join(census.unresolved) or "<none>"
+        unexamined = ", ".join(census.unexamined_producers) or "<none>"
         print(
-            f"{name}: NO VERDICT — subject census is incomplete; unresolved: {missing}; "
+            f"{name}: NO VERDICT — subject census is incomplete; unresolved declarations: {missing}; "
+            f"unexamined producer subjects: {unexamined}; examined={len(census.examined)}; "
             f"authority revision: {census.authority_revision or '<missing>'}.",
             file=sys.stderr,
         )

@@ -197,6 +197,7 @@ from lib.gate import (  # noqa: E402  (path shim above must run first)
     report_findings,
     report_ok,
     run,
+    subject_census,
     workflow_files,
 )
 
@@ -598,7 +599,18 @@ def main(argv: list[str]) -> int:
     )
     if unused:
         summary += f"; {len(unused)} declared entr{'y' if len(unused) == 1 else 'ies'} unused here: {unused!r}"
-    return report_ok(NAME, summary)
+    examined = tuple(sorted(site for sites in matched.values() for site in sites))
+    return report_ok(
+        NAME,
+        summary,
+        subject_census(
+            declared=PATHS_SUBJECT,
+            resolved=tuple(path for path in PATHS_SUBJECT if os.path.exists(os.path.join(root, path))),
+            examined=examined,
+            producers=examined,
+            authority_revision="PATHS_SUBJECT/v1",
+        ),
+    )
 
 
 if __name__ == "__main__":

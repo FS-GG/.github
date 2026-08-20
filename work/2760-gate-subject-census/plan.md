@@ -16,38 +16,39 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2760-gate-subject-census/spec.md sha256:7d7ee307646c4ecd8eac1c1406de1d1c325587bfef5aad6425de1ba3ad2818e8 schemaVersion:1
+- spec: work/2760-gate-subject-census/spec.md sha256:5980faaa43676b63ac91b0f18445ef3a9fff4840fedf4726f2561a58fa3b5033 schemaVersion:1
 - clarifications: work/2760-gate-subject-census/clarifications.md sha256:f2d071dcf0b625e7bff871ed4a17a519d93ada607e9a386cc6c48d99be63da24 schemaVersion:1
-- checklist: work/2760-gate-subject-census/checklist.md sha256:d5e5f25fd26b457b975829d8d324253b2e5a5cafadc2b4cb418d6a5005a1f348 schemaVersion:1
+- checklist: work/2760-gate-subject-census/checklist.md sha256:ebac0d1e549de10a70266cdc3fd1fdd627bcb28b2584d2971406892a0b093c4e schemaVersion:1
 
 ## Plan Scope
 - Work item 2760-gate-subject-census is planned from the current specification, clarification, and checklist facts.
-- Requirement count: 5.
+- Requirement count: 6.
 - Clarification decision count: 0.
 - Checklist result count: 5.
 
 ## Plan Decisions
-- PD-001 [AC-001] [FR-001] complete: Add an immutable `SubjectCensus` value to `scripts/lib/gate.py` carrying the declared subjects, resolved subjects, authority revision, and authority digest; completeness requires a non-empty declaration, a non-empty resolution, set equality between declared and resolved subjects, and non-empty authority bindings.
-- PD-002 [AC-001] [FR-002] complete: Keep `PATHS_SUBJECT` as the only declaration spelling and add one reusable resolver that preserves the structured census through `report_ok`, rather than reducing completeness to a caller-owned Boolean.
-- PD-003 [AC-001] [FR-003] complete: Migrate only `check-repo-filter-monopoly.py`; derive its declaration from `PATHS_SUBJECT`, resolve subjects relative to an explicitly present project root, and return a permanent no-verdict when a declared file is moved while leaving an absent project fixture silent.
-- PD-004 [AC-001] [FR-004] complete: Extend `tests/gate-harness` with negative and positive controls for empty, partial, authority-unbound, and complete censuses, and extend `tests/repo-filter-monopoly` with a source mutation that moves the declared monopoly home while retaining other subjects.
-- PD-005 [AC-001] [FR-005] complete: Remove the stale `gate-harness.yml` claim that no consumers exist; make `repo-filter-monopoly.yml` trigger on its new shared-library dependency and describe partial census no-verdicts accurately; state the follow-on migration order in the pull request without changing the remaining gate consumers.
+- PD-001 [AC-001] [FR-001] complete: Make `SubjectCensus` and the census parameter to `report_ok` structurally required; completeness requires non-empty declarations, resolutions, semantic examinations, live independent producers, producer/examination agreement, and authority provenance.
+- PD-002 [AC-001] [FR-002] complete: Keep `PATHS_SUBJECT` as the declaration spelling and bind the monopoly census to resolved files, enumerated semantic comparison sites, and an independently parsed producer inventory rather than a Boolean or basename-derived compatibility default.
+- PD-003 [AC-001] [FR-003] complete: Return permanent no-verdict when a declared file moves, the HOME producer disappears, or semantic enumeration reaches zero while a producer remains live; leave only a genuinely absent fixture project silent.
+- PD-004 [AC-001] [FR-004] complete: Extend gate-harness with empty, partial, authority-unbound, zero-semantic, producerless, producer-mismatch, complete, and former-caller omitted-census controls; extend repo-filter-monopoly with named moved-home, HOME-removal, and zero-semantic controls.
+- PD-005 [AC-001] [FR-005] complete: Migrate every current `report_ok` caller to an explicit census derived from its own declared, resolved, examined, and producing subjects after holder-gated scope widening.
+- PD-006 [AC-001] [FR-006] complete: Remove the stale `gate-harness.yml` consumer-count claim; make `repo-filter-monopoly.yml` trigger on its shared-library dependency and describe partial census no-verdicts accurately.
 
 ## Contract Impact
-- PC-001 [PD-001] [PD-002] pythonApi: `gate.report_ok` gains a required structured census parameter. This is intentionally source-breaking for callers and therefore this row migrates the one declared consumer while the remaining migration is sequenced separately.
+- PC-001 [PD-001] [PD-002] [PD-005] pythonApi: `gate.report_ok` has a required structured census parameter and every current caller is migrated in the same coherent change.
 - PC-002 [PD-003] exitProtocol: complete examinations retain `ExitCode.OK`; empty, partial, or authority-unbound examinations return `ExitCode.NO_VERDICT_PERMANENT` with a diagnostic that names unresolved subjects.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PD-002] [PC-001] semanticTest: `tests/gate-harness/run.sh` passes on the complete census and reds on empty, unresolved, and authority-unbound subject mutations; each mutation names its witness leg.
-- VO-002 [PD-003] [PC-002] semanticTest: `tests/repo-filter-monopoly/run.sh` passes normally, returns permanent no-verdict when the declared home is moved but the project remains present, and remains silent only when its fixture project is absent.
-- VO-003 [PD-004] semanticTest: The gate-harness self-test is shown red when a fixture gate reports OK with an empty census and green for a known complete census, proving both negative and positive controls.
-- VO-004 [PD-005] staticCheck: The workflow no longer contains the stale `no gate consumers yet` text and the focused workflow syntax/gate tests remain green.
+- VO-001 [PD-001] [PD-002] [PC-001] semanticTest: `tests/gate-harness/run.sh` passes a complete census and refuses empty, unresolved, authority-unbound, zero-semantic, producerless, producer-mismatched, and omitted-census controls.
+- VO-002 [PD-003] [PC-002] semanticTest: `tests/repo-filter-monopoly/run.sh` passes normally and exercises named zero-semantic, HOME-removal, moved-home, project-absent, and real-tree controls.
+- VO-003 [PD-004] [PD-005] semanticTest: Every former whitelist caller is exercised without a census and crashes through the shared harness as a permanent no-verdict, while each migrated caller's fixture remains green.
+- VO-004 [PD-006] staticCheck: The workflow no longer contains the stale `no gate consumers yet` text and the focused workflow syntax/gate tests remain green.
 
 ## Performance Intent
 No performance intent is declared for this work item.
 
 ## Migration Posture
-- PM-001 [PC-001] boundedMigration: Migrate `check-repo-filter-monopoly.py` first because it is the live fail-open instance. Follow-on rows should migrate gates already importing `lib.gate` before gates that still hand-roll exit codes; this PR does not widen into those paths.
+- PM-001 [PC-001] boundedMigration: Migrate `check-repo-filter-monopoly.py` first because it is the live fail-open instance, then migrate every remaining current shared-harness caller under holder-gated touch-set widening before removing the compatibility default.
 
 ## Generated View Impact
 - GV-001 [PD-001] workModel: `readiness/2760-gate-subject-census/work-model.json` and `analysis.json` are regenerated by `fsgg-sdd tasks`/`analyze` from this plan and are committed as SDD receipts; they are never hand-edited.

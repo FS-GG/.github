@@ -82,7 +82,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib.gate import GateError, base_parser, report_findings, report_ok, run  # noqa: E402
+from lib.gate import GateError, base_parser, report_findings, report_ok, run, subject_census  # noqa: E402
 
 NAME = "check-harness-identity"
 
@@ -391,11 +391,21 @@ def main(argv: list[str]) -> int:
     if findings:
         return report_findings(NAME, findings)
 
+    # The declared population is the audited harness files; a file legitimately may contain no
+    # identity-dependent invocation, which is a clean negative rather than an empty corpus.
+    examined = tuple([f"shell:{path}" for path in shell_files] + [f"fsharp:{path}" for path in fs_files])
     return report_ok(
         NAME,
         f"{len(shell_files)} shell file(s) audited ({worker_sites} `--worker` site(s)), "
         f"{len(fs_files)} F# file(s) audited ({fs_subjects} argv-driven binding(s)) — every "
         f"identity-dependent invocation decided the ladder for itself.",
+        subject_census(
+            declared=("tests",),
+            resolved=("tests",) if (root / "tests").is_dir() else (),
+            examined=examined,
+            producers=examined,
+            authority_revision="tests-harness-walk/v1",
+        ),
     )
 
 

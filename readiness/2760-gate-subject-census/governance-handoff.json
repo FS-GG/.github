@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2760-gate-subject-census/ship.json",
-      "digest": "sha256:c5c8764bd9445fc8c60ce010b50d364ae02f08e9967a36bf8aae989af56c0544",
+      "digest": "sha256:78ffd162b3b00920e76de1355c91b4d6f61ea65a6e6c414e1a6308e25c83be34",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2760-gate-subject-census/verify.json",
-      "digest": "sha256:ad45202e196b81cf29130b036be9b4e7f39d584ad0b6eb71bfda1ba5bfda91e9",
+      "digest": "sha256:eb6d15b11d7757304d595425fe2fea5fb2ccead8da295ff4e6e62952862c7acc",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2760-gate-subject-census/work-model.json",
-      "digest": "sha256:6f77cb307539dfba47226b9a3afbd73e21742466816eab376aa68b964313ee0a",
+      "digest": "sha256:cf44ab0233c4d1163e5c94083f70efd1f62fff805a2cce10b96c876f6f046c1e",
       "schemaVersion": 1
     }
   ],
@@ -88,6 +88,11 @@
         "rationale": null
       },
       {
+        "id": "evidence:EV014",
+        "state": "real",
+        "rationale": null
+      },
+      {
         "id": "task:T001",
         "state": "real",
         "rationale": null
@@ -151,6 +156,11 @@
         "id": "task:T013",
         "state": "real",
         "rationale": null
+      },
+      {
+        "id": "task:T014",
+        "state": "real",
+        "rationale": null
       }
     ],
     "dependencies": [
@@ -205,6 +215,10 @@
       {
         "dependent": "evidence:EV013",
         "dependency": "task:T013"
+      },
+      {
+        "dependent": "evidence:EV014",
+        "dependency": "task:T014"
       },
       {
         "dependent": "task:T001",
@@ -289,6 +303,10 @@
       {
         "dependent": "task:T013",
         "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T014",
+        "dependency": "evidence:EV014"
       }
     ]
   },

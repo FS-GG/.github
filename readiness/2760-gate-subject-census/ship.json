@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "9602d660947e9b5b20259c6d33f90e7bcf88265d394cb181e6b7061e3d9e5ac7"
+        "value": "652c65980b3c5182fa16dcef32552d11d19fa713d1bcfadbf535207c5c8bb032"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "source",
       "digest": {
         "algorithm": "sha256",
-        "value": "ad45202e196b81cf29130b036be9b4e7f39d584ad0b6eb71bfda1ba5bfda91e9"
+        "value": "eb6d15b11d7757304d595425fe2fea5fb2ccead8da295ff4e6e62952862c7acc"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "6f77cb307539dfba47226b9a3afbd73e21742466816eab376aa68b964313ee0a"
+        "value": "cf44ab0233c4d1163e5c94083f70efd1f62fff805a2cce10b96c876f6f046c1e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "d5e5f25fd26b457b975829d8d324253b2e5a5cafadc2b4cb418d6a5005a1f348"
+        "value": "ebac0d1e549de10a70266cdc3fd1fdd627bcb28b2584d2971406892a0b093c4e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "046efea21090d11aada413988786d9129b95508e1a03390241eb9dbe54541f38"
+        "value": "24b58b78d3d3165a53145d20959542d2d595f368034c7b2430885780d73e14a9"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "bd19129fd19a94b9104e840e11552e7c08ff2613135b9cf1b9d056ea7df15269"
+        "value": "3f61da8e1e36a2f15f080948ae9f5303a187948e3213d817ef8a0c6becc577ee"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "7d7ee307646c4ecd8eac1c1406de1d1c325587bfef5aad6425de1ba3ad2818e8"
+        "value": "5980faaa43676b63ac91b0f18445ef3a9fff4840fedf4726f2561a58fa3b5033"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -121,7 +121,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "f0f5e937e2284f1a279e61d86815d6646f2fecdab9a72bd77bd216d678709c44"
+        "value": "7940339f2946f8fee1348d657a0d0780df1ca227f31b8a6e84c62d2df4026b2a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -167,9 +167,9 @@
   "verificationReadiness": {
     "status": "verificationReady",
     "blockingFindingIds": [],
-    "evidenceSupportedCount": 13,
+    "evidenceSupportedCount": 14,
     "evidenceSelfAttestedCount": 0,
-    "evidenceObservedCount": 13,
+    "evidenceObservedCount": 14,
     "evidenceDeferredCount": 0,
     "evidenceMissingCount": 0,
     "evidenceStaleCount": 0,
@@ -276,6 +276,14 @@
     {
       "id": "ED-EV013",
       "obligationId": "EV013",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV014",
+      "obligationId": "EV014",
       "state": "supported",
       "observed": true,
       "severity": "ready",

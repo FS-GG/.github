@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "03284b63ded9e87e1bc43076fd29fc369a7a6ccd2b9d309bab63c1434e8e0030"
+        "value": "9e2316c86da7ce32c1521ef56d046beea423b01c9192d84ab1def898d31d7ffc"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "d5e5f25fd26b457b975829d8d324253b2e5a5cafadc2b4cb418d6a5005a1f348"
+        "value": "ebac0d1e549de10a70266cdc3fd1fdd627bcb28b2584d2971406892a0b093c4e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "bd19129fd19a94b9104e840e11552e7c08ff2613135b9cf1b9d056ea7df15269"
+        "value": "3f61da8e1e36a2f15f080948ae9f5303a187948e3213d817ef8a0c6becc577ee"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "7d7ee307646c4ecd8eac1c1406de1d1c325587bfef5aad6425de1ba3ad2818e8"
+        "value": "5980faaa43676b63ac91b0f18445ef3a9fff4840fedf4726f2561a58fa3b5033"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "f0f5e937e2284f1a279e61d86815d6646f2fecdab9a72bd77bd216d678709c44"
+        "value": "7940339f2946f8fee1348d657a0d0780df1ca227f31b8a6e84c62d2df4026b2a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -242,6 +242,16 @@
       "id": "AR015",
       "sourcePath": "work/2760-gate-subject-census/plan.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
+      "sourceId": "PD-006",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/2760-gate-subject-census/plan.md",
+      "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": null,
       "targetId": null,
       "relationship": "taskSourcePlan",
@@ -249,7 +259,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR017",
       "sourcePath": "work/2760-gate-subject-census/plan.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "VO-001",
@@ -259,7 +269,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR018",
       "sourcePath": "work/2760-gate-subject-census/plan.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "VO-002",
@@ -269,7 +279,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR019",
       "sourcePath": "work/2760-gate-subject-census/plan.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "VO-003",
@@ -279,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR020",
       "sourcePath": "work/2760-gate-subject-census/plan.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "VO-004",
@@ -289,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR021",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "AC-001",
@@ -299,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR022",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/checklist.md",
       "sourceId": null,
@@ -309,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR023",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/plan.md",
       "sourceId": null,
@@ -319,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR024",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "FR-001",
@@ -329,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR025",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "FR-002",
@@ -339,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR026",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "FR-003",
@@ -349,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR027",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "FR-004",
@@ -359,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR028",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "FR-005",
@@ -369,7 +379,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR029",
+      "sourcePath": "work/2760-gate-subject-census/spec.md",
+      "targetPath": "work/2760-gate-subject-census/tasks.yml",
+      "sourceId": "FR-006",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR030",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/clarifications.md",
       "sourceId": null,
@@ -379,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR031",
       "sourcePath": "work/2760-gate-subject-census/spec.md",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": null,
@@ -389,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR032",
       "sourcePath": "work/2760-gate-subject-census/tasks.yml",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "T006",
@@ -399,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR033",
       "sourcePath": "work/2760-gate-subject-census/tasks.yml",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "T007",
@@ -409,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR034",
       "sourcePath": "work/2760-gate-subject-census/tasks.yml",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "T008",
@@ -419,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR035",
       "sourcePath": "work/2760-gate-subject-census/tasks.yml",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "T009",
@@ -429,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR036",
       "sourcePath": "work/2760-gate-subject-census/tasks.yml",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "T010",
@@ -439,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR037",
       "sourcePath": "work/2760-gate-subject-census/tasks.yml",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "T011",
@@ -449,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR038",
       "sourcePath": "work/2760-gate-subject-census/tasks.yml",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "T012",
@@ -459,7 +479,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR039",
       "sourcePath": "work/2760-gate-subject-census/tasks.yml",
       "targetPath": "work/2760-gate-subject-census/tasks.yml",
       "sourceId": "T013",
@@ -471,7 +491,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 37,
+    "readyCount": 39,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,

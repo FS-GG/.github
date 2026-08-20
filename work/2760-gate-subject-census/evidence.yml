@@ -11,11 +11,11 @@ sourceAnalysis: readiness/2760-gate-subject-census/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2760-gate-subject-census/analysis.json
-    digest: 9602d660947e9b5b20259c6d33f90e7bcf88265d394cb181e6b7061e3d9e5ac7
+    digest: 652c65980b3c5182fa16dcef32552d11d19fa713d1bcfadbf535207c5c8bb032
     schemaVersion: 1
   - label: checklist
     path: work/2760-gate-subject-census/checklist.md
-    digest: d5e5f25fd26b457b975829d8d324253b2e5a5cafadc2b4cb418d6a5005a1f348
+    digest: ebac0d1e549de10a70266cdc3fd1fdd627bcb28b2584d2971406892a0b093c4e
     schemaVersion: 1
   - label: clarifications
     path: work/2760-gate-subject-census/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2760-gate-subject-census/plan.md
-    digest: bd19129fd19a94b9104e840e11552e7c08ff2613135b9cf1b9d056ea7df15269
+    digest: 3f61da8e1e36a2f15f080948ae9f5303a187948e3213d817ef8a0c6becc577ee
     schemaVersion: 1
   - label: spec
     path: work/2760-gate-subject-census/spec.md
-    digest: 7d7ee307646c4ecd8eac1c1406de1d1c325587bfef5aad6425de1ba3ad2818e8
+    digest: 5980faaa43676b63ac91b0f18445ef3a9fff4840fedf4726f2561a58fa3b5033
     schemaVersion: 1
   - label: tasks
     path: work/2760-gate-subject-census/tasks.yml
-    digest: f0f5e937e2284f1a279e61d86815d6646f2fecdab9a72bd77bd216d678709c44
+    digest: 7940339f2946f8fee1348d657a0d0780df1ca227f31b8a6e84c62d2df4026b2a
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -378,12 +378,39 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2760-gate-subject-census/test-results/focused.xml
-      digest: "sha256:3b54a906cf9811ec3b3e02c20f3285182fe06ed2357ab641652bcd0009a3a7ae"
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
     notes: [Focused green gates and authoring-time red mutations cover this task.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV014]
+    artifacts: [".github/workflows/gate-harness.yml", ".github/workflows/repo-filter-monopoly.yml"]
+    sourceRefs:
+      - kind: verification
+        path: tests/gate-harness/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2760-gate-subject-census/test-results/focused.xml
+      digest: "sha256:54e0b6686f42853339bd623dd0035912ac7200399e9c276b4587716586eee45f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Focused workflow and harness verification cover this completed requirement.]
 lifecycleNotes:
   - "Next lifecycle action: verify."

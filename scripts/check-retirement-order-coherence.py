@@ -122,6 +122,7 @@ from lib.gate import (  # noqa: E402  (path shim above must run first)
     report_findings,
     report_ok,
     run,
+    subject_census,
 )
 
 NAME = "check-retirement-order-coherence"
@@ -861,6 +862,13 @@ def main(argv: list[str]) -> int:
             f"document only (--offline): the verdict block says {len(retired)} of {total} retired, the "
             f"headline agrees, and no second count is on the live surface. NO receiver tree was read, "
             f"so this says NOTHING about whether the count is true.",
+            subject_census(
+                declared=PATHS_SUBJECT,
+                resolved=tuple(path for path in PATHS_SUBJECT if os.path.exists(os.path.join(root, path))),
+                examined=tuple(sorted(identifiers)),
+                producers=tuple(sorted(identifiers)),
+                authority_revision="PATHS_SUBJECT/v1-offline",
+            ),
         )
 
     # THE IN-FLIGHT LIST HAS A FLOOR, OR IT IS THE MUTE BUTTON THIS GATE'S HEADER SAYS IT IS NOT.
@@ -917,6 +925,13 @@ def main(argv: list[str]) -> int:
         NAME,
         f"{len(retired)} of {total} retired, and {graded} receiver tree(s) agree. The headline agrees "
         f"with the verdict block and no second count is on the live surface.{parked}",
+        subject_census(
+            declared=PATHS_SUBJECT,
+            resolved=tuple(path for path in PATHS_SUBJECT if os.path.exists(os.path.join(root, path))),
+            examined=tuple(identifier for identifier, _ in receivers if identifier not in in_flight),
+            producers=tuple(identifier for identifier, _ in receivers if identifier not in in_flight),
+            authority_revision="PATHS_SUBJECT/v1-live",
+        ),
     )
 
 

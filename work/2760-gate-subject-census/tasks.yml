@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2760-gate-subject-census/spec.md
-    digest: 7d7ee307646c4ecd8eac1c1406de1d1c325587bfef5aad6425de1ba3ad2818e8
+    digest: 5980faaa43676b63ac91b0f18445ef3a9fff4840fedf4726f2561a58fa3b5033
     schemaVersion: 1
   - label: clarifications
     path: work/2760-gate-subject-census/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/2760-gate-subject-census/checklist.md
-    digest: d5e5f25fd26b457b975829d8d324253b2e5a5cafadc2b4cb418d6a5005a1f348
+    digest: ebac0d1e549de10a70266cdc3fd1fdd627bcb28b2584d2971406892a0b093c4e
     schemaVersion: 1
   - label: plan
     path: work/2760-gate-subject-census/plan.md
-    digest: bd19129fd19a94b9104e840e11552e7c08ff2613135b9cf1b9d056ea7df15269
+    digest: 3f61da8e1e36a2f15f080948ae9f5303a187948e3213d817ef8a0c6becc577ee
     schemaVersion: 1
 tasks:
   - id: T001
@@ -85,7 +85,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PC-001, PD-001, PD-002]
+    sourceIds: [PC-001, PD-001, PD-002, PD-005]
     requiredSkills: [fsharp]
     requiredEvidence: [EV006]
   - id: T007
@@ -125,7 +125,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PD-004, VO-003]
+    sourceIds: [PD-004, PD-005, VO-003]
     requiredSkills: [automated-tests, readiness-evidence]
     requiredEvidence: [EV010]
   - id: T011
@@ -135,7 +135,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PD-005, VO-004]
+    sourceIds: [PD-005, PD-006, VO-004]
     requiredSkills: [automated-tests, readiness-evidence]
     requiredEvidence: [EV011]
   - id: T012
@@ -158,6 +158,16 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV013]
+  - id: T014
+    title: Implement requirement FR-006
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-006]
+    decisions: []
+    sourceIds: [AC-001, FR-006, PD-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV014]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:
