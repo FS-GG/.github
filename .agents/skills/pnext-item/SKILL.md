@@ -145,10 +145,13 @@ Fix in-scope causes now. For a distinct cause, **establish the root cause before
 is where a defect *surfaced*, which is rarely where it *lives*, and filing the surface is how one defect
 gets seven numbers (#266). Then **dedupe over REST against that cause, not against the symptom**: reuse
 an existing issue that expresses the same cause and transplant your evidence onto it instead of opening
-a second row. File only when no row carries that cause. The issue states observed behavior, **the root
-cause** — or, where you could not establish one, says so explicitly and gives what you measured instead
-(#1858) — acceptance criteria, verification, and a narrow `Paths:` declaration. Link dependencies only
-when authorship truly depends on landed work, then add it to the follow-up queue.
+a second row. File only when no row carries that cause. Use the complete `fsgg.coord.intake/v1` draft
+shown in [deep detail](references/deep-detail.md): put observed behavior, **the root cause** — or the
+measurement that remains unestablished — acceptance, verification, `paths`, `class`, `severity`, and
+optional `blockedBy` in the draft, run `scripts/fsgg-coord intake validate`, then `intake apply` on
+that same file. A hand-authored `Paths:` or `Class:` line in a created body is a defect, not a style
+choice. Link dependencies only when authorship truly depends on landed work, then add it to the
+follow-up queue.
 
 [findings-and-filing](references/findings-and-filing.md) carries the rest of this rule and is **binding,
 not elaboration** — load it for the dedupe reads and the judgement boundaries. This section owns

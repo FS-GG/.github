@@ -41,11 +41,11 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "81d1a7c850daca5a77e031a0aa3c4092a5f17811038b7b816120d30fe156dc93",
+      "tree-sha256": "057b0632ca5ed15c871e05af6216456209e7aa96cd4a6919719f2ceef6100860",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "222682e6b2b745bb891e2f5898181a562ff8945f807759a5b6cb064063ae047f",
+          "sha256": "bc040e2ba93b490a31f868497e46eeb2c6a2eea6f27a3fc90bb21361887aefe0",
           "executable": false
         },
         {
@@ -65,7 +65,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "ab5c0ca7ec064e22362015dff7471ff7725bc966903c0986c8159cdc9517b5e9",
+          "sha256": "629c767cfb0f51191230dbafae3c2affd78a2c89b39a66971ede4c17907fca0a",
           "executable": false
         },
         {
@@ -110,11 +110,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "af7f9c8a6f6b91b04e286da09d9cb6d27904eefd29a52e3035ada32f2c77861a",
+      "tree-sha256": "08dfc23b903b9d15d72b7b096cd88803c324d35eeb8122c7fd25513d64eaef8c",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "24fe33c53203a84c9eb045cc0a35a60d9e6cca6b362e81c7e57b2a171bd2112a",
+          "sha256": "c2057d60b7bc4aedf19b2fb520616928fcbf2a2fff59b3871185462b4413170b",
           "executable": false
         },
         {
@@ -134,12 +134,12 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "5b5917a953b924a635a6b25b8c748ed4f0d2e97fabb64345ef6331b402b954a2",
+          "sha256": "73d5872566d414631eb7c7ae924be2361251da165e0b276cb74c234e524d09d4",
           "executable": false
         },
         {
           "path": "references/findings-and-filing.md",
-          "sha256": "4c082e50f9671bfa363ca117f79dcf77f79a1b533d2038ac7c0616603b1aa2f3",
+          "sha256": "695d68a731108744646d46fba4eb84e4a30ad3f980ce0b88197b7637527b9f45",
           "executable": false
         },
         {
