@@ -1,0 +1,636 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="FS.GG.Coord.GitHub.Tests" tests="633" failures="0" errors="0" skipped="0">
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1896 an off-board issue with an incomplete marker scan refuses the scheduler snapshot" time="00.0007494"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.contentEditProvenance reports a genuine zero - measured, not defaulted" time="00.0007741"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.subIssues keeps a truncated graph honest - Total exceeds the visible nodes" time="00.0001126"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2477 contentEditProvenance FAILS CLOSED - a transport failure propagates as-is, never zero edits" time="00.0001574"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2166 an unavailable external-owner ProjectV2 lookup is never non-membership" time="00.0002215"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#461 a scan that is not JSON is never written either" time="00.0004136"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#706 widen takes the HELD claim - the ownership check is an ARGUMENT, not an if" time="00.0002216"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#641 the open-issue scan EXCLUDES pull requests" time="00.0001298"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#965 an epic whose every acceptance line is a child ref still rolls up" time="00.0003585"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#476 a MERGED pull request resolves as BlockerMerged, not BlockerClosed" time="00.0002686"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.collecting a stale marker a peer already removed (404) is not fatal" time="00.0005941"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a project list with NO pageInfo REFUSES rather than answering 'no such board'" time="00.0001579"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.messages keeps a broadcast (to=*) and orders by comment id" time="00.0086884"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2477 contentEditProvenance FAILS CLOSED - a null issueOrPullRequest is an error, never zero edits" time="00.0001668"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2204 an external issue genuinely not on this board is still Ok None" time="00.0002648"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.rate limit carries retry and rate metadata" time="00.0003925"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2450 a CLAIMED, OPEN row already 'In review' with an open item PR still populates ItemPr" time="00.0006878"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#881 a concurrent defer is NOT destroyed by a flush's dropPending" time="01.0881843"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.the resource is READ from the header, not inferred - and an UNNAMED budget is not guessed" time="00.0001127"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.a rate-limited roll-up PROPAGATES - it does not silently leave the parent open" time="00.0001724"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#550 heartbeat PATCHes the marker by its COMMENT ID, not by the worker string" time="00.0001388"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2204 an incomplete external-owner lookup is Error, never 'no column'" time="00.0002992"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575 a BLOCKED PR whose reporting checks are all green is pending — the green GitHub refused" time="00.0010804"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2477 contentEditProvenance FAILS CLOSED - a generic GraphQL error is GraphQlErrors, never zero edits" time="00.0001766"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1896 reap refuses an incomplete re-verification and deletes no marker" time="00.0002134"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a RATE LIMIT is tested BEFORE the partial arm - or it reads as a half-written board" time="00.0003395"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2264 only the immutable done receipt is terminal lifecycle evidence" time="00.0001678"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 every GraphQlErrors construction in the GitHub layer is preceded by the classifier" time="00.0058079"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2517 AC3: a PR whose ONLY failing check is NON-required is GREEN — PR #2514's own shape" time="00.0032787"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#600 ...but the evidence is REQUIRED - a blank one is refused" time="00.0001256"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.duplicate identity across pages exposes page-boundary mutation" time="00.0012336"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.messages parses an fsgg:msg comment - id, from, to, and the text with the header peeled off" time="00.0002226"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#614 ...and it does not even LOOK at the board - the refusal is free and total" time="00.0001474"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.rewrite APPENDS when the body declared nothing - #496's omission is repairable" time="00.0000740"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.an issue body we could NOT read is an error - never an empty touch-set" time="00.0001149"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a STALE marker does not win - but an unreadable AGE is not stale" time="00.0001307"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.addItem adds when the read DEFINITELY says not-on-board, and returns the new item id" time="00.0026992"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575 a RULESET's required check is named too — protection and rulesets are two stores" time="00.0015885"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#895 the WITHDRAW is on the lock's budget too - a lost race never reaches for GraphQL" time="00.0003714"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#461 a MALFORMED comments page is a failed read, NOT an empty lock" time="00.0001625"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#863 a real unmatchable token is STILL refused when the sentinel is not involved" time="00.0000993"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#972 a declaration appended below an UNTERMINATED fence is one the scheduler can see" time="00.0039420"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.the CAS winner is the LOWEST LIVE comment id" time="00.0000933"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.empty continuing page and explicit item limit both fail closed" time="00.0002301"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 the two doors agree - claim and verifyHeld answer the SAME question the same way" time="00.0003370"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.a closed issue with a merged PR is DONE" time="00.0000901"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a GraphQL body's resetAt answers when no header does - INCLUDING inside errors[]" time="00.0003898"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.the CLOSED_EVENT closer is read WITH its merge facts, and it is not listed (#928)" time="00.0003409"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2384 an UNCLAIMED, OPEN row already 'In review' with an open item PR still populates ItemPr" time="00.0003329"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 the advisory states BOTH readings — a typo and a repo with no items are one fact from here" time="00.0005157"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#581 a PR on ANOTHER item's branch is not proof of life for this one" time="00.0002971"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.operational repository policy never inverts mixed data and errors" time="00.0004561"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.issues returns the raw body, then revalidates with the stored ETag and serves the 304 from cache (#418)" time="00.0012372"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.'we cannot tell' is a LOSS - our marker missing from the re-read withdraws and refuses" time="00.0002444"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#510 an exhausted budget is queueable - it is the ONLY thing that is" time="00.0000226"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#2419 round 2 - a Number that is not an Int32 is no meter, and never a rounded one" time="00.0000755"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a stale marker we could not delete is LEFT for reap, never a reason to fail a won claim" time="00.0003133"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#344 an EMPTY scan is never written to the cache" time="00.0002565"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 the construction regex tells building a GraphQlErrors from matching on one" time="00.0002781"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.--sha suppresses the green guard too — the caller asserted the commit and was answered for free" time="00.0008051"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.appendRoomLine is additive — a second room keeps the first" time="00.0076784"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a page we cannot COUNT is never memoised - headroom unproven is headroom refused" time="00.0013304"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.contentEditProvenance keeps a truncated connection honest - Total exceeds the visible nodes" time="00.0002582"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.response header lookup is case-insensitive for GitHub rate-limit headers" time="00.0003170"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.subIssues reads the total apart from the visible nodes, with each child's ref and state" time="00.0005010"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.a COMMIT closer resolves through to its associated PR (#558/#928)" time="00.0002486"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a ref we cannot read leaves the GREEN standing — fail-closed must not strand every merge" time="00.0007004"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 the non-object guard survives the hoist into GraphQl.decode" time="00.0004391"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a page with NO headroom is never memoised - the boundary the whole rule exists to refuse" time="00.0114534"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2204 an external-owner row on the board with the field unset is a measured Ok None" time="00.0004259"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1896 a board candidate with an incomplete marker scan refuses the scheduler snapshot" time="00.0003682"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#421 'not on board' is reachable ONLY from a successful read" time="00.0000894"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.LeaseFreeOrderingTests.lowestId returns the lowest comment id, and SORTS rather than trusting input order" time="00.0001858"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a TTL of zero disables the cache entirely" time="00.0002642"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2427 a COMMIT closer's associated PR carries its own repository too" time="00.0001711"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 a SESSIONLESS marker with our id still verifies - the #1031 boundary must not regress" time="00.0002152"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1794 a PR is still dropped - a POSITIVE identification is not a failure to identify" time="00.0001262"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a response that PAGINATES stores no validator, whatever its shape" time="00.0088522"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#972 an unterminated TILDE fence is closed with a tilde marker, not a backtick one" time="00.0001103"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2427 with no same-repo closer at all, the foreign one wins and nothing is reported passed over" time="00.0001313"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2254 Cache.Reconciling reads SweptBody from the typed board response with an EMPTY Class column" time="00.0005090"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 a steal that LOSES the fresh race still announces the eviction it performed" time="00.0004084"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a rejected new force admission evicts nothing and posts no marker" time="00.0004625"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 subIssues reports a SECONDARY limit as a secondary limit, not the GraphQL budget" time="00.0001452"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.OwnerKind.fromEnv resolves org, user, and viewer from the environment (#1349)" time="00.0002103"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2517 AC4: the same PR is RED when the failing check IS required — the fix is not &quot;always green&quot;" time="00.0007796"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 a genuine field error is still GraphQlErrors, and still exits 1" time="00.0003282"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a zero board TTL disables the board cache - the safe direction is to pay for the read" time="00.0002728"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2561 a full associated-PR window with a hidden tail refuses the fact set" time="00.0002558"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.bootstrap still queries organization(login:) by default - org behaviour is byte-identical (#1344)" time="00.0001886"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 the classification gate ACCEPTS the repaired shape, direct and via the helper" time="00.0002821"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.#494 a REST read names the repo it was ADDRESSED TO" time="00.0001062"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#862 flush DROPS an entry whose item left the board - but does NOT count it as written" time="00.0011444"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1598 a Phase value this engine does not speak is None, never the nearest phase" time="00.0004788"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a GREEN scored over the commit you REPLACED is pending, not green — the fail-OPEN twin of #955" time="00.0005950"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 an honest multi-page walk still returns EVERY row" time="00.0005272"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a request with NO IfNoneMatch sends NO validator - which is what the LOCK depends on" time="00.0021857"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a board TITLE that does not exist is named back, so it can be fixed" time="00.0001385"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#863 a validated sentinel round-trips through rewrite to DeclaredNone" time="00.0000983"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.a RECONCILING scan never serves the cache, however fresh it is" time="00.0005229"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.no Link header means ONE request - the adapter does not invent pages" time="00.0008654"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a PR body that IS a string reads back exactly, closing-keyword defects and all" time="00.0001078"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2204 a resolved external row whose board node does not resolve is Error, never an empty column" time="00.0005165"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 an EMPTY board yields NO advisory — #266's defect, inside the fix for it" time="00.0001842"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#476 ...and an ABANDONED pull request is BlockerClosed" time="00.0000907"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#613 a rolled-up parent is stamped Done AND CLOSED - not one or the other" time="00.0007473"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 no --repo is the identity, and says nothing" time="00.0006135"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a FULL projectItems window with no totalCount is NEVER 'not on the board'" time="00.0001582"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 the SAME board WITHOUT --force still refuses - the flag is what makes the difference" time="00.0002381"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.the marker read is NEVER conditional - a 304 could hide a live lock" time="00.0000983"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2365 recentCommentBodies refuses a null issue" time="00.0001297"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.rewrite is FENCE-AWARE - a Paths: inside a code block is PROSE, not a declaration" time="00.0016270"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.#421 a 403 carrying a rate-limit message is RateLimited, not Unauthorized" time="00.0008315"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1507 a FLAG-SHAPED token is refused at the write, even though the parser now stops before it" time="00.0000686"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#882 HALF a board is a line we cannot read, and refuses the drain" time="00.0004108"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 a missing or ill-typed pageInfo REFUSES" time="00.0001584"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.contentEditProvenance reads the total apart from the visible edits, with each edit's time and editor" time="00.0002376"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.the board scan PAGINATES on the cursor - a second page is not lost" time="00.0006405"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 a --repo naming no board row REPORTS, and does not merely return empty" time="00.0000786"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.a comma-separated blocker list is split into separate edges" time="00.0000974"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#614 a PARTIAL child does NOT close its parent - even when it is the ONLY child" time="00.0002169"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.a DAG has no ring - no false positive" time="00.0000846"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2166 a cold external-owner write resolves the exact ProjectV2 row across pages" time="00.0008146"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1901 Severity is read from the board and survives the scan cache" time="00.0019451"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575 UNSTABLE is not a refusal — a non-required check failing is a merge GitHub takes" time="00.0006029"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 a steal does NOT evict past a live marker carrying OUR OWN id - the twin rule covers both slots" time="00.0003185"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#1003 the refusal costs no graph read either - it is a property of the body" time="00.0002821"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 a MISTYPED --worker is not an accusation - an id that holds nothing stays DoesNotHold" time="00.0002538"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.an OPEN issue cannot be stamped - the stamp records that work is finished, it does not finish it" time="00.0001146"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a SINGLE_SELECT option id is declared String — the schema types it String, not ID (#848)" time="00.0022717"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a body that is not JSON yields NO meter reading - never a reading of zero" time="00.0000433"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 a response carrying neither data nor errors is a failed read" time="00.0001071"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a 403 that is NOT a rate limit is Unauthorized - the remedies are opposite" time="00.0000948"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1149 a twin's claim AFTER a heartbeat is refused Twin, not Renewed" time="00.0003906"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a GraphQL document with NO variables omits the variables object entirely" time="00.0009170"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 a SECONDARY limit NEVER carries the primary reset - that is the false countdown" time="00.0001713"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.a MERGED pull request reads as CLOSED, not OPEN" time="00.0004540"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#421 a rate-limited scan PROPAGATES - it is not an empty board" time="00.0002957"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 a claim that evicts NOBODY never calls onEvict - no theft is reported that did not happen" time="00.0003084"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575 ...and the SAME world reported CLEAN is green — the gate must still let work land" time="00.0011379"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2143 an external-owner item cached by intake is written without re-parsing it as the default owner" time="00.0004549"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a PARTIAL write is never queued - replaying it would rewrite the half that landed" time="00.0000585"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.operational project lookup refuses duplicate title rather than choosing" time="00.0002011"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 the window extractor does not credit a connection that dropped totalCount" time="00.0003311"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#882 a queued write RECORDS the board it was queued against" time="00.0004293"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a marker is ANCHORED - a say message that QUOTES one cannot forge a lock" time="00.0001814"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.the cursor file is keyed on the slugged worker id (matches the bash client)" time="00.0002451"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2308 a legacy cache row without a node id takes the former fresh REST lock path" time="00.0004239"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2444 passedOverForeignNote names the foreign closer that render's stdout omits" time="00.0000662"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 it is NOT DoesNotHold - a typo and an impersonation need different messages" time="00.0001931"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2365 recentCommentBodies refuses a null repository instead of throwing" time="00.0001243"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2254 Cache.Scheduling never enriches SweptBody, even for the identical empty-column closed row" time="00.0004184"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.the aliased batch document is logged whole - one document, aliases in order (#448)" time="00.0001201"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 a --repo that MATCHES is silent — the advisory is not noise on the happy path" time="00.0000664"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2365 subIssues refuses a null repository instead of throwing" time="00.0001140"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.an OFF-BOARD blocker draws no edge - it cannot be a ring node" time="00.0001631"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 a SECONDARY limit inside a GraphQL errors array is not the GraphQL budget" time="00.0001216"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#2419 a valid-JSON body that is NOT an object is no meter - and does not throw" time="00.0000560"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#928 an UNMERGED closer named by the close event does NOT stamp - the union cannot launder" time="00.0005620"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.repeated cursor refuses instead of looping or succeeding short" time="00.0002647"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a REST rate limit says REST - it must NEVER be reported as the GraphQL budget" time="00.0001637"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.verifyHeld returns the capability when the live winner IS us" time="00.0002776"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.the cache is keyed on the BOARD - one board's items are never served for another" time="00.0002860"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.reap SKIPS a marker the holder RENEWED between the scan and the delete" time="00.0002517"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 a MISSING hasNextPage REFUSES — completeness is a required Boolean, not an optional hint" time="00.0001599"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.issues --refresh drops the stored ETag and re-reads unconditionally" time="00.0012860"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.LeaseFreeOrderingTests.lowestId on an empty list is None - an absence, never an invented answer" time="00.0000320"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#881 defer REFUSES while another worker holds the queue, rather than racing it" time="00.1516413"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1598 the Phase column and createdAt are READ off the board" time="00.0021397"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#510 a board write may be deferred ONLY on an exhausted budget" time="00.0004534"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2363 criterion 4: --repo sir and --repo S.I.R. select the identical row set from a mixed-spelling board" time="00.0001671"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.an unreachable host is a Transport error - we did not observe an empty board, we observed NOTHING" time="00.0025633"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a failed FIRST read is fatal, and nothing is posted" time="00.0001930"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests..github#2735 a merged total of exactly the page size, behind an advertised continuation, is REFUSED" time="00.0015894"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 prClosingRef still reads a real reference, and a measured 'closes nothing'" time="00.0002133"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2204 itemBlockedBy reads an external-owner edge from the board side too" time="00.0004620"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.an UNPARSEABLE marker blocks the item - it is a claim held by nobody" time="00.0002004"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.an ORG-owned scan still queries organization(login:) - user support is OFF by default (#1344)" time="00.0005051"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a pull request or malformed state is UNKNOWN to reconciliation, never closed" time="00.0003680"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1680 AC4 a CLOSED-UNMERGED pr is decided too, and says so" time="00.0012397"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.#2418 a REST response is NOT counted against the GraphQL meter" time="00.0010671"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.concurrent workers retain one credential-scoped observation per REST resource" time="00.0099538"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#581 reapable refuses a lease that is not even expired" time="00.0001047"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1794 a NULL body is BodyRead empty - a real, observed, empty declaration" time="00.0005363"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a GREEN whose PR head IS the branch tip still settles green — the gate must still let work land" time="00.0005404"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 a non-object 200 at the node-facts read is a typed refusal, not an unhandled crash" time="00.0163655"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2365 recentCommentBodies refuses a null element inside nodes" time="00.0001727"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a TRUNCATED closing-issue connection refuses rather than naming a head of five" time="00.0002707"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.an unreadable cursor falls back to 0 - it shows too much, never too little" time="00.0086348"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 --force re-claiming our OWN live marker renews it - it does not steal from itself" time="00.0002761"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#583 a parent with OPEN sub-issues is not done, whatever its board says" time="00.0003957"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a GraphQL variable is serialised WITH ITS TYPE - a number is a number, not a quoted string" time="00.0297875"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 the messages stay a LIST, not one glued string" time="00.0006334"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a conflicted whose PR head IS the branch tip stays terminal — a real conflict, still exit 3" time="00.0003365"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.the cursor is per-worker - one worker's read does not consume another's mail" time="00.0002803"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1031 a SESSIONLESS marker with our id still verifies - the boundary of the rule" time="00.0030169"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.inboxCursor is 0 for a mailbox never read" time="00.0004526"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 verifyHeld REFUSES the capability when the caller NAMES another worker whose marker is live" time="00.0003780"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#325 a parent whose BODY declares an unlinked child is left open, and names it" time="00.0025921"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.operational project lookup drains every page and returns one typed visibility" time="00.0011574"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1732 canonical command scope selects a short-id Repo Scope" time="00.0001908"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 a SECONDARY limit is classified as one - not as the REST budget" time="00.0017702"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a query body's cost accumulates into this process's spend" time="00.0000982"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.REST fleet state is pessimistic across resources and only a successful resource response clears exhaustion" time="00.0032424"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.operational roster board refuses a partially resolved issue node" time="00.0012960"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 --force TAKES a live claim held by another worker, and names who it took it from" time="00.0004037"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575 a policy we may not READ still REFUSES — the verdict never rested on it (#463)" time="00.0008460"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1103 the 'any' sentinel validates and canonicalises, distinct from 'none'" time="00.0002007"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#581 a FAILED pr read is Unknown, NOT 'no PR' - this is what reaped live work" time="00.0000994"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.appendRoomLine closes an unterminated fence FIRST, so the line is not swallowed (#972)" time="00.0000897"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2427 a same-repo true closer wins over a LATER-merged foreign-repo closer, and names what it passed over" time="00.0025902"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.LeaseFreeOrderingTests.winner IS lowestId composed with the staleness filter - one rule with one parameter" time="00.0023281"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.itemStatus is Ok None when the item is on the board with NO Status set" time="00.0008360"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.the false arm reconciles on ONE read budget — the guard costs no extra PR read" time="00.0003453"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575 --require still binds a context the base branch does NOT require" time="00.0008941"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 prClosingRef refuses a partial 200 even when the visible nodes look complete" time="00.0002076"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.a diamond - shared blocker, not a cycle" time="00.0003538"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2384 an UNCLAIMED, OPEN 'Blocked' row with an unresolved blocker is NOT probed by this arm - the widened probe buys no request it need not" time="00.0005922"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a MUTATION carries no meter, and that is not an error" time="00.0000260"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#2131 guarded merge binds GitHub's write to the inspected head SHA" time="00.0005010"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#881 a queue we could not read is not an EMPTY queue" time="00.1514228"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.LeaseFreeOrderingTests.reserver falls back to lowestId - and returns the LIVE winner when there is one" time="00.0001482"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a TRUNCATED itemBlockedBy read is not 'nothing recorded'" time="00.0006393"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2427 among two SAME-repo closers, latest-merged still wins - the repository preference does not soften #342" time="00.0001550"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 a genuinely empty board is still a successful, EMPTY read" time="00.0003377"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a ZERO-BYTE cache file is a miss, not an empty board" time="00.0086961"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 claim is the OTHER door and it refuses too - a re-claim under a foreign id is not a renewal" time="00.0002196"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a RED never reads the ref — a PR that is not merging need not prove which commit it is" time="00.0008750"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.an ITERATION id is declared String too — same schema type, same fix (#848)" time="00.0002122"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#863 the sentinel is CANONICALISED — 'none none' is the very body #863 is about" time="00.0000869"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.EX_PARTIAL - some aliases landed and the rest did not, and it is NEVER queued" time="00.0005178"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.a two-item ring is caught" time="00.0099804"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.a parent with an OPEN sibling is left open, and says which" time="00.0005761"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#550 ...and it re-emits the column it overwrote, so a long-lived claim does not forget it" time="00.0003630"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#273 an UNMATCHABLE token is refused - it would reserve nothing and read as disjoint" time="00.0000532"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.LeaseFreeOrderingTests.lowestId is LEASE-FREE - a wholly lapsed set still elects, which is the whole point" time="00.0000867"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#641 a PULL REQUEST on the board is FLAGGED as one" time="00.0004383"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.#2308 markerScan keeps a stale claim found only on REST page two" time="00.0096525"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a CONFLICTED about the commit you replaced is pending, not a verdict — the false arm reaches --sha" time="00.0006281"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.a parent reporting NO children is a CONTRADICTION - we climbed to it from one" time="00.0002037"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2561 genuinely short connections remain a complete successful fact read" time="00.0001438"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests..github#2735 a continuation page that ERRORS is a failed read, not a short inventory" time="00.0039622"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2561 a full nested closing-issue window with a hidden tail refuses the fact set" time="00.0008881"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a 404 is NotFound - the server SAID it is not there" time="00.0011943"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a TRUNCATED itemStatus read is not 'not on this board'" time="00.0002184"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#419 a live marker with OUR id but a DIFFERENT session is a TWIN - refused, not adopted" time="00.0002417"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 the helpers the gate TRUSTS actually classify" time="00.0079630"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests.M2 bootstrap completes the connection even when the board is on the first page" time="00.0006259"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 the session is not what decides it - a DIFFERING session reaches the same refusal, by the new rule" time="00.0001998"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.writeRoomRef PATCHes the member issue with the appended Rooms line" time="00.0004436"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#882 the board survives the queue round-trip" time="00.0003757"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 prClosingRef refuses a reference it cannot NAME" time="00.0002413"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.refIsPullRequest is true iff the issues payload carries a pull_request object" time="00.0001755"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.itemIdCached never memoises 'not on board' - an item added later must still be found (#421)" time="00.0004473"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a blocker we could not READ is Unknown - and Unknown BLOCKS" time="00.0001560"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 a caller that derives NOTHING is not refused - the human operator --worker exists for" time="00.0002804"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1732 a marker carries path scope while legacy markers remain readable" time="00.0002937"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1794 an element whose number is the STRING 42 refuses - a JSON kind change is not an identity" time="00.0001610"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.a MERGED closing PR is read as a closing PR" time="00.0004701"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2134 duplicate inventory refuses an unmerged continuation page" time="00.0002236"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#895 the RENEW is on the lock's budget too - holding a claim never spends a GraphQL point" time="00.0003401"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1149 heartbeat re-emits session= so the marker does not go SESSIONLESS" time="00.0001960"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 a FRESH claim under a foreign id is refused - a lock nobody can drop is not a lock" time="00.0008516"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#461 ...and an EMPTY body is a failed read too, not an unheld item" time="00.0001037"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 recentCommentBodies still reads a clean 200" time="00.0013861"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#882 the board that OWNS the queued write still replays it" time="00.0007035"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 prClosingRef still reads a real closing reference" time="00.0015495"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2444 renderReceipt matches render exactly when nothing was passed over" time="00.0000395"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2427 the CLOSED_EVENT PullRequest closer's own repository is read too" time="00.0001547"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#928 a LISTED PR whose body never carried the keyword is still rescued" time="00.0001137"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests..github#2735 a continuation page that is NOT AN ARRAY is a failed read, not a short inventory" time="00.0019997"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1680 AC5 the four fixtures side by side — open+green, open+pending, merged, closed-unmerged" time="00.0023482"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a mutation and an unparseable body add NOTHING - a call the meter did not speak for is not a zero" time="00.0000972"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#543 --pr names WHICH true closer to stamp, among several" time="00.0001405"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 no exemption outlives its reason" time="00.0083645"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#2134 createIntake refuses an invalid draft before any issue POST" time="00.0012684"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a mergeable that lands WITHIN the budget is still scored on the spot, not deferred to --wait" time="00.0007399"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 a data extraction in a LATER function does not inherit an earlier one's errors check" time="00.0001021"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.boardToJson is the board's machine contract - number, id, and typed fields" time="00.0014677"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1680 AC1 a MERGED pr is NOT pending and NOT exit 7" time="00.0003825"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.THE INVERSION - unaccumulated meters leave spend at zero, which is exactly the pre-2418 state" time="00.0000616"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2444 passedOverForeignNote is None when nothing was passed over" time="00.0000504"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.a parent whose child set is TRUNCATED is left open - we could not see them all" time="00.0002513"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 the classifier does NOT consult /rate_limit to override a real 403" time="00.0001463"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a page that is NOT a JSON array refuses - it is never silently truncated to the first page" time="00.0029926"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#448 a BAD pair in the batch is caught BEFORE any mutation is sent" time="00.0014007"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.a full sub-issue page with an OPEN child is SomeOpen" time="00.0001860"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.bootstrap resolves the field and option ids in TWO GraphQL calls" time="00.0002126"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2427 a closedByPullRequestsReferences node's OWN repository is read into Repo" time="00.0001617"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#972 rewrite and TouchSet agree about a fence indented four spaces" time="00.0001042"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a spend record outside the window is not counted" time="00.0012077"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2450 a CLAIMED, OPEN row already 'In review' with NO open item PR is still probed - the mate" time="00.0004322"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 the window-agreement gate FIRES on a document and guard that disagree" time="00.0034940"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.verifyHeld fails CLOSED - an unreadable marker set yields an error, never a capability" time="00.0002377"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#862 a PARTIAL flush reports the writes it DID land, alongside the stop" time="00.0008628"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.subIssues FAILS CLOSED - an unreadable graph is an error, never an empty set" time="00.0001417"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2444 render's stdout stamp names ONLY the winner - the passed-over note does not ride stdout" time="00.0000530"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.#418 the meter read is FREE - GET rate_limit is billed to NEITHER counter" time="00.0001225"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.a null issue is NotFound - the query ran, the issue is not there" time="00.0001024"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a conflicted whose PR head LAGS the branch tip is pending — no --sha, and none needed" time="00.0005114"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#2758 a claim marker records the dispatched agent contract version" time="00.0004475"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests..github#2735 the duplicate inventory's REQUEST — method, collection path, query, headers and body — is pinned WHOLE" time="00.0023840"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1794 an element with NO number REFUSES the read - it is never silently dropped" time="00.0001566"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.itemStatus reads the item's current Status column, narrowed to OUR board" time="00.0001395"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 the ordering gate FIRES on a data extraction that skips the errors check" time="00.0001770"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1055 the branch probe FAILS CLOSED - an unreadable probe is Unknown, never 'no branch'" time="00.0001345"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.say does NOT require the lock - the worker who lost the race must still be able to speak" time="00.0002334"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.every read of the landable poll revalidates on the second look, and the 304s reach the SAME verdict" time="00.0008950"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.an UNPARSEABLE TTL falls back to no cache - the safe direction is to pay for the read" time="00.0002872"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.the 1059-1063-1073 ring produces a graph in which cycles finds the three-item ring" time="00.0000872"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.one unreadable blocker does not STARVE the board" time="00.0002028"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.the classifier NAMES ITS SUBJECT, not its payload" time="00.0000883"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 the known-repo set is DEDUPED and ordered — a board of N items lists each repo once" time="00.0001708"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2427 end-to-end: facts read + verify prefer the same-repo closer over the later-merged retrofit" time="00.0001827"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.an EMPTY value is --clear, never --text with an empty string" time="00.0001721"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a claim renewing our OWN stale marker ends with ONE marker and reports no eviction" time="00.0023129"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2308 a missing or mismatched fresh node fact refuses rather than deciding a cached lock" time="00.0012324"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#421 a rate-limited failure classifies as RateLimited, never as NotFound" time="00.0001415"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#481 a column NOBODY recorded is not restored - release says so rather than inventing one" time="00.0003286"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 an Issue node whose identity will not parse REFUSES instead of vanishing from the batch" time="00.0002900"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#863 the 'none' SENTINEL validates — it is a decision, not an unmatchable path" time="00.0000841"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.every rate-limit WORDING is recognised - an unrecognised one would be dropped, not queued" time="00.0000304"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a per-ref issue-state read distinguishes valid open and closed refs off board(wire: &quot;OPEN&quot;)" time="00.0017581"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a 304 with NO cached body is an ERROR, never an empty result" time="00.0005914"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2308 exact fresh zero-comment facts eliminate both per-row REST reads" time="00.0003894"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#882 an entry that recorded NO board is replayed, not skipped forever" time="00.0042308"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#928 the CLOSED_EVENT rescues a PR whose BODY never carried the keyword - and it is NOT listed" time="00.0001166"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a SINGLE-page response KEEPS its ETag - the counterweight" time="00.0010263"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.operational archive mutation preserves partial alias accounting" time="00.0009218"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.bootstrap resolves a USER-owned board through user(login:) (#1344)" time="00.0008949"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2477 contentEditProvenance FAILS CLOSED - a null repository is an error, never zero edits" time="00.0001388"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.the evidence does NOT override a real PR - the record wins over the prose" time="00.0000871"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2444 renderReceipt DELIBERATELY diverges from render - the durable comment keeps the note" time="00.0001095"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 a rate-limited claim scan is QUEUEABLE, which a generic GraphQlErrors is not" time="00.0002462"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#895 the pre-claim column read is the CALLER's - the CAS routes no board read of its own" time="00.0011426"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.truncation is checked FIRST - before the closing PR, before everything" time="00.0000975"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2204 an unavailable external field read is never a manufactured absence" time="00.0004808"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 a worker still operates its OWN claim across processes - including after a heartbeat rewrote the marker" time="00.0002270"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 a DraftIssue card is still skipped, not refused" time="00.0004359"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.contentEditProvenance tolerates a deleted editor - a null actor is not a parse failure" time="00.0010431"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#1003 a parent whose body states NO task-line acceptance is left open - #889's shape" time="00.0102637"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests..github#2735 a listing that genuinely has nothing reads as an EMPTY inventory, not a failure" time="00.0011485"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2561 a full closing-PR window with a hidden tail refuses the fact set" time="00.0001678"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.flush replays a queued write and DROPS it" time="00.0005304"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#965 a parent whose body states UN-DELEGATED acceptance is left open, and names the lines" time="00.0044778"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a 403 that is NOT a rate limit is Unauthorized, and NAMES ITS SUBJECT" time="00.0019854"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.the chore lock is the item CAS UNCHANGED — an off-board ref, a short lease, and no column" time="00.0002892"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1794 an off-board issue with an unreadable body and NO claim reserves nothing - a comment is not a lock" time="00.0003466"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.a failed page ABORTS the scan - it never returns a partial board as a complete one" time="00.0003520"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 a function merely NAMED GraphQl.decode does not absolve itself" time="00.0000877"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.addItem is IDEMPOTENT - an issue already on the board is a success, and writes nothing" time="00.0005103"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.issues judges headroom on the RAW page, not on the filtered projection (#641)" time="00.0012341"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 a legitimate HTTP-date Retry-After IS still read - exactness is not blanket refusal" time="00.0007749"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.every REST resource is the REST budget - and it NAMES the bucket rather than collapsing it" time="00.0002298"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#2419 round 1 - a non-object 'data' is no meter either, at every depth" time="00.0001176"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575 BEHIND and DRAFT refuse too — the other two states GitHub will not merge" time="00.0012718"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#543 --pr cannot launder a mention into a stamp" time="00.0006545"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.prose in a dependency field draws no edge" time="00.0000776"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.a GraphQL rate limit arrives as HTTP 200 with errors, and is still RateLimited" time="00.0002803"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.appendRoomLine appends a Rooms line the parser can read back" time="00.0000727"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 Retry-After is READ, and it is the reset a secondary limit actually uses" time="00.0022755"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 a STRING hasNextPage REFUSES rather than being read as truthy or falsy" time="00.0001553"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#581 reap RE-VERIFIES the marker is still stale, then DELETES it by its comment id" time="00.0002431"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.messages FAILS CLOSED on a malformed page - a lost message is not an empty mailbox" time="00.0001173"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a landed write folds into the cached scan for THIS board, not a hardcoded one" time="00.0015968"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.messages ignores a claim marker and any non-message comment" time="00.0002130"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 contentEditProvenance keeps refusing a partial 200 through the shared helper" time="00.0005291"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1794 an off-board claim with a READABLE body still reserves its NAMED paths - the control" time="00.0004826"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1598 an entry written before this existed reads as None, never as a zero age" time="00.0038909"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2365 recentCommentBodies still reads real comments" time="00.0001745"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.issues fails closed on a 200 that is not a JSON array - a proxy error page is not an empty listing" time="00.0004127"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a board that reports NO fields is a failed read, and is never cached" time="00.0001963"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a batch where NOTHING landed is a clean failure, not a partial one" time="00.0016790"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.a truncated sub-issue page is detected - totalCount disagrees with the nodes" time="00.0002063"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.mixed data and errors is never a successful typed value" time="00.0003668"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1680 a PR body with no `merged` field at all is NOT read as merged" time="00.0005169"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a real REST header observation is credential-scoped and preserves the named resource" time="00.0019540"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2134 duplicate candidates retain both closed issues and PRs" time="00.0007182"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 the match is case-insensitive, as every hand-rolled copy was" time="00.0000606"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.itemIdCached serves the forever-cache on the second lookup - one GraphQL, then zero" time="00.0004300"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2166 an incomplete external-owner ProjectV2 page fails closed instead of reporting absence" time="00.0002385"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 the claim scan tells a SECONDARY limit from the primary budget" time="00.0012087"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.reap treats a marker a peer already collected as AlreadyGone, deleting nothing" time="00.0006567"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.the API base is read from the environment - the mechanism C1 specified" time="00.0001338"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.createRoom fails LOUDLY when the response carries no number" time="00.0001053"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.a body that is not JSON is Malformed - never an empty fact set" time="00.0001173"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#510 an exhausted budget DEFERS the board write - and it is really queued" time="00.0004775"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.the reset is read from X-RateLimit-Reset - the header that was there the whole time" time="00.0013610"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1103 mixing 'none' and 'any' is refused — they mean opposite things" time="00.0000662"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1680 an OPEN pr carrying merged:false is untouched — the guard reads state, not the flag alone" time="00.0006715"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#928 --pr names a closer the reference list never listed" time="00.0001182"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#419 the SAME session re-claiming its own marker is a heartbeat, not a twin" time="00.0003131"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.the CAS refuses BEFORE posting when somebody else already holds a live lock" time="00.0002153"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.a CLOSED blocker breaks the ring - its edge is resolved and dropped" time="00.0001164"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.#418 the assignee goes over REST - it is never a GraphQL issue-edit" time="00.0001815"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#2217 two heartbeats renew a lapsed server lease only when each PATCH changes its stored body" time="00.0025299"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#342 a merged PR that only MENTIONS the issue is not a closer" time="00.0001114"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#581 reapable FAILS CLOSED when liveness is unknown - a lock we cannot rule dead we may not break" time="00.0001390"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.the green path reconciles ONCE — #989's bound, as #995 revised it" time="00.0006928"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.closeRoom PATCHes the room issue (the derived roll-up close)" time="00.0002160"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a CONFLICTED about the commit you ASKED to gate is still terminal — the guard widens reach, not claim" time="00.0009768"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2384 an UNCLAIMED, OPEN row already 'In review' with NO open item PR is still probed - the mate" time="00.0003432"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.an empty BlockedByRaw yields a node with no blockers" time="00.0001555"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a scan older than the TTL is a MISS" time="00.0004421"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#534 ...and prAlive propagates it too - reap must not decide liveness on a read it cannot make" time="00.0001011"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1055 a pushed item branch with NO PR is proof of life - LeaseExpiredBranchPushed" time="00.0001308"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 a steal does NOT override an UNPARSEABLE marker - a lock held by nobody still blocks" time="00.0002859"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575 an ABSENT mergeable_state is NO OPINION, not a refusal — it must not strand every caller" time="00.0006689"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 the classification gate FIRES on the exact pre-repair freshNodeFacts shape" time="00.0273604"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2477 contentEditProvenance FAILS CLOSED - a 200-with-errors rate limit is RateLimited, never zero edits" time="00.0001280"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.a self-edge is a one-item ring" time="00.0000723"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 a NULL hasNextPage REFUSES" time="00.0001792"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 a construction in a LATER function does not inherit an earlier one's classifier" time="00.0000983"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#421 addItem REFUSES to add on a failed lookup - and spends no mutation" time="00.0002277"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.an UNKNOWN field is refused, and costs ZERO GraphQL" time="00.0001615"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.an empty item id is never memoised - an absence must not become a hit (#421)" time="00.0003512"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1055 reapable REFUSES a claim whose branch is pushed but has no PR - work in progress" time="00.0002084"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#481 the claim RECORDS the column it overwrote, so release can put it back" time="00.0002999"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.a VIEWER-owned board is scanned through viewer, with no login in config (#1349)" time="00.0006421"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a chore is CLAIMED, not broadcast — the CAS refuses the second worker" time="00.0002991"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#461 the guard must NOT fire on a legitimately empty comment list" time="00.0001153"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 the claim scan's node-facts read reports an exhausted GraphQL budget AS a rate limit" time="00.0001319"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.createRoom POSTs to the issues endpoint and returns the new room's ref" time="00.0004145"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#273 a matchable touch-set validates" time="00.0002796"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 recentCommentBodies reports an exhausted budget AS a rate limit" time="00.0001222"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1031 a twin is a case of its OWN - collapsing it into DoesNotHold would misdiagnose the lease" time="00.0001974"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#965 un-delegated acceptance is refused BEFORE the graph read is paid for" time="00.0003780"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#2134 an unreadable intake receipt fails closed instead of looking absent" time="00.0006338"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.the two budgets are counted apart - GraphQL and REST are not one meter" time="00.0001332"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.the log names a SINGLE_SELECT write in the gh stub's grammar" time="00.0001557"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 a secondary limit with NO Retry-After says so - it does not fall back to the primary window" time="00.0001877"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a marker we cannot parse a WORKER out of is held by nobody - and it BLOCKS" time="00.0004313"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 bootstrap FINDS a board that is not on the first page of projects" time="00.0002460"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#600 an item resolved WITHOUT a PR is DONE - when there is evidence" time="00.0001697"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#863 'none' beside real paths is refused as a CONTRADICTION, naming the choice" time="00.0002261"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#882 flush SKIPS a write queued against ANOTHER board - it must not be dropped" time="00.0011721"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.the board's OWN ids stay ID! — the fix is per-argument, not a blanket retag" time="00.0001560"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a body and its ETag are stored together, and a body with no ETag drops the stale one" time="00.0006463"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 snapshot says NOTHING for a --repo that matches — no noise on the happy path" time="00.0001565"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1901 a missing or unknown Severity is Unset and cannot promote the row" time="00.0003829"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1933 the SAME body, with the field set instead, yields the edge - the control" time="00.0014415"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 a GraphQL errors array with NO rate limit is not a rate limit" time="00.0000334"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 a blank endCursor is not a usable cursor" time="00.0004642"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.a DRAFT board card is skipped - it has no issue, so it cannot be claimed" time="00.0004268"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.a second scan inside the TTL spends ZERO GraphQL - and returns the SAME rows" time="00.0013635"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2517 AC6: an EMPTY required set fails closed on the SAME rule as an unreadable one" time="00.0007535"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.an item with NO Status is NoStatus - which is its own state, not Backlog" time="00.0005189"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#972 a quoted declaration stays quoted, and the real one is what round-trips" time="00.0001016"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2517 AC2: --require overrides the derivation — the flag still binds a non-required check" time="00.0008640"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1598 both rank inputs survive the cache codec" time="00.0008712"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a TRUNCATED field map is refused rather than cached" time="00.0003036"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#342 among two true closers the LATEST-merged wins, not the lowest-numbered" time="00.0001147"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1896 the CAS pre-read refuses one unclassifiable comment beside a readable marker, before posting" time="00.0002146"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a DATE value is declared Date!, not String! — and this leg is REACHED (#848)" time="00.0003424"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a project list with another page but no cursor REFUSES - it is not 'no such board'" time="00.0005015"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1680 a merged pr whose head IS the asserted sha reports nothing extra" time="00.0023912"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.#507 the child's id is sent as a JSON NUMBER, not a string" time="00.0002937"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#421 a rate-limited read propagates as RateLimited - never as 'not there'" time="00.0001491"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a resolved item id is cached forever, keyed on the board" time="00.0003322"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 an exhausted budget on the claim scan's hot path exits EX_RATE 75, not a generic 1" time="00.0016953"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1794 an ILL-TYPED body is BodyUnread - and it still names the issue, so its lock is still read" time="00.0001700"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2204 itemStatus reads an external-owner column the issue-side connection omits" time="00.0016434"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 a HOSTILE Retry-After is NO reading - never 'retry now', never a fabricated window" time="00.0001920"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.a CLOSED issue that nothing closed is RED - and it names the green path" time="00.0001396"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2166 a complete external-owner ProjectV2 lookup may report genuine non-membership" time="00.0002159"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.the ledger attributes spend BY COMMAND, dearest first" time="00.0054781"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 'not on the board' is still reachable - from a MEASURED read" time="00.0001203"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#1003 does not fire on a body #965 already governs - the two guards do not double-report" time="00.0002907"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.an OUT-OF-RANGE reset header does not CRASH - Int64 parses where DateTimeOffset cannot convert" time="00.0002039"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 an eviction we could NOT complete takes nothing, and never posts our marker" time="00.0011084"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BlockerGraphTests+BlockerGraphTests.an owner-qualified cross-repo ref matches the on-board node" time="00.0001252"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a per-ref issue-state read distinguishes valid open and closed refs off board(wire: &quot;CLOSED&quot;)" time="00.0001686"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#510 an issue NOT on the board is permanent - reported, and NOT queued" time="00.0003163"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 truncation cannot unmake a HIT" time="00.0001633"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 'no such board' survives the repair, once the walk is shown to FINISH" time="00.0001196"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#507 child POSTs the REST id as a JSON NUMBER, not a string" time="00.0004453"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 prClosingRef refuses a partial 200 instead of answering 'this PR closes nothing'" time="00.0058931"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a TRUNCATED projectItems read is NEVER 'not on the board'" time="00.0012974"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.an UNMERGED PR associated with the closing commit is read, but does not stamp (#928)" time="00.0005101"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.the item lookup narrows to OUR board - an issue can sit on several" time="00.0001095"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#510 a REFUSED write is NEVER queued - replaying it would loop forever" time="00.0003294"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests..github#2735 a merged total ONE PAST the page size is a complete inventory, not a refusal" time="00.0014743"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#510 every OTHER failure is permanent, and a permanent failure may NOT be queued" time="00.0000358"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a branch tip we cannot READ leaves the conflict standing — fail-closed, not fail-pending" time="00.0007659"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2517: a red GitHub itself REFUSES pays no policy read — the derivation cannot rescue it" time="00.0005616"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a follow-up disposition is a durable issue comment, not a worker mailbox message" time="00.0002118"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#448 the cost model has a ONE-POINT FLOOR - which is what makes the aliased batch a 6x win" time="00.0000696"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1732 heartbeat re-emits marker path scope" time="00.0001910"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#344 a FAILED scan is never written to the cache" time="00.0003477"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 recentCommentBodies refuses a partial 200 instead of returning the visible comments" time="00.0011179"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlBoundaryTests.changing total count across pages is a typed incomplete read" time="00.0002791"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a FULL closing-issue window with no totalCount refuses" time="00.0001169"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1031 a SESSIONLESS caller keeps the old behaviour over a marker that carries one" time="00.0002498"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.Clear is a DIFFERENT MUTATION, and the log shows it" time="00.0001011"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.LeaseFreeOrderingTests.a single-element list elects that element whatever its lease says" time="00.0000641"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.If-None-Match is SENT when given, and a 304 comes back as a SUCCESS with an empty body" time="00.0012565"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 a steal still COLLECTS stale debris, and reports it apart from who it stole from" time="00.0003696"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.putInboxCursor then inboxCursor round-trips the high-water mark" time="00.0004919"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.the comment verbs are the stub's verbs - post, delete, patch, list" time="00.0001905"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests..github#2735 the duplicate inventory MERGES the continuation page" time="00.0016262"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#523 the PATCH cannot precede its own validation - the re-check PRODUCES what the write consumes" time="00.0000852"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.issues fails closed on an unreadable list - never an empty array" time="00.0002518"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#421 a rate-limited item lookup is RateLimited - it is NEVER 'not on board'" time="00.0001000"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.an UNKNOWN single-select option is refused, and costs ZERO GraphQL" time="00.0001492"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 the ordering gate ACCEPTS the errors-first shape, in both spellings" time="00.0002424"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.the claim scan is UNCONDITIONAL - inm=none, because a 304 could hide a live marker" time="00.0001034"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#965 the rule holds for a parent that is NOT [epic]-titled - which is #561 exactly" time="00.0002983"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 the errors check precedes every data extraction in the GitHub layer" time="00.0048551"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#421 ...and it carries EX_RATE (75), the back-off signal - not a generic 1" time="00.0000454"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a FULL field window with no totalCount is refused" time="00.0002053"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1646 the --force STEAL under a foreign id is refused - and it is the sharpest of the four" time="00.0002132"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1103 a validated 'any' round-trips through rewrite to DeclaredChore, NOT DeclaredNone" time="00.0002097"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1896 the CAS re-read refuses incompleteness and withdraws the marker it already posted" time="00.0007561"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.without --sha a conflicted stays terminal — an ASSERTION nobody made demotes nothing" time="00.0003507"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#2217 heartbeat changes the marker body so GitHub advances the server lease clock" time="00.0010551"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 --force on a FREE item is an ordinary win - it reports no theft it did not commit" time="00.0003439"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 a clean 200 still assembles the claim-scan snapshot" time="00.0071989"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.an UNPARSEABLE reset header is no reset - never 1970, which renders as 'retry now'" time="00.0001877"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#448 THREE fields cost exactly ONE GraphQL call" time="00.0002108"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.all children closed is AllResolved" time="00.0003860"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.the chore lock COLLECTS a dead holder's debris — the lock a worker died holding" time="00.0004763"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2365 prClosingRef treats a null repository the same as an unreadable graph" time="00.0003085"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2365 recentCommentBodies refuses null comments" time="00.0001961"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a board map with NO fields is never cached - it is a bootstrap that went wrong" time="00.0003265"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2254 Cache.Reconciling does NOT enrich SweptBody when the Class column already carries a value" time="00.0006480"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.itemStatus is Ok None when the issue is not on this board" time="00.0001134"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a mergeable still COMPUTING past the re-read budget is pending, not unknown — so --wait waits" time="00.0005314"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#928 the union does not disturb #342 - the latest-merged closer still wins" time="00.0005622"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a PR body we could NOT read is an error - never an empty string" time="00.0000999"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1598 a board with NO Phase field reads as None and does not fail the scan" time="00.0003774"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#882 an entry with NO board parses as a legacy entry, rather than refusing the drain" time="00.0004324"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a CORRUPT queue refuses to drain rather than silently dropping a board write" time="00.0006083"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2450 a CLAIMED, OPEN 'Blocked' row is NOT probed by this arm - the widened probe buys no request it need not" time="00.0003687"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.re-claiming an item we ALREADY hold renews it in place and posts no second marker" time="00.0029236"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.the CAS WINS when our marker is the lowest live id" time="00.0003463"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 a COMPLETE field map still bootstraps, and a SHORT window needs no totalCount" time="00.0004988"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.the queue is UNLINKED when it drains, not truncated" time="00.0003512"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#2308 positive count still sees an old marker beyond a 100-comment bound" time="00.0010740"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#1152 a patchScan fold does not restart the TTL clock - only a real read does" time="00.0005089"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a rate limit is NOT RETRIED - one request, and the back-off is the caller's" time="00.0024269"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1794 an OFF-BOARD live claim whose body could not be read reserves an UNKNOWN surface, not nothing" time="00.0016543"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1933 a body-only 'Blocked by:' line with an EMPTY field yields blockers=[] - the field is the only edge" time="00.0004089"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a genuinely non-empty scan IS cached - the guard must not fire on a real answer" time="00.0003765"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.verifyHeld does NOT hold when SOMEBODY ELSE holds it - and that is not a capability" time="00.0001837"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#419 a SESSIONLESS marker with our id is genuinely ours - a heartbeat, not a twin" time="00.0003190"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2517 AC5: a policy we may not READ fails CLOSED — the verdict is what it was before the derivation" time="00.0006836"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2427 --pr can still name the foreign closer explicitly - the override skips the preference, not the provenance check" time="00.0001602"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.the CAS LOSES to a lower id, and WITHDRAWS its own marker" time="00.0003307"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#581 reapable is GREEN only when the lease lapsed AND no PR is open" time="00.0001254"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a RECONCILING read never serves the cache, however fresh it is" time="00.0003171"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 subIssues refuses a partial 200 instead of rolling up a truncated graph" time="00.0001475"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2542 the classification gate is measuring a non-empty corpus" time="00.0045420"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 the ordering gate is measuring a non-empty corpus" time="00.0100938"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.bootstrap resolves a VIEWER-owned board through viewer, with no login in config (#1349)" time="00.0003391"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1575/#2517 a RED that GitHub also refuses reads no policy — it is already not merging" time="00.0011176"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 an UNCLASSIFIED limit fails closed - it advises the conservative union, not the primary" time="00.0003034"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.a GraphQL rate limit still says GraphQL" time="00.0001806"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.messages does NOT deliver a comment whose TEXT merely quotes a msg marker (anchored)" time="00.0001280"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.an issue with a NULL body reads as empty - that is a successful read, not a failure" time="00.0001102"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2166 malformed pagination completeness is never external non-membership" time="00.0038487"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#1732 Repo Scope supplies the path repository while Ref remains the issue repository" time="00.0005534"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.a MERGED response carries NO ETag - page one's validator dies at the merge" time="00.0011149"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 subIssues still reads a clean 200" time="00.0151181"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a NUMBER field is validated by a REAL numeric parse, not a character class" time="00.0001996"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a stopped flush does NOT RE-QUEUE what it was replaying - the queue must not grow" time="00.0007050"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 a PRIMARY limit inside a GraphQL errors array is still the GraphQL budget" time="00.0000811"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a won claim COLLECTS a stale OTHER worker's marker and names the evicted worker" time="00.0003463"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#895 the LOCK ITSELF goes over REST - the winning CAS never spends a GraphQL point" time="00.0002980"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests..github#2525 hasNextPage true with no endCursor REFUSES rather than reporting a short board" time="00.0001629"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1732 a scoped claim records its path repository in the marker" time="00.0004658"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#2419 the handler is a BACKSTOP for the whole shape, not one exception type" time="00.0001024"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a STALE unparseable marker is collected as debris but never notified (no worker to tell)" time="00.0003139"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 a steal does NOT override a TWIN - a broken identity is not a contested item" time="00.0002539"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.rewrite replaces the FIRST declaration and drops the rest" time="00.0000819"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#581 reapable REFUSES a claim whose item PR is open - the work is alive, not abandoned" time="00.0001628"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2204 the board owner's own issues keep the ONE-POINT issue-side resolver read" time="00.0002171"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.GraphQlErrorsFirstTests..github#2534 prClosingRef Ok None means MEASURED none - an empty connection, cleanly read" time="00.0000950"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 the connection windows in the documents agree with the guards" time="00.0024182"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#510 a PERMANENT failure is refused, and nothing is queued" time="00.0003167"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.#979 snapshot carries the advisory OUT, on the receipt next-batch-take read" time="00.0002001"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.the marker's prev= column is decoded, and %% comes out LAST" time="00.0003121"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a SINGLE_SELECT value is routed to its OPTION ID" time="00.0001033"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1055 no PR and NO branch is a genuinely dead claim - LeaseExpiredNoPr" time="00.0001568"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.an UNVERIFIABLE child set is NoVerdict - never green, and never a confident red either" time="00.0002980"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 a steal whose POST fails still announces the eviction - the lock is already gone" time="00.0003986"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2477 contentEditProvenance FAILS CLOSED - a non-object JSON root is an error, never an unhandled crash" time="00.0001608"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.an empty Set is REFUSED - the API would treat it as a no-op and leave the old value" time="00.0001833"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#534 an EXHAUSTED BUDGET is NOT degraded to 'blocker unknown' - it is propagated" time="00.0001042"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2444 gate-inversion: a stamp with NO passed-over closer never gains the note" time="00.0000293"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1896 verifyHeld refuses an incomplete successful scan, never minting a capability" time="00.0001995"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.the adapter FOLLOWS Link rel=next and CONCATENATES the pages" time="00.0026491"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.an EMPTY touch-set is refused - it reserves nothing, and 'none' is a different decision" time="00.0000660"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#2758 create then environment change then heartbeat preserves the dispatch agent contract" time="00.0007313"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.an UNMERGED PR that references the issue does NOT close it" time="00.0001657"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#882 dropPending does not drop the SAME write queued against another board" time="00.0005741"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.addItem sends the ISSUE's node id as contentId, not the board item id" time="00.0008234"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.an exhausted budget STOPS the flush - the rest would fail identically" time="00.0008354"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1055 the branch probe propagates a RATE LIMIT - not swallowed as Unknown" time="00.0002640"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.a green stamp and a red stamp do not look alike" time="00.0008018"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.a 200-with-errors rate limit is RateLimited, not a malformed fact set" time="00.0000961"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.the meter is read from the response, and a HALF meter is no meter" time="00.0000938"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#461 a malformed issue list is an error, not an empty candidate set" time="00.0001200"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BudgetTests.#1666 the three fixture cases the item asked for, as one table" time="00.0002835"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ScanBoardTests.a USER-owned board is scanned through user(login:) and its rows resolve (#1344)" time="00.0009351"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#2131 a GitHub head mismatch is a refused guarded merge, not a green write" time="00.0001486"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#2477 contentEditProvenance FAILS CLOSED - an empty body is an error, never zero edits" time="00.0001090"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1680 AC3 --wait never polls a merged pr — it settles, and costs ONE read" time="00.0003705"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.the runs cache is keyed on the head SHA - one commit's green is never served as another's" time="00.0011478"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 itemStatus still reads a measured absence and a real column" time="00.0002635"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.#2143 ownerless legacy rows only fold default-owner writes when same-name external twins exist" time="00.0007360"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1031 our OWN session verifies its own marker - or no worker could ever renew" time="00.0003002"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ConnectionPaginationTests..github#2535 itemBlockedBy still reads a measured absence and a real edge" time="00.0002078"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#581 an OPEN item PR is proof of life - the lease lapsed, the WORK did not" time="00.0002339"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.an ABSENT mergeable field is still unknown, and still settles — the fail-closed half" time="00.0008717"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.#2561 a full project-item window with our row hidden refuses instead of reporting NoStatus" time="00.0002449"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.HttpTransportTests.#2418 a GraphQL response's rateLimit cost is ACCUMULATED by the real adapter" time="00.0014019"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.dropBoardMap forgets the cached map - the --refresh path" time="00.0003310"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneTests.#2444 passedOverForeignNote is None off a red or unverified verdict" time="00.0001728"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.TransportTests.a FAILED call still counts - you were charged for it" time="00.0001083"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a marker we can neither win with NOR withdraw is reported LOUDLY - it is orphaned" time="00.0003196"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1031 verifyHeld REFUSES the capability over a TWIN's marker - our id, another session" time="00.0002950"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.itemStatus fails CLOSED - a failed read is Error, never the definite Ok None" time="00.0001577"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.--sha ANSWERS the question, so the branch tip is never read — the caller does not pay twice" time="00.0003183"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1680 a merged pr still REPORTS a --sha the caller named that is not what landed" time="00.0003955"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.bootstrapCached serves the day-cache on the second call - zero GraphQL (#418)" time="00.0053096"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.DoneFactsTests.the parent ref is read, cross-repo, so the roll-up can climb" time="00.0003436"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.CacheTests.a usable board map round-trips through the day-cache" time="00.0003935"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.a NUMBER is sent as a JSON NUMBER, not a quoted string" time="00.0001231"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.BoardTests.#2143 an external-owner batch uses the same canonical cached item as a single field write" time="00.0107840"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.a FAILED re-read withdraws the marker and refuses - it never wins by default" time="00.0002313"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.#1794 an ABSENT body field is BodyUnread - NOT an issue that declares nothing" time="00.0001976"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.WriteTests.#1620 a steal that loses the FRESH race backs off cleanly - it does not force its way past" time="00.0003908"/>
+  <testcase classname="FS.GG.Coord.GitHub.Tests" name="FS.GG.Coord.GitHub.Tests.ReadTests.a PR with a NULL body reads as empty - that is a successful read, not a failure" time="00.0004098"/>
+</testsuite>

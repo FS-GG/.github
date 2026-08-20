@@ -23,6 +23,7 @@ let private at (id: int64) (worker: string) (ageSeconds: int) : Reads.Marker =
       Reads.AgeSeconds = ageSeconds
       Reads.PreviousStatus = None
       Reads.PathRepo = None
+      Reads.AgentContract = None
       Reads.Raw = "" }
 
 /// Live: well inside a 120-minute lease.

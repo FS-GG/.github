@@ -19,7 +19,8 @@ module Writes =
             markerId: int64,
             session: SessionId option,
             previousStatus: BoardStatus option,
-            pathRepo: string option
+            pathRepo: string option,
+            agentContract: string option
         ) =
         member _.Ref = ref
         member _.Worker = worker
@@ -27,6 +28,7 @@ module Writes =
         member _.Session = session
         member _.PreviousStatus = previousStatus
         member _.PathRepo = pathRepo
+        member _.AgentContract = agentContract
 
     type ClaimForce =
         | RefuseLiveHolder
@@ -88,6 +90,19 @@ module Writes =
     let private encodeStatus (s: string) =
         s.Replace("%", "%25").Replace(" ", "%20")
 
+    let private currentAgentContract () =
+        match Environment.GetEnvironmentVariable "FSGG_AGENT_CONTRACT_VERSION" with
+        | null | "" -> None
+        | version when version.Length = 64 && version |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f') ->
+            Some version
+        | invalid ->
+            invalidArg
+                "FSGG_AGENT_CONTRACT_VERSION"
+                $"agent contract version must be one lowercase SHA-256 digest, got '%s{invalid}'"
+
+    let private agentContractPart =
+        Option.map (fun version -> $" agentContract=%s{version}") >> Option.defaultValue ""
+
     // THE MARKER. `worker=` MUST stay the first key — the parser anchors on it, and the anchor is what
     // stops a `say` message that merely QUOTES a marker from forging a lock.
     let private markerBody
@@ -96,6 +111,7 @@ module Writes =
         (leaseMinutes: int)
         (previousStatus: BoardStatus option)
         (pathRepo: string option)
+        (agentContract: string option)
         =
         let sessionPart =
             match session with
@@ -111,6 +127,7 @@ module Writes =
             | None -> ""
 
         let pathRepoPart = pathRepo |> Option.map (fun p -> $" pathRepo=%s{p}") |> Option.defaultValue ""
+        let agentContractPart = agentContractPart agentContract
 
         // GitHub only advances an issue comment's `updated_at` when its body actually changes.  Lease age
         // is measured from that server timestamp, so re-sending the byte-identical marker made a green
@@ -118,7 +135,7 @@ module Writes =
         // PATCH a real server-side update; readers deliberately do not need to interpret it.
         let renewalToken = DateTimeOffset.UtcNow.Ticks
 
-        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes} renewed=%d{renewalToken}%s{sessionPart}%s{prevPart}%s{pathRepoPart} -->"
+        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes} renewed=%d{renewalToken}%s{sessionPart}%s{prevPart}%s{pathRepoPart}%s{agentContractPart} -->"
 
     // IS A MARKER BEARING OUR WORKER ID ACTUALLY A TWIN'S? Returns the OTHER session when it is.
     //
@@ -346,7 +363,8 @@ module Writes =
             // never reaches here, so neither pays the read.
             let previousStatus = readPreviousStatus ()
             let pathRepo = readPathRepo ()
-            let body = markerBody worker session leaseMinutes previousStatus pathRepo
+            let agentContract = currentAgentContract ()
+            let body = markerBody worker session leaseMinutes previousStatus pathRepo agentContract
 
             match postComment transport ref body with
             | Error e -> Error e
@@ -387,7 +405,7 @@ module Writes =
                 // including our OWN just-superseded stale marker, so a renew ends with exactly one marker,
                 // not two. `session` is what we posted into the marker (`body`, above), so the `Held`
                 // re-emits it on every heartbeat and twin-detection survives the lease (#1149).
-                let held = Held(ref, worker, myId, session, previousStatus, pathRepo)
+                let held = Held(ref, worker, myId, session, previousStatus, pathRepo, agentContract)
                 let collected = collectStale myId after
 
                 match evicted with
@@ -549,7 +567,7 @@ module Writes =
                 // Collect the stale debris first (as the fresh-CAS win does), then renew — a stale OTHER
                 // marker on this item is still what `heartbeat` would resurrect underneath us.
                 let collected = collectStale m.Id before
-                let renewed = markerBody worker session leaseMinutes m.PreviousStatus m.PathRepo
+                let renewed = markerBody worker session leaseMinutes m.PreviousStatus m.PathRepo m.AgentContract
 
                 // THE RENEWAL IS BEST-EFFORT, and it must be: we ALREADY hold this lock — our marker is the
                 // live CAS winner — so a failed renewal PATCH does not un-hold us, and failing the command
@@ -561,7 +579,7 @@ module Writes =
                 // `session` (our own) is what `renewed` just wrote into the marker (line above), so that is
                 // what the `Held` carries forward — a re-claim UPGRADES a sessionless marker to bear our
                 // session, exactly as it refreshes the lease.
-                Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus, m.PathRepo), collected))
+                Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus, m.PathRepo, m.AgentContract), collected))
 
         // Nobody holds it. Post and race, evicting nothing.
         | None -> admitNew () |> Result.bind (fun () -> postAndResolve [])
@@ -651,7 +669,7 @@ module Writes =
                 // `m.Session` is the session ALREADY in the live marker — carry it, unchanged, so a later
                 // `heartbeat` re-emits it rather than stripping it (#1149). verifyHeld does not write, so the
                 // marker's own value is the truth here.
-                | None -> Ok(Holds(Held(ref, worker, m.Id, m.Session, m.PreviousStatus, m.PathRepo)))
+                | None -> Ok(Holds(Held(ref, worker, m.Id, m.Session, m.PreviousStatus, m.PathRepo, m.AgentContract)))
             | _ -> Ok DoesNotHold
 
     // ---- the touch-set -----------------------------------------------------------------------------
@@ -821,7 +839,7 @@ module Writes =
         // item — the double-hold the CAS exists to prevent (#1149). The capability now HOLDS the session, so
         // the rewrite can re-emit it.
         let body =
-            markerBody held.Worker held.Session leaseMinutes held.PreviousStatus held.PathRepo
+            markerBody held.Worker held.Session leaseMinutes held.PreviousStatus held.PathRepo held.AgentContract
 
         match patchComment transport held.Ref held.MarkerId body with
         | Error e -> Error e

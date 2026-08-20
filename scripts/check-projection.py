@@ -50,9 +50,30 @@ Usage: scripts/check-projection.py [registry/dependencies.yml] [docs/registry/co
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
+from pathlib import Path
 
 import yaml
+
+
+def _agent_contract_version() -> str:
+    """Read the version from its sole producer; never duplicate the canonical-byte algorithm."""
+    producer = Path(__file__).with_name("generate-projections")
+    completed = subprocess.run(
+        [str(producer), "--contract-version"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    version = completed.stdout.strip()
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or "producer returned no diagnostic"
+        raise RuntimeError(f"agent contract version could not be derived: {detail}")
+    if re.fullmatch(r"[0-9a-f]{64}", version) is None:
+        raise RuntimeError(
+            f"agent contract version producer returned {version!r}, not one SHA-256 digest")
+    return version
 
 
 def _table(md: str, header: str) -> tuple[list[str], list[str]]:
@@ -151,6 +172,12 @@ def _token_present(value: str, text: str) -> bool:
 def main() -> int:
     reg_path = sys.argv[1] if len(sys.argv) > 1 else "registry/dependencies.yml"
     proj_path = sys.argv[2] if len(sys.argv) > 2 else "docs/registry/compatibility.md"
+
+    try:
+        agent_contract_version = _agent_contract_version()
+    except RuntimeError as error:
+        print(f"::error::projection-drift: {error}", file=sys.stderr)
+        return 1
 
     doc = yaml.safe_load(open(reg_path, encoding="utf-8"))
     md = open(proj_path, encoding="utf-8").read()
@@ -259,7 +286,8 @@ def main() -> int:
     ncoh = len(doc.get("coherence") or [])
     ncon = len(doc.get("contracts") or [])
     print(f"ok: {proj_path} projects all {ncoh} coherence ids (flags match) and all {ncon} "
-          f"contract version literals from {reg_path}.")
+          f"contract version literals from {reg_path}; "
+          f"agentContractVersion={agent_contract_version}.")
     return 0
 
 

@@ -96,6 +96,11 @@ module Writes =
         /// collision reads need no board query; `None` is a legacy marker and falls back conservatively.
         member PathRepo: string option
 
+        /// The agent-contract digest captured at dispatch. Heartbeats re-emit this exact value rather than
+        /// replacing work attribution with whatever contract happens to be active at renewal time.
+        /// `None` preserves a legacy marker's absence.
+        member AgentContract: string option
+
     /// **MAY THIS CLAIM TAKE AN ITEM ANOTHER WORKER IS HOLDING RIGHT NOW?** (#1620)
     ///
     /// A TYPE RATHER THAN A `bool`, because the two answers are not "more" and "less" of one thing — one of

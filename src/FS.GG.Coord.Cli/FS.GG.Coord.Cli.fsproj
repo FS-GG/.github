@@ -167,7 +167,18 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.63.0 — filing guidance now requires typed validated intake, while the coordination CLI isolates BoardOps registration behind its owned boundary.
+    <PackageReleaseNotes>0.64.0 — dispatched work keeps the canonical agent-contract attribution captured when its claim was created.
+
+WHAT MOVED, AND WHY IT IS A MINOR. The packed coordination shim obtains the sole canonical
+agent-contract digest producer and stamps that value into each new durable claim marker (.github#2758).
+The GitHub claim capability now parses and retains the stamped value, so a re-claim or heartbeat under a
+later process preserves the contract that actually governed dispatch rather than rewriting history with
+the process's current environment. This is receiver-observable coordination behavior carried by the Kit
+and Coord.Cli coherent set. The marker field is additive, claims predating it remain accepted, and no
+command, flag, result member, destination, or package identity is removed, so the stable 0.x line advances
+from the independently published 0.63.0 frontier to MINOR 0.64.0 rather than a major/removal line.
+
+0.63.0 — filing guidance now requires typed validated intake, while the coordination CLI isolates BoardOps registration behind its owned boundary.
 
 WHAT MOVED, AND WHY IT IS A MINOR. The packed Kit and Drivers change the executable filing recipes
 consumers receive: `p-add`, `padd-item`, `cross-repo-coordination`, and `pnext-item` now construct the

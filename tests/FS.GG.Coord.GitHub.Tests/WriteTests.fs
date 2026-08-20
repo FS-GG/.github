@@ -193,6 +193,122 @@ let ``#1732 a scoped claim records its path repository in the marker`` () =
     | other -> failwith $"the scoped claim must win and carry its path repository — got %A{other}"
 
 [<Fact>]
+let ``#2758 a claim marker records the dispatched agent contract version`` () =
+    let variable = "FSGG_AGENT_CONTRACT_VERSION"
+    let before = System.Environment.GetEnvironmentVariable variable
+    let version = System.String('a', 64)
+
+    try
+        System.Environment.SetEnvironmentVariable(variable, version)
+
+        let responses =
+            System.Collections.Generic.Queue<IoResult<Response>>(
+                [ ok "[]"
+                  ok """{"id":901}"""
+                  ok (comments [ marker 901 "vole-418" $" agentContract=%s{version}" ]) ]
+            )
+
+        let bodies = System.Collections.Generic.List<string>()
+
+        let transport =
+            Fake.Recorder(fun req ->
+                match req.Body with
+                | Json body -> bodies.Add body
+                | _ -> ()
+
+                responses.Dequeue())
+
+        match
+            claimScoped
+                transport
+                120
+                RefuseLiveHolder
+                ignore
+                me
+                itsMe
+                None
+                aRef
+                (fun () -> None)
+                (fun () -> Some "FS.GG.Rendering")
+                (fun () -> Ok())
+        with
+        | Ok(Won _) -> Assert.Contains($"agentContract=%s{version}", Seq.last bodies)
+        | other -> failwith $"the attributed claim must win — got %A{other}"
+    finally
+        System.Environment.SetEnvironmentVariable(variable, before)
+
+[<Fact>]
+let ``#2758 create then environment change then heartbeat preserves the dispatch agent contract`` () =
+    let variable = "FSGG_AGENT_CONTRACT_VERSION"
+    let before = System.Environment.GetEnvironmentVariable variable
+    let dispatched = System.String('a', 64)
+    let renewalEnvironment = System.String('b', 64)
+    let mutable scans = 0
+    let mutable posted = ""
+    let mutable patched = ""
+
+    let bodyOf (request: Request) =
+        match request.Body with
+        | Json payload ->
+            use doc = System.Text.Json.JsonDocument.Parse payload
+            doc.RootElement.GetProperty("body").GetString()
+        | _ -> failwith "claim and heartbeat must send a JSON comment body"
+
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method, request.Path with
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                scans <- scans + 1
+
+                if scans = 1 then
+                    ok "[]"
+                else
+                    let comment =
+                        System.Text.Json.JsonSerializer.Serialize
+                            [ {| id = 901
+                                 body = posted
+                                 updated_at = System.DateTimeOffset.UtcNow.ToString("o") |} ]
+
+                    ok comment
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                posted <- bodyOf request
+                ok """{"id":901}"""
+            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/comments/901" ->
+                patched <- bodyOf request
+                ok ""
+            | method', path -> failwith $"unexpected #2758 fixture request: %s{method'} %s{path}")
+
+    try
+        System.Environment.SetEnvironmentVariable(variable, dispatched)
+
+        match
+            claimScoped
+                transport
+                120
+                RefuseLiveHolder
+                ignore
+                me
+                itsMe
+                None
+                aRef
+                (fun () -> None)
+                (fun () -> Some "FS.GG.Rendering")
+                (fun () -> Ok())
+        with
+        | Ok(Won(held, _)) ->
+            System.Environment.SetEnvironmentVariable(variable, renewalEnvironment)
+
+            match heartbeat transport 120 held with
+            | Ok beaten ->
+                Assert.Equal(Some dispatched, beaten.AgentContract)
+                Assert.Contains($"agentContract=%s{dispatched}", patched)
+                Assert.DoesNotContain($"agentContract=%s{renewalEnvironment}", patched)
+            | Error e -> failwith $"the attributed heartbeat should have landed — got %A{e}"
+        | other -> failwith $"the attributed claim must win before its heartbeat — got %A{other}"
+    finally
+        System.Environment.SetEnvironmentVariable(variable, before)
+
+[<Fact>]
 let ``a rejected new force admission evicts nothing and posts no marker`` () =
     let mutable admissions = 0
     let transport = scripted [ ok (comments [ marker 901 "kite-461" "" ]) ]
@@ -1645,6 +1761,7 @@ let private staleMarker =
       Reads.AgeSeconds = 10800 // 3h — well past a 120-minute lease
       Reads.PreviousStatus = None
       Reads.PathRepo = None
+      Reads.AgentContract = None
       Reads.Raw = "<!-- fsgg:claim worker=ghost-222 lease=120 -->" }
 
 [<Fact>]

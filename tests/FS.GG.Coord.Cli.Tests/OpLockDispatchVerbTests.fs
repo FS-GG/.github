@@ -503,6 +503,7 @@ let ``op-lock release drops OUR grant, through verifyHeld rather than lowest id`
             AgeSeconds = 3600
             PreviousStatus = None
             PathRepo = None
+            AgentContract = None
             Raw = "" }
           { Id = 901L
             Worker = me
@@ -510,6 +511,7 @@ let ``op-lock release drops OUR grant, through verifyHeld rather than lowest id`
             AgeSeconds = 1
             PreviousStatus = None
             PathRepo = None
+            AgentContract = None
             Raw = "" } ]
 
     Assert.Equal(Some 700L, Reads.lowestId scanned |> Option.map (fun m -> m.Id))

@@ -25,6 +25,7 @@ module AuthorizedMarkerTests =
           AgeSeconds = ageSeconds
           PreviousStatus = None
           PathRepo = None
+          AgentContract = None
           Raw = $"<!-- fsgg:claim worker=%s{worker} lease=120 -->" }
 
     /// A lease of 120 minutes throughout — matches the production default and #2378's own incident
