@@ -1,0 +1,136 @@
+schemaVersion: 1
+work:
+  id: 2726-boardops-handler-registration
+  title: "Extract FS.GG.Coord.Cli.BoardOps and establish handler registration"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2726-boardops-handler-registration/spec.md
+  sourceClarifications: work/2726-boardops-handler-registration/clarifications.md
+  sourceChecklist: work/2726-boardops-handler-registration/checklist.md
+  sourcePlan: work/2726-boardops-handler-registration/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2726-boardops-handler-registration/spec.md
+    digest: ee53d1f2c33c48c72755bdebbb3bedd2ad774b656bf9cb71efaedf7e44657b3a
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2726-boardops-handler-registration/clarifications.md
+    digest: 31ece806d391c02ee8a23186d4dbdd7abae6a74774755b7fdeaa26e597e95c4b
+    schemaVersion: 1
+  - label: checklist
+    path: work/2726-boardops-handler-registration/checklist.md
+    digest: 9ccd274e213c03111ca11bebe7c544e210ae563492ae08a0ac8c0a1f2cb811dc
+    schemaVersion: 1
+  - label: plan
+    path: work/2726-boardops-handler-registration/plan.md
+    digest: 25f548584c5c27c3f175d4cedc86df91e8a6b078f35818097e6cfc4fec0ff425
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001, PD-002, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Update contract surface PC-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Update contract surface PC-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-003, PD-003]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-002, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Record verification evidence VO-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-003, PD-003, VO-003]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Record verification evidence VO-004
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-004]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV010]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2726-boardops-handler-registration."

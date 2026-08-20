@@ -1256,6 +1256,9 @@ module Client =
     /// from a later board result.
     val intakeCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
+    /// REST issue-list handler registered by the BoardOps command family.
+    val issues: ctx: Kernel.Context -> opts: Options.Options -> int
+
     /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
     /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
     val deliveryRouteCmd: ctx: Kernel.Context -> opts: Options.Options -> int

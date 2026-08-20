@@ -24,6 +24,7 @@ module Client =
     open FS.GG.Coord.GitHub.Transport
     open FS.GG.Coord.Cli.Options
     open FS.GG.Coord.Cli.Render
+    open FS.GG.Coord.Cli.BoardOps
     // .github#2725 — the shared base now lives in `FS.GG.Coord.Cli.Kernel`, and this `open` is what keeps
     // its extraction a MOVE rather than a rewrite: `eprint`, `fail`, the exit literals, `Context`,
     // `worker`, `parseRef` and the checkout-scope readers keep the unqualified spelling they had inside
@@ -10650,7 +10651,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// while `--repo game` worked everywhere else (#446). A 404 there is worse than a typo: `issues` is
     /// advertised as THE way to read issues without spending GraphQL, so the natural recovery is `gh issue
     /// list` — the exact budget the command exists to save. Emits the raw JSON array; the caller jq's it.
-    let private issues (ctx: Context) (opts: Options) : int =
+    let issues (ctx: Context) (opts: Options) : int =
         match opts.Args with
         | [] ->
             eprint "fsgg-coord-engine: issues: a repo is required (a registry short-id, owner/repo, or a repo name)."
@@ -10968,6 +10969,31 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             eprint "fsgg-coord-engine: graphql: expected project-visibility OWNER TITLE | project-id OWNER NUMBER | repository-policy OWNER NAME | meter | archive-scan PROJECT-ID | archive-items PROJECT-ID ID... | roster-board OWNER TITLE"
             ExitError
 
+    /// The first extracted command-family registration. The family owns the command inventory and
+    /// the exactly-once validation; this composition edge supplies the current implementations until
+    /// their mechanical move into the family assembly is completed.
+    let private boardOpsHandlers () =
+        HandlerRegistration.handlers
+            { Add = addCmd
+              Flush = flushCmd
+              SetField = setField
+              Child = child
+              BodyEdits = bodyEditsCmd
+              FieldId = fieldId
+              OptionId = optionId
+              ItemId = itemIdCmd
+              Board = fun ctx _ -> boardCmd ctx
+              Bootstrap = bootstrapCmd
+              Issues = issues
+              Intake = intakeCmd
+              Say = say
+              Inbox = inbox
+              RoomOpen = roomOpen }
+        |> HandlerRegistration.validate HandlerRegistration.commands
+        |> function
+            | Ok table -> table
+            | Error errors -> failwith ("invalid BoardOps handler registration: " + String.concat "; " errors)
+
     let run (opts: Options) : int =
         // #548: the bare-`<n>` default is resolved from what the CALLER actually passed, so it must be read
         // BEFORE the #480 rewrite below replaces `Repo` with the git-remote scope. That rewrite goes through
@@ -11022,46 +11048,34 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 { ctx with
                     DefaultRepo = defaultRepoScope ctx.Owner callerOpts }
 
-            match opts.Command with
-            | Next -> next ctx opts
-            | BatchCmd -> batch ctx opts
-            | DriverCmd -> driver ctx opts
-            | DeliveryCmd -> delivery ctx opts
-            | ReviewCmd -> review ctx opts
-            | Ready -> ready ctx opts
-            | Reconcile -> reconcile ctx opts
-            | Who -> who ctx opts
-            | Reap -> reap ctx opts
-            | Budget -> budget ctx opts
-            | Claim -> claim ctx opts
-            | Adopt -> adopt ctx opts
-            | Landable -> landable ctx opts
-            | Take -> take ctx opts
-            | Release -> release ctx opts
-            | Heartbeat -> heartbeat ctx opts
-            | SetField -> setField ctx opts
-            | Child -> child ctx opts
-            | Widen -> widen ctx opts
-            | SetPaths -> setPaths ctx opts
-            | Overlap -> overlapCmd ctx opts
-            | Say -> say ctx opts
-            | Inbox -> inbox ctx opts
-            | RoomOpen -> roomOpen ctx opts
-            | OpLockAcquire -> opLockAcquire ctx opts
-            | OpLockRelease -> opLockRelease ctx opts
-            | DoneCmd -> doneCmd ctx opts
-            | VerifyPaths -> verifyPaths ctx opts
-            | Bootstrap -> bootstrapCmd ctx opts
-            | BoardCmd -> boardCmd ctx
-            | FieldId -> fieldId ctx opts
-            | OptionId -> optionId ctx opts
-            | ItemId -> itemIdCmd ctx opts
-            | BodyEdits -> bodyEditsCmd ctx opts
-            | GraphQlOps -> graphQlOps ctx opts
-            | Add -> addCmd ctx opts
-            | Flush -> flushCmd ctx opts
-            | LintCmd -> lint ctx opts
-            | Issues -> issues ctx opts
-            | IntakeCmd -> intakeCmd ctx opts
-            | RouteCmd -> deliveryRouteCmd ctx opts
-            | other -> failwith $"Client.run received a non-IO command: %A{other}"
+            match Map.tryFind opts.Command (boardOpsHandlers ()) with
+            | Some handler -> handler ctx opts
+            | None ->
+                match opts.Command with
+                | Next -> next ctx opts
+                | BatchCmd -> batch ctx opts
+                | DriverCmd -> driver ctx opts
+                | DeliveryCmd -> delivery ctx opts
+                | ReviewCmd -> review ctx opts
+                | Ready -> ready ctx opts
+                | Reconcile -> reconcile ctx opts
+                | Who -> who ctx opts
+                | Reap -> reap ctx opts
+                | Budget -> budget ctx opts
+                | Claim -> claim ctx opts
+                | Adopt -> adopt ctx opts
+                | Landable -> landable ctx opts
+                | Take -> take ctx opts
+                | Release -> release ctx opts
+                | Heartbeat -> heartbeat ctx opts
+                | Widen -> widen ctx opts
+                | SetPaths -> setPaths ctx opts
+                | Overlap -> overlapCmd ctx opts
+                | OpLockAcquire -> opLockAcquire ctx opts
+                | OpLockRelease -> opLockRelease ctx opts
+                | DoneCmd -> doneCmd ctx opts
+                | VerifyPaths -> verifyPaths ctx opts
+                | GraphQlOps -> graphQlOps ctx opts
+                | LintCmd -> lint ctx opts
+                | RouteCmd -> deliveryRouteCmd ctx opts
+                | other -> failwith $"Client.run received a non-IO command: %A{other}"
