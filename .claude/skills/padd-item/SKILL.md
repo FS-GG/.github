@@ -57,24 +57,50 @@ implementation onto this repo's local scheduling lane.
 Decide autonomously when evidence selects one scope. Ask one concise question before mutation only when
 materially different local scopes remain plausible after inspection.
 
-## 4. Construct, file, and project
+## 4. Construct, validate, file, and project
 
-Create a concise outcome title and an issue body containing the requested/observed behavior, testable
-acceptance criteria, evidence links, real `Blocked by:` edges, and the narrowest valid `Paths:` exact
-paths or directory prefixes. Never guess paths or use unsupported glob syntax. Use `Paths: none` only
-when the item deliberately changes no repository file.
+Create a concise outcome title and put the structured fields in a draft such as:
 
-Create the issue in the current repository, or retain the deduplicated ref. Then run:
-
-```bash
-scripts/fsgg-coord add <this-repo>#<number>
-scripts/fsgg-coord set-field <this-repo>#<number> Status <status>
+```json
+{
+  "schema": "fsgg.coord.intake/v1",
+  "id": "<stable-local-id>",
+  "owner": "<configured-board-owner>",
+  "repository": "<this-repo>",
+  "title": "<outcome title>",
+  "observed": "<requested or observed behavior>",
+  "rootCause": "<established cause, or what remains unestablished>",
+  "acceptance": "<testable criteria>",
+  "verification": "<commands or evidence links>",
+  "paths": ["<exact path or directory prefix>"],
+  "class": "<defect|hardening|capability|decision>",
+  "severity": "<low|medium|high|critical>",
+  "status": "Backlog",
+  "backlogReason": "not-yet-actionable",
+  "disposition": "create"
+}
 ```
 
-`add` is idempotent and targets the configured board. Since `#1823` it **defaults `Status` to `Backlog`**
-when the row has no column yet — a row with no `Status` is invisible to every scheduler — and it never
-overwrites a column somebody set. Run the `set-field` above anyway when the evidence supports a different
-column; it is the explicit decision, and it wins.
+Put a real sequencing dependency in the optional `blockedBy` property; omit it otherwise. Never guess
+paths or use unsupported glob syntax. The intake contract requires at least one existing path; do not
+substitute an empty array or `none`. A hand-authored `Paths:` or `Class:` line in a created body is a
+defect, not a style choice: those projections belong to the validated draft.
+
+Validate the exact draft before creation, then apply that same file:
+
+```bash
+scripts/fsgg-coord intake validate intake.json --json
+intake_result="$(scripts/fsgg-coord intake apply intake.json --json)"
+issue_ref="$(jq -r .issue <<<"$intake_result")"
+scripts/fsgg-coord add "$issue_ref"
+```
+
+`intake apply` creates or reuses the issue according to `disposition`, composes the body from validated
+fields, and targets the configured board. Use `disposition: reuse` for a deduplicated existing issue and
+retain the canonical ref returned by the transaction. Direct issue-creation commands are not the ordinary
+filing path.
+The following idempotent `add` asserts that the returned ref is on the configured board; it is not a
+second filing path and never substitutes for validate/apply.
 
 Set only evidenced fields:
 

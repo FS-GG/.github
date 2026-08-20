@@ -38,33 +38,65 @@ Treat the invocation text as the source request. Infer the owning repository fro
 Decide autonomously when evidence selects one owner and scope. Ask one concise question before any
 mutation only when materially different owners or scopes remain plausible after inspection.
 
-## 3. Construct the issue
+## 3. Construct the intake draft
 
-Create a concise outcome-oriented title and a body containing:
+Create a concise outcome-oriented title and put every structured field in an intake draft, not in a
+hand-authored issue body. Start from this complete shape and replace every placeholder with evidence:
+
+```json
+{
+  "schema": "fsgg.coord.intake/v1",
+  "id": "<stable-local-id>",
+  "owner": "FS-GG",
+  "repository": "<owning-repo>",
+  "title": "<outcome-oriented title>",
+  "observed": "<requested or observed behavior and why it matters>",
+  "rootCause": "<established cause, or what remains unestablished>",
+  "acceptance": "<testable acceptance criteria>",
+  "verification": "<commands, evidence links, or intended proof>",
+  "paths": ["<exact path or directory prefix>"],
+  "class": "<defect|hardening|capability|decision>",
+  "severity": "<low|medium|high|critical>",
+  "status": "Backlog",
+  "backlogReason": "not-yet-actionable",
+  "disposition": "create"
+}
+```
+
+The draft must carry:
 
 - the observed or requested behavior and why it matters;
 - testable acceptance criteria;
-- `Paths:` with the narrowest evidence-backed exact paths or directory prefixes;
-- `Blocked by:` only for a real sequencing dependency;
+- `paths` with the narrowest evidence-backed exact paths or directory prefixes;
+- `blockedBy` only for a real sequencing dependency (omit the property otherwise);
 - relevant evidence links or identifiers.
 
-Never guess a path or use unsupported glob syntax. Use `Paths: none` only when the item deliberately
-changes no repository file. If a valid touch-set cannot be established, investigate further or ask
-before filing.
+Never guess a path or use unsupported glob syntax. The intake contract requires at least one existing
+path; do not substitute an empty array or `none`. If a valid touch-set cannot be established, investigate
+further or surface the missing judgement before filing.
 
-## 4. File and project
+`paths`, `class`, `severity`, `blockedBy`, and the projected body lines they produce belong to the
+draft. Hand-authoring `Paths:` or `Class:` in a created issue body is a defect, not a style choice.
 
-Create the issue in its owning repository, or retain the deduplicated issue ref. Then:
+## 4. Validate, file, and project
+
+For a new issue, validate the exact draft before any creation, then apply that same file:
 
 ```bash
-scripts/fsgg-coord add FS-GG/<repo>#<number>
-scripts/fsgg-coord set-field FS-GG/<repo>#<number> Status <status>
+scripts/fsgg-coord intake validate intake.json --json
+intake_result="$(scripts/fsgg-coord intake apply intake.json --json)"
+issue_ref="$(jq -r .issue <<<"$intake_result")"
+scripts/fsgg-coord add "$issue_ref"
 ```
 
-`add` is idempotent, and since `#1823` it **defaults `Status` to `Backlog`** when the row has no column
-yet — a row with no `Status` is invisible to every scheduler, so the default is what stops a filed item
-being unschedulable. It never overwrites a column somebody set. Run the `set-field` above anyway when
-the evidence supports a different column; it is the explicit decision, and it wins.
+`intake apply` creates or reuses the issue according to `disposition`, composes the body from the
+validated fields, and projects it onto the board. Retain the returned canonical issue ref. A direct
+`gh issue create` or `gh api ... POST .../issues` is not the ordinary filing path.
+The following idempotent `add` is a live projection assertion for the returned ref; it is not a second
+filing path and never replaces the transaction.
+
+For a deduplicated existing issue, set `disposition` to `reuse` and use the same validate/apply pair;
+the transaction refuses a draft whose claimed disposition does not match live dedupe evidence.
 
 Set only fields supported by evidence:
 
