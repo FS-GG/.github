@@ -7,6 +7,7 @@ open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
+open FS.GG.Coord.Cli.BoardOps
 
 /// THE `add` STATUS DEFAULT, AND THE IDEMPOTENCE IT MUST NOT BREAK (.github#1823).
 ///
@@ -270,7 +271,7 @@ module AddStatusDefaultTests =
 
     /// Drive ONE CLI verb as a real command line, isolated on its own cache and pinned identity.
     ///
-    /// `runAddWithStderr` was this function with `Client.addCmd` welded in. .github#2698 needs the same
+    /// `runAddWithStderr` was this function with the add handler welded in. .github#2698 needs the same
     /// scaffolding for `set-field` and `release`, because the refusal it adds is ONE shared gate reached
     /// through four doors, and a gate proven at one door is a gate a scheduled job walks around — which is
     /// exactly what the host measured on 2026-08-16, seven times, at doors this module did not drive.
@@ -318,7 +319,7 @@ module AddStatusDefaultTests =
             with _ ->
                 ()
 
-    let private runAddWithStderr (transport: Fake.Recorder) (args: string list) = runVerbWithStderr Client.addCmd transport args
+    let private runAddWithStderr (transport: Fake.Recorder) (args: string list) = runVerbWithStderr Handlers.addCmd transport args
 
     let private runAdd transport args =
         let code, stdout, _ = runAddWithStderr transport args
@@ -674,7 +675,7 @@ module AddStatusDefaultTests =
     let private worldWithUnreadableLedger (column: Column) =
         worldWithLedgerFailure column (Errors.Http(502, "the receipt ledger could not be read"))
 
-    let private runSetField transport args = runVerbWithStderr Client.setField transport args
+    let private runSetField transport args = runVerbWithStderr Handlers.setField transport args
     let private runRelease transport args = runVerbWithStderr Client.release transport args
 
     let private addReady (comments: string list) =

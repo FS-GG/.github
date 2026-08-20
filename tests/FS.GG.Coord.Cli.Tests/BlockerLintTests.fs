@@ -71,7 +71,7 @@ module BlockerLintTests =
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
         Assert.Equal(12, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
-        Assert.Equal(4, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
+        Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(1, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("LifecycleProjectionLag destination -> Some(\"Status\", statusWireName destination)", chore)
