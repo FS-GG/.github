@@ -287,7 +287,8 @@ module DriverEventsCliTests =
     [<Fact>]
     let ``candidateToItemFacts: review evidence keyed by the candidate's ItemPr is attached`` () =
         let review: Driver.ReviewChain =
-            { MarkerValid = true; CriticIdentity = Some "critic-1"; HeadSha = Some "head-1"
+            { MarkerValid = true; Subject = None; ClaimGeneration = None; BaseSha = None
+              CriticIdentity = Some "critic-1"; HeadSha = Some "head-1"
               Rounds = []; RepairPhase = false; ChecksGreen = false; HostAccepted = false
               RuntimeRouteEvidence = None; DiffAuditRequired = false; DiffAuditHead = None }
 

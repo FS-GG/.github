@@ -28,6 +28,9 @@ module DriverEventsTests =
 
     let validReview: Driver.ReviewChain =
         { MarkerValid = true
+          Subject = None
+          ClaimGeneration = None
+          BaseSha = None
           CriticIdentity = Some "critic-1"
           HeadSha = Some "head-1"
           Rounds = []

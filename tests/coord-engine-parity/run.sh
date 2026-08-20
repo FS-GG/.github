@@ -4309,14 +4309,14 @@ rm -f "$SUP_OUT"
 if [ -z "$SUP_PORT" ]; then bad "landable-super fixture bound a port"; else
   sup()    { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SUP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
                FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
-               FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" landable "$1" --repo FS.GG.SDD 2>/dev/null || true; }
+               FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" landable "$1" --repo FS.GG.SDD --require registry-coherence 2>/dev/null || true; }
   # >/dev/null 2>&1, BOTH: the command prints its VERDICT on stdout and the DECISION in the exit code —
   # leaking stdout here would make this helper return "green0" and every leg compare against a word it
   # never expected. `|| rc=$?` is not optional under `set -e`: the whole point of legs below is a NON-zero
   # exit, and letting it escape would kill the run on a PASSING assertion.
   sup_rc() { local rc=0; FSGG_GITHUB_API_BASE="http://127.0.0.1:$SUP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
                FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
-               FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" landable "$1" --repo FS.GG.SDD >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+               FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" landable "$1" --repo FS.GG.SDD --require registry-coherence >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
 
   # 1. THE BUG, IN THE SHAPE .github#718 CARRIED. A cancelled run REPLACED by a later run of its own
   #    concurrency group is superseded — evidence of nothing — and so are ITS check-runs; both drop.
@@ -4414,7 +4414,7 @@ if [ -z "$WAIT_PORT" ]; then bad "landable-wait fixture bound a port"; else
   lndw() { local rc=0; FSGG_GITHUB_API_BASE="http://127.0.0.1:$WAIT_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
              FSGG_COORD_CACHE="$(mktemp -d)" \
-             "$ENGINE" landable "$1" --repo FS.GG.SDD --wait --tries "${2:-3}" --interval 0 >/dev/null 2>&1 \
+             "$ENGINE" landable "$1" --repo FS.GG.SDD --require registry-coherence --wait --tries "${2:-3}" --interval 0 >/dev/null 2>&1 \
              || rc=$?; printf '%s' "$rc"; }
 
   # 1. --wait AGREES with the single-shot verdict on a SETTLED PR. 801 is the superseded-but-green PR: its
@@ -4494,19 +4494,19 @@ if [ -z "$REQ_PORT" ]; then bad "landable-require fixture bound a port"; else
 
   # 2. THE LOAD-BEARING LEG. 902 is green on every check it HAS, and the subject is absent. Without
   #    --require that is a GREEN — the merge the bot's own gate exists to refuse (#642/#425).
-  r="$(lndr 902)"
+  r="$(lndr 902 --require registry-coherence)"
   [ "$r" = "green" ] \
     && ok "#737: WITHOUT --require, a PR whose subject never reported is GREEN — the #606 hole (case 32)" \
     || bad "#737: 902 without --require -> green" "got: $r"
 
   # ...and WITH it, the same world is pending. The flag is the whole difference.
-  r="$(lndr 902 --require registry-coherence)"
+  r="$(lndr 902 --require registry-coherence --require subject-absent)"
   [ "$r" = "pending" ] \
     && ok "#737: WITH --require, the SAME world is PENDING — an absent check is never a green (case 32)" \
     || bad "#737: 902 with --require -> pending" "got: $r"
 
   # ...and it is exit 7 (pending), not 0. The exit code is what the bot's `|| exit` reads.
-  r="$(lndr_rc 902 --require registry-coherence)"
+  r="$(lndr_rc 902 --require registry-coherence --require subject-absent)"
   [ "$r" = "7" ] \
     && ok "#737: an unmet --require exits 7 (pending), never 0 (case 32)" \
     || bad "#737: 902 --require -> exit 7" "got: $r"
@@ -4529,19 +4529,19 @@ if [ -z "$REQ_PORT" ]; then bad "landable-require fixture bound a port"; else
   # 5. THE OTHER LOAD-BEARING LEG. 905's PR still names shaOld, whose checks are green. Without --sha the
   #    command takes the PR's head on trust and scores the OLD commit: GREEN. That is the read the bot's
   #    gate avoids by pinning `git rev-parse HEAD`, and it is why --sha exists.
-  r="$(lndr 905)"
+  r="$(lndr 905 --require registry-coherence)"
   [ "$r" = "green" ] \
     && ok "#737: WITHOUT --sha, a lagging PR object scores the PREVIOUS commit's green checks (case 32)" \
     || bad "#737: 905 without --sha -> green" "got: $r"
 
   # ...and naming the commit we MEAN refuses it until GitHub catches up.
-  r="$(lndr 905 --sha shaNew)"
+  r="$(lndr 905 --require registry-coherence --sha shaNew)"
   [ "$r" = "pending" ] \
     && ok "#737: WITH --sha, a PR that still names another head is PENDING, never green (case 32)" \
     || bad "#737: 905 with --sha -> pending" "got: $r"
 
   # ...and --sha naming the head the PR ACTUALLY has is a no-op: the assertion is met, so it scores as before.
-  r="$(lndr 905 --sha shaOld)"
+  r="$(lndr 905 --require registry-coherence --sha shaOld)"
   [ "$r" = "green" ] \
     && ok "#737: --sha that AGREES with the PR's head changes nothing (case 32)" \
     || bad "#737: 905 --sha shaOld -> green" "got: $r"
@@ -4589,11 +4589,11 @@ if [ -z "$PRO_PORT" ]; then bad "landable-protection fixture bound a port"; else
   lndp() { local pr="$1"; shift; FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t \
              FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
              FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
-             "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" 2>/dev/null || true; }
+             "$ENGINE" landable "$pr" --repo FS.GG.SDD --require registry-coherence "$@" 2>/dev/null || true; }
   lndp_rc() { local pr="$1" rc=0; shift; FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t \
                 FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
                 FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
-                "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+                "$ENGINE" landable "$pr" --repo FS.GG.SDD --require registry-coherence "$@" >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
 
   # 1. THE DEFECT. Everything that reported is green; GitHub says it will refuse the merge anyway,
   #    because a context its base branch requires has no check run at all.

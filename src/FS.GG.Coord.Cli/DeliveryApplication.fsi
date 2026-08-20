@@ -18,6 +18,11 @@ module DeliveryApplication =
         /// rather than retrying blindly.
         | MergeRefused of reason: string
 
+    type LandingReceipt<'result> =
+        { HeadSha: string
+          BaseSha: string
+          Result: 'result }
+
     /// Render one lifecycle verdict from facts observed by either the snapshot or live adapter.
     val render: Options.Options -> FS.GG.Coord.Delivery.Snapshot -> int
 
@@ -68,8 +73,10 @@ module DeliveryApplication =
         actionKey: string ->
         facts: FS.GG.Coord.Delivery.Snapshot ->
         currentClaimGeneration: string option ->
+        currentHead: string option ->
+        currentBase: string option ->
         merge: (unit -> 'result) ->
-            Result<'result, string>
+            Result<LandingReceipt<'result>, string>
 
     /// Run `delivery --snapshot FILE` — the PURE, IO-free form, which reads a supplied lifecycle
     /// snapshot and prints one freshness-bound action.

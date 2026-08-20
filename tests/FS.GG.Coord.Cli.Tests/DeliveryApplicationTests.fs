@@ -28,7 +28,7 @@ module DeliveryApplicationTests =
           ClosingLinkageCanonical = true
           PathsVerified = true
           InReview = true
-          Review = Some { MarkerValid = true; CriticIdentity = Some "critic"; HeadSha = Some(String.replicate 40 "a"); Rounds = [ 1 ]; RepairPhase = false; ChecksGreen = true; HostAccepted = true; RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure adapter test"); DiffAuditRequired = false; DiffAuditHead = None }
+          Review = Some { MarkerValid = true; Subject = Some ".github#2131/pr/2174"; ClaimGeneration = Some claimGeneration; BaseSha = Some(String.replicate 40 "b"); CriticIdentity = Some "critic"; HeadSha = Some(String.replicate 40 "a"); Rounds = [ 1 ]; RepairPhase = false; ChecksGreen = true; HostAccepted = true; RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure adapter test"); DiffAuditRequired = false; DiffAuditHead = None }
           ReviewProblem = None
           Landable = true
           Merged = false
@@ -566,11 +566,41 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let mutable mergeCalls = 0
         let attemptMerge () = mergeCalls <- mergeCalls + 1; "merge endpoint was called"
 
-        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-b") attemptMerge with
-        | Ok result -> failwith result
+        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-b") (Some facts.Freshness.HeadSha) (Some(String.replicate 40 "b")) attemptMerge with
+        | Ok result -> failwith result.Result
         | Error reason -> Assert.Contains("generation changed", reason)
 
         Assert.Equal(0, mergeCalls)
+
+    [<Fact>]
+    let ``#2360 guarded landing refuses a moved effective base and names both revisions`` () =
+        let facts = guardedLandingFacts "claim-generation-a"
+        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+        let mutable mergeCalls = 0
+        let acceptedBase = String.replicate 40 "b"
+        let movedBase = String.replicate 40 "c"
+        let attemptMerge () = mergeCalls <- mergeCalls + 1
+
+        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-a") (Some facts.Freshness.HeadSha) (Some movedBase) attemptMerge with
+        | Ok _ -> failwith "a moved base authorized a merge"
+        | Error reason ->
+            Assert.Contains(acceptedBase, reason)
+            Assert.Contains(movedBase, reason)
+
+        Assert.Equal(0, mergeCalls)
+
+    [<Fact>]
+    let ``#2360 guarded landing emits the exact head and base receipt used by the conditional write`` () =
+        let facts = guardedLandingFacts "claim-generation-a"
+        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+        let acceptedBase = String.replicate 40 "b"
+
+        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-a") (Some facts.Freshness.HeadSha) (Some acceptedBase) (fun () -> "merged") with
+        | Error reason -> failwith reason
+        | Ok receipt ->
+            Assert.Equal(facts.Freshness.HeadSha, receipt.HeadSha)
+            Assert.Equal(acceptedBase, receipt.BaseSha)
+            Assert.Equal("merged", receipt.Result)
 
     // -- repair round 1 (critic `crake-0420`, PR #2301): the `declaredPaths` JSON wire shapes were only
     // proven by the critic executing the built CLI artifact by hand — this closes that with a committed

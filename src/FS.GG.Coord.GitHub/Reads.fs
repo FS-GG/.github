@@ -1550,6 +1550,66 @@ module Reads =
                     | _ -> Error(Malformed(subject, "the PR response carried no base.sha"))
                 | _ -> Error(Malformed(subject, "the PR response carried no `base`"))
 
+    // The PR object's `base.sha` is the base snapshot GitHub attached when it last recomputed the PR.
+    // It is not the current authority for "what would this PR merge onto now": another PR can advance
+    // the named base branch while this object's snapshot remains unchanged. Read `base.ref` from the PR,
+    // then resolve that branch's live git ref in a second unconditional request.
+    let prBaseTipSha (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr} effective base"
+
+        let prRequest =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        let baseRef =
+            match transport.Send prRequest with
+            | Error e -> Error e
+            | Ok response ->
+                match parse subject response.Body with
+                | Error e -> Error e
+                | Ok doc ->
+                    use doc = doc
+
+                    match doc.RootElement.TryGetProperty "base" with
+                    | true, baseNode when baseNode.ValueKind = JsonValueKind.Object ->
+                        match str baseNode "ref" with
+                        | Some branch when not (String.IsNullOrWhiteSpace branch) -> Ok branch
+                        | _ -> Error(Malformed(subject, "the PR response carried no base.ref"))
+                    | _ -> Error(Malformed(subject, "the PR response carried no `base`"))
+
+        match baseRef with
+        | Error e -> Error e
+        | Ok branch ->
+            let tipSubject = $"%s{owner}/%s{repo} base branch %s{branch} tip for PR #%d{pr}"
+            let tipRequest =
+                { Method = "GET"
+                  Path = $"repos/%s{owner}/%s{repo}/git/ref/heads/%s{Uri.EscapeDataString branch}"
+                  Query = []
+                  Body = NoBody
+                  Budget = Rest
+                  IfNoneMatch = None
+                  Subject = tipSubject }
+
+            match transport.Send tipRequest with
+            | Error e -> Error e
+            | Ok response ->
+                match parse tipSubject response.Body with
+                | Error e -> Error e
+                | Ok doc ->
+                    use doc = doc
+
+                    match doc.RootElement.TryGetProperty "object" with
+                    | true, objectNode when objectNode.ValueKind = JsonValueKind.Object ->
+                        match str objectNode "sha" with
+                        | Some sha when not (String.IsNullOrWhiteSpace sha) -> Ok sha
+                        | _ -> Error(Malformed(tipSubject, "the base branch ref response carried no object.sha"))
+                    | _ -> Error(Malformed(tipSubject, "the base branch ref response carried no `object`"))
+
     let fileAtRef
         (transport: IGitHubTransport)
         (owner: string)

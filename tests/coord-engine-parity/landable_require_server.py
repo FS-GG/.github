@@ -84,6 +84,8 @@ CHECKS = {
     # 905: the OLD commit's checks — green, and about code that is no longer the PR's head.
     "shaOld": [cr(SUBJECT, 111, "completed", "success")],
 }
+for _sha in ("sha902", "shaOld"):
+    CHECKS[_sha].append(cr("registry-coherence", 777, "completed", "success"))
 
 
 class H(BaseHTTPRequestHandler):

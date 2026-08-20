@@ -32,7 +32,8 @@ module StructuredDecision =
 
     type ReviewRecord =
         { Schema: string; Subject: string; Revision: int; PreviousDigest: string option
-          HeadSha: string; Critic: string; Verdict: ReviewVerdict; AcceptedExceptions: string list
+          HeadSha: string; ClaimGeneration: string option; BaseSha: string option
+          Critic: string; Verdict: ReviewVerdict; AcceptedExceptions: string list
           RouteApplicability: string; RouteEvidence: string list; PolicyVersion: string
           Kind: ReviewKind; Round: int; InitialReview: string option
           PrecedingReview: string option; DiffAuditRequired: bool; DiffAuditReceipts: string list
@@ -90,7 +91,10 @@ module StructuredDecision =
                frame record.PolicyVersion; frame (kindName record.Kind)
                string record.Round; scalar record.InitialReview; scalar record.PrecedingReview
                string record.DiffAuditRequired; strings record.DiffAuditReceipts; frame record.Timestamp ]
-             @ successionFields record.Succession)
+             @ successionFields record.Succession
+             @ (match record.ClaimGeneration, record.BaseSha with
+                | None, None -> []
+                | claim, baseSha -> [ scalar claim; scalar baseSha ]))
 
     let private blank field value = if String.IsNullOrWhiteSpace value then [ $"%s{field} is required" ] else []
     let private values field items =
@@ -256,6 +260,19 @@ module StructuredDecision =
                   if record.PolicyVersion <> PolicyVersion then yield $"policyVersion must be '%s{PolicyVersion}'"
                   yield! blank "headSha" record.HeadSha
                   if not (sha record.HeadSha) then yield "headSha must be an exact 40-hex commit SHA"
+                  if record.Kind = Acceptance then
+                      // `None,None` is the historical v2 shape. It remains parseable so an accepted old
+                      // generation can retire cleanly, but it grants no landing authority: the live
+                      // consumers require both values. Every newly written acceptance gets both from
+                      // `review record`; partial or malformed bindings are never a legacy shape.
+                      match record.ClaimGeneration, record.BaseSha with
+                      | None, None -> ()
+                      | Some claim, Some baseSha ->
+                          if String.IsNullOrWhiteSpace claim then yield "acceptance claimGeneration must not be blank"
+                          if not (sha baseSha) then yield "acceptance baseSha must be an exact 40-hex commit SHA"
+                      | _ -> yield "acceptance claimGeneration and baseSha must be supplied together"
+                  elif record.ClaimGeneration.IsSome || record.BaseSha.IsSome then
+                      yield "claimGeneration and baseSha belong to the acceptance record"
                   yield! blank "critic" record.Critic
                   if record.RouteApplicability <> "meaningful" && record.RouteApplicability <> "not-meaningful" then
                       yield "routeApplicability must be meaningful or not-meaningful"

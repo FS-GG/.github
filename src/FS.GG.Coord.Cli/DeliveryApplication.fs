@@ -112,6 +112,9 @@ module DeliveryApplication =
                     | _ -> invalidArg "review.rounds" "must contain integers")
                 |> List.ofSeq
             let markerValid = readBoolean "markerValid" value
+            let subject = readOptionalStringOrAbsent "subject" value
+            let claimGeneration = readOptionalStringOrAbsent "claimGeneration" value
+            let baseSha = readOptionalStringOrAbsent "baseSha" value
             let criticIdentity = readOptionalString "criticIdentity" value
             let headSha = readOptionalString "headSha" value
             let repairPhase = readBoolean "repairPhase" value
@@ -122,6 +125,9 @@ module DeliveryApplication =
             let diffAuditHead = readOptionalStringOrAbsent "diffAuditHead" value
             Some
                 ({ MarkerValid = markerValid;
+                  Subject = subject;
+                  ClaimGeneration = claimGeneration;
+                  BaseSha = baseSha;
                   CriticIdentity = criticIdentity;
                   HeadSha = headSha;
                   Rounds = rounds;
@@ -454,6 +460,11 @@ module DeliveryApplication =
         | MergeAuthorized
         | MergeRefused of reason: string
 
+    type LandingReceipt<'result> =
+        { HeadSha: string
+          BaseSha: string
+          Result: 'result }
+
     let authorizeGuardedLanding freshnessToken actionKey facts currentClaimGeneration =
         match Delivery.advance freshnessToken actionKey facts with
         | Delivery.NoVerdict reason -> MergeRefused reason
@@ -463,11 +474,21 @@ module DeliveryApplication =
             MergeRefused "delivery claim generation changed after inspection; GitHub merge was not attempted"
         | Delivery.Next _ -> MergeAuthorized
 
-    /// Invoke the merge adapter only after the receipt and re-read claim generation both authorize it.
-    let guardedLanding freshnessToken actionKey facts currentClaimGeneration merge =
+    /// Invoke the merge adapter only after claim, head, and effective base are re-read and still match.
+    let guardedLanding freshnessToken actionKey facts currentClaimGeneration currentHead currentBase merge =
         match authorizeGuardedLanding freshnessToken actionKey facts currentClaimGeneration with
         | MergeRefused reason -> Error reason
-        | MergeAuthorized -> Ok(merge ())
+        | MergeAuthorized when currentHead <> Some facts.Freshness.HeadSha ->
+            Error "delivery PR head changed after inspection; GitHub merge was not attempted"
+        | MergeAuthorized ->
+            let acceptedBase = facts.Review |> Option.bind _.BaseSha
+            match acceptedBase, currentBase with
+            | Some expected, Some actual when expected = actual ->
+                Ok { HeadSha = facts.Freshness.HeadSha; BaseSha = actual; Result = merge () }
+            | Some expected, Some actual ->
+                Error $"delivery effective base changed after acceptance: expected %s{expected}, actual %s{actual}; GitHub merge was not attempted"
+            | None, _ -> Error "delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
+            | _, None -> Error "delivery effective base could not be re-read; GitHub merge was not attempted"
 
     let private snapshot (raw: string) : Result<Delivery.Snapshot, string> =
         try

@@ -203,6 +203,12 @@ rm -f "$route_sdd"
 
 # ---- M4: structured review authoring seals and appends initial/confirmation/acceptance ------------
 review_draft="$(mktemp)"
+# Acceptance binds the winning live claim generation. Scope that setup to this writer leg instead of
+# putting it in the shared server's initial state, which must remain neutral for recorded-board replay.
+review_claim_id="$(curl -fsS -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-review lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
 write_review_draft() {
   local kind="$1" verdict="$2" round="$3" initial="$4" preceding="$5" head="${6:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}" critic="${7:-critic-heron-42}"
   python3 - "$review_draft" "$kind" "$verdict" "$round" "$initial" "$preceding" "$head" "$critic" <<'PY'
@@ -245,6 +251,9 @@ review_confirmation_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" 
 review_confirmation_url="$(printf '%s' "$review_confirmation_out" | jq -r '.commentUrl // empty')"
 write_review_draft acceptance accepted 0 "$review_initial_url" "$review_confirmation_url"
 review_acceptance_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_acceptance_rc=$?
+review_acceptance_id="$(printf '%s' "$review_acceptance_out" | jq -r '.commentId // empty')"
+review_acceptance_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" \
+  | jq -r --argjson id "${review_acceptance_id:-0}" '.[] | select(.id == $id) | .body')"
 write_review_draft initial pass 0 "" "" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb critic-tern-43
 review_moved_initial_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_moved_initial_rc=$?
 review_moved_initial_url="$(printf '%s' "$review_moved_initial_out" | jq -r '.commentUrl // empty')"
@@ -257,6 +266,8 @@ if [ "$review_initial_rc" -eq 0 ] && [ "$review_confirmation_rc" -eq 0 ] && [ "$
    && printf '%s' "$review_initial_out" | jq -e '.revision == 1 and (.digest | length) == 64' >/dev/null \
    && printf '%s' "$review_confirmation_out" | jq -e '.revision == 2 and (.digest | length) == 64' >/dev/null \
    && printf '%s' "$review_acceptance_out" | jq -e '.revision == 3 and .effectiveChainValidated == true and (.digest | length) == 64' >/dev/null \
+   && [[ "$review_acceptance_body" == *'"baseSha":"cccccccccccccccccccccccccccccccccccccccc"'* ]] \
+   && [[ "$review_acceptance_body" != *'"baseSha":"9999999999999999999999999999999999999999"'* ]] \
    && printf '%s' "$review_moved_initial_out" | jq -e '.revision == 4 and (.digest | length) == 64' >/dev/null \
    && printf '%s' "$review_moved_acceptance_out" | jq -e '.revision == 5 and .effectiveChainValidated == true and (.digest | length) == 64' >/dev/null \
    && [ "$review_after" -eq $((review_before + 5)) ]; then
@@ -265,8 +276,12 @@ else
   bad "M4 review record must append parseable v2 generations with actual backlinks" "comments=$review_before->$review_after wrong=$review_wrong_rc:$review_wrong_before->$review_wrong_after initial=$review_initial_rc:$review_initial_out confirmation=$review_confirmation_rc:$review_confirmation_out acceptance=$review_acceptance_rc:$review_acceptance_out moved-initial=$review_moved_initial_rc:$review_moved_initial_out moved-acceptance=$review_moved_acceptance_rc:$review_moved_acceptance_out"
 fi
 
+# Remove the review leg's live-claim setup marker. The claim-CAS cases below deliberately start
+# unclaimed and prove their own POST/re-read winner rather than inheriting review authorization.
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$review_claim_id" >/dev/null
+
 printf '%s%s' '<!-- fsgg:independent-review' ':v1 -->' >"$review_draft"
-review_before="$review_after"
+review_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 "$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json >/dev/null 2>&1; review_legacy_rc=$?
 review_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 [ "$review_legacy_rc" -ne 0 ] && [ "$review_before" = "$review_after" ] \

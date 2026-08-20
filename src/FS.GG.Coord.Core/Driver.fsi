@@ -25,7 +25,8 @@ module Driver =
         | NotMeaningful of reason: string
 
     type ReviewChain =
-        { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
+        { MarkerValid: bool; Subject: string option; ClaimGeneration: string option; BaseSha: string option
+          CriticIdentity: string option; HeadSha: string option
           Rounds: int list; RepairPhase: bool; ChecksGreen: bool; HostAccepted: bool
           RuntimeRouteEvidence: RuntimeRouteEvidence option
           DiffAuditRequired: bool; DiffAuditHead: string option }

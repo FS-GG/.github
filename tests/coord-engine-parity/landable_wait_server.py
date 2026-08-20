@@ -49,6 +49,12 @@ def cr(suite, status, concl, app="github-actions"):
             "conclusion": concl, "app": {"slug": app}}
 
 
+def registry():
+    value = cr(777, "completed", "success")
+    value["name"] = "registry-coherence"
+    return value
+
+
 # Every mergeable leg's PR is mergeable=true; 704 is CONFLICTED (mergeable=false, no CI at all).
 PULLS = {
     801: {"number": 801, "state": "open", "mergeable": True, "head": {"ref": "item/1-x", "sha": "sha801"}},
@@ -64,7 +70,7 @@ RUNS = {
     "sha804": [],
 }
 CHECKS = {
-    "sha801": [cr(111, "completed", "cancelled"), cr(222, "completed", "success")],
+    "sha801": [cr(111, "completed", "cancelled"), cr(222, "completed", "success"), registry()],
     "sha804": [],
 }
 
@@ -73,8 +79,8 @@ CHECKS = {
 GROW_SHA = "sha810"
 GROW_RUNS_FIRST = [wf(111, 1, "completed", "success")]
 GROW_RUNS_REST = [wf(111, 1, "completed", "success"), wf(222, 1, "completed", "failure")]
-GROW_CHECKS_FIRST = [cr(111, "completed", "success")]
-GROW_CHECKS_REST = [cr(111, "completed", "success"), cr(222, "completed", "failure")]
+GROW_CHECKS_FIRST = [cr(111, "completed", "success"), registry()]
+GROW_CHECKS_REST = [cr(111, "completed", "success"), cr(222, "completed", "failure"), registry()]
 
 # Per-endpoint read counters for the growing SHA — the fixture is STATEFUL, exactly as GitHub's scheduling is.
 seen = {"runs": 0, "checks": 0}

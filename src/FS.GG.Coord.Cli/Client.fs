@@ -1871,15 +1871,20 @@ module Client =
                                         match Reads.winner opts.LeaseMinutes markers with
                                         | Some held when held.Worker.Value = w.Id -> Some(string held.Id)
                                         | _ -> None)
-                                match currentClaimGeneration with
-                                | Error error -> fail error
-                                | Ok generation ->
-                                    match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts generation (fun () -> Writes.mergeAtHead ctx.Transport target pr.Value head) with
+                                match currentClaimGeneration,
+                                      Reads.prHeadSha ctx.Transport target.Owner target.Repo pr.Value,
+                                      Reads.prBaseTipSha ctx.Transport target.Owner target.Repo pr.Value with
+                                | Error error, _, _
+                                | _, Error error, _
+                                | _, _, Error error -> fail error
+                                | Ok generation, Ok currentHead, Ok currentBase ->
+                                    match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts generation (Some currentHead) (Some currentBase) (fun () -> Writes.mergeAtHead ctx.Transport target pr.Value head) with
                                     | Error reason ->
                                         eprint $"fsgg-coord-engine: delivery --apply is refused: %s{reason}"
                                         ExitNoVerdict
-                                    | Ok merge ->
-                                        match merge with
+                                    | Ok receipt ->
+                                        eprint $"fsgg-coord-engine: guarded landing receipt: head=%s{receipt.HeadSha} base=%s{receipt.BaseSha}"
+                                        match receipt.Result with
                                         | Error error -> fail error
                                         | Ok false ->
                                             eprint "fsgg-coord-engine: delivery merge was refused because the PR is no longer at the inspected head. Re-inspect before attempting another action."
@@ -2055,43 +2060,70 @@ module Client =
                                 ExitError
                             else
                                 let previous = existing |> List.tryLast |> Option.map _.Digest
-                                let unsigned =
-                                    { draft with
-                                        Revision = existing.Length + 1
-                                        PreviousDigest = previous
-                                        Digest = "" }
-                                let candidate = { unsigned with Digest = StructuredDecision.reviewDigest unsigned }
-                                match StructuredDecision.validateReviewLedger expectedSubject (existing @ [ candidate ]) with
-                                | Error errors ->
-                                    let detail = String.concat "; " errors
-                                    eprint $"fsgg-coord-engine: review record: %s{detail}"
-                                    ExitError
-                                | Ok _ ->
-                                    let body = StructuredReviewMarker + "\n" + Driver.encodeStructuredReview candidate
-                                    let pendingUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-pending"
-                                    let pendingId = comments |> List.map _.Id |> List.fold max 0L |> (+) 1L
-                                    let projected =
-                                        comments
-                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                                    let effectiveValidation =
-                                        if candidate.Kind <> StructuredDecision.Acceptance then Ok None
-                                        else
-                                            Driver.parseEffectiveReviewComments candidate.HeadSha
-                                                (projected @ [ { Id = pendingId; Url = pendingUrl; Body = body } ])
-                                            |> Result.map Some
-                                    match effectiveValidation with
+                                // The acceptance record is the authorization receipt, so its producer —
+                                // not a hand-authored draft — binds the two live coordination revisions
+                                // that are not already carried by subject/head. Existing non-acceptance
+                                // records stay byte-compatible; only the terminal host act gains fields.
+                                let liveAcceptanceBinding =
+                                    if draft.Kind <> StructuredDecision.Acceptance then
+                                        Ok(None, None)
+                                    else
+                                        match Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+                                              |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
+                                              Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                                              Reads.prBaseTipSha ctx.Transport target.Owner target.Repo pr with
+                                        | Ok markers, Ok liveHead, Ok liveBase ->
+                                            match Reads.winner opts.LeaseMinutes markers with
+                                            | None -> Error(Errors.Malformed(target.Short, "host acceptance requires a live claim generation"))
+                                            | Some held when liveHead <> draft.HeadSha ->
+                                                Error(Errors.Malformed(target.Short, $"host acceptance draft names head %s{draft.HeadSha}, but PR #%d{pr} is at %s{liveHead}"))
+                                            | Some held -> Ok(Some(string held.Id), Some liveBase)
+                                        | Error error, _, _
+                                        | _, Error error, _
+                                        | _, _, Error error -> Error error
+
+                                match liveAcceptanceBinding with
+                                | Error error -> fail error
+                                | Ok(claimGeneration, baseSha) ->
+                                    let unsigned =
+                                        { draft with
+                                            Revision = existing.Length + 1
+                                            PreviousDigest = previous
+                                            ClaimGeneration = claimGeneration
+                                            BaseSha = baseSha
+                                            Digest = "" }
+                                    let candidate = { unsigned with Digest = StructuredDecision.reviewDigest unsigned }
+                                    match StructuredDecision.validateReviewLedger expectedSubject (existing @ [ candidate ]) with
                                     | Error errors ->
                                         let detail = String.concat "; " errors
-                                        eprint $"fsgg-coord-engine: review record: resulting accepted chain is invalid: %s{detail}"
+                                        eprint $"fsgg-coord-engine: review record: %s{detail}"
                                         ExitError
                                     | Ok _ ->
-                                        let prTarget = { target with Number = pr }
-                                        match Writes.postIssueComment ctx.Transport prTarget body with
-                                        | Error error -> fail error
-                                        | Ok commentId ->
-                                            let commentUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
-                                            printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-record-result/v2"; subject = expectedSubject; revision = candidate.Revision; digest = candidate.Digest; commentId = commentId; commentUrl = commentUrl; effectiveChainValidated = (candidate.Kind = StructuredDecision.Acceptance) |})
-                                            ExitGreen
+                                        let body = StructuredReviewMarker + "\n" + Driver.encodeStructuredReview candidate
+                                        let pendingUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-pending"
+                                        let pendingId = comments |> List.map _.Id |> List.fold max 0L |> (+) 1L
+                                        let projected =
+                                            comments
+                                            |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                        let effectiveValidation =
+                                            if candidate.Kind <> StructuredDecision.Acceptance then Ok None
+                                            else
+                                                Driver.parseEffectiveReviewComments candidate.HeadSha
+                                                    (projected @ [ { Id = pendingId; Url = pendingUrl; Body = body } ])
+                                                |> Result.map Some
+                                        match effectiveValidation with
+                                        | Error errors ->
+                                            let detail = String.concat "; " errors
+                                            eprint $"fsgg-coord-engine: review record: resulting accepted chain is invalid: %s{detail}"
+                                            ExitError
+                                        | Ok _ ->
+                                            let prTarget = { target with Number = pr }
+                                            match Writes.postIssueComment ctx.Transport prTarget body with
+                                            | Error error -> fail error
+                                            | Ok commentId ->
+                                                let commentUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
+                                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-record-result/v2"; subject = expectedSubject; revision = candidate.Revision; digest = candidate.Digest; commentId = commentId; commentUrl = commentUrl; effectiveChainValidated = (candidate.Kind = StructuredDecision.Acceptance) |})
+                                                ExitGreen
             with error -> eprint $"fsgg-coord-engine: review record: %s{error.Message}"; ExitError
 
     let review (ctx: Context) (opts: Options) : int =
@@ -5992,20 +6024,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// unsatisfied assertion is `pending`, so `--wait` rides out the transient case and refuses the
     /// permanent one; neither can produce a `green`.
     ///
-    /// `--require fsgg:review-decision/v2` (.github#2360) is a THIRD assertion in that same family, and
-    /// deliberately shaped as one: `--require` already means "an assertion the CALLER added, that the base
-    /// branch policy has no opinion about, and that nothing else would ever look at" (`Reads.Asserted`) —
-    /// which is exactly what the host's independent-review acceptance marker is to `landable`. Reusing the
-    /// channel rather than adding a new flag means no new option grammar, no new exit-code arm, and the
-    /// SAME reporting path (`asserted`, `state = PrPending` below) a caller and a poll loop already handle.
+    /// Review acceptance is the DEFAULT final assertion (.github#2360). The earlier opt-in shape let a
+    /// worker omit one token and receive the same green word as a command that evaluated the host's review
+    /// record. `--require fsgg:review-decision/v2` remains a compatible, explicit spelling, but plain
+    /// `landable` now asks the same question.
     ///
-    /// WHY THIS IS OPT-IN, NOT THE DEFAULT. `landable` has exactly one other unattended caller today — the
-    /// skill-registry autofix bot (`skill-registry-autofix.yml`) — and it merges its OWN mechanical PRs
-    /// under `--require registry-coherence --sha <head>` with NO independent critic in the loop at all, by
-    /// design (that gate is a coherence check, not the worker/critic protocol). Making review-acceptance a
-    /// DEFAULT part of `landable`'s verdict would silently wedge that bot forever, because no PR of its
-    /// ever carries the marker. The token is therefore something a caller must NAME, exactly like
-    /// `registry-coherence` is — `pnext-item`'s merge-time recipe is the one meant to pass it.
+    /// One known caller deliberately has no critic: skill-registry-autofix merges its own mechanical PRs
+    /// under `--require registry-coherence --sha <head>`. That already-named assertion is the narrow
+    /// exemption. It is not a broad "some --require was supplied" escape, and explicitly adding the review
+    /// token wins over it. Both the evaluated and exempt paths announce their provenance on stderr, while
+    /// stdout remains the one-word verdict contract.
     ///
     /// THE TOKEN IS NAMESPACED (`fsgg:review-decision/v2`, the structured schema id) rather than a bare word
     /// like `review-accepted`, because AC4 (.github#2360) is exactly `.github#2354`: a required check
@@ -6019,11 +6047,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// sees a marker at all is the reader most likely to stop looking.
     let private reviewAcceptedRequireToken = "fsgg:review-decision/v2"
 
+    let private registryCoherenceRequireToken = "registry-coherence"
+
     /// The one extra assertion `landable --require fsgg:review-decision/v2` folds into the rollup — see the
-    /// doc comment above `landable` for why this exists and why it is opt-in. Costs two REST reads
-    /// (the live head sha, the comment thread), paid ONLY when the caller asked for it AND every other
-    /// signal already reads green — never on the common "still waiting on CI" path.
-    let private reviewAcceptedUnmet (ctx: Context) (repoName: string) (pr: int) : Reads.Unmet list =
+    /// doc comment above `landable` for why this exists. The accepted receipt authorizes exactly one
+    /// issue/claim/head/effective-base tuple; every component is recomputed on this final green path.
+    let private reviewAcceptedUnmet (ctx: Context) (leaseMinutes: int) (repoName: string) (pr: int) : Reads.Unmet list =
         match Reads.prHeadSha ctx.Transport ctx.Owner repoName pr with
         | Error _ ->
             [ Reads.Asserted
@@ -6043,14 +6072,65 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     [ Reads.Asserted
                           $"PR #%d{pr} carries no valid host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) — the review chain is absent, incomplete, or malformed" ]
                 | Ok chain ->
+                    let problems = ResizeArray<Reads.Unmet>()
                     match chain.HeadSha with
-                    | Some acceptedHead when acceptedHead = liveHead -> []
+                    | Some acceptedHead when acceptedHead = liveHead -> ()
                     | Some staleHead ->
-                        [ Reads.Asserted
-                              $"PR #%d{pr}'s host review-acceptance marker is bound to head `%s{staleHead}`, not the current head `%s{liveHead}` — a stale-sha marker is treated as ABSENT, never as satisfaction" ]
+                        problems.Add(
+                            Reads.Asserted
+                                $"PR #%d{pr}'s host review-acceptance marker is bound to head `%s{staleHead}`, not the current head `%s{liveHead}` — a stale-sha marker is treated as ABSENT, never as satisfaction")
                     | None ->
-                        [ Reads.Asserted
-                              $"PR #%d{pr}'s host review-acceptance marker did not resolve to a bound head SHA" ]
+                        problems.Add(
+                            Reads.Asserted
+                                $"PR #%d{pr}'s host review-acceptance marker did not resolve to a bound head SHA")
+
+                    let suffix = $"/pr/%d{pr}"
+                    let boundItem =
+                        chain.Subject
+                        |> Option.bind (fun subject ->
+                            if subject.EndsWith(suffix, StringComparison.Ordinal) then
+                                subject.Substring(0, subject.Length - suffix.Length) |> parseRef ctx |> Result.toOption
+                            else None)
+
+                    match boundItem with
+                    | None ->
+                        problems.Add(
+                            Reads.Asserted
+                                $"PR #%d{pr}'s host review-acceptance receipt does not bind this pull request to a readable coordination item")
+                    | Some item when item.Owner <> ctx.Owner || item.Repo <> repoName ->
+                        problems.Add(
+                            Reads.Asserted
+                                $"PR #%d{pr}'s host review-acceptance receipt is bound to `%s{item.Canonical}`, not `%s{ctx.Owner}/%s{repoName}`")
+                    | Some item ->
+                        match Reads.markerScan ctx.Transport item.Owner item.Repo item.Number
+                              |> Result.bind (Reads.requireCompleteMarkerScan item.Short) with
+                        | Error _ ->
+                            problems.Add(
+                                Reads.Asserted
+                                    $"PR #%d{pr}'s bound item `%s{item.Canonical}` has no readable current claim generation")
+                        | Ok markers ->
+                            let actualGeneration =
+                                Reads.winner leaseMinutes markers |> Option.map (fun marker -> string marker.Id)
+                            if chain.ClaimGeneration <> actualGeneration then
+                                let expectedGeneration = chain.ClaimGeneration |> Option.defaultValue "absent"
+                                let liveGeneration = actualGeneration |> Option.defaultValue "released"
+                                problems.Add(
+                                    Reads.Asserted
+                                        $"PR #%d{pr}'s host review-acceptance receipt is bound to claim generation `%s{expectedGeneration}`, not the current generation `%s{liveGeneration}`")
+
+                    match Reads.prBaseTipSha ctx.Transport ctx.Owner repoName pr with
+                    | Error _ ->
+                        problems.Add(
+                            Reads.Asserted
+                                $"PR #%d{pr}'s effective base SHA could not be read, so review acceptance cannot be authorized")
+                    | Ok liveBase when chain.BaseSha = Some liveBase -> ()
+                    | Ok liveBase ->
+                        let expectedBase = chain.BaseSha |> Option.defaultValue "absent"
+                        problems.Add(
+                            Reads.Asserted
+                                $"PR #%d{pr}'s host review-acceptance receipt is STALE: expected effective base `%s{expectedBase}`, actual `%s{liveBase}`; rebase or revalidate the merged tree")
+
+                    List.ofSeq problems
 
     let landable (ctx: Context) (opts: Options) : int =
         match opts.Repo with
@@ -6080,7 +6160,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // NOT a check-run/workflow-run name for `Reads.prLandableRequire` to look for (it would
                     // never report and this PR would poll forever for the wrong reason) — it is handled
                     // below, after CI has settled, by `reviewAcceptedUnmet`.
-                    let requireReviewAccepted = opts.Require |> List.contains reviewAcceptedRequireToken
+                    let explicitlyRequireReview = opts.Require |> List.contains reviewAcceptedRequireToken
+                    let registryCoherenceExemption =
+                        not explicitlyRequireReview
+                        && (opts.Require |> List.contains registryCoherenceRequireToken)
+                    let requireReviewAccepted = not registryCoherenceExemption
                     let required = opts.Require |> List.filter (fun r -> r <> reviewAcceptedRequireToken)
                     let expected = opts.Sha
 
@@ -6126,8 +6210,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // PENDING, never anything to RED, so it can never be confused with a failing check.
                     let reviewUnmet =
                         if requireReviewAccepted && state = PrGreen then
-                            reviewAcceptedUnmet ctx repoName pr
+                            eprint
+                                $"fsgg-coord-engine: landable: evaluated the host review-acceptance assertion (`%s{reviewAcceptedRequireToken}`) for PR #%d{pr}."
+                            reviewAcceptedUnmet ctx opts.LeaseMinutes repoName pr
                         else
+                            if registryCoherenceExemption && state = PrGreen then
+                                eprint
+                                    $"fsgg-coord-engine: landable: host review-acceptance assertion (`%s{reviewAcceptedRequireToken}`) EXEMPTED for PR #%d{pr} by the explicit `%s{registryCoherenceRequireToken}` unattended-caller gate."
                             []
 
                     let missing = missing @ reviewUnmet
@@ -6177,8 +6266,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         for reason in asserted do
                             eprint $"fsgg-coord-engine: landable: PR #%d{pr} is not landable — %s{reason}."
 
-                        eprint
-                            "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
+                        if not explicitlyRequireReview && not reviewUnmet.IsEmpty then
+                            eprint
+                                "fsgg-coord-engine:   Review acceptance is asserted by DEFAULT; an unmet record is `pending`, never `green`. Obtain a current host acceptance record, or use the narrowly named registry-coherence unattended route when that is genuinely the caller."
+                        else
+                            eprint
+                                "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
 
                     // AN UNMET `--sha` ON A MERGED PR GETS ITS OWN SENTENCES (#1680), and must NOT borrow
                     // the block above. Every clause up there is FALSE here: this PR is not "not landable"
