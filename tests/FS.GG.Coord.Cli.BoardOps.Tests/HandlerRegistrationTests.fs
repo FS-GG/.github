@@ -1,6 +1,7 @@
 namespace FS.GG.Coord.Cli.BoardOps.Tests
 
 open Xunit
+open FS.GG.Coord.Cli
 open FS.GG.Coord.Cli.BoardOps
 
 module HandlerRegistrationTests =
@@ -41,3 +42,17 @@ module HandlerRegistrationTests =
         let registrations = HandlerRegistration.handlers implementations |> List.tail
         let result = HandlerRegistration.validate HandlerRegistration.commands registrations
         Assert.True(Result.isError result)
+
+    [<Fact>]
+    let ``registration validation rejects an unexpected handler`` () =
+        let registrations = HandlerRegistration.handlers implementations
+        let unexpected = Options.Help, inert
+        let result = HandlerRegistration.validate HandlerRegistration.commands (unexpected :: registrations)
+        Assert.True(Result.isError result)
+
+    [<Fact>]
+    let ``production producers agree with every command union case exactly once`` () =
+        let registrations = Program.commandRegistrations
+        let result = HandlerRegistration.validate Options.allCommands registrations
+        Assert.True(Result.isOk result)
+        Assert.Equal(Options.allCommands.Length, registrations.Length)

@@ -6,6 +6,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../FS.GG.Coord.Cli.Tests/AssemblyInfo.fs" Link="AssemblyInfo.fs" />
     <Compile Include="../FS.GG.Coord.Cli.Tests/StructuredFixtures.fs" Link="StructuredFixtures.fs" />
     <Compile Include="HandlerRegistrationTests.fs" />
     <Compile Include="AddStatusDefaultTests.fs" />

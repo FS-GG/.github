@@ -25,4 +25,7 @@ module HandlerRegistration =
 
     val commands: Options.Command list
     val handlers: implementations: Implementations -> (Options.Command * Handler) list
-    val validate: allCommands: Options.Command list -> registrations: (Options.Command * Handler) list -> Result<Map<Options.Command, Handler>, string list>
+    val validate:
+        allCommands: Options.Command list ->
+        registrations: (Options.Command * 'handler) list ->
+        Result<Map<Options.Command, 'handler>, string list>

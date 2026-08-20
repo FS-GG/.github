@@ -8,11 +8,23 @@
     <DeterministicSourcePaths>true</DeterministicSourcePaths>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../FS.GG.Coord.Cli/Snapshot.fsi" Link="Snapshot.fsi" />
+    <Compile Include="../FS.GG.Coord.Cli/Snapshot.fs" Link="Snapshot.fs" />
+    <Compile Include="../FS.GG.Coord.Cli/KitDigest.fsi" Link="KitDigest.fsi" />
+    <Compile Include="../FS.GG.Coord.Cli/KitDigest.fs" Link="KitDigest.fs" />
+    <Compile Include="../FS.GG.Coord.Cli/IntakeApplication.fsi" Link="IntakeApplication.fsi" />
+    <Compile Include="../FS.GG.Coord.Cli/IntakeApplication.fs" Link="IntakeApplication.fs" />
+    <Compile Include="../FS.GG.Coord.Cli/DeliveryRouteApplication.fsi" Link="DeliveryRouteApplication.fsi" />
+    <Compile Include="../FS.GG.Coord.Cli/DeliveryRouteApplication.fs" Link="DeliveryRouteApplication.fs" />
     <Compile Include="HandlerRegistration.fsi" />
     <Compile Include="HandlerRegistration.fs" />
+    <Compile Include="Handlers.fsi" />
+    <Compile Include="Handlers.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
