@@ -503,6 +503,11 @@
          later process runs under a different contract. This is observable coordination behavior, not
          a comment-only repair. The member set, destinations, command vocabulary, and legacy-marker
          compatibility are unchanged, so no major/removal line applies. -->
+    <!-- 0.64.0 -> 0.64.1, a PATCH (.github#2770): the packed pnext-item skill gains one linked
+         measurement-discipline reference. It requires positive controls and immutable subjects for
+         absence, count, and unchanged evidence, and supplies worked history/diff/pagination examples.
+         This is corrective operational documentation: no kit member is removed or relocated, no
+         command or runtime implementation changes, and the materialization contract is unchanged. -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
