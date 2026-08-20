@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2771-live-path-coherence/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "99a50ce80ea5ad5db1d255ea41da22294013bc99ec9e41583e9c23444fb3e1c0"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2771-live-path-coherence/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "b1977ec05be1bde2ad106b9a6142591d3d1dc0cd971cbc3b8745bffbf7bf596a"
+        "value": "5c3182598fc7f1a0b9fea7e55d342842a264b34e6936b3262b80df7ef9f3af4a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -396,7 +406,7 @@
     {
       "path": "readiness/2771-live-path-coherence/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/2771-live-path-coherence/ship.json",
-      "digest": "sha256:2e2616e2a215680d28e1d27e204289b6d86526b66929c7200975defd60a2c606",
+      "digest": "sha256:14a73a1eab815f33a4bff770bbeb8fdbba2465dc66d535c276779830bff618c6",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2771-live-path-coherence/verify.json",
-      "digest": "sha256:4643bd2468f6468a5c8b8c5226f3233b81fc3968c9c1d2cdf4579d5785423d32",
+      "digest": "sha256:1458b437e313d31f6a8cedd248a347ed2d490f27870fe358c642d3b7c82ef9e7",
       "schemaVersion": 1
     },
     {

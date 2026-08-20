@@ -18,14 +18,28 @@ JSON
 out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$root" --items "$work/green.json" --baseline-root "$work")"
 grep -q '0 coherence violation(s)' <<<"$out"
 
+# Hermetic history subject shared by the full-history, shallow-history, and pagination legs. The
+# fixture never depends on how much history actions/checkout supplied for the repository under test.
+history="$work/history"
+git init -q -b main "$history"
+git -C "$history" config user.email board-paths-live@example.invalid
+git -C "$history" config user.name board-paths-live-fixture
+mkdir -p "$history/src/Old"
+printf 'moved\n' >"$history/src/Old/Options.fs"
+git -C "$history" add src/Old/Options.fs
+git -C "$history" commit -qm 'add old path'
+mkdir -p "$history/src/New"
+git -C "$history" mv src/Old/Options.fs src/New/Options.fs
+git -C "$history" commit -qm 'move path'
+
 cat >"$work/moved.json" <<'JSON'
-[{"number":2,"state":"OPEN","body":"Paths: src/FS.GG.Coord.Cli/Options.fs"}]
+[{"number":2,"state":"OPEN","body":"Paths: src/Old/Options.fs"}]
 JSON
-if out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$root" --items "$work/moved.json" --baseline-root "$work" 2>&1)"; then
+if out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$history" --items "$work/moved.json" --baseline-root "$work" 2>&1)"; then
   echo 'fixture must reject a token whose live destination is proven by rename history' >&2; exit 1
 fi
-grep -q '#2 declares moved-away token src/FS.GG.Coord.Cli/Options.fs' <<<"$out"
-grep -q 'src/FS.GG.Coord.Cli.Kernel/Options.fs' <<<"$out"
+grep -q '#2 declares moved-away token src/Old/Options.fs' <<<"$out"
+grep -q 'src/New/Options.fs' <<<"$out"
 
 cat >"$work/gap.json" <<'JSON'
 [{"number":42,"state":"OPEN","body":"Paths: scripts/example.sh"}]
@@ -43,20 +57,8 @@ if out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$root" --ite
 fi
 grep -q '#3 declares retired root token .codex/skills/pnext-item' <<<"$out"
 
-# Production-route history control. Build a two-commit repository whose first commit owns the old
-# token and whose second renames it. A depth-1 clone cannot prove the rename and must leave the token
+# Production-route history control. A depth-1 clone cannot prove the rename and must leave the token
 # classified as a possible planned file; fetching full history must make the identical input red.
-history="$work/history"
-git init -q -b main "$history"
-git -C "$history" config user.email board-paths-live@example.invalid
-git -C "$history" config user.name board-paths-live-fixture
-mkdir -p "$history/src/Old"
-printf 'moved\n' >"$history/src/Old/Options.fs"
-git -C "$history" add src/Old/Options.fs
-git -C "$history" commit -qm 'add old path'
-mkdir -p "$history/src/New"
-git -C "$history" mv src/Old/Options.fs src/New/Options.fs
-git -C "$history" commit -qm 'move path'
 git clone -q --depth 1 "file://$history" "$work/shallow"
 mkdir -p "$work/no-baselines"
 cat >"$work/shallow.json" <<'JSON'
@@ -75,14 +77,14 @@ grep -q 'src/New/Options.fs' <<<"$out"
 # Producer agreement: GitHub pagination yields an array per page, while the detector accepts one
 # flat list. Prove the production jq transform preserves page two, including its red item.
 cat >"$work/pages.json" <<'JSON'
-[[{"number":5,"state":"open","body":"Paths: scripts/new-planned.py"}],[{"number":6,"state":"open","body":"Paths: src/FS.GG.Coord.Cli/Options.fs"}]]
+[[{"number":5,"state":"open","body":"Paths: scripts/new-planned.py"}],[{"number":6,"state":"open","body":"Paths: src/Old/Options.fs"}]]
 JSON
 jq -c 'add' "$work/pages.json" >"$work/flattened.json"
 [ "$(jq 'length' "$work/flattened.json")" -eq 2 ]
-if out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$root" --items "$work/flattened.json" --baseline-root "$work/no-baselines" 2>&1)"; then
+if out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$history" --items "$work/flattened.json" --baseline-root "$work/no-baselines" 2>&1)"; then
   echo 'fixture must preserve and diagnose the item from page two' >&2; exit 1
 fi
-grep -q '#6 declares moved-away token src/FS.GG.Coord.Cli/Options.fs' <<<"$out"
+grep -q '#6 declares moved-away token src/Old/Options.fs' <<<"$out"
 grep -q -- '--paginate --slurp' "$root/.github/workflows/board-paths-live.yml"
 grep -q -- "jq 'add'" "$root/.github/workflows/board-paths-live.yml"
 grep -q 'fetch-depth: 0' "$root/.github/workflows/board-paths-live.yml"

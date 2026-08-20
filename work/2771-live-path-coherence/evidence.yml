@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2771-live-path-coherence/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2771-live-path-coherence/analysis.json
-    digest: f9f0107b042d2c3c2bc67244601c001adcc2e3898f5f653bc824a6f4cbf4b7de
+    digest: 308b46a1c8f9459c3ca430a7d77817c5de05b0a2f6a1940b0bfec7cb02c5c53b
     schemaVersion: 1
   - label: checklist
     path: work/2771-live-path-coherence/checklist.md
