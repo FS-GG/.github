@@ -167,7 +167,24 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.62.0 — the per-receiver operation lock gains a production caller, and `delivery` posts the merge election it grounds the authorization in.
+    <PackageReleaseNotes>0.63.0 — filing guidance now requires typed validated intake, while the coordination CLI isolates BoardOps registration behind its owned boundary.
+
+WHAT MOVED, AND WHY IT IS A MINOR. The packed Kit and Drivers change the executable filing recipes
+consumers receive: `p-add`, `padd-item`, `cross-repo-coordination`, and `pnext-item` now construct the
+complete `fsgg.coord.intake/v1` envelope, run `intake validate` before `intake apply`, and reserve direct
+issue creation for an explicit recorded break-glass path (.github#2736). The semantic skill gate rejects
+both `command gh api -X POST .../issues` bypasses and recipes that apply before validation, so the
+prescription and its executable enforcement move together.
+
+The CLI package also carries the BoardOps registration extraction from .github#2726. The program edge
+now composes the BoardOps-owned handlers instead of retaining a second command-family registry, and the
+`intake validate` registration reaches the pure application route without requiring GitHub credentials;
+`intake apply` and every other live operation still use the authenticated dispatcher. This fixes the
+tokenless validation path without changing its typed receipt or exit contract. The coherent-set policy
+cuts every release as a MINOR, and all three packages therefore move together from the newest complete,
+published 0.62.0 set to 0.63.0.
+
+0.62.0 — the per-receiver operation lock gains a production caller, and `delivery` posts the merge election it grounds the authorization in.
 
 WHAT MOVED, AND WHY IT IS A MINOR. Measured against 0.61.0, the newest version any consumer can
 actually restore. `src/FS.GG.Coord.Core/Protocol.fs` is BYTE-IDENTICAL across the span, so no reported
