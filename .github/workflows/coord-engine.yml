@@ -29,6 +29,7 @@ on:
       # workflow would not start on such a change and would be green by absence (#266) — which is
       # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
       - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
@@ -36,6 +37,7 @@ on:
       # `dotnet test` on the CLI suite does not run one of them, so a workflow that started only on
       # the CLI suite would report green over a kernel change it never executed.
       - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
+      - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/FS.GG.Coord.Core.Tests/**"
       - "tests/m6-decision-cutover/**"
       # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
@@ -77,6 +79,7 @@ on:
       # workflow would not start on such a change and would be green by absence (#266) — which is
       # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
       - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
@@ -84,6 +87,7 @@ on:
       # `dotnet test` on the CLI suite does not run one of them, so a workflow that started only on
       # the CLI suite would report green over a kernel change it never executed.
       - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
+      - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/FS.GG.Coord.Core.Tests/**"
       - "tests/m6-decision-cutover/**"
       # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
@@ -149,6 +153,7 @@ jobs:
           dotnet restore tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --locked-mode
 
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
@@ -255,6 +260,21 @@ jobs:
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
+
+      - name: Test — BoardOps handlers and production registration agreement
+        run: dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --logger "console;verbosity=normal"
+
+      - name: Non-vacuity — the BoardOps run must have executed tests
+        run: |
+          set -euo pipefail
+          out="$(dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --no-build -c Release 2>&1)"
+          printf '%s\n' "$out"
+          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
+          if [ "${passed:-0}" -lt 5 ]; then
+            echo "::error title=coord-engine: the BoardOps suite audited nothing::Only ${passed:-0} tests ran."
+            exit 1
+          fi
+          echo "coord-engine (BoardOps): $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
 
       # THE KERNEL SUITE IS A SEPARATE ASSEMBLY, AND THAT IS WHY IT NEEDS ITS OWN TWO STEPS (.github#2725).
       # `dotnet test` on the CLI suite discovers exactly the tests in `FS.GG.Coord.Cli.Tests.dll`, and the

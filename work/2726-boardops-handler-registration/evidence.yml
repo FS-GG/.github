@@ -46,7 +46,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003]
     obligationRefs: [EV001]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.BoardOps/Handlers.fsi, src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/Program.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["The 45-test BoardOps report exercises the extracted implementations and forwarding compatibility seams; the implementation files are the separately reviewed ownership evidence."]
   - id: EV002
     kind: verification
     subject:
@@ -73,21 +73,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV002]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/Program.fs]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs
     result: pass
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: [The production agreement test derives the expected inventory from Options.allCommands and validates the exact Program.commandRegistrations composition.]
   - id: EV003
     kind: verification
     subject:
@@ -100,7 +100,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV003]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj, src/FS.GG.Coord.Cli.BoardOps/Handlers.fsi, src/FS.GG.Coord.Cli/Client.fsi, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["The observed BoardOps run loads the family through the public signatures and the CLI project reference; Release build success is recorded separately in the PR verification."]
   - id: EV004
     kind: verification
     subject:
@@ -127,21 +127,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV004]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [".github/workflows/engine-build-determinism.yml", scripts/check-engine-build-determinism.py, src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/engine-build-determinism/run.sh]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+        path: tests/engine-build-determinism/run.sh
     result: pass
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["The observed unit report establishes the family payload is buildable; bash tests/engine-build-determinism/run.sh separately passed 4/4 including ten per-entry mutation witnesses and a missing-BoardOps producer-agreement refusal."]
   - id: EV005
     kind: verification
     subject:
@@ -154,21 +154,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV005]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/Program.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs
     result: pass
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["Five registration tests passed: production union agreement plus duplicate, missing, unexpected, and family exactly-once controls. A temporary duplicate Help registration made the focused suite red and was then removed."]
   - id: EV006
     kind: verification
     subject:
@@ -181,21 +181,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV006]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj, tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+        path: readiness/2726-boardops-handler-registration/test-results/cli.trx
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      source: readiness/2726-boardops-handler-registration/test-results/cli.trx
+      digest: "sha256:eb98b41670fb5d56290dc02953423b52a8ef73c9878601e5ebb5b7187acfe31c"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 671
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["This receipt is the 671-test CLI run. The separately parsed boardops.trx report passed 45 tests, and the Release CLI build completed with zero warnings and errors."]
   - id: EV007
     kind: verification
     subject:
@@ -208,21 +208,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV007]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [scripts/check-engine-build-determinism.py, src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/engine-build-determinism/run.sh]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+        path: tests/engine-build-determinism/run.sh
     result: pass
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["Packing was exercised by the four-arm determinism harness: production green, DeterministicSourcePaths inversion red for all ten entries, missing BoardOps payload red by name, and empty payload red."]
   - id: EV008
     kind: verification
     subject:
@@ -235,21 +235,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV008]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs, tests/coord-engine-e2e/run.sh, tests/coord-engine-e2e/writes.sh]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+        path: tests/coord-engine-e2e/run.sh
     result: pass
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["The 671-test compatibility report passed; the compiled production route additionally passed all 24 coord-engine-e2e read assertions and exercised the stateful write-command corpus."]
   - id: EV009
     kind: verification
     subject:
@@ -262,21 +262,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV009]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [".github/workflows/coord-engine.yml", src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/Program.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs
     result: pass
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["The exact Program composition and separately wired BoardOps suite land atomically; Client retains forwarding seams only and no BoardOps dispatch cases."]
   - id: EV010
     kind: verification
     subject:
@@ -289,20 +289,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV010]
-    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi, tests/FS.GG.Coord.Cli.BoardOps.Tests/AddStatusDefaultTests.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    artifacts: [readiness/2726-boardops-handler-registration/analysis.json, readiness/2726-boardops-handler-registration/ship.json, readiness/2726-boardops-handler-registration/verify.json, work/2726-boardops-handler-registration/evidence.yml]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+        path: work/2726-boardops-handler-registration/evidence.yml
     result: pass
     synthetic: false
     observedRun:
       source: readiness/2726-boardops-handler-registration/test-results/boardops.trx
-      digest: "sha256:c1cc8db99c522e92ad03ea8e51592229724feef289f73bf6458019ed2aa841fc"
+      digest: "sha256:67f498ae8c450f68bde3032815c55d1884c3ad4142ecb1e8339631c82d21f7d9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 43
+      passed: 45
       failed: 0
       skipped: 0
-    notes: [BoardOps registration and moved add-command compatibility tests passed in Release configuration.]
+    notes: ["The observed family report anchors the refreshed evidence; fsgg-sdd verify and ship regenerate the deterministic readiness views from these exact sources."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

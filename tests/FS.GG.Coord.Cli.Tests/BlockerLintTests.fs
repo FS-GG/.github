@@ -61,13 +61,18 @@ module BlockerLintTests =
             if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then dir
             else repoRoot (Directory.GetParent(dir).FullName)
 
-        let source = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Cli/Client.fs"))
-        let chore = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Chore.fs"))
+        let root = repoRoot (Directory.GetCurrentDirectory())
+        let source =
+            [ "src/FS.GG.Coord.Cli/Client.fs"
+              "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs" ]
+            |> List.map (fun path -> File.ReadAllText(Path.Combine(root, path)))
+            |> String.concat "\n"
+        let chore = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Core/Chore.fs"))
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
-        Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
-        Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
-        Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
+        Assert.Equal(12, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
+        Assert.Equal(4, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
+        Assert.Equal(3, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(1, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("LifecycleProjectionLag destination -> Some(\"Status\", statusWireName destination)", chore)
         for retired in [ "StatusNotBlocked"; "BlockerCleared"; "ClosedIssueNotDone"; "ClaimStatusLag"; "ClaimReviewLag" ] do

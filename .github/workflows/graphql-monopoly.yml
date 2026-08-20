@@ -50,6 +50,7 @@ on:
       # workflow would not start on such a change and would be green by absence (#266) — which is
       # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
       - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/graphql-boundary/**"
@@ -74,6 +75,7 @@ on:
       # workflow would not start on such a change and would be green by absence (#266) — which is
       # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
       - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/graphql-boundary/**"

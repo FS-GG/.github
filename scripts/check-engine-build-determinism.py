@@ -6,12 +6,11 @@ WHAT THIS GATE IS FOR, AND WHAT IT DELIBERATELY DOES NOT CLAIM.
 `.github#2688` measured two independent reasons a re-pack of one unchanged tree produces different
 `payloadSha256` values, and they have opposite answers:
 
-  1. THE CHECKOUT PATH. Six packed entries — `FS.GG.Coord.Core`, `FS.GG.Coord.GitHub` and
-     `fsgg-coord-engine`, each as `.dll` and `.pdb` — embedded the absolute directory the package
+  1. THE CHECKOUT PATH. The repository-built coord projects, each as `.dll` and `.pdb`, embedded the
+     absolute directory the package
      happened to be built in. This is fixed, by `DeterministicSourcePaths` on all the coord projects,
-     and THIS GATE IS WHAT KEEPS IT FIXED. The set is EIGHT entries since .github#2725, which added
-     `FS.GG.Coord.Cli.Kernel` as a fourth coord project; it carries the property and is graded here for
-     exactly the reason the original six are.
+     and THIS GATE IS WHAT KEEPS IT FIXED. The set is TEN entries now that the BoardOps project joins
+     the four earlier coord projects; each carries the property and is graded for the same reason.
   2. AN F# CLOSURE-NAME RACE inside the compiler, which no build setting on SDK 10.0.302 can reach.
      That half is bounded and recorded in `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj`, and this gate
      says nothing about it. A gate that pretended to grade it would have to sample dozens of clean
@@ -23,15 +22,15 @@ comparable ACROSS machines at all — what `.github#2428` needs in order to comp
 artifact against the bytes a feed already serves, and what made three agents on `.github#2688` report
 three different `payload_id` values for one unchanged tree.
 
-WHY IT GRADES THE PACKAGE AND NOT THE PROJECT FILES. Reading `DeterministicSourcePaths` out of three
-`.fsproj` files would pass on a tree where the property is set in a place MSBuild ignores — which is
+WHY IT GRADES THE PACKAGE AND NOT THE PROJECT FILES. Reading `DeterministicSourcePaths` out of project
+files would pass on a tree where the property is set in a place MSBuild ignores — which is
 not hypothetical here: `.github#2688` measured the F# SDK setting `ParallelCompilation` and then
 passing `@(ParallelCompilation)`, an item reference to a property, so the value never reached the
 compiler. A property that is declared and inert is exactly the failure this repo has already paid for
 once, so this gate executes the build and grades the bytes it produced.
 
 WHY IT REFUSES AN EMPTY SELECTION. "Found no path" and "graded no entries" would otherwise share an
-exit code, which is `#266`'s shape. A package with none of the three coord assemblies in it is a
+exit code, which is `#266`'s shape. A package with none of the five coord assemblies in it is a
 refusal, not a pass.
 
 No `PATHS_SUBJECT` is declared: this gate reads no repository file. Its input is the artifact
@@ -49,22 +48,21 @@ import sys
 import tempfile
 import zipfile
 
-# The project whose package is the subject, and the four assemblies this repository itself builds
+# The project whose package is the subject, and the assemblies this repository itself builds
 # into it. `FSharp.Core` and its satellite resources are NuGet payload — not built here, not ours to
 # grade, and not affected by any property this repository sets.
 PROJECT = "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
-# `FS.GG.Coord.Cli.Kernel` joined at .github#2725, taking the graded set from six entries to eight.
-# It is graded for the same reason as its three siblings and not as a courtesy: it is built by this
-# repository, it is packed into `tools/net10.0/any/` as a `.dll` and a `.pdb`, and it therefore
-# embeds the absolute checkout directory unless its own project sets `DeterministicSourcePaths`.
-# A stem missing from this tuple is a packed entry no gate holds — which is how two of the original
-# six came to be path-bound while the package was believed path-independent (.github#2688).
-GRADED_STEMS = (
-    "FS.GG.Coord.Core",
-    "FS.GG.Coord.GitHub",
-    "FS.GG.Coord.Cli.Kernel",
-    "fsgg-coord-engine",
+# Project directory and packed assembly stem are one paired inventory. Deriving both the clean-build
+# roots and the expected payload entries from this table prevents a new project from being packed but
+# omitted from one half of the determinism gate.
+GRADED_PROJECTS = (
+    ("FS.GG.Coord.Core", "FS.GG.Coord.Core"),
+    ("FS.GG.Coord.GitHub", "FS.GG.Coord.GitHub"),
+    ("FS.GG.Coord.Cli.Kernel", "FS.GG.Coord.Cli.Kernel"),
+    ("FS.GG.Coord.Cli.BoardOps", "FS.GG.Coord.Cli.BoardOps"),
+    ("FS.GG.Coord.Cli", "fsgg-coord-engine"),
 )
+GRADED_STEMS = tuple(stem for _, stem in GRADED_PROJECTS)
 GRADED_SUFFIXES = (".dll", ".pdb")
 
 # What `DeterministicSourcePaths` maps the source root to. Its ABSENCE is a failure as much as the
@@ -83,7 +81,7 @@ def graded(names: list[str]) -> list[str]:
 
 
 def clean(root: pathlib.Path) -> None:
-    """Remove `obj/` and `bin/` for the three coord projects before packing.
+    """Remove `obj/` and `bin/` for every repository-built coord project before packing.
 
     This is not tidiness. MSBuild's `CoreCompile` incrementality is keyed on file timestamps, not on
     the property values that produce the compiler command line — so a pack that follows one with a
@@ -91,17 +89,7 @@ def clean(root: pathlib.Path) -> None:
     gate would then report whichever arm ran first. It is also the shape `.github#2688`'s AC2 states:
     each measurement starts from a clean `obj/` and `bin/`.
     """
-    # KEEP THIS LIST IN STEP WITH `GRADED_STEMS`, and note that they are keyed differently: this one is
-    # PROJECT DIRECTORIES and that one is ASSEMBLY STEMS, which differ for `FS.GG.Coord.Cli` (whose
-    # assembly is `fsgg-coord-engine`). Adding a stem to the grade without adding its directory here
-    # would leave arm 2 reusing arm 1's `obj/`, so the gate would grade bytes it did not just produce —
-    # the precise failure this function's docstring exists to prevent.
-    for project in (
-        "FS.GG.Coord.Cli",
-        "FS.GG.Coord.Cli.Kernel",
-        "FS.GG.Coord.Core",
-        "FS.GG.Coord.GitHub",
-    ):
+    for project, _ in GRADED_PROJECTS:
         for directory in ("obj", "bin"):
             shutil.rmtree(root / "src" / project / directory, ignore_errors=True)
 
@@ -134,6 +122,15 @@ def check(package: pathlib.Path, root: pathlib.Path) -> int:
                 file=sys.stderr,
             )
             return 1
+        actual = [pathlib.PurePosixPath(name).name for name in entries]
+        expected = sorted(stem + suffix for stem in GRADED_STEMS for suffix in GRADED_SUFFIXES)
+        if actual != expected:
+            missing = sorted(set(expected) - set(actual))
+            unexpected = sorted(set(actual) - set(expected))
+            if missing:
+                problems.append(f"missing expected packed coord entries: {', '.join(missing)}")
+            if unexpected:
+                problems.append(f"unexpected packed coord entries: {', '.join(unexpected)}")
         for name in entries:
             data = archive.read(name)
             leaks = data.count(needle)

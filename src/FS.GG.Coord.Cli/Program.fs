@@ -7,6 +7,15 @@ open FS.GG.Coord
 open FS.GG.Coord.Types
 open FS.GG.Coord.Cli
 open FS.GG.Coord.Cli.Options
+open FS.GG.Coord.Cli.BoardOps
+
+let private boardOpsHandlers =
+    HandlerRegistration.validate HandlerRegistration.commands Handlers.handlers
+    |> function
+        | Ok table -> table
+        | Error errors -> failwith ("invalid BoardOps handler registration: " + String.concat "; " errors)
+
+let private runClient opts = Client.run boardOpsHandlers opts
 
 // These were a VERBATIM re-declaration of a subset of `Client.fs`'s codes — a fourth copy of the
 // numbers, `private` so the compiler could not even compare it to the other three (#918). They now
@@ -301,6 +310,100 @@ let private decide (opts: Options) =
         | Red _ -> ExitRed
         | NoVerdict _ -> ExitNoVerdict
 
+let private intakeProgramHandler opts =
+    // `validate` is pure, but `apply` is the receipt-bound live transaction in the BoardOps handler.
+    // Keep that distinction in the family's composed entry without reintroducing a command match.
+    if opts.Args |> List.tryHead = Some "validate" then
+        IntakeApplication.run opts
+    else
+        runClient opts
+
+let private legacyHandler (opts: Options) =
+    match opts.Command with
+    | Help ->
+        printfn "%s" Options.usage
+        ExitGreen
+    | Version ->
+        let v =
+            Assembly.GetExecutingAssembly().GetName().Version
+            |> Option.ofObj
+            |> Option.map string
+            |> Option.defaultValue "0.0.0"
+
+        printfn "%s" v
+        ExitGreen
+    | Scan -> scan opts
+    | Decide -> decide opts
+    | DeliveryCmd when opts.SnapshotFile.IsSome -> DeliveryApplication.run opts
+    | DeliveryCmd -> runClient opts
+    | ReviewCmd when opts.SnapshotFile.IsSome -> ReviewApplication.run opts
+    | ReviewCmd -> runClient opts
+    | LanesView -> lanes opts
+    | Facts -> facts opts
+    | CommandContractCmd ->
+        printfn "%s" (Options.renderCommandContract ())
+        ExitGreen
+    | PacketCmd -> PacketApplication.run opts
+    | RouteCmd -> runClient opts
+    | DriverCmd -> runClient opts
+    | CycleCmd -> CycleLedgerApplication.run opts
+    | WhoAmI -> Client.whoami opts
+    | Followup ->
+        match Followups.parse opts.Args with
+        | Ok Followups.Audit -> Client.followupAudit opts
+        | _ -> Followups.run opts
+    | Predicate -> Client.predicate opts
+    | DiffAudit -> SemanticDiffApplication.run opts
+    | Next
+    | BatchCmd
+    | Ready
+    | Reconcile
+    | Who
+    | Reap
+    | Budget
+    | Claim
+    | Adopt
+    | Landable
+    | Take
+    | Release
+    | Heartbeat
+    | Widen
+    | SetPaths
+    | Overlap
+    | DoneCmd
+    | VerifyPaths
+    | GraphQlOps
+    | LintCmd
+    | OpLockAcquire
+    | OpLockRelease -> runClient opts
+    | command -> failwith $"legacy handler received family-owned command: %A{command}"
+
+let private boardOpsProgramRegistrations =
+    HandlerRegistration.commands
+    |> List.map (fun command ->
+        let handler =
+            if command = IntakeCmd then intakeProgramHandler else runClient
+
+        command, handler)
+
+let private legacyProgramRegistrations =
+    let boardOpsCommands = HandlerRegistration.commands |> Set.ofList
+
+    Options.allCommands
+    |> List.filter (fun command -> not (Set.contains command boardOpsCommands))
+    |> List.map (fun command -> command, legacyHandler)
+
+/// The production composition subject used by the producer-agreement test. Each family contributes
+/// registrations; the reflection-derived command inventory remains the independent expected set.
+let commandRegistrations = boardOpsProgramRegistrations @ legacyProgramRegistrations
+
+let private commandHandlers =
+    match HandlerRegistration.validate Options.allCommands commandRegistrations with
+    | Ok table -> table
+    | Error errors ->
+        let detail = String.concat "; " errors
+        failwith $"invalid composed command handlers: %s{detail}"
+
 [<EntryPoint>]
 let main argv =
     // #2418: whatever this invocation spent, the ledger gets it — on the success path and the
@@ -320,119 +423,7 @@ let main argv =
 
             | Ok opts ->
                 invoked <- Options.commandName opts.Command
-
-                match opts.Command with
-                | Help ->
-                    printfn "%s" Options.usage
-                    ExitGreen
-
-                | Version ->
-                    let v =
-                        Assembly.GetExecutingAssembly().GetName().Version
-                        |> Option.ofObj
-                        |> Option.map string
-                        |> Option.defaultValue "0.0.0"
-
-                    printfn "%s" v
-                    ExitGreen
-
-                | Scan -> scan opts
-
-                | Decide -> decide opts
-
-                | DeliveryCmd when opts.SnapshotFile.IsSome -> DeliveryApplication.run opts
-                | DeliveryCmd -> Client.run opts
-
-                // .github#2175: the typed review/repair protocol, mirroring `delivery`'s exact split — the
-                // pure snapshot-JSON contract with `--snapshot`, the live `Client.review` adapter otherwise.
-                | ReviewCmd when opts.SnapshotFile.IsSome -> ReviewApplication.run opts
-                | ReviewCmd -> Client.run opts
-
-                | LanesView -> lanes opts
-
-                | Facts -> facts opts
-
-                | CommandContractCmd ->
-                    printfn "%s" (Options.renderCommandContract ())
-                    ExitGreen
-
-                // `validate` is pure, but `apply` is the receipt-bound live transaction in `Client.intakeCmd`.
-                // Routing the whole verb through IntakeApplication made the public `apply` command a permanent
-                // refusal while unit tests that invoked Client.intakeCmd directly stayed green (#2134).
-                | IntakeCmd when opts.Args |> List.tryHead = Some "validate" -> IntakeApplication.run opts
-                | IntakeCmd -> Client.run opts
-
-                // `packet validate` (.github#2737) is pure all the way down and has NO live half:
-                // it decides over a local file, touches no board, and — by DEC-001 — can refuse no
-                // post. It therefore never routes to `Client`, unlike `intake` above.
-                | PacketCmd -> PacketApplication.run opts
-
-                | RouteCmd -> Client.run opts
-
-                | DriverCmd -> Client.run opts
-
-                | CycleCmd -> CycleLedgerApplication.run opts
-
-                // `whoami` reads no board — identity is local, and `--mint` needs no token.
-                | WhoAmI -> Client.whoami opts
-
-                // `followup` is local for the same reason, and it is load-bearing here rather than incidental:
-                // the queue is a worker's own promise, and the state that most reliably strands one is an
-                // exhausted budget (#1063/§1). A promise you cannot pop without a board read is a promise that
-                // breaks exactly when it is needed.
-                | Followup ->
-                    // Queue mutation stays local and available during a budget outage. Fleet audit is a
-                    // different operation: it claims to distinguish an orphan from a worker that is still
-                    // alive, so it must make the fresh GitHub reads that establish that fact.
-                    match Followups.parse opts.Args with
-                    | Ok Followups.Audit -> Client.followupAudit opts
-                    | _ -> Followups.run opts
-
-                // `predicate` reads LOCAL files (registry + producer manifests) — no board, no token — so it is
-                // inline here, not a `Client.run` target. The ADR-0050 oracle, call-site A (.github#1202).
-                | Predicate -> Client.predicate opts
-
-                | DiffAudit -> SemanticDiffApplication.run opts
-
-                // The client command surface — the shim's targets. Each reads/writes GitHub through the typed
-                // IO layer; `Client.run` owns the token check, the transport lifetime, and the exit contract.
-                | Next
-                | BatchCmd
-                | Ready
-                | Reconcile
-                | Who
-                | Reap
-                | Budget
-                | Claim
-                | Adopt
-                | Landable
-                | Take
-                | Release
-                | Heartbeat
-                | SetField
-                | Child
-                | Widen
-                | SetPaths
-                | Overlap
-                | Say
-                | Inbox
-                | DoneCmd
-                | VerifyPaths
-                | Bootstrap
-                | BoardCmd
-                | FieldId
-                | OptionId
-                | ItemId
-                | BodyEdits
-                | GraphQlOps
-                | Add
-                | Flush
-                | LintCmd
-                | RoomOpen
-                | OpLockAcquire
-                | OpLockRelease
-                | Issues
-                | IntakeCmd -> Client.run opts
+                commandHandlers[opts.Command] opts
 
         with e ->
             // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine

@@ -1256,9 +1256,6 @@ module Client =
     /// from a later board result.
     val intakeCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
-    /// REST issue-list handler registered by the BoardOps command family.
-    val issues: ctx: Kernel.Context -> opts: Options.Options -> int
-
     /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
     /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
     val deliveryRouteCmd: ctx: Kernel.Context -> opts: Options.Options -> int
@@ -1283,4 +1280,6 @@ module Client =
     ///
     /// Returns the process exit code. A PURE command routed here by mistake is a `failwith`, not a verdict —
     /// this door is for IO commands and the mistake is a defect in the caller, not a condition to report.
-    val run: opts: Options.Options -> int
+    val run:
+      boardOpsHandlers: Map<Options.Command, BoardOps.HandlerRegistration.Handler> ->
+      opts: Options.Options -> int

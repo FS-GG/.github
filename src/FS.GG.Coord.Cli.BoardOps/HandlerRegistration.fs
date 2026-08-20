@@ -57,7 +57,10 @@ module HandlerRegistration =
           Options.Inbox, implementations.Inbox
           Options.RoomOpen, implementations.RoomOpen ]
 
-    let validate (allCommands: Options.Command list) (registrations: (Options.Command * Handler) list) =
+    let validate<'handler>
+        (allCommands: Options.Command list)
+        (registrations: (Options.Command * 'handler) list)
+        =
         let grouped = registrations |> List.groupBy fst
         let duplicates = grouped |> List.choose (fun (command, entries) -> if entries.Length = 1 then None else Some command)
         let registered = grouped |> List.map fst |> Set.ofList
