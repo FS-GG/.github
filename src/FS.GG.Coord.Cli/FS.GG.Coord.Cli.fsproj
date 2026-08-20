@@ -331,8 +331,6 @@ the standing safety advisories carry forward.
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Snapshot.fsi" />
-    <Compile Include="Snapshot.fs" />
     <Compile Include="DeliveryApplication.fsi" />
     <Compile Include="DeliveryApplication.fs" />
     <Compile Include="ReviewApplication.fsi" />
@@ -343,8 +341,6 @@ the standing safety advisories carry forward.
     <Compile Include="FollowupAudit.fs" />
     <Compile Include="Chores.fsi" />
     <Compile Include="Chores.fs" />
-    <Compile Include="KitDigest.fsi" />
-    <Compile Include="KitDigest.fs" />
     <Compile Include="ReadyApplication.fsi" />
     <Compile Include="ReadyApplication.fs" />
     <Compile Include="LintApplication.fsi" />
@@ -356,16 +352,12 @@ the standing safety advisories carry forward.
          It is a LOCAL verb — no token, no board — and depends on `Client` for those two things only. -->
     <Compile Include="Followups.fsi" />
     <Compile Include="Followups.fs" />
-    <Compile Include="IntakeApplication.fsi" />
-    <Compile Include="IntakeApplication.fs" />
     <!-- PacketApplication (.github#2737) is the finder's pre-flight over one
          fsgg.coord.finding-packet/v1 document. It opens no Client seam and takes no lock: the pure
          decode and validation are FS.GG.Coord.FindingPacket's, and this module owns only the file
          read and the printing. -->
     <Compile Include="PacketApplication.fsi" />
     <Compile Include="PacketApplication.fs" />
-    <Compile Include="DeliveryRouteApplication.fsi" />
-    <Compile Include="DeliveryRouteApplication.fs" />
     <Compile Include="Client.fsi" />
     <Compile Include="Client.fs" />
     <Compile Include="SemanticDiffApplication.fsi" />
@@ -398,6 +390,7 @@ the standing safety advisories carry forward.
          What a separate project buys is that .github#2726–#2729 can each add a family project without any
          of them editing THIS file to reach the shared base. -->
     <ProjectReference Include="../FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

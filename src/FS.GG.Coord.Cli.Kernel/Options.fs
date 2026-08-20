@@ -705,7 +705,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | TextOnly -> Text
 
     /// Every nullary `Command` case, by reflection — the one enumeration that cannot drift from the DU.
-    let private allCommands: Command list =
+    let allCommands: Command list =
         Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<Command>
         |> Array.toList
         |> List.choose (fun case ->

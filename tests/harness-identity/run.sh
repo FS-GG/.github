@@ -162,8 +162,8 @@ expect "an (args: string list)+FSGG_COORD_CACHE fixture never handed --worker is
 REAL="$WORK/real"; mkdir -p "$REAL/tests"
 cp -r "$REPO_ROOT/tests/coord-engine-e2e" "$REAL/tests/"
 cp -r "$REPO_ROOT/tests/coord-engine-parity" "$REAL/tests/"
-mkdir -p "$REAL/tests/FS.GG.Coord.Cli.Tests"
-cp "$REPO_ROOT/tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs" "$REAL/tests/FS.GG.Coord.Cli.Tests/"
+mkdir -p "$REAL/tests/FS.GG.Coord.Cli.BoardOps.Tests"
+cp "$REPO_ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/ApplicationServiceTests.fs" "$REAL/tests/FS.GG.Coord.Cli.BoardOps.Tests/"
 
 expect "the SHIPPED tree (writes.sh, run.sh, shim.sh, ApplicationServiceTests.fs) is green as it stands" \
   0 "OK" "$REAL"
@@ -182,9 +182,9 @@ expect "REGRESSION REPLAY: writes.sh with its unset line removed is caught" \
 
 # 4b. `runQueue`, reverted to its pre-#1817 shape (FSGG_COORD_CACHE scrubbed, identity ladder not) —
 #     the live instance this item's own PR fixed.
-REAL_B="$WORK/real-runqueue-unfixed"; mkdir -p "$REAL_B/tests/FS.GG.Coord.Cli.Tests"
-python3 - "$REPO_ROOT/tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs" \
-          "$REAL_B/tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs" <<'PYEOF'
+REAL_B="$WORK/real-runqueue-unfixed"; mkdir -p "$REAL_B/tests/FS.GG.Coord.Cli.BoardOps.Tests"
+python3 - "$REPO_ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/ApplicationServiceTests.fs" \
+          "$REAL_B/tests/FS.GG.Coord.Cli.BoardOps.Tests/ApplicationServiceTests.fs" <<'PYEOF'
 import re, sys
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src, encoding="utf-8").read()

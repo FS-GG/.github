@@ -8,6 +8,7 @@ open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
+open FS.GG.Coord.Cli.BoardOps
 
 module BlockerLintTests =
 
@@ -61,13 +62,18 @@ module BlockerLintTests =
             if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then dir
             else repoRoot (Directory.GetParent(dir).FullName)
 
-        let source = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Cli/Client.fs"))
-        let chore = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Chore.fs"))
+        let root = repoRoot (Directory.GetCurrentDirectory())
+        let source =
+            [ "src/FS.GG.Coord.Cli/Client.fs"
+              "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs" ]
+            |> List.map (fun path -> File.ReadAllText(Path.Combine(root, path)))
+            |> String.concat "\n"
+        let chore = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Core/Chore.fs"))
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
-        Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
+        Assert.Equal(12, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
-        Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
+        Assert.Equal(3, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(1, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("LifecycleProjectionLag destination -> Some(\"Status\", statusWireName destination)", chore)
         for retired in [ "StatusNotBlocked"; "BlockerCleared"; "ClosedIssueNotDone"; "ClaimStatusLag"; "ClaimReviewLag" ] do
@@ -475,7 +481,7 @@ module BlockerLintTests =
     // ---- AC2 (.github#2098): `set-field --batch` end to end, from raw argv to the aliased mutation ----
     //
     // The legs above pin `requireCoherentParkIfBlockedForBatch`'s PREDICATE. These drive
-    // `Client.setField` itself — the whole CLI verb, argv to GraphQL — because the defect this issue is
+    // `Handlers.setField` itself — the whole family verb, argv to GraphQL — because the defect this issue is
     // about is in the WIRING inside `setFieldBatchCmd` (whether it computes the requested status and the
     // pending `Blocked by` write from the batch's own pairs and calls the gate at all), which only a
     // fixture that counts real GraphQL calls across the whole command can see. Same shape as
@@ -489,7 +495,7 @@ module BlockerLintTests =
                   ETag = None
                   NextLink = None; Headers = Map.empty }
 
-        /// A full board fixture for `Client.setField --batch`: discovery (`projectsV2`, `fields(first`),
+        /// A full board fixture for `Handlers.setField --batch`: discovery (`projectsV2`, `fields(first`),
         /// the item-id lookup (`projectItems`), the aliased mutation itself
         /// (`updateProjectV2ItemFieldValue`), and — for the leg that must fall back to the LIVE gate — the
         /// `Blocked by` resolver read (`fieldValueByName`) and the REST issue body for the sentinel check.
@@ -542,7 +548,7 @@ module BlockerLintTests =
         let private sessionVars =
             [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
 
-        /// Drive `Client.setField` as a real command line, isolated on its own cache and identity — see
+        /// Drive `Handlers.setField` as a real command line, isolated on its own cache and identity — see
         /// `ReleaseBlockedByFixture.run`, whose shape this reuses.
         let run (transport: Fake.Recorder) (args: string list) : int * string * string =
             let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-setfield-batch-" + System.Guid.NewGuid().ToString "n")
@@ -577,7 +583,7 @@ module BlockerLintTests =
                       DefaultRepo = Some "FS.GG.SDD"
                       ChoreLocks = [] }
 
-                let code = Client.setField context opts
+                let code = Handlers.setField context opts
                 System.Console.Out.Flush()
                 System.Console.Error.Flush()
                 code, capturedOut.ToString(), capturedErr.ToString()

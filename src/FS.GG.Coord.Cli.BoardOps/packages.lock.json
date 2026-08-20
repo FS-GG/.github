@@ -8,15 +8,6 @@
         "resolved": "10.1.302",
         "contentHash": "bN7XMQrAQg1dyHScJ7FcsznERBkvm74LtIo1O6C5mUzgbDqSwNbDpb3+nBGaJAjDmtC/suK5Vx5pFysKY6Hm+Q=="
       },
-      "fs.gg.coord.cli.boardops": {
-        "type": "Project",
-        "dependencies": {
-          "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
-          "FS.GG.Coord.Core": "[1.0.0, )",
-          "FS.GG.Coord.GitHub": "[1.0.0, )",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
       "fs.gg.coord.cli.kernel": {
         "type": "Project",
         "dependencies": {

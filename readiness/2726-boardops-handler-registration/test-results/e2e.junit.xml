@@ -1,0 +1,195 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites name="coord-engine-e2e" tests="185" failures="0" errors="0" skipped="0"><testsuite name="coord-engine-e2e-read" tests="24" failures="0" errors="0" skipped="0"><testcase classname="fsgg.receipt" name="contains finds a line-1 needle in a 282650-byte haystack (no pipeline, no SIGPIPE)" /><testcase classname="fsgg.receipt" name="matches finds a line-1 needle in a 282650-byte haystack (here-string, not a pipe)" /><testcase classname="fsgg.receipt" name="matches_i finds a line-1 needle case-insensitively in a 282650-byte haystack" /><testcase classname="fsgg.receipt" name="contains still says NO for a needle that is genuinely absent" /><testcase classname="fsgg.receipt" name="matches still says NO for a needle that is genuinely absent" /><testcase classname="fsgg.receipt" name="matches_i still says NO for a needle that is genuinely absent" /><testcase classname="fsgg.receipt" name="the idiom guard catches all four banned spellings when it is actually run over a corpus" /><testcase classname="fsgg.receipt" name="the idiom guard flags none of the four safe spellings (no false positives)" /><testcase classname="fsgg.receipt" name="the idiom guard actually read this file (398 lines, wc says 398)" /><testcase classname="fsgg.receipt" name="no assertion in this suite consumes the status of an early-exiting pipeline" /><testcase classname="fsgg.receipt" name="scan exits 0 against the fixture" /><testcase classname="fsgg.receipt" name="scan emits the fsgg.coord.snapshot/1 document, carrying the board item" /><testcase classname="fsgg.receipt" name="decide exits 0 (green) on the fixture snapshot" /><testcase classname="fsgg.receipt" name="offline decide refuses to infer a delivery route from the snapshot" /><testcase classname="fsgg.receipt" name="live batch reads the current route receipt and schedules FS.GG.SDD#42" /><testcase classname="fsgg.receipt" name="scan | decide stays fail-closed without a live route read" /><testcase classname="fsgg.receipt" name="scan REFUSES without a token (never invents an empty board)" /><testcase classname="fsgg.receipt" name="unset FSGG_CLAIM_LEASE_MIN leaves the documented 120-minute default" /><testcase classname="fsgg.receipt" name="FSGG_CLAIM_LEASE_MIN=45 actually changes the lease the snapshot carries" /><testcase classname="fsgg.receipt" name="--lease 30 beats FSGG_CLAIM_LEASE_MIN=45 (flag &gt; env &gt; default)" /><testcase classname="fsgg.receipt" name="a malformed FSGG_CLAIM_LEASE_MIN is REFUSED by name, never silently defaulted" /><testcase classname="fsgg.receipt" name="FSGG_CLAIM_LEASE_MIN=0 is REFUSED — the env channel cannot mint an instantly-reapable lease" /><testcase classname="fsgg.receipt" name="a whitespace-only FSGG_CLAIM_LEASE_MIN reads as UNSET, not as malformed" /><testcase classname="fsgg.receipt" name="--help and --version still answer under a malformed FSGG_CLAIM_LEASE_MIN" /><system-out>PASS  contains finds a line-1 needle in a 282650-byte haystack (no pipeline, no SIGPIPE)
+PASS  matches finds a line-1 needle in a 282650-byte haystack (here-string, not a pipe)
+PASS  matches_i finds a line-1 needle case-insensitively in a 282650-byte haystack
+PASS  contains still says NO for a needle that is genuinely absent
+PASS  matches still says NO for a needle that is genuinely absent
+PASS  matches_i still says NO for a needle that is genuinely absent
+PASS  the idiom guard catches all four banned spellings when it is actually run over a corpus
+PASS  the idiom guard flags none of the four safe spellings (no false positives)
+PASS  the idiom guard actually read this file (398 lines, wc says 398)
+PASS  no assertion in this suite consumes the status of an early-exiting pipeline
+PASS  scan exits 0 against the fixture
+PASS  scan emits the fsgg.coord.snapshot/1 document, carrying the board item
+PASS  decide exits 0 (green) on the fixture snapshot
+PASS  offline decide refuses to infer a delivery route from the snapshot
+PASS  live batch reads the current route receipt and schedules FS.GG.SDD#42
+PASS  scan | decide stays fail-closed without a live route read
+PASS  scan REFUSES without a token (never invents an empty board)
+PASS  unset FSGG_CLAIM_LEASE_MIN leaves the documented 120-minute default
+PASS  FSGG_CLAIM_LEASE_MIN=45 actually changes the lease the snapshot carries
+PASS  --lease 30 beats FSGG_CLAIM_LEASE_MIN=45 (flag &gt; env &gt; default)
+PASS  a malformed FSGG_CLAIM_LEASE_MIN is REFUSED by name, never silently defaulted
+PASS  FSGG_CLAIM_LEASE_MIN=0 is REFUSED — the env channel cannot mint an instantly-reapable lease
+PASS  a whitespace-only FSGG_CLAIM_LEASE_MIN reads as UNSET, not as malformed
+PASS  --help and --version still answer under a malformed FSGG_CLAIM_LEASE_MIN
+
+coord-engine-e2e: 24 assertion(s), 24 passed, 0 failed
+green — the engine reads its own board, over HTTP, hermetically.
+</system-out></testsuite><testsuite name="coord-engine-e2e-writes" tests="161" failures="0" errors="0" skipped="0"><testcase classname="fsgg.receipt" name="#2137: delivery-route record posts exactly one current source-bound receipt" /><testcase classname="fsgg.receipt" name="#2137: stale delivery-route receipt is refused with zero writes" /><testcase classname="fsgg.receipt" name="#2298: an sdd-required receipt with no SDD package on disk yet still records, honestly not-ready" /><testcase classname="fsgg.receipt" name="#2298: mismatched workId SDD readiness records, reporting sddPackageReady=false" /><testcase classname="fsgg.receipt" name="#2298: unready status SDD readiness records, reporting sddPackageReady=false" /><testcase classname="fsgg.receipt" name="#2298: current implementationReady SDD readiness records, reporting sddPackageReady=true" /><testcase classname="fsgg.receipt" name="M4 review record validates actual backlinks and retires an accepted generation after head movement" /><testcase classname="fsgg.receipt" name="M4 review record refuses legacy v1 authoring with zero writes" /><testcase classname="fsgg.receipt" name="claim WINS the CAS and reports the holder" /><testcase classname="fsgg.receipt" name="a second worker LOSES to the live lock (no double-claim)" /><testcase classname="fsgg.receipt" name="#2268: constrained force admission refuses before marker/status mutation" /><testcase classname="fsgg.receipt" name="#2268: exhausted force admission refuses before marker/status mutation" /><testcase classname="fsgg.receipt" name="#2268: unknown force admission refuses before marker/status mutation" /><testcase classname="fsgg.receipt" name="#2268: healthy force admission still steals the live claim" /><testcase classname="fsgg.receipt" name="heartbeat renews the lease the worker holds" /><testcase classname="fsgg.receipt" name="a non-holder cannot heartbeat (it names the real holder)" /><testcase classname="fsgg.receipt" name=".github#1620: adopt refuses a LIVE claim and prints a remedy command to follow" /><testcase classname="fsgg.receipt" name=".github#1620: ...and running it VERBATIM takes the item — the advertised route is real" /><testcase classname="fsgg.receipt" name=".github#1620: the displaced holder's heartbeat FAILS LOUDLY and names the worker that took it" /><testcase classname="fsgg.receipt" name=".github#1620: ...and the steal is recorded on the item, in the displaced worker's inbox" /><testcase classname="fsgg.receipt" name="release drops the held lock" /><testcase classname="fsgg.receipt" name="the item is claimable again after release (the marker was removed)" /><testcase classname="fsgg.receipt" name="set-field writes a board column" /><testcase classname="fsgg.receipt" name="set-field refuses an unknown field" /><testcase classname="fsgg.receipt" name="child attaches the sub-issue" /><testcase classname="fsgg.receipt" name="say posts a message with no lock required" /><testcase classname="fsgg.receipt" name="#706: widen refuses when the caller does not hold the claim" /><testcase classname="fsgg.receipt" name="#1377: widen unions new paths into a HELD item's existing touch-set" /><testcase classname="fsgg.receipt" name="#1377: a second widen preserves every prior token" /><testcase classname="fsgg.receipt" name="#1377: repeated widen is idempotent" /><testcase classname="fsgg.receipt" name="#273/#1377: an unmatchable new token is refused without modifying the union" /><testcase classname="fsgg.receipt" name="#1377: set-paths explicitly replaces (and can narrow) the touch-set" /><testcase classname="fsgg.receipt" name="done stamps an item closed by a merged PR" /><testcase classname="fsgg.receipt" name="#1151: done keeps the GREEN stamp but SURFACES the deferred Status write with flush advice" /><testcase classname="fsgg.receipt" name="#1151: done drops the claim marker even when the Status write DEFERS" /><testcase classname="fsgg.receipt" name="#1151: flush replays the deferred Status=Done write (the queued stamp lands)" /><testcase classname="fsgg.receipt" name="#1086: a worker holding a claim in ANOTHER repo is not idle — no chore, though one is on offer" /><testcase classname="fsgg.receipt" name="M6: done offers only the direct reducer's receipt-backed lifecycle projection" /><testcase classname="fsgg.receipt" name="#733: the AfterDone offer is on stderr — done's stdout verdict is untouched" /><testcase classname="fsgg.receipt" name="M6: receiver done also offers the direct reducer's fresh projection" /><testcase classname="fsgg.receipt" name="#1087: an UNROSTERED repo is offered nothing, and still stamps" /><testcase classname="fsgg.receipt" name="#1087: an unrostered repo costs NO board read — the free question is asked first (53→53)" /><testcase classname="fsgg.receipt" name=".github#1535: the chore lock is free before the probe (the one variable is the verb)" /><testcase classname="fsgg.receipt" name=".github#1535: `batch --text` is the same decision and takes NO lock — the read half of the pair" /><testcase classname="fsgg.receipt" name=".github#1535: ...and it is the same ANSWER — one shared `nothingSchedulable` spelling, so the words cannot drift" /><testcase classname="fsgg.receipt" name=".github#1535: `next` POSTs a claim marker to .github#1033 — it WRITES, and is declared so" /><testcase classname="fsgg.receipt" name=".github#1535: the lock `next` took is the one the offer it printed names (#50)" /><testcase classname="fsgg.receipt" name="verify-paths: a PR inside its touch-set is OK (exit 0)" /><testcase classname="fsgg.receipt" name="verify-paths: a drifting PR names the out-of-bounds file and fails" /><testcase classname="fsgg.receipt" name="verify-paths --warn downgrades DRIFT to advisory (exit 0)" /><testcase classname="fsgg.receipt" name="#498: a regenerated CI-gated artifact is subtracted from drift, and reported as expected" /><testcase classname="fsgg.receipt" name="#498: real drift stays RED and is reported apart from the regenerated artifact" /><testcase classname="fsgg.receipt" name="#498: subtracts NOTHING when the checkout is not the PR's repo (drift stays reported)" /><testcase classname="fsgg.receipt" name="#498: an ABSENT generated-paths subtracts nothing (fails closed)" /><testcase classname="fsgg.receipt" name="#498: a FAILING generated-paths subtracts nothing (fails closed)" /><testcase classname="fsgg.receipt" name="#498: a failing generated-paths forwards its REASON — fails closed, and readably" /><testcase classname="fsgg.receipt" name="#498: an EMPTY generated-paths subtracts nothing (fails closed)" /><testcase classname="fsgg.receipt" name="#498: a HANGING generated-paths is killed and subtracts nothing (bounded, 2s)" /><testcase classname="fsgg.receipt" name="#498: the killed generator leaves no orphaned process behind" /><testcase classname="fsgg.receipt" name="#2211: cross-owner claim converges through the board-side item and Status read" /><testcase classname="fsgg.receipt" name="#2211: bare cross-owner release restores the pre-claim Backlog column" /><testcase classname="fsgg.receipt" name="#2211: fixture establishes a live external In progress column before add" /><testcase classname="fsgg.receipt" name="#2211: add preserves a live cross-owner Status instead of writing the Backlog default" /><testcase classname="fsgg.receipt" name="#1740: the fixture built the state — marker live, Status write DEFERRED, board row still reads 'Ready'" /><testcase classname="fsgg.receipt" name="#1740: a live claim whose Status column has NOT landed still COLLIDES (no false DISJOINT)" /><testcase classname="fsgg.receipt" name="#1779: the SAME state with an EMPTY deferral queue still collides — the marker carries it, not the queue" /><testcase classname="fsgg.receipt" name="#1779: control — the same colliding declaration with NO live claim reads DISJOINT (the marker is the lock)" /><testcase classname="fsgg.receipt" name="#1779: the fixture built the state — marker live, Status write FAILED, queue depth UNCHANGED at 1, column still 'Ready'" /><testcase classname="fsgg.receipt" name="#1779: a live claim whose Status write FAILED PERMANENTLY still COLLIDES" /><testcase classname="fsgg.receipt" name="#1779: the fixture built the state — marker live on #46, statusWrite=not-on-board, NO board row" /><testcase classname="fsgg.receipt" name="#1779: a live claim on an item the board has NEVER LISTED still COLLIDES" /><testcase classname="fsgg.receipt" name="#1779/#2250 AC2: overlap --active spent 6 REST calls (target verification, 1 issue list, and 1 marker per shortlisted row) and 1 GraphQL board read for closed-unstamped holders" /><testcase classname="fsgg.receipt" name="#1740 AC5: a narrowing that collides is reported as PRE-EXISTING, not as introduced" /><testcase classname="fsgg.receipt" name="#1740 AC5: a WIDENING that collides is NOT reported as pre-existing (the sentences differ)" /><testcase classname="fsgg.receipt" name="#1569: batch is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: board is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: bootstrap is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: budget is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: command-contract is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: driver is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: facts is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: field-id is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: inbox is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: issues is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: option-id is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: scan is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: ready is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: who is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: landable reached its valid read verdict without mutating" /><testcase classname="fsgg.receipt" name="#1569: overlap is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: verify-paths is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: item-id is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: body-edits is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: graphql is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: lint is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: whoami is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#2134: intake paths are validated in the draft target repository" /><testcase classname="fsgg.receipt" name="#2134: intake applies one public create and converged board projection" /><testcase classname="fsgg.receipt" name="#2134: missing Class persistence fails the intake transaction" /><testcase classname="fsgg.receipt" name="#2134: missing Phase persistence fails the intake transaction" /><testcase classname="fsgg.receipt" name="#2134: missing Severity persistence fails the intake transaction" /><testcase classname="fsgg.receipt" name="#2134: Blocked intake creates and projects Status plus dependency coherently" /><testcase classname="fsgg.receipt" name="#2134: queued intake projection retries to zero pending without a second create" /><testcase classname="fsgg.receipt" name="#1569: cycle is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#2133: cycle production route rejects a cyclic ledger" /><testcase classname="fsgg.receipt" name="#2133: cycle production route emits the canonical registered cycle id" /><testcase classname="fsgg.receipt" name="#2133: cycle advance validates real SDD, critique, and feedback provider artifact shapes" /><testcase classname="fsgg.receipt" name="#2133: production advance runs the exact schema-v3 critique validator against minimal lookalikes" /><testcase classname="fsgg.receipt" name="#2133: production advance runs the exact schema-v2 feedback validator against minimal lookalikes" /><testcase classname="fsgg.receipt" name="#2133: caller-controlled artifact roots cannot substitute a no-op critique validator" /><testcase classname="fsgg.receipt" name="#2133: caller-controlled artifact roots cannot substitute a no-op feedback validator" /><testcase classname="fsgg.receipt" name="#2133: engine-shipped provider validator bytes are bound to a supported identity digest" /><testcase classname="fsgg.receipt" name="#2133: production advance rejects supported-looking caller-authored provider envelopes" /><testcase classname="fsgg.receipt" name="#2465: an unvetted fsgg-sdd validator toolVersion fails closed and names the reported version" /><testcase classname="fsgg.receipt" name="#2133: production update emits a source/head/evidence/disposition-bound receipt" /><testcase classname="fsgg.receipt" name="#2133: production complete accepts the exact emitted guarded-update receipt" /><testcase classname="fsgg.receipt" name="#2133: production complete rejects a full recomputed receipt without durable update history" /><testcase classname="fsgg.receipt" name="#2133: production update resolves its default durable journal through a linked worktree gitdir" /><testcase classname="fsgg.receipt" name="#1569: followup is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: followup's local driver completed successfully" /><testcase classname="fsgg.receipt" name="#1569: decide is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: lanes is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#2131: delivery --snapshot bare executes its lifecycle decision without a wire mutation" /><testcase classname="fsgg.receipt" name="#2131: delivery --snapshot apply executes its lifecycle decision without a wire mutation" /><testcase classname="fsgg.receipt" name="#2175: review --snapshot reaches its typed state/action without a wire mutation" /><testcase classname="fsgg.receipt" name="#2207: an omitted legacy reviewProblem defaults to none, while an empty supplied diagnostic refuses" /><testcase classname="fsgg.receipt" name="#1569: predicate reached its valid read verdict without mutating" /><testcase classname="fsgg.receipt" name="#1569: diff-audit reached its valid read verdict without mutating" /><testcase classname="fsgg.receipt" name="#1569: packet is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#2737: packet validate issued ZERO wire mutations — the sole predicate of this leg, so its red names mutation and nothing else" /><testcase classname="fsgg.receipt" name="#1569: next (argvCannotSay: after printing its answer it makes the #733 chore offer, which POSTs a claim marker) is a valid driver" /><testcase classname="fsgg.receipt" name="#1569: flush --dry-run is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: flush without --dry-run mutates the queued board write" /><testcase classname="fsgg.receipt" name="#1569: add is a valid always-write invocation (wire ledger observed a mutation)" /><testcase classname="fsgg.receipt" name="#1569: take precondition is a Ready #43 with no claim marker" /><testcase classname="fsgg.receipt" name="#1569: take is a valid always-write invocation (wire ledger observed a mutation)" /><testcase classname="fsgg.receipt" name="#1569: room open is a valid always-write invocation (wire ledger observed a mutation)" /><testcase classname="fsgg.receipt" name="#1569: reap (bare, expired claim) is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: reap --apply (expired claim) is a valid always-write invocation (wire ledger observed a mutation)" /><testcase classname="fsgg.receipt" name="#1569: reconcile (bare, actionable chore) is a valid never-write invocation (wire ledger empty)" /><testcase classname="fsgg.receipt" name="#1569: reconcile --apply (actionable chore) is a valid always-write invocation (wire ledger observed a mutation)" /><testcase classname="fsgg.receipt" name="#2157: reducer result atomically writes/observes Status=Ready plus empty Blocked by and records its receipt" /><testcase classname="fsgg.receipt" name="#2157: partial Status-only projection fails closed and retains both fresh observations" /><testcase classname="fsgg.receipt" name="#2157: a missing fresh row cannot masquerade as BLOCKER-CLEARED convergence" /><testcase classname="fsgg.receipt" name=".github#2312: FS.GG.SDD's operation lock is free before the probe (the one variable is the verb)" /><testcase classname="fsgg.receipt" name=".github#2312: `op-lock acquire` succeeds and prints a grant and a 64-hex opkey" /><testcase classname="fsgg.receipt" name=".github#2312: the grant printed IS the server-assigned comment id of the marker on the lock issue" /><testcase classname="fsgg.receipt" name=".github#2312: a second executor is REFUSED with exit 6 and names the holder — the lock working" /><testcase classname="fsgg.receipt" name=".github#2312: a non-holder's `op-lock release` REFUSES and deletes nothing" /><testcase classname="fsgg.receipt" name=".github#2312: the holder's `op-lock release` drops the grant and the lock is free again" /><testcase classname="fsgg.receipt" name=".github#2312: FSGG_COORD_OP_LOCKS repoints the lock — the marker lands on the injected issue, not the embedded one" /><testcase classname="fsgg.receipt" name="#1569: every one of the 52 advertised contract rows has exactly one executable driver" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: delivery:bare" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: delivery:apply" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: flush:dry-run" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: flush:apply" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: reap:bare" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: reap:apply" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: reconcile:bare" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: reconcile:apply" /><testcase classname="fsgg.receipt" name="#1569: conditional contract polarity exercised: next:argvCannotSay" /><system-out>PASS  #2137: delivery-route record posts exactly one current source-bound receipt
+PASS  #2137: stale delivery-route receipt is refused with zero writes
+PASS  #2298: an sdd-required receipt with no SDD package on disk yet still records, honestly not-ready
+PASS  #2298: mismatched workId SDD readiness records, reporting sddPackageReady=false
+PASS  #2298: unready status SDD readiness records, reporting sddPackageReady=false
+PASS  #2298: current implementationReady SDD readiness records, reporting sddPackageReady=true
+PASS  M4 review record validates actual backlinks and retires an accepted generation after head movement
+PASS  M4 review record refuses legacy v1 authoring with zero writes
+PASS  claim WINS the CAS and reports the holder
+PASS  a second worker LOSES to the live lock (no double-claim)
+PASS  #2268: constrained force admission refuses before marker/status mutation
+PASS  #2268: exhausted force admission refuses before marker/status mutation
+PASS  #2268: unknown force admission refuses before marker/status mutation
+PASS  #2268: healthy force admission still steals the live claim
+PASS  heartbeat renews the lease the worker holds
+PASS  a non-holder cannot heartbeat (it names the real holder)
+PASS  .github#1620: adopt refuses a LIVE claim and prints a remedy command to follow
+PASS  .github#1620: ...and running it VERBATIM takes the item — the advertised route is real
+PASS  .github#1620: the displaced holder's heartbeat FAILS LOUDLY and names the worker that took it
+PASS  .github#1620: ...and the steal is recorded on the item, in the displaced worker's inbox
+PASS  release drops the held lock
+PASS  the item is claimable again after release (the marker was removed)
+PASS  set-field writes a board column
+PASS  set-field refuses an unknown field
+PASS  child attaches the sub-issue
+PASS  say posts a message with no lock required
+PASS  #706: widen refuses when the caller does not hold the claim
+PASS  #1377: widen unions new paths into a HELD item's existing touch-set
+PASS  #1377: a second widen preserves every prior token
+PASS  #1377: repeated widen is idempotent
+PASS  #273/#1377: an unmatchable new token is refused without modifying the union
+PASS  #1377: set-paths explicitly replaces (and can narrow) the touch-set
+PASS  done stamps an item closed by a merged PR
+PASS  #1151: done keeps the GREEN stamp but SURFACES the deferred Status write with flush advice
+PASS  #1151: done drops the claim marker even when the Status write DEFERS
+PASS  #1151: flush replays the deferred Status=Done write (the queued stamp lands)
+PASS  #1086: a worker holding a claim in ANOTHER repo is not idle — no chore, though one is on offer
+PASS  M6: done offers only the direct reducer's receipt-backed lifecycle projection
+PASS  #733: the AfterDone offer is on stderr — done's stdout verdict is untouched
+PASS  M6: receiver done also offers the direct reducer's fresh projection
+PASS  #1087: an UNROSTERED repo is offered nothing, and still stamps
+PASS  #1087: an unrostered repo costs NO board read — the free question is asked first (53→53)
+PASS  .github#1535: the chore lock is free before the probe (the one variable is the verb)
+PASS  .github#1535: `batch --text` is the same decision and takes NO lock — the read half of the pair
+PASS  .github#1535: ...and it is the same ANSWER — one shared `nothingSchedulable` spelling, so the words cannot drift
+PASS  .github#1535: `next` POSTs a claim marker to .github#1033 — it WRITES, and is declared so
+PASS  .github#1535: the lock `next` took is the one the offer it printed names (#50)
+PASS  verify-paths: a PR inside its touch-set is OK (exit 0)
+PASS  verify-paths: a drifting PR names the out-of-bounds file and fails
+PASS  verify-paths --warn downgrades DRIFT to advisory (exit 0)
+PASS  #498: a regenerated CI-gated artifact is subtracted from drift, and reported as expected
+PASS  #498: real drift stays RED and is reported apart from the regenerated artifact
+PASS  #498: subtracts NOTHING when the checkout is not the PR's repo (drift stays reported)
+PASS  #498: an ABSENT generated-paths subtracts nothing (fails closed)
+PASS  #498: a FAILING generated-paths subtracts nothing (fails closed)
+PASS  #498: a failing generated-paths forwards its REASON — fails closed, and readably
+PASS  #498: an EMPTY generated-paths subtracts nothing (fails closed)
+PASS  #498: a HANGING generated-paths is killed and subtracts nothing (bounded, 2s)
+PASS  #498: the killed generator leaves no orphaned process behind
+PASS  #2211: cross-owner claim converges through the board-side item and Status read
+PASS  #2211: bare cross-owner release restores the pre-claim Backlog column
+PASS  #2211: fixture establishes a live external In progress column before add
+PASS  #2211: add preserves a live cross-owner Status instead of writing the Backlog default
+PASS  #1740: the fixture built the state — marker live, Status write DEFERRED, board row still reads 'Ready'
+PASS  #1740: a live claim whose Status column has NOT landed still COLLIDES (no false DISJOINT)
+PASS  #1779: the SAME state with an EMPTY deferral queue still collides — the marker carries it, not the queue
+PASS  #1779: control — the same colliding declaration with NO live claim reads DISJOINT (the marker is the lock)
+PASS  #1779: the fixture built the state — marker live, Status write FAILED, queue depth UNCHANGED at 1, column still 'Ready'
+PASS  #1779: a live claim whose Status write FAILED PERMANENTLY still COLLIDES
+PASS  #1779: the fixture built the state — marker live on #46, statusWrite=not-on-board, NO board row
+PASS  #1779: a live claim on an item the board has NEVER LISTED still COLLIDES
+PASS  #1779/#2250 AC2: overlap --active spent 6 REST calls (target verification, 1 issue list, and 1 marker per shortlisted row) and 1 GraphQL board read for closed-unstamped holders
+PASS  #1740 AC5: a narrowing that collides is reported as PRE-EXISTING, not as introduced
+PASS  #1740 AC5: a WIDENING that collides is NOT reported as pre-existing (the sentences differ)
+PASS  #1569: batch is a valid never-write invocation (wire ledger empty)
+PASS  #1569: board is a valid never-write invocation (wire ledger empty)
+PASS  #1569: bootstrap is a valid never-write invocation (wire ledger empty)
+PASS  #1569: budget is a valid never-write invocation (wire ledger empty)
+PASS  #1569: command-contract is a valid never-write invocation (wire ledger empty)
+PASS  #1569: driver is a valid never-write invocation (wire ledger empty)
+PASS  #1569: facts is a valid never-write invocation (wire ledger empty)
+PASS  #1569: field-id is a valid never-write invocation (wire ledger empty)
+PASS  #1569: inbox is a valid never-write invocation (wire ledger empty)
+PASS  #1569: issues is a valid never-write invocation (wire ledger empty)
+PASS  #1569: option-id is a valid never-write invocation (wire ledger empty)
+PASS  #1569: scan is a valid never-write invocation (wire ledger empty)
+PASS  #1569: ready is a valid never-write invocation (wire ledger empty)
+PASS  #1569: who is a valid never-write invocation (wire ledger empty)
+PASS  #1569: landable reached its valid read verdict without mutating
+PASS  #1569: overlap is a valid never-write invocation (wire ledger empty)
+PASS  #1569: verify-paths is a valid never-write invocation (wire ledger empty)
+PASS  #1569: item-id is a valid never-write invocation (wire ledger empty)
+PASS  #1569: body-edits is a valid never-write invocation (wire ledger empty)
+PASS  #1569: graphql is a valid never-write invocation (wire ledger empty)
+PASS  #1569: lint is a valid never-write invocation (wire ledger empty)
+PASS  #1569: whoami is a valid never-write invocation (wire ledger empty)
+PASS  #2134: intake paths are validated in the draft target repository
+PASS  #2134: intake applies one public create and converged board projection
+PASS  #2134: missing Class persistence fails the intake transaction
+PASS  #2134: missing Phase persistence fails the intake transaction
+PASS  #2134: missing Severity persistence fails the intake transaction
+PASS  #2134: Blocked intake creates and projects Status plus dependency coherently
+PASS  #2134: queued intake projection retries to zero pending without a second create
+PASS  #1569: cycle is a valid never-write invocation (wire ledger empty)
+PASS  #2133: cycle production route rejects a cyclic ledger
+PASS  #2133: cycle production route emits the canonical registered cycle id
+PASS  #2133: cycle advance validates real SDD, critique, and feedback provider artifact shapes
+PASS  #2133: production advance runs the exact schema-v3 critique validator against minimal lookalikes
+PASS  #2133: production advance runs the exact schema-v2 feedback validator against minimal lookalikes
+PASS  #2133: caller-controlled artifact roots cannot substitute a no-op critique validator
+PASS  #2133: caller-controlled artifact roots cannot substitute a no-op feedback validator
+PASS  #2133: engine-shipped provider validator bytes are bound to a supported identity digest
+PASS  #2133: production advance rejects supported-looking caller-authored provider envelopes
+PASS  #2465: an unvetted fsgg-sdd validator toolVersion fails closed and names the reported version
+PASS  #2133: production update emits a source/head/evidence/disposition-bound receipt
+PASS  #2133: production complete accepts the exact emitted guarded-update receipt
+PASS  #2133: production complete rejects a full recomputed receipt without durable update history
+PASS  #2133: production update resolves its default durable journal through a linked worktree gitdir
+PASS  #1569: followup is a valid never-write invocation (wire ledger empty)
+PASS  #1569: followup's local driver completed successfully
+scan: 11 candidate(s); 0 off-board blocker(s) resolved
+PASS  #1569: decide is a valid never-write invocation (wire ledger empty)
+scan: 11 candidate(s); 0 off-board blocker(s) resolved
+PASS  #1569: lanes is a valid never-write invocation (wire ledger empty)
+PASS  #2131: delivery --snapshot bare executes its lifecycle decision without a wire mutation
+PASS  #2131: delivery --snapshot apply executes its lifecycle decision without a wire mutation
+PASS  #2175: review --snapshot reaches its typed state/action without a wire mutation
+PASS  #2207: an omitted legacy reviewProblem defaults to none, while an empty supplied diagnostic refuses
+PASS  #1569: predicate reached its valid read verdict without mutating
+PASS  #1569: diff-audit reached its valid read verdict without mutating
+PASS  #1569: packet is a valid never-write invocation (wire ledger empty)
+PASS  #2737: packet validate issued ZERO wire mutations — the sole predicate of this leg, so its red names mutation and nothing else
+PASS  #1569: next (argvCannotSay: after printing its answer it makes the #733 chore offer, which POSTs a claim marker) is a valid driver
+PASS  #1569: flush --dry-run is a valid never-write invocation (wire ledger empty)
+PASS  #1569: flush without --dry-run mutates the queued board write
+PASS  #1569: add is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: take precondition is a Ready #43 with no claim marker
+PASS  #1569: take is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: room open is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: reap (bare, expired claim) is a valid never-write invocation (wire ledger empty)
+PASS  #1569: reap --apply (expired claim) is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: reconcile (bare, actionable chore) is a valid never-write invocation (wire ledger empty)
+PASS  #1569: reconcile --apply (actionable chore) is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #2157: reducer result atomically writes/observes Status=Ready plus empty Blocked by and records its receipt
+PASS  #2157: partial Status-only projection fails closed and retains both fresh observations
+PASS  #2157: a missing fresh row cannot masquerade as BLOCKER-CLEARED convergence
+PASS  .github#2312: FS.GG.SDD's operation lock is free before the probe (the one variable is the verb)
+PASS  .github#2312: `op-lock acquire` succeeds and prints a grant and a 64-hex opkey
+PASS  .github#2312: the grant printed IS the server-assigned comment id of the marker on the lock issue
+PASS  .github#2312: a second executor is REFUSED with exit 6 and names the holder — the lock working
+PASS  .github#2312: a non-holder's `op-lock release` REFUSES and deletes nothing
+PASS  .github#2312: the holder's `op-lock release` drops the grant and the lock is free again
+PASS  .github#2312: FSGG_COORD_OP_LOCKS repoints the lock — the marker lands on the injected issue, not the embedded one
+PASS  #1569: every one of the 52 advertised contract rows has exactly one executable driver
+PASS  #1569: conditional contract polarity exercised: delivery:bare
+PASS  #1569: conditional contract polarity exercised: delivery:apply
+PASS  #1569: conditional contract polarity exercised: flush:dry-run
+PASS  #1569: conditional contract polarity exercised: flush:apply
+PASS  #1569: conditional contract polarity exercised: reap:bare
+PASS  #1569: conditional contract polarity exercised: reap:apply
+PASS  #1569: conditional contract polarity exercised: reconcile:bare
+PASS  #1569: conditional contract polarity exercised: reconcile:apply
+PASS  #1569: conditional contract polarity exercised: next:argvCannotSay
+
+coord-engine writes: 161 assertion(s), 161 passed, 0 failed
+green — the engine's write commands land, over HTTP, hermetically.
+</system-out></testsuite></testsuites>

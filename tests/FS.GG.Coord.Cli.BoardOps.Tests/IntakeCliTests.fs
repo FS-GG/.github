@@ -24,14 +24,16 @@ module IntakeCliTests =
     let private valid = """{"schema":"fsgg.coord.intake/v1","id":"intake-42","owner":"FS-GG","repository":".github","title":"t","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}"""
 
     [<Fact>]
-    let ``#2134 intake validate renders a typed zero-write receipt`` () =
+    let ``#2134 intake validate is tokenless when both token variables are absent`` () =
         let path = Path.GetTempFileName()
         File.WriteAllText(path, valid)
         let old = Console.Out
         let oldToken = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
+        let oldGhToken = Environment.GetEnvironmentVariable "GH_TOKEN"
         use writer = new StringWriter()
         try
             Environment.SetEnvironmentVariable("GITHUB_TOKEN", null)
+            Environment.SetEnvironmentVariable("GH_TOKEN", null)
             Console.SetOut(writer)
             let code = Program.main [| "intake"; "validate"; path |]
             Assert.Equal(ExitCode.toInt ExitCode.Green, code)
@@ -40,6 +42,7 @@ module IntakeCliTests =
         finally
             Console.SetOut(old)
             Environment.SetEnvironmentVariable("GITHUB_TOKEN", oldToken)
+            Environment.SetEnvironmentVariable("GH_TOKEN", oldGhToken)
             File.Delete(path)
 
     [<Fact>]

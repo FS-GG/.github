@@ -1,0 +1,11 @@
+<testsuite name="dotnet" tests="1" failures="0"><testcase name="dotnet"><system-out><![CDATA[  FS.GG.Coord.Core -> /home/developer/fsgg-driver/worktrees/2726-curlew-dd04-repair-phase/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.GitHub -> /home/developer/fsgg-driver/worktrees/2726-curlew-dd04-repair-phase/src/FS.GG.Coord.GitHub/bin/Release/net10.0/FS.GG.Coord.GitHub.dll
+  FS.GG.Coord.Cli.Kernel -> /home/developer/fsgg-driver/worktrees/2726-curlew-dd04-repair-phase/src/FS.GG.Coord.Cli.Kernel/bin/Release/net10.0/FS.GG.Coord.Cli.Kernel.dll
+  FS.GG.Coord.Cli.BoardOps -> /home/developer/fsgg-driver/worktrees/2726-curlew-dd04-repair-phase/src/FS.GG.Coord.Cli.BoardOps/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.dll
+  FS.GG.Coord.Cli -> /home/developer/fsgg-driver/worktrees/2726-curlew-dd04-repair-phase/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine.dll
+  FS.GG.Coord.Cli.BoardOps.Tests -> /home/developer/fsgg-driver/worktrees/2726-curlew-dd04-repair-phase/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll
+Test run for /home/developer/fsgg-driver/worktrees/2726-curlew-dd04-repair-phase/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   229, Skipped:     0, Total:   229, Duration: 1 s - FS.GG.Coord.Cli.BoardOps.Tests.dll (net10.0)
+]]></system-out></testcase></testsuite>

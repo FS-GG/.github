@@ -170,6 +170,9 @@ module Options =
         /// stdout is ALWAYS human text: `--text` is kept, `--json` is refused. The #1523 bucket.
         | TextOnly
 
+    /// Every nullary command case, derived from the union rather than maintained as a second list.
+    val allCommands: Command list
+
     type Options =
         { Command: Command
           Render: Render

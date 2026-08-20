@@ -1,0 +1,310 @@
+schemaVersion: 1
+workId: 2726-boardops-handler-registration
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2726-boardops-handler-registration/spec.md
+sourceClarifications: work/2726-boardops-handler-registration/clarifications.md
+sourceChecklist: work/2726-boardops-handler-registration/checklist.md
+sourcePlan: work/2726-boardops-handler-registration/plan.md
+sourceTasks: work/2726-boardops-handler-registration/tasks.yml
+sourceAnalysis: readiness/2726-boardops-handler-registration/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2726-boardops-handler-registration/analysis.json
+    digest: c8165e839bc06f3b1d91c274cf12f11a05f59895dd2c9988034cb1f61c2b344e
+    schemaVersion: 1
+  - label: checklist
+    path: work/2726-boardops-handler-registration/checklist.md
+    digest: 9ccd274e213c03111ca11bebe7c544e210ae563492ae08a0ac8c0a1f2cb811dc
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2726-boardops-handler-registration/clarifications.md
+    digest: 31ece806d391c02ee8a23186d4dbdd7abae6a74774755b7fdeaa26e597e95c4b
+    schemaVersion: 1
+  - label: plan
+    path: work/2726-boardops-handler-registration/plan.md
+    digest: 25f548584c5c27c3f175d4cedc86df91e8a6b078f35818097e6cfc4fec0ff425
+    schemaVersion: 1
+  - label: spec
+    path: work/2726-boardops-handler-registration/spec.md
+    digest: ee53d1f2c33c48c72755bdebbb3bedd2ad774b656bf9cb71efaedf7e44657b3a
+    schemaVersion: 1
+  - label: tasks
+    path: work/2726-boardops-handler-registration/tasks.yml
+    digest: 5dc4254bcef8ea8e2db03ed2e3f84841e14c315569577c19993c8f41a6e2af02
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.BoardOps/Handlers.fsi, src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["The command-produced JUnit receipt embeds the passing 229-test BoardOps output for the physically moved application-service, intake, set-field/blocker, and widen fixture files. The repository's observed-command-report producer propagates a failing command and emits failures=1, with positive, negative, and missing-command controls in its wired self-test."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [The production agreement test compares the reflection-derived Options.allCommands oracle with Program.commandRegistrations assembled from two independently authored family inventories.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj, src/FS.GG.Coord.Cli.BoardOps/Handlers.fsi, src/FS.GG.Coord.Cli/Client.fsi, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["The observed BoardOps run loads the family through the public signatures and the CLI project reference; Release build success is recorded separately in the PR verification."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV004]
+    artifacts: [".github/workflows/engine-build-determinism.yml", scripts/check-engine-build-determinism.py, src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/engine-build-determinism/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/engine-build-determinism/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/determinism.junit.xml
+      digest: "sha256:4df0d9b798c757db07dbdd0904c720bb419bbec36a05dbdedf462afecef856f6"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: ["The observed six-arm determinism receipt derives the five-project/ten-entry inventory from the production CLI ProjectReferences, proves both producer-to-payload and payload-to-producer agreement, refuses an empty producer inventory and empty payload, and records per-entry path mutations."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/Program.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Six registration tests passed: independent production-union agreement, a permanent missing-production-command control, duplicate, missing, unexpected, and family exactly-once controls. Removing Help from Program's real legacy inventory made module initialization red with 'missing handlers: [Help]'; restoring it returned the suite green. Repair-phase round 1 also runs IntakeCliTests with both GITHUB_TOKEN and GH_TOKEN absent: the named validate control passes through the family-owned pure route, while apply still reaches the live dispatcher. Replacing the Intake registration with the generic context wrapper reproduced CI's token refusal and made that named control red; restoring the family-owned split returned all four IntakeCliTests green."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV006]
+    artifacts: [src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj, tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj]
+    sourceRefs:
+      - kind: verification
+        path: readiness/2726-boardops-handler-registration/test-results/cli.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/cli.junit.xml
+      digest: "sha256:bcded273bfcf22fb802c741c5b479f62a90bc65579c85b23226d3e8ba1eb7771"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["This command-produced JUnit receipt embeds the passing 488-test legacy CLI run after physical fixture ownership moved. The separate BoardOps command receipt embeds 229 passing tests; both reports are emitted by the inversion-controlled observed-command-report producer after locked restore."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV007]
+    artifacts: [scripts/check-engine-build-determinism.py, src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/engine-build-determinism/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/engine-build-determinism/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/determinism.junit.xml
+      digest: "sha256:4df0d9b798c757db07dbdd0904c720bb419bbec36a05dbdedf462afecef856f6"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: ["The exact determinism JUnit receipt contains six green arms: production, ten-entry path mutation, missing BoardOps payload, unreferenced BoardOps payload, empty production inventory, and empty package inventory."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/ApplicationServiceTests.fs, tests/coord-engine-e2e/run.sh, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/run.sh
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/e2e.junit.xml
+      digest: "sha256:b3f502728f00a02810c5f84562916b639dcead90b65556bc620513fde7c8d39c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 185
+      failed: 0
+      skipped: 0
+    notes: ["The combined JUnit receipt embeds the actual compiled-engine transcripts for all 24 read assertions and all 161 stateful write assertions, run hermetically; the write leg used the workflow-pinned FS.GG.SDD.Cli 1.0.0."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/coord-engine.yml", src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/Program.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["The exact Program composition and separately wired BoardOps suite land atomically; Client retains forwarding seams only and no BoardOps dispatch cases."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [readiness/2726-boardops-handler-registration/analysis.json, readiness/2726-boardops-handler-registration/ship.json, readiness/2726-boardops-handler-registration/verify.json, work/2726-boardops-handler-registration/evidence.yml]
+    sourceRefs:
+      - kind: verification
+        path: work/2726-boardops-handler-registration/evidence.yml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2726-boardops-handler-registration/test-results/boardops.junit.xml
+      digest: "sha256:1ad25d0809ce21fbf87871732aaeba5208ed212c7a1197c9ae9b0c14b181dbf9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["The observed family report anchors the refreshed evidence; fsgg-sdd verify and ship regenerate the deterministic readiness views from these exact sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

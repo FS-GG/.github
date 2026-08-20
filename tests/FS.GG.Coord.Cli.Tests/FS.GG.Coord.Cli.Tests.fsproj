@@ -15,12 +15,10 @@
     <Compile Include="SnapshotTests.fs" />
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="CrossRepoRankTests.fs" />
-    <Compile Include="IntakeCliTests.fs" />
     <!-- PacketCliTests (.github#2737) pins the `packet validate` command boundary: exit codes and
          the stdout/stderr split. The decode and validation contract is pure and lives in
          FS.GG.Coord.Core.Tests/FindingPacketTests.fs. -->
     <Compile Include="PacketCliTests.fs" />
-    <Compile Include="IntakeTransactionTests.fs" />
     <Compile Include="DriverEventsCliTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
     <Compile Include="SkillProgressiveDisclosureTests.fs" />
@@ -30,21 +28,17 @@
     <Compile Include="TouchSetLintTests.fs" />
     <Compile Include="EpicVerdictTests.fs" />
     <Compile Include="ClassLintTests.fs" />
-    <Compile Include="BlockerLintTests.fs" />
     <Compile Include="CacheIsolationTests.fs" />
     <Compile Include="ChoresTests.fs" />
     <Compile Include="OpLockTests.fs" />
     <Compile Include="OpLockDispatchVerbTests.fs" />
     <Compile Include="FollowupsTests.fs" />
-    <Compile Include="ApplicationServiceTests.fs" />
     <Compile Include="DeliveryApplicationTests.fs" />
     <Compile Include="ReviewApplicationTests.fs" />
-    <Compile Include="WidenRefusalTests.fs" />
     <Compile Include="OverlapTests.fs" />
     <Compile Include="ForceStealTests.fs" />
     <Compile Include="DeliveryRouteCliTests.fs" />
     <Compile Include="WhoLivenessTests.fs" />
-    <Compile Include="AddStatusDefaultTests.fs" />
     <Compile Include="LandableNotOpenTests.fs" />
     <Compile Include="VerifyPathsClosingKeywordTests.fs" />
     <Compile Include="VerifyPathsSddPackageTests.fs" />

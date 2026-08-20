@@ -1280,4 +1280,6 @@ module Client =
     ///
     /// Returns the process exit code. A PURE command routed here by mistake is a `failwith`, not a verdict —
     /// this door is for IO commands and the mistake is a defect in the caller, not a condition to report.
-    val run: opts: Options.Options -> int
+    val run:
+      boardOpsHandlers: Map<Options.Command, BoardOps.HandlerRegistration.Handler> ->
+      opts: Options.Options -> int

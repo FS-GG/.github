@@ -11,6 +11,7 @@ open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
+open FS.GG.Coord.Cli.BoardOps
 
 module ApplicationServiceTests =
 
@@ -780,7 +781,7 @@ module ApplicationServiceTests =
                     | Options.Take -> Client.take (context transport) opts
                     | Options.Claim -> Client.claim (context transport) opts
                     | Options.Release -> Client.release (context transport) opts
-                    | Options.Add -> Client.addCmd (context transport) opts
+                    | Options.Add -> Handlers.addCmd (context transport) opts
                     | command -> failwithf "twin-owner fixture drives batch/take/claim/release/add, got %A" command
                 Console.Out.Flush()
                 Console.Error.Flush()
@@ -2692,7 +2693,7 @@ module ApplicationServiceTests =
                 match opts.Command with
                 | Options.Reconcile -> Client.reconcile (context transport) opts
                 | Options.Ready -> Client.ready (context transport) opts
-                | Options.SetField -> Client.setField (context transport) opts
+                | Options.SetField -> Handlers.setField (context transport) opts
                 | other -> failwithf "this fixture drives reconciliation board surfaces only, got %A" other
 
             Console.Out.Flush()
@@ -4191,9 +4192,9 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
           Options.CommandContractCmd,
           "`Program.fs` dispatches `renderCommandContract ()` inline; `JsonOnly`, it reads nothing, and `CommandSurfaceTests` already parses the emitted document"
           Options.Issues,
-          "`Client.issues` is private; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE"
+          "`Handlers.issues` is the family-owned handler; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE"
           Options.IntakeCmd,
-          "`Client.intakeCmd` is private; audited by transaction tests. Its validate arm emits one typed zero-write receipt, while apply emits one receipt-bound issue/projection result; malformed drafts and unreadable receipts fail on stderr before a POST."
+          "`Handlers.intakeCmd` is the family-owned handler and is audited by transaction tests. Its validate arm emits one typed zero-write receipt, while apply emits one receipt-bound issue/projection result; malformed drafts and unreadable receipts fail on stderr before a POST."
           Options.RouteCmd,
           "`Client.deliveryRouteCmd` is private; audited by reading pending its recording-transport fixture. Its show arm emits one typed current receipt only after reading both the body and append-only comment ledger; record validates the source-bound receipt before its sole comment POST, and malformed or unreadable evidence fails on stderr."
           Options.GraphQlOps,
@@ -4251,9 +4252,9 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 | Options.Ready -> Client.ready ctx opts
                 | Options.Reconcile -> Client.reconcile ctx opts
                 | Options.LintCmd -> Client.lint ctx opts
-                | Options.BoardCmd -> Client.boardCmd ctx
+                | Options.BoardCmd -> Handlers.boardCmd ctx
                 | Options.Who -> Client.who ctx opts
-                | Options.Inbox -> Client.inbox ctx opts
+                | Options.Inbox -> Handlers.inbox ctx opts
                 | Options.Budget -> Client.budget ctx opts
                 | Options.Predicate -> Client.predicate opts
                 | Options.Claim -> Client.claim ctx opts
@@ -4261,7 +4262,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 | Options.Widen -> Client.widen ctx opts
                 | Options.SetPaths -> Client.setPaths ctx opts
                 | Options.ReviewCmd -> Client.review ctx opts
-                | Options.BodyEdits -> Client.bodyEditsCmd ctx opts
+                | Options.BodyEdits -> Handlers.bodyEditsCmd ctx opts
                 | Options.PacketCmd -> PacketApplication.run opts
                 | Options.OpLockAcquire -> Client.opLockAcquire ctx opts
                 | Options.OpLockRelease -> Client.opLockRelease ctx opts
