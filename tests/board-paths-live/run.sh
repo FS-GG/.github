@@ -43,6 +43,50 @@ if out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$root" --ite
 fi
 grep -q '#3 declares retired root token .codex/skills/pnext-item' <<<"$out"
 
+# Production-route history control. Build a two-commit repository whose first commit owns the old
+# token and whose second renames it. A depth-1 clone cannot prove the rename and must leave the token
+# classified as a possible planned file; fetching full history must make the identical input red.
+history="$work/history"
+git init -q -b main "$history"
+git -C "$history" config user.email board-paths-live@example.invalid
+git -C "$history" config user.name board-paths-live-fixture
+mkdir -p "$history/src/Old"
+printf 'moved\n' >"$history/src/Old/Options.fs"
+git -C "$history" add src/Old/Options.fs
+git -C "$history" commit -qm 'add old path'
+mkdir -p "$history/src/New"
+git -C "$history" mv src/Old/Options.fs src/New/Options.fs
+git -C "$history" commit -qm 'move path'
+git clone -q --depth 1 "file://$history" "$work/shallow"
+mkdir -p "$work/no-baselines"
+cat >"$work/shallow.json" <<'JSON'
+[{"number":4,"state":"open","body":"Paths: src/Old/Options.fs"}]
+JSON
+[ "$(git -C "$work/shallow" rev-list --count HEAD)" -eq 1 ]
+out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$work/shallow" --items "$work/shallow.json" --baseline-root "$work/no-baselines")"
+grep -q '0 coherence violation(s)' <<<"$out"
+git -C "$work/shallow" fetch -q --unshallow
+if out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$work/shallow" --items "$work/shallow.json" --baseline-root "$work/no-baselines" 2>&1)"; then
+  echo 'fixture must detect the moved token once the production route supplies full history' >&2; exit 1
+fi
+grep -q '#4 declares moved-away token src/Old/Options.fs' <<<"$out"
+grep -q 'src/New/Options.fs' <<<"$out"
+
+# Producer agreement: GitHub pagination yields an array per page, while the detector accepts one
+# flat list. Prove the production jq transform preserves page two, including its red item.
+cat >"$work/pages.json" <<'JSON'
+[[{"number":5,"state":"open","body":"Paths: scripts/new-planned.py"}],[{"number":6,"state":"open","body":"Paths: src/FS.GG.Coord.Cli/Options.fs"}]]
+JSON
+jq -c 'add' "$work/pages.json" >"$work/flattened.json"
+[ "$(jq 'length' "$work/flattened.json")" -eq 2 ]
+if out="$(python3 "$root/scripts/check-board-paths-live.py" --root "$root" --items "$work/flattened.json" --baseline-root "$work/no-baselines" 2>&1)"; then
+  echo 'fixture must preserve and diagnose the item from page two' >&2; exit 1
+fi
+grep -q '#6 declares moved-away token src/FS.GG.Coord.Cli/Options.fs' <<<"$out"
+grep -q -- '--paginate --slurp' "$root/.github/workflows/board-paths-live.yml"
+grep -q -- "jq 'add'" "$root/.github/workflows/board-paths-live.yml"
+grep -q 'fetch-depth: 0' "$root/.github/workflows/board-paths-live.yml"
+
 printf 'not json' >"$work/bad.json"
 if python3 "$root/scripts/check-board-paths-live.py" --root "$root" --items "$work/bad.json" --baseline-root "$work" >/dev/null 2>&1; then
   echo 'fixture must reject unreadable board evidence' >&2; exit 1

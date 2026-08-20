@@ -11,9 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Rename evidence is part of the detector's verdict. A depth-1 checkout makes every moved
+      # token look indistinguishable from a planned new path, so production must carry full history.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api --paginate 'repos/${{ github.repository }}/issues?state=open&per_page=100' > items.json
+          # --paginate emits one JSON array per page. Slurp those pages and flatten them into the
+          # single list the detector accepts, so rows after page one cannot disappear silently.
+          gh api --paginate --slurp 'repos/${{ github.repository }}/issues?state=open&per_page=100' |
+            jq 'add' > items.json
           python3 scripts/check-board-paths-live.py --items items.json

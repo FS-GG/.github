@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2771-live-path-coherence/verification/junit.xml
-      digest: "sha256:eac69df323c3077b160b69b9cc6926e3ac16e0edde734aa15be965a77fbbc803"
+      digest: "sha256:534ed9ba9532b3a1dca9b1b5139c71af63de7c19755804167c44dc95ea63fb62"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
