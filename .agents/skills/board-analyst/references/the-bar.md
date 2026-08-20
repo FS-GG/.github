@@ -94,11 +94,18 @@ titles that cannot stay true.
 
 ## Test 3 — Class-anchored
 
-> If an open row already proposes the mechanism that prevents this finding's whole class, the finding
-> is **evidence on that row** until the class row lands.
+> On the **second known instance of one preventive mechanism**, the mechanism row is the required
+> artifact. Create or reuse that row and fold both instances onto it as evidence; do not file another
+> instance row. A genuinely singular mechanism — exactly one known instance and no plausible second —
+> may still be filed as an instance row.
 
 This is the test that stops one cause becoming seven numbers. It is also the one most often skipped,
-because the instance in front of you always looks more concrete than the class row.
+because the instance in front of you always looks more concrete than the mechanism row.
+
+The deferral has an expiry. When the mechanism row lands, re-take each folded finding's own measurement
+at its site. If the repair reached that site, retire the evidence. If it did not, the finding is no
+longer class-anchored: adjudicate it again on tests 1 and 2 alone. A landed mechanism row is not a
+permanent reason to suppress an instance it did not repair.
 
 **Worked rejection — a worktree's own engine build shadows the shared one (2026-08-15).**
 
@@ -115,10 +122,21 @@ worktree"* — and names three occurrences in one run. The `skill-quality` harne
 occurrence**, not a fourth cause. Transplant it onto `.github#2653` as evidence, with the exact harness
 and the line that forces the build, and file nothing.
 
-The tell that this is test 3 and not a duplicate check: the finding and the class row surface in
+The tell that this is test 3 and not a duplicate check: the finding and the mechanism row surface in
 different places and share no symptom text. Deduping on the **symptom** would have missed it.
 Deduping on the **cause** — "an incidental local engine build shadows tier 2b" — finds it immediately.
 This is why the packet's `cause:` field is required and its `surface:` field is not sufficient.
+
+**Worked fold — the gate-harness census (2026-08-17).**
+
+The pending register held **17 packets across four `#266` mechanisms**. Under the old practice each
+packet could become another instance row because the standing anchor defined the class but proposed no
+preventive mechanism. The gate-harness census instead made the shared mechanism the row and absorbed all
+17 packets as evidence for one adjudication. That is the required shape once a second instance exists:
+one mechanism row, many evidence packets, and no child row per sighting.
+
+**Verdict: FOLDED.** The packets remain visible as evidence on the mechanism row and in the register;
+they do not multiply the board. This is a disposition, not a lower severity judgement.
 
 ---
 
@@ -135,7 +153,7 @@ rejections have to survive for whoever eventually claims the area, who is someon
 So a rejection lands in **two** places, and both are cheap:
 
 1. **On the row where it will be looked for**, when there is one. A test-3 rejection goes onto the
-   class row as evidence — that is the disposition, not a consolation prize, and the eventual claimant
+   mechanism row as evidence — that is the disposition, not a consolation prize, and the eventual claimant
    of that row is the exact reader who needs it. A test-2 rejection goes onto the derived gate's own
    row if one is open.
 
