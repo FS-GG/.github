@@ -1,0 +1,389 @@
+schemaVersion: 1
+workId: 2756-review-wait-continuity
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2756-review-wait-continuity/spec.md
+sourceClarifications: work/2756-review-wait-continuity/clarifications.md
+sourceChecklist: work/2756-review-wait-continuity/checklist.md
+sourcePlan: work/2756-review-wait-continuity/plan.md
+sourceTasks: work/2756-review-wait-continuity/tasks.yml
+sourceAnalysis: readiness/2756-review-wait-continuity/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2756-review-wait-continuity/analysis.json
+    digest: 2b9720304d1b480c7b321b392bf070851fb66939640335ff03ff313314766261
+    schemaVersion: 1
+  - label: checklist
+    path: work/2756-review-wait-continuity/checklist.md
+    digest: e97b500fa045b23ecfbabee50dbd870a90023680a64a071e3328ebeea34f784b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2756-review-wait-continuity/clarifications.md
+    digest: 6da26f230bee9069c85a2ce5a5414cc1a97c16462bea42f872c0a8ae828ea9af
+    schemaVersion: 1
+  - label: plan
+    path: work/2756-review-wait-continuity/plan.md
+    digest: 4589b2a594241982651192ca64fcccbca60bea8c96aa5f06f357612c98ee8984
+    schemaVersion: 1
+  - label: spec
+    path: work/2756-review-wait-continuity/spec.md
+    digest: 24ea22bef992f6a555914eaeff93e118907250684a861c4cd2d8a294d3028e97
+    schemaVersion: 1
+  - label: tasks
+    path: work/2756-review-wait-continuity/tasks.yml
+    digest: 60dda340f14a58c8b8d1075a248d53ce91dfefd09fbead95988a0f841964d6df
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
+      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

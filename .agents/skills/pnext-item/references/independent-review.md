@@ -59,19 +59,23 @@ Mint a critic with `eval "$(scripts/fsgg-coord whoami --mint)"`. The `initial` r
 four ordered meaningful-route evidence strings or exactly one not-meaningful reason. Set
 `diffAuditRequired` when mechanically discovered semantic replacements exist.
 
-After material repair, the same critic posts a `confirmation` for the new exact head. Rounds are
-contiguous and one-based; `initialReview` names the initial comment and `precedingReview` names the
-immediately prior structured comment. At most three ordinary confirmations are allowed.
+After material repair, a freshly minted successor critic posts a `confirmation` for the new exact
+head. Rounds are contiguous and one-based; `initialReview` names the initial comment and
+`precedingReview` names the immediately prior structured comment. At most three ordinary
+confirmations are allowed. The successor inherits the durable ledger and review packet, not the prior
+critic's clearances, and performs a fresh full review of the current head.
 
 If that ceiling is exhausted, append `escalation` then `repair-phase`. Escalation without the typed
 repair-phase fact has no authority. Repair phase permits at most ten confirmations before human
 escalation.
 
-If the round's critic has despawned and the host grants succession, the successor performs a genuinely
-fresh, full review of the current head and records it under **its own minted identity** — never as a
-record bearing the despawned critic's id, and never as a second `initial`, which is allowed only after
-host acceptance. The record keeps whichever `kind` the chain needs (`confirmation`, `escalation` or
-`repair-phase`) and adds one object:
+Critic succession is the ordinary repair route, not an exceptional recovery. Five of five measured
+repair chains on 2026-08-17 outlived their dispatched critic: `.github#2712` / PR #2745,
+`.github#2724` / PR #2746 (twice), `.github#2730` / PR #2747, and the fifth chain recorded at
+`.github#2691` comment `5311942674` (packet comments `5311928208` and `5311942674`). A successor
+therefore records under **its own minted identity** — never as a record bearing the earlier critic's
+id, and never as a second `initial`, which is allowed only after host acceptance. The record keeps
+whichever `kind` the chain needs (`confirmation`, `escalation` or `repair-phase`) and adds one object:
 
 ```json
 "critic": "<successor-minted-id>",
@@ -79,10 +83,44 @@ host acceptance. The record keeps whichever `kind` the chain needs (`confirmatio
 ```
 
 After a valid succession the successor IS the generation's critic: the host's `acceptance` binds the
-successor, and any further grant names the successor as its `originalCritic`. A differing critic
-carrying no grant is refused exactly as before, and a grant on an `initial` or `acceptance` record, or
-on one that changes no critic, is refused. The engine requires `grantUrl` to be present and never
-resolves it, and a grant is bound to one exact head — a moved head needs a new grant.
+successor, and a later succession names that successor as its `originalCritic`. The durable review-wait
+receipt below supplies the accountable generation transition; no host is asked to attest that an
+ephemeral agent has despawned. A differing critic carrying neither the current wait receipt nor its
+recorded succession is refused. A succession on an `initial` or `acceptance` record, or one that changes
+no critic, is refused. `grantUrl` identifies the durable transition evidence and is bound to one exact
+head — a moved head needs a new receipt and transition.
+
+## Durable review waits and critic generations
+
+A protocol-created queue is durable state, not an agent sleeping while its active lease expires. The
+one receipt vocabulary is:
+
+`WaitReceipt(item, claimGeneration, reviewGeneration, kind, enteredAt, expiresAt, evidenceRef)`.
+
+`item` is the qualified issue ref; `claimGeneration` is the winning GitHub-issued claim marker id;
+`reviewGeneration` is the initial structured-review record that anchors the current chain; `kind`
+names the awaited event (`initial-review`, `implementer-repair`, `critic-confirmation`,
+`host-acceptance`, or `checks`); `enteredAt` and `expiresAt` bound the wait; and `evidenceRef` identifies
+the durable comment or check whose change resumes it. These are authority-issued revisions, not values
+an agent invents.
+
+Entering a review queue writes the receipt before the actor yields. A current receipt plus the open
+item PR preserves the touch-set reservation, but it never extends or resurrects the worker's mutation
+lease. Before changing the tree, posting a repair, or advancing review, the resumed actor revalidates
+that `claimGeneration` is still current or explicitly reacquires the item and records the new
+generation. `Unknown` or stale claim state authorizes nothing.
+
+Review completion, cancellation, and bounded timeout each consume or expire the receipt idempotently.
+They conditionally transition the same receipt revision, then read back the winner; completion racing
+timeout therefore has one durable outcome rather than two inferred successes. Timeout returns the item
+to an explicit recoverable review state and cannot reserve a lane forever. It does not revive a claim.
+
+The receipt also carries critic-generation continuity. On an implementer-repair wait, the critic that
+produced the finding may exit normally. Resumption dispatches a fresh successor, which receives the
+item/spec, exact head, complete ledger, repair diff, verification evidence, and current wait receipt.
+It inherits no prior clearance and performs a full independent review of that head. The successor's
+structured record and the consumed receipt make the handoff re-derivable; ephemeral runtime liveness
+and a host's testimony about despawn are not review evidence.
 
 Only the host posts `acceptance`, after the latest critic record is `pass` and all checks are green.
 It uses verdict `accepted`, binds the exact head, initial URL and latest critic URL, follows the
@@ -100,9 +138,9 @@ generation. Backlinks, head bindings, critic continuity, and digest continuity f
 ## Independent critic boundary
 
 The critic is independent of implementation context: provide the roadmap/spec, diff, exact head and
-verification evidence, but not hidden implementation reasoning. The same critic handles repairs in a
-generation. Use the explicit succession workflow above if replacement is unavoidable; prose is never
-authority.
+verification evidence, but not hidden implementation reasoning. A fresh successor handles each
+post-repair review from the durable wait packet. The structured ledger and consumed wait receipt carry
+continuity; prose is never authority, and runtime liveness testimony is not evidence.
 
 Report concrete findings first, ordered by severity and linked to files or commands. A pass means no
 unresolved material finding remains at the reviewed head. The host validates the ledger and checks
@@ -553,8 +591,9 @@ an unmetered principal is the shape `graphql-monopoly` exists to catch.
 
 ## Disposition and repair bounds
 
-The implementing worker repairs the material findings that belong in the current PR; the same critic
-reviews each repaired head. Every round addresses material findings only — never minor observations.
+The implementing worker repairs the material findings that belong in the current PR; a fresh successor
+critic fully reviews each repaired head from the durable wait packet. Every round addresses material
+findings only — never minor observations.
 Where no repair is required, an initial `pass` whose reviewed head equals the candidate head **is** the
 confirmation, and no second record is required. Before routing any repair the host validates the current
 chain and permits it only while the latest round is below the ordinary ceiling; that count-before-routing
@@ -702,7 +741,7 @@ round chain and the escalation record before entering. On entry:
    escalation record, so a reader can tell "landed after repair-phase escalation" from "landed normally"
    without reconstructing history.
 4. The repair-phase chain is a **fresh** chain: round numbering restarts at one under the identical
-   confirmation discipline — same critic across its own rounds, one round per repair, no skipped or
+   confirmation discipline — one fresh successor per repaired head, one round per repair, no skipped or
    duplicate numbers — but under the repair-phase ceiling, a distinct literal that is never conflated
    with the ordinary one. The repair phase never changes the ordinary ceiling for any other item.
 5. A clean repair-phase result merges under the same acceptance and `landable` gates as any other PR.
