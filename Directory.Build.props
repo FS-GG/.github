@@ -395,8 +395,14 @@
        existing package member destination, or runtime behavior is removed, so this is not a major.
        Main, all four immutable tag namespaces, GitHub Packages, nuget.org, and the registry
        independently put the complete predecessor at 0.64.0 before this next-minor move. -->
+  <!-- 0.65.0 -> 0.66.0 (.github#2757): MINOR on the stable 0.x line. The packed pnext-item
+       findings contract adds a new terminal disposition with four required conditions and assigns
+       who may declare it at each workflow boundary. Receivers therefore make a new stopping
+       decision rather than reading corrected prose about an existing action. This matches the
+       additive required-behavior precedent used for 0.65.0; no command, member, destination, or
+       runtime implementation is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.65.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.66.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
