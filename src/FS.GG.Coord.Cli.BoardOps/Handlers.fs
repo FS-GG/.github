@@ -1962,8 +1962,18 @@ module Handlers =
               Inbox = inbox
               RoomOpen = roomOpen }
 
-    // Program-level registrations are also a BoardOps-family product. Every family command enters
-    // through Client's context-owning dispatcher and its validated handler map; no listed verb has a
-    // central special case or a second implementation route.
+    // Program-level registrations are also a BoardOps-family product. Intake validation is the one
+    // tokenless BoardOps route: it parses the draft and validates paths against the local checkout,
+    // while apply still enters Client's context-owning live dispatcher. Keep that distinction here,
+    // at the owning family's registration edge, so Program and Client gain no command special case.
     let programHandlers (runWithContext: Options -> int) : (Command * (Options -> int)) list =
-        handlers |> List.map (fun (command, _) -> command, runWithContext)
+        handlers
+        |> List.map (fun (command, _) ->
+            match command with
+            | IntakeCmd ->
+                command,
+                fun opts ->
+                    match opts.Args with
+                    | [ "validate"; _ ] -> IntakeApplication.run opts
+                    | _ -> runWithContext opts
+            | _ -> command, runWithContext)

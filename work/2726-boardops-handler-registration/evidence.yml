@@ -168,7 +168,7 @@ evidence:
       passed: 1
       failed: 0
       skipped: 0
-    notes: ["Six registration tests passed: independent production-union agreement, a permanent missing-production-command control, duplicate, missing, unexpected, and family exactly-once controls. Removing Help from Program's real legacy inventory made module initialization red with 'missing handlers: [Help]'; restoring it returned the suite green."]
+    notes: ["Six registration tests passed: independent production-union agreement, a permanent missing-production-command control, duplicate, missing, unexpected, and family exactly-once controls. Removing Help from Program's real legacy inventory made module initialization red with 'missing handlers: [Help]'; restoring it returned the suite green. Repair-phase round 1 also runs IntakeCliTests with both GITHUB_TOKEN and GH_TOKEN absent: the named validate control passes through the family-owned pure route, while apply still reaches the live dispatcher. Replacing the Intake registration with the generic context wrapper reproduced CI's token refusal and made that named control red; restoring the family-owned split returned all four IntakeCliTests green."]
   - id: EV006
     kind: verification
     subject:
