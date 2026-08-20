@@ -1,4 +1,5 @@
 # Baseline for scripts/check-signature-doc-siting.py (.github#2730).
+# board-paths-live: maintaining-issues=.github#2724,.github#2731,.github#2726,.github#2727,.github#2728,.github#2729
 #
 # `<count> <path>` -- how many F# XML documentation comments (`///`) sit in that implementation
 # file, which has a sibling `.fsi` and therefore has every one of them discarded by the compiler.

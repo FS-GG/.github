@@ -1,0 +1,126 @@
+schemaVersion: 1
+work:
+  id: 2771-live-path-coherence
+  title: "Live board path and maintaining-lane coherence"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2771-live-path-coherence/spec.md
+  sourceClarifications: work/2771-live-path-coherence/clarifications.md
+  sourceChecklist: work/2771-live-path-coherence/checklist.md
+  sourcePlan: work/2771-live-path-coherence/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2771-live-path-coherence/spec.md
+    digest: 4781c55f6aeab32228fd14ac0e226b1c91550bd4ea55299a2fa1962f814e650b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2771-live-path-coherence/clarifications.md
+    digest: 9c1862ea2d31ad209c9e4ab4b0a0094700142d6e845759b493e4f066f444e079
+    schemaVersion: 1
+  - label: checklist
+    path: work/2771-live-path-coherence/checklist.md
+    digest: 3aa6ce5c3120edd69ed86a1ab5bdc5f3fac10eb43b4240303760576d15aff418
+    schemaVersion: 1
+  - label: plan
+    path: work/2771-live-path-coherence/plan.md
+    digest: f83a3406b998d99be94939d7bda2f6db33a9ad05cdc5f3a2baddf3c33c73c9b2
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-001, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, PD-005, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-002]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV009]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2771-live-path-coherence."

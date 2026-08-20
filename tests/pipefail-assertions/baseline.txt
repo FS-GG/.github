@@ -1,4 +1,5 @@
 # Baseline for scripts/check-pipefail-assertions.py (.github#2689).
+# board-paths-live: exempt=Each conversion is opportunistic, so no issue is a maintaining lane until its actual diff changes a counted site.
 #
 # `<count> <path>` -- how many sites in that file consume the status of a pipeline ending in an
 # early-exiting reader (`grep -q`, `grep -m N`, `head`) while the file sets `pipefail`.

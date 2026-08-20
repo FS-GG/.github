@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="2771-live-path-coherence" tests="4" failures="0" errors="0" skipped="0">
+  <testcase classname="board-paths-live" name="focused-fixture"/>
+  <testcase classname="board-paths-live" name="pipefail-baseline-regression"/>
+  <testcase classname="board-paths-live" name="signature-baseline-regression"/>
+  <testcase classname="board-paths-live" name="workflow-wiring"/>
+</testsuite>
