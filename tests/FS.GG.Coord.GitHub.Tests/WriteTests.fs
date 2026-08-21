@@ -2241,6 +2241,12 @@ let ``appendRoomLine is additive — a second room keeps the first`` () =
         FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" twice)
 
 [<Fact>]
+let ``#2801 appendRoomLine is idempotent for the same automatic room`` () =
+    let once = appendRoomLine "body" "#12"
+    let twice = appendRoomLine once "#12"
+    Assert.Equal(once, twice)
+
+[<Fact>]
 let ``appendRoomLine closes an unterminated fence FIRST, so the line is not swallowed (#972)`` () =
     // A body ending inside a fence would otherwise eat the appended declaration, and `Rooms.parse` —
     // which reads only unfenced lines — would never see it. The room MUST survive.
@@ -2296,3 +2302,82 @@ let ``closeRoom PATCHes the room issue (the derived roll-up close)`` () =
     match closeRoom transport aRef with
     | Ok() -> Assert.True(transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}", "closeRoom did not PATCH the room issue")
     | Error e -> failwith $"closeRoom must succeed on a 200 — got %A{e}"
+
+// ---- #2801 mutual-overlap writer recovery ----------------------------------------------------------
+
+[<Fact>]
+let ``#2801 durable wait receipt is observed after its comment write`` () =
+    let marker = "<!-- fsgg:overlap-wait/v1 key=a-b -->"
+    let body = marker + "\n{\"schema\":\"fsgg.coord.overlap-wait/v1\"}"
+    let transport =
+        scripted
+            [ ok "[]"
+              ok "{\"id\":901}"
+              ok (comments [ markerWithExactBody 901 body ]) ]
+
+    match writeDurableComment transport aRef marker body with
+    | Ok(CommentWritten 901L) -> Assert.Equal(3, transport.RestCalls)
+    | other -> failwith $"expected observed durable receipt write, got %A{other}"
+
+[<Fact>]
+let ``#2801 response-lost wait receipt converges from the authoritative re-read`` () =
+    let marker = "<!-- fsgg:overlap-wait/v1 key=a-b -->"
+    let body = marker + "\n{\"schema\":\"fsgg.coord.overlap-wait/v1\"}"
+    let transport =
+        scripted
+            [ ok "[]"
+              Error(Transport "response lost")
+              ok (comments [ markerWithExactBody 901 body ]) ]
+
+    match writeDurableComment transport aRef marker body with
+    | Ok CommentAlreadyPresent -> Assert.Equal(3, transport.RestCalls)
+    | other -> failwith $"response loss must reconcile to the exact stored receipt, got %A{other}"
+
+[<Fact>]
+let ``#2801 conflicting wait receipt at one marker fails before a write`` () =
+    let marker = "<!-- fsgg:overlap-wait/v1 key=a-b -->"
+    let existing = marker + "\n{\"revision\":1}"
+    let proposed = marker + "\n{\"revision\":2}"
+    let transport = scripted [ ok (comments [ markerWithExactBody 901 existing ]) ]
+
+    match writeDurableComment transport aRef marker proposed with
+    | Error(Malformed _) ->
+        Assert.Equal(1, transport.RestCalls)
+        Assert.False(transport.Logged "comment-post")
+    | other -> failwith $"same-marker conflict must fail closed, got %A{other}"
+
+[<Fact>]
+let ``#2801 automatic room is created once and confirmed by cycle marker`` () =
+    let marker = "<!-- fsgg:mutual-overlap-room/v1 cycle=abc -->"
+    let body = marker + "\n\nPaths: none"
+    let after = System.Text.Json.JsonSerializer.Serialize [ {| number = 220; body = body |} ]
+    let transport = scripted [ ok "[]"; ok "{\"number\":220}"; ok after ]
+
+    match ensureRoom transport "FS-GG" "FS.GG.SDD" marker "automatic room" body with
+    | Ok(RoomCreated room) ->
+        Assert.Equal(220, room.Number)
+        Assert.Equal(3, transport.RestCalls)
+    | other -> failwith $"expected one confirmed room, got %A{other}"
+
+[<Fact>]
+let ``#2801 response-lost room create reuses the one observed cycle room`` () =
+    let marker = "<!-- fsgg:mutual-overlap-room/v1 cycle=abc -->"
+    let body = marker + "\n\nPaths: none"
+    let after = System.Text.Json.JsonSerializer.Serialize [ {| number = 220; body = body |} ]
+    let transport = scripted [ ok "[]"; Error(Transport "response lost"); ok after ]
+
+    match ensureRoom transport "FS-GG" "FS.GG.SDD" marker "automatic room" body with
+    | Ok(RoomAlreadyPresent room) -> Assert.Equal(220, room.Number)
+    | other -> failwith $"response-lost create must recover the marker-keyed room, got %A{other}"
+
+[<Fact>]
+let ``#2801 response-lost room back-reference PATCH is accepted only after readback`` () =
+    let transport =
+        scripted
+            [ ok "{\"body\":\"Paths: src/A\"}"
+              Error(Transport "response lost")
+              ok "{\"body\":\"Paths: src/A\\n\\nRooms: #220\"}" ]
+
+    match ensureRoomRef transport aRef "#220" with
+    | Ok() -> Assert.Equal(3, transport.RestCalls)
+    | other -> failwith $"response-lost back-reference must reconcile from the issue body, got %A{other}"
