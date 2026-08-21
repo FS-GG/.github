@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2797-review-escalation-claim-turnover/ship.json",
-      "digest": "sha256:a5f0d78f1b9cbf26f6240a2726f8ef53231ac581b75df54e499f0fe655364035",
+      "digest": "sha256:e3470215f6b6fc87f3c534796c1a576f14810f55942360f9932ed58010852d9c",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2797-review-escalation-claim-turnover/verify.json",
-      "digest": "sha256:ce21ae6e479595fd367f685d5addbb92f0b2d9be9df79095bc882e6ebc89f4b7",
+      "digest": "sha256:377d267484e78e26d8914432210fa04910165206d17c0d9579eb9b8f85a12f14",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2797-review-escalation-claim-turnover/work-model.json",
-      "digest": "sha256:16d4e5fd918d45e20b77c261af8f9bdde95d96eddcbf4e6c972d20f64969a22b",
+      "digest": "sha256:ea38cb0d05910eaafd2e7589ec95be7b1c9db12d0b570f4e335c14e2240d64ae",
       "schemaVersion": 1
     }
   ],
@@ -49,8 +49,8 @@
       },
       {
         "id": "evidence:EV006",
-        "state": "skipped",
-        "rationale": "FR-006 is deliberately post-merge: merged origin/main is the only honest subject for engine freshness, release-debt deduplication, and the S.I.R. install handoff. The source item will discharge this before Done; pre-merge verify records the boundary instead of fabricating a merged-main result."
+        "state": "real",
+        "rationale": null
       },
       {
         "id": "evidence:EV007",

@@ -1,0 +1,33 @@
+{
+  "schema": "fsgg.engine-freshness/1",
+  "package": "FS.GG.Coord.Cli",
+  "feedVersion": "0.67.0",
+  "tag": "coord-engine/v0.67.0",
+  "ref": "origin/main",
+  "wireSurface": "src/FS.GG.Coord.Core/Protocol.fs",
+  "unreleasedCount": 3,
+  "wireCount": 0,
+  "defectCount": 0,
+  "releaseOwed": true,
+  "red": false,
+  "commits": [
+    {
+      "sha": "183f47d2a4ce0c6e41585936436b557f4a640922",
+      "display": "183f47d2 coord: preserve completed exhaustion across claim turnover",
+      "wire": false,
+      "closes": []
+    },
+    {
+      "sha": "72800bec80e8a79a1e741e7f7c6e562384800527",
+      "display": "72800bec coord: project exhausted review phase explicitly",
+      "wire": false,
+      "closes": []
+    },
+    {
+      "sha": "391700704b52f2e21e2f92666992c2726b121be2",
+      "display": "39170070 coord: authorize one exhausted-claim escalation",
+      "wire": false,
+      "closes": []
+    }
+  ]
+}

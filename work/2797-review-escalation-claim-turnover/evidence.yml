@@ -170,7 +170,7 @@ evidence:
       skipped: 0
     notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
   - id: EV006
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T006
@@ -181,15 +181,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: [scripts/check-engine-freshness.py]
-    sourceRefs: []
-    result: deferred
+    artifacts: [scripts/check-engine-freshness.py, work/2797-review-escalation-claim-turnover/artifacts/2797-post-merge-freshness.json, work/2797-review-escalation-claim-turnover/artifacts/2797-post-merge-release-disposition.json]
+    sourceRefs:
+      - kind: verification
+        path: work/2797-review-escalation-claim-turnover/artifacts/2797-post-merge-freshness.json
+      - kind: verification
+        path: work/2797-review-escalation-claim-turnover/artifacts/2797-post-merge-release-disposition.json
+    result: pass
     synthetic: false
-    rationale: "FR-006 is deliberately post-merge: merged origin/main is the only honest subject for engine freshness, release-debt deduplication, and the S.I.R. install handoff. The source item will discharge this before Done; pre-merge verify records the boundary instead of fabricating a merged-main result."
-    owner: FS-GG/.github
-    scope: merged-main engine freshness plus coherent release/install disposition for S.I.R.
-    laterLifecycleVisibility: "Immediately after guarded merge, run scripts/check-engine-freshness.py against origin/main, replace this deferral with the resulting real verification evidence, and only then stamp the item Done."
-    notes: ["Accepted only across the PR review boundary; it is not a waiver of the post-merge pnext-item obligation."]
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-post-merge-release-disposition.json
+      digest: "sha256:0096e616bbe973bfc92be3d65ef25c50df239c360ba945242099652d3e2245c4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Guarded merge bdf3b494 is reachable from origin/main. The observed freshness report records releaseOwed=true, red=false, three unreleased behavior commits and zero wire-surface defects. Existing release row FS-GG/.github#2794 was deduplicated, updated with the exact measurement, assigned an sdd-required route, and promoted to Ready; the downstream S.I.R. handoff remains mechanical until that coherent release is published and installed."]
   - id: EV007
     kind: verification
     subject:
