@@ -14,11 +14,12 @@ and test blobs).
   once; the readable noncontiguous historical chain and malformed legacy backlink each returned
   nonzero with unchanged comment count.
 - `scripts/check-coherent-set-version.py`: all three package projects evaluate to 0.69.0.
-- `scripts/check-release-coherence.py`: current immutable feed frontier is coherent 0.68.0 and the
+- `python3 scripts/check-release-coherence.py`: current immutable feed frontier is coherent 0.68.0 and the
   0.69.0 source cut introduces no completion gap.
-- `scripts/check-engine-release-notes.py`, `scripts/check-ship-verdict-provenance.py`,
-  `scripts/generate-driver-manifest --check`, `scripts/generate-projections --check`, and
-  `git diff --check`: passed.
+- `scripts/check-engine-release-notes.py`, `python3 scripts/check-ship-verdict-provenance.py`,
+  `PATH=/tmp/fsgg-2807-pyyaml.LvVuAr/bin:$PATH scripts/generate-driver-manifest --check`,
+  `PATH=/tmp/fsgg-2807-pyyaml.LvVuAr/bin:$PATH scripts/generate-projections --check`, and
+  `git diff --check d395877725ef31bcd1414a64b3ecd0b77d0ee862..HEAD`: passed.
 - Release packs produced `FS.GG.Coord.Cli.0.69.0.nupkg`, `FS.GG.Kit.0.69.0.nupkg`, and
   `FS.GG.Drivers.0.69.0.nupkg`. An isolated local tool install reported `0.69.0.0` and loaded the
   command contract.
@@ -30,10 +31,11 @@ candidate branch.
 
 1. Noncontiguous-history fence inversion: disabled all three production structured-ledger validation
    calls involved in `review record` plus the exact initial/confirmation 1/2/3 kind-round predicate.
-   The writer suite went red at the targeted `.github#2797` assertion: 174 passed, 1 failed, exit 1.
+   The malformed route escaped with comment count 15→16 and the writer suite went red at the targeted
+   `.github#2797` assertion: 174 passed, 1 failed, exit 1.
 2. Legacy-backlink fence inversion: changed only the `not legacyMatches` refusal guard so a malformed
    confirmation backlink could pass that production boundary. The same targeted assertion went red:
-   174 passed, 1 failed, exit 1.
+   the malformed route escaped with comment count 15→16; 174 passed, 1 failed, exit 1.
 
 These are author-time mutation results, not hosted publication evidence. Dual-feed identity, clean
 public installation, registry reconciliation, and the S.I.R. handoff remain post-merge obligations.
