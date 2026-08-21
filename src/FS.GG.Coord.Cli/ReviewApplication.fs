@@ -299,7 +299,25 @@ module ReviewApplication =
            expiresAt = receipt.ExpiresAt
            evidenceRef = receipt.EvidenceRef |}
 
-    let private waitAuthority (binding: Review.Binding) (state: Review.State) (action: Review.NextAction) (waitState: ReviewWait.State option) =
+    let private isCompletedOrdinaryExhaustion (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State option) =
+        let phaseFacts = Driver.reviewPhaseFacts facts.Comments
+        match binding.Phase, waitState with
+        | Review.Ordinary, Some (ReviewWait.Completed (receipt, _)) ->
+            receipt.Kind = ReviewWait.RepairConfirmation
+            && receipt.ClaimGeneration <> binding.ClaimGeneration
+            && phaseFacts.ConfirmationCount = Protocol.reviewPolicy.MaxAutomatedRepairRounds
+            && receipt.ReviewGeneration =
+                ReviewWait.generationToken
+                    binding.HeadSha
+                    ReviewWait.RepairConfirmation
+                    Protocol.reviewPolicy.MaxAutomatedRepairRounds
+        | _ -> false
+
+    let private hasRecordedRepairPhaseEntry (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State option) =
+        let phaseFacts = Driver.reviewPhaseFacts facts.Comments
+        isCompletedOrdinaryExhaustion binding facts waitState && phaseFacts.EscalationPresent
+
+    let private waitAuthority (binding: Review.Binding) (facts: Review.Facts) (state: Review.State) (action: Review.NextAction) (waitState: ReviewWait.State option) =
         let dispatchAuthority =
             match action with
             | Review.DispatchCritic -> Some(ReviewWait.InitialReview, ReviewWait.generationToken binding.HeadSha ReviewWait.InitialReview 0)
@@ -308,6 +326,14 @@ module ReviewApplication =
                 Some(ReviewWait.RepairConfirmation, ReviewWait.generationToken binding.HeadSha ReviewWait.RepairConfirmation round)
             | _ -> None
         match waitState, dispatchAuthority with
+        | _ when hasRecordedRepairPhaseEntry binding facts waitState ->
+            Error
+                [ "the structured ordinary-exhaustion escalation is recorded; enter the fresh repair phase "
+                  + "instead of dispatching, resuming, accepting, or manufacturing ordinary round four on the exhausted pull request" ]
+        | _ when isCompletedOrdinaryExhaustion binding facts waitState ->
+            Error
+                [ "the ordinary review chain is exhausted after its completed round-three wait; "
+                  + "record exactly one structured escalation for repair-phase entry — never dispatch or resume ordinary round four" ]
         | None, _ -> Ok () // offline snapshots predate the live durable-wait projection
         | Some (ReviewWait.Invalid errors), _ -> Error errors
         | Some (ReviewWait.Recoverable (_, reason)), _ -> Error [ reason ]
@@ -352,7 +378,11 @@ module ReviewApplication =
             ExitCode.toInt ExitCode.NoVerdict
         | Ok verdict ->
             let waitStatus, waitReceipt, waitReason = waitProjection waitState
-            match waitAuthority binding verdict.State verdict.NextAction waitState, opts.Render with
+            let waitStatus =
+                if hasRecordedRepairPhaseEntry binding facts waitState then Some "repairPhaseEntry"
+                elif isCompletedOrdinaryExhaustion binding facts waitState then Some "ordinaryExhaustion"
+                else waitStatus
+            match waitAuthority binding facts verdict.State verdict.NextAction waitState, opts.Render with
             | Error reasons, Json ->
                 printfn
                     "%s"

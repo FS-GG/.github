@@ -1,0 +1,437 @@
+schemaVersion: 1
+workId: 2797-review-escalation-claim-turnover
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2797-review-escalation-claim-turnover/spec.md
+sourceClarifications: work/2797-review-escalation-claim-turnover/clarifications.md
+sourceChecklist: work/2797-review-escalation-claim-turnover/checklist.md
+sourcePlan: work/2797-review-escalation-claim-turnover/plan.md
+sourceTasks: work/2797-review-escalation-claim-turnover/tasks.yml
+sourceAnalysis: readiness/2797-review-escalation-claim-turnover/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2797-review-escalation-claim-turnover/analysis.json
+    digest: 89bbb83021100c03f97116d130bf3c2de6b157690f5a79a3c824b5e936fb1f34
+    schemaVersion: 1
+  - label: checklist
+    path: work/2797-review-escalation-claim-turnover/checklist.md
+    digest: 3de48fdf64f60f17a0527412a330454fe3d8e3cb9c0f1f403d49290baee995ee
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2797-review-escalation-claim-turnover/clarifications.md
+    digest: d4ab78fce38c7d8e8cfef542271ea2671bd7512cb0c88480bc1683cc8f516a5b
+    schemaVersion: 1
+  - label: plan
+    path: work/2797-review-escalation-claim-turnover/plan.md
+    digest: 5fb16b2a70a8ade5600a8b56f7b8c8032cbe4d67cdb55b8d1ecf87cdd8f104f8
+    schemaVersion: 1
+  - label: spec
+    path: work/2797-review-escalation-claim-turnover/spec.md
+    digest: d27ccba03741b3519075e1533a0a776e6fe309e3dcd51f17f2850e32159e5584
+    schemaVersion: 1
+  - label: tasks
+    path: work/2797-review-escalation-claim-turnover/tasks.yml
+    digest: 7a6c72e602c0df55516d1cf499b172ff33dcdd0dc17aa30433f374ad67bde133
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV006
+    kind: deferral
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [scripts/check-engine-freshness.py]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "FR-006 is deliberately post-merge: merged origin/main is the only honest subject for engine freshness, release-debt deduplication, and the S.I.R. install handoff. The source item will discharge this before Done; pre-merge verify records the boundary instead of fabricating a merged-main result."
+    owner: FS-GG/.github
+    scope: merged-main engine freshness plus coherent release/install disposition for S.I.R.
+    laterLifecycleVisibility: "Immediately after guarded merge, run scripts/check-engine-freshness.py against origin/main, replace this deferral with the resulting real verification evidence, and only then stamp the item Done."
+    notes: ["Accepted only across the PR review boundary; it is not a waiver of the post-merge pnext-item obligation."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV012]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli/Client.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
+    obligationRefs: [EV013]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV015]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Focused pure and compiled production-writer evidence covers this obligation; the exact focused TRX receipt is committed and digest-bound, and its verifier refuses missing or tampered bytes."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

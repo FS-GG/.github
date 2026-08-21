@@ -485,6 +485,201 @@ else
 fi
 rm -f "$review_wait_draft"
 
+# .github#2797: the ordinary round-three wait is durable evidence even after its owning claim is
+# released. Reproduce the live S.I.R. sequence on an isolated fixture PR: initial + confirmations
+# 1/2/3 all changes-required, exact round-three wait completed, old claim deleted, legacy exhaustion
+# recorded, and a fresh claim made current. Only one structured escalation may cross that boundary.
+turnover_draft="$(mktemp)"
+turnover_wait="$(mktemp)"
+turnover_comment_ids=()
+turnover_head="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+turnover_critic="critic-turnover-2797"
+turnover_old_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-turnover-old lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+turnover_comment_ids+=("$turnover_old_claim_id")
+
+write_turnover_wait() {
+  local event="$1" generation="$2" evidence="$3" claim="${4:-$turnover_old_claim_id}"
+  python3 - "$turnover_wait" "$event" "$generation" "$evidence" "$claim" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+path, event, generation, evidence, claim = sys.argv[1:]
+now = datetime.now(timezone.utc).replace(microsecond=0)
+if event == "enter":
+    value = {"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#43",
+             "claimGeneration":claim,"reviewGeneration":generation,"kind":
+             "initial-review" if generation.endswith(":initial-review:0") else "repair-confirmation",
+             "enteredAt":now.isoformat().replace("+00:00", "Z"),
+             "expiresAt":(now + timedelta(hours=4)).isoformat().replace("+00:00", "Z"),
+             "evidenceRef":"https://fixture.invalid/2797/dispatch"}
+else:
+    value = {"schema":"fsgg.coord.review-wait/v1","event":"complete","reviewGeneration":generation,
+             "at":now.isoformat().replace("+00:00", "Z"),"evidenceRef":evidence}
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(value, stream, separators=(",", ":"))
+PY
+}
+
+write_turnover_draft() {
+  local kind="$1" round="$2" previous="$3" initial="$4" preceding="$5" head="${6:-$turnover_head}" subject="${7:-FS-GG/FS.GG.SDD#43/pr/43}" verdict="${8:-changes-required}"
+  python3 - "$turnover_draft" "$kind" "$round" "$previous" "$initial" "$preceding" "$head" "$subject" "$turnover_critic" "$verdict" <<'PY'
+import json, sys
+path, kind, round_number, previous, initial, preceding, head, subject, critic, verdict = sys.argv[1:]
+record = {
+    "schema":"fsgg.coord.review-decision/v2", "subject":subject, "revision":0,
+    "previousDigest":previous or None, "headSha":head, "claimGeneration":None, "baseSha":None,
+    "critic":critic, "verdict":verdict, "acceptedExceptions":[],
+    "routeApplicability":"not-meaningful", "routeEvidence":["claim-turnover writer fixture"],
+    "policyVersion":"structured-decisions/1", "kind":kind, "round":int(round_number),
+    "initialReview":initial or None, "precedingReview":preceding or None,
+    "diffAuditRequired":False, "diffAuditReceipts":[], "succession":None,
+    "timestamp":"2026-08-21T07:00:00Z", "digest":""
+}
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(record, stream, separators=(",", ":"))
+PY
+}
+
+turnover_initial_url=""; turnover_preceding_url=""; turnover_previous_digest=""
+for turnover_round in 0 1 2 3; do
+  if [ "$turnover_round" -eq 0 ]; then
+    turnover_kind="initial"; turnover_generation="$turnover_head:initial-review:0"
+  else
+    turnover_kind="confirmation"; turnover_generation="$turnover_head:repair-confirmation:$turnover_round"
+  fi
+  write_turnover_wait enter "$turnover_generation" ""
+  turnover_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 43 --json 2>&1)"; turnover_wait_rc=$?
+  turnover_wait_id="$(printf '%s' "$turnover_wait_out" | jq -r '.commentId // empty')"
+  [ -n "$turnover_wait_id" ] && turnover_comment_ids+=("$turnover_wait_id")
+  write_turnover_draft "$turnover_kind" "$turnover_round" "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url"
+  turnover_record_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json 2>&1)"; turnover_record_rc=$?
+  turnover_record_id="$(printf '%s' "$turnover_record_out" | jq -r '.commentId // empty')"
+  turnover_record_url="$(printf '%s' "$turnover_record_out" | jq -r '.commentUrl // empty')"
+  turnover_previous_digest="$(printf '%s' "$turnover_record_out" | jq -r '.digest // empty')"
+  [ -n "$turnover_record_id" ] && turnover_comment_ids+=("$turnover_record_id")
+  [ "$turnover_round" -eq 0 ] && turnover_initial_url="$turnover_record_url"
+  turnover_preceding_url="$turnover_record_url"
+  write_turnover_wait complete "$turnover_generation" "$turnover_record_url"
+  turnover_complete_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 43 --json 2>&1)"; turnover_complete_rc=$?
+  turnover_complete_id="$(printf '%s' "$turnover_complete_out" | jq -r '.commentId // empty')"
+  [ -n "$turnover_complete_id" ] && turnover_comment_ids+=("$turnover_complete_id")
+  if [ "$turnover_wait_rc" -ne 0 ] || [ "$turnover_record_rc" -ne 0 ] || [ "$turnover_complete_rc" -ne 0 ]; then
+    bad ".github#2797: fixture must establish the exhausted ordinary chain" "round=$turnover_round wait=$turnover_wait_rc:$turnover_wait_out record=$turnover_record_rc:$turnover_record_out complete=$turnover_complete_rc:$turnover_complete_out"
+  fi
+done
+
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$turnover_old_claim_id" >/dev/null
+turnover_early_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-turnover-early lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+turnover_comment_ids+=("$turnover_early_claim_id")
+write_turnover_draft escalation 3 "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url"
+turnover_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_missing_legacy_rc=$?
+turnover_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+
+# Recover the actual confirmation URLs instead of depending on comment-id spacing: structured records
+# are ordered and their URLs are the legacy marker's exact backlinks.
+turnover_confirmation_urls="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" \
+  | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-decision/v2 -->")) | .html_url] | .[1:4] | @tsv')"
+IFS=$'\t' read -r turnover_confirmation_1 turnover_confirmation_2 turnover_confirmation_3 <<<"$turnover_confirmation_urls"
+turnover_legacy_body="$(jq -n -r --arg h "$turnover_head" --arg i "$turnover_initial_url" --arg c1 "$turnover_confirmation_1" --arg c2 "$turnover_confirmation_2" --arg c3 "$turnover_confirmation_3" --arg critic "$turnover_critic" '
+  "<!-- fsgg:independent-review-escalation:v1 -->\nexhausted-head: \($h)\ninitial-review: \($i)\nconfirmation-1: \($c1)\nconfirmation-2: \($c2)\nconfirmation-3: \($c3)\ncritic: \($critic)\nverdict: ordinary-chain-exhausted\n\nFixture exhaustion evidence."')"
+turnover_legacy_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg body "$turnover_legacy_body" '{body:$body}')" \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+turnover_comment_ids+=("$turnover_legacy_id")
+turnover_nonfresh_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_nonfresh_rc=$?
+turnover_nonfresh_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$turnover_early_claim_id" >/dev/null
+turnover_fresh_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-turnover-fresh lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+turnover_comment_ids+=("$turnover_fresh_claim_id")
+
+# A second terminal for the exhausted generation is a malformed chain even when the first completion
+# remains the projection winner. Inject it at the wire boundary, prove zero-write refusal, then remove
+# only the injected mutation so the exact valid history can proceed.
+write_turnover_wait complete "$turnover_head:repair-confirmation:3" "https://fixture.invalid/2797/duplicate-terminal"
+turnover_malformed_body="$(jq -n -r --rawfile event "$turnover_wait" '"<!-- fsgg:review-wait/v1 -->\n" + $event')"
+turnover_malformed_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg body "$turnover_malformed_body" '{body:$body}')" \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+turnover_comment_ids+=("$turnover_malformed_id")
+turnover_malformed_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_malformed_rc=$?
+turnover_malformed_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$turnover_malformed_id" >/dev/null
+
+turnover_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 43 --worker vole-418 --json 2>&1)"; turnover_projection_rc=$?
+
+# Every identity/binding mutation is exercised before the valid escalation exists, so refusal
+# cannot be attributed merely to the later duplicate fence.
+turnover_mutation_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+write_turnover_draft escalation 3 "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url" "$turnover_head" "FS-GG/FS.GG.SDD#42/pr/43"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_wrong_item_rc=$?
+turnover_wrong_pr_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+write_turnover_draft escalation 3 "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url" "$turnover_head" "FS-GG/FS.GG.SDD#43/pr/42"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 42 --json >/dev/null 2>&1; turnover_wrong_pr_rc=$?
+turnover_wrong_pr_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+write_turnover_draft escalation 3 "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url" "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_wrong_head_rc=$?
+write_turnover_draft escalation 2 "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_wrong_round_rc=$?
+write_turnover_draft escalation 3 "$(printf '0%.0s' {1..64})" "$turnover_initial_url" "$turnover_preceding_url"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_wrong_digest_rc=$?
+turnover_mutation_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+
+write_turnover_draft escalation 3 "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url"
+turnover_valid_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+turnover_valid_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json 2>&1)"; turnover_valid_rc=$?
+turnover_valid_id="$(printf '%s' "$turnover_valid_out" | jq -r '.commentId // empty')"
+turnover_valid_url="$(printf '%s' "$turnover_valid_out" | jq -r '.commentUrl // empty')"
+turnover_valid_digest="$(printf '%s' "$turnover_valid_out" | jq -r '.digest // empty')"
+[ -n "$turnover_valid_id" ] && turnover_comment_ids+=("$turnover_valid_id")
+turnover_valid_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+turnover_repair_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 43 --worker vole-418 --json 2>&1)"; turnover_repair_projection_rc=$?
+
+turnover_duplicate_before="$turnover_valid_after"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_duplicate_rc=$?
+turnover_duplicate_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+write_turnover_draft confirmation 4 "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url"
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_round4_rc=$?
+turnover_round4_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+write_turnover_draft acceptance 0 "$turnover_valid_digest" "$turnover_initial_url" "$turnover_valid_url" "$turnover_head" "FS-GG/FS.GG.SDD#43/pr/43" accepted
+"$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_acceptance_rc=$?
+turnover_acceptance_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+
+if [ "$turnover_missing_legacy_rc" -ne 0 ] && [ "$turnover_before" = "$turnover_after" ] \
+   && [ "$turnover_nonfresh_rc" -ne 0 ] && [ "$turnover_nonfresh_before" = "$turnover_nonfresh_after" ] \
+   && [ "$turnover_malformed_rc" -ne 0 ] && [ "$turnover_malformed_before" = "$turnover_malformed_after" ] \
+   && [ "$turnover_projection_rc" -ne 0 ] \
+   && printf '%s' "$turnover_projection" | jq -e '.verdict == "noVerdict" and .waitStatus == "ordinaryExhaustion" and (.reasons[0] | contains("never dispatch or resume ordinary round four"))' >/dev/null \
+   && [ "$turnover_wrong_item_rc" -ne 0 ] && [ "$turnover_wrong_pr_rc" -ne 0 ] \
+   && [ "$turnover_wrong_pr_before" = "$turnover_wrong_pr_after" ] && [ "$turnover_wrong_head_rc" -ne 0 ] \
+   && [ "$turnover_wrong_round_rc" -ne 0 ] && [ "$turnover_wrong_digest_rc" -ne 0 ] \
+   && [ "$turnover_mutation_before" = "$turnover_mutation_after" ] \
+   && [ "$turnover_valid_rc" -eq 0 ] && [ "$turnover_valid_after" -eq $((turnover_valid_before + 1)) ] \
+   && printf '%s' "$turnover_valid_out" | jq -e '.revision == 5 and (.digest | length) == 64' >/dev/null \
+   && [ "$turnover_repair_projection_rc" -ne 0 ] \
+   && printf '%s' "$turnover_repair_projection" | jq -e '.verdict == "noVerdict" and .waitStatus == "repairPhaseEntry" and (.reasons[0] | contains("instead of dispatching, resuming, accepting, or manufacturing ordinary round four"))' >/dev/null \
+   && [ "$turnover_duplicate_rc" -ne 0 ] && [ "$turnover_duplicate_before" = "$turnover_duplicate_after" ] \
+   && [ "$turnover_round4_rc" -ne 0 ] && [ "$turnover_round4_after" = "$turnover_duplicate_after" ] \
+   && [ "$turnover_acceptance_rc" -ne 0 ] && [ "$turnover_acceptance_after" = "$turnover_duplicate_after" ]; then
+  ok ".github#2797: exactly one structured escalation crosses completed round-three wait claim turnover and every mutation refuses before write"
+else
+  bad ".github#2797: exhausted-claim turnover must authorize escalation only" \
+    "missing=$turnover_missing_legacy_rc:$turnover_before->$turnover_after nonfresh=$turnover_nonfresh_rc:$turnover_nonfresh_before->$turnover_nonfresh_after malformed=$turnover_malformed_rc:$turnover_malformed_before->$turnover_malformed_after projection=$turnover_projection_rc:$turnover_projection mutations=item:$turnover_wrong_item_rc,pr:$turnover_wrong_pr_rc:$turnover_wrong_pr_before->$turnover_wrong_pr_after,head:$turnover_wrong_head_rc,round:$turnover_wrong_round_rc,digest:$turnover_wrong_digest_rc:$turnover_mutation_before->$turnover_mutation_after valid=$turnover_valid_rc:$turnover_valid_before->$turnover_valid_after:$turnover_valid_out repair=$turnover_repair_projection_rc:$turnover_repair_projection duplicate=$turnover_duplicate_rc:$turnover_duplicate_before->$turnover_duplicate_after round4=$turnover_round4_rc:$turnover_round4_after acceptance=$turnover_acceptance_rc:$turnover_acceptance_after"
+fi
+
+for turnover_id in "${turnover_comment_ids[@]}"; do
+  curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$turnover_id" >/dev/null 2>&1 || true
+done
+rm -f "$turnover_draft" "$turnover_wait"
+
 # Remove the review leg's live-claim setup marker. The claim-CAS cases below deliberately start
 # unclaimed and prove their own POST/re-read winner rather than inheriting review authorization.
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$review_claim_id" >/dev/null

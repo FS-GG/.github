@@ -1,0 +1,1322 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2797-review-escalation-claim-turnover",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2797-review-escalation-claim-turnover/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "3de48fdf64f60f17a0527412a330454fe3d8e3cb9c0f1f403d49290baee995ee"
+      }
+    },
+    {
+      "path": "work/2797-review-escalation-claim-turnover/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "d4ab78fce38c7d8e8cfef542271ea2671bd7512cb0c88480bc1683cc8f516a5b"
+      }
+    },
+    {
+      "path": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "1d3c92794cb895a5af414b929d96f3f74214f4a504fc2acfc9945e02d6e08d42"
+      }
+    },
+    {
+      "path": "work/2797-review-escalation-claim-turnover/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "5fb16b2a70a8ade5600a8b56f7b8c8032cbe4d67cdb55b8d1ecf87cdd8f104f8"
+      }
+    },
+    {
+      "path": "work/2797-review-escalation-claim-turnover/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "d27ccba03741b3519075e1533a0a776e6fe309e3dcd51f17f2850e32159e5584"
+      }
+    },
+    {
+      "path": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "7a6c72e602c0df55516d1cf499b172ff33dcdd0dc17aa30433f374ad67bde133"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2797-review-escalation-claim-turnover",
+    "title": "Review Escalation Claim Turnover",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The review writer MUST authorize exactly one escalation across claim turnover only after a valid initial plus confirmation rounds 1, 2, and 3 chain, completed exact round-3 wait, ordinary-exhaustion evidence, and fresh current repair-phase claim all validate. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The review writer MUST authorize exactly one escalation across claim turnover only after a valid initial plus confirmation rounds 1, 2, and 3 chain, completed exact round-3 wait, ordinary-exhaustion evidence, and fresh current repair-phase claim all validate. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2797-review-escalation-claim-turnover/spec.md",
+      "sourceLocation": {
+        "line": 36,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Replacement-claim authority MUST be escalation-only for the exhausted PR and MUST NOT authorize another confirmation, pass, acceptance, or round four. (Stories: US-001; Acceptance: AC-002)",
+      "text": "Replacement-claim authority MUST be escalation-only for the exhausted PR and MUST NOT authorize another confirmation, pass, acceptance, or round four. (Stories: US-001; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2797-review-escalation-claim-turnover/spec.md",
+      "sourceLocation": {
+        "line": 37,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "The writer MUST refuse wrong item, PR, head, round, digest, malformed or incomplete wait chain, absent exhaustion evidence, duplicate escalation, and stale, non-current, or non-fresh claimant before writes. (Stories: US-001; Acceptance: AC-003)",
+      "text": "The writer MUST refuse wrong item, PR, head, round, digest, malformed or incomplete wait chain, absent exhaustion evidence, duplicate escalation, and stale, non-current, or non-fresh claimant before writes. (Stories: US-001; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2797-review-escalation-claim-turnover/spec.md",
+      "sourceLocation": {
+        "line": 38,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Review projection MUST represent ordinary exhaustion and repair-phase entry without proposing a fourth ordinary repair round. (Stories: US-001; Acceptance: AC-004)",
+      "text": "Review projection MUST represent ordinary exhaustion and repair-phase entry without proposing a fourth ordinary repair round. (Stories: US-001; Acceptance: AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2797-review-escalation-claim-turnover/spec.md",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Focused pure and production-writer tests MUST reproduce the changed-claim route and demonstrate fail-before/pass-after mutations for every acceptance boundary. (Stories: US-001; Acceptance: AC-005)",
+      "text": "Focused pure and production-writer tests MUST reproduce the changed-claim route and demonstrate fail-before/pass-after mutations for every acceptance boundary. (Stories: US-001; Acceptance: AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2797-review-escalation-claim-turnover/spec.md",
+      "sourceLocation": {
+        "line": 40,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "A coherent released engine MUST make the repaired producer behavior installable by the blocked S.I.R. consumer without manual history edits. (Stories: US-001; Acceptance: AC-006)",
+      "text": "A coherent released engine MUST make the repaired producer behavior installable by the blocked S.I.R. consumer without manual history edits. (Stories: US-001; Acceptance: AC-006)",
+      "acceptanceCriteria": [
+        "AC-006"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2797-review-escalation-claim-turnover/spec.md",
+      "sourceLocation": {
+        "line": 41,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "A changed-claim escalation grant exists only for the exact exhausted ordinary chain, completed exact round-3 wait, legacy escalation evidence, no prior structured escalation, and one current fresh replacement claim.",
+      "decision": "A changed-claim escalation grant exists only for the exact exhausted ordinary chain, completed exact round-3 wait, legacy escalation evidence, no prior structured escalation, and one current fresh replacement claim.",
+      "requirementRefs": [
+        "FR-001",
+        "FR-003"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2797-review-escalation-claim-turnover/clarifications.md",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "\u0060ReviewWait\u0060 owns the pure grant/refusal vocabulary; \u0060ReviewApplication\u0060 and the live client consume it before writes, and no generic claim-generation relaxation is introduced.",
+      "decision": "\u0060ReviewWait\u0060 owns the pure grant/refusal vocabulary; \u0060ReviewApplication\u0060 and the live client consume it before writes, and no generic claim-generation relaxation is introduced.",
+      "requirementRefs": [
+        "FR-001",
+        "FR-002",
+        "FR-003"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2797-review-escalation-claim-turnover/clarifications.md",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "The ordinary projection terminates at confirmation round 3 and emits repair-phase/escalation state; the replacement claimant receives no authority for confirmation, pass, acceptance, or round four on the exhausted PR.",
+      "decision": "The ordinary projection terminates at confirmation round 3 and emits repair-phase/escalation state; the replacement claimant receives no authority for confirmation, pass, acceptance, or round four on the exhausted PR.",
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2797-review-escalation-claim-turnover/clarifications.md",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "Pure tests enumerate every grant input and refusal dimension; the production writer reproduces old-claim enter\u002Bcomplete, release/current fresh claim, and exactly one escalation append, with subject mutations proving the gate fires.",
+      "decision": "Pure tests enumerate every grant input and refusal dimension; the production writer reproduces old-claim enter\u002Bcomplete, release/current fresh claim, and exactly one escalation append, with subject mutations proving the gate fires.",
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2797-review-escalation-claim-turnover/clarifications.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T010"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "Merge completes source delivery only; engine freshness determines a separately boarded coherent release/install obligation when unreleased wire-surface commits remain.",
+      "decision": "Merge completes source delivery only; engine freshness determines a separately boarded coherent release/install obligation when unreleased wire-surface commits remain.",
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2797-review-escalation-claim-turnover/clarifications.md",
+      "sourceLocation": {
+        "line": 32,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T011"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-006",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-006",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement clarification decision DEC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement clarification decision DEC-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-002"
+      ],
+      "sourceIds": [
+        "DEC-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement clarification decision DEC-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-003"
+      ],
+      "sourceIds": [
+        "DEC-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Implement clarification decision DEC-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-004"
+      ],
+      "sourceIds": [
+        "DEC-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Implement clarification decision DEC-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-005"
+      ],
+      "sourceIds": [
+        "DEC-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002",
+        "PD-003",
+        "PD-004",
+        "PD-005",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "T015",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV015"
+      ],
+      "source": "work/2797-review-escalation-claim-turnover/tasks.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        "scripts/check-engine-freshness.py"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "FR-006 is deliberately post-merge: merged origin/main is the only honest subject for engine freshness, release-debt deduplication, and the S.I.R. install handoff. The source item will discharge this before Done; pre-merge verify records the boundary instead of fabricating a merged-main result.",
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV015",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T015",
+      "taskRefs": [
+        "T015"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Cli/ReviewApplication.fs",
+        "src/FS.GG.Coord.Core/ReviewWait.fs",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2797-review-escalation-claim-turnover/evidence.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2797-review-escalation-claim-turnover/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2797-review-escalation-claim-turnover/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "3de48fdf64f60f17a0527412a330454fe3d8e3cb9c0f1f403d49290baee995ee"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2797-review-escalation-claim-turnover/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "d4ab78fce38c7d8e8cfef542271ea2671bd7512cb0c88480bc1683cc8f516a5b"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2797-review-escalation-claim-turnover/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "1d3c92794cb895a5af414b929d96f3f74214f4a504fc2acfc9945e02d6e08d42"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2797-review-escalation-claim-turnover/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "5fb16b2a70a8ade5600a8b56f7b8c8032cbe4d67cdb55b8d1ecf87cdd8f104f8"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2797-review-escalation-claim-turnover/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "d27ccba03741b3519075e1533a0a776e6fe309e3dcd51f17f2850e32159e5584"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2797-review-escalation-claim-turnover/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "7a6c72e602c0df55516d1cf499b172ff33dcdd0dc17aa30433f374ad67bde133"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "3f92e75247053f1fea8f5aa86a668b070e8c19cab77302fc8ef400c2f26a0d7d"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}
