@@ -19,6 +19,46 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-22** — **coherent set `github:0.71.0` published and registry reconciled; poisoned `0.70.0` preserved**
+  (github; [.github#2813](https://github.com/FS-GG/.github/issues/2813),
+  [source PR #2814](https://github.com/FS-GG/.github/pull/2814),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.71.0)): prepare run
+  [32534144971](https://github.com/FS-GG/.github/actions/runs/32534144971) packed Kit, Drivers,
+  and Coord.Cli once from merge `3890c8f6b20fcd2c1fdd5b2a9a5356877c217397` under policy
+  `release-saga/1`. The manifest binds predecessor `0.69.0`, source
+  `808d8f23e802b68edd8e4b5dec9998febdaf686b`, content
+  `sha256:33a95104430e150ca00dbd9bf44ea726fd2d2c1006f5096cc5040770f3611729`.
+  Initial publishers [Kit 32534428907](https://github.com/FS-GG/.github/actions/runs/32534428907),
+  [Drivers 32534428063](https://github.com/FS-GG/.github/actions/runs/32534428063), and
+  [Coord.Cli 32534428718](https://github.com/FS-GG/.github/actions/runs/32534428718) pushed the
+  prepared bytes to GitHub Packages and nuget.org, then exhausted only the public indexing wait.
+  After direct feed reads found all three versions, exact-source Drivers recovery
+  [32535391833](https://github.com/FS-GG/.github/actions/runs/32535391833) observed the existing
+  package without repacking or a duplicate push. Promotion
+  [32535440477](https://github.com/FS-GG/.github/actions/runs/32535440477) independently read both
+  feeds and sealed content
+  `sha256:991f180789fa9a6011439eac18f32ddc14424b7548c9094835790ad3529887c6` at
+  `2026-08-21T23:03:33Z`; the release is non-draft and immutable, and all four coherent/component
+  tags resolve to the merge. Both feeds carry the exact prepared payload identities: Coord.Cli
+  `sha256:5e549bb145a09c76d991f2c270e47fd32d28b4397022d8d48d8e0e65d3fe844e`
+  (GitHub archive `612e2caf12a44cfa95b8beaafbfcc4404d913740149d9441b705e5d1ee6f3827`,
+  nuget.org archive `3f3de808c0a2c7ca14aef949571598ff215f9d7abb1b9a33caa763e7a2820b61`),
+  Drivers `sha256:5abc51aaaf8497bd6d6f7246bc744e1cf2ec12180e4d5e7dbde08875550a07a0`
+  (GitHub `929d1893a419839eddbbd89fac450bc9aeac20590e51ee8a187caf2cf62734c3`,
+  nuget.org `f80dcfe05d8feb3f46eedfe1698192516c9607640fee265d7646025c7c1b09da`), and Kit
+  `sha256:b8499daf4d7a0142bfa69ce38d55b10750c2388a4b1462cd0aea246c35199523`
+  (GitHub `f53d73a2579d27f8f59123a0a47201af140466e11072a65b90f590addf43369d`,
+  nuget.org `6c99d54b83b8fee52a09c5bd4fd68f0c61f5259bca622c4de0c133ef2bb9d995`).
+  Poisoned `0.70.0` remains exactly the unpromoted draft prepared from
+  `2017df453e249cb4358e47dea5188d91d8445fa9`: content
+  `sha256:943c94b10fdbc97b6d0cbf58c7e38ddae9e451601d19418514ec64dc40103631`, stale
+  predecessor `0.68.0`, component tags at that source, and original package payloads Coord.Cli
+  `sha256:9c86076e3ac57606ff6679344e02fea2f4fa51713cf088a4fa702068fc6698d9`, Drivers
+  `sha256:9824ac27ad3a55e05b92c34745ef785fbbd525ba70f7e1fdff04b292f0b8e660`, and Kit
+  `sha256:7bcdc9bc6b996f59749dd948be472fec558022c9cd4e327ec5d0bf9dc718634d`.
+  Its published packages, three immutable component tags, manifest, journals, seven draft assets,
+  and draft identity remain unchanged and are not a stable predecessor.
+
 - **2026-08-21** — **coherent set `github:0.71.0` prepared as forward recovery; `0.70.0` poisoned**
   (github; [.github#2813](https://github.com/FS-GG/.github/issues/2813)): preparation now derives
   predecessor version and content identity only from the live promoted `stable-channel.json` and
