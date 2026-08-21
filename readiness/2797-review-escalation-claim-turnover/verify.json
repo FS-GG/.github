@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "16d4e5fd918d45e20b77c261af8f9bdde95d96eddcbf4e6c972d20f64969a22b"
+        "value": "ea38cb0d05910eaafd2e7589ec95be7b1c9db12d0b570f4e335c14e2240d64ae"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "1d3c92794cb895a5af414b929d96f3f74214f4a504fc2acfc9945e02d6e08d42"
+        "value": "70812d8e577a641677669cc602e0ee1362692ac54a481248c18a4e40bc7ff946"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -271,8 +271,8 @@
     {
       "id": "ED-EV006",
       "obligationId": "EV006",
-      "state": "deferred",
-      "observed": false,
+      "state": "supported",
+      "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "evidenceIds": [
@@ -286,9 +286,9 @@
         "FR-006",
         "PD-006"
       ],
-      "severity": "advisory",
+      "severity": "ready",
       "diagnosticIds": [],
-      "correction": "Resolve evidence obligation EV006."
+      "correction": ""
     },
     {
       "id": "ED-EV007",
@@ -575,8 +575,8 @@
     {
       "id": "TD-EV006",
       "obligationId": "EV006",
-      "state": "deferred",
-      "observed": false,
+      "state": "satisfied",
+      "observed": true,
       "evidenceIds": [
         "EV006"
       ],
@@ -586,9 +586,9 @@
       "affectedRequirementIds": [
         "FR-006"
       ],
-      "severity": "advisory",
+      "severity": "ready",
       "diagnosticIds": [],
-      "correction": "Record a verifying test for EV006."
+      "correction": ""
     },
     {
       "id": "TD-EV007",

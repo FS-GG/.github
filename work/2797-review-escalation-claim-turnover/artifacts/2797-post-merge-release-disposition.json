@@ -1,0 +1,17 @@
+{
+  "schema": "fsgg.coord.engine-release-disposition/1",
+  "sourceItem": "FS-GG/.github#2797",
+  "sourcePullRequest": "https://github.com/FS-GG/.github/pull/2798",
+  "mergedMain": "bdf3b494164d2fabd903eef238f1dbc2d3df517e",
+  "freshnessArtifact": "work/2797-review-escalation-claim-turnover/artifacts/2797-post-merge-freshness.json",
+  "freshnessSha256": "3feab0231731b0942ee3ac4b3d01a3abfbdd6a4a3d42bc1a2bfce8998898799a",
+  "releaseOwed": true,
+  "releaseRow": "https://github.com/FS-GG/.github/issues/2794",
+  "releaseRowState": "open",
+  "releaseRowBoardStatus": "Ready",
+  "freshnessCheckpoint": "https://github.com/FS-GG/.github/issues/2794#issuecomment-5367880229",
+  "deliveryRouteReceipt": "https://github.com/FS-GG/.github/issues/2794#issuecomment-5367894226",
+  "route": "sdd-required",
+  "consumerDisposition": "S.I.R. #231 remains mechanically dependent on the coherent engine release and install verification; its history was not patched by hand.",
+  "capturedAt": "2026-08-21T09:10:54Z"
+}
