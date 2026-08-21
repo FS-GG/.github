@@ -1,0 +1,186 @@
+schemaVersion: 1
+work:
+  id: 2797-review-escalation-claim-turnover
+  title: "Review Escalation Claim Turnover"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2797-review-escalation-claim-turnover/spec.md
+  sourceClarifications: work/2797-review-escalation-claim-turnover/clarifications.md
+  sourceChecklist: work/2797-review-escalation-claim-turnover/checklist.md
+  sourcePlan: work/2797-review-escalation-claim-turnover/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2797-review-escalation-claim-turnover/spec.md
+    digest: d27ccba03741b3519075e1533a0a776e6fe309e3dcd51f17f2850e32159e5584
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2797-review-escalation-claim-turnover/clarifications.md
+    digest: d4ab78fce38c7d8e8cfef542271ea2671bd7512cb0c88480bc1683cc8f516a5b
+    schemaVersion: 1
+  - label: checklist
+    path: work/2797-review-escalation-claim-turnover/checklist.md
+    digest: 3de48fdf64f60f17a0527412a330454fe3d8e3cb9c0f1f403d49290baee995ee
+    schemaVersion: 1
+  - label: plan
+    path: work/2797-review-escalation-claim-turnover/plan.md
+    digest: 5fb16b2a70a8ade5600a8b56f7b8c8032cbe4d67cdb55b8d1ecf87cdd8f104f8
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-005, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement requirement FR-006
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-006]
+    decisions: []
+    sourceIds: [AC-006, FR-006, PD-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement clarification decision DEC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement clarification decision DEC-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Implement clarification decision DEC-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-003]
+    sourceIds: [DEC-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Implement clarification decision DEC-004
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-004]
+    sourceIds: [DEC-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Implement clarification decision DEC-005
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-005]
+    sourceIds: [DEC-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, PD-005, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV013]
+  - id: T014
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV014]
+  - id: T015
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-004]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV015]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2797-review-escalation-claim-turnover."
