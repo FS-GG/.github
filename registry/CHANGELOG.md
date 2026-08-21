@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-21** — **coherent set `github:0.69.0` prepared with a mapped release obligation**
+  (github; [.github#2807](https://github.com/FS-GG/.github/issues/2807)): repairs fresh-claim
+  ordinary-exhaustion authorization for genuine H0/H1/H2/H3 head progression while retaining exact
+  final-head, wait, legacy-backlink, fresh-claim, duplicate, and round-four fences. The claim owner must
+  publish the prepared Kit, Drivers, and Coord.Cli bytes to both feeds, prove payload identity and a
+  clean public installed-tool route for S.I.R., and replace this entry with immutable evidence before Done.
+
 - **2026-08-21** — **coherent set `github:0.68.0` published; `coord-engine` flipped to `0.68.0`**
   (github; [.github#2794](https://github.com/FS-GG/.github/issues/2794),
   [source PR #2803](https://github.com/FS-GG/.github/pull/2803),

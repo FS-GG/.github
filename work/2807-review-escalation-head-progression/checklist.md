@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2807-review-escalation-head-progression/clarifications.md
 
 ## Source Snapshot
-- spec: work/2807-review-escalation-head-progression/spec.md sha256:f4bac13dac0c9a83ad580d8ea01440b38ecad7b9248e57f83782bb14baef21b8 schemaVersion:1
-- clarifications: work/2807-review-escalation-head-progression/clarifications.md sha256:7af5f5f3c3ace975b3be7f852b3eef30e04326db0d245428328375e3a903d556 schemaVersion:1
+- spec: work/2807-review-escalation-head-progression/spec.md sha256:e00aaf330f15437ccca35af08df03ece4beadd106d843b86eedd486fb8c827cb schemaVersion:1
+- clarifications: work/2807-review-escalation-head-progression/clarifications.md sha256:e6a988340d17b96623a09c1be814ea01b8b661581b9fcd80969faea2d1cce76c schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

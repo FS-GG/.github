@@ -11,27 +11,27 @@ sourceAnalysis: readiness/2807-review-escalation-head-progression/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2807-review-escalation-head-progression/analysis.json
-    digest: 044b640fdc63ca5c35e6d66746b18ca44a13fc8594f16f21dc1262f3badcac33
+    digest: 0cb45534df6a33105ff7b5386a6efc1523629dc9b2b64fe8186a41083f25c491
     schemaVersion: 1
   - label: checklist
     path: work/2807-review-escalation-head-progression/checklist.md
-    digest: a1f17cdeb8b43bf16072938b94174930ac5a4ec6b57decb038ee66c9bb273bc6
+    digest: 25c054cfc58428e7b1ac330245e0194e3c6278b6956b510314e7a5a4f2803212
     schemaVersion: 1
   - label: clarifications
     path: work/2807-review-escalation-head-progression/clarifications.md
-    digest: 7af5f5f3c3ace975b3be7f852b3eef30e04326db0d245428328375e3a903d556
+    digest: e6a988340d17b96623a09c1be814ea01b8b661581b9fcd80969faea2d1cce76c
     schemaVersion: 1
   - label: plan
     path: work/2807-review-escalation-head-progression/plan.md
-    digest: 9d88abc6b8fd92d8012c74f6302f78613cc6a0df2739916ed7d745fb2bf18734
+    digest: 46fcb1273168b2f2461df92cf5305719eaab49bdf7ce9759968168da5150d984
     schemaVersion: 1
   - label: spec
     path: work/2807-review-escalation-head-progression/spec.md
-    digest: f4bac13dac0c9a83ad580d8ea01440b38ecad7b9248e57f83782bb14baef21b8
+    digest: e00aaf330f15437ccca35af08df03ece4beadd106d843b86eedd486fb8c827cb
     schemaVersion: 1
   - label: tasks
     path: work/2807-review-escalation-head-progression/tasks.yml
-    digest: 807b437c232aae1ed743e7b84156e7a332211d8fb68562202a133523cea82ff9
+    digest: d9b68f5fdca3a18ab9b9d50e40c0ca21e55de8216bceda711313cedcf1263542
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -199,7 +199,7 @@ evidence:
     synthetic: false
     rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
     owner: godwit-2afc
-    scope: coherent release handoff after source merge
+    scope: "mapped 0.69.0 coherent-set release, dual-feed identity, clean public install, registry evidence, and S.I.R. handoff after source merge"
     laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
     notes: []
   - id: EV009

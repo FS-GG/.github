@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2807-review-escalation-head-progression/ship.json",
-      "digest": "sha256:4fd2589e0eb84cfdfe4678563e30ebb04a230f7a6fd5a67c95520e0c41fa39ff",
+      "digest": "sha256:15cef0d8ec5bc900dd11ba3004a37175c9ba0a6677a97ff28c723c7bf3fb5205",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2807-review-escalation-head-progression/verify.json",
-      "digest": "sha256:1dcf006628a9fbeb0c38c6748c5333771b73be8beb5d0ea0d9290ad13d3d3613",
+      "digest": "sha256:9321eb9a3157be5d66ba764d1a312fef53a768ee93c6ed248f228b66bc0f189d",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2807-review-escalation-head-progression/work-model.json",
-      "digest": "sha256:135bb2aa7b2146b45a9bcfb4bce82718f8efcfc3a18c26a3bba679f422f7c768",
+      "digest": "sha256:2cd3f29efe469b03ba873df7482643c56aa957006d7816a4d25efb673b702169",
       "schemaVersion": 1
     }
   ],

@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a1f17cdeb8b43bf16072938b94174930ac5a4ec6b57decb038ee66c9bb273bc6"
+        "value": "25c054cfc58428e7b1ac330245e0194e3c6278b6956b510314e7a5a4f2803212"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "7af5f5f3c3ace975b3be7f852b3eef30e04326db0d245428328375e3a903d556"
+        "value": "e6a988340d17b96623a09c1be814ea01b8b661581b9fcd80969faea2d1cce76c"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "66c63659e36f4865befefdba6edcbc4223cfa60f5a6e941b4ac3993cd427c078"
+        "value": "bacc9ba799a6d4c0e91559e47394b8bd39995a566ddc65c9b53596ae55adc647"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "9d88abc6b8fd92d8012c74f6302f78613cc6a0df2739916ed7d745fb2bf18734"
+        "value": "46fcb1273168b2f2461df92cf5305719eaab49bdf7ce9759968168da5150d984"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f4bac13dac0c9a83ad580d8ea01440b38ecad7b9248e57f83782bb14baef21b8"
+        "value": "e00aaf330f15437ccca35af08df03ece4beadd106d843b86eedd486fb8c827cb"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "807b437c232aae1ed743e7b84156e7a332211d8fb68562202a133523cea82ff9"
+        "value": "d9b68f5fdca3a18ab9b9d50e40c0ca21e55de8216bceda711313cedcf1263542"
       }
     }
   ],
@@ -273,8 +273,8 @@
     },
     {
       "id": "DEC-003",
-      "title": "Source merge is followed by the freshness gate and a deduplicated, separately boarded coherent release item when owed; no unreleased source build is used as the S.I.R. handoff.",
-      "decision": "Source merge is followed by the freshness gate and a deduplicated, separately boarded coherent release item when owed; no unreleased source build is used as the S.I.R. handoff.",
+      "title": "Source and release are one bounded delivery for 0.69.0: the exact reviewed head carries a mapped coherent-set-release obligation, and the current claim remains live through dual-feed identity, clean public install, registry evidence, and the S.I.R. handoff. No unreleased source build is used as the handoff.",
+      "decision": "Source and release are one bounded delivery for 0.69.0: the exact reviewed head carries a mapped coherent-set-release obligation, and the current claim remains live through dual-feed identity, clean public install, registry evidence, and the S.I.R. handoff. No unreleased source build is used as the handoff.",
       "requirementRefs": [
         "FR-005"
       ],
@@ -1008,7 +1008,7 @@
           "path": "work/2807-review-escalation-head-progression/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "a1f17cdeb8b43bf16072938b94174930ac5a4ec6b57decb038ee66c9bb273bc6"
+            "value": "25c054cfc58428e7b1ac330245e0194e3c6278b6956b510314e7a5a4f2803212"
           },
           "schemaVersion": 1
         },
@@ -1016,7 +1016,7 @@
           "path": "work/2807-review-escalation-head-progression/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "7af5f5f3c3ace975b3be7f852b3eef30e04326db0d245428328375e3a903d556"
+            "value": "e6a988340d17b96623a09c1be814ea01b8b661581b9fcd80969faea2d1cce76c"
           },
           "schemaVersion": 1
         },
@@ -1024,7 +1024,7 @@
           "path": "work/2807-review-escalation-head-progression/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "66c63659e36f4865befefdba6edcbc4223cfa60f5a6e941b4ac3993cd427c078"
+            "value": "bacc9ba799a6d4c0e91559e47394b8bd39995a566ddc65c9b53596ae55adc647"
           },
           "schemaVersion": 1
         },
@@ -1032,7 +1032,7 @@
           "path": "work/2807-review-escalation-head-progression/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "9d88abc6b8fd92d8012c74f6302f78613cc6a0df2739916ed7d745fb2bf18734"
+            "value": "46fcb1273168b2f2461df92cf5305719eaab49bdf7ce9759968168da5150d984"
           },
           "schemaVersion": 1
         },
@@ -1040,7 +1040,7 @@
           "path": "work/2807-review-escalation-head-progression/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "f4bac13dac0c9a83ad580d8ea01440b38ecad7b9248e57f83782bb14baef21b8"
+            "value": "e00aaf330f15437ccca35af08df03ece4beadd106d843b86eedd486fb8c827cb"
           },
           "schemaVersion": 1
         },
@@ -1048,14 +1048,14 @@
           "path": "work/2807-review-escalation-head-progression/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "807b437c232aae1ed743e7b84156e7a332211d8fb68562202a133523cea82ff9"
+            "value": "d9b68f5fdca3a18ab9b9d50e40c0ca21e55de8216bceda711313cedcf1263542"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "180e340ede50a7bedb67105469dfac378710424f0113a2f5a49816f84ad8964f"
+        "value": "b86e57be53547991f5fe664439115137703d2a64093e23bd9e1f338dc47919aa"
       },
       "currency": "current"
     }

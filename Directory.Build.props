@@ -413,8 +413,15 @@
        forced-claim transition so repair-phase latest-review/backlink validation remains coherent after that
        escalation. These four merged engine commits add or repair receiver-visible review behavior;
        Protocol.fs is unchanged and no command, member, destination, or package identity is removed. -->
+  <!-- 0.68.0 -> 0.69.0 (.github#2807): MINOR on the stable 0.x line. The coordination engine
+       corrects the fresh-claim ordinary-exhaustion authorization so the historical initial and
+       confirmation records retain their own advancing heads while the escalation, completed wait,
+       legacy exhaustion evidence, and live PR remain bound to the exact round-three head. The
+       production writer now also proves readable noncontiguous history and a malformed legacy
+       confirmation backlink refuse before writes. This repairs receiver-visible review behavior;
+       no command, member, destination, or package identity is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.68.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.69.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

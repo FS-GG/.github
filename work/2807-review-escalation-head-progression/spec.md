@@ -41,7 +41,7 @@ An exhausted review chain with legitimate repaired heads can enter its one bound
 ## Ambiguities
 - AMB-001: Which head equalities are true terminal invariants and which incorrectly compare historical records with the final escalation head?
 - AMB-002: How should the fixture prove both legitimate head progression and the existing fail-closed chain invariants without broadening production authority?
-- AMB-003: Does this source item cut the owed engine release itself or file and sequence a separate coherent release item after merge?
+- AMB-003: How does this item bind the source repair and the owed coherent release without allowing Done before public installation?
 
 ## Public Or Tool-Facing Impact
 - `fsgg-coord review record` accepts the already-valid multi-round exhaustion shape that public engine 0.68.0 rejects; marker schema and command syntax remain unchanged.

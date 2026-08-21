@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2807-review-escalation-head-progression/spec.md sha256:f4bac13dac0c9a83ad580d8ea01440b38ecad7b9248e57f83782bb14baef21b8 schemaVersion:1
-- clarifications: work/2807-review-escalation-head-progression/clarifications.md sha256:7af5f5f3c3ace975b3be7f852b3eef30e04326db0d245428328375e3a903d556 schemaVersion:1
-- checklist: work/2807-review-escalation-head-progression/checklist.md sha256:a1f17cdeb8b43bf16072938b94174930ac5a4ec6b57decb038ee66c9bb273bc6 schemaVersion:1
+- spec: work/2807-review-escalation-head-progression/spec.md sha256:e00aaf330f15437ccca35af08df03ece4beadd106d843b86eedd486fb8c827cb schemaVersion:1
+- clarifications: work/2807-review-escalation-head-progression/clarifications.md sha256:e6a988340d17b96623a09c1be814ea01b8b661581b9fcd80969faea2d1cce76c schemaVersion:1
+- checklist: work/2807-review-escalation-head-progression/checklist.md sha256:25c054cfc58428e7b1ac330245e0194e3c6278b6956b510314e7a5a4f2803212 schemaVersion:1
 
 ## Plan Scope
 - Work item 2807-review-escalation-head-progression is planned from the current specification, clarification, and checklist facts.
@@ -31,7 +31,7 @@ Prose status: planned
 - PD-002 [AC-002] [FR-002] complete: Keep structured parser validation responsible for each decision's own exact reviewed head and the ordered predecessor URL, digest, critic, and contiguous round chain; do not normalize or rewrite historical heads.
 - PD-003 [AC-003] [FR-003] complete: Retain the existing exact final-head, completed wait, legacy backlink, current fresh claim, duplicate, and decision-kind fences unchanged; add explicit progressed-chain negative controls for missing/noncontiguous rounds and malformed backlink.
 - PD-004 [AC-004] [FR-004] complete: Change the #2797 production writer fixture to deterministic distinct heads for initial and confirmations 1/2/3, prove the valid cross-claim escalation writes exactly once, and prove each added/changed gate reds under one subject mutation before restoration.
-- PD-005 [AC-005] [FR-005] complete: After guarded source merge, run engine freshness, dedupe and board any owed coherent-release item, and hold the S.I.R. dependency until public install of the repaired engine is verified.
+- PD-005 [AC-005] [FR-005] complete: Advance the coherent set to 0.69.0 on the source head, bind one mapped coherent-set-release obligation to that exact reviewed head, then retain the claim after guarded merge through dual-feed byte identity, clean public install, registry evidence, and the S.I.R. handoff.
 
 ## Contract Impact
 - PC-001 [PD-001] [PD-002] reviewWriter: `fsgg-coord review record` accepts one previously rejected valid chain shape without changing command syntax, marker schema, round limits, or fail-closed mutation semantics.

@@ -37,11 +37,21 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2807-review-escalation-head-progression/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "595bd86b621d35c17550d34ef24aa57519618c417e7dd2110287e703a46a1da6"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2807-review-escalation-head-progression/checklist.md",
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "a1f17cdeb8b43bf16072938b94174930ac5a4ec6b57decb038ee66c9bb273bc6"
+        "value": "25c054cfc58428e7b1ac330245e0194e3c6278b6956b510314e7a5a4f2803212"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "7af5f5f3c3ace975b3be7f852b3eef30e04326db0d245428328375e3a903d556"
+        "value": "e6a988340d17b96623a09c1be814ea01b8b661581b9fcd80969faea2d1cce76c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "9d88abc6b8fd92d8012c74f6302f78613cc6a0df2739916ed7d745fb2bf18734"
+        "value": "46fcb1273168b2f2461df92cf5305719eaab49bdf7ce9759968168da5150d984"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "f4bac13dac0c9a83ad580d8ea01440b38ecad7b9248e57f83782bb14baef21b8"
+        "value": "e00aaf330f15437ccca35af08df03ece4beadd106d843b86eedd486fb8c827cb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "807b437c232aae1ed743e7b84156e7a332211d8fb68562202a133523cea82ff9"
+        "value": "d9b68f5fdca3a18ab9b9d50e40c0ca21e55de8216bceda711313cedcf1263542"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -516,7 +526,7 @@
     {
       "path": "readiness/2807-review-escalation-head-progression/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
