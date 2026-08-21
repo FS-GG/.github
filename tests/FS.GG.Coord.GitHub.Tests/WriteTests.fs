@@ -2347,6 +2347,18 @@ let ``#2801 conflicting wait receipt at one marker fails before a write`` () =
     | other -> failwith $"same-marker conflict must fail closed, got %A{other}"
 
 [<Fact>]
+let ``#2801 exact existing wait receipt is an idempotent no-write`` () =
+    let marker = "<!-- fsgg:overlap-wait/v1 key=a-b -->"
+    let body = marker + "\n{\"schema\":\"fsgg.coord.overlap-wait/v1\"}"
+    let transport = scripted [ ok (comments [ markerWithExactBody 901 body ]) ]
+
+    match writeDurableComment transport aRef marker body with
+    | Ok CommentAlreadyPresent ->
+        Assert.Equal(1, transport.RestCalls)
+        Assert.False(transport.Logged "comment-post")
+    | other -> failwith $"exact durable receipt retry must be a no-write, got %A{other}"
+
+[<Fact>]
 let ``#2801 automatic room is created once and confirmed by cycle marker`` () =
     let marker = "<!-- fsgg:mutual-overlap-room/v1 cycle=abc -->"
     let body = marker + "\n\nPaths: none"
@@ -2369,6 +2381,31 @@ let ``#2801 response-lost room create reuses the one observed cycle room`` () =
     match ensureRoom transport "FS-GG" "FS.GG.SDD" marker "automatic room" body with
     | Ok(RoomAlreadyPresent room) -> Assert.Equal(220, room.Number)
     | other -> failwith $"response-lost create must recover the marker-keyed room, got %A{other}"
+
+[<Fact>]
+let ``#2801 duplicate cycle rooms fail closed before create`` () =
+    let marker = "<!-- fsgg:mutual-overlap-room/v1 cycle=abc -->"
+    let body = marker + "\n\nPaths: none"
+    let existing =
+        System.Text.Json.JsonSerializer.Serialize
+            [ {| number = 220; body = body |}
+              {| number = 221; body = body |} ]
+    let transport = scripted [ ok existing ]
+
+    match ensureRoom transport "FS-GG" "FS.GG.SDD" marker "automatic room" body with
+    | Error(Malformed _) ->
+        Assert.Equal(1, transport.RestCalls)
+    | other -> failwith $"duplicate marker-keyed rooms must fail closed, got %A{other}"
+
+[<Fact>]
+let ``#2801 unreadable room census refuses rather than inventing absence`` () =
+    let marker = "<!-- fsgg:mutual-overlap-room/v1 cycle=abc -->"
+    let body = marker + "\n\nPaths: none"
+    let transport = scripted [ ok "[{\"number\":219}]" ]
+
+    match ensureRoom transport "FS-GG" "FS.GG.SDD" marker "automatic room" body with
+    | Error(Malformed _) -> Assert.Equal(1, transport.RestCalls)
+    | other -> failwith $"unreadable open room bodies must refuse, got %A{other}"
 
 [<Fact>]
 let ``#2801 response-lost room back-reference PATCH is accepted only after readback`` () =
