@@ -93,6 +93,11 @@ names the awaited event (`initial-review` or `repair-confirmation`); `enteredAt`
 the durable comment or check whose change resumes it. These are authority-issued revisions, not values
 an agent invents.
 
+The canonical generation token is `<head>:initial-review:0` for an initial record and
+`<head>:repair-confirmation:<round>` for confirmation, escalation, or repair-phase records. Exactly one
+generation may be unconsumed. A new entry is refused until the preceding entry has a durable terminal
+event; multiple distinct unconsumed entries are invalid authority, never a latest-wins queue.
+
 Entering a review queue writes the receipt before the actor yields. A current receipt plus the open
 item PR preserves the touch-set reservation, but it never extends or resurrects the worker's mutation
 lease. Before changing the tree, posting a repair, or advancing review, the resumed actor revalidates
@@ -116,8 +121,14 @@ Write each entry/completion/cancellation/timeout event through the authoritative
 `scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json`
 
 The writer rejects a non-current claim generation, a duplicate entry generation, or a transition with
-no matching durable entry. A live `review <ref> --pr <n> --json` parses those PR markers and projects
+no matching durable entry. A terminal event is authorized by both the matching entry and that entry's
+still-current `claimGeneration`; replacing the claim cannot transfer authority to consume an older
+entry. `review record` refuses every critic record until the matching canonical entry is waiting, and
+host `acceptance` until the immediately preceding critic record is named by a completed entry. A live
+`review <ref> --pr <n> --json` parses those PR markers and projects
 `waiting`, `completed`, `cancelled`, `recoverable`, `invalid`, or `noReceipt` with the bound receipt.
+Dispatch actions are available only from the matching `waiting` state. `noReceipt`, malformed or
+invalid markers, stale-claim recovery, and an unconsumed generation all return no actionable verdict.
 
 Only the host posts `acceptance`, after the latest critic record is `pass` and all checks are green.
 It uses verdict `accepted`, binds the exact head, initial URL and latest critic URL, follows the

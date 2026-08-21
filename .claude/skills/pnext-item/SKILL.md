@@ -256,7 +256,9 @@ Before yielding at every protocol-created critic queue, write the bounded entry 
 `scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json`. After a critic record lands, write
 the matching completion event; cancellation and bounded timeout use the same command and generation.
 Never treat a sleeping process as the receipt. On resumption, run live `review` and revalidate or
-reacquire the current claim generation before any mutation.
+reacquire the current claim generation before any mutation. Use the canonical generation token
+`<head>:initial-review:0` or `<head>:repair-confirmation:<round>`; dispatch and `review record` fail
+closed without the matching waiting entry, and acceptance requires its completed critic-record evidence.
 
 [independent-review](references/independent-review.md) is the binding contract for materiality, critic
 ownership, the durable PR record, direct filing, confirmation, and host verification. Its

@@ -299,6 +299,30 @@ module ReviewApplication =
            expiresAt = receipt.ExpiresAt
            evidenceRef = receipt.EvidenceRef |}
 
+    let private waitAuthority (action: Review.NextAction) (waitState: ReviewWait.State option) =
+        let dispatchKind =
+            match action with
+            | Review.DispatchCritic -> Some ReviewWait.InitialReview
+            | Review.DispatchSuccessor _ -> Some ReviewWait.RepairConfirmation
+            | _ -> None
+        match waitState, dispatchKind with
+        | None, _ -> Ok () // offline snapshots predate the live durable-wait projection
+        | Some (ReviewWait.Invalid errors), _ -> Error errors
+        | Some (ReviewWait.Recoverable (_, reason)), _ -> Error [ reason ]
+        | Some (ReviewWait.Waiting receipt), Some expected when receipt.Kind = expected -> Ok ()
+        | Some (ReviewWait.Waiting receipt), Some _ ->
+            Error [ $"the durable review wait kind does not authorize %s{actionName action}: %A{receipt.Kind}" ]
+        | Some (ReviewWait.Waiting receipt), None ->
+            Error [ $"review generation '%s{receipt.ReviewGeneration}' remains unconsumed; record its completion, cancellation, or timeout before advancing" ]
+        | Some ReviewWait.NoReceipt, Some _ ->
+            Error [ $"%s{actionName action} requires a durable review-wait entry before dispatch" ]
+        | Some (ReviewWait.Completed _), Some _
+        | Some (ReviewWait.Cancelled _), Some _ ->
+            Error [ $"%s{actionName action} requires a new durable review-wait entry for this generation" ]
+        | Some (ReviewWait.Cancelled (_, reason)), None -> Error [ $"the durable review wait was cancelled: %s{reason}" ]
+        | Some ReviewWait.NoReceipt, None
+        | Some (ReviewWait.Completed _), None -> Ok ()
+
     // `render`'s own public 3-arg shape (`Options -> Review.Binding -> Review.Facts -> int`) is a fixed
     // contract other callers depend on positionally — most importantly `Client.review`'s live
     // `review <ref> --pr N` path, which calls `ReviewApplication.render opts binding facts` as a tail
@@ -325,8 +349,22 @@ module ReviewApplication =
             ExitCode.toInt ExitCode.NoVerdict
         | Ok verdict ->
             let waitStatus, waitReceipt, waitReason = waitProjection waitState
-            match opts.Render with
-            | Json ->
+            match waitAuthority verdict.NextAction waitState, opts.Render with
+            | Error reasons, Json ->
+                printfn
+                    "%s"
+                    (JsonSerializer.Serialize
+                        {| schema = "fsgg.coord.review/1"
+                           verdict = "noVerdict"
+                           reasons = reasons
+                           waitStatus = waitStatus
+                           waitReceipt = waitReceipt |> Option.map waitReceiptJson
+                           waitReason = waitReason |})
+                ExitCode.toInt ExitCode.NoVerdict
+            | Error reasons, Text ->
+                reasons |> List.iter (fun reason -> eprint $"UNDETERMINED — %s{reason}")
+                ExitCode.toInt ExitCode.NoVerdict
+            | Ok (), Json ->
                 let payload =
                     {| schema = "fsgg.coord.review/1"
                        verdict = "next"
@@ -355,6 +393,7 @@ module ReviewApplication =
                        freshnessToken = verdict.FreshnessToken
                        actionKey = verdict.ActionKey |}
                 printfn "%s" (JsonSerializer.Serialize payload)
+                ExitCode.toInt ExitCode.Green
             // .github#2487 AC3 reaches the TEXT projection too, because "a reader can act without a
             // manual `git` comparison" is not a property of one render mode. The reason the JSON payload
             // has always carried as `actionReason` was simply dropped here, so `--text` printed
@@ -365,12 +404,12 @@ module ReviewApplication =
             // byte-for-byte unchanged, and the reason is appended only where one exists — so every
             // verdict that carried no reason before still renders exactly one line of exactly the same
             // two words.
-            | Text ->
+            | Ok (), Text ->
                 match actionReason verdict.NextAction with
                 | Some reason ->
                     printfn "%s — %s: %s" (stateName verdict.State) (actionName verdict.NextAction) reason
                 | None -> printfn "%s — %s" (stateName verdict.State) (actionName verdict.NextAction)
-            ExitCode.toInt ExitCode.Green
+                ExitCode.toInt ExitCode.Green
 
     let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
         renderVerdict opts binding facts None None None

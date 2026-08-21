@@ -209,6 +209,23 @@ review_claim_id="$(curl -fsS -X POST \
   -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:claim worker=fixture-review lease=120 -->\nheld"}' \
   "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
+# .github#2756: the live typed route may not turn an absent or malformed durable wait ledger into an
+# actionable critic dispatch. The malformed control is deleted after observation so the authoring
+# cases below start from an honestly readable ledger.
+review_no_wait_out="$("$ENGINE" review FS.GG.SDD#42 --pr 42 --worker vole-418 --json 2>&1)"; review_no_wait_rc=$?
+review_malformed_wait_id="$(curl -fsS -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:review-wait/v1 -->\n{\"schema\":"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
+review_malformed_wait_out="$("$ENGINE" review FS.GG.SDD#42 --pr 42 --worker vole-418 --json 2>&1)"; review_malformed_wait_rc=$?
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$review_malformed_wait_id" >/dev/null
+if [ "$review_no_wait_rc" -ne 0 ] && [ "$review_malformed_wait_rc" -ne 0 ] \
+   && printf '%s' "$review_no_wait_out" | jq -e '.verdict == "noVerdict" and .waitStatus == "noReceipt" and (.action == null)' >/dev/null \
+   && printf '%s' "$review_malformed_wait_out" | jq -e '.verdict == "noVerdict" and .waitStatus == "invalid" and (.action == null)' >/dev/null; then
+  ok "#2756 live review refuses absent/malformed wait authority before dispatch"
+else
+  bad "#2756 wait authority must gate the live dispatch route" "absent=$review_no_wait_rc:$review_no_wait_out malformed=$review_malformed_wait_rc:$review_malformed_wait_out"
+fi
 write_review_draft() {
   local kind="$1" verdict="$2" round="$3" initial="$4" preceding="$5" head="${6:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}" critic="${7:-critic-heron-42}"
   python3 - "$review_draft" "$kind" "$verdict" "$round" "$initial" "$preceding" "$head" "$critic" <<'PY'
@@ -238,29 +255,70 @@ with open(path, "w", encoding="utf-8") as stream:
 PY
 }
 
+review_wait_for_record="$(mktemp)"
+enter_review_record_wait() {
+  local generation="$1" kind="$2"
+  python3 - "$review_wait_for_record" "$review_claim_id" "$generation" "$kind" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+path, claim, generation, kind = sys.argv[1:]
+entered = datetime.now(timezone.utc).replace(microsecond=0)
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump({"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#42",
+               "claimGeneration":claim,"reviewGeneration":generation,"kind":kind,
+               "enteredAt":entered.isoformat().replace("+00:00", "Z"),
+               "expiresAt":(entered + timedelta(hours=4)).isoformat().replace("+00:00", "Z"),
+               "evidenceRef":"https://fixture.invalid/review-queue"}, stream, separators=(",", ":"))
+PY
+  "$ENGINE" review wait FS.GG.SDD#42 "$review_wait_for_record" --pr 42 --json >/dev/null 2>&1
+}
+complete_review_record_wait() {
+  local generation="$1" evidence="$2"
+  python3 - "$review_wait_for_record" "$generation" "$evidence" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({"schema":"fsgg.coord.review-wait/v1","event":"complete",
+               "reviewGeneration":sys.argv[2],
+               "at":datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+               "evidenceRef":sys.argv[3]}, stream, separators=(",", ":"))
+PY
+  "$ENGINE" review wait FS.GG.SDD#42 "$review_wait_for_record" --pr 42 --json >/dev/null 2>&1
+}
+
 review_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 write_review_draft initial changes-required 0 "" ""
+review_unwaited_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+"$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json >/dev/null 2>&1; review_unwaited_rc=$?
+review_unwaited_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+enter_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0 initial-review
 review_initial_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_initial_rc=$?
 review_initial_url="$(printf '%s' "$review_initial_out" | jq -r '.commentUrl // empty')"
+complete_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0 "$review_initial_url"
 write_review_draft confirmation pass 1 https://fixture.invalid/wrong https://fixture.invalid/wrong
+enter_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:repair-confirmation:1 repair-confirmation
 review_wrong_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 "$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json >/dev/null 2>&1; review_wrong_rc=$?
 review_wrong_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 write_review_draft confirmation pass 1 "$review_initial_url" "$review_initial_url"
 review_confirmation_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_confirmation_rc=$?
 review_confirmation_url="$(printf '%s' "$review_confirmation_out" | jq -r '.commentUrl // empty')"
+complete_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:repair-confirmation:1 "$review_confirmation_url"
 write_review_draft acceptance accepted 0 "$review_initial_url" "$review_confirmation_url"
 review_acceptance_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_acceptance_rc=$?
 review_acceptance_id="$(printf '%s' "$review_acceptance_out" | jq -r '.commentId // empty')"
 review_acceptance_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" \
   | jq -r --argjson id "${review_acceptance_id:-0}" '.[] | select(.id == $id) | .body')"
 write_review_draft initial pass 0 "" "" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb critic-tern-43
+enter_review_record_wait bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:initial-review:0 initial-review
 review_moved_initial_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_moved_initial_rc=$?
 review_moved_initial_url="$(printf '%s' "$review_moved_initial_out" | jq -r '.commentUrl // empty')"
+complete_review_record_wait bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:initial-review:0 "$review_moved_initial_url"
 write_review_draft acceptance accepted 0 "$review_moved_initial_url" "$review_moved_initial_url" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb critic-tern-43
 review_moved_acceptance_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_moved_acceptance_rc=$?
 review_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 if [ "$review_initial_rc" -eq 0 ] && [ "$review_confirmation_rc" -eq 0 ] && [ "$review_acceptance_rc" -eq 0 ] \
+   && [ "$review_unwaited_rc" -ne 0 ] && [ "$review_unwaited_before" = "$review_unwaited_after" ] \
    && [ "$review_wrong_rc" -ne 0 ] && [ "$review_wrong_before" = "$review_wrong_after" ] \
    && [ "$review_moved_initial_rc" -eq 0 ] && [ "$review_moved_acceptance_rc" -eq 0 ] \
    && printf '%s' "$review_initial_out" | jq -e '.revision == 1 and (.digest | length) == 64' >/dev/null \
@@ -270,11 +328,12 @@ if [ "$review_initial_rc" -eq 0 ] && [ "$review_confirmation_rc" -eq 0 ] && [ "$
    && [[ "$review_acceptance_body" != *'"baseSha":"9999999999999999999999999999999999999999"'* ]] \
    && printf '%s' "$review_moved_initial_out" | jq -e '.revision == 4 and (.digest | length) == 64' >/dev/null \
    && printf '%s' "$review_moved_acceptance_out" | jq -e '.revision == 5 and .effectiveChainValidated == true and (.digest | length) == 64' >/dev/null \
-   && [ "$review_after" -eq $((review_before + 5)) ]; then
+   && [ "$review_after" -eq $((review_before + 11)) ]; then
   ok "M4 review record validates actual backlinks and retires an accepted generation after head movement"
 else
   bad "M4 review record must append parseable v2 generations with actual backlinks" "comments=$review_before->$review_after wrong=$review_wrong_rc:$review_wrong_before->$review_wrong_after initial=$review_initial_rc:$review_initial_out confirmation=$review_confirmation_rc:$review_confirmation_out acceptance=$review_acceptance_rc:$review_acceptance_out moved-initial=$review_moved_initial_rc:$review_moved_initial_out moved-acceptance=$review_moved_acceptance_rc:$review_moved_acceptance_out"
 fi
+rm -f "$review_wait_for_record"
 
 # .github#2756: queue entry and terminal transition are durable PR writes, fenced to the current
 # claim generation. Drive the compiled command, not the codec in isolation.
@@ -298,6 +357,16 @@ wait_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/
 wait_enter_out="$("$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json 2>&1)"; wait_enter_rc=$?
 "$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json >/dev/null 2>&1; wait_duplicate_rc=$?
 wait_duplicate_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+python3 - "$review_wait_draft" "$review_claim_id" "$wait_entered_at" "$wait_expires_at" <<'PY'
+import json, sys
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#42",
+               "claimGeneration":sys.argv[2],"reviewGeneration":"fixture-generation-2","kind":"repair-confirmation",
+               "enteredAt":sys.argv[3],"expiresAt":sys.argv[4],
+               "evidenceRef":"https://fixture.invalid/review/2"}, stream, separators=(",", ":"))
+PY
+"$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json >/dev/null 2>&1; wait_parallel_generation_rc=$?
+wait_parallel_generation_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 python3 - "$review_wait_draft" "$wait_expires_at" <<'PY'
 import json, sys
 from datetime import datetime, timedelta
@@ -323,6 +392,7 @@ wait_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/c
 wait_projected_out="$("$ENGINE" review FS.GG.SDD#42 --pr 42 --worker vole-418 --json 2>&1)"; wait_projected_rc=$?
 if [ "$wait_enter_rc" -eq 0 ] && [ "$wait_duplicate_rc" -ne 0 ] \
    && [ "$wait_duplicate_after" -eq $((wait_before + 1)) ] && [ "$wait_complete_rc" -eq 0 ] \
+   && [ "$wait_parallel_generation_rc" -ne 0 ] && [ "$wait_parallel_generation_after" -eq $((wait_before + 1)) ] \
    && [ "$wait_early_timeout_rc" -ne 0 ] && [ "$wait_early_timeout_after" -eq $((wait_before + 1)) ] \
    && [ "$wait_terminal_duplicate_rc" -ne 0 ] && [ "$wait_after" -eq $((wait_before + 2)) ] \
    && [ "$wait_projected_rc" -eq 0 ] && printf '%s' "$wait_projected_out" | jq -e '.waitStatus == "completed" and .waitReceipt.reviewGeneration == "fixture-generation-1"' >/dev/null \
@@ -331,6 +401,47 @@ if [ "$wait_enter_rc" -eq 0 ] && [ "$wait_duplicate_rc" -ne 0 ] \
   ok "#2756 review wait writer persists one fenced entry, refuses duplicate entry/terminal writes, and projects its consumed state"
 else
   bad "#2756 review wait writer must be durable and generation-fenced" "entry=$wait_enter_rc:$wait_enter_out duplicate=$wait_duplicate_rc:$wait_before->$wait_duplicate_after early-timeout=$wait_early_timeout_rc:$wait_early_timeout_after complete=$wait_complete_rc:$wait_complete_out terminal-duplicate=$wait_terminal_duplicate_rc projected=$wait_projected_rc:$wait_projected_out after=$wait_after"
+fi
+
+# A terminal transition is fenced to the ENTRY's claim generation, not merely to whichever worker
+# happens to hold the item when it calls. Replace the claim after a durable entry and prove the old
+# receipt cannot be consumed by the new generation.
+python3 - "$review_wait_draft" "$review_claim_id" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+entered = datetime.now(timezone.utc).replace(microsecond=0)
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#42",
+               "claimGeneration":sys.argv[2],"reviewGeneration":"replacement-fence","kind":"repair-confirmation",
+               "enteredAt":entered.isoformat().replace("+00:00", "Z"),
+               "expiresAt":(entered + timedelta(hours=4)).isoformat().replace("+00:00", "Z"),
+               "evidenceRef":"https://fixture.invalid/review/replacement"}, stream, separators=(",", ":"))
+PY
+"$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json >/dev/null 2>&1; wait_replacement_enter_rc=$?
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$review_claim_id" >/dev/null
+review_claim_id="$(curl -fsS -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-review-replacement lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
+python3 - "$review_wait_draft" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({"schema":"fsgg.coord.review-wait/v1","event":"complete","reviewGeneration":"replacement-fence",
+               "at":datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+               "evidenceRef":"https://fixture.invalid/review/replaced-pass"}, stream, separators=(",", ":"))
+PY
+wait_replacement_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+"$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json >/dev/null 2>&1; wait_replacement_complete_rc=$?
+wait_replacement_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+wait_replacement_projection="$("$ENGINE" review FS.GG.SDD#42 --pr 42 --worker vole-418 --json 2>&1)"; wait_replacement_projection_rc=$?
+if [ "$wait_replacement_enter_rc" -eq 0 ] && [ "$wait_replacement_complete_rc" -ne 0 ] \
+   && [ "$wait_replacement_before" = "$wait_replacement_after" ] \
+   && [ "$wait_replacement_projection_rc" -ne 0 ] \
+   && printf '%s' "$wait_replacement_projection" | jq -e '.verdict == "noVerdict" and .waitStatus == "recoverable" and (.waitReceipt.claimGeneration != null)' >/dev/null; then
+  ok "#2756 a replacement claim cannot consume the preceding generation's wait receipt"
+else
+  bad "#2756 terminal writes must be fenced to the entry claim generation" "entry=$wait_replacement_enter_rc complete=$wait_replacement_complete_rc comments=$wait_replacement_before->$wait_replacement_after projection=$wait_replacement_projection_rc:$wait_replacement_projection"
 fi
 rm -f "$review_wait_draft"
 

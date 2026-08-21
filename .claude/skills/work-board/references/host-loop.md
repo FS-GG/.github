@@ -135,6 +135,8 @@ after each repair. Before merge, verify PR state/head/checks, the durable review
 round/URL/SHA chain, critic independence, each material finding's disposition, and newly filed work.
 The queue write is `scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json`; do not dispatch
 until its entry marker is durable, and consume it with the matching completion/cancel/timeout event.
+Use `<head>:initial-review:0` or `<head>:repair-confirmation:<round>` as the generation token; critic
+records require the matching waiting entry, and acceptance requires its completed critic-record evidence.
 Validate the chain and confirm its latest round is less than three before routing each repair.
 A critic may file review-discovered work only when
 materiality, distinct root cause, dedupe, and actionability are evidenced; nonmaterial observations

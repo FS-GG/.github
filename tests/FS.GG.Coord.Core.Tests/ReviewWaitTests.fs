@@ -36,6 +36,14 @@ module ReviewWaitTests =
         | other -> failwithf "expected recoverable claim mismatch, got %A" other
 
     [<Fact>]
+    let ``2756 a terminal event cannot hide a changed claim generation`` () =
+        let completed = ReviewWait.Complete(receipt.ReviewGeneration, entered.AddMinutes 1.0, "old-claim-pass")
+        match ReviewWait.project receipt.Item (Some "new-claim") true (entered.AddHours 1.0)
+                  [ ReviewWait.Enter receipt; completed ] with
+        | ReviewWait.Recoverable (_, reason) -> Assert.Contains("reacquire", reason)
+        | other -> failwithf "an old-claim terminal hid the replacement claim: %A" other
+
+    [<Fact>]
     let ``2756 bounded timeout returns an explicit recoverable state`` () =
         match ReviewWait.project receipt.Item (Some receipt.ClaimGeneration) true receipt.ExpiresAt [ ReviewWait.Enter receipt ] with
         | ReviewWait.Recoverable (_, reason) -> Assert.Contains("expired", reason)
@@ -83,3 +91,28 @@ module ReviewWaitTests =
         match ReviewWait.tryDecode (ReviewWait.Marker + "\n{\"schema\":") with
         | Error _ -> ()
         | other -> failwithf "a malformed marker was ignored: %A" other
+
+    [<Fact>]
+    let ``2756 two different unconsumed generations are invalid rather than latest wins`` () =
+        let second =
+            { receipt with
+                ReviewGeneration = "review-3"
+                EnteredAt = receipt.EnteredAt.AddMinutes 1.0
+                ExpiresAt = receipt.ExpiresAt.AddMinutes 1.0 }
+        match ReviewWait.project receipt.Item (Some receipt.ClaimGeneration) true (entered.AddHours 1.0)
+                  [ ReviewWait.Enter receipt; ReviewWait.Enter second ] with
+        | ReviewWait.Invalid errors -> Assert.Contains("multiple review generations are unconsumed", String.concat "; " errors)
+        | other -> failwithf "a later unconsumed generation silently replaced the first: %A" other
+
+    [<Fact>]
+    let ``2756 a new generation is admitted after the preceding one is consumed`` () =
+        let completed = ReviewWait.Complete(receipt.ReviewGeneration, entered.AddMinutes 1.0, "first-complete")
+        let second =
+            { receipt with
+                ReviewGeneration = "review-3"
+                EnteredAt = receipt.EnteredAt.AddMinutes 2.0
+                ExpiresAt = receipt.ExpiresAt.AddMinutes 2.0 }
+        match ReviewWait.project receipt.Item (Some receipt.ClaimGeneration) true (entered.AddHours 1.0)
+                  [ ReviewWait.Enter receipt; completed; ReviewWait.Enter second ] with
+        | ReviewWait.Waiting active -> Assert.Equal(second.ReviewGeneration, active.ReviewGeneration)
+        | other -> failwithf "the consumed predecessor blocked the next generation: %A" other

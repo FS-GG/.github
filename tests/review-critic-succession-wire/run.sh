@@ -447,6 +447,26 @@ with open(path, "w", encoding="utf-8") as stream:
 PY
 }
 
+ledger_wait_draft() {
+  python3 - "$@" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+path, event, claim, generation, kind, evidence = sys.argv[1:]
+now = datetime.now(timezone.utc).replace(microsecond=0)
+if event == "enter":
+    record = {"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#42",
+              "claimGeneration":claim,"reviewGeneration":generation,"kind":kind,
+              "enteredAt":now.isoformat().replace("+00:00", "Z"),
+              "expiresAt":(now + timedelta(hours=4)).isoformat().replace("+00:00", "Z"),
+              "evidenceRef":evidence}
+else:
+    record = {"schema":"fsgg.coord.review-wait/v1","event":"complete","reviewGeneration":generation,
+              "at":now.isoformat().replace("+00:00", "Z"),"evidenceRef":evidence}
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(record, stream, separators=(",", ":"))
+PY
+}
+
 # ledger_case <dll> <kind> <successor> <succession-json|none> -- drives ONE chain against a fresh
 # loopback server and echoes `<rc> <ledger-records-before> <ledger-records-after> <stderr-first-line>`.
 # The record COUNT is what makes a refusal leg discriminating: `review record` validates before it
@@ -454,7 +474,7 @@ PY
 # that refused, and only the count can tell those apart.
 ledger_case() {
   local dll="$1" kind="$2" successor="$3" succession="$4"
-  local srv_out srv_pid port draft rc out before after initial_url
+  local srv_out srv_pid port draft rc out before after initial_url claim_id second_round second_generation
   srv_out="$(mktemp "$WORK/ledger-srv.XXXXXX")"
   python3 "$REPO_ROOT/tests/coord-engine-e2e/stateful_server.py" >"$srv_out" 2>&1 &
   srv_pid=$!
@@ -472,20 +492,33 @@ ledger_case() {
     export GITHUB_TOKEN="fixture-token"
     export FSGG_COORD_OWNER="FS-GG"
 
+    claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+      -d '{"body":"<!-- fsgg:claim worker=fixture-ledger lease=120 -->\nheld"}' \
+      "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+
     ledger_draft "$draft" initial tern-42 0 "" "" none
+    ledger_wait_draft "$draft.wait" enter "$claim_id" "$(printf 'a%.0s' {1..40}):initial-review:0" initial-review queue
+    dotnet "$dll" review wait FS.GG.SDD#42 "$draft.wait" --pr 42 --json >/dev/null 2>&1
     out="$(dotnet "$dll" review record FS.GG.SDD#42 "$draft" --pr 42 --json 2>&1)"
     initial_url="$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["commentUrl"])' 2>/dev/null)"
     if [ -z "$initial_url" ]; then
       printf '98 0 0 the initial record could not be written: %s' "$(printf '%s' "$out" | head -1)"
       exit 0
     fi
+    ledger_wait_draft "$draft.wait" complete "$claim_id" "$(printf 'a%.0s' {1..40}):initial-review:0" initial-review "$initial_url"
+    dotnet "$dll" review wait FS.GG.SDD#42 "$draft.wait" --pr 42 --json >/dev/null 2>&1
 
     before="$(ledger_count "$port")"
     if [ "$kind" = "confirmation" ]; then
+      second_round=1
       ledger_draft "$draft" "$kind" "$successor" 1 "$initial_url" "$initial_url" "$succession"
     else
+      second_round=0
       ledger_draft "$draft" "$kind" "$successor" 0 "$initial_url" "$initial_url" "$succession"
     fi
+    second_generation="$(printf 'a%.0s' {1..40}):repair-confirmation:$second_round"
+    ledger_wait_draft "$draft.wait" enter "$claim_id" "$second_generation" repair-confirmation queue
+    dotnet "$dll" review wait FS.GG.SDD#42 "$draft.wait" --pr 42 --json >/dev/null 2>&1
     out="$(dotnet "$dll" review record FS.GG.SDD#42 "$draft" --pr 42 --json 2>&1)"; rc=$?
     after="$(ledger_count "$port")"
     printf '%s %s %s %s' "$rc" "$before" "$after" "$(printf '%s' "$out" | head -1)"

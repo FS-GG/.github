@@ -33,6 +33,8 @@ module ReviewWait =
         | Invalid of errors: string list
 
     val validate: Transition -> Result<Transition, string list>
+    /// Canonical structured-review generation token bound to the exact head, queue kind and round.
+    val generationToken: head: string -> kind: Kind -> round: int -> string
     val encode: Transition -> string
     val tryDecode: string -> Result<Transition option, string>
     val project:

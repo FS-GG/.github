@@ -53,6 +53,11 @@ def main() -> None:
         "ephemeral runtime liveness and a host's testimony about despawn are not review evidence",
         "Entering a review queue writes the receipt before the actor yields",
         "scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json",
+        "The canonical generation token is `<head>:initial-review:0`",
+        "Exactly one generation may be unconsumed",
+        "replacing the claim cannot transfer authority to consume an older entry",
+        "`review record` refuses every critic record until the matching canonical entry is waiting",
+        "Dispatch actions are available only from the matching `waiting` state",
     ):
         require(literal in contract, f"durable review-wait contract is missing: {literal}")
 

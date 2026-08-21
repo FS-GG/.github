@@ -56,6 +56,7 @@ module ReviewWait =
         if List.isEmpty errors then Ok event else Error errors
 
     let private kindName = function InitialReview -> "initial-review" | RepairConfirmation -> "repair-confirmation"
+    let generationToken head kind round = $"%s{head}:%s{kindName kind}:%d{round}"
     let private instant (value: DateTimeOffset) = value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
 
     let encode event =
@@ -112,7 +113,9 @@ module ReviewWait =
         if not (List.isEmpty errors) then Invalid errors else
         // GitHub comment order is the authority: the first entry for one generation wins, so two
         // racing writers cannot let the later comment replace the receipt the earlier comment made
-        // durable. A later, genuinely new generation remains the active one.
+        // durable. A genuinely new generation may start only after the preceding entry has a terminal
+        // transition; two simultaneously unconsumed generations are contradictory authority, never a
+        // latest-wins queue.
         let entries =
             events
             |> List.choose (function Enter receipt when receipt.Item = item -> Some receipt | _ -> None)
@@ -129,12 +132,27 @@ module ReviewWait =
                 | Timeout (generation, _, _) when not (Set.contains generation enteredGenerations) -> Some generation
                 | _ -> None)
             |> List.distinct
-        match List.tryLast entries, orphaned with
-        | _, generations when not (List.isEmpty generations) ->
+        let terminalGenerations =
+            events
+            |> List.choose (function
+                | Complete (generation, _, _)
+                | Cancel (generation, _, _)
+                | Timeout (generation, _, _) -> Some generation
+                | _ -> None)
+            |> Set.ofList
+        let unconsumed =
+            entries
+            |> List.filter (fun receipt -> not (Set.contains receipt.ReviewGeneration terminalGenerations))
+        match entries, unconsumed, orphaned with
+        | _, _, generations when not (List.isEmpty generations) ->
             let names = String.concat ", " generations
             Invalid [ $"terminal transition has no entry receipt: %s{names}" ]
-        | None, _ -> NoReceipt
-        | Some receipt, _ ->
+        | _, active, _ when List.length active > 1 ->
+            let names = active |> List.map _.ReviewGeneration |> String.concat ", "
+            Invalid [ $"multiple review generations are unconsumed: %s{names}" ]
+        | [], _, _ -> NoReceipt
+        | entries, active, _ ->
+            let receipt = active |> List.tryExactlyOne |> Option.defaultWith (fun () -> List.last entries)
             // The first terminal comment wins. `at` is checked against the receipt boundary, but is
             // never used to reorder GitHub's append-only authority: a later caller cannot backdate a
             // comment to steal a completion/timeout race.
@@ -145,15 +163,16 @@ module ReviewWait =
                     | Cancel (g, at, evidence) when g = receipt.ReviewGeneration -> Some(1, at, evidence)
                     | Timeout (g, at, evidence) when g = receipt.ReviewGeneration -> Some(2, at, evidence)
                     | _ -> None)
-            match terminal with
-            | Some (0, at, _) when at < receipt.EnteredAt -> Invalid [ "completion predates queue entry" ]
-            | Some (0, at, evidence) when at <= receipt.ExpiresAt -> Completed(receipt, evidence)
-            | Some (0, _, _) -> Recoverable(receipt, "completion arrived after bounded review wait expiry")
-            | Some (1, at, _) when at < receipt.EnteredAt -> Invalid [ "cancellation predates queue entry" ]
-            | Some (1, _, evidence) -> Cancelled(receipt, evidence)
-            | Some (2, at, _) when at < receipt.ExpiresAt -> Invalid [ "timeout predates expiresAt" ]
-            | Some (2, _, evidence) -> Recoverable(receipt, evidence)
-            | _ when not prOpen -> Cancelled(receipt, "pull request is closed")
-            | _ when currentClaimGeneration <> Some receipt.ClaimGeneration -> Recoverable(receipt, "claim generation changed; reacquire before mutation")
-            | _ when now >= receipt.ExpiresAt -> Recoverable(receipt, "bounded review wait expired")
-            | _ -> Waiting receipt
+            match currentClaimGeneration, terminal with
+            | generation, _ when generation <> Some receipt.ClaimGeneration ->
+                Recoverable(receipt, "claim generation changed; reacquire before mutation")
+            | _, Some (0, at, _) when at < receipt.EnteredAt -> Invalid [ "completion predates queue entry" ]
+            | _, Some (0, at, evidence) when at <= receipt.ExpiresAt -> Completed(receipt, evidence)
+            | _, Some (0, _, _) -> Recoverable(receipt, "completion arrived after bounded review wait expiry")
+            | _, Some (1, at, _) when at < receipt.EnteredAt -> Invalid [ "cancellation predates queue entry" ]
+            | _, Some (1, _, evidence) -> Cancelled(receipt, evidence)
+            | _, Some (2, at, _) when at < receipt.ExpiresAt -> Invalid [ "timeout predates expiresAt" ]
+            | _, Some (2, _, evidence) -> Recoverable(receipt, evidence)
+            | _, _ when not prOpen -> Cancelled(receipt, "pull request is closed")
+            | _, _ when now >= receipt.ExpiresAt -> Recoverable(receipt, "bounded review wait expired")
+            | _, _ -> Waiting receipt

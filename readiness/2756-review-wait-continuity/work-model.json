@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "4faabc20a97d059ba2e783dc643b09104103f1c1e87a3810f9081e2f5b63ac35"
+        "value": "6635476a559f02c3aa05a9f76fc6283c31c1a38740bcce6137b7a76cef7e1135"
       }
     },
     {
@@ -1010,7 +1010,7 @@
           "path": "work/2756-review-wait-continuity/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "4faabc20a97d059ba2e783dc643b09104103f1c1e87a3810f9081e2f5b63ac35"
+            "value": "6635476a559f02c3aa05a9f76fc6283c31c1a38740bcce6137b7a76cef7e1135"
           },
           "schemaVersion": 1
         },
@@ -1041,7 +1041,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "721291daba1592e913a30dd3ee281d30e213c7f84121070869f97b132c862c7b"
+        "value": "76ac8b3f1eacc837b02405edb33fa1fe586e5cef59b90d8b65c29ad884f41a58"
       },
       "currency": "current"
     }

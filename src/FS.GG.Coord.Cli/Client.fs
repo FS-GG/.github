@@ -2032,6 +2032,18 @@ module Client =
                             let parseErrors = parsed |> List.choose (function Error error -> Some error | _ -> None)
                             let prior =
                                 parsed |> List.choose (function Ok (Some prior) -> Some prior | _ -> None)
+                            let terminalGenerations =
+                                prior
+                                |> List.choose (function
+                                    | ReviewWait.Complete (generation, _, _)
+                                    | ReviewWait.Cancel (generation, _, _)
+                                    | ReviewWait.Timeout (generation, _, _) -> Some generation
+                                    | _ -> None)
+                                |> Set.ofList
+                            let unconsumedEntries =
+                                prior
+                                |> List.choose (function ReviewWait.Enter receipt -> Some receipt | _ -> None)
+                                |> List.filter (fun receipt -> not (Set.contains receipt.ReviewGeneration terminalGenerations))
                             let permitted =
                                 if not (List.isEmpty parseErrors) then
                                     let detail = String.concat "; " parseErrors
@@ -2045,6 +2057,7 @@ module Client =
                                         elif receipt.EnteredAt > now.AddMinutes 5.0 then Error "enteredAt is implausibly in the future"
                                         elif receipt.ExpiresAt <= now then Error "receipt is already expired"
                                         elif prior |> List.exists (function ReviewWait.Enter old when old.ReviewGeneration = receipt.ReviewGeneration -> true | _ -> false) then Error "reviewGeneration already has an entry receipt"
+                                        elif not (List.isEmpty unconsumedEntries) then Error "a preceding reviewGeneration is still unconsumed"
                                         else Ok ()
                                     | ReviewWait.Complete (generation, at, _)
                                     | ReviewWait.Cancel (generation, at, _)
@@ -2062,6 +2075,7 @@ module Client =
                                             let receipt = entry.Value
                                             let now = DateTimeOffset.UtcNow
                                             match event with
+                                            | _ when receipt.ClaimGeneration <> string claim.Id -> Error "entry receipt claimGeneration is not current"
                                             | ReviewWait.Complete _ when at > now.AddMinutes 5.0 -> Error "completion timestamp is implausibly in the future"
                                             | ReviewWait.Complete _ when at < receipt.EnteredAt -> Error "completion predates queue entry"
                                             | ReviewWait.Complete _ when at > receipt.ExpiresAt -> Error "completion is after bounded review wait expiry"
@@ -2115,6 +2129,52 @@ module Client =
                                             ExitGreen
             with error -> eprint $"fsgg-coord-engine: review wait: %s{error.Message}"; ExitError
 
+    let private authorizeReviewRecordWait
+        (ctx: Context)
+        (opts: Options)
+        (target: Ref)
+        (pr: int)
+        (comments: Reads.CommentBody list)
+        (draft: StructuredDecision.ReviewRecord)
+        =
+        match Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+              |> Result.bind (Reads.requireCompleteMarkerScan target.Short) with
+        | Error error -> Error(sprintf "the current claim generation could not be read: %A" error)
+        | Ok markers ->
+            match Reads.winner opts.LeaseMinutes markers with
+            | None -> Error "no current claim generation can authorize the structured review write"
+            | Some claim ->
+                let parsed =
+                    comments
+                    |> List.sortBy _.Id
+                    |> List.map (fun comment -> ReviewWait.tryDecode comment.Body)
+                let parseErrors = parsed |> List.choose (function Error error -> Some error | _ -> None)
+                let events = parsed |> List.choose (function Ok (Some event) -> Some event | _ -> None)
+                let state =
+                    if List.isEmpty parseErrors then
+                        ReviewWait.project target.Canonical (Some(string claim.Id)) true DateTimeOffset.UtcNow events
+                    else ReviewWait.Invalid parseErrors
+                let generationMatches kind round (receipt: ReviewWait.WaitReceipt) =
+                    receipt.Kind = kind
+                    && receipt.ReviewGeneration = ReviewWait.generationToken draft.HeadSha kind round
+                match draft.Kind, state with
+                | StructuredDecision.Acceptance, ReviewWait.Completed (_, evidence)
+                    when draft.PrecedingReview = Some evidence -> Ok ()
+                | StructuredDecision.Acceptance, _ ->
+                    Error "host acceptance requires the immediately preceding critic record's durable review wait to be completed"
+                | StructuredDecision.Initial, ReviewWait.Waiting receipt
+                    when generationMatches ReviewWait.InitialReview 0 receipt -> Ok ()
+                | (StructuredDecision.Confirmation | StructuredDecision.Escalation | StructuredDecision.RepairPhase),
+                  ReviewWait.Waiting receipt
+                    when generationMatches ReviewWait.RepairConfirmation draft.Round receipt -> Ok ()
+                | _, ReviewWait.Invalid errors ->
+                    let detail = String.concat "; " errors
+                    Error($"the review-wait ledger is invalid: %s{detail}")
+                | _, ReviewWait.Recoverable (_, reason) -> Error($"the review-wait ledger is recoverable, not authoritative: %s{reason}")
+                | _, ReviewWait.Waiting receipt ->
+                    Error($"waiting receipt generation/kind does not authorize this review record: %s{receipt.ReviewGeneration} / %A{receipt.Kind}")
+                | _, _ -> Error "a matching durable review-wait entry is required before a critic record"
+
     let private recordReview (ctx: Context) (opts: Options) (rawRef: string) (path: string) : int =
         match parseRef ctx rawRef, opts.Pr with
         | Error message, _ -> eprint $"fsgg-coord-engine: review record: %s{message}"; ExitError
@@ -2122,13 +2182,18 @@ module Client =
         | Ok target, Some pr ->
             try
                 let raw = File.ReadAllText path
+                let mutable waitRefusal = None
                 match Driver.decodeStructuredReview raw,
                       Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
                 | Error reason, _ ->
                     eprint $"fsgg-coord-engine: review record: only structured v2 drafts may be written: %s{reason}"
                     ExitError
                 | _, Error error -> fail error
-                | Ok draft, Ok comments ->
+                | Ok draft, Ok comments
+                    when
+                        (authorizeReviewRecordWait ctx opts target pr comments draft
+                         |> Result.mapError (fun reason -> waitRefusal <- Some reason)
+                         |> Result.isOk) ->
                     let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
                     let marked =
                         comments
@@ -2249,6 +2314,10 @@ module Client =
                                                 let commentUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
                                                 printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-record-result/v2"; subject = expectedSubject; revision = candidate.Revision; digest = candidate.Digest; commentId = commentId; commentUrl = commentUrl; effectiveChainValidated = (candidate.Kind = StructuredDecision.Acceptance) |})
                                                 ExitGreen
+                | Ok _, Ok _ ->
+                    let detail = waitRefusal |> Option.defaultValue "durable review-wait authorization failed"
+                    eprint $"fsgg-coord-engine: review record: refused: %s{detail}"
+                    ExitNoVerdict
             with error -> eprint $"fsgg-coord-engine: review record: %s{error.Message}"; ExitError
 
     let review (ctx: Context) (opts: Options) : int =

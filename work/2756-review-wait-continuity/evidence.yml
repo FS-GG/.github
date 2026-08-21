@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2756-review-wait-continuity/review-wait-contract.trx
-      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 10
+      passed: 13
       failed: 0
       skipped: 0
     notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
