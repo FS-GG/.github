@@ -1986,9 +1986,134 @@ module Client =
                                   RepairRouteAvailable = true
                                   DiffAuditTrusted = None }
 
-                            ReviewApplication.render opts binding facts
+                            let waitResults =
+                                comments
+                                |> List.sortBy _.Id
+                                |> List.map (fun comment -> ReviewWait.tryDecode comment.Body)
+                            let waitErrors = waitResults |> List.choose (function Error error -> Some error | _ -> None)
+                            let waitEvents = waitResults |> List.choose (function Ok (Some event) -> Some event | _ -> None)
+                            let prOpen = checks <> Types.PrMerged && checks <> Types.PrClosed
+                            let waitState =
+                                if List.isEmpty waitErrors then
+                                    ReviewWait.project target.Canonical (Some(string marker.Id)) prOpen DateTimeOffset.UtcNow waitEvents
+                                else ReviewWait.Invalid waitErrors
+                            ReviewApplication.renderWithWait opts binding facts waitState
                         | Error error, _, _
                         | _, _, Error error -> fail error
+
+    // Append one validated durable review-wait event. Queue entry is a write, never an in-memory host
+    // promise: the marker is posted to the reviewed PR and is therefore available to a later host after
+    // the worker/critic process exits. Transition writes require an existing entry for the same review
+    // generation. Entry is fenced to the current claim generation; resumption still has to reacquire or
+    // revalidate that generation before any tree mutation (.github#2756).
+    let private recordReviewWait (ctx: Context) (opts: Options) (rawRef: string) (path: string) : int =
+        match parseRef ctx rawRef, opts.Pr with
+        | Error message, _ -> eprint $"fsgg-coord-engine: review wait: %s{message}"; ExitError
+        | _, None -> eprint "fsgg-coord-engine: review wait: --pr is required."; ExitError
+        | Ok target, Some pr ->
+            try
+                let raw = File.ReadAllText path
+                let markerBody = if raw.StartsWith(ReviewWait.Marker, StringComparison.Ordinal) then raw else ReviewWait.Marker + "\n" + raw
+                match ReviewWait.tryDecode markerBody with
+                | Error reason -> eprint $"fsgg-coord-engine: review wait: malformed event: %s{reason}"; ExitError
+                | Ok None -> eprint "fsgg-coord-engine: review wait: the draft is not a review-wait event."; ExitError
+                | Ok (Some event) ->
+                    match Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+                          |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
+                          Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                    | Error error, _
+                    | _, Error error -> fail error
+                    | Ok markers, Ok comments ->
+                        match Reads.winner opts.LeaseMinutes markers with
+                        | None -> eprint "fsgg-coord-engine: review wait: no current claim generation can authorize this write."; ExitNoVerdict
+                        | Some claim ->
+                            let ordered = comments |> List.sortBy _.Id
+                            let parsed = ordered |> List.map (fun comment -> ReviewWait.tryDecode comment.Body)
+                            let parseErrors = parsed |> List.choose (function Error error -> Some error | _ -> None)
+                            let prior =
+                                parsed |> List.choose (function Ok (Some prior) -> Some prior | _ -> None)
+                            let permitted =
+                                if not (List.isEmpty parseErrors) then
+                                    let detail = String.concat "; " parseErrors
+                                    Error($"existing review-wait ledger is malformed: %s{detail}")
+                                else
+                                    match event with
+                                    | ReviewWait.Enter receipt ->
+                                        let now = DateTimeOffset.UtcNow
+                                        if receipt.Item <> target.Canonical then Error "receipt item does not match the requested item"
+                                        elif receipt.ClaimGeneration <> string claim.Id then Error "receipt claimGeneration is not current"
+                                        elif receipt.EnteredAt > now.AddMinutes 5.0 then Error "enteredAt is implausibly in the future"
+                                        elif receipt.ExpiresAt <= now then Error "receipt is already expired"
+                                        elif prior |> List.exists (function ReviewWait.Enter old when old.ReviewGeneration = receipt.ReviewGeneration -> true | _ -> false) then Error "reviewGeneration already has an entry receipt"
+                                        else Ok ()
+                                    | ReviewWait.Complete (generation, at, _)
+                                    | ReviewWait.Cancel (generation, at, _)
+                                    | ReviewWait.Timeout (generation, at, _) ->
+                                        let entry = prior |> List.tryPick (function ReviewWait.Enter old when old.ReviewGeneration = generation -> Some old | _ -> None)
+                                        if entry.IsNone then
+                                            Error "transition has no durable entry receipt for this reviewGeneration"
+                                        elif prior |> List.exists (function
+                                            | ReviewWait.Complete (old, _, _)
+                                            | ReviewWait.Cancel (old, _, _)
+                                            | ReviewWait.Timeout (old, _, _) -> old = generation
+                                            | _ -> false) then
+                                            Error "reviewGeneration already has a terminal transition"
+                                        else
+                                            let receipt = entry.Value
+                                            let now = DateTimeOffset.UtcNow
+                                            match event with
+                                            | ReviewWait.Complete _ when at > now.AddMinutes 5.0 -> Error "completion timestamp is implausibly in the future"
+                                            | ReviewWait.Complete _ when at < receipt.EnteredAt -> Error "completion predates queue entry"
+                                            | ReviewWait.Complete _ when at > receipt.ExpiresAt -> Error "completion is after bounded review wait expiry"
+                                            | ReviewWait.Complete _ when now >= receipt.ExpiresAt -> Error "completion was not durable before bounded review wait expiry"
+                                            | ReviewWait.Cancel _ when at > now.AddMinutes 5.0 -> Error "cancellation timestamp is implausibly in the future"
+                                            | ReviewWait.Cancel _ when at < receipt.EnteredAt -> Error "cancellation predates queue entry"
+                                            | ReviewWait.Cancel _ when now >= receipt.ExpiresAt -> Error "cancellation was not durable before bounded review wait expiry"
+                                            | ReviewWait.Timeout _ when at > now.AddMinutes 5.0 -> Error "timeout timestamp is implausibly in the future"
+                                            | ReviewWait.Timeout _ when at < receipt.ExpiresAt -> Error "timeout predates expiresAt"
+                                            | ReviewWait.Timeout _ when now < receipt.ExpiresAt -> Error "timeout cannot be made durable before expiresAt"
+                                            | _ -> Ok ()
+                            match permitted with
+                            | Error reason -> eprint $"fsgg-coord-engine: review wait: refused: %s{reason}"; ExitNoVerdict
+                            | Ok () ->
+                                let prTarget = { target with Number = pr }
+                                match Writes.postIssueComment ctx.Transport prTarget markerBody with
+                                | Error error -> fail error
+                                | Ok commentId ->
+                                    // Re-read the append-only thread and project in GitHub comment-id
+                                    // order. Concurrent terminal writers can both pass the pre-read,
+                                    // but only the first durable comment wins; every caller observes
+                                    // that same answer and a loser never reports its write as success.
+                                    match Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                                    | Error error -> fail error
+                                    | Ok current ->
+                                        let currentParsed =
+                                            current
+                                            |> List.sortBy _.Id
+                                            |> List.map (fun comment -> ReviewWait.tryDecode comment.Body)
+                                        let currentErrors = currentParsed |> List.choose (function Error error -> Some error | _ -> None)
+                                        let currentEvents = currentParsed |> List.choose (function Ok (Some transition) -> Some transition | _ -> None)
+                                        let state =
+                                            if List.isEmpty currentErrors then
+                                                ReviewWait.project target.Canonical (Some(string claim.Id)) true DateTimeOffset.UtcNow currentEvents
+                                            else ReviewWait.Invalid currentErrors
+                                        let ownsWinner =
+                                            match event, state with
+                                            | ReviewWait.Enter expected, ReviewWait.Waiting actual
+                                            | ReviewWait.Enter expected, ReviewWait.Completed (actual, _)
+                                            | ReviewWait.Enter expected, ReviewWait.Cancelled (actual, _)
+                                            | ReviewWait.Enter expected, ReviewWait.Recoverable (actual, _) -> expected = actual
+                                            | ReviewWait.Complete (generation, _, evidence), ReviewWait.Completed (actual, winner) -> generation = actual.ReviewGeneration && evidence = winner
+                                            | ReviewWait.Cancel (generation, _, evidence), ReviewWait.Cancelled (actual, winner) -> generation = actual.ReviewGeneration && evidence = winner
+                                            | ReviewWait.Timeout (generation, _, evidence), ReviewWait.Recoverable (actual, winner) -> generation = actual.ReviewGeneration && evidence = winner
+                                            | _ -> false
+                                        if not ownsWinner then
+                                            eprint "fsgg-coord-engine: review wait: the posted event lost a concurrent durable transition race; re-read review state."
+                                            ExitNoVerdict
+                                        else
+                                            printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-wait-result/v1"; item = target.Canonical; pr = pr; commentId = commentId |})
+                                            ExitGreen
+            with error -> eprint $"fsgg-coord-engine: review wait: %s{error.Message}"; ExitError
 
     let private recordReview (ctx: Context) (opts: Options) (rawRef: string) (path: string) : int =
         match parseRef ctx rawRef, opts.Pr with
@@ -2128,6 +2253,7 @@ module Client =
 
     let review (ctx: Context) (opts: Options) : int =
         match opts.Args with
+        | [ "wait"; rawRef; path ] -> recordReviewWait ctx opts rawRef path
         | [ "record"; rawRef; path ] -> recordReview ctx opts rawRef path
         | _ -> inspectReview ctx opts
 

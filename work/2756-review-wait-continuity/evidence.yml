@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2756-review-wait-continuity/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2756-review-wait-continuity/analysis.json
-    digest: 2b9720304d1b480c7b321b392bf070851fb66939640335ff03ff313314766261
+    digest: 11d5cd23ea0f188b6116a26cc2776c29a144d8b424b20b59e96347d9886da1c0
     schemaVersion: 1
   - label: checklist
     path: work/2756-review-wait-continuity/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2756-review-wait-continuity/plan.md
-    digest: 4589b2a594241982651192ca64fcccbca60bea8c96aa5f06f357612c98ee8984
+    digest: ee8eab19118775e994bb2946cd2a6c124a9093341801567aeb3ca9f285279792
     schemaVersion: 1
   - label: spec
     path: work/2756-review-wait-continuity/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2756-review-wait-continuity/tasks.yml
-    digest: 60dda340f14a58c8b8d1075a248d53ce91dfefd09fbead95988a0f841964d6df
+    digest: d2ebb0850a73079670d0a50474691fcb0b0e9624b8288d7507fcd8df9ac64413
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -49,18 +49,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV002
     kind: verification
     subject:
@@ -76,18 +76,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV003
     kind: verification
     subject:
@@ -103,18 +103,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV004
     kind: verification
     subject:
@@ -130,18 +130,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV005
     kind: verification
     subject:
@@ -157,18 +157,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV006
     kind: verification
     subject:
@@ -184,18 +184,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV007
     kind: verification
     subject:
@@ -211,18 +211,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV008
     kind: verification
     subject:
@@ -238,18 +238,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV009
     kind: verification
     subject:
@@ -265,18 +265,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV010
     kind: verification
     subject:
@@ -292,18 +292,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV011
     kind: verification
     subject:
@@ -319,18 +319,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV012
     kind: verification
     subject:
@@ -346,18 +346,18 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
   - id: EV013
     kind: verification
     subject:
@@ -373,17 +373,17 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/review-round-contract.py
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2756-review-wait-continuity/review-round-contract.junit.xml
-      digest: "sha256:bb6816a4ced0b4605344be91cac1cc39b657734a88505e5a54f0eca2608c7d5a"
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:12ef1f89d18b344ddc525e1e227d2c084f332683db16a2e84816085341542e5f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 1
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused review contract fixture passed; mutation of the touch-set reservation clause exited 1."]
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

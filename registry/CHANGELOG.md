@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-21** — **coherent set `github:0.67.0` prepared with a post-merge release obligation**
+  (github; [.github#2756](https://github.com/FS-GG/.github/issues/2756),
+  [PR #2792](https://github.com/FS-GG/.github/pull/2792)): adds the durable bounded review-wait
+  marker/writer/projection and makes a full fresh successor review the ordinary repaired-head route.
+  The merge owner must publish the byte-identical coherent set to both feeds and replace this prepared
+  entry with immutable run/tag/feed evidence before the item is stamped Done.
+
 - **2026-08-21** — **coherent set `github:0.66.0` published; `coord-engine` flipped to `0.66.0`**
   (github; [.github#2757](https://github.com/FS-GG/.github/issues/2757),
   [PR #2789](https://github.com/FS-GG/.github/pull/2789),

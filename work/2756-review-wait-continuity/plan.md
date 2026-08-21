@@ -31,13 +31,13 @@ Prose status: planned
 - PD-002 [AC-002] [FR-002] complete: Define the current receipt plus open PR as reservation evidence, while requiring claim-generation validation or reacquisition before mutation.
 - PD-003 [AC-003] [FR-003] complete: Define completion, cancellation, and timeout as idempotent terminal dispositions; a losing race re-reads the winning state and timeout projects explicit recovery.
 - PD-004 [AC-004] [FR-004] complete: Replace exceptional same-critic succession with ordinary fresh-successor dispatch after a repair wait; preserve the durable digest chain and require a full exact-head review with no inherited clearance.
-- PD-005 [AC-005] [FR-005] complete: Extend the existing mirrored review-contract fixture with positive clauses and negative mutations for lease expiry, stale claim generation, dead critic replacement, and completion/timeout racing.
+- PD-005 [AC-005] [FR-005] complete: Add production-code xUnit witnesses for entry/write round-trip, wait beyond the active lease, changed claim generation, bounded expiry, completion/timeout racing, and maximum duration; keep the mirrored contract gate as the reached prose boundary and independently invert `writes` to `may write`.
 
 ## Contract Impact
-- PC-001 [PD-001] reviewProtocol: This change authors the operator contract consumed by host adapters; it does not claim that the current `fsgg-coord review` engine already persists the receipt.
+- PC-001 [PD-001] reviewProtocol: `ReviewWait` owns the append-only marker codec and deterministic projection; `review wait` is the authoritative writer and live `review` parses the PR ledger. Structured review admits an ordinary fresh successor only at a confirmation following `changes-required` while preserving legacy explicit grants.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PC-001] semanticTest: Run `tests/skill-quality/review-round-contract.py` and the encompassing skill-quality gate; mutate one required wait/successor clause and show the focused fixture red.
+- VO-001 [PD-001] [PC-001] semanticTest: Run the six `ReviewWaitTests` behavioral witnesses plus the compiled e2e writer, the succession wire/inversion fixture, and `tests/skill-quality/review-round-contract.py`; independently mutate `writes` to `may write` and show the focused fixture red.
 
 ## Performance Intent
 No performance intent is declared for this work item.

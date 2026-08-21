@@ -130,7 +130,16 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.66.0 — disclosed residuals become an explicit, bounded stopping decision.
+    <PackageReleaseNotes>0.67.0 — review queues become durable, bounded state and fresh successors become ordinary.
+
+WHAT MOVED, AND WHY IT IS A MINOR. The engine adds the `fsgg.coord.review-wait/v1` append-only marker,
+the `review wait` writer, live wait-state projection, and an ordinary `dispatchSuccessor` review action.
+The packed Kit makes hosts write and consume the same receipt and requires every fresh successor to
+re-derive a full verdict rather than inherit clearance. Legacy succession records remain readable;
+no command, wire member, destination, or package identity is removed. This is additive receiver-visible
+protocol behavior, so the coherent set advances from the complete 0.66.0 frontier to 0.67.0 (.github#2756).
+
+0.66.0 — disclosed residuals become an explicit, bounded stopping decision.
 
 WHAT MOVED, AND WHY IT IS A MINOR. The packed Kit's pnext-item findings contract adds a terminal
 disposition that receivers did not previously have: a limitation may stop only when its bound is

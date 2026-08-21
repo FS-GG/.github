@@ -136,9 +136,11 @@ supports slash-based skill selection.
 
 At each worker's review handoff, spawn a fresh critic under the `independent-review` contract loaded
 by `$pnext-item`, route
-up to three numbered repairs back to the still-live worker, and require the same critic's confirmation
+up to three numbered repairs back to the still-live worker, write a bounded review-wait receipt, and require a fresh successor critic's full review
 after each repair. Before merge, verify PR state/head/checks, the durable review marker, the ordered
 round/URL/SHA chain, critic independence, each material finding's disposition, and newly filed work.
+The queue write is `scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json`; do not dispatch
+until its entry marker is durable, and consume it with the matching completion/cancel/timeout event.
 Validate the chain and confirm its latest round is less than three before routing each repair.
 The critic may file review-discovered work only when materiality, distinct root cause, dedupe, and
 actionability are all evidenced; nonmaterial observations must not create issues, board rows, blocker

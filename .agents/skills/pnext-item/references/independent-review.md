@@ -69,26 +69,16 @@ If that ceiling is exhausted, append `escalation` then `repair-phase`. Escalatio
 repair-phase fact has no authority. Repair phase permits at most ten confirmations before human
 escalation.
 
-Critic succession is the ordinary repair route, not an exceptional recovery. Five of five measured
+Fresh succession is the ordinary repair route, not an exceptional recovery. Five of five measured
 repair chains on 2026-08-17 outlived their dispatched critic: `.github#2712` / PR #2745,
 `.github#2724` / PR #2746 (twice), `.github#2730` / PR #2747, and the fifth chain recorded at
 `.github#2691` comment `5311942674` (packet comments `5311928208` and `5311942674`). A successor
 therefore records under **its own minted identity** — never as a record bearing the earlier critic's
-id, and never as a second `initial`, which is allowed only after host acceptance. The record keeps
-whichever `kind` the chain needs (`confirmation`, `escalation` or `repair-phase`) and adds one object:
-
-```json
-"critic": "<successor-minted-id>",
-"succession": {"originalCritic": "<despawned-id>", "grantedBy": "<host-id>", "grantUrl": "<grant comment URL>"}
-```
-
-After a valid succession the successor IS the generation's critic: the host's `acceptance` binds the
-successor, and a later succession names that successor as its `originalCritic`. The durable review-wait
-receipt below supplies the accountable generation transition; no host is asked to attest that an
-ephemeral agent has despawned. A differing critic carrying neither the current wait receipt nor its
-recorded succession is refused. A succession on an `initial` or `acceptance` record, or one that changes
-no critic, is refused. `grantUrl` identifies the durable transition evidence and is bound to one exact
-head — a moved head needs a new receipt and transition.
+id, and never as a second `initial`, which is allowed only after host acceptance. A `confirmation`
+immediately following `changes-required` is the typed ordinary generation boundary. Historical
+`succession` objects remain readable, but new ordinary successors do not manufacture a host grant.
+The durable review-wait receipt below is the accountable transition; no host attests that an ephemeral
+agent despawned. Outside that repaired-head boundary, an unrecorded critic change remains refused.
 
 ## Durable review waits and critic generations
 
@@ -98,9 +88,8 @@ one receipt vocabulary is:
 `WaitReceipt(item, claimGeneration, reviewGeneration, kind, enteredAt, expiresAt, evidenceRef)`.
 
 `item` is the qualified issue ref; `claimGeneration` is the winning GitHub-issued claim marker id;
-`reviewGeneration` is the initial structured-review record that anchors the current chain; `kind`
-names the awaited event (`initial-review`, `implementer-repair`, `critic-confirmation`,
-`host-acceptance`, or `checks`); `enteredAt` and `expiresAt` bound the wait; and `evidenceRef` identifies
+`reviewGeneration` is the structured-review generation token that anchors the current chain; `kind`
+names the awaited event (`initial-review` or `repair-confirmation`); `enteredAt` and `expiresAt` bound the wait; and `evidenceRef` identifies
 the durable comment or check whose change resumes it. These are authority-issued revisions, not values
 an agent invents.
 
@@ -121,6 +110,14 @@ item/spec, exact head, complete ledger, repair diff, verification evidence, and 
 It inherits no prior clearance and performs a full independent review of that head. The successor's
 structured record and the consumed receipt make the handoff re-derivable; ephemeral runtime liveness
 and a host's testimony about despawn are not review evidence.
+
+Write each entry/completion/cancellation/timeout event through the authoritative client boundary:
+
+`scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json`
+
+The writer rejects a non-current claim generation, a duplicate entry generation, or a transition with
+no matching durable entry. A live `review <ref> --pr <n> --json` parses those PR markers and projects
+`waiting`, `completed`, `cancelled`, `recoverable`, `invalid`, or `noReceipt` with the bound receipt.
 
 Only the host posts `acceptance`, after the latest critic record is `pass` and all checks are green.
 It uses verdict `accepted`, binds the exact head, initial URL and latest critic URL, follows the

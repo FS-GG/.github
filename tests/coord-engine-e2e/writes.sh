@@ -276,6 +276,64 @@ else
   bad "M4 review record must append parseable v2 generations with actual backlinks" "comments=$review_before->$review_after wrong=$review_wrong_rc:$review_wrong_before->$review_wrong_after initial=$review_initial_rc:$review_initial_out confirmation=$review_confirmation_rc:$review_confirmation_out acceptance=$review_acceptance_rc:$review_acceptance_out moved-initial=$review_moved_initial_rc:$review_moved_initial_out moved-acceptance=$review_moved_acceptance_rc:$review_moved_acceptance_out"
 fi
 
+# .github#2756: queue entry and terminal transition are durable PR writes, fenced to the current
+# claim generation. Drive the compiled command, not the codec in isolation.
+review_wait_draft="$(mktemp)"
+python3 - "$review_wait_draft" "$review_claim_id" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+path, claim = sys.argv[1:]
+entered = datetime.now(timezone.utc).replace(microsecond=0)
+expires = entered + timedelta(hours=4)
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump({"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#42",
+               "claimGeneration":claim,"reviewGeneration":"fixture-generation-1","kind":"repair-confirmation",
+               "enteredAt":entered.isoformat().replace("+00:00", "Z"),
+               "expiresAt":expires.isoformat().replace("+00:00", "Z"),
+               "evidenceRef":"https://fixture.invalid/review/1"}, stream, separators=(",", ":"))
+PY
+wait_entered_at="$(jq -r .enteredAt "$review_wait_draft")"
+wait_expires_at="$(jq -r .expiresAt "$review_wait_draft")"
+wait_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+wait_enter_out="$("$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json 2>&1)"; wait_enter_rc=$?
+"$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json >/dev/null 2>&1; wait_duplicate_rc=$?
+wait_duplicate_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+python3 - "$review_wait_draft" "$wait_expires_at" <<'PY'
+import json, sys
+from datetime import datetime, timedelta
+expires = datetime.fromisoformat(sys.argv[2].replace("Z", "+00:00"))
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({"schema":"fsgg.coord.review-wait/v1","event":"timeout",
+               "reviewGeneration":"fixture-generation-1",
+               "at":(expires - timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
+               "evidenceRef":"timer"}, stream, separators=(",", ":"))
+PY
+"$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json >/dev/null 2>&1; wait_early_timeout_rc=$?
+wait_early_timeout_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+python3 - "$review_wait_draft" "$wait_entered_at" <<'PY'
+import json, sys
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({"schema":"fsgg.coord.review-wait/v1","event":"complete",
+               "reviewGeneration":"fixture-generation-1","at":sys.argv[2],
+               "evidenceRef":"https://fixture.invalid/review/pass"}, stream, separators=(",", ":"))
+PY
+wait_complete_out="$("$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json 2>&1)"; wait_complete_rc=$?
+"$ENGINE" review wait FS.GG.SDD#42 "$review_wait_draft" --pr 42 --json >/dev/null 2>&1; wait_terminal_duplicate_rc=$?
+wait_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+wait_projected_out="$("$ENGINE" review FS.GG.SDD#42 --pr 42 --worker vole-418 --json 2>&1)"; wait_projected_rc=$?
+if [ "$wait_enter_rc" -eq 0 ] && [ "$wait_duplicate_rc" -ne 0 ] \
+   && [ "$wait_duplicate_after" -eq $((wait_before + 1)) ] && [ "$wait_complete_rc" -eq 0 ] \
+   && [ "$wait_early_timeout_rc" -ne 0 ] && [ "$wait_early_timeout_after" -eq $((wait_before + 1)) ] \
+   && [ "$wait_terminal_duplicate_rc" -ne 0 ] && [ "$wait_after" -eq $((wait_before + 2)) ] \
+   && [ "$wait_projected_rc" -eq 0 ] && printf '%s' "$wait_projected_out" | jq -e '.waitStatus == "completed" and .waitReceipt.reviewGeneration == "fixture-generation-1"' >/dev/null \
+   && printf '%s' "$wait_enter_out" | jq -e '.schema == "fsgg.coord.review-wait-result/v1"' >/dev/null \
+   && printf '%s' "$wait_complete_out" | jq -e '.schema == "fsgg.coord.review-wait-result/v1"' >/dev/null; then
+  ok "#2756 review wait writer persists one fenced entry, refuses duplicate entry/terminal writes, and projects its consumed state"
+else
+  bad "#2756 review wait writer must be durable and generation-fenced" "entry=$wait_enter_rc:$wait_enter_out duplicate=$wait_duplicate_rc:$wait_before->$wait_duplicate_after early-timeout=$wait_early_timeout_rc:$wait_early_timeout_after complete=$wait_complete_rc:$wait_complete_out terminal-duplicate=$wait_terminal_duplicate_rc projected=$wait_projected_rc:$wait_projected_out after=$wait_after"
+fi
+rm -f "$review_wait_draft"
+
 # Remove the review leg's live-claim setup marker. The claim-CAS cases below deliberately start
 # unclaimed and prove their own POST/re-read winner rather than inheriting review authorization.
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$review_claim_id" >/dev/null

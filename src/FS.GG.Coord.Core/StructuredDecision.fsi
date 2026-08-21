@@ -33,8 +33,9 @@ module StructuredDecision =
     type ReviewKind = Initial | Confirmation | Escalation | RepairPhase | Acceptance
     type ReviewVerdict = Pass | ChangesRequired | Accepted
 
-    /// The host-granted transfer of a live review generation's critic seat, written INTO the record the
-    /// successor appends (.github#2662). `.github#2417` gave the DECISION layer a typed succession; the
+    /// The legacy host-granted transfer of a live review generation's critic seat, written INTO the record the
+    /// successor appends (.github#2662). New repaired-head queues use ordinary fresh successors plus
+    /// `ReviewWait.WaitReceipt`; this shape remains readable for already-authored chains. `.github#2417` gave the DECISION layer a typed succession; the
     /// ledger never learned one, so a granted successor could review and then had no honest record shape
     /// to write. This is that shape.
     ///

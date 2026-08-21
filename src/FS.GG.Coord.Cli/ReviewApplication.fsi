@@ -38,6 +38,10 @@ module ReviewApplication =
     /// sentence it might mistake for an answer.
     val render: Options.Options -> FS.GG.Coord.Review.Binding -> FS.GG.Coord.Review.Facts -> int
 
+    /// Live projection including the durable review-wait ledger parsed from PR comments.
+    val renderWithWait:
+        Options.Options -> FS.GG.Coord.Review.Binding -> FS.GG.Coord.Review.Facts -> FS.GG.Coord.ReviewWait.State -> int
+
     /// Run `review --snapshot FILE` (or read the snapshot from stdin), printing one verdict.
     ///
     /// REFUSES AN EMPTY SNAPSHOT EXPLICITLY rather than parsing it into a default: an empty document

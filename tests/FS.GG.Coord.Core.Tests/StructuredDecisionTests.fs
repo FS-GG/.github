@@ -329,7 +329,6 @@ module StructuredDecisionTests =
             [ { confirmation with Revision = 3 } |> reseal
               { confirmation with PreviousDigest = Some(String.replicate 64 "0") } |> reseal
               { confirmation with Subject = "FS-GG/.github#42/pr/78" } |> reseal
-              { confirmation with Critic = "different-critic" } |> reseal
               { confirmation with Round = 2 } |> reseal
               { confirmation with InitialReview = None } |> reseal
               { confirmation with PrecedingReview = None } |> reseal ]
@@ -429,7 +428,7 @@ module StructuredDecisionTests =
         | Error errors -> Assert.Contains(errors, fun error -> error.Contains "digest does not match")
 
     [<Fact>]
-    let ``2662 an ungranted critic change is still refused with the unchanged message`` () =
+    let ``2756 a repaired generation admits an ordinary fresh successor`` () =
         let initial = review 1 None StructuredDecision.Initial StructuredDecision.ChangesRequired 0 None None
         let stranger =
             { review 2 (Some initial.Digest) StructuredDecision.Confirmation StructuredDecision.Pass 1
@@ -437,10 +436,19 @@ module StructuredDecisionTests =
                 Critic = "different-critic" }
             |> reseal
         match StructuredDecision.validateReviewLedger initial.Subject [ initial; stranger ] with
-        | Ok _ -> failwith "an ungranted critic change must stay refused"
+        | Ok _ -> ()
+        | Error errors -> failwithf "ordinary repaired-head successor was refused: %A" errors
+
+    [<Fact>]
+    let ``2756 a critic change outside a repaired-head boundary is refused`` () =
+        let initial = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        let stranger =
+            { review 2 (Some initial.Digest) StructuredDecision.Confirmation StructuredDecision.Pass 1
+                (Some "https://review/1") (Some "https://review/1") with Critic = "different-critic" }
+            |> reseal
+        match StructuredDecision.validateReviewLedger initial.Subject [ initial; stranger ] with
+        | Ok _ -> failwith "a critic change outside a repair boundary must stay refused"
         | Error errors ->
-            // The exact string, not a substring: continuity is not weakened generally, and a consumer
-            // reading this message must keep reading the same one.
             Assert.Contains("every record in one review generation must bind the same critic", errors)
 
     [<Fact>]

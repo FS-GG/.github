@@ -302,13 +302,16 @@ DECISION (pure — no board, no network):
                                              lives under IO, below (.github#2488)
   review <ref> --pr N [--json|--text]        inspect the resumable review/repair protocol (.github#2175):
                                              one typed state and next action — dispatch critic, resume
-                                             implementer, resume the same critic, await checks, request
+                                             implementer, dispatch a fresh successor critic, await checks, request
                                              host acceptance, enter the one fresh repair phase, accept, or
                                              park for human action — bound to a freshness token a changed
                                              head invalidates, or a fail-closed no-verdict
   review --snapshot FILE [--json|--text]     inspect a supplied review-protocol snapshot without IO
   review record REF draft.json --pr N [--json]
                                              seal and append the next structured v2 review decision
+  review wait REF event.json --pr N [--json]
+                                             append a bounded durable review-wait entry/completion/
+                                             cancellation/timeout event; queue entry is state, not sleep
   driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
   driver --events [--cursor FILE] [--json|--text]
                                              derive material transitions and the complete active-item

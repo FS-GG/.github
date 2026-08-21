@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2756-review-wait-continuity/plan.md
-    digest: 4589b2a594241982651192ca64fcccbca60bea8c96aa5f06f357612c98ee8984
+    digest: ee8eab19118775e994bb2946cd2a6c124a9093341801567aeb3ca9f285279792
     schemaVersion: 1
 tasks:
   - id: T001

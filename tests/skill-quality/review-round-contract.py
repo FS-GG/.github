@@ -47,12 +47,35 @@ def main() -> None:
         "revalidates that `claimGeneration` is still current or explicitly reacquires the item",
         "completion racing timeout therefore has one durable outcome",
         "Timeout returns the item to an explicit recoverable review state",
-        "Critic succession is the ordinary repair route, not an exceptional recovery",
+        "Fresh succession is the ordinary repair route, not an exceptional recovery",
         "Five of five measured repair chains on 2026-08-17",
         "It inherits no prior clearance and performs a full independent review of that head",
         "ephemeral runtime liveness and a host's testimony about despawn are not review evidence",
+        "Entering a review queue writes the receipt before the actor yields",
+        "scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json",
     ):
         require(literal in contract, f"durable review-wait contract is missing: {literal}")
+
+    # Requirement-boundary mutation witness from the independent critic: weakening the mandatory
+    # entry transition to "may write" must red even though the rest of the paragraph remains present.
+    require(
+        "Entering a review queue may write the receipt" not in contract,
+        "durable queue entry was weakened from writes to may write",
+    )
+
+    # The semantic assertions are production-code xUnit witnesses, not this source-text scanner. The
+    # selected Core suite executes them when ReviewWait or its consumers change; these names keep each
+    # required boundary independently visible in evidence and prevent one catch-all test being reused.
+    behavioral = (ROOT / "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs").read_text(encoding="utf-8")
+    for witness in (
+        "entering a queue writes a round-trippable receipt",
+        "a current receipt reserves after the active lease duration",
+        "a changed claim generation never resurrects mutation authority",
+        "bounded timeout returns an explicit recoverable state",
+        "completion recorded before expiry wins a later timeout race",
+        "receipt is bounded and cannot reserve forever",
+    ):
+        require(witness in behavioral, f"durable review-wait behavioral witness is missing: {witness}")
 
     # .github#2551. Gate-inversion evidence proved a gate CAN fail and never that anything RUNS it,
     # and never named the case where a gate passes because it examined nothing. Both requirements are
