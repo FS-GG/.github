@@ -17,8 +17,8 @@ Prose status: planned
 
 ## Source Snapshot
 - spec: work/2772-force-claim-transition/spec.md sha256:722173e24b3e5a0da6b0166e61632e7a3a229eaa35a8b2510cada2f82890c117 schemaVersion:1
-- clarifications: work/2772-force-claim-transition/clarifications.md sha256:1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8 schemaVersion:1
-- checklist: work/2772-force-claim-transition/checklist.md sha256:a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d schemaVersion:1
+- clarifications: work/2772-force-claim-transition/clarifications.md sha256:808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133 schemaVersion:1
+- checklist: work/2772-force-claim-transition/checklist.md sha256:51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a schemaVersion:1
 
 ## Plan Scope
 - Refactor only the forced-live-holder arm of `Writes.claimScoped`; keep ordinary claim and renewal
@@ -34,18 +34,20 @@ Prose status: planned
 - PD-002 [AC-002] [FR-002] complete: When cleanup stops on a non-404 delete failure, retain the posted
   replacement and return `CleanupRequired` with its `Held` capability, removed worker ids, and the failed
   incumbent marker. Never withdraw the replacement in that arm.
-- PD-003 [AC-003] [FR-003] complete: Capture complete typed pre/post censuses for every forced transition.
-  Map replacement POST failure to `ReplacementPostFailed` only after the post-census proves the incumbent
-  still wins; map cleanup interruptions to their distinct typed postconditions. Render each actionable
-  state distinctly and add the governing censuses to successful `Stolen` machine receipts.
+- PD-003 [AC-003] [FR-003] [DEC-004] complete: Capture complete typed pre/post censuses for every forced transition.
+  Treat replacement POST transport failure as ambiguous: identify an exact newly observed replacement
+  and reconcile it through cleanup/election, or map it to `ReplacementPostFailed` only after the census
+  proves the incumbent still wins. Capture terminal `After` only after stale cleanup and any replacement
+  withdrawal complete. Render each actionable state distinctly and serialize its governing censuses.
 - PD-004 [AC-004] [FR-004] complete: Move theft callback invocation after each successful foreign-marker
   deletion. This makes every named victim an observed removal and keeps a partial cleanup accurately
   accounted.
 - PD-005 [AC-005] [FR-005] complete: Preserve the twin/unparseable checks before mutation, the admission
   check before posting, stale collection after election, and ordinary `postAndResolve` behavior.
 - PD-006 [AC-001] [AC-002] [FR-006] complete: Add scripted transport legs for replacement POST failure
-  and incumbent DELETE failure; assert operation order and full marker ids. Invert the order in a bounded
-  mutation and observe the POST-failure leg red because the incumbent vanishes.
+  and incumbent DELETE failure, plus response-lost POST legs where old+replacement coexist and where the
+  replacement already wins. Assert operation order and final marker ids. Invert ambiguous-POST recognition
+  and final-census ordering independently and observe the focused tests red.
 
 ## Contract Impact
 - PC-001 [PD-001] [PD-002] additive union: `ClaimOutcome` gains census-backed forced-transition cases;
@@ -65,8 +67,9 @@ Prose status: planned
   and a successful steal receipt carries its pre/post censuses.
 - VO-004 [PD-005] regression: run `FS.GG.Coord.GitHub.Tests`, the relevant CLI test project, formatting,
   signature surface, and repository gate subset.
-- VO-005 [PD-006] mutation: temporarily restore delete-before-post ordering, run the bounded focused test,
-  record the observed failure, restore source, and re-run green.
+- VO-005 [PD-006] mutation: temporarily restore delete-before-post ordering, then independently disable
+  response-lost replacement recognition and substitute the pre-cleanup census; run each bounded focused
+  test, record the observed failure, restore source, and re-run green.
 
 ## Performance Intent
 No performance intent is declared for this work item.
@@ -93,4 +96,6 @@ No blocking planning findings recorded.
 ## Lifecycle Notes
 - Round-1 repair incorporates independent review decision digest
   `1251c73621e6d00d05cb75d38041a9b123d1ae43504ab9f1a787da69b7eaa8ee`.
+- Round-2 repair incorporates independent review decision digest
+  `387201c40307bdeefb15e8e00196a732df8d39a14045bc7d76096bb4dee9d3ed`.
 - Next lifecycle action: `fsgg-sdd tasks --work 2772-force-claim-transition`.

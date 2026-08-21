@@ -169,6 +169,8 @@ FAIL_FIELD_WRITES = [0]
 # the incumbent untouched. The DELETE fault models a lost replacement plus a failed incumbent deletion,
 # so the authoritative re-read proves `OldHolderStands` rather than confusing it with POST failure.
 FAIL_NEXT_CLAIM_POST = [0]
+LOSE_NEXT_CLAIM_POST_RESPONSE = [0]
+LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT = [0]
 LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE = [0]
 RECONCILE_45_PROJECTION = [0]
 # .github#2157's negative controls.  A mutation acknowledgement is deliberately not convergence:
@@ -623,10 +625,22 @@ class Handler(BaseHTTPRequestHandler):
                     FAIL_NEXT_CLAIM_POST[0] -= 1
                     return self._send(500, {"message": "fixture: replacement POST failed"})
             with LOCK:
+                lose_response = "fsgg:claim" in body and LOSE_NEXT_CLAIM_POST_RESPONSE[0] > 0
+                drop_incumbent = (
+                    "fsgg:claim" in body
+                    and LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT[0] > 0
+                )
+                if lose_response:
+                    LOSE_NEXT_CLAIM_POST_RESPONSE[0] -= 1
+                if drop_incumbent:
+                    LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT[0] -= 1
+                    COMMENTS[n] = [c for c in COMMENTS.get(n, []) if "fsgg:claim" not in c.get("body", "")]
                 cid = NEXT_COMMENT_ID[0]
                 NEXT_COMMENT_ID[0] += 1
                 html_url = f"https://github.com/{owner_of(n)}/{repo_of(n)}/pull/{n}#issuecomment-{cid}"
                 COMMENTS.setdefault(n, []).append({"id": cid, "html_url": html_url, "body": body, "updated_at": now_iso()})
+            if lose_response or drop_incumbent:
+                return self._send(503, {"message": "fixture: replacement stored but POST response lost"})
             return self._send(201, {"id": cid, "html_url": html_url, "body": body, "updated_at": now_iso()})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/sub_issues$", path)
@@ -729,6 +743,16 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 FAIL_NEXT_CLAIM_POST[0] += 1
                 return self._send(200, {"failArmed": FAIL_NEXT_CLAIM_POST[0]})
+
+        if path.rstrip("/") == "/_fixture/lose-next-claim-post-response":
+            with LOCK:
+                LOSE_NEXT_CLAIM_POST_RESPONSE[0] += 1
+                return self._send(200, {"failArmed": LOSE_NEXT_CLAIM_POST_RESPONSE[0]})
+
+        if path.rstrip("/") == "/_fixture/lose-next-claim-post-response-and-drop-incumbent":
+            with LOCK:
+                LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT[0] += 1
+                return self._send(200, {"failArmed": LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT[0]})
 
         if path.rstrip("/") == "/_fixture/lose-replacement-on-next-claim-delete":
             with LOCK:

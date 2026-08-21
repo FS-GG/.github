@@ -5801,6 +5801,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     // #1620: a steal reads as a steal on stdout too. The stderr lines above
                                     // named the displaced worker; this is the line a human skims.
                                     | "stolen" -> $"STOLE %s{ref.Short} for worker %s{w.Id} (--force; "
+                                    | "replacement-won" -> $"forced replacement won %s{ref.Short} for worker %s{w.Id} ("
                                     | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
 
                                 if converged then
@@ -5958,6 +5959,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // steal as a steal so a scripted caller can tell it from an ordinary win.
                             announceCollected collected
                             emitClaimReceipt "stolen" held (Some censuses) (setClaimLifecycle held)
+                        | Ok(Writes.ReplacementWon(held, collected, censuses)) ->
+                            // A response-lost POST was found by census and now wins, but no live incumbent
+                            // deletion was observed. Report the forced replacement without inventing theft.
+                            announceCollected collected
+                            emitClaimReceipt "replacement-won" held (Some censuses) (setClaimLifecycle held)
                         | Ok(Writes.ReplacementPostFailed(holder, holderMarkerId, reason, _)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim replacement POST FAILED before any incumbent deletion (%s{reason}). The complete post-state census proves worker '%s{holder.Value}' marker %d{holderMarkerId} remains authoritative: the OLD HOLDER STANDS and nothing was taken."

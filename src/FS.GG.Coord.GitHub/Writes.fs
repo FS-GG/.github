@@ -55,6 +55,7 @@ module Writes =
         | Won of held: Held * collected: WorkerId list
         | Renewed of held: Held * collected: WorkerId list
         | Stolen of held: Held * from: WorkerId list * collected: WorkerId list * censuses: ForcedClaimCensuses
+        | ReplacementWon of held: Held * collected: WorkerId list * censuses: ForcedClaimCensuses
         | ReplacementPostFailed of holder: WorkerId * holderMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
         | CleanupRequired of replacement: Held * removed: WorkerId list * failed: WorkerId * failedMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
         | PostStateUnreadable of replacement: Held option * removed: WorkerId list * reason: string * censuses: ForcedClaimCensuses
@@ -384,14 +385,14 @@ module Writes =
         // prior holder untouched, while a later cleanup failure leaves two ordered, recoverable markers
         // instead of zero. The marker is not a second authority — comment-order election remains the only
         // authority, evaluated by `resolvePosted` after cleanup.
-        let postReplacement () : IoResult<Held> =
+        let postReplacement () : Result<Held, IoError * (BoardStatus option * string option * string option)> =
             let previousStatus = readPreviousStatus ()
             let pathRepo = readPathRepo ()
             let agentContract = currentAgentContract ()
             let body = markerBody worker session leaseMinutes previousStatus pathRepo agentContract
 
             match postComment transport ref body with
-            | Error e -> Error e
+            | Error e -> Error(e, (previousStatus, pathRepo, agentContract))
             | Ok myId -> Ok(Held(ref, worker, myId, session, previousStatus, pathRepo, agentContract))
 
         // Re-read and apply the existing comment-order election to a posted marker. `retainOnUnreadable`
@@ -400,6 +401,10 @@ module Writes =
         // zero-marker state, so unreadable/empty post-state is a typed interruption instead.
         let resolvePosted (held: Held) (evicted: WorkerId list) (retainOnUnreadable: bool) : IoResult<ClaimOutcome> =
             let myId = held.MarkerId
+
+            let readComplete () =
+                Reads.markerScan transport ref.Owner ref.Repo ref.Number
+                |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
 
             let withdraw (reason: string) =
                 match deleteComment transport ref myId with
@@ -413,10 +418,33 @@ module Writes =
                             $"%s{reason} — AND our own marker (comment %d{myId}) could not be removed: %s{explain e}. It is orphaned on %s{ref.Short} and must be reaped."
                     )
 
-            match
-                Reads.markerScan transport ref.Owner ref.Repo ref.Number
-                |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
-            with
+            let classifyFinalForced (collected: WorkerId list) (after: Reads.Marker list) =
+                match Reads.winner leaseMinutes after with
+                | None -> Ok(NoHolderRemaining(Some myId, evicted, forcedCensuses (Some after)))
+                | Some winner when winner.Id = myId ->
+                    if List.isEmpty evicted then
+                        Ok(ReplacementWon(held, collected, forcedCensuses (Some after)))
+                    else
+                        Ok(Stolen(held, evicted, collected, forcedCensuses (Some after)))
+                | Some winner -> Ok(ForcedClaimLost(winner.Worker, forcedCensuses (Some after)))
+
+            // A forced loss is not terminal until our replacement withdrawal is followed by a complete
+            // census. The DELETE acknowledgement is not itself the post-state; the final read may show
+            // the foreign winner, no holder, or even that our replacement survived and now wins.
+            let withdrawForced (winner: Reads.Marker) =
+                match deleteComment transport ref myId with
+                | Error e ->
+                    Error(
+                        Transport
+                            $"lost the forced claim race on %s{ref.Short} to %s{winner.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
+                    )
+                | Ok() ->
+                    match readComplete () with
+                    | Error e ->
+                        Ok(PostStateUnreadable(None, evicted, $"replacement withdrawal completed; final post-state read failed (%s{explain e})", forcedCensuses None))
+                    | Ok final -> classifyFinalForced [] final
+
+            match readComplete () with
             | Error e when retainOnUnreadable -> Ok(PostStateUnreadable(Some held, evicted, explain e, forcedCensuses None))
             | Error e -> withdraw $"the re-read failed (%s{explain e})"
             | Ok after ->
@@ -436,18 +464,21 @@ module Writes =
                 // re-emits it on every heartbeat and twin-detection survives the lease (#1149).
                 let collected = collectStale myId after
 
-                match evicted with
-                | [] -> Ok(Won(held, collected))
-                | _ -> Ok(Stolen(held, evicted, collected, forcedCensuses (Some after)))
+                if retainOnUnreadable then
+                    // `collectStale` performs deletes. The census that licensed collection is therefore
+                    // not a post-operation census; read once more after every cleanup attempt finishes.
+                    match readComplete () with
+                    | Error e ->
+                        Ok(PostStateUnreadable(Some held, evicted, $"replacement won; final post-cleanup census failed (%s{explain e})", forcedCensuses None))
+                    | Ok final ->
+                        match Reads.winner leaseMinutes final with
+                        | Some winner when winner.Id <> myId -> withdrawForced winner
+                        | _ -> classifyFinalForced collected final
+                else
+                    Ok(Won(held, collected))
 
             | Some w when retainOnUnreadable ->
-                match deleteComment transport ref myId with
-                | Ok() -> Ok(ForcedClaimLost(w.Worker, forcedCensuses (Some after)))
-                | Error e ->
-                    Error(
-                        Transport
-                            $"lost the forced claim race on %s{ref.Short} to %s{w.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
-                    )
+                withdrawForced w
 
             | Some w ->
                 // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
@@ -460,7 +491,9 @@ module Writes =
                     )
 
         let postAndResolve () : IoResult<ClaimOutcome> =
-            postReplacement () |> Result.bind (fun held -> resolvePosted held [] false)
+            match postReplacement () with
+            | Ok held -> resolvePosted held [] false
+            | Error(e, _) -> Error e
 
         // THE #1620/#2772 STEAL — POST A REPLACEMENT, THEN CLEAN EVERY FOREIGN LIVE MARKER. Only
         // `claim --force` reaches this. The CAS is still the comment-order election above.
@@ -510,7 +543,7 @@ module Writes =
                                 | None -> Ok(NoHolderRemaining(Some replacement.MarkerId, removed, forcedCensuses (Some after)))
 
             markers
-            |> List.filter (fun m -> not (Reads.isStale leaseMinutes m) && m.Worker <> worker)
+            |> List.filter (fun m -> not (Reads.isStale leaseMinutes m) && m.Id <> replacement.MarkerId)
             |> go []
 
         match liveBefore with
@@ -565,7 +598,7 @@ module Writes =
                     | None ->
                         match postReplacement () with
                         | Ok replacement -> evictLive replacement before
-                        | Error postError ->
+                        | Error(postError, (previousStatus, pathRepo, agentContract)) ->
                             match
                                 Reads.markerScan transport ref.Owner ref.Repo ref.Number
                                 |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
@@ -580,10 +613,33 @@ module Writes =
                                     )
                                 )
                             | Ok after ->
-                                match Reads.winner leaseMinutes after with
-                                | Some holder ->
-                                    Ok(ReplacementPostFailed(holder.Worker, holder.Id, explain postError, forcedCensuses (Some after)))
-                                | None -> Ok(NoHolderRemaining(None, [], forcedCensuses (Some after))))
+                                // POST transport failure is ambiguous: GitHub may have committed the comment
+                                // and lost only the response. Identify a newly observed marker carrying the
+                                // exact draft identity, then reconcile it through the same cleanup/election
+                                // path as an acknowledged POST. Lowest id is deterministic if an identical
+                                // caller raced a retry; `evictLive` cleans every other live marker by id.
+                                let beforeIds = before |> List.map _.Id |> Set.ofList
+                                let replacement =
+                                    after
+                                    |> List.filter (fun marker ->
+                                        not (Set.contains marker.Id beforeIds)
+                                        && marker.Worker = worker
+                                        && marker.Session = session
+                                        && marker.PreviousStatus = previousStatus
+                                        && marker.PathRepo = pathRepo
+                                        && marker.AgentContract = agentContract)
+                                    |> List.sortBy _.Id
+                                    |> List.tryHead
+
+                                match replacement with
+                                | Some marker ->
+                                    let held = Held(ref, worker, marker.Id, session, previousStatus, pathRepo, agentContract)
+                                    evictLive held after
+                                | None ->
+                                    match Reads.winner leaseMinutes after with
+                                    | Some holder ->
+                                        Ok(ReplacementPostFailed(holder.Worker, holder.Id, explain postError, forcedCensuses (Some after)))
+                                    | None -> Ok(NoHolderRemaining(None, [], forcedCensuses (Some after))))
 
         // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
         // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.

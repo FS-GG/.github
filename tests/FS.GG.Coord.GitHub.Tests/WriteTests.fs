@@ -699,7 +699,8 @@ let ``#1620 --force TAKES a live claim held by another worker, and names who it 
             [ ok (comments [ marker 901 "kite-461" "" ]) // 1. read: kite-461 holds a LIVE lock
               ok """{"id":902}""" // 2. post replacement
               ok "" // 3. evict their marker
-              ok (comments [ marker 902 "vole-418" "" ]) ] // 4. re-read: the way is clear, we win
+              ok (comments [ marker 902 "vole-418" "" ]) // 4. election read: the way is clear, we win
+              ok (comments [ marker 902 "vole-418" "" ]) ] // 5. final census after cleanup
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(held, from, _, _)) ->
@@ -794,6 +795,7 @@ let ``#2772 retry reuses the retained replacement and completes cleanup without 
         scripted
             [ ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
               ok ""
+              ok (comments [ marker 902 "vole-418" "" ])
               ok (comments [ marker 902 "vole-418" "" ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
@@ -812,6 +814,7 @@ let ``#2772 an ambiguous DELETE response is resolved from the complete census be
             [ ok (comments [ marker 901 "kite-461" "" ])
               ok """{"id":902}"""
               Error(Http(503, "response lost"))
+              ok (comments [ marker 902 "vole-418" "" ])
               ok (comments [ marker 902 "vole-418" "" ])
               ok (comments [ marker 902 "vole-418" "" ]) ]
 
@@ -885,13 +888,15 @@ let ``#2772 a fresh winner after cleanup is distinct from an ordinary incumbent 
               ok """{"id":903}"""
               ok ""
               ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ])
-              ok "" ]
+              ok ""
+              ok (comments [ marker 902 "otter-77" "" ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(ForcedClaimLost(winner, censuses)) ->
         Assert.Equal(WorkerId "otter-77", winner)
         Assert.Equal(Some 901L, censuses.Before.WinnerMarkerId)
         Assert.Equal(Some 902L, censuses.After |> Option.bind _.WinnerMarkerId)
+        Assert.Equal<int64 list>([ 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
     | other -> failwith $"a fresh post-cleanup winner needs a forced-transition result — got %A{other}"
 
 [<Fact>]
@@ -905,7 +910,8 @@ let ``#1620 a steal that loses the FRESH race backs off cleanly - it does not fo
               ok """{"id":903}""" // 2. post ours
               ok "" // 3. evict 901
               ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // 4. a newcomer beat us
-              ok "" ] // 5. withdraw ours
+              ok "" // 5. withdraw ours
+              ok (comments [ marker 902 "otter-77" "" ]) ] // 6. final census
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(ForcedClaimLost(w, _)) -> Assert.Equal(WorkerId "otter-77", w)
@@ -924,12 +930,14 @@ let ``#1620 a steal still COLLECTS stale debris, and reports it apart from who i
               ok """{"id":902}"""
               ok "" // evict the LIVE marker 901
               ok (comments [ staleClaimJson 700 "ghost-111" ""; marker 902 "vole-418" "" ])
-              ok "" ] // collect the stale 700
+              ok "" // collect the stale 700
+              ok (comments [ marker 902 "vole-418" "" ]) ] // final census after stale cleanup
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
-    | Ok(Stolen(_, from, collected, _)) ->
+    | Ok(Stolen(_, from, collected, censuses)) ->
         Assert.Equal<WorkerId list>([ them ], from)
         Assert.Equal<WorkerId list>([ WorkerId "ghost-111" ], collected)
+        Assert.Equal<int64 list>([ 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
     | other -> failwith $"a steal collects stale debris too — got %A{other}"
 
     Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 700")
@@ -966,6 +974,67 @@ let ``#2772 a replacement POST failure leaves the incumbent standing and announc
     Assert.Equal(0, transport.Count "comment-delete")
 
 [<Fact>]
+let ``#2772 a response-lost POST that stored the replacement reconciles old plus replacement`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" "" ])
+              Error(Http(503, "POST response lost"))
+              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
+              ok "" // delete incumbent only after census discovers the replacement
+              ok (comments [ marker 902 "vole-418" "" ])
+              ok (comments [ marker 902 "vole-418" "" ]) ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(Stolen(replacement, removed, _, censuses)) ->
+        Assert.Equal(902L, replacement.MarkerId)
+        Assert.Equal<WorkerId list>([ them ], removed)
+        Assert.Equal<int64 list>([ 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
+    | other -> failwith $"a landed ambiguous POST must reconcile through cleanup — got %A{other}"
+
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 901")
+
+[<Fact>]
+let ``#2772 a response-lost POST whose replacement already wins reports ReplacementWon`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" "" ])
+              Error(Http(503, "POST response lost"))
+              ok (comments [ marker 902 "vole-418" "" ])
+              ok (comments [ marker 902 "vole-418" "" ])
+              ok (comments [ marker 902 "vole-418" "" ]) ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(ReplacementWon(replacement, collected, censuses)) ->
+        Assert.Equal(902L, replacement.MarkerId)
+        Assert.Empty collected
+        Assert.Equal(Some 901L, censuses.Before.WinnerMarkerId)
+        Assert.Equal(Some 902L, censuses.After |> Option.bind _.WinnerMarkerId)
+        Assert.Equal<int64 list>([ 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
+    | other -> failwith $"a landed replacement that already wins must not be called the old holder — got %A{other}"
+
+    Assert.Equal(0, transport.Count "comment-delete")
+
+[<Fact>]
+let ``#2772 a response-lost POST with failed cleanup retains both markers for deterministic retry`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" "" ])
+              Error(Http(503, "POST response lost"))
+              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
+              Error(Http(500, "cleanup failed"))
+              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(CleanupRequired(replacement, removed, failed, failedMarkerId, reason, censuses)) ->
+        Assert.Equal(902L, replacement.MarkerId)
+        Assert.Empty removed
+        Assert.Equal(them, failed)
+        Assert.Equal(901L, failedMarkerId)
+        Assert.Contains("cleanup failed", reason)
+        Assert.Equal<int64 list>([ 901L; 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
+    | other -> failwith $"ambiguous POST cleanup failure must retain its discovered replacement — got %A{other}"
+
+[<Fact>]
 let ``#1620 a steal that LOSES the fresh race still announces the eviction it performed`` () =
     // We displaced kite-461 and then lost to a newcomer. We get nothing, but kite-461 has still lost its
     // lock, and it is still running — the notice is owed by the eviction, not by the acquisition.
@@ -977,7 +1046,8 @@ let ``#1620 a steal that LOSES the fresh race still announces the eviction it pe
               ok """{"id":903}"""
               ok "" // evict 901
               ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // a newcomer beat us
-              ok "" ] // withdraw ours
+              ok "" // withdraw ours
+              ok (comments [ marker 902 "otter-77" "" ]) ] // final census
 
     match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
     | Ok(ForcedClaimLost(w, _)) -> Assert.Equal(WorkerId "otter-77", w)

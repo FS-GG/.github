@@ -4,7 +4,7 @@
   "workId": "2772-force-claim-transition",
   "stage": "analyze",
   "status": "implementationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "0563f5eb8fdb56dcd29c32bc668a7ef8a39aaeb943ccc62dc1ee574631234165"
+        "value": "f5cf53932451c35856f4704499fa904dbe52e4ad7a0aedbd57b38d81ff9c2a8e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d"
+        "value": "51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8"
+        "value": "808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "2bd4e0e70d1576f49cda11a3c7fa5e02c6690b6871bd8f803e8f600091ef84d2"
+        "value": "fd016709bb1ea8761b42710503c6b40cea5d2402e628f634d237f9b5d31bbf0b"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "92ba36acf314c39eb0afb50f8e9caa473bd36fbadf6fb7c07ebbc014b9bca505"
+        "value": "2f8e978ea9966cbf93ab790fb5f27ca0edff4f735671ada3600829ec4990b4cd"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -161,6 +161,16 @@
     {
       "id": "AR007",
       "sourcePath": "work/2772-force-claim-transition/clarifications.md",
+      "targetPath": "work/2772-force-claim-transition/tasks.yml",
+      "sourceId": "DEC-004",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2772-force-claim-transition/clarifications.md",
       "targetPath": "work/2772-force-claim-transition/plan.md",
       "sourceId": null,
       "targetId": null,
@@ -169,7 +179,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR008",
+      "id": "AR009",
       "sourcePath": "work/2772-force-claim-transition/clarifications.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": null,
@@ -179,7 +189,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR009",
+      "id": "AR010",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PC-001",
@@ -189,7 +199,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR010",
+      "id": "AR011",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PC-002",
@@ -199,7 +209,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR012",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "GV-001",
@@ -209,7 +219,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR013",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PM-001",
@@ -219,7 +229,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR014",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PD-001",
@@ -229,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR015",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PD-002",
@@ -239,7 +249,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR016",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PD-003",
@@ -249,7 +259,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR017",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PD-004",
@@ -259,7 +269,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR018",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PD-005",
@@ -269,7 +279,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR019",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "PD-006",
@@ -279,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR020",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": null,
@@ -289,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR021",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "VO-001",
@@ -299,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR022",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "VO-002",
@@ -309,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR023",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "VO-003",
@@ -319,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR024",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "VO-004",
@@ -329,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR025",
       "sourcePath": "work/2772-force-claim-transition/plan.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "VO-005",
@@ -339,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR026",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "AC-001",
@@ -349,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR027",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "AC-002",
@@ -359,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR028",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "AC-003",
@@ -369,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR029",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "AC-004",
@@ -379,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR030",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "AC-005",
@@ -389,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR031",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/checklist.md",
       "sourceId": null,
@@ -399,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR032",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/plan.md",
       "sourceId": null,
@@ -409,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR033",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "FR-001",
@@ -419,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR034",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "FR-002",
@@ -429,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR035",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "FR-003",
@@ -439,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR036",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "FR-004",
@@ -449,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR037",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "FR-005",
@@ -459,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR038",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "FR-006",
@@ -469,7 +479,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR039",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/clarifications.md",
       "sourceId": null,
@@ -479,7 +489,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR039",
+      "id": "AR040",
       "sourcePath": "work/2772-force-claim-transition/spec.md",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": null,
@@ -489,7 +499,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR040",
+      "id": "AR041",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T007",
@@ -499,7 +509,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR041",
+      "id": "AR042",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T008",
@@ -509,7 +519,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR042",
+      "id": "AR043",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T009",
@@ -519,7 +529,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR043",
+      "id": "AR044",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T010",
@@ -529,7 +539,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR044",
+      "id": "AR045",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T011",
@@ -539,7 +549,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR045",
+      "id": "AR046",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T012",
@@ -549,7 +559,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR046",
+      "id": "AR047",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T013",
@@ -559,7 +569,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR047",
+      "id": "AR048",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T014",
@@ -569,7 +579,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR048",
+      "id": "AR049",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T015",
@@ -579,7 +589,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR049",
+      "id": "AR050",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T016",
@@ -589,7 +599,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR050",
+      "id": "AR051",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T017",
@@ -599,10 +609,30 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR051",
+      "id": "AR052",
       "sourcePath": "work/2772-force-claim-transition/tasks.yml",
       "targetPath": "work/2772-force-claim-transition/tasks.yml",
       "sourceId": "T018",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR053",
+      "sourcePath": "work/2772-force-claim-transition/tasks.yml",
+      "targetPath": "work/2772-force-claim-transition/tasks.yml",
+      "sourceId": "T019",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR054",
+      "sourcePath": "work/2772-force-claim-transition/tasks.yml",
+      "targetPath": "work/2772-force-claim-transition/tasks.yml",
+      "sourceId": "T020",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -611,7 +641,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 51,
+    "readyCount": 54,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,

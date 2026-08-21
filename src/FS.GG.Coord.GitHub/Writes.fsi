@@ -226,6 +226,11 @@ module Writes =
         /// because a lock can be destroyed on executions that never reach here.
         | Stolen of held: Held * from: WorkerId list * collected: WorkerId list * censuses: ForcedClaimCensuses
 
+        /// A response-lost replacement POST was found by authoritative census and now wins, but the old
+        /// holder disappeared before this process deleted it. No theft is invented; the forced replacement
+        /// receipt still carries the final pre/post censuses.
+        | ReplacementWon of held: Held * collected: WorkerId list * censuses: ForcedClaimCensuses
+
         /// Replacement creation failed, a complete post-census proves the incumbent still wins, and no
         /// incumbent deletion was attempted. This is a typed old-holder-standing result, not raw transport.
         | ReplacementPostFailed of holder: WorkerId * holderMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses

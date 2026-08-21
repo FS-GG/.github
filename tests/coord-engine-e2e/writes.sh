@@ -592,6 +592,57 @@ else
   bad ".github#1620: adopt must refuse a live claim and name a remedy" "rc=$adrc advice='$advice': $adoptout"
 fi
 
+# A transport error is not proof the replacement failed to land. Store it, lose only the response,
+# and leave both markers visible: the command must discover its marker, clean the old one, and report
+# the final one-marker census rather than the ambiguous transport failure or the pre-cleanup census.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/lose-next-claim-post-response" >/dev/null
+response_lost_err="$(mktemp)"
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+response_lost="$("$ENGINE" $advice --worker kite-461 --json 2>"$response_lost_err")"; response_lost_rc=$?
+response_lost_ok=false
+jq -e \
+      '.markerId as $markerId
+       | .kind == "stolen"
+       and .forcedClaimCensuses.before.winnerMarkerId != null
+       and .forcedClaimCensuses.after.winnerMarkerId == $markerId
+       and (.forcedClaimCensuses.after.markers | map(.markerId)) == [$markerId]' \
+      <<<"$response_lost" >/dev/null && response_lost_ok=true
+if [ "$response_lost_rc" -eq 0 ] && [ "$response_lost_ok" = true ] \
+   && grep -q 'STOLE FS.GG.SDD#42' "$response_lost_err"; then
+  ok ".github#2772: a response-lost replacement POST reconciles both markers and returns the final census"
+else
+  bad ".github#2772: a stored replacement must survive a lost POST response" \
+    "rc=$response_lost_rc stdout=$response_lost stderr=$(cat "$response_lost_err")"
+fi
+rm -f "$response_lost_err"
+"$ENGINE" release FS.GG.SDD#42 --worker kite-461 >/dev/null 2>&1
+run claim FS.GG.SDD#42 >/dev/null 2>&1
+
+# The same ambiguous response can race with the incumbent disappearing. The replacement is then the
+# authority without having stolen anything, so it must succeed without inventing a theft notice.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/lose-next-claim-post-response-and-drop-incumbent" >/dev/null
+replacement_won_err="$(mktemp)"
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+replacement_won="$("$ENGINE" $advice --worker kite-461 --json 2>"$replacement_won_err")"; replacement_won_rc=$?
+replacement_won_ok=false
+jq -e \
+      '.markerId as $markerId
+       | .kind == "replacement-won"
+       and .forcedClaimCensuses.before.winnerMarkerId != null
+       and .forcedClaimCensuses.after.winnerMarkerId == $markerId
+       and (.forcedClaimCensuses.after.markers | map(.markerId)) == [$markerId]' \
+      <<<"$replacement_won" >/dev/null && replacement_won_ok=true
+if [ "$replacement_won_rc" -eq 0 ] && [ "$replacement_won_ok" = true ] \
+   && ! grep -q 'STOLE FS.GG.SDD#42' "$replacement_won_err"; then
+  ok ".github#2772: a response-lost replacement that already wins preserves authority without inventing theft"
+else
+  bad ".github#2772: a replacement winner needs a distinct authoritative result" \
+    "rc=$replacement_won_rc stdout=$replacement_won stderr=$(cat "$replacement_won_err")"
+fi
+rm -f "$replacement_won_err"
+"$ENGINE" release FS.GG.SDD#42 --worker kite-461 >/dev/null 2>&1
+run claim FS.GG.SDD#42 >/dev/null 2>&1
+
 # .github#2772: replacement creation fails before any destructive write. The compiled command must
 # render the typed, census-backed postcondition, not the raw transport error shared by the later boundary.
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-claim-post" >/dev/null

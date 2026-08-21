@@ -11,19 +11,19 @@ sourceAnalysis: readiness/2772-force-claim-transition/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2772-force-claim-transition/analysis.json
-    digest: 5139dc359a36299506f46ac140b662ca20cd11052f0c2715ed04d2e82717d954
+    digest: f8265794aa15f3434f614ccd5e9b5915e9678b9bb75436b0f5af5ee735773bed
     schemaVersion: 1
   - label: checklist
     path: work/2772-force-claim-transition/checklist.md
-    digest: a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d
+    digest: 51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a
     schemaVersion: 1
   - label: clarifications
     path: work/2772-force-claim-transition/clarifications.md
-    digest: 1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8
+    digest: 808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133
     schemaVersion: 1
   - label: plan
     path: work/2772-force-claim-transition/plan.md
-    digest: 2bd4e0e70d1576f49cda11a3c7fa5e02c6690b6871bd8f803e8f600091ef84d2
+    digest: fd016709bb1ea8761b42710503c6b40cea5d2402e628f634d237f9b5d31bbf0b
     schemaVersion: 1
   - label: spec
     path: work/2772-force-claim-transition/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2772-force-claim-transition/tasks.yml
-    digest: 92ba36acf314c39eb0afb50f8e9caa473bd36fbadf6fb7c07ebbc014b9bca505
+    digest: 2f8e978ea9966cbf93ab790fb5f27ca0edff4f735671ada3600829ec4990b4cd
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
-    notes: ["Observed 641-test run passed; compiled engine e2e passed 167/167. Replacing the typed POST-failure result with raw transport red-lit the focused test", and omitting receipt censuses red-lit the production-route receipt assertion.]
+    notes: ["Observed 644-test run passed; compiled engine e2e passed 169/169. Disabling response-lost replacement recognition red-lit the named focused test, and substituting the pre-cleanup census red-lit final-census ordering", while the earlier raw-error and omitted-receipt-census inversions remain red.]
   - id: EV004
     kind: verification
     subject:
@@ -135,13 +135,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
-    notes: ["Observed 641-test run passed; removing TAKEN from the displaced-worker production notice red-lit exactly the standing inbox assertion (166/167)", and restoration passed 167/167.]
+    notes: ["Observed 644-test run passed; removing TAKEN from the displaced-worker production notice historically red-lit exactly the standing inbox assertion (166/167)", and the restored current production suite passed 169/169.]
   - id: EV005
     kind: verification
     subject:
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -486,10 +486,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
@@ -513,12 +513,68 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2772-force-claim-transition/github-tests.trx
-      digest: "sha256:c8190c34f6f0e78ab2a453d2d1208b191c520b0ce5f408179fb3ebb2939fa53d"
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 641
+      passed: 644
       failed: 0
       skipped: 0
     notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 644
+      failed: 0
+      skipped: 0
+    notes: ["Response-lost POST reconciliation passed focused and compiled-engine coverage; disabling new-marker recognition red-lit the named response-lost test."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: [AC-003]
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:95b38d6677269015bda7a3be4dfc943d8f8d6e07cbd26ab2217b8066b394ada6"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 644
+      failed: 0
+      skipped: 0
+    notes: ["Terminal censuses are read after cleanup and withdrawal; substituting the pre-cleanup census red-lit the stale-debris final-census assertion with marker ids 700 and 902 instead of 902 alone."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

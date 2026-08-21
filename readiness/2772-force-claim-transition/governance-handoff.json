@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/1.1.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.0.0",
   "workId": "2772-force-claim-transition",
   "sources": [
     {
       "path": "readiness/2772-force-claim-transition/ship.json",
-      "digest": "sha256:d800b7efe03ad3e4ad8e5814591131bf0cb52e987f3304af0aa753d12dd9eb74",
+      "digest": "sha256:be31b0f0c45aa9cba5d25756470fc2d0de88e636940062ec0fdabb2ea8095185",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2772-force-claim-transition/verify.json",
-      "digest": "sha256:d9891cb266d8d92dd78db6f69c89518fa7249b32d277bfdf5657b7616bb28e17",
+      "digest": "sha256:427b9311d358575dbc1eafb40ff89f7df72569fa0ad7868b6d5cb3e7bbbee132",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2772-force-claim-transition/work-model.json",
-      "digest": "sha256:2b60254ca9970f090401b1d636adfe43bc4b260525786e9409cb19df2b0cd65f",
+      "digest": "sha256:e1aa09127b2d454c980089c1b1de99c14d1ad00ff67d544678e913aa6b14acb1",
       "schemaVersion": 1
     }
   ],
@@ -113,6 +113,16 @@
         "rationale": null
       },
       {
+        "id": "evidence:EV019",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV020",
+        "state": "real",
+        "rationale": null
+      },
+      {
         "id": "task:T001",
         "state": "real",
         "rationale": null
@@ -201,6 +211,16 @@
         "id": "task:T018",
         "state": "real",
         "rationale": null
+      },
+      {
+        "id": "task:T019",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T020",
+        "state": "real",
+        "rationale": null
       }
     ],
     "dependencies": [
@@ -275,6 +295,14 @@
       {
         "dependent": "evidence:EV018",
         "dependency": "task:T018"
+      },
+      {
+        "dependent": "evidence:EV019",
+        "dependency": "task:T019"
+      },
+      {
+        "dependent": "evidence:EV020",
+        "dependency": "task:T020"
       },
       {
         "dependent": "task:T001",
@@ -394,6 +422,22 @@
       },
       {
         "dependent": "task:T018",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T019",
+        "dependency": "evidence:EV019"
+      },
+      {
+        "dependent": "task:T019",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T020",
+        "dependency": "evidence:EV020"
+      },
+      {
+        "dependent": "task:T020",
         "dependency": "task:T001"
       }
     ]

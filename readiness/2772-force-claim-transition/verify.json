@@ -4,7 +4,7 @@
   "workId": "2772-force-claim-transition",
   "stage": "verify",
   "status": "verificationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "5139dc359a36299506f46ac140b662ca20cd11052f0c2715ed04d2e82717d954"
+        "value": "f8265794aa15f3434f614ccd5e9b5915e9678b9bb75436b0f5af5ee735773bed"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "2b60254ca9970f090401b1d636adfe43bc4b260525786e9409cb19df2b0cd65f"
+        "value": "e1aa09127b2d454c980089c1b1de99c14d1ad00ff67d544678e913aa6b14acb1"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d"
+        "value": "51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8"
+        "value": "808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "faea159ffe7ffd1ccd2519110f2d40bc063a194d0fb46771b1d0e9a124cb79fe"
+        "value": "90b188bceb72d44d2fa6478e76ff2c0619dd27c8eb406700d7fc4d36f07f1212"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "2bd4e0e70d1576f49cda11a3c7fa5e02c6690b6871bd8f803e8f600091ef84d2"
+        "value": "fd016709bb1ea8761b42710503c6b40cea5d2402e628f634d237f9b5d31bbf0b"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "92ba36acf314c39eb0afb50f8e9caa473bd36fbadf6fb7c07ebbc014b9bca505"
+        "value": "2f8e978ea9966cbf93ab790fb5f27ca0edff4f735671ada3600829ec4990b4cd"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -151,8 +151,8 @@
     ]
   },
   "taskGraph": {
-    "taskCount": 18,
-    "dependencyCount": 12,
+    "taskCount": 20,
+    "dependencyCount": 14,
     "dependenciesValid": true,
     "statusesValid": true,
     "findingIds": []
@@ -165,7 +165,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV001"
       ],
@@ -188,7 +187,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV002"
       ],
@@ -211,7 +209,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV003"
       ],
@@ -234,7 +231,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV004"
       ],
@@ -257,7 +253,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV005"
       ],
@@ -280,7 +275,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV006"
       ],
@@ -304,7 +298,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV007"
       ],
@@ -325,7 +318,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV008"
       ],
@@ -346,7 +338,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV009"
       ],
@@ -367,7 +358,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV010"
       ],
@@ -390,7 +380,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV011"
       ],
@@ -412,7 +401,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV012"
       ],
@@ -435,7 +423,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV013"
       ],
@@ -458,7 +445,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV014"
       ],
@@ -481,7 +467,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV015"
       ],
@@ -503,7 +488,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV016"
       ],
@@ -525,7 +509,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV017"
       ],
@@ -547,7 +530,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV018"
       ],
@@ -561,6 +543,49 @@
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
+    },
+    {
+      "id": "ED-EV019",
+      "obligationId": "EV019",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV019"
+      ],
+      "affectedTaskIds": [
+        "T019"
+      ],
+      "affectedSourceIds": [
+        "DEC-004"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV020",
+      "obligationId": "EV020",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV020"
+      ],
+      "affectedTaskIds": [
+        "T020"
+      ],
+      "affectedSourceIds": [
+        "AC-003",
+        "DEC-004",
+        "FR-003",
+        "PD-003"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
     }
   ],
   "testDispositions": [
@@ -569,7 +594,6 @@
       "obligationId": "EV001",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV001"
       ],
@@ -588,7 +612,6 @@
       "obligationId": "EV002",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV002"
       ],
@@ -607,7 +630,6 @@
       "obligationId": "EV003",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV003"
       ],
@@ -626,7 +648,6 @@
       "obligationId": "EV004",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV004"
       ],
@@ -645,7 +666,6 @@
       "obligationId": "EV005",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV005"
       ],
@@ -664,7 +684,6 @@
       "obligationId": "EV006",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV006"
       ],
@@ -683,7 +702,6 @@
       "obligationId": "EV007",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV007"
       ],
@@ -700,7 +718,6 @@
       "obligationId": "EV008",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV008"
       ],
@@ -717,7 +734,6 @@
       "obligationId": "EV009",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV009"
       ],
@@ -734,7 +750,6 @@
       "obligationId": "EV010",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV010"
       ],
@@ -751,7 +766,6 @@
       "obligationId": "EV011",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV011"
       ],
@@ -768,7 +782,6 @@
       "obligationId": "EV012",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV012"
       ],
@@ -785,7 +798,6 @@
       "obligationId": "EV013",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV013"
       ],
@@ -802,7 +814,6 @@
       "obligationId": "EV014",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV014"
       ],
@@ -819,7 +830,6 @@
       "obligationId": "EV015",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV015"
       ],
@@ -836,7 +846,6 @@
       "obligationId": "EV016",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV016"
       ],
@@ -853,7 +862,6 @@
       "obligationId": "EV017",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV017"
       ],
@@ -870,12 +878,43 @@
       "obligationId": "EV018",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV018"
       ],
       "affectedTaskIds": [
         "T018"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV019",
+      "obligationId": "EV019",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV019"
+      ],
+      "affectedTaskIds": [
+        "T019"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV020",
+      "obligationId": "EV020",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV020"
+      ],
+      "affectedTaskIds": [
+        "T020"
       ],
       "affectedRequirementIds": [],
       "severity": "ready",
@@ -923,7 +962,9 @@
         "T008",
         "T009",
         "T010",
-        "T011"
+        "T011",
+        "T019",
+        "T020"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2772-force-claim-transition/tasks.yml",
@@ -942,7 +983,9 @@
         "T006",
         "T007",
         "T008",
-        "T009"
+        "T009",
+        "T019",
+        "T020"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2772-force-claim-transition/tasks.yml",

@@ -4,12 +4,12 @@
   "workId": "2772-force-claim-transition",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "verificationReadiness": {
     "status": "verificationReady",
-    "evidenceSupportedCount": 18,
+    "evidenceSupportedCount": 20,
     "evidenceSelfAttestedCount": 0,
-    "evidenceObservedCount": 18
+    "evidenceObservedCount": 20
   },
   "disposition": {
     "state": "shipReady",

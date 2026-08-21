@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d"
+        "value": "51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8"
+        "value": "808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "4fe6e0d5a7f7e2a1ca7b29539afeb305005b02e3955f4a9783caeb3cf9f2a967"
+        "value": "90b188bceb72d44d2fa6478e76ff2c0619dd27c8eb406700d7fc4d36f07f1212"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2bd4e0e70d1576f49cda11a3c7fa5e02c6690b6871bd8f803e8f600091ef84d2"
+        "value": "fd016709bb1ea8761b42710503c6b40cea5d2402e628f634d237f9b5d31bbf0b"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "92ba36acf314c39eb0afb50f8e9caa473bd36fbadf6fb7c07ebbc014b9bca505"
+        "value": "2f8e978ea9966cbf93ab790fb5f27ca0edff4f735671ada3600829ec4990b4cd"
       }
     }
   ],
@@ -186,7 +186,8 @@
         "T003"
       ],
       "linkedEvidenceIds": [
-        "EV003"
+        "EV003",
+        "EV020"
       ]
     },
     {
@@ -264,7 +265,7 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 34,
+        "line": 40,
         "column": 1
       },
       "linkedTaskIds": [
@@ -280,7 +281,7 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 38,
+        "line": 44,
         "column": 1
       },
       "linkedTaskIds": [
@@ -296,11 +297,27 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 43,
+        "line": 49,
         "column": 1
       },
       "linkedTaskIds": [
         "T009"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "Treat replacement POST transport failure as ambiguous. A matching newly",
+      "decision": "Treat replacement POST transport failure as ambiguous. A matching newly",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2772-force-claim-transition/clarifications.md",
+      "sourceLocation": {
+        "line": 53,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T019"
       ]
     }
   ],
@@ -800,6 +817,63 @@
         "line": 18,
         "column": 1
       }
+    },
+    {
+      "id": "T019",
+      "title": "Implement clarification decision DEC-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-004"
+      ],
+      "sourceIds": [
+        "DEC-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV019"
+      ],
+      "source": "work/2772-force-claim-transition/tasks.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "T020",
+      "title": "Implement plan decision PD-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "DEC-004",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV020"
+      ],
+      "source": "work/2772-force-claim-transition/tasks.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
     }
   ],
   "evidence": [
@@ -1210,6 +1284,52 @@
         "line": 18,
         "column": 1
       }
+    },
+    {
+      "id": "EV019",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T019",
+      "taskRefs": [
+        "T019"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2772-force-claim-transition/evidence.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV020",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T020",
+      "taskRefs": [
+        "T020"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2772-force-claim-transition/evidence.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
     }
   ],
   "generatedViews": [
@@ -1219,7 +1339,7 @@
       "schemaVersion": 1,
       "generator": {
         "id": "FS.GG.SDD.Artifacts",
-        "version": "1.1.0"
+        "version": "1.0.0"
       },
       "sources": [
         {
@@ -1250,7 +1370,7 @@
           "path": "work/2772-force-claim-transition/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d"
+            "value": "51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a"
           },
           "schemaVersion": 1
         },
@@ -1258,7 +1378,7 @@
           "path": "work/2772-force-claim-transition/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8"
+            "value": "808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133"
           },
           "schemaVersion": 1
         },
@@ -1266,7 +1386,7 @@
           "path": "work/2772-force-claim-transition/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "4fe6e0d5a7f7e2a1ca7b29539afeb305005b02e3955f4a9783caeb3cf9f2a967"
+            "value": "90b188bceb72d44d2fa6478e76ff2c0619dd27c8eb406700d7fc4d36f07f1212"
           },
           "schemaVersion": 1
         },
@@ -1274,7 +1394,7 @@
           "path": "work/2772-force-claim-transition/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "2bd4e0e70d1576f49cda11a3c7fa5e02c6690b6871bd8f803e8f600091ef84d2"
+            "value": "fd016709bb1ea8761b42710503c6b40cea5d2402e628f634d237f9b5d31bbf0b"
           },
           "schemaVersion": 1
         },
@@ -1290,14 +1410,14 @@
           "path": "work/2772-force-claim-transition/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "92ba36acf314c39eb0afb50f8e9caa473bd36fbadf6fb7c07ebbc014b9bca505"
+            "value": "2f8e978ea9966cbf93ab790fb5f27ca0edff4f735671ada3600829ec4990b4cd"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "5ba36b6ae87f59248d85294b43f819fa067cab31c4265ae96c9170eef63e0323"
+        "value": "13af7c245765e4c2c8de25607e73a79374c082414368e802584043d3c6eb27fc"
       },
       "currency": "current"
     }
