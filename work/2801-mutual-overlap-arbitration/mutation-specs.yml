@@ -1,4 +1,20 @@
 mutations:
+  - id: focused/freeze-comment-before-hint
+    gate: compiled overlap interleaving control
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --no-restore --filter FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: |-
+      Writes.ensureBodyMarker ctx.Transport cycle.First (overlapFreezeHint cycle.FirstGeneration)
+              |> Result.bind (fun () -> Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody)
+    replace: |-
+      Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody
+              |> Result.bind (fun _ -> Writes.ensureBodyMarker ctx.Transport cycle.First (overlapFreezeHint cycle.FirstGeneration))
+    breaks: a durable freeze comment becomes visible before its generation hint makes production mutations fail closed
+    anchor:
+      pattern: '(?:Passed|Failed)!\s+- Failed:\s+\d+, Passed:\s+\d+, Skipped:\s+\d+, Total:\s+\d+'
+      produced_by: tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs
+
   - id: overlap/unreadable-state-fails-open
     gate: ClaimOverlapTests
     discriminator: terminal

@@ -506,6 +506,7 @@ module ClaimOverlapTests =
         let comments = Dictionary<int, ResizeArray<string>>()
         let posted = ResizeArray<int * string>()
         let issueBodies = Dictionary<int, string>()
+        let effects = ResizeArray<string>()
         let mutable roomBody: string option = None
         let mutable roomCreates = 0
 
@@ -519,6 +520,8 @@ module ClaimOverlapTests =
 
         member _.Bodies number = comments.[number] |> List.ofSeq
         member _.Posted = List.ofSeq posted
+        member _.Effects = List.ofSeq effects
+        member _.Record effect = effects.Add effect
         member _.Body number = issueBodies.[number]
         member _.SetBody(number, body) = issueBodies.[number] <- body
         member _.RoomBody with get () = roomBody and set value = roomBody <- value
@@ -528,6 +531,7 @@ module ClaimOverlapTests =
             if not (comments.ContainsKey number) then comments.[number] <- ResizeArray()
             comments.[number].Add body
             posted.Add(number, body)
+            if body.Contains "fsgg.coord.overlap-freeze/v1" then effects.Add($"freeze-comment:%d{number}")
             9100L + int64 posted.Count
 
         member this.Json number =
@@ -572,8 +576,16 @@ module ClaimOverlapTests =
                 ok (sprintf """{"id":%d}""" (thread.Add(2801, jsonBody req)))
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok (JsonSerializer.Serialize {| state = "open"; body = thread.Body 42 |})
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/43" -> ok (JsonSerializer.Serialize {| state = "open"; body = thread.Body 43 |})
-            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/42" -> thread.SetBody(42, jsonBody req); ok "{}"
-            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/43" -> thread.SetBody(43, jsonBody req); ok "{}"
+            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                let body = jsonBody req
+                thread.SetBody(42, body)
+                if body.Contains "fsgg:overlap-freeze-present/v1" then thread.Record "freeze-hint:42"
+                ok "{}"
+            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/43" ->
+                let body = jsonBody req
+                thread.SetBody(43, body)
+                if body.Contains "fsgg:overlap-freeze-present/v1" then thread.Record "freeze-hint:43"
+                ok "{}"
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
                 [ yield {| number = 42; state = "open"; body = thread.Body 42 |}
                   yield {| number = 43; state = "open"; body = thread.Body 43 |}
@@ -693,6 +705,11 @@ module ClaimOverlapTests =
         Assert.Contains(thread.Bodies 43, fun body -> body.Contains "fsgg.coord.overlap-freeze/v1")
         Assert.Contains("fsgg:overlap-freeze-present/v1 generation=8001", thread.Body 42)
         Assert.Contains("fsgg:overlap-freeze-present/v1 generation=8070", thread.Body 43)
+        let effectIndex effect = thread.Effects |> List.findIndex ((=) effect)
+        Assert.True(
+            effectIndex "freeze-hint:42" < effectIndex "freeze-comment:42"
+            && effectIndex "freeze-hint:43" < effectIndex "freeze-comment:43",
+            $"freeze comments must never precede their fail-closed hints: %A{thread.Effects}")
 
     [<Fact>]
     let ``#2801 compiled arbitration route records precedence and narrows loser while its claim remains held`` () =

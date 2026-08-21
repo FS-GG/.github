@@ -8642,10 +8642,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     let private freezeCycleParticipants (ctx: Context) (cycle: MutualOverlapCycle) =
         let firstKey, firstBody = overlapFreezeBody cycle cycle.FirstGeneration cycle.Second cycle.SharedTokens "cycle"
         let secondKey, secondBody = overlapFreezeBody cycle cycle.SecondGeneration cycle.First cycle.SharedTokens "cycle"
-        Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody
-        |> Result.bind (fun _ -> Writes.ensureBodyMarker ctx.Transport cycle.First (overlapFreezeHint cycle.FirstGeneration))
-        |> Result.bind (fun () -> Writes.writeDurableComment ctx.Transport cycle.Second secondKey secondBody)
+        // Hint first. From this write boundary onward the production path writer either loads a durable
+        // receipt or refuses the orphan hint; it can never skip a freeze comment that already exists.
+        // A response-lost/failed comment leaves a loud, retryable orphan hint, and ensureBodyMarker is
+        // idempotent on retry, so fail-closed ordering does not become an unrecoverable silent state.
+        Writes.ensureBodyMarker ctx.Transport cycle.First (overlapFreezeHint cycle.FirstGeneration)
+        |> Result.bind (fun () -> Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody)
         |> Result.bind (fun _ -> Writes.ensureBodyMarker ctx.Transport cycle.Second (overlapFreezeHint cycle.SecondGeneration))
+        |> Result.bind (fun () -> Writes.writeDurableComment ctx.Transport cycle.Second secondKey secondBody)
         |> Result.map ignore
 
     let private overlapWait (ctx: Context) (opts: Options) waiterArg predecessorArg host =
