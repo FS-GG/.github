@@ -787,7 +787,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -819,7 +819,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -851,7 +851,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -883,7 +883,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -915,7 +915,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -973,7 +973,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -1003,7 +1003,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -1033,7 +1033,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -1063,7 +1063,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -1093,7 +1093,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -1123,7 +1123,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -1153,7 +1153,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -1183,7 +1183,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",
@@ -1213,7 +1213,7 @@
         "src/FS.GG.Coord.Core/ReviewWait.fs",
         "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
         "tests/coord-engine-e2e/writes.sh",
-        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx",
+        "work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml",
         "work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh"
       ],
       "result": "pass",

@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "9323af5bf9588e60ff6b18522a39a8d2aa379d2085dc34d7c4afa1900f83a8bf"
+        "value": "6e83e1f0be5bd20c72088f24e8876fffa0f5e388d6f1ee4233736263419fb56b"
       }
     },
     {
@@ -661,7 +661,7 @@
   "evidence": [
     {
       "id": "EV001",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T001",
       "taskRefs": [
@@ -671,19 +671,15 @@
         "FR-001"
       ],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "FR-001 is complete at the prepared-source boundary: freshness measured exactly four merged engine commits after 0.67.0, including #2772 commit 7cef7301, zero Protocol.fs commits, and no unmerged bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 1,
@@ -692,7 +688,7 @@
     },
     {
       "id": "EV002",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T002",
       "taskRefs": [
@@ -702,19 +698,15 @@
         "FR-002"
       ],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "FR-002 cannot execute before this prepared source merges: tags must identify the immutable merge and the release saga must then publish the once-packed payloads to both feeds before promotion. No tag, feed, or manifest success is claimed by the ReviewWait TRX.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 2,
@@ -723,7 +715,7 @@
     },
     {
       "id": "EV003",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T003",
       "taskRefs": [
@@ -733,19 +725,15 @@
         "FR-003"
       ],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "FR-003 requires an independently downloaded public 0.68.0 tool. The local source-pack install reports 0.68.0.0 and focused source tests pass, but it is deliberately not substituted for nuget.org consumption or the installed #2797 route.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 3,
@@ -754,7 +742,7 @@
     },
     {
       "id": "EV004",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T004",
       "taskRefs": [
@@ -764,19 +752,15 @@
         "FR-004"
       ],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports four unreleased commits.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 4,
@@ -785,7 +769,7 @@
     },
     {
       "id": "EV005",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T005",
       "taskRefs": [
@@ -793,19 +777,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "DEC-001\u0027s 0.68.0 classification is directly supported by freshness, version/coherent-set gates, and the release-note mismatch inversion, but those checks do not emit one durable observed-run receipt for this decision.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 5,
@@ -814,7 +794,7 @@
     },
     {
       "id": "EV006",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T006",
       "taskRefs": [
@@ -822,19 +802,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "DEC-002\u0027s prepared-source boundary is satisfied through the current frozen PR and includes merged #2772 commit 7cef7301 while excluding unmerged work, but its immutable merge/tag half necessarily remains after merge.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 6,
@@ -843,7 +819,7 @@
     },
     {
       "id": "EV007",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T007",
       "taskRefs": [
@@ -851,19 +827,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "DEC-003 is an unexecuted release transaction by design. The prepared source names release-saga/1, but no prepare/tag/publisher/promotion event is claimed before the source merge exists.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 7,
@@ -872,7 +844,7 @@
     },
     {
       "id": "EV008",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T008",
       "taskRefs": [
@@ -880,19 +852,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "DEC-004 identifies manifest/journal/feed/install facts as acceptance authority; none exist for 0.68.0 yet. Hosted source CI and a local source-pack install are diagnostics, not substitutes for those future immutable facts.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 8,
@@ -901,7 +869,7 @@
     },
     {
       "id": "EV009",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T009",
       "taskRefs": [
@@ -909,19 +877,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "DEC-005\u0027s source behavior preflight passed (ReviewWait 19/19, ReviewApplication 7/7, and hosted #2797 E2E 166/166), but the decision explicitly requires the installed public 0.68.0 tool; that final leg is outstanding.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 9,
@@ -930,7 +894,7 @@
     },
     {
       "id": "EV010",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T010",
       "taskRefs": [
@@ -938,19 +902,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "PC-001\u0027s three projects evaluate to 0.68.0 and release-note/version gates pass, but those direct checks are not the ReviewWait TRX previously attached here. Publication must still prove that the package contract\u0027s served bytes use this scalar.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 10,
@@ -959,7 +919,7 @@
     },
     {
       "id": "EV011",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T011",
       "taskRefs": [
@@ -967,19 +927,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "VO-001 intentionally spans pre-merge and post-merge gates. Its pre-merge release/version/focused-test/pack/install/inversion checks passed, while promotion, both-feed identity, public install, registry gates, and clear freshness remain unexecuted.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 11,
@@ -988,7 +944,7 @@
     },
     {
       "id": "EV012",
-      "kind": "deferral",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T012",
       "taskRefs": [
@@ -996,19 +952,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "PM-001 is a documented additive migration posture rather than a test-run subject. S.I.R. remains deliberately blocked on the future 0.68.0 public install, so no receiver migration is claimed complete.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 12,
@@ -1017,7 +969,7 @@
     },
     {
       "id": "EV013",
-      "kind": "generated-view",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T013",
       "taskRefs": [
@@ -1025,19 +977,15 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "Directory.Build.props",
-        "scripts/check-engine-release-notes.py",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+        "work/2794-coord-engine-release/artifacts/2794-release-receipt.json",
+        "work/2794-coord-engine-release/artifacts/2794-release-verification.junit.xml"
       ],
-      "result": "deferred",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "GV-001 is a generated-view currency subject, not ReviewWait behavior. The SDD generator establishes current pre-merge readiness views; final registry projections cannot be generated until promoted release facts exist.",
+      "rationale": null,
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 13,
@@ -1099,7 +1047,7 @@
           "path": "work/2794-coord-engine-release/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "9323af5bf9588e60ff6b18522a39a8d2aa379d2085dc34d7c4afa1900f83a8bf"
+            "value": "6e83e1f0be5bd20c72088f24e8876fffa0f5e388d6f1ee4233736263419fb56b"
           },
           "schemaVersion": 1
         },
@@ -1130,7 +1078,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "31afe2df17be4a810c909f29fe5d6aca3f019efe22e66be544c87bb2a3152281"
+        "value": "b0246f86afdcf0439c220a679f1a55036ded0de5637be298e4a4bffe238fa5cc"
       },
       "currency": "current"
     }

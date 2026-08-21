@@ -19,15 +19,29 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
-- **2026-08-21** — **coherent set `github:0.68.0` prepared with a post-merge release obligation**
-  (github; [.github#2794](https://github.com/FS-GG/.github/issues/2794), producers
-  [.github#2797](https://github.com/FS-GG/.github/issues/2797) and
-  [.github#2772](https://github.com/FS-GG/.github/issues/2772)): packages the four merged commits that
-  preserve ordinary review exhaustion across claim turnover, project the exhausted phase, and authorize
-  one exact structured escalation for the fresh claimant, then repair the forced-claim repair-phase
-  latest-review/backlink transition. The claim owner must publish the prepared coherent bytes to both feeds,
-  prove payload identity and a public installed-tool route, then replace this entry with immutable evidence
-  before Done.
+- **2026-08-21** — **coherent set `github:0.68.0` published; `coord-engine` flipped to `0.68.0`**
+  (github; [.github#2794](https://github.com/FS-GG/.github/issues/2794),
+  [source PR #2803](https://github.com/FS-GG/.github/pull/2803),
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.68.0)): prepare run
+  [32474831515](https://github.com/FS-GG/.github/actions/runs/32474831515) packed the coherent set once
+  from merge `1d5f8e246a0db64e87f8b98204cf5b09f5f156dd`; the Kit, Drivers, and Coord.Cli
+  publisher runs [32474984283](https://github.com/FS-GG/.github/actions/runs/32474984283),
+  [32474984664](https://github.com/FS-GG/.github/actions/runs/32474984664), and
+  [32474984533](https://github.com/FS-GG/.github/actions/runs/32474984533) pushed the prepared bytes to
+  both feeds, then timed out on nuget.org's bounded indexing window. After direct feed reads returned
+  all three immutable versions, manifest-bound recoveries
+  [32475532330](https://github.com/FS-GG/.github/actions/runs/32475532330),
+  [32475534727](https://github.com/FS-GG/.github/actions/runs/32475534727), and
+  [32475530019](https://github.com/FS-GG/.github/actions/runs/32475530019) observed them without a
+  duplicate push. Promotion [32475579256](https://github.com/FS-GG/.github/actions/runs/32475579256)
+  re-read both registries and sealed content
+  `sha256:d289364236b4987aaa445ce913a6bf4dbebcc4921a49bb9a8071d135834ed7a4` at
+  `2026-08-21T11:06:12Z`. Every sibling tag names the merge commit. Payload hashes match across feeds:
+  Coord.Cli `sha256:4facee6cadcd9f48caf5efaa87fdb38a0325d342d90b5a65011962429546ba3a`,
+  Drivers `sha256:d1ac4b47cc90a537ad7285cd38f51f96c10f49b5861a5d2fcefe74a4bd1cbd7a`, and
+  Kit `sha256:e4ce99521725685a943ba5c9feb8af670b79e058c9d5414741f17bb184e48261`.
+  A clean nuget.org tool install reports `0.68.0.0` and reads the completed repair-confirmation chain;
+  post-release freshness reports zero unreleased, wire, or defect commits and no release debt.
 
 - **2026-08-21** — **coherent set `github:0.67.0` published; `coord-engine` flipped to `0.67.0`**
   (github; [.github#2756](https://github.com/FS-GG/.github/issues/2756),
