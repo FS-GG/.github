@@ -250,7 +250,7 @@ mutations:
   - id: production/frozen-token-bypasses-resume
     gate: compiled writer route
     discriminator: terminal
-    command: ["bash", "tests/coord-engine-e2e/writes.sh"]
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
     target: src/FS.GG.Coord.Cli/Client.fs
     find: 'if not readdsFrozenToken then Ok()'
     replace: 'if true then Ok()'
@@ -262,7 +262,7 @@ mutations:
   - id: production/caller-authority-spoofed
     gate: compiled writer route
     discriminator: terminal
-    command: ["bash", "tests/coord-engine-e2e/writes.sh"]
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
     target: src/FS.GG.Coord.Cli/Client.fs
     find: 'when requestingRepo <> coordinationRef.Repo || holder <> w.Id ->'
     replace: 'when false ->'
@@ -274,7 +274,7 @@ mutations:
   - id: production/priority-write-bypassed
     gate: compiled writer route
     discriminator: terminal
-    command: ["bash", "tests/coord-engine-e2e/writes.sh"]
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
     target: src/FS.GG.Coord.Cli/Client.fs
     find: 'match Board.setField ctx.Transport board itemId "Severity" (Board.Set severity) with'
     replace: 'match Ok() with'
