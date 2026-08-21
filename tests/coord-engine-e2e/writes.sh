@@ -549,7 +549,51 @@ with open(path, "w", encoding="utf-8") as stream:
 PY
 }
 
+# Rewrite one already-sealed fixture record while preserving its digest contract. This lets the
+# production writer see a readable but semantically noncontiguous historical chain, rather than a
+# trivially unreadable JSON/digest mutant that would exercise the wrong refusal.
+rewrite_turnover_record() {
+  local body="$1" field="$2" value="$3"
+  python3 - "$body" "$field" "$value" <<'PY'
+import hashlib, json, sys
+body, field, raw_value = sys.argv[1:]
+marker, payload = body.split("\n", 1)
+record = json.loads(payload)
+record[field] = int(raw_value) if field in {"revision", "round"} else raw_value
+def frame(value):
+    value = value or ""
+    return f"{len(value.encode('utf-8'))}:{value}"
+def strings(values):
+    return "".join(frame(value) for value in values)
+fields = [
+    frame(record["schema"]), frame(record["subject"]), str(record["revision"]),
+    frame(record.get("previousDigest")), frame(record["headSha"]), frame(record["critic"]),
+    frame(record["verdict"]), strings(record["acceptedExceptions"]),
+    frame(record["routeApplicability"]), strings(record["routeEvidence"]),
+    frame(record["policyVersion"]), frame(record["kind"]), str(record["round"]),
+    frame(record.get("initialReview")), frame(record.get("precedingReview")),
+    str(record["diffAuditRequired"]), strings(record["diffAuditReceipts"]),
+    frame(record["timestamp"]),
+]
+succession = record.get("succession")
+if succession is not None:
+    fields.extend([frame(succession["originalCritic"]), frame(succession["grantedBy"]), frame(succession["grantUrl"])])
+if record.get("claimGeneration") is not None or record.get("baseSha") is not None:
+    fields.extend([frame(record.get("claimGeneration")), frame(record.get("baseSha"))])
+record["digest"] = hashlib.sha256("|".join(fields).encode()).hexdigest()
+print(marker + "\n" + json.dumps(record, separators=(",", ":"), sort_keys=True))
+PY
+}
+
+patch_turnover_comment() {
+  local id="$1" body="$2"
+  curl -fsS -X PATCH -H 'Content-Type: application/json' \
+    -d "$(jq -n --arg body "$body" '{body:$body}')" \
+    "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$id" >/dev/null
+}
+
 turnover_initial_url=""; turnover_preceding_url=""; turnover_previous_digest=""
+turnover_round_two_id=""; turnover_round_two_body=""; turnover_round_three_id=""; turnover_round_three_body=""
 for turnover_round in 0 1 2 3; do
   turnover_round_head="${turnover_heads[$turnover_round]}"
   if [ "$turnover_round" -eq 0 ]; then
@@ -567,6 +611,13 @@ for turnover_round in 0 1 2 3; do
   turnover_record_url="$(printf '%s' "$turnover_record_out" | jq -r '.commentUrl // empty')"
   turnover_previous_digest="$(printf '%s' "$turnover_record_out" | jq -r '.digest // empty')"
   [ -n "$turnover_record_id" ] && turnover_comment_ids+=("$turnover_record_id")
+  if [ "$turnover_round" -eq 2 ]; then
+    turnover_round_two_id="$turnover_record_id"
+    turnover_round_two_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r --argjson id "$turnover_record_id" '.[] | select(.id == $id) | .body')"
+  elif [ "$turnover_round" -eq 3 ]; then
+    turnover_round_three_id="$turnover_record_id"
+    turnover_round_three_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r --argjson id "$turnover_record_id" '.[] | select(.id == $id) | .body')"
+  fi
   [ "$turnover_round" -eq 0 ] && turnover_initial_url="$turnover_record_url"
   turnover_preceding_url="$turnover_record_url"
   write_turnover_wait complete "$turnover_generation" "$turnover_record_url"
@@ -623,6 +674,32 @@ turnover_malformed_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.
 turnover_malformed_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$turnover_malformed_id" >/dev/null
 
+# `.github#2807`: keep the history readable and digest-valid while making round two noncontiguous.
+# The round-three digest is re-sealed against its mutated predecessor, so refusal demonstrates the
+# ordered round rule rather than merely tripping JSON or digest parsing. Restore exact bytes afterward.
+turnover_noncontiguous_two="$(rewrite_turnover_record "$turnover_round_two_body" round 4)"
+turnover_noncontiguous_two_digest="$(printf '%s' "$turnover_noncontiguous_two" | sed '1d' | jq -r '.digest')"
+turnover_noncontiguous_three="$(rewrite_turnover_record "$turnover_round_three_body" previousDigest "$turnover_noncontiguous_two_digest")"
+turnover_noncontiguous_three_digest="$(printf '%s' "$turnover_noncontiguous_three" | sed '1d' | jq -r '.digest')"
+patch_turnover_comment "$turnover_round_two_id" "$turnover_noncontiguous_two"
+patch_turnover_comment "$turnover_round_three_id" "$turnover_noncontiguous_three"
+write_turnover_draft escalation 3 "$turnover_noncontiguous_three_digest" "$turnover_initial_url" "$turnover_preceding_url"
+turnover_noncontiguous_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+turnover_noncontiguous_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json 2>&1)"; turnover_noncontiguous_rc=$?
+turnover_noncontiguous_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+patch_turnover_comment "$turnover_round_two_id" "$turnover_round_two_body"
+patch_turnover_comment "$turnover_round_three_id" "$turnover_round_three_body"
+
+# A legacy escalation whose confirmation backlink no longer names the exact structured round is not
+# exhaustion authority. Mutate only that backlink, prove zero-write refusal, then restore exact bytes.
+turnover_bad_backlink_body="${turnover_legacy_body/confirmation-2: $turnover_confirmation_2/confirmation-2: https:\/\/fixture.invalid\/2807\/wrong-confirmation-2}"
+patch_turnover_comment "$turnover_legacy_id" "$turnover_bad_backlink_body"
+write_turnover_draft escalation 3 "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url"
+turnover_bad_backlink_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+turnover_bad_backlink_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json 2>&1)"; turnover_bad_backlink_rc=$?
+turnover_bad_backlink_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+patch_turnover_comment "$turnover_legacy_id" "$turnover_legacy_body"
+
 turnover_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 43 --worker vole-418 --json 2>&1)"; turnover_projection_rc=$?
 
 # Every identity/binding mutation is exercised before the valid escalation exists, so refusal
@@ -665,6 +742,10 @@ turnover_acceptance_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.
 if [ "$turnover_missing_legacy_rc" -ne 0 ] && [ "$turnover_before" = "$turnover_after" ] \
    && [ "$turnover_nonfresh_rc" -ne 0 ] && [ "$turnover_nonfresh_before" = "$turnover_nonfresh_after" ] \
    && [ "$turnover_malformed_rc" -ne 0 ] && [ "$turnover_malformed_before" = "$turnover_malformed_after" ] \
+   && [ "$turnover_noncontiguous_rc" -ne 0 ] && [ "$turnover_noncontiguous_before" = "$turnover_noncontiguous_after" ] \
+   && [[ "$turnover_noncontiguous_out" == *"confirmation round must be contiguous within its generation"* ]] \
+   && [ "$turnover_bad_backlink_rc" -ne 0 ] && [ "$turnover_bad_backlink_before" = "$turnover_bad_backlink_after" ] \
+   && [[ "$turnover_bad_backlink_out" == *"legacy ordinary-exhaustion evidence is missing, duplicated, stale, or malformed"* ]] \
    && [ "$turnover_projection_rc" -ne 0 ] \
    && printf '%s' "$turnover_projection" | jq -e '.verdict == "noVerdict" and .waitStatus == "ordinaryExhaustion" and (.reasons[0] | contains("never dispatch or resume ordinary round four"))' >/dev/null \
    && [ "$turnover_wrong_item_rc" -ne 0 ] && [ "$turnover_wrong_pr_rc" -ne 0 ] \
@@ -681,7 +762,7 @@ if [ "$turnover_missing_legacy_rc" -ne 0 ] && [ "$turnover_before" = "$turnover_
   ok ".github#2797: exactly one structured escalation crosses completed round-three wait claim turnover and every mutation refuses before write"
 else
   bad ".github#2797: exhausted-claim turnover must authorize escalation only" \
-    "missing=$turnover_missing_legacy_rc:$turnover_before->$turnover_after nonfresh=$turnover_nonfresh_rc:$turnover_nonfresh_before->$turnover_nonfresh_after malformed=$turnover_malformed_rc:$turnover_malformed_before->$turnover_malformed_after projection=$turnover_projection_rc:$turnover_projection mutations=item:$turnover_wrong_item_rc,pr:$turnover_wrong_pr_rc:$turnover_wrong_pr_before->$turnover_wrong_pr_after,head:$turnover_wrong_head_rc,round:$turnover_wrong_round_rc,digest:$turnover_wrong_digest_rc:$turnover_mutation_before->$turnover_mutation_after valid=$turnover_valid_rc:$turnover_valid_before->$turnover_valid_after:$turnover_valid_out repair=$turnover_repair_projection_rc:$turnover_repair_projection duplicate=$turnover_duplicate_rc:$turnover_duplicate_before->$turnover_duplicate_after round4=$turnover_round4_rc:$turnover_round4_after acceptance=$turnover_acceptance_rc:$turnover_acceptance_after"
+    "missing=$turnover_missing_legacy_rc:$turnover_before->$turnover_after nonfresh=$turnover_nonfresh_rc:$turnover_nonfresh_before->$turnover_nonfresh_after malformed=$turnover_malformed_rc:$turnover_malformed_before->$turnover_malformed_after noncontiguous=$turnover_noncontiguous_rc:$turnover_noncontiguous_before->$turnover_noncontiguous_after:$turnover_noncontiguous_out backlink=$turnover_bad_backlink_rc:$turnover_bad_backlink_before->$turnover_bad_backlink_after:$turnover_bad_backlink_out projection=$turnover_projection_rc:$turnover_projection mutations=item:$turnover_wrong_item_rc,pr:$turnover_wrong_pr_rc:$turnover_wrong_pr_before->$turnover_wrong_pr_after,head:$turnover_wrong_head_rc,round:$turnover_wrong_round_rc,digest:$turnover_wrong_digest_rc:$turnover_mutation_before->$turnover_mutation_after valid=$turnover_valid_rc:$turnover_valid_before->$turnover_valid_after:$turnover_valid_out repair=$turnover_repair_projection_rc:$turnover_repair_projection duplicate=$turnover_duplicate_rc:$turnover_duplicate_before->$turnover_duplicate_after round4=$turnover_round4_rc:$turnover_round4_after acceptance=$turnover_acceptance_rc:$turnover_acceptance_after"
 fi
 
 for turnover_id in "${turnover_comment_ids[@]}"; do
