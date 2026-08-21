@@ -19,12 +19,27 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
-- **2026-08-21** — **coherent set `github:0.67.0` prepared with a post-merge release obligation**
+- **2026-08-21** — **coherent set `github:0.67.0` published; `coord-engine` flipped to `0.67.0`**
   (github; [.github#2756](https://github.com/FS-GG/.github/issues/2756),
-  [PR #2792](https://github.com/FS-GG/.github/pull/2792)): adds the durable bounded review-wait
-  marker/writer/projection and makes a full fresh successor review the ordinary repaired-head route.
-  The merge owner must publish the byte-identical coherent set to both feeds and replace this prepared
-  entry with immutable run/tag/feed evidence before the item is stamped Done.
+  [PR #2792](https://github.com/FS-GG/.github/pull/2792),
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.67.0)): prepare run
+  [32444470355](https://github.com/FS-GG/.github/actions/runs/32444470355) packed the coherent set once
+  from merge `406e4fb84b82dfd511d97588cee27f01a2980295`; the Kit, Drivers, and Coord.Cli
+  publisher runs [32444611768](https://github.com/FS-GG/.github/actions/runs/32444611768),
+  [32444612054](https://github.com/FS-GG/.github/actions/runs/32444612054), and
+  [32444612182](https://github.com/FS-GG/.github/actions/runs/32444612182) pushed those prepared bytes
+  to GitHub Packages and nuget.org. Their first attempts durably recorded nuget.org's bounded indexing
+  wait; manifest-bound resumptions observed the immutable versions without duplicate pushes. Promotion
+  run [32445130593](https://github.com/FS-GG/.github/actions/runs/32445130593) re-read both registries
+  and sealed content `sha256:6a7068720bf591ea8ce830d2885587d3c446132f20eb1a97c16a889ee4d60adc`
+  at `2026-08-21T03:56:38Z`. All sibling tags resolve to the merge commit, and the promoted manifest
+  records identical payload hashes across feeds: Coord.Cli
+  `sha256:ecf8af73d84cdacf5e3095c738f7b0fc3a766cf594e89d36b20adfee35e0d844`, Drivers
+  `sha256:c12d0f0c3241a971faca251d1d599f3352b11385f9dbebf14965ee20406998cd`, and Kit
+  `sha256:66377a5c1fa88ec02704be4703dbc624db17e1c610414b851e0876e8a7136f22`.
+  The live coherence gate reports all three packages at 0.67.0 on both feeds. The durable review-wait
+  contract and ordinary full-successor review path described by #2756 are therefore publicly shipped.
+  Architecture shape is unaffected.
 
 - **2026-08-21** — **coherent set `github:0.66.0` published; `coord-engine` flipped to `0.66.0`**
   (github; [.github#2757](https://github.com/FS-GG/.github/issues/2757),
