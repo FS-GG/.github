@@ -15,8 +15,11 @@ namespace FS.GG.Coord.Cli
 module Client =
 
     open System
+    open System.Collections.Generic
     open System.Diagnostics
     open System.IO
+    open System.Security.Cryptography
+    open System.Text
     open System.Text.Json
     open FS.GG.Coord
     open FS.GG.Coord.Types
@@ -7865,6 +7868,557 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
     let setPaths (ctx: Context) (opts: Options) : int = updateTouchSet Replace ctx opts
 
+    // .github#2801 — typed facts for the mutual-overlap protocol.  These deliberately live beside the
+    // command which consumes them: this is one narrow policy transaction, not a generic graph framework.
+    type OverlapWaitReceipt =
+        { Waiter: Ref
+          WaiterGeneration: string
+          Predecessor: Ref
+          PredecessorGeneration: string
+          SharedTokens: string list
+          Host: string
+          Digest: string }
+
+    type OverlapClaimFact =
+        { Item: Ref
+          Generation: string
+          Live: bool }
+
+    type OverlapRelation =
+        { Left: Ref
+          Right: Ref
+          SharedTokens: string list }
+
+    type MutualOverlapSnapshot =
+        { Readable: bool
+          Claims: OverlapClaimFact list
+          Relations: OverlapRelation list
+          Waits: OverlapWaitReceipt list
+          DurableDependencies: (Ref * Ref) list
+          RelatedRoomCycleDigests: string list }
+
+    type MutualOverlapCycle =
+        { First: Ref
+          Second: Ref
+          FirstGeneration: string
+          SecondGeneration: string
+          SharedTokens: string list
+          Digest: string }
+
+    type MutualOverlapVerdict =
+        | NoMutualOverlapCycle
+        | MutualOverlapCycle of MutualOverlapCycle
+        | MutualOverlapRefused of reason: string
+
+    type OverlapPrecedenceReceipt =
+        { CycleDigest: string
+          Revision: int
+          PreviousDigest: string option
+          Winner: Ref
+          Loser: Ref
+          Host: string
+          Reason: string option
+          Digest: string }
+
+    type LoserResumeFacts =
+        { WinnerLanded: bool
+          LoserClaimGenerationCurrent: bool
+          FetchedWinnerBase: bool
+          RebasedHead: bool
+          OverlapClear: bool
+          ExplicitlyRewidened: bool
+          ReviewRequired: bool
+          ExactHeadReviewed: bool }
+
+    let private sha256 (value: string) =
+        SHA256.HashData(Encoding.UTF8.GetBytes value)
+        |> Convert.ToHexString
+        |> fun digest -> digest.ToLowerInvariant()
+
+    let private normalizedTokens tokens = tokens |> List.map TouchSet.stem |> List.distinct |> List.sort
+
+    let waitReceiptDigest (receipt: OverlapWaitReceipt) =
+        String.concat
+            "\n"
+            [ "fsgg.coord.overlap-wait/v1"
+              receipt.Waiter.Canonical
+              receipt.WaiterGeneration
+              receipt.Predecessor.Canonical
+              receipt.PredecessorGeneration
+              String.concat "," (normalizedTokens receipt.SharedTokens)
+              receipt.Host ]
+        |> sha256
+
+    let private cycleDigest (a: Ref) (aGeneration: string) (b: Ref) (bGeneration: string) tokens =
+        let first, firstGeneration, second, secondGeneration =
+            if a.Canonical < b.Canonical then a, aGeneration, b, bGeneration else b, bGeneration, a, aGeneration
+
+        sha256
+            (String.concat
+                "\n"
+                [ "fsgg.coord.mutual-overlap/v1"
+                  first.Canonical
+                  firstGeneration
+                  second.Canonical
+                  secondGeneration
+                  String.concat "," (normalizedTokens tokens) ])
+
+    let precedenceReceiptDigest (receipt: OverlapPrecedenceReceipt) =
+        String.concat
+            "\n"
+            [ "fsgg.coord.overlap-precedence/v1"
+              receipt.CycleDigest
+              string receipt.Revision
+              Option.defaultValue "" receipt.PreviousDigest
+              receipt.Winner.Canonical
+              receipt.Loser.Canonical
+              receipt.Host
+              Option.defaultValue "" receipt.Reason ]
+        |> sha256
+
+    /// Decide only from one authoritative snapshot.  Every missing/stale/conflicting fact refuses; a
+    /// one-way wait is the sole honest no-cycle result.  Comment order cannot affect the result.
+    let detectMutualOverlap (snapshot: MutualOverlapSnapshot) : MutualOverlapVerdict =
+        let samePair a b left right = (a = left && b = right) || (a = right && b = left)
+
+        let claim item generation =
+            snapshot.Claims
+            |> List.filter (fun fact -> fact.Item = item)
+            |> function
+                | [ fact ] when fact.Live && fact.Generation = generation -> Ok()
+                | [ fact ] when not fact.Live -> Error $"claim on %s{item.Short} is stale"
+                | [ _ ] -> Error $"claim generation on %s{item.Short} changed"
+                | [] -> Error $"claim on %s{item.Short} is missing"
+                | _ -> Error $"claim state for %s{item.Short} conflicts"
+
+        let relation (wait: OverlapWaitReceipt) =
+            snapshot.Relations
+            |> List.filter (fun fact -> samePair wait.Waiter wait.Predecessor fact.Left fact.Right)
+            |> function
+                | [ fact ] ->
+                    let observed = normalizedTokens fact.SharedTokens
+                    let recorded = normalizedTokens wait.SharedTokens
+                    if List.isEmpty observed then Error "the overlap has cleared"
+                    elif observed <> recorded then Error "the shared reservation tokens changed"
+                    else Ok observed
+                | [] -> Error "the overlap has cleared"
+                | _ -> Error "overlap state conflicts"
+
+        let validateWait wait =
+            if wait.Waiter = wait.Predecessor then Error "self wait edges are invalid"
+            elif String.IsNullOrWhiteSpace wait.Host then Error "wait receipt host authority is missing"
+            elif wait.Digest <> waitReceiptDigest { wait with Digest = "" } then Error "wait receipt digest is invalid"
+            elif snapshot.DurableDependencies |> List.exists (fun (a, b) -> samePair wait.Waiter wait.Predecessor a b) then
+                Error "a durable Blocked-by dependency already sequences the pair"
+            else
+                claim wait.Waiter wait.WaiterGeneration
+                |> Result.bind (fun () -> claim wait.Predecessor wait.PredecessorGeneration)
+                |> Result.bind (fun () -> relation wait)
+
+        if not snapshot.Readable then
+            MutualOverlapRefused "authoritative overlap state is unreadable"
+        else
+            let duplicateEdges =
+                snapshot.Waits
+                |> List.groupBy (fun wait -> wait.Waiter, wait.WaiterGeneration)
+                |> List.tryFind (fun (_, waits) -> waits |> List.map (fun wait -> wait.Predecessor, wait.PredecessorGeneration, wait.Digest) |> List.distinct |> List.length > 1)
+
+            match duplicateEdges with
+            | Some _ -> MutualOverlapRefused "wait receipts conflict for one live claim generation"
+            | None ->
+                let rec validated acc waits =
+                    match waits with
+                    | [] -> Ok(List.rev acc)
+                    | wait :: rest ->
+                        match validateWait wait with
+                        | Error reason -> Error reason
+                        | Ok tokens -> validated ((wait, tokens) :: acc) rest
+
+                match validated [] snapshot.Waits with
+                | Error reason -> MutualOverlapRefused reason
+                | Ok waits ->
+                    let cycles =
+                        [ for left, leftTokens in waits do
+                              for right, rightTokens in waits do
+                                  if left.Waiter = right.Predecessor
+                                     && left.Predecessor = right.Waiter
+                                     && left.WaiterGeneration = right.PredecessorGeneration
+                                     && left.PredecessorGeneration = right.WaiterGeneration
+                                     && left.Digest < right.Digest then
+                                      let tokens = Set.intersect (Set.ofList leftTokens) (Set.ofList rightTokens) |> Set.toList |> List.sort
+                                      if not (List.isEmpty tokens) then
+                                          let first, firstGeneration, second, secondGeneration =
+                                              if left.Waiter.Canonical < left.Predecessor.Canonical then
+                                                  left.Waiter, left.WaiterGeneration, left.Predecessor, left.PredecessorGeneration
+                                              else
+                                                  left.Predecessor, left.PredecessorGeneration, left.Waiter, left.WaiterGeneration
+
+                                          yield
+                                              { First = first
+                                                Second = second
+                                                FirstGeneration = firstGeneration
+                                                SecondGeneration = secondGeneration
+                                                SharedTokens = tokens
+                                                Digest = cycleDigest first firstGeneration second secondGeneration tokens } ]
+                        |> List.distinct
+
+                    match cycles with
+                    | [] -> NoMutualOverlapCycle
+                    | [ cycle ] -> MutualOverlapCycle cycle
+                    | _ -> MutualOverlapRefused "more than one authoritative mutual cycle matches this receipt set"
+
+    /// Validate the host's revision chain and return its one current receipt.  A reversal is permitted only
+    /// when the new revision binds the preceding digest and carries a measured reason.
+    let validateOverlapPrecedence (cycle: MutualOverlapCycle) (receipts: OverlapPrecedenceReceipt list) =
+        let participants receipt =
+            receipt.Winner <> receipt.Loser
+            && Set.ofList [ receipt.Winner; receipt.Loser ] = Set.ofList [ cycle.First; cycle.Second ]
+
+        let rec loop previous remaining =
+            match previous, remaining with
+            | _, [] -> Error "host precedence receipt is missing"
+            | None, current :: rest when current.Revision = 1 && current.PreviousDigest.IsNone ->
+                if current.CycleDigest <> cycle.Digest then Error "precedence receipt names another cycle"
+                elif not (participants current) then Error "precedence winner and loser are not the cycle participants"
+                elif String.IsNullOrWhiteSpace current.Host then Error "precedence host authority is missing"
+                elif current.Digest <> precedenceReceiptDigest { current with Digest = "" } then Error "precedence receipt digest is invalid"
+                elif List.isEmpty rest then Ok current
+                else loop (Some current) rest
+            | Some prior, current :: rest when current.Revision = prior.Revision + 1 && current.PreviousDigest = Some prior.Digest ->
+                if current.CycleDigest <> cycle.Digest then Error "precedence receipt names another cycle"
+                elif not (participants current) then Error "precedence winner and loser are not the cycle participants"
+                elif String.IsNullOrWhiteSpace current.Host then Error "precedence host authority is missing"
+                elif current.Digest <> precedenceReceiptDigest { current with Digest = "" } then Error "precedence receipt digest is invalid"
+                elif current.Winner <> prior.Winner && (current.Reason |> Option.forall String.IsNullOrWhiteSpace) then
+                    Error "a precedence reversal requires a measured reason"
+                elif List.isEmpty rest then Ok current
+                else loop (Some current) rest
+            | _ -> Error "precedence revisions conflict, are stale, or do not bind the prior digest"
+
+        let ordered = receipts |> List.sortBy _.Revision
+        if ordered |> List.groupBy _.Revision |> List.exists (fun (_, sameRevision) -> List.length sameRevision <> 1) then
+            Error "conflicting same-revision precedence receipts"
+        else
+            loop None ordered
+
+    /// The losing reservation may resume only after the complete winner-land/rebase/re-overlap/re-widen
+    /// transaction, including an exact-head review when the changed tree requires one.
+    let validateLoserResume (facts: LoserResumeFacts) =
+        [ if not facts.WinnerLanded then "winner has not landed"
+          if not facts.LoserClaimGenerationCurrent then "loser claim generation changed"
+          if not facts.FetchedWinnerBase then "winner base was not fetched"
+          if not facts.RebasedHead then "loser head was not rebased"
+          if not facts.OverlapClear then "overlap was not re-run clear"
+          if not facts.ExplicitlyRewidened then "loser reservation was not explicitly re-widened"
+          if facts.ReviewRequired && not facts.ExactHeadReviewed then "changed loser head lacks exact-head review" ]
+
+    [<Literal>]
+    let private WaitMarker = "<!-- fsgg:overlap-wait/v1 -->"
+
+    [<Literal>]
+    let private PrecedenceMarker = "<!-- fsgg:overlap-precedence/v1 -->"
+
+    let private waitReceiptBody (receipt: OverlapWaitReceipt) =
+        WaitMarker
+        + "\n"
+        + JsonSerializer.Serialize
+            {| schema = "fsgg.coord.overlap-wait/v1"
+               waiter = receipt.Waiter.Canonical
+               waiterGeneration = receipt.WaiterGeneration
+               predecessor = receipt.Predecessor.Canonical
+               predecessorGeneration = receipt.PredecessorGeneration
+               sharedTokens = normalizedTokens receipt.SharedTokens
+               host = receipt.Host
+               digest = receipt.Digest |}
+
+    let private precedenceReceiptBody (receipt: OverlapPrecedenceReceipt) =
+        PrecedenceMarker
+        + "\n"
+        + JsonSerializer.Serialize
+            {| schema = "fsgg.coord.overlap-precedence/v1"
+               cycleDigest = receipt.CycleDigest
+               revision = receipt.Revision
+               previousDigest = receipt.PreviousDigest |> Option.toObj
+               winner = receipt.Winner.Canonical
+               loser = receipt.Loser.Canonical
+               host = receipt.Host
+               reason = receipt.Reason |> Option.toObj
+               digest = receipt.Digest |}
+
+    let private parseStructuredRef owner repo (raw: string) = parseRefIn owner (Some repo) raw
+
+    let private parseWaitReceipt owner repo (body: string) : Result<OverlapWaitReceipt option, string> =
+        if not (body.Contains(WaitMarker, StringComparison.Ordinal)) then Ok None
+        else
+            try
+                let markerAt = body.IndexOf(WaitMarker, StringComparison.Ordinal)
+                if markerAt > 0 && (body.Substring(0, markerAt).Split('\n') |> Array.exists (fun line -> not (String.IsNullOrWhiteSpace line) && not (line.StartsWith("<!-- fsgg:overlap-wait-key/v1 ", StringComparison.Ordinal)))) then
+                    raise (JsonException "overlap-wait marker is not anchored after its optional idempotence key")
+                use doc = JsonDocument.Parse(body.Substring(markerAt + WaitMarker.Length).TrimStart())
+                let root = doc.RootElement
+                let text (name: string) = root.GetProperty(name).GetString()
+                let tokens = root.GetProperty("sharedTokens").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                match parseStructuredRef owner repo (text "waiter"), parseStructuredRef owner repo (text "predecessor") with
+                | Ok waiter, Ok predecessor ->
+                    Ok(
+                        Some
+                            { Waiter = waiter
+                              WaiterGeneration = text "waiterGeneration"
+                              Predecessor = predecessor
+                              PredecessorGeneration = text "predecessorGeneration"
+                              SharedTokens = tokens
+                              Host = text "host"
+                              Digest = text "digest" }
+                    )
+                | _ -> Error "overlap-wait receipt contains an invalid item ref"
+            with
+            | :? JsonException as error -> Error $"overlap-wait receipt is malformed JSON: %s{error.Message}"
+            | :? InvalidOperationException as error -> Error $"overlap-wait receipt has an invalid field: %s{error.Message}"
+            | :? KeyNotFoundException as error -> Error $"overlap-wait receipt is missing a field: %s{error.Message}"
+
+    let private parsePrecedenceReceipt owner repo (body: string) : Result<OverlapPrecedenceReceipt option, string> =
+        if not (body.Contains(PrecedenceMarker, StringComparison.Ordinal)) then Ok None
+        else
+            try
+                let markerAt = body.IndexOf(PrecedenceMarker, StringComparison.Ordinal)
+                if markerAt > 0 && (body.Substring(0, markerAt).Split('\n') |> Array.exists (fun line -> not (String.IsNullOrWhiteSpace line) && not (line.StartsWith("<!-- fsgg:overlap-precedence-key/v1 ", StringComparison.Ordinal)))) then
+                    raise (JsonException "overlap-precedence marker is not anchored after its optional idempotence key")
+                use doc = JsonDocument.Parse(body.Substring(markerAt + PrecedenceMarker.Length).TrimStart())
+                let root = doc.RootElement
+                let text (name: string) = root.GetProperty(name).GetString()
+                let optional (name: string) =
+                    let value = root.GetProperty name
+                    if value.ValueKind = JsonValueKind.Null then None else Some(value.GetString())
+                match parseStructuredRef owner repo (text "winner"), parseStructuredRef owner repo (text "loser") with
+                | Ok winner, Ok loser ->
+                    Ok(
+                        Some
+                            { CycleDigest = text "cycleDigest"
+                              Revision = root.GetProperty("revision").GetInt32()
+                              PreviousDigest = optional "previousDigest"
+                              Winner = winner
+                              Loser = loser
+                              Host = text "host"
+                              Reason = optional "reason"
+                              Digest = text "digest" }
+                    )
+                | _ -> Error "overlap-precedence receipt contains an invalid item ref"
+            with
+            | :? JsonException as error -> Error $"overlap-precedence receipt is malformed JSON: %s{error.Message}"
+            | :? InvalidOperationException as error -> Error $"overlap-precedence receipt has an invalid field: %s{error.Message}"
+            | :? KeyNotFoundException as error -> Error $"overlap-precedence receipt is missing a field: %s{error.Message}"
+
+    let private parseReceiptSet parser comments =
+        let rec loop acc remaining =
+            match remaining with
+            | [] -> Ok(List.rev acc)
+            | body :: rest ->
+                match parser body with
+                | Error error -> Error error
+                | Ok None -> loop acc rest
+                | Ok(Some receipt) -> loop (receipt :: acc) rest
+        loop [] comments
+
+    let private liveClaimMarker (ctx: Context) (opts: Options) (ref: Ref) =
+        Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+        |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+        |> Result.bind (fun markers ->
+            match Reads.winner opts.LeaseMinutes markers with
+            | Some marker -> Ok marker
+            | None -> Error(Errors.Malformed(ref.Short, "mutual-overlap sequencing requires a live claim")))
+
+    let private mutualOverlapFacts (ctx: Context) (opts: Options) (a: Ref) (b: Ref) =
+        if not (sameRepo a b) then Error(Errors.Malformed(a.Short, "automatic mutual-overlap arbitration is intra-repo"))
+        else
+            match
+                liveClaimMarker ctx opts a,
+                liveClaimMarker ctx opts b,
+                Reads.issueBody ctx.Transport a.Owner a.Repo a.Number,
+                Reads.issueBody ctx.Transport b.Owner b.Repo b.Number,
+                Reads.commentBodies ctx.Transport a.Owner a.Repo a.Number,
+                Reads.commentBodies ctx.Transport b.Owner b.Repo b.Number,
+                Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+            with
+            | Error error, _, _, _, _, _, _
+            | _, Error error, _, _, _, _, _
+            | _, _, Error error, _, _, _, _
+            | _, _, _, Error error, _, _, _
+            | _, _, _, _, Error error, _, _
+            | _, _, _, _, _, Error error, _
+            | _, _, _, _, _, _, Error error -> Error error
+            | Ok aMarker, Ok bMarker, Ok aBody, Ok bBody, Ok aComments, Ok bComments, Ok board ->
+                match
+                    parseReceiptSet (parseWaitReceipt a.Owner a.Repo) (aComments @ bComments),
+                    Board.itemBlockedBy ctx.Transport board a.Owner a.Repo a.Number,
+                    Board.itemBlockedBy ctx.Transport board b.Owner b.Repo b.Number
+                with
+                | Error error, _, _ -> Error(Errors.Malformed(a.Short, error))
+                | _, Error error, _
+                | _, _, Error error -> Error error
+                | Ok waits, Ok aBlocked, Ok bBlocked ->
+                    let dependencies =
+                        [ a, b, aBlocked; b, a, bBlocked ]
+                        |> List.choose (fun (waiter, predecessor, raw) ->
+                            match raw |> Option.bind (fun value -> Blockers.canonicalizeBlockedBy waiter.Owner waiter.Repo value |> Result.toOption |> Option.flatten) with
+                            | Some canonical when canonical.Split(',') |> Array.exists (fun value -> value.Trim() = predecessor.Canonical) -> Some(waiter, predecessor)
+                            | _ -> None)
+                    let pairs = TouchSet.conflicts (TouchSet.parse aBody) (TouchSet.parse bBody)
+                    let tokens = sharedTokens pairs
+                    Ok(
+                        aMarker,
+                        bMarker,
+                        aBody,
+                        bBody,
+                        { Readable = true
+                          Claims =
+                            [ { Item = a; Generation = string aMarker.Id; Live = true }
+                              { Item = b; Generation = string bMarker.Id; Live = true } ]
+                          Relations = [ { Left = a; Right = b; SharedTokens = tokens } ]
+                          Waits = waits
+                          DurableDependencies = dependencies
+                          RelatedRoomCycleDigests = [] }
+                    )
+
+    let private ensureCycleRoom (ctx: Context) (cycle: MutualOverlapCycle) =
+        let marker = $"<!-- fsgg:mutual-overlap-room/v1 cycle=%s{cycle.Digest} -->"
+        let title = $"mutual-overlap arbitration: %s{cycle.First.Short} ↔ %s{cycle.Second.Short}"
+        let body =
+            marker
+            + $"\n\nAutomatic coordination room (ADR-0051) for %s{cycle.First.Canonical} and %s{cycle.Second.Canonical}. Both holders are frozen against edits to %s{sharedTokenText cycle.SharedTokens} until one current host precedence receipt is applied.\n\nPaths: none"
+        Writes.ensureRoom ctx.Transport cycle.First.Owner cycle.First.Repo marker title body
+        |> Result.bind (fun outcome ->
+            let room =
+                match outcome with
+                | Writes.RoomCreated room
+                | Writes.RoomAlreadyPresent room -> room
+            let roomToken = $"#%d{room.Number}"
+            Writes.ensureRoomRef ctx.Transport cycle.First roomToken
+            |> Result.bind (fun () -> Writes.ensureRoomRef ctx.Transport cycle.Second roomToken)
+            |> Result.map (fun () -> room))
+
+    let private overlapWait (ctx: Context) (opts: Options) waiterArg predecessorArg host =
+        match worker opts, parseRef ctx waiterArg, parseRef ctx predecessorArg with
+        | Error code, _, _ -> code
+        | _, Error message, _
+        | _, _, Error message ->
+            eprint $"fsgg-coord-engine: %s{message}"
+            ExitError
+        | Ok w, Ok waiter, Ok predecessor ->
+            match mutualOverlapFacts ctx opts waiter predecessor with
+            | Error error -> fail error
+            | Ok(waiterMarker, predecessorMarker, _, _, snapshot) when waiterMarker.Worker.Value <> w.Id ->
+                eprint $"fsgg-coord-engine: overlap wait can only be recorded by the live waiter; %s{waiter.Short} is held by %s{waiterMarker.Worker.Value}."
+                ExitError
+            | Ok(waiterMarker, predecessorMarker, _, _, snapshot) ->
+                let relation = snapshot.Relations.Head
+                let draft: OverlapWaitReceipt =
+                    { Waiter = waiter
+                      WaiterGeneration = string waiterMarker.Id
+                      Predecessor = predecessor
+                      PredecessorGeneration = string predecessorMarker.Id
+                      SharedTokens = relation.SharedTokens
+                      Host = host
+                      Digest = "" }
+                let receipt = { draft with Digest = waitReceiptDigest draft }
+                let marker = $"<!-- fsgg:overlap-wait-key/v1 waiter=%s{waiter.Canonical} generation=%s{receipt.WaiterGeneration} -->"
+                let body = marker + "\n" + waitReceiptBody receipt
+                match Writes.writeDurableComment ctx.Transport waiter marker body with
+                | Error error -> fail error
+                | Ok _ ->
+                    match mutualOverlapFacts ctx opts waiter predecessor with
+                    | Error error -> fail error
+                    | Ok(_, _, _, _, current) ->
+                        match detectMutualOverlap current with
+                        | MutualOverlapRefused reason ->
+                            eprint $"fsgg-coord-engine: mutual-overlap arbitration refused: %s{reason}."
+                            ExitError
+                        | NoMutualOverlapCycle ->
+                            printfn "WAIT RECORDED — %s generation %s waits for %s generation %s on %s." waiter.Short receipt.WaiterGeneration predecessor.Short receipt.PredecessorGeneration (sharedTokenText receipt.SharedTokens)
+                            ExitGreen
+                        | MutualOverlapCycle cycle ->
+                            match ensureCycleRoom ctx cycle with
+                            | Error error -> fail error
+                            | Ok room ->
+                                printfn "MUTUAL OVERLAP — %s and %s are frozen in automatic room %s; host precedence required." cycle.First.Short cycle.Second.Short room.Short
+                                ExitContended
+
+    let private overlapArbitrate (ctx: Context) (opts: Options) winnerArg loserArg host reason =
+        match worker opts, parseRef ctx winnerArg, parseRef ctx loserArg with
+        | Error code, _, _ -> code
+        | _, Error message, _
+        | _, _, Error message ->
+            eprint $"fsgg-coord-engine: %s{message}"
+            ExitError
+        | Ok w, Ok winner, Ok loser ->
+            match mutualOverlapFacts ctx opts winner loser with
+            | Error error -> fail error
+            | Ok(_, _, _, loserBody, snapshot) ->
+                match detectMutualOverlap snapshot with
+                | MutualOverlapRefused detail ->
+                    eprint $"fsgg-coord-engine: mutual-overlap arbitration refused: %s{detail}."
+                    ExitError
+                | NoMutualOverlapCycle ->
+                    eprint "fsgg-coord-engine: no authoritative mutual-overlap cycle exists."
+                    ExitError
+                | MutualOverlapCycle cycle ->
+                    match ensureCycleRoom ctx cycle with
+                    | Error error -> fail error
+                    | Ok room ->
+                        match Reads.commentBodies ctx.Transport room.Owner room.Repo room.Number with
+                        | Error error -> fail error
+                        | Ok comments ->
+                            match parseReceiptSet (parsePrecedenceReceipt room.Owner room.Repo) comments with
+                            | Error detail ->
+                                eprint $"fsgg-coord-engine: precedence ledger is unreadable: %s{detail}."
+                                ExitError
+                            | Ok existing ->
+                                let current = existing |> List.sortBy _.Revision |> List.tryLast
+                                let candidate =
+                                    match current with
+                                    | Some receipt when receipt.Winner = winner && receipt.Loser = loser -> receipt
+                                    | prior ->
+                                        let draft: OverlapPrecedenceReceipt =
+                                            { CycleDigest = cycle.Digest
+                                              Revision = prior |> Option.map (fun receipt -> receipt.Revision + 1) |> Option.defaultValue 1
+                                              PreviousDigest = prior |> Option.map _.Digest
+                                              Winner = winner
+                                              Loser = loser
+                                              Host = host
+                                              Reason = if String.IsNullOrWhiteSpace reason then None else Some reason
+                                              Digest = "" }
+                                        { draft with Digest = precedenceReceiptDigest draft }
+                                match validateOverlapPrecedence cycle (existing @ (if current = Some candidate then [] else [ candidate ])) with
+                                | Error detail ->
+                                    eprint $"fsgg-coord-engine: precedence refused: %s{detail}."
+                                    ExitError
+                                | Ok precedence ->
+                                    match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) loser with
+                                    | Error error -> fail error
+                                    | Ok(Writes.Holds held) ->
+                                        let shared = Set.ofList (normalizedTokens cycle.SharedTokens)
+                                        let remaining =
+                                            declaredPathTokens (TouchSet.parse loserBody)
+                                            |> List.filter (fun token -> not (Set.contains (TouchSet.stem token) shared))
+                                        let narrowedTokens = if List.isEmpty remaining then [ "any" ] else remaining
+                                        match Writes.validate narrowedTokens with
+                                        | Error detail ->
+                                            eprint $"fsgg-coord-engine: cannot narrow loser: %s{detail}"
+                                            ExitError
+                                        | Ok valid ->
+                                            let rewritten = Writes.rewrite loserBody valid
+                                            let marker = $"<!-- fsgg:overlap-precedence-key/v1 cycle=%s{cycle.Digest} revision=%d{precedence.Revision} -->"
+                                            let body = marker + "\n" + precedenceReceiptBody precedence
+                                            match Writes.applyArbitration ctx.Transport held room marker body rewritten with
+                                            | Error error -> fail error
+                                            | Ok _ ->
+                                                printfn "PRECEDENCE APPLIED — %s wins; %s remains claimed with shared reservations narrowed. After %s lands, %s must fetch/rebase, re-run overlap, explicitly re-widen, and refresh exact-head review when required." winner.Short loser.Short winner.Short loser.Short
+                                                ExitGreen
+                                    | Ok Writes.DoesNotHold ->
+                                        eprint $"fsgg-coord-engine: worker %s{w.Id} must hold losing item %s{loser.Short} to apply precedence without releasing its claim."
+                                        ExitError
+                                    | Ok(Writes.TwinHolds theirs) -> twinRefusal "overlap arbitrate" w.Id loser theirs
+                                    | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "overlap arbitrate" loser derived named
+
     /// `paths_of` FAILS CLOSED (#494 leg k). A touch-set read FOR SCHEDULING that we could not complete is
     /// NOT an empty touch-set: an empty set reads as "disjoint from everything", so a failed body read would
     /// let the scheduler hand out work overlapping a held item (#266's fail-open, one subtree down). So a
@@ -7895,6 +8449,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             |> Result.map TouchSet.parse
 
         match opts.Args with
+        | [ "wait"; waiter; predecessor; host ] when not opts.Active ->
+            overlapWait ctx opts waiter predecessor host
+
+        | "arbitrate" :: winner :: loser :: host :: reason when not opts.Active ->
+            overlapArbitrate ctx opts winner loser host (String.concat " " reason)
+
         | [ a ] when opts.Active ->
             match parseRef ctx a with
             | Error m ->
@@ -7971,7 +8531,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     ExitContended
 
         | _ ->
-            eprint "fsgg-coord-engine: overlap needs <ref> --active, or two refs: overlap <ref-a> <ref-b>."
+            eprint "fsgg-coord-engine: overlap needs <ref> --active, two refs, `wait <waiter> <predecessor> <host>`, or `arbitrate <winner> <loser> <host> [measured reason]`."
             ExitError
 
     let say (ctx: Context) (opts: Options) : int = Handlers.say ctx opts

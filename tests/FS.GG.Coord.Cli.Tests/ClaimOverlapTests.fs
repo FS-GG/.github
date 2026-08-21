@@ -7,6 +7,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open Xunit
+open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
@@ -37,6 +38,148 @@ open FS.GG.Coord.Cli
 /// pre-fix source at review time, alongside the disjoint-set control leg, which stays green throughout
 /// (it has nothing to invert: no collision exists for either version of the code to find).
 module ClaimOverlapTests =
+
+    let private item number : Types.Ref =
+        { Owner = "FS-GG"; Repo = ".github"; Number = number }
+
+    let private wait waiter waiterGeneration predecessor predecessorGeneration tokens host =
+        let draft: Client.OverlapWaitReceipt =
+            { Waiter = waiter
+              WaiterGeneration = waiterGeneration
+              Predecessor = predecessor
+              PredecessorGeneration = predecessorGeneration
+              SharedTokens = tokens
+              Host = host
+              Digest = "" }
+
+        { draft with Digest = Client.waitReceiptDigest draft }
+
+    let private cycleFixture () =
+        let a, b = item 2772, item 2797
+        let aWait = wait a "5365000001" b "5365000002" [ "src/FS.GG.Coord.Cli/Client.fs" ] "host/root"
+        let bWait = wait b "5365000002" a "5365000001" [ "src/FS.GG.Coord.Cli/Client.fs" ] "host/root"
+        let snapshot: Client.MutualOverlapSnapshot =
+            { Readable = true
+              Claims =
+                [ { Item = a; Generation = "5365000001"; Live = true }
+                  { Item = b; Generation = "5365000002"; Live = true } ]
+              Relations = [ { Left = a; Right = b; SharedTokens = [ "src/FS.GG.Coord.Cli/Client.fs" ] } ]
+              Waits = [ aWait; bWait ]
+              DurableDependencies = []
+              RelatedRoomCycleDigests = [] }
+        a, b, aWait, bWait, snapshot
+
+    let private detected snapshot =
+        match Client.detectMutualOverlap snapshot with
+        | Client.MutualOverlapCycle cycle -> cycle
+        | other -> failwithf "expected mutual overlap cycle, got %A" other
+
+    [<Fact>]
+    let ``#2801 detects the authoritative two-cycle independent of receipt and claim order`` () =
+        let _, _, _, _, snapshot = cycleFixture ()
+        let first = detected snapshot
+        let reordered = detected { snapshot with Claims = List.rev snapshot.Claims; Waits = List.rev snapshot.Waits }
+        Assert.Equal(first, reordered)
+        Assert.Equal<string list>([ "src/FS.GG.Coord.Cli/Client.fs" ], first.SharedTokens)
+
+    [<Fact>]
+    let ``#2801 one-way wait and unrelated room are negative controls`` () =
+        let _, _, aWait, _, snapshot = cycleFixture ()
+        let actual =
+            Client.detectMutualOverlap
+                { snapshot with
+                    Waits = [ aWait ]
+                    RelatedRoomCycleDigests = [ "unrelated-room-cycle" ] }
+        Assert.Equal(Client.NoMutualOverlapCycle, actual)
+
+    [<Fact>]
+    let ``#2801 detector refuses unreadable self stale missing changed nonoverlap dependency and conflict inversions`` () =
+        let a, b, aWait, bWait, snapshot = cycleFixture ()
+        let selfDraft = wait a "5365000001" a "5365000001" [ "src/FS.GG.Coord.Cli/Client.fs" ] "host/root"
+        let conflicting = wait a "5365000001" (item 2801) "5365000003" [ "src/FS.GG.Coord.Cli/Client.fs" ] "host/root"
+        let badDigest = { aWait with Digest = "tampered" }
+        let cases =
+            [ "unreadable", { snapshot with Readable = false }
+              "self", { snapshot with Waits = [ selfDraft ] }
+              "stale", { snapshot with Claims = { snapshot.Claims.Head with Live = false } :: snapshot.Claims.Tail }
+              "missing", { snapshot with Claims = [ snapshot.Claims.Head ] }
+              "generation", { snapshot with Claims = { snapshot.Claims.Head with Generation = "5365999999" } :: snapshot.Claims.Tail }
+              "cleared", { snapshot with Relations = [] }
+              "changed tokens", { snapshot with Relations = [ { Left = a; Right = b; SharedTokens = [ "tests/other" ] } ] }
+              "dependency", { snapshot with DurableDependencies = [ a, b ] }
+              "bad digest", { snapshot with Waits = [ badDigest; bWait ] }
+              "conflicting edge", { snapshot with Waits = [ aWait; bWait; conflicting ] } ]
+        for name, candidate in cases do
+            match Client.detectMutualOverlap candidate with
+            | Client.MutualOverlapRefused _ -> ()
+            | other -> failwithf "%s should refuse, got %A" name other
+
+    let private precedence (cycle: Client.MutualOverlapCycle) revision previous winner loser reason =
+        let draft: Client.OverlapPrecedenceReceipt =
+            { CycleDigest = cycle.Digest
+              Revision = revision
+              PreviousDigest = previous
+              Winner = winner
+              Loser = loser
+              Host = "host/root"
+              Reason = reason
+              Digest = "" }
+        { draft with Digest = Client.precedenceReceiptDigest draft }
+
+    [<Fact>]
+    let ``#2801 precedence accepts one current revision and measured digest-linked reversal`` () =
+        let a, b, _, _, snapshot = cycleFixture ()
+        let cycle = detected snapshot
+        let first = precedence cycle 1 None a b None
+        let reversed = precedence cycle 2 (Some first.Digest) b a (Some "winner CI is red; loser is green at exact head")
+        Assert.Equal(Ok reversed, Client.validateOverlapPrecedence cycle [ first; reversed ])
+
+    [<Fact>]
+    let ``#2801 precedence refuses missing same-revision stale-chain participant digest and unmeasured reversal inversions`` () =
+        let a, b, _, _, snapshot = cycleFixture ()
+        let cycle = detected snapshot
+        let first = precedence cycle 1 None a b None
+        let sameRevision = precedence cycle 1 None b a None
+        let staleChain = precedence cycle 3 (Some first.Digest) a b None
+        let foreign = item 2801
+        let wrongParticipant = precedence cycle 1 None a foreign None
+        let badDigest = { first with Digest = "tampered" }
+        let unmeasured = precedence cycle 2 (Some first.Digest) b a None
+        let cases =
+            [ "missing", []
+              "same revision", [ first; sameRevision ]
+              "stale chain", [ first; staleChain ]
+              "participant", [ wrongParticipant ]
+              "digest", [ badDigest ]
+              "unmeasured reversal", [ first; unmeasured ] ]
+        for name, receipts in cases do
+            match Client.validateOverlapPrecedence cycle receipts with
+            | Error _ -> ()
+            | Ok value -> failwithf "%s should refuse, got %A" name value
+
+    [<Fact>]
+    let ``#2801 loser resume requires every winner-land rebase re-overlap re-widen and review predicate`` () =
+        let green: Client.LoserResumeFacts =
+            { WinnerLanded = true
+              LoserClaimGenerationCurrent = true
+              FetchedWinnerBase = true
+              RebasedHead = true
+              OverlapClear = true
+              ExplicitlyRewidened = true
+              ReviewRequired = true
+              ExactHeadReviewed = true }
+        Assert.Empty(Client.validateLoserResume green)
+        let mutations =
+            [ { green with WinnerLanded = false }
+              { green with LoserClaimGenerationCurrent = false }
+              { green with FetchedWinnerBase = false }
+              { green with RebasedHead = false }
+              { green with OverlapClear = false }
+              { green with ExplicitlyRewidened = false }
+              { green with ExactHeadReviewed = false } ]
+        for mutation in mutations do
+            Assert.Single(Client.validateLoserResume mutation) |> ignore
+        Assert.Empty(Client.validateLoserResume { green with ReviewRequired = false; ExactHeadReviewed = false })
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
@@ -291,6 +434,214 @@ module ClaimOverlapTests =
 
     let private claimArgs (extra: string list) =
         [ "claim"; "FS.GG.SDD#42"; "--worker"; "vole-418"; "--json" ] @ extra
+
+    type private WaitThread() =
+        let comments = Dictionary<int, ResizeArray<string>>()
+        let posted = ResizeArray<int * string>()
+        let issueBodies = Dictionary<int, string>()
+        let mutable roomBody: string option = None
+        let mutable roomCreates = 0
+
+        do
+            comments.[42] <- ResizeArray [ "<!-- fsgg:claim worker=vole-418 lease=120 -->\nheld" ]
+            comments.[43] <- ResizeArray [ "<!-- fsgg:claim worker=smew-e1d9 lease=120 -->\nheld" ]
+            issueBodies.[42] <- "Paths: src/Thing.fs"
+            issueBodies.[43] <- "Paths: src/Thing.fs"
+
+        member _.Bodies number = comments.[number] |> List.ofSeq
+        member _.Posted = List.ofSeq posted
+        member _.Body number = issueBodies.[number]
+        member _.SetBody(number, body) = issueBodies.[number] <- body
+        member _.RoomBody with get () = roomBody and set value = roomBody <- value
+        member _.RoomCreates with get () = roomCreates and set value = roomCreates <- value
+
+        member _.Add(number, body) =
+            if not (comments.ContainsKey number) then comments.[number] <- ResizeArray()
+            comments.[number].Add body
+            posted.Add(number, body)
+            9100L + int64 posted.Count
+
+        member this.Json number =
+            let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+            this.Bodies number
+            |> List.mapi (fun index body ->
+                {| id = (if index = 0 then (if number = 42 then 8001L else 8070L) else 9100L + int64 index)
+                   body = body
+                   user = {| login = "EHotwagner" |}
+                   created_at = timestamp
+                   updated_at = timestamp |})
+            |> JsonSerializer.Serialize
+
+    let private jsonBody (request: Request) =
+        match request.Body with
+        | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
+        | _ -> ""
+
+    let private waitWorld (thread: WaitThread) =
+        Fake.Recorder(fun (req: Request) ->
+            let path = req.Path.Trim '/'
+            match req.Method, path with
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) ->
+                    match graphqlAnswer document with
+                    | Some answer -> ok answer
+                    | None -> Error(Errors.NotFound "wait fixture has no answer for this GraphQL document")
+                | _ -> Error(Errors.NotFound "wait fixture expected GraphQL")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json 42)
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/43/comments" -> ok (thread.Json 43)
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/99/comments" -> ok (thread.Json 99)
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                ok (sprintf """{"id":%d}""" (thread.Add(42, jsonBody req)))
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/99/comments" ->
+                ok (sprintf """{"id":%d}""" (thread.Add(99, jsonBody req)))
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok (JsonSerializer.Serialize {| state = "open"; body = thread.Body 42 |})
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/43" -> ok (JsonSerializer.Serialize {| state = "open"; body = thread.Body 43 |})
+            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/42" -> thread.SetBody(42, jsonBody req); ok "{}"
+            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/43" -> thread.SetBody(43, jsonBody req); ok "{}"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
+                [ yield {| number = 42; state = "open"; body = thread.Body 42 |}
+                  yield {| number = 43; state = "open"; body = thread.Body 43 |}
+                  match thread.RoomBody with
+                  | Some body -> yield {| number = 99; state = "open"; body = body |}
+                  | None -> () ]
+                |> JsonSerializer.Serialize
+                |> ok
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues" ->
+                let body = jsonBody req
+                thread.RoomBody <- Some body
+                thread.RoomCreates <- thread.RoomCreates + 1
+                ok """{"number":99}"""
+            | _ -> Error(Errors.NotFound $"wait fixture has no response for %s{req.Method} %s{path}"))
+
+    let private runOverlapCommand (transport: Fake.Recorder) args =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2801-" + Guid.NewGuid().ToString "n")
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+        let stdout, stderr = Console.Out, Console.Error
+        use capturedOut = new StringWriter()
+        use capturedErr = new StringWriter()
+        try
+            Directory.CreateDirectory dir |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
+            Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
+            Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", "ed60050b")
+            Environment.SetEnvironmentVariable("FSGG_WORKER", "vole-418")
+            Console.SetOut capturedOut
+            Console.SetError capturedErr
+            let opts = Options.parse args |> Result.defaultWith failwith
+            let code = Client.overlapCmd (context transport) opts
+            Console.Out.Flush()
+            Console.Error.Flush()
+            code, capturedOut.ToString(), capturedErr.ToString()
+        finally
+            Console.SetOut stdout
+            Console.SetError stderr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+            for name, value in previousSessions do Environment.SetEnvironmentVariable(name, value)
+            try Directory.Delete(dir, true) with _ -> ()
+
+    let private runOverlapWait transport =
+        runOverlapCommand transport [ "overlap"; "wait"; "FS.GG.SDD#42"; "FS.GG.SDD#43"; "host/root"; "--worker"; "vole-418" ]
+
+    let private runOverlapArbitrate transport =
+        runOverlapCommand transport [ "overlap"; "arbitrate"; "FS.GG.SDD#43"; "FS.GG.SDD#42"; "host/root"; "--worker"; "vole-418" ]
+
+    [<Fact>]
+    let ``#2801 compiled overlap wait route writes one generation-bound receipt and is retry-idempotent`` () =
+        let thread = WaitThread()
+        let transport = waitWorld thread
+        let firstCode, firstOut, firstErr = runOverlapWait transport
+        Assert.Equal(0, firstCode)
+        Assert.Empty(firstErr)
+        Assert.Contains("WAIT RECORDED", firstOut)
+        Assert.Single(thread.Posted) |> ignore
+        let _, receipt = thread.Posted.Head
+        Assert.Contains("fsgg.coord.overlap-wait/v1", receipt)
+        Assert.Contains("\"waiterGeneration\":\"8001\"", receipt)
+        Assert.Contains("\"predecessorGeneration\":\"8070\"", receipt)
+        Assert.Contains("\"sharedTokens\":[\"src/Thing.fs\"]", receipt)
+        let secondCode, secondOut, secondErr = runOverlapWait transport
+        Assert.Equal(0, secondCode)
+        Assert.Empty(secondErr)
+        Assert.Contains("WAIT RECORDED", secondOut)
+        Assert.Single(thread.Posted) |> ignore
+
+    [<Fact>]
+    let ``#2801 compiled reciprocal wait route creates one automatic room and backrefs both items`` () =
+        let thread = WaitThread()
+        let a: Types.Ref = { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 42 }
+        let b: Types.Ref = { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 43 }
+        let reciprocal = wait b "8070" a "8001" [ "src/Thing.fs" ] "host/root"
+        let reciprocalBody =
+            "<!-- fsgg:overlap-wait-key/v1 waiter=FS-GG/FS.GG.SDD#43 generation=8070 -->\n"
+            + "<!-- fsgg:overlap-wait/v1 -->\n"
+            + JsonSerializer.Serialize
+                {| schema = "fsgg.coord.overlap-wait/v1"
+                   waiter = reciprocal.Waiter.Canonical
+                   waiterGeneration = reciprocal.WaiterGeneration
+                   predecessor = reciprocal.Predecessor.Canonical
+                   predecessorGeneration = reciprocal.PredecessorGeneration
+                   sharedTokens = reciprocal.SharedTokens
+                   host = reciprocal.Host
+                   digest = reciprocal.Digest |}
+        thread.Add(43, reciprocalBody) |> ignore
+        let transport = waitWorld thread
+        let code, output, errors = runOverlapWait transport
+        Assert.True((code = Kernel.ExitContended), $"expected mutual-cycle exit, got %d{code}; stdout=%s{output}; stderr=%s{errors}")
+        Assert.Empty(errors)
+        Assert.Contains("MUTUAL OVERLAP", output)
+        Assert.Contains("#99", output)
+        Assert.True(thread.RoomBody.IsSome)
+        Assert.Contains("fsgg:mutual-overlap-room/v1", thread.RoomBody.Value)
+        Assert.Contains("Rooms: #99", thread.Body 42)
+        Assert.Contains("Rooms: #99", thread.Body 43)
+        Assert.Equal(1, thread.RoomCreates)
+
+    [<Fact>]
+    let ``#2801 compiled arbitration route records precedence and narrows loser while its claim remains held`` () =
+        let thread = WaitThread()
+        let a: Types.Ref = { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 42 }
+        let b: Types.Ref = { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 43 }
+        let aWait = wait a "8001" b "8070" [ "src/Thing.fs" ] "host/root"
+        let bWait = wait b "8070" a "8001" [ "src/Thing.fs" ] "host/root"
+        let receiptBody (receipt: Client.OverlapWaitReceipt) =
+            $"<!-- fsgg:overlap-wait-key/v1 waiter=%s{receipt.Waiter.Canonical} generation=%s{receipt.WaiterGeneration} -->\n"
+            + "<!-- fsgg:overlap-wait/v1 -->\n"
+            + JsonSerializer.Serialize
+                {| schema = "fsgg.coord.overlap-wait/v1"
+                   waiter = receipt.Waiter.Canonical
+                   waiterGeneration = receipt.WaiterGeneration
+                   predecessor = receipt.Predecessor.Canonical
+                   predecessorGeneration = receipt.PredecessorGeneration
+                   sharedTokens = receipt.SharedTokens
+                   host = receipt.Host
+                   digest = receipt.Digest |}
+        thread.Add(42, receiptBody aWait) |> ignore
+        thread.Add(43, receiptBody bWait) |> ignore
+        let snapshot: Client.MutualOverlapSnapshot =
+            { Readable = true
+              Claims = [ { Item = a; Generation = "8001"; Live = true }; { Item = b; Generation = "8070"; Live = true } ]
+              Relations = [ { Left = a; Right = b; SharedTokens = [ "src/Thing.fs" ] } ]
+              Waits = [ aWait; bWait ]
+              DurableDependencies = []
+              RelatedRoomCycleDigests = [] }
+        let cycle = detected snapshot
+        thread.RoomBody <- Some($"<!-- fsgg:mutual-overlap-room/v1 cycle=%s{cycle.Digest} -->\n\nPaths: none")
+        thread.Add(99, "ordinary room message") |> ignore
+        let transport = waitWorld thread
+        let code, output, errors = runOverlapArbitrate transport
+        Assert.True((code = 0), $"expected arbitration success, got %d{code}; stdout=%s{output}; stderr=%s{errors}")
+        Assert.Empty(errors)
+        Assert.Contains("PRECEDENCE APPLIED", output)
+        Assert.Contains("Paths: any", thread.Body 42)
+        Assert.Contains("fsgg:claim worker=vole-418", thread.Bodies(42).Head)
+        let precedence = thread.Bodies 99 |> List.filter (fun body -> body.Contains "fsgg.coord.overlap-precedence/v1")
+        Assert.Single(precedence) |> ignore
 
     // ---- AC1/AC2/AC4: default is a WARNING that still claims -------------------------------------------
 
