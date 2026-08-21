@@ -4054,11 +4054,44 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
               // .github#2459 adds this key to the wire shape; the empty case is what every claim before
               // #2459 would have reported had the key existed, so it is the byte-identical baseline here.
               Collisions = []
+              ForcedClaimCensuses = None
               Converged = true }
 
         Assert.Equal(
             """{"ref":".github#1525","repo":"FS-GG/.github","number":1525,"worker":"snipe-6404","kind":"claimed","markerObserved":true,"markerId":5087533685,"assigneeObserved":null,"status":"In progress","statusRead":"observed","statusWrite":"written","pendingBoardWrites":0,"collisions":[],"converged":true}""",
             Render.renderClaimReceiptJson receipt
+        )
+
+    [<Fact>]
+    let ``#2772 a non-green forced claim has a typed census receipt`` () =
+        let census: Render.ClaimMarkerCensusReceipt =
+            { WinnerMarkerId = Some 901L
+              Markers =
+                [ { MarkerId = 901L
+                    Worker = "vole-418"
+                    Live = true } ] }
+
+        let receipt: Render.ForcedClaimOutcomeReceipt =
+            { Ref =
+                { Owner = "FS-GG"
+                  Repo = ".github"
+                  Number = 2772 }
+              Worker = "kite-461"
+              Kind = "replacement-post-failed"
+              ReplacementMarkerId = None
+              StandingWorker = Some "vole-418"
+              StandingMarkerId = Some 901L
+              RemovedWorkers = []
+              FailedWorker = None
+              FailedMarkerId = None
+              Reason = Some "HTTP 500: post failed"
+              ForcedClaimCensuses =
+                { Before = census
+                  After = Some census } }
+
+        Assert.Equal(
+            """{"ref":".github#2772","repo":"FS-GG/.github","number":2772,"worker":"kite-461","kind":"replacement-post-failed","replacementMarkerId":null,"standingWorker":"vole-418","standingMarkerId":901,"removedWorkers":[],"failedWorker":null,"failedMarkerId":null,"reason":"HTTP 500: post failed","forcedClaimCensuses":{"before":{"winnerMarkerId":901,"markers":[{"markerId":901,"worker":"vole-418","live":true}]},"after":{"winnerMarkerId":901,"markers":[{"markerId":901,"worker":"vole-418","live":true}]}}}""",
+            Render.renderForcedClaimOutcomeJson receipt
         )
 
     // ---- .github#1688 — THE SIBLING SWEEP: no `Json`-admitting verb leaks prose onto stdout ----------

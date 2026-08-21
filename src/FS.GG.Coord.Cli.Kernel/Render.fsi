@@ -76,6 +76,37 @@ module Render =
           /// Why the notice failed; `None` when it landed.
           NotifyError: string option }
 
+    /// One marker in a complete authoritative forced-claim census.
+    type ClaimMarkerReceipt =
+        { MarkerId: int64
+          Worker: string
+          Live: bool }
+
+    type ClaimMarkerCensusReceipt =
+        { WinnerMarkerId: int64 option
+          Markers: ClaimMarkerReceipt list }
+
+    type ForcedClaimCensusesReceipt =
+        { Before: ClaimMarkerCensusReceipt
+          /// `None` means the post-operation census was unreadable, never empty.
+          After: ClaimMarkerCensusReceipt option }
+
+    /// A terminal non-green `claim --force --json` result. Unlike `ClaimReceipt`, this document does not
+    /// claim that the caller holds a marker or that a board projection was attempted. It reports only the
+    /// typed transition outcome and the authoritative pre/final census that governed it.
+    type ForcedClaimOutcomeReceipt =
+        { Ref: Ref
+          Worker: string
+          Kind: string
+          ReplacementMarkerId: int64 option
+          StandingWorker: string option
+          StandingMarkerId: int64 option
+          RemovedWorkers: string list
+          FailedWorker: string option
+          FailedMarkerId: int64 option
+          Reason: string option
+          ForcedClaimCensuses: ForcedClaimCensusesReceipt }
+
     /// The fresh postcondition emitted by `claim --json` and `take --json`. The lock and board column are
     /// separate observations; `Converged` is true only when both were read back successfully.
     type ClaimReceipt =
@@ -103,6 +134,9 @@ module Render =
           /// Purely advisory: it never participates in `Converged`, which is about THIS item's own lock
           /// and board state, not about other items this claim happens to overlap.
           Collisions: PathCollision list
+          /// Present for a successful `claim --force` transition, naming the governing pre/post marker
+          /// observations. Ordinary claims preserve their existing wire shape by carrying `None`.
+          ForcedClaimCensuses: ForcedClaimCensusesReceipt option
           Converged: bool }
 
     /// The OTHER outcome of `take --json`: it looked, and it claimed nothing (.github#1525). A LOOK THAT
@@ -214,6 +248,9 @@ module Render =
 
     /// `claim --json` / `take --json` — one typed mutation receipt, safe to gate worker startup on.
     val renderClaimReceiptJson: receipt: ClaimReceipt -> string
+
+    /// `claim --force --json` when the transition reached a terminal non-green typed outcome.
+    val renderForcedClaimOutcomeJson: receipt: ForcedClaimOutcomeReceipt -> string
 
     /// `take --json` when the queue handed out nothing (.github#1525) — the SAME projection's other
     /// outcome, so a caller parses one stream and reads `kind` rather than branching on the exit code to

@@ -695,12 +695,10 @@ module Client =
     /// `widen`/`overlap --active` use and WARNS on a live overlap while still claiming (#2459);
     /// `--refuse-overlap` turns that warning into a refusal.
     ///
-    /// `--force` STEALS: it takes an item another worker holds right now, deleting their marker and posting the
-    /// theft on the item so both they and a later reader can see it (#1620 — the recovery route for a holder
-    /// that died with an open PR and hours of lease left, which `reap` and `adopt` correctly refuse). It also
-    /// lifts the #516 one-item-per-worker refusal. It does NOT override a twin marker (#419) or an unparseable
-    /// one: those are a broken IDENTITY, not a contested item, and forcing through them would put two workers
-    /// behind one id.
+    /// `--force` STEALS through an interruption-safe transition: post a replacement capability, delete the
+    /// prior live marker, then apply the existing comment-order election (#1620/#2772). Ambiguous cleanup is
+    /// classified only after a complete marker census, and retry reuses a retained replacement. It also lifts
+    /// #516, but does not override twin or unparseable markers.
     ///
     /// Exit contract: 0 on a converged claim; `ExitRed` for every LOSS that is not a race the caller should
     /// re-run — held by another worker, a twin marker, an impersonation refusal, an undecided CAS, a marker
