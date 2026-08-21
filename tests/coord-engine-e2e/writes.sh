@@ -2405,6 +2405,59 @@ FSGG_COORD_OP_LOCKS="FS-GG/FS.GG.SDD#4242" "$ENGINE" op-lock release "FS-GG/FS.G
 mark_contract "op-lock acquire" "oplock-grant-round-trip"
 mark_contract "op-lock release" "oplock-grant-round-trip"
 
+# ---- .github#2801: compiled mutual-overlap arbitration transaction -------------------------------
+# Build the real incident shape through HTTP: two live generations reserve one token, then each holder
+# records its wait. The second command must discover the cycle from the authoritative threads, create
+# one ADR-0051 room, and back-reference both items. Arbitration is then applied by the losing holder;
+# the claim comment must survive while the shared token disappears from its body.
+for n in 42 43; do
+  curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/$n/comments" \
+    | jq -r '.[] | select(.body | contains("fsgg:claim") or contains("fsgg:overlap-wait/")) | .id' \
+    | while read -r cid; do
+        [ -z "$cid" ] || curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$cid" >/dev/null
+      done
+  curl -fsS -X PATCH -H 'Content-Type: application/json' \
+    -d '{"body":"Mutual-overlap fixture.\n\nPaths: src/Mutual.fs"}' \
+    "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/$n" >/dev/null
+done
+wait42_gen="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=vole-418 lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
+wait43_gen="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=smew-e1d9 lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+
+wait_a="$($ENGINE overlap wait FS.GG.SDD#42 FS.GG.SDD#43 host/root --worker vole-418 2>&1)"; wait_a_rc=$?
+wait_b="$($ENGINE overlap wait FS.GG.SDD#43 FS.GG.SDD#42 host/root --worker smew-e1d9 2>&1)"; wait_b_rc=$?
+rooms="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues" \
+  | jq '[.[] | select(.body | contains("fsgg:mutual-overlap-room/v1"))]')"
+room_number="$(printf '%s' "$rooms" | jq -r 'if length == 1 then .[0].number else empty end')"
+body42="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
+body43="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43" | jq -r '.body')"
+if [ "$wait_a_rc" -eq 0 ] && grep -qF 'WAIT RECORDED' <<<"$wait_a" \
+   && [ "$wait_b_rc" -eq 6 ] && grep -qF 'MUTUAL OVERLAP' <<<"$wait_b" \
+   && [ -n "$room_number" ] && grep -qF "Rooms: #$room_number" <<<"$body42" \
+   && grep -qF "Rooms: #$room_number" <<<"$body43"; then
+  ok ".github#2801: reciprocal generation-bound waits create exactly one automatic room and both backrefs"
+else
+  bad ".github#2801: compiled reciprocal wait route must freeze both holders in one room" \
+      "gens=$wait42_gen/$wait43_gen first=$wait_a_rc:$wait_a second=$wait_b_rc:$wait_b rooms=$rooms body42=$body42 body43=$body43"
+fi
+
+arb="$($ENGINE overlap arbitrate FS.GG.SDD#43 FS.GG.SDD#42 host/root --worker vole-418 2>&1)"; arb_rc=$?
+after42_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
+after42_thread="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
+room_thread="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/$room_number/comments")"
+if [ "$arb_rc" -eq 0 ] && grep -qF 'PRECEDENCE APPLIED' <<<"$arb" \
+   && grep -qF 'Paths: any' <<<"$after42_body" && ! grep -qF 'src/Mutual.fs' <<<"$after42_body" \
+   && [ "$(printf '%s' "$after42_thread" | jq --argjson gen "$wait42_gen" '[.[] | select(.id == $gen and (.body | contains("fsgg:claim worker=vole-418")))] | length')" = "1" ] \
+   && [ "$(printf '%s' "$room_thread" | jq '[.[] | select(.body | contains("fsgg.coord.overlap-precedence/v1"))] | length')" = "1" ]; then
+  ok ".github#2801: precedence narrows the loser atomically without releasing its live claim"
+else
+  bad ".github#2801: compiled arbitration must preserve the loser claim and leave one current precedence" \
+      "rc=$arb_rc:$arb body=$after42_body item-thread=$after42_thread room-thread=$room_thread"
+fi
+
 # These ten write rows are driven by their dedicated state-transition assertions above.  Marking
 # them here keeps the ledger at one entry per advertised command while the assertions remain next
 # to the preconditions that make each mutation meaningful.
