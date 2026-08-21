@@ -199,7 +199,12 @@ module StructuredDecision =
                   | (Escalation | RepairPhase | Acceptance), _ -> ()
                   | _, _ -> ()
 
-                  // CRITIC CONTINUITY, and the ONE accountable exception to it (.github#2662).
+                  // CRITIC GENERATION CONTINUITY (.github#2756). A confirmation after a
+                  // changes-required record is an ordinary fresh-successor boundary: the successor
+                  // inherits the finding and chain linkage, but none of the predecessor's clearances,
+                  // and therefore authors a complete confirmation verdict. The durable ReviewWait
+                  // marker is the queue/lifetime authority; the append-only review record is the
+                  // completion authority. Historical explicit succession grants remain valid.
                   //
                   // The no-grant arm is textually and behaviourally what it has always been, including its
                   // message: an identity change nobody granted is refused exactly as before, which is the
@@ -221,7 +226,10 @@ module StructuredDecision =
                   let successionErrors =
                       match record.Succession with
                       | None ->
-                          [ if record.Kind <> Initial && generationCritic <> Some record.Critic then
+                          let ordinarySuccessor =
+                              record.Kind = Confirmation
+                              && (preceding |> Option.exists (fun prior -> prior.Verdict = ChangesRequired))
+                          [ if record.Kind <> Initial && generationCritic <> Some record.Critic && not ordinarySuccessor then
                                 yield "every record in one review generation must bind the same critic" ]
                       | Some grant ->
                           [ match record.Kind with
@@ -252,7 +260,13 @@ module StructuredDecision =
 
                   yield! successionErrors
 
-                  if record.Succession.IsSome && List.isEmpty successionErrors then
+                  let ordinarySuccessor =
+                      record.Succession.IsNone
+                      && record.Kind = Confirmation
+                      && generationCritic <> Some record.Critic
+                      && (preceding |> Option.exists (fun prior -> prior.Verdict = ChangesRequired))
+
+                  if (record.Succession.IsSome || ordinarySuccessor) && List.isEmpty successionErrors then
                       generationCritic <- Some record.Critic
               for record in records do
                   if record.Schema <> ReviewSchema then yield $"schema must be '%s{ReviewSchema}'"

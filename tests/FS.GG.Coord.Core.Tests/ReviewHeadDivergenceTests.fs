@@ -92,10 +92,10 @@ module ReviewHeadDivergenceTests =
     /// Both heads, in the text a host reads (AC3).
     let private assertNamesBothHeads (verdict: Review.Verdict) =
         match verdict.NextAction with
-        | Review.ResumeSameCritic reason ->
+        | Review.DispatchSuccessor reason ->
             Assert.Contains(reviewedHead, reason)
             Assert.Contains(movedHead, reason)
-        | other -> failwithf "expected resumeSameCritic carrying the head divergence, got %A" other
+        | other -> failwithf "expected dispatchSuccessor carrying the head divergence, got %A" other
 
     /// The state names the old code produced. Asserted as a REFUSAL on every moved-head leg, because
     /// "the new answer appeared" and "the optimistic answer is gone" are different claims and this row
@@ -122,7 +122,7 @@ module ReviewHeadDivergenceTests =
     let ``2487 an ordinary pass at a moved head is not terminal and names both heads`` () =
         let verdict = verdictOf Review.Ordinary movedHead (ordinaryChain ()) Types.PrPending
         assertNotOptimistic verdict
-        Assert.Equal(Review.AwaitingSameCriticConfirmation 2, verdict.State)
+        Assert.Equal(Review.AwaitingSuccessorReview 2, verdict.State)
         assertNamesBothHeads verdict
 
     /// AC1: the same chain with GREEN checks. This is the leg that produced the durable, refused
@@ -132,7 +132,7 @@ module ReviewHeadDivergenceTests =
     let ``2487 an ordinary pass at a moved head does not request host acceptance`` () =
         let verdict = verdictOf Review.Ordinary movedHead (ordinaryChain ()) Types.PrGreen
         assertNotOptimistic verdict
-        Assert.Equal(Review.AwaitingSameCriticConfirmation 2, verdict.State)
+        Assert.Equal(Review.AwaitingSuccessorReview 2, verdict.State)
         assertNamesBothHeads verdict
 
     // ── AC1/AC2/AC3 — the repair phase, the second site ────────────────────────────────────────────
@@ -195,7 +195,7 @@ module ReviewHeadDivergenceTests =
         match Review.inspect (binding Review.Ordinary movedHead) (facts (ordinaryChain ()) Types.PrPending) (Some granted) None with
         | Error errors -> failwithf "review refused a well-formed binding: %A" errors
         | Ok verdict ->
-            Assert.Equal(Review.AwaitingSameCriticConfirmation 2, verdict.State)
+            Assert.Equal(Review.AwaitingSuccessorReview 2, verdict.State)
             Assert.Equal(Review.EnterCriticSuccession granted, verdict.NextAction)
 
     /// THE ROW'S OUTCOME, as one test: the same engine no longer gives two different answers about the
@@ -214,7 +214,7 @@ module ReviewHeadDivergenceTests =
 
         let beforeAcceptance = verdictOf Review.Ordinary movedHead [ StructuredDecisionTests.reviewComment 1L first ] Types.PrPending
         assertNotOptimistic beforeAcceptance
-        Assert.Equal(Review.AwaitingSameCriticConfirmation 1, beforeAcceptance.State)
+        Assert.Equal(Review.AwaitingSuccessorReview 1, beforeAcceptance.State)
 
         let afterAcceptance =
             verdictOf Review.Ordinary movedHead

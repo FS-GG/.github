@@ -55,6 +55,7 @@
          so it must compile AFTER that entry. Same rule as every line above it: the list carries no globs,
          and an unlisted file is a suite that runs nowhere. -->
     <Compile Include="ReviewHeadDivergenceTests.fs" />
+    <Compile Include="ReviewWaitTests.fs" />
     <!-- FindingPacketTests (.github#2737) drives the new pure FindingPacket module against a corpus of
          REAL packets lifted from the live registers .github#2691 and .github#2687. Same rule as every
          line above it: the list carries no globs, and an unlisted file is a suite that runs nowhere. -->

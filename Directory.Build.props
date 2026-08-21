@@ -401,8 +401,13 @@
        decision rather than reading corrected prose about an existing action. This matches the
        additive required-behavior precedent used for 0.65.0; no command, member, destination, or
        runtime implementation is removed. -->
+  <!-- 0.66.0 -> 0.67.0 (.github#2756): MINOR on the stable 0.x line. The coordination engine and
+       packed Kit add an append-only review-wait wire contract, a new `review wait` writer/projection,
+       and the ordinary fresh-successor action. These are additive receiver-visible protocol and
+       command behaviors; legacy structured succession records remain readable and no command,
+       package member, destination, or identity is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.66.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.67.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

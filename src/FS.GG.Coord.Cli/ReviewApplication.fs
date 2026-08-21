@@ -187,7 +187,7 @@ module ReviewApplication =
         | Review.AwaitingInitialReview -> "awaitingInitialReview"
         | Review.ChangesRequiringRepair _ -> "changesRequiringRepair"
         | Review.AwaitingImplementerRepair _ -> "awaitingImplementerRepair"
-        | Review.AwaitingSameCriticConfirmation _ -> "awaitingSameCriticConfirmation"
+        | Review.AwaitingSuccessorReview _ -> "awaitingSuccessorReview"
         | Review.PassedAwaitingChecks -> "passedAwaitingChecks"
         | Review.AwaitingHostAcceptance -> "awaitingHostAcceptance"
         | Review.AcceptedAwaitingChecks _ -> "acceptedAwaitingChecks"
@@ -203,7 +203,7 @@ module ReviewApplication =
         match value with
         | Review.ChangesRequiringRepair round
         | Review.AwaitingImplementerRepair round
-        | Review.AwaitingSameCriticConfirmation round
+        | Review.AwaitingSuccessorReview round
         | Review.RepairPhaseActive round -> Some round
         | _ -> None
 
@@ -228,7 +228,7 @@ module ReviewApplication =
         match value with
         | Review.DispatchCritic -> "dispatchCritic"
         | Review.ResumeImplementer _ -> "resumeImplementer"
-        | Review.ResumeSameCritic _ -> "resumeSameCritic"
+        | Review.DispatchSuccessor _ -> "dispatchSuccessor"
         | Review.AwaitChecks -> "awaitChecks"
         | Review.AuthorizeDelivery _ -> "authorizeDelivery"
         | Review.RequestHostAcceptance -> "requestHostAcceptance"
@@ -240,7 +240,7 @@ module ReviewApplication =
     let private actionReason (value: Review.NextAction) : string option =
         match value with
         | Review.ResumeImplementer reason
-        | Review.ResumeSameCritic reason
+        | Review.DispatchSuccessor reason
         | Review.AuthorizeDelivery reason
         | Review.Park reason -> Some reason
         | _ -> None
@@ -281,6 +281,51 @@ module ReviewApplication =
            diffAuditRequired = receipt.DiffAuditRequired
            diffAuditHead = receipt.DiffAuditHead |}
 
+    let private waitProjection = function
+        | None -> None, None, None
+        | Some ReviewWait.NoReceipt -> Some "noReceipt", None, None
+        | Some (ReviewWait.Waiting receipt) -> Some "waiting", Some receipt, None
+        | Some (ReviewWait.Completed (receipt, evidence)) -> Some "completed", Some receipt, Some evidence
+        | Some (ReviewWait.Cancelled (receipt, evidence)) -> Some "cancelled", Some receipt, Some evidence
+        | Some (ReviewWait.Recoverable (receipt, reason)) -> Some "recoverable", Some receipt, Some reason
+        | Some (ReviewWait.Invalid errors) -> Some "invalid", None, Some(String.concat "; " errors)
+
+    let private waitReceiptJson (receipt: ReviewWait.WaitReceipt) =
+        {| item = receipt.Item
+           claimGeneration = receipt.ClaimGeneration
+           reviewGeneration = receipt.ReviewGeneration
+           kind = match receipt.Kind with ReviewWait.InitialReview -> "initial-review" | ReviewWait.RepairConfirmation -> "repair-confirmation"
+           enteredAt = receipt.EnteredAt
+           expiresAt = receipt.ExpiresAt
+           evidenceRef = receipt.EvidenceRef |}
+
+    let private waitAuthority (binding: Review.Binding) (state: Review.State) (action: Review.NextAction) (waitState: ReviewWait.State option) =
+        let dispatchAuthority =
+            match action with
+            | Review.DispatchCritic -> Some(ReviewWait.InitialReview, ReviewWait.generationToken binding.HeadSha ReviewWait.InitialReview 0)
+            | Review.DispatchSuccessor _ ->
+                let round = stateRound state |> Option.defaultValue binding.Round
+                Some(ReviewWait.RepairConfirmation, ReviewWait.generationToken binding.HeadSha ReviewWait.RepairConfirmation round)
+            | _ -> None
+        match waitState, dispatchAuthority with
+        | None, _ -> Ok () // offline snapshots predate the live durable-wait projection
+        | Some (ReviewWait.Invalid errors), _ -> Error errors
+        | Some (ReviewWait.Recoverable (_, reason)), _ -> Error [ reason ]
+        | Some (ReviewWait.Waiting receipt), Some(expectedKind, expectedGeneration)
+            when receipt.Kind = expectedKind && receipt.ReviewGeneration = expectedGeneration -> Ok ()
+        | Some (ReviewWait.Waiting receipt), Some(_, expectedGeneration) ->
+            Error [ $"the durable review wait does not authorize %s{actionName action}: expected generation '%s{expectedGeneration}', got '%s{receipt.ReviewGeneration}' / %A{receipt.Kind}" ]
+        | Some (ReviewWait.Waiting receipt), None ->
+            Error [ $"review generation '%s{receipt.ReviewGeneration}' remains unconsumed; record its completion, cancellation, or timeout before advancing" ]
+        | Some ReviewWait.NoReceipt, Some _ ->
+            Error [ $"%s{actionName action} requires a durable review-wait entry before dispatch" ]
+        | Some (ReviewWait.Completed _), Some _
+        | Some (ReviewWait.Cancelled _), Some _ ->
+            Error [ $"%s{actionName action} requires a new durable review-wait entry for this generation" ]
+        | Some (ReviewWait.Cancelled (_, reason)), None -> Error [ $"the durable review wait was cancelled: %s{reason}" ]
+        | Some ReviewWait.NoReceipt, None
+        | Some (ReviewWait.Completed _), None -> Ok ()
+
     // `render`'s own public 3-arg shape (`Options -> Review.Binding -> Review.Facts -> int`) is a fixed
     // contract other callers depend on positionally — most importantly `Client.review`'s live
     // `review <ref> --pr N` path, which calls `ReviewApplication.render opts binding facts` as a tail
@@ -294,6 +339,7 @@ module ReviewApplication =
         (facts: Review.Facts)
         (successionGranted: Review.CriticSuccessionReceipt option)
         (repairAssertionGranted: Review.RepairAssertionReceipt option)
+        (waitState: ReviewWait.State option)
         : int =
         match Review.inspect binding facts successionGranted repairAssertionGranted with
         | Error reasons ->
@@ -305,8 +351,23 @@ module ReviewApplication =
             | Text -> reasons |> List.iter (fun reason -> eprint $"UNDETERMINED — %s{reason}")
             ExitCode.toInt ExitCode.NoVerdict
         | Ok verdict ->
-            match opts.Render with
-            | Json ->
+            let waitStatus, waitReceipt, waitReason = waitProjection waitState
+            match waitAuthority binding verdict.State verdict.NextAction waitState, opts.Render with
+            | Error reasons, Json ->
+                printfn
+                    "%s"
+                    (JsonSerializer.Serialize
+                        {| schema = "fsgg.coord.review/1"
+                           verdict = "noVerdict"
+                           reasons = reasons
+                           waitStatus = waitStatus
+                           waitReceipt = waitReceipt |> Option.map waitReceiptJson
+                           waitReason = waitReason |})
+                ExitCode.toInt ExitCode.NoVerdict
+            | Error reasons, Text ->
+                reasons |> List.iter (fun reason -> eprint $"UNDETERMINED — %s{reason}")
+                ExitCode.toInt ExitCode.NoVerdict
+            | Ok (), Json ->
                 let payload =
                     {| schema = "fsgg.coord.review/1"
                        verdict = "next"
@@ -328,10 +389,14 @@ module ReviewApplication =
                         match verdict.NextAction with
                         | Review.Accept receipt -> Some(acceptedJson receipt)
                         | _ -> None
+                       waitStatus = waitStatus
+                       waitReceipt = waitReceipt |> Option.map waitReceiptJson
+                       waitReason = waitReason
                        retiredChains = verdict.RetiredChains |> List.map retiredChainJson
                        freshnessToken = verdict.FreshnessToken
                        actionKey = verdict.ActionKey |}
                 printfn "%s" (JsonSerializer.Serialize payload)
+                ExitCode.toInt ExitCode.Green
             // .github#2487 AC3 reaches the TEXT projection too, because "a reader can act without a
             // manual `git` comparison" is not a property of one render mode. The reason the JSON payload
             // has always carried as `actionReason` was simply dropped here, so `--text` printed
@@ -342,15 +407,18 @@ module ReviewApplication =
             // byte-for-byte unchanged, and the reason is appended only where one exists — so every
             // verdict that carried no reason before still renders exactly one line of exactly the same
             // two words.
-            | Text ->
+            | Ok (), Text ->
                 match actionReason verdict.NextAction with
                 | Some reason ->
                     printfn "%s — %s: %s" (stateName verdict.State) (actionName verdict.NextAction) reason
                 | None -> printfn "%s — %s" (stateName verdict.State) (actionName verdict.NextAction)
-            ExitCode.toInt ExitCode.Green
+                ExitCode.toInt ExitCode.Green
 
     let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
-        renderVerdict opts binding facts None None
+        renderVerdict opts binding facts None None None
+
+    let renderWithWait (opts: Options) (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State) : int =
+        renderVerdict opts binding facts None None (Some waitState)
 
     let run (opts: Options) : int =
         let raw = input opts
@@ -363,4 +431,4 @@ module ReviewApplication =
                 eprint $"fsgg-coord-engine: review snapshot is malformed: %s{error}"
                 ExitCode.toInt ExitCode.Error
             | Ok(binding, facts, successionGranted, repairAssertionGranted) ->
-                renderVerdict opts binding facts successionGranted repairAssertionGranted
+                renderVerdict opts binding facts successionGranted repairAssertionGranted None

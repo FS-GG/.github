@@ -37,6 +37,51 @@ def main() -> None:
     ):
         require(literal in contract, f"structured review contract is missing: {literal}")
 
+    # .github#2756. A protocol-created review wait is durable coordination state, and critic
+    # replacement is the measured ordinary route rather than an unverifiable despawn exception.
+    # Pin each race/lifetime leg independently so deleting one cannot leave a plausible summary green.
+    for literal in (
+        "WaitReceipt(item, claimGeneration, reviewGeneration, kind, enteredAt, expiresAt, evidenceRef)",
+        "A current receipt plus the open item PR preserves the touch-set reservation",
+        "never extends or resurrects the worker's mutation lease",
+        "revalidates that `claimGeneration` is still current or explicitly reacquires the item",
+        "completion racing timeout therefore has one durable outcome",
+        "Timeout returns the item to an explicit recoverable review state",
+        "Fresh succession is the ordinary repair route, not an exceptional recovery",
+        "Five of five measured repair chains on 2026-08-17",
+        "It inherits no prior clearance and performs a full independent review of that head",
+        "ephemeral runtime liveness and a host's testimony about despawn are not review evidence",
+        "Entering a review queue writes the receipt before the actor yields",
+        "scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json",
+        "The canonical generation token is `<head>:initial-review:0`",
+        "Exactly one generation may be unconsumed",
+        "replacing the claim cannot transfer authority to consume an older entry",
+        "`review record` refuses every critic record until the matching canonical entry is waiting",
+        "Dispatch actions are available only from the matching `waiting` state",
+    ):
+        require(literal in contract, f"durable review-wait contract is missing: {literal}")
+
+    # Requirement-boundary mutation witness from the independent critic: weakening the mandatory
+    # entry transition to "may write" must red even though the rest of the paragraph remains present.
+    require(
+        "Entering a review queue may write the receipt" not in contract,
+        "durable queue entry was weakened from writes to may write",
+    )
+
+    # The semantic assertions are production-code xUnit witnesses, not this source-text scanner. The
+    # selected Core suite executes them when ReviewWait or its consumers change; these names keep each
+    # required boundary independently visible in evidence and prevent one catch-all test being reused.
+    behavioral = (ROOT / "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs").read_text(encoding="utf-8")
+    for witness in (
+        "entering a queue writes a round-trippable receipt",
+        "a current receipt reserves after the active lease duration",
+        "a changed claim generation never resurrects mutation authority",
+        "bounded timeout returns an explicit recoverable state",
+        "completion recorded before expiry wins a later timeout race",
+        "receipt is bounded and cannot reserve forever",
+    ):
+        require(witness in behavioral, f"durable review-wait behavioral witness is missing: {witness}")
+
     # .github#2551. Gate-inversion evidence proved a gate CAN fail and never that anything RUNS it,
     # and never named the case where a gate passes because it examined nothing. Both requirements are
     # judgement a critic applies, so nothing downstream can enforce them; pinning the clauses here is

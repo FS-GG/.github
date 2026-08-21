@@ -270,12 +270,12 @@ else
   action="$(field "$out" '["action"]')"
   receipt="$(field "$out" '["criticSuccessionReceipt"]')"
   reason="$(field "$out" '["actionReason"]')"
-  if [ "$action" != "resumeSameCritic" ] || [ "$receipt" != "None" ]; then
-    bad "ABSENT: expected action=resumeSameCritic and no receipt" "$out"
+  if [ "$action" != "dispatchSuccessor" ] || [ "$receipt" != "None" ]; then
+    bad "ABSENT: expected ordinary action=dispatchSuccessor and no legacy receipt" "$out"
   elif printf '%s' "$reason" | grep -q "refused, not consumed"; then
     bad "ABSENT: the pre-#2417 reason text must be UNCHANGED (there was no grant to refuse)" "$reason"
   else
-    ok "ABSENT: no key at all parses as no grant -- resumeSameCritic, unchanged reason, no receipt echoed"
+    ok "ABSENT: no key takes the ordinary dispatchSuccessor route with no legacy receipt echoed"
   fi
 fi
 
@@ -285,10 +285,10 @@ snapshot "$NULLED" kite null
 out="$(run_engine "$NULLED")"; rc=$?
 if [ "$rc" -ne 0 ]; then
   bad "NULL: an explicit null must be exit 0, got $rc" "$out"
-elif [ "$(field "$out" '["action"]')" = "resumeSameCritic" ]; then
-  ok "NULL: an explicit null parses identically to an absent key -- resumeSameCritic"
+elif [ "$(field "$out" '["action"]')" = "dispatchSuccessor" ]; then
+  ok "NULL: an explicit null parses identically to an absent key -- dispatchSuccessor"
 else
-  bad "NULL: expected action=resumeSameCritic" "$out"
+  bad "NULL: expected action=dispatchSuccessor" "$out"
 fi
 
 # VALID: the ACCEPTED grant. Every refusal snapshot in section 2 is this one with a single field
@@ -381,12 +381,12 @@ for row in "${REFUSALS[@]}"; do
   reason="$(field "$out" '["actionReason"]')"
   if [ "$action" = "enterCriticSuccession" ]; then
     bad "GATE INVERSION: $name was ADMITTED -- $description entered succession" "$out"
-  elif [ "$action" != "resumeSameCritic" ] || [ "$receipt" != "None" ]; then
-    bad "$name: expected resumeSameCritic with no receipt echoed" "$out"
+  elif [ "$action" != "dispatchSuccessor" ] || [ "$receipt" != "None" ]; then
+    bad "$name: expected ordinary dispatchSuccessor with no legacy receipt echoed" "$out"
   elif ! printf '%s' "$reason" | grep -q "refused, not consumed"; then
     # THE NON-VACUITY ASSERTION. Without it this leg also passes when the snapshot never reached the
     # guard, and a leg that passes for a reason unrelated to its subject has measured nothing.
-    bad "$name: resumeSameCritic, but the reason does not say a grant was REFUSED -- the guard may never have seen it" "$reason"
+    bad "$name: dispatchSuccessor, but the reason does not say a legacy grant was REFUSED -- the guard may never have seen it" "$reason"
   else
     ok "$name: $description is refused, and the reason records that a grant was refused rather than absent"
   fi
@@ -402,11 +402,11 @@ echo "── 3. LEDGER WRITE: can a granted successor actually RECORD a verdict 
 #
 #   name|kind|successor|succession-json|expect|description
 LEDGER_CASES=(
-  "granted-confirmation|confirmation|snipe-8934|GRANT|accept|a granted successor's confirmation"
+  "granted-confirmation|confirmation|snipe-8934|GRANT|ordinary|a successor's confirmation (ordinary boundary; legacy grant remains readable)"
   "granted-escalation|escalation|snipe-8934|GRANT|accept|a granted successor's escalation"
   "granted-repair-phase|repair-phase|snipe-8934|GRANT|accept|a granted successor's repair-phase record"
-  "ungranted-confirmation|confirmation|snipe-8934|none|refuse|an identity change nobody granted"
-  "mismatched-grant|confirmation|snipe-8934|MISMATCH|refuse|a grant naming a critic who never held the seat"
+  "ungranted-confirmation|confirmation|snipe-8934|none|ordinary|an ordinary fresh successor's confirmation"
+  "mismatched-grant|confirmation|snipe-8934|MISMATCH|mismatch|a grant naming a critic who never held the seat"
 )
 
 GRANT_JSON='{"originalCritic":"tern-42","grantedBy":"heron-61d6","grantUrl":"https://github.com/FS-GG/.github/pull/2650#issuecomment-5302904754"}'
@@ -447,6 +447,26 @@ with open(path, "w", encoding="utf-8") as stream:
 PY
 }
 
+ledger_wait_draft() {
+  python3 - "$@" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+path, event, claim, generation, kind, evidence = sys.argv[1:]
+now = datetime.now(timezone.utc).replace(microsecond=0)
+if event == "enter":
+    record = {"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#42",
+              "claimGeneration":claim,"reviewGeneration":generation,"kind":kind,
+              "enteredAt":now.isoformat().replace("+00:00", "Z"),
+              "expiresAt":(now + timedelta(hours=4)).isoformat().replace("+00:00", "Z"),
+              "evidenceRef":evidence}
+else:
+    record = {"schema":"fsgg.coord.review-wait/v1","event":"complete","reviewGeneration":generation,
+              "at":now.isoformat().replace("+00:00", "Z"),"evidenceRef":evidence}
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(record, stream, separators=(",", ":"))
+PY
+}
+
 # ledger_case <dll> <kind> <successor> <succession-json|none> -- drives ONE chain against a fresh
 # loopback server and echoes `<rc> <ledger-records-before> <ledger-records-after> <stderr-first-line>`.
 # The record COUNT is what makes a refusal leg discriminating: `review record` validates before it
@@ -454,7 +474,7 @@ PY
 # that refused, and only the count can tell those apart.
 ledger_case() {
   local dll="$1" kind="$2" successor="$3" succession="$4"
-  local srv_out srv_pid port draft rc out before after initial_url
+  local srv_out srv_pid port draft rc out before after initial_url claim_id second_round second_generation
   srv_out="$(mktemp "$WORK/ledger-srv.XXXXXX")"
   python3 "$REPO_ROOT/tests/coord-engine-e2e/stateful_server.py" >"$srv_out" 2>&1 &
   srv_pid=$!
@@ -472,20 +492,33 @@ ledger_case() {
     export GITHUB_TOKEN="fixture-token"
     export FSGG_COORD_OWNER="FS-GG"
 
+    claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+      -d '{"body":"<!-- fsgg:claim worker=fixture-ledger lease=120 -->\nheld"}' \
+      "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+
     ledger_draft "$draft" initial tern-42 0 "" "" none
+    ledger_wait_draft "$draft.wait" enter "$claim_id" "$(printf 'a%.0s' {1..40}):initial-review:0" initial-review queue
+    dotnet "$dll" review wait FS.GG.SDD#42 "$draft.wait" --pr 42 --json >/dev/null 2>&1
     out="$(dotnet "$dll" review record FS.GG.SDD#42 "$draft" --pr 42 --json 2>&1)"
     initial_url="$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["commentUrl"])' 2>/dev/null)"
     if [ -z "$initial_url" ]; then
       printf '98 0 0 the initial record could not be written: %s' "$(printf '%s' "$out" | head -1)"
       exit 0
     fi
+    ledger_wait_draft "$draft.wait" complete "$claim_id" "$(printf 'a%.0s' {1..40}):initial-review:0" initial-review "$initial_url"
+    dotnet "$dll" review wait FS.GG.SDD#42 "$draft.wait" --pr 42 --json >/dev/null 2>&1
 
     before="$(ledger_count "$port")"
     if [ "$kind" = "confirmation" ]; then
+      second_round=1
       ledger_draft "$draft" "$kind" "$successor" 1 "$initial_url" "$initial_url" "$succession"
     else
+      second_round=0
       ledger_draft "$draft" "$kind" "$successor" 0 "$initial_url" "$initial_url" "$succession"
     fi
+    second_generation="$(printf 'a%.0s' {1..40}):repair-confirmation:$second_round"
+    ledger_wait_draft "$draft.wait" enter "$claim_id" "$second_generation" repair-confirmation queue
+    dotnet "$dll" review wait FS.GG.SDD#42 "$draft.wait" --pr 42 --json >/dev/null 2>&1
     out="$(dotnet "$dll" review record FS.GG.SDD#42 "$draft" --pr 42 --json 2>&1)"; rc=$?
     after="$(ledger_count "$port")"
     printf '%s %s %s %s' "$rc" "$before" "$after" "$(printf '%s' "$out" | head -1)"
@@ -524,7 +557,7 @@ ledger_legs() {
       continue
     fi
 
-    if [ "$expect" = "accept" ] && [ "$mode" = "pristine" ]; then
+    if { [ "$expect" = "accept" ] && [ "$mode" = "pristine" ]; } || [ "$expect" = "ordinary" ]; then
       if [ "$rc" -ne 0 ]; then
         bad "$name: $description must be RECORDABLE, the writer refused it (exit $rc)" "$detail"
       elif [ "$after" != "$((before + 1))" ]; then
@@ -537,6 +570,12 @@ ledger_legs() {
         bad "$name INVERSION SURVIVED: the record was still accepted with the succession allowance removed -- this leg measures something else" "$detail"
       else
         ok "$name inversion: with the allowance removed, the accepting leg REDS (it is bound to the admission it names)"
+      fi
+    elif [ "$expect" = "mismatch" ] && [ "$mode" = "inverted" ]; then
+      if [ "$rc" -eq 0 ] && [ "$after" = "$((before + 1))" ]; then
+        ok "$name inversion: deleting legacy grant awareness exposes the ordinary confirmation boundary"
+      else
+        bad "$name inversion: expected the now-unseen legacy grant to reduce to an ordinary confirmation" "$detail"
       fi
     else
       # The refusing cases are asserted in BOTH modes. In `inverted` they are the control that stops

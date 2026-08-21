@@ -40,6 +40,16 @@ module ReviewApplicationTests =
         |> List.map (fun (id, url, body) -> {| id = id; url = url; body = body |})
         |> List.toArray
 
+    let private renderWithWait binding facts waitState =
+        let opts = Options.parse [ "review"; "FS-GG/.github#2175"; "--pr"; "42"; "--json" ] |> function Ok value -> value | Error error -> failwith error
+        let oldOut, oldErr = Console.Out, Console.Error
+        use stdout = new StringWriter()
+        use stderr = new StringWriter()
+        Console.SetOut stdout
+        Console.SetError stderr
+        try ReviewApplication.renderWithWait opts binding facts waitState, stdout.ToString(), stderr.ToString()
+        finally Console.SetOut oldOut; Console.SetError oldErr
+
     [<Fact>]
     let empty_thread_dispatches_critic () =
         let code, output, _ = run "--json" (snapshot (comments []) "pending")
@@ -89,3 +99,44 @@ module ReviewApplicationTests =
         let code, _, error = run "--json" "{\"binding\":\"not-an-object\",\"facts\":{}}"
         Assert.NotEqual(0, code)
         Assert.Contains("malformed", error)
+
+    [<Fact>]
+    let successor_wait_uses_typed_state_round_not_live_binding_default () =
+        let movedHead = String.replicate 40 "b"
+        let reviewComments =
+            StructuredFixtures.movedHeadRepairComments subject head "critic-1"
+            |> List.map (fun (id, url, body) -> ({ Id = id; Url = url; Body = body }: Driver.ReviewComment))
+        let binding: Review.Binding =
+            { ItemRef = "FS-GG/.github#2175"
+              Pr = 42
+              HeadSha = movedHead
+              ClaimGeneration = "fixture-claim"
+              ImplementerIdentity = "worker-1"
+              Phase = Review.Ordinary
+              Round = 1 }
+        let facts: Review.Facts =
+            { Comments = reviewComments
+              Checks = Types.PrPending
+              RepairPhaseGranted = None
+              RepairRouteAvailable = true
+              DiffAuditTrusted = None }
+        let receipt: ReviewWait.WaitReceipt =
+            { Item = binding.ItemRef
+              ClaimGeneration = binding.ClaimGeneration
+              ReviewGeneration = ReviewWait.generationToken movedHead ReviewWait.RepairConfirmation 2
+              Kind = ReviewWait.RepairConfirmation
+              EnteredAt = DateTimeOffset.Parse "2026-08-21T00:00:00Z"
+              ExpiresAt = DateTimeOffset.Parse "2026-08-21T04:00:00Z"
+              EvidenceRef = "https://reviews/queue" }
+
+        let code, output, error = renderWithWait binding facts (ReviewWait.Waiting receipt)
+        Assert.Equal(0, code)
+        Assert.Contains("\"stateRound\":2", output)
+        Assert.Contains("\"action\":\"dispatchSuccessor\"", output)
+        Assert.Empty error
+
+        let wrongRound = { receipt with ReviewGeneration = ReviewWait.generationToken movedHead ReviewWait.RepairConfirmation binding.Round }
+        let wrongCode, wrongOutput, _ = renderWithWait binding facts (ReviewWait.Waiting wrongRound)
+        Assert.NotEqual(0, wrongCode)
+        Assert.Contains("\"verdict\":\"noVerdict\"", wrongOutput)
+        Assert.Contains("expected generation", wrongOutput)

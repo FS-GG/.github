@@ -1,0 +1,389 @@
+schemaVersion: 1
+workId: 2756-review-wait-continuity
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2756-review-wait-continuity/spec.md
+sourceClarifications: work/2756-review-wait-continuity/clarifications.md
+sourceChecklist: work/2756-review-wait-continuity/checklist.md
+sourcePlan: work/2756-review-wait-continuity/plan.md
+sourceTasks: work/2756-review-wait-continuity/tasks.yml
+sourceAnalysis: readiness/2756-review-wait-continuity/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2756-review-wait-continuity/analysis.json
+    digest: 11d5cd23ea0f188b6116a26cc2776c29a144d8b424b20b59e96347d9886da1c0
+    schemaVersion: 1
+  - label: checklist
+    path: work/2756-review-wait-continuity/checklist.md
+    digest: e97b500fa045b23ecfbabee50dbd870a90023680a64a071e3328ebeea34f784b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2756-review-wait-continuity/clarifications.md
+    digest: 6da26f230bee9069c85a2ce5a5414cc1a97c16462bea42f872c0a8ae828ea9af
+    schemaVersion: 1
+  - label: plan
+    path: work/2756-review-wait-continuity/plan.md
+    digest: ee8eab19118775e994bb2946cd2a6c124a9093341801567aeb3ca9f285279792
+    schemaVersion: 1
+  - label: spec
+    path: work/2756-review-wait-continuity/spec.md
+    digest: 24ea22bef992f6a555914eaeff93e118907250684a861c4cd2d8a294d3028e97
+    schemaVersion: 1
+  - label: tasks
+    path: work/2756-review-wait-continuity/tasks.yml
+    digest: d2ebb0850a73079670d0a50474691fcb0b0e9624b8288d7507fcd8df9ac64413
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2756-review-wait-continuity/review-wait-contract.trx
+      digest: "sha256:cdc89b10f294b20cc52848a50cd80f76d372daffed8094f92c19e51e4cac4c05"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 13
+      failed: 0
+      skipped: 0
+    notes: ["ReviewWait production-code behavioral witnesses passed 7/7; the exact writes-to-may-write mutation red separately."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

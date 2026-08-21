@@ -513,6 +513,9 @@
          it at each workflow boundary. That changes receiver-visible worker and reviewer behavior,
          rather than correcting prose about an existing action. It is additive: no kit member,
          destination, command, or runtime implementation is removed. -->
+    <!-- 0.66.0 -> 0.67.0, a MINOR (.github#2756): the packed Kit teaches hosts and workers the
+         durable review-wait writer and ordinary fresh-successor route, while the coherent engine adds
+         the corresponding wire parser/projector and command. Additive behavior, no removals. -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>

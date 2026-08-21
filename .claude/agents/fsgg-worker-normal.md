@@ -93,7 +93,8 @@ Non-negotiables, restated because they are the ones workers most often skip:
   to spawn your own critic — that is the contract violation `.github#2462` measured twice in one run,
   not an efficiency gain, and a correctly-formed self-dispatched chain is indistinguishable from a
   sanctioned one. The one stated exception is a solo `pnext-item` invocation with no host to ask.
-  Implement the critic's numbered repairs, and merge only after that same critic confirms the exact
+  Implement the critic's numbered repairs, then enter the canonical `<head>:repair-confirmation:<round>`
+  bounded durable review wait; dispatch and record fail closed until that entry exists. Merge only after a fresh successor critic confirms the exact
   head and you observe the host's `fsgg:review-decision/v2` acceptance marker for that SHA.
 
 - **Never edit a comment by recency — always by explicit comment id.** `gh pr comment --edit-last`

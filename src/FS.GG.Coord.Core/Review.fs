@@ -80,7 +80,7 @@ module Review =
         | AwaitingInitialReview
         | ChangesRequiringRepair of round: int
         | AwaitingImplementerRepair of round: int
-        | AwaitingSameCriticConfirmation of round: int
+        | AwaitingSuccessorReview of round: int
         | PassedAwaitingChecks
         | AwaitingHostAcceptance
         | AcceptedAwaitingChecks of checks: PrState
@@ -105,7 +105,7 @@ module Review =
     type NextAction =
         | DispatchCritic
         | ResumeImplementer of reason: string
-        | ResumeSameCritic of reason: string
+        | DispatchSuccessor of reason: string
         | AwaitChecks
         | AuthorizeDelivery of reason: string
         | RequestHostAcceptance
@@ -291,7 +291,7 @@ module Review =
     // reason above — the change is additive to the message, and the pre-#2417 property DEC-001 protects
     // (a supplied-and-refused grant reads differently from no grant at all) is untouched.
     let private resumeSameCriticReason reviewedHead currentHead (successionGranted: CriticSuccessionReceipt option) =
-        "a new commit landed after a changes-required verdict; the same critic must confirm it"
+        "a new commit landed after a changes-required verdict; a fresh successor must fully review it"
         + headDivergenceClause reviewedHead currentHead
         + refusedGrantClause successionGranted
 
@@ -307,10 +307,23 @@ module Review =
     // authors either refusal.
     let private movedPassReason reviewedHead currentHead (successionGranted: CriticSuccessionReceipt option) =
         "the latest review verdict is pass, but it is bound to a head the pull request has moved off, so "
-        + "no critic has reviewed the current head; the same critic must confirm it before a host can "
+        + "no critic has reviewed the current head; a fresh successor must fully review it before a host can "
         + "author an acceptance the acceptance path would refuse"
         + headDivergenceClause reviewedHead currentHead
         + refusedGrantClause successionGranted
+
+    // Ordinary queues need no host grant (.github#2756). A historical explicit grant is still
+    // consumed when valid so already-authored snapshots and their tamper/refusal witnesses remain
+    // readable; absent or refused grants take the ordinary durable fresh-successor route.
+    let private successorAction
+        (binding: Binding)
+        (phaseFacts: Driver.ReviewPhaseFacts)
+        (successionGranted: CriticSuccessionReceipt option)
+        (reason: string)
+        : NextAction =
+        match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
+        | Some receipt -> EnterCriticSuccession receipt
+        | None -> DispatchSuccessor reason
 
     // Where the head the chain's latest review NAMES stands against the head this binding is being
     // decided at — the ONE comparison every verdict arm in both phases consults (.github#2487), never
@@ -407,7 +420,7 @@ module Review =
     let private commentRepairConfirmationReason (receipt: RepairAssertionReceipt) =
         "the outstanding changes-required finding was repaired in a pull request comment rather than the "
         + $"tree, so the head correctly did not move; %s{receipt.GrantedBy} granted the repair assertion "
-        + $"against review %s{receipt.AnsweredReviewUrl}, and the same critic must now confirm it"
+        + $"against review %s{receipt.AnsweredReviewUrl}, and a fresh successor must now fully review it"
 
     // The shared acceptance path for both ordinary and repair-phase review: reuses
     // `Driver.parseReviewCommentsWithFacts` (the terminal chain parser) and `Driver.validateReviewChain`
@@ -613,11 +626,8 @@ module Review =
                             else
                                 RepairPhaseActive round, AwaitChecks
                         | MovedFrom reviewedHead ->
-                            match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
-                            | Some receipt -> RepairPhaseActive round, EnterCriticSuccession receipt
-                            | None ->
-                                RepairPhaseActive round,
-                                ResumeSameCritic(movedPassReason reviewedHead binding.HeadSha successionGranted)
+                            RepairPhaseActive round,
+                            successorAction binding phaseFacts successionGranted (movedPassReason reviewedHead binding.HeadSha successionGranted)
                     | Some "changes-required" ->
                         match reviewedHeadAgainst binding phaseFacts with
                         | Unreadable ->
@@ -626,16 +636,13 @@ module Review =
                         | AtCurrentHead ->
                             match repairAssertionValid binding repairAssertionGranted phaseFacts with
                             | Some receipt ->
-                                RepairPhaseActive round, ResumeSameCritic(commentRepairConfirmationReason receipt)
+                                RepairPhaseActive round, DispatchSuccessor(commentRepairConfirmationReason receipt)
                             | None ->
                                 RepairPhaseActive round,
                                 ResumeImplementer(resumeImplementerReason repairAssertionGranted)
                         | MovedFrom reviewedHead ->
-                            match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
-                            | Some receipt -> RepairPhaseActive round, EnterCriticSuccession receipt
-                            | None ->
-                                RepairPhaseActive round,
-                                ResumeSameCritic (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
+                            RepairPhaseActive round,
+                            successorAction binding phaseFacts successionGranted (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
                     | _ ->
                         let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason
@@ -684,11 +691,8 @@ module Review =
                         // position .github#2417 built that grant for, and leaving it out would have made
                         // the pass arm the only place in the protocol where a moved head has no route.
                         | MovedFrom reviewedHead ->
-                            match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
-                            | Some receipt -> AwaitingSameCriticConfirmation round, EnterCriticSuccession receipt
-                            | None ->
-                                AwaitingSameCriticConfirmation round,
-                                ResumeSameCritic(movedPassReason reviewedHead binding.HeadSha successionGranted)
+                            AwaitingSuccessorReview round,
+                            successorAction binding phaseFacts successionGranted (movedPassReason reviewedHead binding.HeadSha successionGranted)
                     | Some "changes-required" ->
                         match reviewedHeadAgainst binding phaseFacts with
                         | Unreadable ->
@@ -697,17 +701,14 @@ module Review =
                         | AtCurrentHead ->
                             match repairAssertionValid binding repairAssertionGranted phaseFacts with
                             | Some receipt ->
-                                AwaitingSameCriticConfirmation round,
-                                ResumeSameCritic(commentRepairConfirmationReason receipt)
+                                AwaitingSuccessorReview round,
+                                DispatchSuccessor(commentRepairConfirmationReason receipt)
                             | None ->
                                 AwaitingImplementerRepair round,
                                 ResumeImplementer(resumeImplementerReason repairAssertionGranted)
                         | MovedFrom reviewedHead ->
-                            match criticSuccessionValid binding successionGranted phaseFacts.CriticIdentity with
-                            | Some receipt -> AwaitingSameCriticConfirmation round, EnterCriticSuccession receipt
-                            | None ->
-                                AwaitingSameCriticConfirmation round,
-                                ResumeSameCritic (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
+                            AwaitingSuccessorReview round,
+                            successorAction binding phaseFacts successionGranted (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
                     | _ ->
                         let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason

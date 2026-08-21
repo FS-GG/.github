@@ -106,7 +106,7 @@ module Review =
         | AwaitingInitialReview
         | ChangesRequiringRepair of round: int
         | AwaitingImplementerRepair of round: int
-        | AwaitingSameCriticConfirmation of round: int
+        | AwaitingSuccessorReview of round: int
         | PassedAwaitingChecks
         | AwaitingHostAcceptance
         /// The chain is COMPLETE — well-formed, host-accepted, critic-identified and bound to the
@@ -149,7 +149,9 @@ module Review =
     type NextAction =
         | DispatchCritic
         | ResumeImplementer of reason: string
-        | ResumeSameCritic of reason: string
+        /// Enter a bounded review wait for a fresh critic. The successor inherits no clearance from the
+        /// preceding critic and must re-derive a complete verdict for the repaired head (.github#2756).
+        | DispatchSuccessor of reason: string
         | AwaitChecks
         /// Make the one live `scripts/fsgg-coord delivery <ref> --pr <n>` call `pnext-item` §6 places directly
         /// after host acceptance (.github#2549). Deliberately not `AwaitChecks`: by `.github#2504` the
@@ -163,6 +165,8 @@ module Review =
         | AuthorizeDelivery of reason: string
         | RequestHostAcceptance
         | EnterRepairPhase of RepairPhaseReceipt
+        /// Legacy host-granted succession, retained only for already-authored snapshots. New queues use
+        /// `DispatchSuccessor` plus a durable `ReviewWait.WaitReceipt`.
         | EnterCriticSuccession of CriticSuccessionReceipt
         | Accept of AcceptedReceipt
         | Park of reason: string

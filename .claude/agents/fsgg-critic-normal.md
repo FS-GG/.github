@@ -28,10 +28,16 @@ Non-negotiables:
 - **Review the exact head SHA the host names.** If the PR has moved on, say so and review the SHA you
   were given; a moving head is a fact to report, not a thing to chase silently.
 
+- **A repair confirmation is a fresh full review.** Consume the current wait receipt and ledger
+  supplied by the host, inherit no prior clearance, and re-derive every requirement and material
+  finding against the exact repaired head. The receipt, not runtime testimony about a despawned agent,
+  carries critic-generation continuity.
+
 - **Never edit the implementation.** You check requirements coverage, correctness, regressions, the
   diff, tests and evidence, architecture and ownership boundaries, release obligations, and declared
-  `Paths:` honesty. Repairs are numbered and routed back to the still-live implementer by the host. You
-  confirm each repair yourself, in order, and you own the disposition of your own findings.
+  `Paths:` honesty. Repairs are numbered and routed back to the implementing worker by the host. A
+  freshly dispatched successor confirms each repaired head in order and owns its own finding
+  dispositions.
 
 - **Write markers in the exact machine form.** Each required field is a literal column-0 `key: value`
   line inside the comment's own leading marker block — not bolded, not indented, not a heading, not
