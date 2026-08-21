@@ -2157,9 +2157,136 @@ module Client =
                 let generationMatches kind round (receipt: ReviewWait.WaitReceipt) =
                     receipt.Kind = kind
                     && receipt.ReviewGeneration = ReviewWait.generationToken draft.HeadSha kind round
+
+                let authorizeExhaustedClaimTurnover (receipt: ReviewWait.WaitReceipt) evidence =
+                    let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
+                    let ordered = comments |> List.sortBy _.Id
+                    let structured =
+                        ordered
+                        |> List.choose (fun comment ->
+                            if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
+                                Some(comment, Driver.decodeStructuredReview (comment.Body.Substring(StructuredReviewMarker.Length).Trim()))
+                            else None)
+                    let decodeErrors =
+                        structured
+                        |> List.choose (fun (_, decoded) -> match decoded with Error error -> Some error | Ok _ -> None)
+                    let pairs =
+                        structured
+                        |> List.choose (fun (comment, decoded) ->
+                            decoded |> Result.toOption |> Option.map (fun record -> comment, record))
+                    let records = pairs |> List.map snd
+                    let generationPairs =
+                        pairs
+                        |> List.indexed
+                        |> List.choose (fun (index, (_, record)) ->
+                            if record.Kind = StructuredDecision.Initial then Some index else None)
+                        |> List.tryLast
+                        |> Option.map (fun start -> pairs[start..])
+                        |> Option.defaultValue []
+                    let legacyMarker = "<!-- fsgg:independent-review-escalation:v1 -->"
+                    let lines (body: string) = body.Replace("\r\n", "\n").Split '\n' |> Array.toList
+                    let legacyComments =
+                        ordered
+                        |> List.filter (fun comment -> lines comment.Body |> List.tryHead = Some legacyMarker)
+                    let legacyMarkerCount =
+                        ordered
+                        |> List.sumBy (fun comment -> lines comment.Body |> List.filter ((=) legacyMarker) |> List.length)
+                    let legacyField name body =
+                        let prefix = name + ": "
+                        lines body
+                        |> List.choose (fun line ->
+                            if line.StartsWith(prefix, StringComparison.Ordinal) then
+                                Some(line.Substring(prefix.Length).Trim())
+                            else None)
+                        |> List.tryExactlyOne
+                    let completionIds =
+                        ordered
+                        |> List.choose (fun comment ->
+                            match ReviewWait.tryDecode comment.Body with
+                            | Ok (Some (ReviewWait.Complete (generation, _, completedEvidence)))
+                                when generation = receipt.ReviewGeneration && completedEvidence = evidence -> Some comment.Id
+                            | _ -> None)
+                    let terminalIds =
+                        ordered
+                        |> List.choose (fun comment ->
+                            match ReviewWait.tryDecode comment.Body with
+                            | Ok (Some (ReviewWait.Complete (generation, _, _)))
+                            | Ok (Some (ReviewWait.Cancel (generation, _, _)))
+                            | Ok (Some (ReviewWait.Timeout (generation, _, _)))
+                                when generation = receipt.ReviewGeneration -> Some comment.Id
+                            | _ -> None)
+
+                    match StructuredDecision.validateReviewLedger expectedSubject records with
+                    | Error errors ->
+                        let detail = String.concat "; " errors
+                        Error($"the exhausted structured review ledger is invalid: %s{detail}")
+                    | Ok _ when not (List.isEmpty decodeErrors) ->
+                        let detail = String.concat "; " decodeErrors
+                        Error($"the exhausted structured review ledger is unreadable: %s{detail}")
+                    | Ok _ ->
+                        match generationPairs, legacyComments, completionIds, terminalIds with
+                        | [ (initialComment, initial)
+                            (roundOneComment, roundOne)
+                            (roundTwoComment, roundTwo)
+                            (roundThreeComment, roundThree) ],
+                          [ legacy ],
+                          [ completedCommentId ],
+                          [ terminalCommentId ] when completedCommentId = terminalCommentId ->
+                            let expectedKinds =
+                                initial.Kind = StructuredDecision.Initial && initial.Round = 0
+                                && roundOne.Kind = StructuredDecision.Confirmation && roundOne.Round = 1
+                                && roundTwo.Kind = StructuredDecision.Confirmation && roundTwo.Round = 2
+                                && roundThree.Kind = StructuredDecision.Confirmation && roundThree.Round = 3
+                                && ([ initial; roundOne; roundTwo; roundThree ]
+                                    |> List.forall (fun record -> record.HeadSha = draft.HeadSha))
+                            let unresolved =
+                                [ initial; roundOne; roundTwo; roundThree ]
+                                |> List.forall (fun record -> record.Verdict = StructuredDecision.ChangesRequired)
+                            let legacyBody = legacy.Body
+                            let legacyMatches =
+                                legacyMarkerCount = 1
+                                && legacy.Id > completedCommentId
+                                && legacyField "exhausted-head" legacyBody = Some draft.HeadSha
+                                && legacyField "initial-review" legacyBody = Some initialComment.Url
+                                && legacyField "confirmation-1" legacyBody = Some roundOneComment.Url
+                                && legacyField "confirmation-2" legacyBody = Some roundTwoComment.Url
+                                && legacyField "confirmation-3" legacyBody = Some roundThreeComment.Url
+                                && legacyField "critic" legacyBody = Some roundThree.Critic
+                                && legacyField "verdict" legacyBody = Some "ordinary-chain-exhausted"
+                            let exactDraft =
+                                draft.Round = Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                                && draft.Verdict = StructuredDecision.ChangesRequired
+                                && draft.HeadSha = roundThree.HeadSha
+                                && draft.PreviousDigest = Some roundThree.Digest
+                                && draft.InitialReview = Some initialComment.Url
+                                && draft.PrecedingReview = Some roundThreeComment.Url
+                                && draft.Critic = roundThree.Critic
+                                && draft.Succession.IsNone
+                            let exactWait =
+                                receipt.Item = target.Canonical
+                                && receipt.Kind = ReviewWait.RepairConfirmation
+                                && receipt.ReviewGeneration =
+                                    ReviewWait.generationToken draft.HeadSha ReviewWait.RepairConfirmation Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                                && receipt.ClaimGeneration <> string claim.Id
+                                && evidence = roundThreeComment.Url
+                            let freshClaim = claim.Id > legacy.Id
+                            match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr with
+                            | Error error -> Error($"the exhausted pull request head could not be read: %A{error}")
+                            | Ok liveHead when liveHead <> draft.HeadSha ->
+                                Error($"the escalation head is stale: draft %s{draft.HeadSha}, pull request %s{liveHead}")
+                            | Ok _ when not expectedKinds -> Error "ordinary exhaustion requires exactly initial plus confirmation rounds 1, 2, and 3"
+                            | Ok _ when not unresolved -> Error "ordinary exhaustion requires a changes-required verdict through confirmation round 3"
+                            | Ok _ when not legacyMatches -> Error "legacy ordinary-exhaustion evidence is missing, duplicated, stale, or malformed"
+                            | Ok _ when not exactDraft -> Error "the escalation draft does not bind the exact exhausted head, round, digest, critic, and backlinks"
+                            | Ok _ when not exactWait -> Error "the completed wait does not bind the exact old-claim ordinary round-3 generation"
+                            | Ok _ when not freshClaim -> Error "the current claimant is not a fresh post-exhaustion claim generation"
+                            | Ok _ -> Ok ()
+                        | _ -> Error "ordinary exhaustion requires one exact initial+confirmation1/2/3 chain, one completed round-3 wait, and one legacy escalation"
                 match draft.Kind, state with
-                | StructuredDecision.Acceptance, ReviewWait.Completed (_, evidence)
-                    when draft.PrecedingReview = Some evidence -> Ok ()
+                | StructuredDecision.Escalation, ReviewWait.Completed (receipt, evidence) ->
+                    authorizeExhaustedClaimTurnover receipt evidence
+                | StructuredDecision.Acceptance, ReviewWait.Completed (receipt, evidence)
+                    when receipt.ClaimGeneration = string claim.Id && draft.PrecedingReview = Some evidence -> Ok ()
                 | StructuredDecision.Acceptance, _ ->
                     Error "host acceptance requires the immediately preceding critic record's durable review wait to be completed"
                 | StructuredDecision.Initial, ReviewWait.Waiting receipt
