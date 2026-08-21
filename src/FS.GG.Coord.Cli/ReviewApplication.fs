@@ -299,12 +299,13 @@ module ReviewApplication =
            expiresAt = receipt.ExpiresAt
            evidenceRef = receipt.EvidenceRef |}
 
-    let private waitAuthority (binding: Review.Binding) (action: Review.NextAction) (waitState: ReviewWait.State option) =
+    let private waitAuthority (binding: Review.Binding) (state: Review.State) (action: Review.NextAction) (waitState: ReviewWait.State option) =
         let dispatchAuthority =
             match action with
             | Review.DispatchCritic -> Some(ReviewWait.InitialReview, ReviewWait.generationToken binding.HeadSha ReviewWait.InitialReview 0)
             | Review.DispatchSuccessor _ ->
-                Some(ReviewWait.RepairConfirmation, ReviewWait.generationToken binding.HeadSha ReviewWait.RepairConfirmation binding.Round)
+                let round = stateRound state |> Option.defaultValue binding.Round
+                Some(ReviewWait.RepairConfirmation, ReviewWait.generationToken binding.HeadSha ReviewWait.RepairConfirmation round)
             | _ -> None
         match waitState, dispatchAuthority with
         | None, _ -> Ok () // offline snapshots predate the live durable-wait projection
@@ -351,7 +352,7 @@ module ReviewApplication =
             ExitCode.toInt ExitCode.NoVerdict
         | Ok verdict ->
             let waitStatus, waitReceipt, waitReason = waitProjection waitState
-            match waitAuthority binding verdict.NextAction waitState, opts.Render with
+            match waitAuthority binding verdict.State verdict.NextAction waitState, opts.Render with
             | Error reasons, Json ->
                 printfn
                     "%s"

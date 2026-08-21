@@ -99,3 +99,42 @@ module StructuredFixtures =
         let accepted = { acceptedDraft with Digest = StructuredDecision.reviewDigest acceptedDraft }
         [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
           2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson accepted ]
+
+    let movedHeadRepairComments subject reviewedHead critic =
+        let initialDraft: StructuredDecision.ReviewRecord =
+            { Schema = StructuredDecision.ReviewSchema
+              Subject = subject
+              Revision = 1
+              PreviousDigest = None
+              HeadSha = reviewedHead
+              ClaimGeneration = None
+              BaseSha = None
+              Critic = critic
+              Verdict = StructuredDecision.ChangesRequired
+              AcceptedExceptions = []
+              RouteApplicability = "not-meaningful"
+              RouteEvidence = [ "fixture has no runtime route comparison" ]
+              PolicyVersion = StructuredDecision.PolicyVersion
+              Kind = StructuredDecision.Initial
+              Round = 0
+              InitialReview = None
+              PrecedingReview = None
+              DiffAuditRequired = false
+              DiffAuditReceipts = []
+              Succession = None
+              Timestamp = "2026-08-15T00:00:00Z"
+              Digest = "" }
+        let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }
+        let confirmationDraft =
+            { initial with
+                Revision = 2
+                PreviousDigest = Some initial.Digest
+                Kind = StructuredDecision.Confirmation
+                Verdict = StructuredDecision.Pass
+                Round = 1
+                InitialReview = Some "https://reviews/1"
+                PrecedingReview = Some "https://reviews/1"
+                Digest = "" }
+        let confirmation = { confirmationDraft with Digest = StructuredDecision.reviewDigest confirmationDraft }
+        [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
+          2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson confirmation ]
