@@ -1,0 +1,578 @@
+schemaVersion: 1
+workId: 2813-release-saga-stable-predecessor
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2813-release-saga-stable-predecessor/spec.md
+sourceClarifications: work/2813-release-saga-stable-predecessor/clarifications.md
+sourceChecklist: work/2813-release-saga-stable-predecessor/checklist.md
+sourcePlan: work/2813-release-saga-stable-predecessor/plan.md
+sourceTasks: work/2813-release-saga-stable-predecessor/tasks.yml
+sourceAnalysis: readiness/2813-release-saga-stable-predecessor/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2813-release-saga-stable-predecessor/analysis.json
+    digest: d1cc22708e9252a4d5d0130c47441dfa75d046252d0735f1cafea9c5e93d7c58
+    schemaVersion: 1
+  - label: checklist
+    path: work/2813-release-saga-stable-predecessor/checklist.md
+    digest: 201dc12c3dbb9fcea3c31247070b0c423e32c2e2bcd5688b5ce3b34d2619fc6f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2813-release-saga-stable-predecessor/clarifications.md
+    digest: 72268170d2e12918dc75feda0a9db9e8a37e12abedcb1f4941d4cb75bf718d37
+    schemaVersion: 1
+  - label: plan
+    path: work/2813-release-saga-stable-predecessor/plan.md
+    digest: 7d07b24862d11dcee46a63c60fb2a6a9de09a6db7b1f101675b53a0cc89b599f
+    schemaVersion: 1
+  - label: spec
+    path: work/2813-release-saga-stable-predecessor/spec.md
+    digest: f2ba19c6d3addb193d6d5c8ee0b9fd85102038c8e3d630093c0c4eb850f87537
+    schemaVersion: 1
+  - label: tasks
+    path: work/2813-release-saga-stable-predecessor/tasks.yml
+    digest: a84876b8037d181ad2ba4d29640d89e5020ad3126f6b6a6ab3b64b08dd4bb801
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV001]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV002]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-006]
+    obligationRefs: [EV003]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-003, FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV009]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003]
+    obligationRefs: [EV011]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV012]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV013]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003]
+    obligationRefs: [EV014]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV015]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-006]
+    obligationRefs: [EV016]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV017]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV018]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV019]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV020]
+    artifacts: [work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml
+      digest: "sha256:06afa1611aa1cf21b5fa276665ba6abb0d5f3f4519743e2ac599a06d721c3f06"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Focused saga, workflow, packaging, mutation, and immutable-remote evidence passed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

@@ -14,12 +14,15 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 
 SCHEMA = "fsgg.release-saga/1"
 FEEDS = ("github", "nuget")
+CONTENT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
+SOURCE_SHA = re.compile(r"[0-9a-f]{40}\Z")
 
 
 def now() -> str:
@@ -195,8 +198,57 @@ def package_map(data: dict) -> dict[str, dict]:
     return {row["id"]: row for row in data["descriptor"]["packages"]}
 
 
+def stable_parts(value: str) -> tuple[int, ...]:
+    if not isinstance(value, str) or not value or "-" in value:
+        raise ValueError(f"stable channel version is prerelease or empty: {value}")
+    try:
+        parts = tuple(int(part) for part in value.split("."))
+    except ValueError as error:
+        raise ValueError(f"stable channel version is malformed: {value}") from error
+    if len(parts) != 3:
+        raise ValueError(f"stable channel version must have three numeric parts: {value}")
+    return parts
+
+
+def stable_channel_identity(path: pathlib.Path) -> dict[str, str]:
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(receipt, dict):
+        raise ValueError("stable channel receipt must be a JSON object")
+    version = receipt.get("version")
+    content_id = receipt.get("contentId")
+    source_sha = receipt.get("sourceSha")
+    promoted_at = receipt.get("promotedAt")
+    stable_parts(version)
+    if not isinstance(content_id, str) or CONTENT_ID.fullmatch(content_id) is None:
+        raise ValueError("stable channel receipt has a malformed contentId")
+    if not isinstance(source_sha, str) or SOURCE_SHA.fullmatch(source_sha) is None:
+        raise ValueError("stable channel receipt has a malformed sourceSha")
+    if not isinstance(promoted_at, str) or not promoted_at.endswith("Z"):
+        raise ValueError("stable channel receipt has a missing or malformed promotedAt")
+    try:
+        dt.datetime.fromisoformat(promoted_at.removesuffix("Z") + "+00:00")
+    except ValueError as error:
+        raise ValueError("stable channel receipt has a malformed promotedAt") from error
+    return {"version": version, "contentId": content_id, "sourceSha": source_sha}
+
+
+def command_predecessor(args: argparse.Namespace) -> None:
+    identity = stable_channel_identity(pathlib.Path(args.channel).resolve())
+    expected_tag = f"coherent-set/v{identity['version']}"
+    if args.release_tag != expected_tag:
+        raise ValueError(
+            f"stable channel receipt version {identity['version']} does not match release tag {args.release_tag}"
+        )
+    if args.tag_source != identity["sourceSha"]:
+        raise ValueError(
+            f"stable channel receipt source {identity['sourceSha']} does not match tag source {args.tag_source}"
+        )
+    print(json.dumps(identity, sort_keys=True, separators=(",", ":")))
+
+
 def command_prepare(args: argparse.Namespace) -> None:
     root = pathlib.Path(args.artifact_dir).resolve()
+    predecessor = stable_channel_identity(pathlib.Path(args.previous_channel).resolve())
     expected = set(args.expected_package)
     rows = []
     for path in sorted(root.glob("*.nupkg")):
@@ -226,7 +278,8 @@ def command_prepare(args: argparse.Namespace) -> None:
         "version": args.version,
         "sourceSha": args.source_sha,
         "policyVersion": args.policy_version,
-        "previousStableVersion": args.previous_version,
+        "previousStableVersion": predecessor["version"],
+        "previousStableContentId": predecessor["contentId"],
         "channel": "stable",
         "feedOrder": list(FEEDS),
         "packages": rows,
@@ -304,7 +357,7 @@ def command_reusable(args: argparse.Namespace) -> None:
     assert_bound(stored_path, stored)
     assert_bound(candidate_path, candidate)
     problems: list[str] = []
-    for key in ("releaseId", "version", "sourceSha", "policyVersion", "previousStableVersion", "channel", "feedOrder"):
+    for key in ("releaseId", "version", "sourceSha", "policyVersion", "previousStableVersion", "previousStableContentId", "channel", "feedOrder"):
         if stored["descriptor"].get(key) != candidate["descriptor"].get(key):
             problems.append(f"descriptor.{key}: stored {stored['descriptor'].get(key)!r} != candidate {candidate['descriptor'].get(key)!r}")
     stored_packages, candidate_packages = package_map(stored), package_map(candidate)
@@ -459,13 +512,6 @@ def command_promote(args: argparse.Namespace) -> None:
     incomplete = [feed for feed in FEEDS if data["state"]["feeds"][feed]["state"] != "verified"]
     if incomplete:
         raise ValueError("stable promotion refused; incomplete feeds: " + ", ".join(incomplete))
-    def stable_parts(value: str) -> tuple[int, ...]:
-        if "-" in value:
-            raise ValueError(f"stable channel version is prerelease: {value}")
-        try:
-            return tuple(int(part) for part in value.split("."))
-        except ValueError as error:
-            raise ValueError(f"stable channel version is malformed: {value}") from error
     existing = data["state"]["channelPromotion"]
     if existing["state"] == "promoted":
         if existing["receipt"]["contentId"] != data["contentId"]:
@@ -479,12 +525,15 @@ def command_promote(args: argparse.Namespace) -> None:
         print("stable channel already promoted to these bytes")
         return
     previous_version = data["descriptor"].get("previousStableVersion")
+    previous_content_id = data["descriptor"].get("previousStableContentId")
     if args.previous_channel:
-        previous = json.loads(pathlib.Path(args.previous_channel).read_text(encoding="utf-8"))
+        previous = stable_channel_identity(pathlib.Path(args.previous_channel).resolve())
         if previous.get("contentId") == data["contentId"]:
             raise ValueError("previous stable channel already names this content")
         if previous.get("version") != previous_version:
             raise ValueError("previous channel receipt does not match manifest baseline")
+        if previous_content_id is not None and previous.get("contentId") != previous_content_id:
+            raise ValueError("previous channel receipt content does not match manifest baseline")
     if not previous_version:
         raise ValueError("manifest has no previous stable channel baseline")
     if stable_parts(data["descriptor"]["version"]) <= stable_parts(str(previous_version)):
@@ -506,9 +555,12 @@ def parser() -> argparse.ArgumentParser:
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--release-id", required=True); prepare.add_argument("--version", required=True)
     prepare.add_argument("--source-sha", required=True); prepare.add_argument("--policy-version", required=True)
-    prepare.add_argument("--previous-version", required=True)
+    prepare.add_argument("--previous-channel", required=True)
     prepare.add_argument("--artifact-dir", required=True); prepare.add_argument("--expected-package", action="append", required=True)
     prepare.add_argument("--output", required=True); prepare.set_defaults(run=command_prepare)
+    predecessor = commands.add_parser("predecessor")
+    predecessor.add_argument("--channel", required=True); predecessor.add_argument("--release-tag", required=True)
+    predecessor.add_argument("--tag-source", required=True); predecessor.set_defaults(run=command_predecessor)
     preflight = commands.add_parser("preflight")
     preflight.add_argument("--manifest", required=True); preflight.add_argument("--feed", choices=("both",) + FEEDS, required=True)
     preflight.add_argument("--max-package-bytes", type=int, default=250_000_000)

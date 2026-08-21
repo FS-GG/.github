@@ -130,7 +130,16 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.70.0 — mutual overlap waits and board-orchestrator authority become executable policy.
+    <PackageReleaseNotes>0.71.0 — release preparation binds the live stable predecessor before packing.
+
+WHAT MOVED, AND WHY IT IS A MINOR. The release saga now validates the latest promoted coherent-set
+receipt and its tag/source identity before build or pack, binds both predecessor version and content ID
+into newly prepared manifests, and rejects stale draft retries. Registry metadata is explicitly not
+predecessor authority. Published `0.70.0` bytes and immutable tags remain unchanged and unpromoted;
+`0.71.0` is the forward-only recovery against live stable `0.69.0` (.github#2813). No package,
+command, or member identity is removed.
+
+0.70.0 — mutual overlap waits and board-orchestrator authority become executable policy.
 
 WHAT MOVED, AND WHY IT IS A MINOR. Reciprocal, generation-bound overlap waits now detect one exact
 two-cycle, open one automatic ADR-0051 room, bind precedence to the current live board-orchestrator

@@ -6,11 +6,20 @@ truth is the content-addressed `release-manifest.json` attached to `coherent-set
 
 ## Prepare
 
-Run `release-saga-prepare` at the exact merged source SHA. It builds and tests the engine, packs each
+Run `release-saga-prepare` at the exact merged source SHA. Before build or pack, it finds the latest
+published `coherent-set/v*` release, downloads that release's `stable-channel.json`, and validates the
+receipt's stable version and content identity against the coherent tag and its exact source SHA. That
+live promoted receipt is predecessor authority. A prepared manifest is the immutable identity for the
+candidate release; `registry/dependencies.yml` is a downstream projection and never selects or validates
+the predecessor. Missing, unreadable, prerelease, malformed, stale, or contradictory receipt state
+refuses before any package bytes or draft release are created.
+
+Preparation then builds and tests the engine, packs each
 member exactly once, reads each nuspec and dependency relation, hashes every archive and payload,
 preflights both feeds' package-size and release-notes limits, then creates a draft release containing
-the three archives and manifest. A repeated prepare accepts only byte-identical assets; it never
-clobbers drift under an existing version.
+the three archives and manifest. The manifest binds both `previousStableVersion` and
+`previousStableContentId`. A repeated prepare accepts only byte-identical assets whose stored
+predecessor tuple equals the current authoritative tuple; it never clobbers drift under an existing version.
 
 Preparation is reversible: delete the draft before any package tag is pushed. It is not a release and
 does not move the stable channel.
@@ -36,6 +45,13 @@ archive. A different local hash or externally served payload is a terminal byte-
 Published NuGet versions and release tags are immutable and have no rollback operation. Recovery is
 forward-only: finish missing feed steps with the same bytes, or—if a registry contains conflicting
 bytes—leave the draft unpromoted, record the poisoned version, and prepare a new coherent version.
+
+`coherent-set/v0.70.0` is the concrete poisoned-version record: all three package versions and tags
+exist, but its stored manifest names registry-derived predecessor `0.68.0` while the live promoted
+channel is `0.69.0`. Do not rewrite, replace, delete, or promote its packages, tags, manifest, journals,
+assets, or draft. Recovery advances to unused `0.71.0` from reviewed merged source and prepares it
+against the unchanged live `0.69.0` receipt. If the live channel moves first, preparation must bind that
+new authority or refuse; operators never force the planned predecessor through.
 
 ## Promote
 

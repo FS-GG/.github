@@ -85,6 +85,10 @@
     <!-- 0.69.0 -> 0.70.0, a coherent MINOR (.github#2801): the sibling engine and packed kit add
          executable mutual-overlap arbitration and single-board-orchestrator safety. Driver members,
          bytes, and destinations are unchanged; this project advances with the coherent scalar. -->
+    <!-- 0.70.0 -> 0.71.0, a coherent MINOR (.github#2813): the release saga binds the live promoted
+         predecessor before packing and refuses stale predecessor/draft identity. Driver members,
+         bytes, and destinations are unchanged; 0.70.0 remains poisoned and unpromoted, so this project
+         advances with the forward-recovery coherent scalar. -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>

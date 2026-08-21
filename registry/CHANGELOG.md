@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-21** — **coherent set `github:0.71.0` prepared as forward recovery; `0.70.0` poisoned**
+  (github; [.github#2813](https://github.com/FS-GG/.github/issues/2813)): preparation now derives
+  predecessor version and content identity only from the live promoted `stable-channel.json` and
+  validates its coherent tag/source before packing. The packages, tags, stored manifest, journals,
+  assets, and draft for `coherent-set/v0.70.0` remain unchanged and unpromoted; after this source is
+  reviewed and merged, the claim owner must prepare/publish/promote unused `0.71.0` against live stable
+  `0.69.0`, verify byte identity on both feeds, and replace this release-owed entry with immutable evidence.
+
 - **2026-08-21** — **coherent set `github:0.70.0` prepared with a mapped release obligation**
   (github; [.github#2801](https://github.com/FS-GG/.github/issues/2801)): makes mutual-overlap
   arbitration and the single Coordination-board orchestrator executable, generation-bound,

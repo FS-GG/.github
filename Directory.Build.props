@@ -426,8 +426,13 @@
        winner-land/rebase/re-overlap/re-widen recovery. It also makes the single Coordination-board
        orchestrator lease executable, caller-bound, race-safe, and able to project external blocking
        requests to the board's highest safe severity. Additive commands/policy; no identities removed. -->
+  <!-- 0.70.0 -> 0.71.0 (.github#2813): MINOR on the stable 0.x line. Release preparation now
+       resolves the live promoted coherent-set receipt before packing, binds predecessor version plus
+       content identity into the manifest, and rejects stale/missing/contradictory authority and stale
+       draft retries. This is additive release-orchestration behavior. Version 0.70.0 remains a poisoned,
+       unpromoted immutable package/tag set; 0.71.0 is its forward-only recovery. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.70.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.71.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

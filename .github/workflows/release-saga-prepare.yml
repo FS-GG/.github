@@ -72,6 +72,28 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+      - name: Resolve authoritative stable predecessor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          predecessor_tag="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 100 \
+            --json tagName --jq '[.[] | select(.tagName | startswith("coherent-set/v"))][0].tagName // ""')"
+          [ -n "$predecessor_tag" ] \
+            || { echo "::error::no published coherent-set stable-channel receipt exists"; exit 1; }
+          mkdir -p artifacts/predecessor
+          gh release download "$predecessor_tag" --repo "$GITHUB_REPOSITORY" \
+            --pattern stable-channel.json --dir artifacts/predecessor
+          predecessor_source="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/$predecessor_tag" "refs/tags/$predecessor_tag^{}" \
+            | awk -v p="refs/tags/$predecessor_tag^{}" -v b="refs/tags/$predecessor_tag" \
+                '$2==p {peeled=$1} $2==b {plain=$1} END {print (length(peeled) ? peeled : plain)}')"
+          [ -n "$predecessor_source" ] \
+            || { echo "::error::cannot resolve source for $predecessor_tag"; exit 1; }
+          python3 scripts/release-saga.py predecessor \
+            --channel artifacts/predecessor/stable-channel.json \
+            --release-tag "$predecessor_tag" --tag-source "$predecessor_source" \
+            > artifacts/predecessor/identity.json
       - name: Resolve stable coherent-set version
         id: version
         run: |
@@ -94,15 +116,37 @@ jobs:
       - name: Create and preflight durable release manifest
         run: |
           set -euo pipefail
-          previous="$(awk '/^  - id: coord-engine$/{found=1} found && /^[[:space:]]+package-version:/{gsub(/"/, "", $2); print $2; exit}' registry/dependencies.yml)"
-          [ -n "$previous" ]
           python3 scripts/release-saga.py prepare \
             --release-id "github:${{ steps.version.outputs.version }}" \
             --version "${{ steps.version.outputs.version }}" --source-sha "$FSGG_SOURCE_SHA" \
-            --policy-version release-saga/1 --previous-version "$previous" --artifact-dir artifacts/packages \
+            --policy-version release-saga/1 \
+            --previous-channel artifacts/predecessor/stable-channel.json --artifact-dir artifacts/packages \
             --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit \
             --expected-package FS.GG.Drivers --output artifacts/packages/release-manifest.json
           python3 scripts/release-saga.py preflight --manifest artifacts/packages/release-manifest.json --feed both
+      - name: Revalidate predecessor before draft mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current_tag="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 100 \
+            --json tagName --jq '[.[] | select(.tagName | startswith("coherent-set/v"))][0].tagName // ""')"
+          [ -n "$current_tag" ] \
+            || { echo "::error::the promoted coherent-set predecessor became unreadable"; exit 1; }
+          current_dir="$(mktemp -d)"
+          trap 'rm -rf "$current_dir"' EXIT
+          gh release download "$current_tag" --repo "$GITHUB_REPOSITORY" \
+            --pattern stable-channel.json --dir "$current_dir"
+          current_source="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/$current_tag" "refs/tags/$current_tag^{}" \
+            | awk -v p="refs/tags/$current_tag^{}" -v b="refs/tags/$current_tag" \
+                '$2==p {peeled=$1} $2==b {plain=$1} END {print (length(peeled) ? peeled : plain)}')"
+          [ -n "$current_source" ] \
+            || { echo "::error::cannot re-resolve source for $current_tag"; exit 1; }
+          python3 scripts/release-saga.py predecessor --channel "$current_dir/stable-channel.json" \
+            --release-tag "$current_tag" --tag-source "$current_source" > "$current_dir/identity.json"
+          cmp artifacts/predecessor/identity.json "$current_dir/identity.json" \
+            || { echo "::error::stable predecessor moved during preparation; discard these packed bytes and retry"; exit 1; }
       - name: Create immutable draft release inputs
         env:
           GH_TOKEN: ${{ github.token }}

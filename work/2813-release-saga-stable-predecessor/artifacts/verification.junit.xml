@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="2813-release-saga-stable-predecessor" tests="1" failures="0" errors="0" skipped="0" time="3.2">
+  <testcase classname="release-saga" name="live predecessor authority and forward recovery" time="3.2">
+    <system-out>bash tests/release-saga/run.sh passed: live predecessor validation, stale retry refusal, dual-feed recovery, and 0.69.0 to 0.71.0 forward promotion. Production mutation removing previousStableContentId comparison exited 1 at the stale-retry assertion.</system-out>
+  </testcase>
+</testsuite>
