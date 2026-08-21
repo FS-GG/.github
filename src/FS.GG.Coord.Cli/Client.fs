@@ -7527,14 +7527,43 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
           if not explicitlyRewidened then "loser reservation was not explicitly re-widened"
           if reviewRequired && not exactHeadReviewed then "changed loser head lacks exact-head review" ]
 
-    let private currentGitHeadContainsOriginMain () =
+    let private runGit (arguments: string list) =
         try
-            let psi = ProcessStartInfo("git", "merge-base --is-ancestor origin/main HEAD")
+            let psi = ProcessStartInfo("git")
             psi.UseShellExecute <- false
+            psi.RedirectStandardOutput <- true
+            psi.RedirectStandardError <- true
+            arguments |> List.iter psi.ArgumentList.Add
             use gitProcess = Process.Start psi
+            let output = gitProcess.StandardOutput.ReadToEnd().Trim()
             gitProcess.WaitForExit()
-            gitProcess.ExitCode = 0
-        with _ -> false
+            if gitProcess.ExitCode = 0 then Some output else None
+        with _ -> None
+
+    let private currentGitResumeFacts () =
+        let fetchedCurrent =
+            match runGit [ "rev-parse"; "refs/remotes/origin/main" ], runGit [ "ls-remote"; "--exit-code"; "origin"; "refs/heads/main" ] with
+            | Some local, Some remote ->
+                remote.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
+                |> Array.tryHead
+                |> Option.exists (fun current -> String.Equals(local, current, StringComparison.OrdinalIgnoreCase))
+            | _ -> false
+        let rebased = runGit [ "merge-base"; "--is-ancestor"; "refs/remotes/origin/main"; "HEAD" ] |> Option.isSome
+        fetchedCurrent, rebased
+
+    let private exactHeadReviewFacts (ctx: Context) (held: Writes.Held) =
+        match Reads.prAlive ctx.Transport held.Ref.Owner held.Ref.Repo held.Ref.Number with
+        | Error error -> Error error
+        | Ok(LeaseExpiredPrOpen pr) ->
+            match runGit [ "rev-parse"; "HEAD" ], Reads.prHeadSha ctx.Transport held.Ref.Owner held.Ref.Repo pr, Reads.commentsWithIdentity ctx.Transport held.Ref.Owner held.Ref.Repo pr with
+            | Some localHead, Ok remoteHead, Ok comments ->
+                let reviewComments = comments |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                let facts = Driver.reviewPhaseFacts reviewComments
+                Ok(true, localHead = remoteHead && facts.LatestReviewedHeadSha = Some localHead && facts.LatestVerdict = Some "pass")
+            | None, _, _ -> Ok(true, false)
+            | _, Error error, _
+            | _, _, Error error -> Error error
+        | Ok _ -> Ok(false, false)
 
     let private overlapFreezeFor (ctx: Context) (held: Writes.Held) =
         Reads.commentBodies ctx.Transport held.Ref.Owner held.Ref.Repo held.Ref.Number
@@ -7788,24 +7817,33 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                                 | None -> Ok()
                                                 | Some freeze ->
                                                     let frozen = freeze.SharedTokens |> List.map TouchSet.stem |> Set.ofList
+                                                    let priorStems = priorTokens |> List.map TouchSet.stem |> Set.ofList
+                                                    let proposedStems = proposed.Tokens |> List.map TouchSet.stem |> Set.ofList
+                                                    let removesFrozenToken =
+                                                        frozen
+                                                        |> Set.exists (fun token -> priorStems.Contains token && not (proposedStems.Contains token))
                                                     let readdsFrozenToken = newTokenStems |> Set.exists frozen.Contains
-                                                    if not readdsFrozenToken then Ok()
+                                                    if removesFrozenToken then
+                                                        Error(Errors.Malformed(ref.Short, "mutual-overlap cycle freeze refused removal of a shared reservation before host precedence"))
+                                                    elif not readdsFrozenToken then Ok()
                                                     else
                                                         Reads.issueState ctx.Transport freeze.Winner.Owner freeze.Winner.Repo freeze.Winner.Number
                                                         |> Result.bind (fun state ->
-                                                            let rebased = currentGitHeadContainsOriginMain ()
-                                                            let errors =
-                                                                loserResumeErrors
-                                                                    (state = IssueState.Closed)
-                                                                    true
-                                                                    rebased
-                                                                    rebased
-                                                                    (List.isEmpty collisions)
-                                                                    true
-                                                                    false
-                                                                    false
-                                                            if List.isEmpty errors then Ok()
-                                                            else Error(Errors.Malformed(ref.Short, "loser resume refused: " + String.concat "; " errors))))
+                                                            exactHeadReviewFacts ctx held
+                                                            |> Result.bind (fun (reviewRequired, exactHeadReviewed) ->
+                                                                let fetchedCurrentBase, rebasedHead = currentGitResumeFacts ()
+                                                                let errors =
+                                                                    loserResumeErrors
+                                                                        (state = IssueState.Closed)
+                                                                        true
+                                                                        fetchedCurrentBase
+                                                                        rebasedHead
+                                                                        (List.isEmpty collisions)
+                                                                        true
+                                                                        reviewRequired
+                                                                        exactHeadReviewed
+                                                                if List.isEmpty errors then Ok()
+                                                                else Error(Errors.Malformed(ref.Short, "loser resume refused: " + String.concat "; " errors)))))
 
                                         let write =
                                             resumeGate
@@ -8022,6 +8060,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
           ExplicitlyRewidened: bool
           ReviewRequired: bool
           ExactHeadReviewed: bool }
+
+    [<Literal>]
+    let boardOrchestratorAuthority = "FS-GG/.github#2801"
 
     // One immutable generation of the Coordination board's sole orchestrator authority. Expiry, rather
     // than a mutable heartbeat body, makes takeover races a generation-scoped CAS and leaves an audit trail.
@@ -8574,6 +8615,27 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             |> Result.bind (fun () -> Writes.ensureRoomRef ctx.Transport cycle.Second roomToken)
             |> Result.map (fun () -> room))
 
+    let private overlapFreezeBody (cycle: MutualOverlapCycle) (subjectGeneration: string) (peer: Ref) (sharedTokens: string list) (phase: string) =
+        let key = $"<!-- fsgg:overlap-freeze-key/v1 cycle=%s{cycle.Digest} subject-generation=%s{subjectGeneration} phase=%s{phase} -->"
+        key,
+        key
+        + "\n"
+        + OverlapFreezeMarker
+        + "\n"
+        + JsonSerializer.Serialize(
+            {| schema = "fsgg.coord.overlap-freeze/v1"
+               cycleDigest = cycle.Digest
+               winner = peer.Canonical
+               loserGeneration = subjectGeneration
+               sharedTokens = normalizedTokens sharedTokens |})
+
+    let private freezeCycleParticipants (ctx: Context) (cycle: MutualOverlapCycle) =
+        let firstKey, firstBody = overlapFreezeBody cycle cycle.FirstGeneration cycle.Second cycle.SharedTokens "cycle"
+        let secondKey, secondBody = overlapFreezeBody cycle cycle.SecondGeneration cycle.First cycle.SharedTokens "cycle"
+        Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody
+        |> Result.bind (fun _ -> Writes.writeDurableComment ctx.Transport cycle.Second secondKey secondBody)
+        |> Result.map ignore
+
     let private overlapWait (ctx: Context) (opts: Options) waiterArg predecessorArg host =
         match worker opts, parseRef ctx waiterArg, parseRef ctx predecessorArg with
         | Error code, _, _ -> code
@@ -8600,7 +8662,35 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 let receipt = { draft with Digest = waitReceiptDigest draft }
                 let marker = $"<!-- fsgg:overlap-wait-key/v1 waiter=%s{waiter.Canonical} generation=%s{receipt.WaiterGeneration} -->"
                 let body = marker + "\n" + waitReceiptBody receipt
-                match Writes.writeDurableComment ctx.Transport waiter marker body with
+                let candidateSnapshot = { snapshot with Waits = snapshot.Waits @ [ receipt ] }
+                let prefreeze =
+                    match detectMutualOverlap candidateSnapshot with
+                    | MutualOverlapCycle cycle -> freezeCycleParticipants ctx cycle
+                    | MutualOverlapRefused reason -> Error(Errors.Malformed(waiter.Short, reason))
+                    | NoMutualOverlapCycle -> Ok()
+                let persist =
+                    prefreeze
+                    |> Result.bind (fun () ->
+                        // A participant could have changed its declaration while the two durable
+                        // freezes were being written. Re-read only after both freezes exist: from
+                        // this point production touch-set writers cannot move either shared token.
+                        mutualOverlapFacts ctx opts waiter predecessor
+                        |> Result.bind (fun (currentWaiter, currentPredecessor, _, _, currentSnapshot) ->
+                            let currentRelation = currentSnapshot.Relations.Head
+                            let currentDraft: OverlapWaitReceipt =
+                                { Waiter = waiter
+                                  WaiterGeneration = string currentWaiter.Id
+                                  Predecessor = predecessor
+                                  PredecessorGeneration = string currentPredecessor.Id
+                                  SharedTokens = currentRelation.SharedTokens
+                                  Host = host
+                                  Digest = "" }
+                            let currentReceipt = { currentDraft with Digest = waitReceiptDigest currentDraft }
+                            if currentReceipt.Digest <> receipt.Digest then
+                                Error(Errors.Malformed(waiter.Short, "mutual-overlap participants changed while the cycle freeze was being established"))
+                            else
+                                Writes.writeDurableComment ctx.Transport waiter marker body))
+                match persist with
                 | Error error -> fail error
                 | Ok _ ->
                     match mutualOverlapFacts ctx opts waiter predecessor with
@@ -8639,6 +8729,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Ok lease, Ok request -> collect (Option.toList lease @ leases) (Option.toList request @ requests) rest
             collect [] [] comments)
 
+    let private configuredBoardOrchestratorAuthority (ctx: Context) supplied =
+        match parseRef ctx boardOrchestratorAuthority, parseRef ctx supplied with
+        | Error detail, _ -> Error $"configured board-orchestrator authority is invalid: %s{detail}"
+        | _, Error detail -> Error detail
+        | Ok configured, Ok caller when caller <> configured ->
+            Error $"board-orchestrator authority is configured as %s{configured.Canonical}; caller-supplied %s{caller.Canonical} cannot fracture the lease domain"
+        | Ok configured, Ok _ -> Ok configured
+
     let private overlapArbitrate (ctx: Context) (opts: Options) winnerArg loserArg authorityArg reason =
         match worker opts, parseRef ctx winnerArg, parseRef ctx loserArg with
         | Error code, _, _ -> code
@@ -8648,7 +8746,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             ExitError
         | Ok w, Ok winner, Ok loser ->
             let authorize () =
-                match parseRef ctx authorityArg with
+                match configuredBoardOrchestratorAuthority ctx authorityArg with
                 | Error message ->
                     eprint $"fsgg-coord-engine: overlap arbitrate requires the board-orchestrator authority ref: %s{message}"
                     Error ExitError
@@ -8739,19 +8837,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                             let rewritten = Writes.rewrite loserBody valid
                                             let marker = $"<!-- fsgg:overlap-precedence-key/v1 cycle=%s{cycle.Digest} revision=%d{precedence.Revision} -->"
                                             let body = marker + "\n" + precedenceReceiptBody precedence
-                                            let freezeKey = $"<!-- fsgg:overlap-freeze-key/v1 cycle=%s{cycle.Digest} loser-generation=%d{held.MarkerId} -->"
-                                            let freezeBody =
-                                                freezeKey
-                                                + "\n"
-                                                + OverlapFreezeMarker
-                                                + "\n"
-                                                + JsonSerializer.Serialize(
-                                                    {| schema = "fsgg.coord.overlap-freeze/v1"
-                                                       cycleDigest = cycle.Digest
-                                                       winner = winner.Canonical
-                                                       loser = loser.Canonical
-                                                       loserGeneration = string held.MarkerId
-                                                       sharedTokens = normalizedTokens cycle.SharedTokens |})
+                                            let freezeKey, freezeBody = overlapFreezeBody cycle (string held.MarkerId) winner cycle.SharedTokens "precedence"
                                             match Writes.writeDurableComment ctx.Transport loser freezeKey freezeBody with
                                             | Error error -> fail error
                                             | Ok _ ->
@@ -8769,7 +8855,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     // Standard route for an external repository needing Coordination-board work. A live authority receives
     // one generation-bound blocking request; only absence/expiry opens the next generation's comment CAS.
     let private overlapOrchestrate (ctx: Context) (opts: Options) authorityText requestingRepo requestKey coordinationText holder =
-        match worker opts, parseRef ctx authorityText, parseRef ctx coordinationText with
+        match worker opts, configuredBoardOrchestratorAuthority ctx authorityText, parseRef ctx coordinationText with
         | Error code, _, _ -> code
         | _, Error detail, _
         | _, _, Error detail ->

@@ -513,6 +513,7 @@ module ClaimOverlapTests =
             comments.[42] <- ResizeArray [ "<!-- fsgg:claim worker=vole-418 lease=120 -->\nheld" ]
             comments.[43] <- ResizeArray [ "<!-- fsgg:claim worker=smew-e1d9 lease=120 -->\nheld" ]
             comments.[99] <- ResizeArray()
+            comments.[2801] <- ResizeArray()
             issueBodies.[42] <- "Paths: src/Thing.fs"
             issueBodies.[43] <- "Paths: src/Thing.fs"
 
@@ -533,7 +534,7 @@ module ClaimOverlapTests =
             let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
             this.Bodies number
             |> List.mapi (fun index body ->
-                {| id = (if number = 99 then 9101L + int64 index elif index = 0 then (if number = 42 then 8001L else 8070L) else 9100L + int64 index)
+                {| id = (if number = 99 || number = 2801 then 9101L + int64 index elif index = 0 then (if number = 42 then 8001L else 8070L) else 9100L + int64 index)
                    html_url = $"https://example.invalid/comments/%d{9100 + index}"
                    body = body
                    user = {| login = "EHotwagner" |}
@@ -560,10 +561,15 @@ module ClaimOverlapTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json 42)
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/43/comments" -> ok (thread.Json 43)
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/99/comments" -> ok (thread.Json 99)
+            | "GET", "repos/FS-GG/.github/issues/2801/comments" -> ok (thread.Json 2801)
             | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
                 ok (sprintf """{"id":%d}""" (thread.Add(42, jsonBody req)))
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/43/comments" ->
+                ok (sprintf """{"id":%d}""" (thread.Add(43, jsonBody req)))
             | "POST", "repos/FS-GG/FS.GG.SDD/issues/99/comments" ->
                 ok (sprintf """{"id":%d}""" (thread.Add(99, jsonBody req)))
+            | "POST", "repos/FS-GG/.github/issues/2801/comments" ->
+                ok (sprintf """{"id":%d}""" (thread.Add(2801, jsonBody req)))
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok (JsonSerializer.Serialize {| state = "open"; body = thread.Body 42 |})
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/43" -> ok (JsonSerializer.Serialize {| state = "open"; body = thread.Body 43 |})
             | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/42" -> thread.SetBody(42, jsonBody req); ok "{}"
@@ -618,10 +624,10 @@ module ClaimOverlapTests =
         runOverlapCommand transport [ "overlap"; "wait"; "FS.GG.SDD#42"; "FS.GG.SDD#43"; "host/root"; "--worker"; "vole-418" ]
 
     let private runOverlapArbitrate transport =
-        runOverlapCommand transport [ "overlap"; "arbitrate"; "FS.GG.SDD#43"; "FS.GG.SDD#42"; "FS.GG.SDD#99"; "--worker"; "vole-418" ]
+        runOverlapCommand transport [ "overlap"; "arbitrate"; "FS.GG.SDD#43"; "FS.GG.SDD#42"; Client.boardOrchestratorAuthority; "--worker"; "vole-418" ]
 
     let private runOverlapOrchestrate transport =
-        runOverlapCommand transport [ "overlap"; "orchestrate"; "FS.GG.SDD#99"; "FS.GG.SDD"; "coord-fix-42"; "FS.GG.SDD#42"; "vole-418" ]
+        runOverlapCommand transport [ "overlap"; "orchestrate"; Client.boardOrchestratorAuthority; "FS.GG.SDD"; "coord-fix-42"; "FS.GG.SDD#42"; "vole-418" ]
 
     [<Fact>]
     let ``#2801 compiled no-A route acquires one authoritative board-orchestrator generation`` () =
@@ -630,8 +636,8 @@ module ClaimOverlapTests =
         Assert.Equal(0, code)
         Assert.Empty(errors)
         Assert.Contains("ACQUIRED", output)
-        Assert.Single(thread.Bodies 99) |> ignore
-        Assert.Contains("fsgg.coord.board-orchestrator-lease/v1", thread.Bodies(99).Head)
+        Assert.Single(thread.Bodies 2801) |> ignore
+        Assert.Contains("fsgg.coord.board-orchestrator-lease/v1", thread.Bodies(2801).Head)
 
     [<Fact>]
     let ``#2801 compiled overlap wait route writes one generation-bound receipt and is retry-idempotent`` () =
@@ -683,6 +689,8 @@ module ClaimOverlapTests =
         Assert.Contains("Rooms: #99", thread.Body 42)
         Assert.Contains("Rooms: #99", thread.Body 43)
         Assert.Equal(1, thread.RoomCreates)
+        Assert.Contains(thread.Bodies 42, fun body -> body.Contains "fsgg.coord.overlap-freeze/v1")
+        Assert.Contains(thread.Bodies 43, fun body -> body.Contains "fsgg.coord.overlap-freeze/v1")
 
     [<Fact>]
     let ``#2801 compiled arbitration route records precedence and narrows loser while its claim remains held`` () =
@@ -716,7 +724,7 @@ module ClaimOverlapTests =
         thread.RoomBody <- Some($"<!-- fsgg:mutual-overlap-room/v1 cycle=%s{cycle.Digest} -->\n\nPaths: none")
         thread.Add(99, "ordinary room message") |> ignore
         let authorityDraft: Client.BoardOrchestratorLease =
-            { Board = "FS-GG/FS.GG.SDD#99"
+            { Board = Client.boardOrchestratorAuthority
               HolderRepo = "FS.GG.SDD"
               Holder = "vole-418"
               Generation = 1L
@@ -725,7 +733,7 @@ module ClaimOverlapTests =
               Digest = "" }
         let authorityLease = { authorityDraft with Digest = Client.boardOrchestratorLeaseDigest authorityDraft }
         thread.Add(
-            99,
+            2801,
             "<!-- fsgg:board-orchestrator-lease/v1 -->\n"
             + JsonSerializer.Serialize
                 {| schema = "fsgg.coord.board-orchestrator-lease/v1"

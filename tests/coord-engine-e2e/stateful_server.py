@@ -118,7 +118,7 @@ def comments_for(n):
 # 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
 COMMENTS = {
-    42: [], 43: [], 99: [], 44: [], 46: [],
+    42: [], 43: [], 99: [], 44: [], 46: [], 2801: [],
     # Closed rows earn Done only from the immutable receipt. This is the direct-reducer offer fixture;
     # closure/status alone must never resurrect the retired CLOSED-ISSUE-NOT-DONE chore.
     50: [{"id": 650050, "body": "<!-- fsgg:done-receipt v=1 -->\nfixture terminal receipt",
@@ -141,6 +141,7 @@ RATE_LIMIT = {"cost": 1, "remaining": 4999}
 # live force-steal target completely untouched.  ``unknown`` omits the authoritative headers rather
 # than inventing a sentinel value: absence is the state the client must fail closed on.
 REST_BUDGET_MODE = ["healthy"]
+OPEN_PR_42 = [False]
 
 # BOARD READS, COUNTED — so a leg can assert what was NOT spent. #733's `AfterDone` offer costs `done` a
 # scan it otherwise never makes, and `Chores.offer`'s step 1 (`choreLockRef`) is a pure string match that
@@ -761,6 +762,16 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 return self._send(200, {"boardReads": BOARD_READS[0]})
 
+        if path.rstrip("/") == "/_fixture/open-pr-42-unreviewed":
+            with LOCK:
+                OPEN_PR_42[0] = True
+                return self._send(200, {"openPr42": True})
+
+        if path.rstrip("/") == "/_fixture/close-pr-42":
+            with LOCK:
+                OPEN_PR_42[0] = False
+                return self._send(200, {"openPr42": False})
+
         # #1151 — arm ONE deferred field write. The next `updateProjectV2ItemFieldValue` rate-limits, so
         # `boardWrite` returns `Deferred`; the one after it succeeds. Lets a test drive the deferred-stamp
         # path (`done` keeps the green verdict, surfaces the flush remedy) and then `flush` it clean.
@@ -988,6 +999,8 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.match(r"^/repos/[^/]+/[^/]+/pulls$", path)
         if m:
+            if OPEN_PR_42[0]:
+                return self._send(200, [{"number": 42, "state": "open", "head": {"ref": "item/42-mutual-overlap", "sha": "a" * 40}}])
             return self._send(200, [])   # no open PRs → prAlive says lease-expired-no-pr
 
         m = re.match(r"^/repos/[^/]+/[^/]+/git/matching-refs/heads/item/\d+-$", path)

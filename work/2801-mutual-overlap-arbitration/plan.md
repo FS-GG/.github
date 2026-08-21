@@ -17,7 +17,7 @@ Prose status: planned
 
 ## Source Snapshot
 - spec: work/2801-mutual-overlap-arbitration/spec.md sha256:cd06975eb08f678c5d438ce38cfecada1d98114dc80849eddc69f09c4e028523 schemaVersion:1
-- clarifications: work/2801-mutual-overlap-arbitration/clarifications.md sha256:d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a schemaVersion:1
+- clarifications: work/2801-mutual-overlap-arbitration/clarifications.md sha256:2b176f372fc1dc74393613799f7a8a0e61fc5fb62ea71b4d5e611d303f148da0 schemaVersion:1
 - checklist: work/2801-mutual-overlap-arbitration/checklist.md sha256:ccfeb3e86c4300a094c4d3ea100f3bb57c1a5e8381296b3407d722583d48529c schemaVersion:1
 
 ## Plan Scope
@@ -29,14 +29,14 @@ Prose status: planned
 ## Plan Decisions
 - PD-001 [AC-001] [AC-002] [FR-001] complete: Parse schema-versioned wait receipts, canonicalize participants/tokens, and validate the exact current claim generations and overlap before returning any authoritative edge.
 - PD-002 [AC-001] [AC-002] [FR-002] complete: Fold current receipts by directed participant pair, reject duplicate/conflicting edges, and detect only two opposite edges with identical canonical shared tokens; dependency or unrelated-room facts veto automatic arbitration.
-- PD-003 [AC-003] [FR-003] complete: Derive a stable cycle digest and request room create/reuse plus both back-references. Precedence writes a generation-bound losing-item freeze that production `widen`/`set-paths` consume before PATCH.
+- PD-003 [AC-003] [FR-003] complete: Derive a stable cycle digest, write generation-bound freezes to both participants before the reciprocal edge becomes durable, and request room create/reuse plus both back-references. Production `widen`/`set-paths` refuse removal of a frozen shared token before precedence; precedence narrows only through its dedicated writer and leaves the loser frozen for guarded resume.
 - PD-004 [AC-004] [FR-004] complete: Validate a single digest-linked precedence head per cycle. Equal-revision disagreement, missing prior digest, same participant, and missing measured reversal reason return closed conflicts before effects.
 - PD-005 [AC-005] [FR-005] complete: Compute loser paths by removing only canonical shared tokens, then have the writer replace the path declaration and re-read the claim marker/path census before reporting narrowed.
-- PD-006 [AC-006] [FR-006] complete: Model loser resume as explicit facts/effects: winner merged, current base fetched, loser rebased, overlap clear, paths re-widened, and review current for the resulting head where required.
+- PD-006 [AC-006] [FR-006] complete: Model loser resume as independently observed facts/effects: winner closed; local `origin/main` equals a fresh server `ls-remote` result; that exact fetched ref is an ancestor of `HEAD`; overlap is clear; paths are explicitly re-widened; and any open loser PR has a passing structured review bound to its exact local and remote head.
 - PD-007 [AC-003] [AC-004] [AC-005] [AC-006] [AC-007] [FR-007] complete: Give every effect a deterministic key and reconcile ambiguous errors from a complete live re-read. Return applied, already-applied, conflict, stale, unreadable, or retryable states; never infer success from transport completion.
 - PD-008 [AC-001] [AC-002] [AC-003] [AC-004] [AC-005] [AC-006] [AC-007] [AC-008] [FR-008] complete: Test every pure predicate and writer boundary, run through the compiled client, and capture bounded independent source inversions that make the focused gate red before restoration.
 - PD-009 [AC-003] [AC-008] [FR-009] complete: Add one decision-changing automatic-first paragraph and one class-granularity sentence to the existing overlap reference; avoid generic guidance or per-example child policy.
-- PD-010 [AC-009] [AC-010] [FR-010] complete: Project a complete authority-issue comment census into one live immutable lease and its generation-bound, idempotent external requests. Request ref plus minted caller bind repository/holder identity; a foreign holder can only append the request, while the current holder writes the deterministic first external block to board Severity Critical before ordinary work.
+- PD-010 [AC-009] [AC-010] [FR-010] complete: Anchor every production orchestrator route to the checked-in authority `FS-GG/.github#2801`, rejecting any alternative caller ref before lease IO. Project that authority issue's complete comment census into one live immutable lease and its generation-bound, idempotent external requests. Request ref plus minted caller bind repository/holder identity; a foreign holder can only append the request, while the current holder writes the deterministic first external block to board Severity Critical before ordinary work.
 - PD-011 [AC-011] [AC-012] [AC-013] [FR-011] complete: When no lease is live, derive max-generation plus one and acquire it with a lowest-comment-id CAS. Re-read after every boundary; losing contenders remove only their own comments, while stale generations, duplicate live authority, malformed receipts, and incomplete reads refuse.
 
 ## Contract Impact

@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a"
+        "value": "2b176f372fc1dc74393613799f7a8a0e61fc5fb62ea71b4d5e611d303f148da0"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "96be123cf7728b5ffb6cf28ba1079160c717169ab4e2f5a0040538f53d25b3ce"
+        "value": "710c98369e34c3e8a4fb6e813eb009ef6bd67602bba65616542f326caa0cc719"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "33fa22ee99136a5d390ed8272a79853f995ee8b3da16c62934fbcf065ff54e24"
+        "value": "2be793a0bdee8da07f9ad0b1ef5747d0ab28008ef56b742c12afa69d43a8816a"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "1b8d7ca78017212038ceef312a07be42ba88f1c91fd363072bdb297ef8922921"
+        "value": "c951557b75f37115036dc5a61d8ba0f04532a375fe5b4f09d67b790cdf8219da"
       }
     }
   ],
@@ -442,8 +442,8 @@
     },
     {
       "id": "DEC-005",
-      "title": "A complete lease/request census is the sole board-orchestrator authority. External requests are idempotent and bound to its live generation; stale generation races refuse. Same-generation contenders use GitHub comment order and losers delete only their own marker.",
-      "decision": "A complete lease/request census is the sole board-orchestrator authority. External requests are idempotent and bound to its live generation; stale generation races refuse. Same-generation contenders use GitHub comment order and losers delete only their own marker.",
+      "title": "The complete lease/request census on \u0060FS-GG/.github#2801\u0060 is the sole board-orchestrator authority. External requests are idempotent and bound to its live generation; stale generation races and alternative authority refs refuse. Same-generation contenders use GitHub comment order and losers delete only their own marker.",
+      "decision": "The complete lease/request census on \u0060FS-GG/.github#2801\u0060 is the sole board-orchestrator authority. External requests are idempotent and bound to its live generation; stale generation races and alternative authority refs refuse. Same-generation contenders use GitHub comment order and losers delete only their own marker.",
       "requirementRefs": [],
       "storyRefs": [],
       "acceptanceRefs": [],
@@ -1300,6 +1300,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1331,6 +1332,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1362,6 +1364,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1393,6 +1396,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1424,6 +1428,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1455,6 +1460,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1486,6 +1492,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1517,6 +1524,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1548,6 +1556,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1577,6 +1586,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1606,6 +1616,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1635,6 +1646,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1664,6 +1676,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1693,6 +1706,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1722,6 +1736,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1751,6 +1766,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1780,6 +1796,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1809,6 +1826,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1838,6 +1856,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1867,6 +1886,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1896,6 +1916,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1925,6 +1946,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1954,6 +1976,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -1983,6 +2006,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -2014,6 +2038,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -2045,6 +2070,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -2074,6 +2100,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -2103,6 +2130,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -2132,6 +2160,7 @@
         "src/FS.GG.Coord.GitHub/Writes.fs",
         "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
         "tests/coord-engine-e2e/writes.sh",
         "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
       ],
@@ -2155,7 +2184,7 @@
       "schemaVersion": 1,
       "generator": {
         "id": "FS.GG.SDD.Artifacts",
-        "version": "1.0.0"
+        "version": "1.1.0"
       },
       "sources": [
         {
@@ -2194,7 +2223,7 @@
           "path": "work/2801-mutual-overlap-arbitration/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a"
+            "value": "2b176f372fc1dc74393613799f7a8a0e61fc5fb62ea71b4d5e611d303f148da0"
           },
           "schemaVersion": 1
         },
@@ -2202,7 +2231,7 @@
           "path": "work/2801-mutual-overlap-arbitration/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "96be123cf7728b5ffb6cf28ba1079160c717169ab4e2f5a0040538f53d25b3ce"
+            "value": "710c98369e34c3e8a4fb6e813eb009ef6bd67602bba65616542f326caa0cc719"
           },
           "schemaVersion": 1
         },
@@ -2210,7 +2239,7 @@
           "path": "work/2801-mutual-overlap-arbitration/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "33fa22ee99136a5d390ed8272a79853f995ee8b3da16c62934fbcf065ff54e24"
+            "value": "2be793a0bdee8da07f9ad0b1ef5747d0ab28008ef56b742c12afa69d43a8816a"
           },
           "schemaVersion": 1
         },
@@ -2226,14 +2255,14 @@
           "path": "work/2801-mutual-overlap-arbitration/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "1b8d7ca78017212038ceef312a07be42ba88f1c91fd363072bdb297ef8922921"
+            "value": "c951557b75f37115036dc5a61d8ba0f04532a375fe5b4f09d67b790cdf8219da"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "8a23cc4c4016b30e9073b8bae7001abd9af6fc2929cc8b8f95bf45f0b90b6f79"
+        "value": "136347d85385a48898dad20adc2387e5a28f8b1458290a46c224a6d5ed870ced"
       },
       "currency": "current"
     }

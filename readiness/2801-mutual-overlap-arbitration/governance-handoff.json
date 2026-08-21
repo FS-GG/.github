@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/1.0.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.1.0",
   "workId": "2801-mutual-overlap-arbitration",
   "sources": [
     {
       "path": "readiness/2801-mutual-overlap-arbitration/ship.json",
-      "digest": "sha256:a96f4d4a328e660380c408edd1cf22d102903e8f4ab0f9016e11e3577b5ff751",
+      "digest": "sha256:506161337a9bd0705aec1649428ab47ece391e0df5d6f5cb41802e239decf1c7",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2801-mutual-overlap-arbitration/verify.json",
-      "digest": "sha256:6faaf8282b0760d77337ca7c0a5deabcddb2f2d96ac17f81070689424e5904b0",
+      "digest": "sha256:a2529addccbc5257c4ae59d5811dde056eeba746a02cfd6768db252ba407af4e",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2801-mutual-overlap-arbitration/work-model.json",
-      "digest": "sha256:3c8b9d33faf5fff5dfc47477c055ba2f90676c4e217da206773c0b6d9f6368d8",
+      "digest": "sha256:233df9dc25a9c4cae3743cf07d8fb89d515dd33a39f04cc748e6bc70272117f2",
       "schemaVersion": 1
     }
   ],

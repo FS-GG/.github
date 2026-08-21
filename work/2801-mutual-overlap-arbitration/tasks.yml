@@ -17,7 +17,7 @@ sources:
     schemaVersion: 1
   - label: clarifications
     path: work/2801-mutual-overlap-arbitration/clarifications.md
-    digest: d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a
+    digest: 2b176f372fc1dc74393613799f7a8a0e61fc5fb62ea71b4d5e611d303f148da0
     schemaVersion: 1
   - label: checklist
     path: work/2801-mutual-overlap-arbitration/checklist.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2801-mutual-overlap-arbitration/plan.md
-    digest: 33fa22ee99136a5d390ed8272a79853f995ee8b3da16c62934fbcf065ff54e24
+    digest: 2be793a0bdee8da07f9ad0b1ef5747d0ab28008ef56b742c12afa69d43a8816a
     schemaVersion: 1
 tasks:
   - id: T001

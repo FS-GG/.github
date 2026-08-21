@@ -933,6 +933,10 @@ module Client =
           ReviewRequired: bool
           ExactHeadReviewed: bool }
 
+    /// The checked-in Coordination-board issue that owns the singleton orchestrator lease domain.
+    [<Literal>]
+    val boardOrchestratorAuthority: string = "FS-GG/.github#2801"
+
     type BoardOrchestratorLease =
         { Board: string
           HolderRepo: string

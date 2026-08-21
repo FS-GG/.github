@@ -2422,21 +2422,27 @@ for n in 42 43; do
 done
 # The host string is no longer authority. Acquire one immutable live board-orchestrator lease and bind
 # arbitration to that authority ref plus the current caller identity.
-curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" \
+curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/.github/issues/2801/comments" \
   | jq -r '.[] | select(.body | contains("fsgg:board-orchestrator-")) | .id' \
   | while read -r cid; do
       [ -z "$cid" ] || curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$cid" >/dev/null
     done
-authority="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD mutual-overlap-host FS.GG.SDD#42 vole-418 --worker vole-418 2>&1)"; authority_rc=$?
-spoof="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD copied-public-values FS.GG.SDD#42 vole-418 --worker smew-e1d9 2>&1)"; spoof_rc=$?
+authority="$($ENGINE overlap orchestrate FS-GG/.github#2801 FS.GG.SDD mutual-overlap-host FS.GG.SDD#42 vole-418 --worker vole-418 2>&1)"; authority_rc=$?
+fractured="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD fractured-domain FS.GG.SDD#42 vole-418 --worker vole-418 2>&1)"; fractured_rc=$?
+if [ "$fractured_rc" -ne 0 ] && grep -qF 'cannot fracture the lease domain' <<<"$fractured"; then
+  ok ".github#2801: arbitrary caller authority refs cannot create a second lease domain"
+else
+  bad ".github#2801: singleton authority must reject arbitrary caller refs" "rc=$fractured_rc: $fractured"
+fi
+spoof="$($ENGINE overlap orchestrate FS-GG/.github#2801 FS.GG.SDD copied-public-values FS.GG.SDD#42 vole-418 --worker smew-e1d9 2>&1)"; spoof_rc=$?
 if [ "$spoof_rc" -ne 0 ] && grep -qF 'identity is authoritative' <<<"$spoof"; then
   ok ".github#2801: copied public lease values cannot spoof the live orchestrator caller"
 else
   bad ".github#2801: active-A authority must bind the current caller, not supplied strings" "rc=$spoof_rc: $spoof"
 fi
-routed="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD external-block FS.GG.SDD#42 smew-e1d9 --worker smew-e1d9 2>&1)"; routed_rc=$?
+routed="$($ENGINE overlap orchestrate FS-GG/.github#2801 FS.GG.SDD external-block FS.GG.SDD#42 smew-e1d9 --worker smew-e1d9 2>&1)"; routed_rc=$?
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
-promoted="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD run-priority FS.GG.SDD#42 vole-418 --worker vole-418 2>&1)"; promoted_rc=$?
+promoted="$($ENGINE overlap orchestrate FS-GG/.github#2801 FS.GG.SDD run-priority FS.GG.SDD#42 vole-418 --worker vole-418 2>&1)"; promoted_rc=$?
 promotion_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
 if [ "$routed_rc" -eq 0 ] && grep -qF 'ROUTED' <<<"$routed" \
    && [ "$promoted_rc" -eq 0 ] && grep -qF 'promoted blocking request' <<<"$promoted" \
@@ -2470,7 +2476,19 @@ else
       "gens=$wait42_gen/$wait43_gen first=$wait_a_rc:$wait_a second=$wait_b_rc:$wait_b rooms=$rooms body42=$body42 body43=$body43"
 fi
 
-arb="$($ENGINE overlap arbitrate FS.GG.SDD#43 FS.GG.SDD#42 FS.GG.SDD#44 --worker vole-418 2>&1)"; arb_rc=$?
+# The cycle is already durable here, and both holders must be unable to mutate the shared token away
+# before precedence. This is the exact production-writer escape the initial critic demonstrated.
+cycle_escape="$($ENGINE set-paths FS.GG.SDD#42 --paths src/Other.fs --worker vole-418 2>&1)"; cycle_escape_rc=$?
+cycle_escape_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
+if [ "$cycle_escape_rc" -ne 0 ] && grep -qF 'cycle freeze refused removal' <<<"$cycle_escape" \
+   && grep -qF 'src/Mutual.fs' <<<"$cycle_escape_body" && ! grep -qF 'src/Other.fs' <<<"$cycle_escape_body"; then
+  ok ".github#2801: both-holder production freeze blocks mutation away before precedence"
+else
+  bad ".github#2801: detected cycle must freeze the production set-paths writer" \
+      "rc=$cycle_escape_rc:$cycle_escape body=$cycle_escape_body"
+fi
+
+arb="$($ENGINE overlap arbitrate FS.GG.SDD#43 FS.GG.SDD#42 FS-GG/.github#2801 --worker vole-418 2>&1)"; arb_rc=$?
 after42_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
 after42_thread="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
 room_thread="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/$room_number/comments")"
@@ -2497,14 +2515,45 @@ fi
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$wait43_gen" >/dev/null
 curl -fsS -X PATCH -H 'Content-Type: application/json' -d '{"state":"closed"}' \
   "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43" >/dev/null
-# The production resume predicate reads the checkout, so give this positive leg an isolated repository
-# whose fetched base is contained by HEAD. CI's checkout intentionally does not promise an origin/main
-# ref, and mutating the real checkout's remote-tracking ref would make the fixture alter its caller.
 git -C "$RESUME_GIT" init -q
 git -C "$RESUME_GIT" config user.email fixture@example.invalid
 git -C "$RESUME_GIT" config user.name fixture
-git -C "$RESUME_GIT" commit --allow-empty -qm fixture-base
+git -C "$RESUME_GIT" commit --allow-empty -qm unfetched-base
 git -C "$RESUME_GIT" update-ref refs/remotes/origin/main HEAD
+unfetched="$(cd "$RESUME_GIT" && "$ENGINE" widen FS.GG.SDD#42 --paths src/Mutual.fs --worker vole-418 2>&1)"; unfetched_rc=$?
+if [ "$unfetched_rc" -ne 0 ] && grep -qF 'winner base was not fetched' <<<"$unfetched"; then
+  ok ".github#2801: locally manufactured or unfetched origin/main cannot satisfy loser resume"
+else
+  bad ".github#2801: loser resume must independently prove a fetched current base" "rc=$unfetched_rc:$unfetched"
+fi
+# The production resume predicate reads the checkout, so give this positive leg an isolated repository
+# whose fetched base is contained by HEAD. CI's checkout intentionally does not promise an origin/main
+# ref, and mutating the real checkout's remote-tracking ref would make the fixture alter its caller.
+git -C "$RESUME_GIT" init --bare -q remote.git
+git -C "$RESUME_GIT/remote.git" symbolic-ref HEAD refs/heads/main
+git -C "$RESUME_GIT" remote add origin "$RESUME_GIT/remote.git"
+git -C "$RESUME_GIT" branch -M main
+git -C "$RESUME_GIT" push -q -u origin main
+git -C "$RESUME_GIT" fetch -q origin main
+stale_base="$(git -C "$RESUME_GIT" rev-parse refs/remotes/origin/main)"
+git -C "$RESUME_GIT" commit --allow-empty -qm remote-advanced
+git -C "$RESUME_GIT" push -q origin main
+git -C "$RESUME_GIT" update-ref refs/remotes/origin/main "$stale_base"
+stale_fetch="$(cd "$RESUME_GIT" && "$ENGINE" widen FS.GG.SDD#42 --paths src/Mutual.fs --worker vole-418 2>&1)"; stale_fetch_rc=$?
+if [ "$stale_fetch_rc" -ne 0 ] && grep -qF 'winner base was not fetched' <<<"$stale_fetch"; then
+  ok ".github#2801: a stale fetched origin/main ref cannot satisfy loser resume"
+else
+  bad ".github#2801: loser resume must compare its fetched ref with current server main" "rc=$stale_fetch_rc:$stale_fetch"
+fi
+git -C "$RESUME_GIT" fetch -q origin main
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/open-pr-42-unreviewed" >/dev/null
+unreviewed="$(cd "$RESUME_GIT" && "$ENGINE" widen FS.GG.SDD#42 --paths src/Mutual.fs --worker vole-418 2>&1)"; unreviewed_rc=$?
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/close-pr-42" >/dev/null
+if [ "$unreviewed_rc" -ne 0 ] && grep -qF 'changed loser head lacks exact-head review' <<<"$unreviewed"; then
+  ok ".github#2801: an open loser PR with no exact-head passing review cannot resume"
+else
+  bad ".github#2801: unreviewed loser heads must fail the production resume gate" "rc=$unreviewed_rc:$unreviewed"
+fi
 resumed="$(cd "$RESUME_GIT" && "$ENGINE" widen FS.GG.SDD#42 --paths src/Mutual.fs --worker vole-418 2>&1)"; resumed_rc=$?
 resumed_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
 if [ "$resumed_rc" -eq 0 ] && grep -qF 'src/Mutual.fs' <<<"$resumed_body"; then

@@ -4,7 +4,7 @@
   "workId": "2801-mutual-overlap-arbitration",
   "stage": "analyze",
   "status": "implementationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "5c944a1235e62e5fdd6404e6ed32c11a3f57449213b48e11a782e616cb58fc52"
+        "value": "fc3c55848f4d4070233722bf11bed6736095d14ed60d513eb69af0d8e6728dc1"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a"
+        "value": "2b176f372fc1dc74393613799f7a8a0e61fc5fb62ea71b4d5e611d303f148da0"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "33fa22ee99136a5d390ed8272a79853f995ee8b3da16c62934fbcf065ff54e24"
+        "value": "2be793a0bdee8da07f9ad0b1ef5747d0ab28008ef56b742c12afa69d43a8816a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "1b8d7ca78017212038ceef312a07be42ba88f1c91fd363072bdb297ef8922921"
+        "value": "c951557b75f37115036dc5a61d8ba0f04532a375fe5b4f09d67b790cdf8219da"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"

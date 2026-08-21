@@ -252,9 +252,57 @@ mutations:
     discriminator: terminal
     command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
     target: src/FS.GG.Coord.Cli/Client.fs
-    find: 'if not readdsFrozenToken then Ok()'
-    replace: 'if true then Ok()'
+    find: 'elif not readdsFrozenToken then Ok()'
+    replace: 'elif true then Ok()'
     breaks: the production touch-set writer can re-add a frozen shared reservation before winner landing and rebase
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/cycle-freeze-removal-bypassed
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if removesFrozenToken then'
+    replace: 'if false then'
+    breaks: a holder removes a cycle-frozen shared reservation before precedence
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/arbitrary-authority-accepted
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'when caller <> configured ->'
+    replace: 'when false ->'
+    breaks: caller-selected issue refs fracture the singleton orchestrator lease domain
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/unreviewed-head-accepted
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'exactHeadReviewFacts ctx held'
+    replace: 'Ok(false, false)'
+    breaks: an open loser PR resumes without a passing review bound to its exact current head
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/stale-base-accepted
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'String.Equals(local, current, StringComparison.OrdinalIgnoreCase)'
+    replace: 'not (String.IsNullOrWhiteSpace current)'
+    breaks: a stale local origin/main ref is treated as the current server base
     anchor:
       pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
       produced_by: tests/coord-engine-e2e/writes.sh
