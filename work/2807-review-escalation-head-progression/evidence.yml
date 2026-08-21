@@ -1,0 +1,311 @@
+schemaVersion: 1
+workId: 2807-review-escalation-head-progression
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2807-review-escalation-head-progression/spec.md
+sourceClarifications: work/2807-review-escalation-head-progression/clarifications.md
+sourceChecklist: work/2807-review-escalation-head-progression/checklist.md
+sourcePlan: work/2807-review-escalation-head-progression/plan.md
+sourceTasks: work/2807-review-escalation-head-progression/tasks.yml
+sourceAnalysis: readiness/2807-review-escalation-head-progression/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2807-review-escalation-head-progression/analysis.json
+    digest: 0cb45534df6a33105ff7b5386a6efc1523629dc9b2b64fe8186a41083f25c491
+    schemaVersion: 1
+  - label: checklist
+    path: work/2807-review-escalation-head-progression/checklist.md
+    digest: 25c054cfc58428e7b1ac330245e0194e3c6278b6956b510314e7a5a4f2803212
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2807-review-escalation-head-progression/clarifications.md
+    digest: e6a988340d17b96623a09c1be814ea01b8b661581b9fcd80969faea2d1cce76c
+    schemaVersion: 1
+  - label: plan
+    path: work/2807-review-escalation-head-progression/plan.md
+    digest: 46fcb1273168b2f2461df92cf5305719eaab49bdf7ce9759968168da5150d984
+    schemaVersion: 1
+  - label: spec
+    path: work/2807-review-escalation-head-progression/spec.md
+    digest: e00aaf330f15437ccca35af08df03ece4beadd106d843b86eedd486fb8c827cb
+    schemaVersion: 1
+  - label: tasks
+    path: work/2807-review-escalation-head-progression/tasks.yml
+    digest: d9b68f5fdca3a18ab9b9d50e40c0ca21e55de8216bceda711313cedcf1263542
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: deferral
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: source authorization repair and its hosted exact-head qualification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV002
+    kind: deferral
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: per-record head and ordered ledger-chain verification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV003
+    kind: deferral
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: fail-before-write mutation verification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV004
+    kind: deferral
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: distinct-head production writer fixture qualification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV005
+    kind: deferral
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: post-merge coherent engine publication and public installation
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV006
+    kind: deferral
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: terminal-versus-historical head invariant qualification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV007
+    kind: deferral
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: progressed-chain fixture and mutation qualification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV008
+    kind: deferral
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: "mapped 0.69.0 coherent-set release, dual-feed identity, clean public install, registry evidence, and S.I.R. handoff after source merge"
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV009
+    kind: deferral
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: escalation-only claim-turnover authority regression proof
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV010
+    kind: deferral
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: review-writer compatibility qualification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV011
+    kind: deferral
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: frozen-candidate hosted verification evidence
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV012
+    kind: deferral
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: additive compatibility verification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+  - id: EV013
+    kind: deferral
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The focused local proof is complete, but immutable hosted or post-merge evidence does not exist before the candidate is frozen and reviewed."
+    owner: godwit-2afc
+    scope: generated readiness refresh after hosted qualification
+    laterLifecycleVisibility: Replace this deferral with exact hosted or post-merge evidence during review and release closeout before the Done stamp.
+    notes: []
+lifecycleNotes:
+  - "Next lifecycle action: verify."

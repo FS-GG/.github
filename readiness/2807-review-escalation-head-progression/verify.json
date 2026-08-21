@@ -1,0 +1,791 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2807-review-escalation-head-progression",
+  "stage": "verify",
+  "status": "verificationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2807-review-escalation-head-progression/analysis.json",
+      "kind": "analysis",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "0cb45534df6a33105ff7b5386a6efc1523629dc9b2b64fe8186a41083f25c491"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2807-review-escalation-head-progression/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "2cd3f29efe469b03ba873df7482643c56aa957006d7816a4d25efb673b702169"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2807-review-escalation-head-progression/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "25c054cfc58428e7b1ac330245e0194e3c6278b6956b510314e7a5a4f2803212"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2807-review-escalation-head-progression/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "e6a988340d17b96623a09c1be814ea01b8b661581b9fcd80969faea2d1cce76c"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2807-review-escalation-head-progression/evidence.yml",
+      "kind": "evidence",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "bacc9ba799a6d4c0e91559e47394b8bd39995a566ddc65c9b53596ae55adc647"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2807-review-escalation-head-progression/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "46fcb1273168b2f2461df92cf5305719eaab49bdf7ce9759968168da5150d984"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2807-review-escalation-head-progression/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "e00aaf330f15437ccca35af08df03ece4beadd106d843b86eedd486fb8c827cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2807-review-escalation-head-progression/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "d9b68f5fdca3a18ab9b9d50e40c0ca21e55de8216bceda711313cedcf1263542"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "lifecycleReadiness": {
+    "status": "implementationReady",
+    "stages": [
+      {
+        "stage": "analyze",
+        "status": "implementationReady"
+      },
+      {
+        "stage": "checklist",
+        "status": "current"
+      },
+      {
+        "stage": "clarify",
+        "status": "current"
+      },
+      {
+        "stage": "evidence",
+        "status": "evidenceReady"
+      },
+      {
+        "stage": "plan",
+        "status": "current"
+      },
+      {
+        "stage": "specify",
+        "status": "current"
+      },
+      {
+        "stage": "tasks",
+        "status": "current"
+      }
+    ]
+  },
+  "taskGraph": {
+    "taskCount": 13,
+    "dependencyCount": 8,
+    "dependenciesValid": true,
+    "statusesValid": true,
+    "findingIds": []
+  },
+  "evidenceDispositions": [
+    {
+      "id": "ED-EV001",
+      "obligationId": "EV001",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV001"
+      ],
+      "affectedTaskIds": [
+        "T001"
+      ],
+      "affectedSourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV001."
+    },
+    {
+      "id": "ED-EV002",
+      "obligationId": "EV002",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV002"
+      ],
+      "affectedTaskIds": [
+        "T002"
+      ],
+      "affectedSourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV002."
+    },
+    {
+      "id": "ED-EV003",
+      "obligationId": "EV003",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV003"
+      ],
+      "affectedTaskIds": [
+        "T003"
+      ],
+      "affectedSourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV003."
+    },
+    {
+      "id": "ED-EV004",
+      "obligationId": "EV004",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV004"
+      ],
+      "affectedTaskIds": [
+        "T004"
+      ],
+      "affectedSourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV004."
+    },
+    {
+      "id": "ED-EV005",
+      "obligationId": "EV005",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV005"
+      ],
+      "affectedTaskIds": [
+        "T005"
+      ],
+      "affectedSourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV005."
+    },
+    {
+      "id": "ED-EV006",
+      "obligationId": "EV006",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV006"
+      ],
+      "affectedTaskIds": [
+        "T006"
+      ],
+      "affectedSourceIds": [
+        "DEC-001"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV006."
+    },
+    {
+      "id": "ED-EV007",
+      "obligationId": "EV007",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV007"
+      ],
+      "affectedTaskIds": [
+        "T007"
+      ],
+      "affectedSourceIds": [
+        "DEC-002"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV007."
+    },
+    {
+      "id": "ED-EV008",
+      "obligationId": "EV008",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV008"
+      ],
+      "affectedTaskIds": [
+        "T008"
+      ],
+      "affectedSourceIds": [
+        "DEC-003"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV008."
+    },
+    {
+      "id": "ED-EV009",
+      "obligationId": "EV009",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV009"
+      ],
+      "affectedTaskIds": [
+        "T009"
+      ],
+      "affectedSourceIds": [
+        "DEC-004"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV009."
+    },
+    {
+      "id": "ED-EV010",
+      "obligationId": "EV010",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV010"
+      ],
+      "affectedTaskIds": [
+        "T010"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV010."
+    },
+    {
+      "id": "ED-EV011",
+      "obligationId": "EV011",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV011"
+      ],
+      "affectedTaskIds": [
+        "T011"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002",
+        "PD-003",
+        "PD-004",
+        "VO-001"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV011."
+    },
+    {
+      "id": "ED-EV012",
+      "obligationId": "EV012",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV012"
+      ],
+      "affectedTaskIds": [
+        "T012"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV012."
+    },
+    {
+      "id": "ED-EV013",
+      "obligationId": "EV013",
+      "state": "deferred",
+      "observed": false,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV013"
+      ],
+      "affectedTaskIds": [
+        "T013"
+      ],
+      "affectedSourceIds": [
+        "GV-001",
+        "PD-004"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Resolve evidence obligation EV013."
+    }
+  ],
+  "testDispositions": [
+    {
+      "id": "TD-EV001",
+      "obligationId": "EV001",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV001"
+      ],
+      "affectedTaskIds": [
+        "T001"
+      ],
+      "affectedRequirementIds": [
+        "FR-001"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV001."
+    },
+    {
+      "id": "TD-EV002",
+      "obligationId": "EV002",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV002"
+      ],
+      "affectedTaskIds": [
+        "T002"
+      ],
+      "affectedRequirementIds": [
+        "FR-002"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV002."
+    },
+    {
+      "id": "TD-EV003",
+      "obligationId": "EV003",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV003"
+      ],
+      "affectedTaskIds": [
+        "T003"
+      ],
+      "affectedRequirementIds": [
+        "FR-003"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV003."
+    },
+    {
+      "id": "TD-EV004",
+      "obligationId": "EV004",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV004"
+      ],
+      "affectedTaskIds": [
+        "T004"
+      ],
+      "affectedRequirementIds": [
+        "FR-004"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV004."
+    },
+    {
+      "id": "TD-EV005",
+      "obligationId": "EV005",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV005"
+      ],
+      "affectedTaskIds": [
+        "T005"
+      ],
+      "affectedRequirementIds": [
+        "FR-005"
+      ],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV005."
+    },
+    {
+      "id": "TD-EV006",
+      "obligationId": "EV006",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV006"
+      ],
+      "affectedTaskIds": [
+        "T006"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV006."
+    },
+    {
+      "id": "TD-EV007",
+      "obligationId": "EV007",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV007"
+      ],
+      "affectedTaskIds": [
+        "T007"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV007."
+    },
+    {
+      "id": "TD-EV008",
+      "obligationId": "EV008",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV008"
+      ],
+      "affectedTaskIds": [
+        "T008"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV008."
+    },
+    {
+      "id": "TD-EV009",
+      "obligationId": "EV009",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV009"
+      ],
+      "affectedTaskIds": [
+        "T009"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV009."
+    },
+    {
+      "id": "TD-EV010",
+      "obligationId": "EV010",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV010"
+      ],
+      "affectedTaskIds": [
+        "T010"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV010."
+    },
+    {
+      "id": "TD-EV011",
+      "obligationId": "EV011",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV011"
+      ],
+      "affectedTaskIds": [
+        "T011"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV011."
+    },
+    {
+      "id": "TD-EV012",
+      "obligationId": "EV012",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV012"
+      ],
+      "affectedTaskIds": [
+        "T012"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV012."
+    },
+    {
+      "id": "TD-EV013",
+      "obligationId": "EV013",
+      "state": "deferred",
+      "observed": false,
+      "evidenceIds": [
+        "EV013"
+      ],
+      "affectedTaskIds": [
+        "T013"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "advisory",
+      "diagnosticIds": [],
+      "correction": "Record a verifying test for EV013."
+    }
+  ],
+  "skillVisibility": [
+    {
+      "skill": "automated-tests",
+      "requiringTaskIds": [
+        "T011"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2807-review-escalation-head-progression/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "deterministic-json",
+      "requiringTaskIds": [
+        "T013"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2807-review-escalation-head-progression/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "fsharp",
+      "requiringTaskIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004",
+        "T005",
+        "T006",
+        "T007",
+        "T008",
+        "T009",
+        "T010"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2807-review-escalation-head-progression/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "implementation",
+      "requiringTaskIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004",
+        "T005",
+        "T006",
+        "T007",
+        "T008",
+        "T009"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2807-review-escalation-head-progression/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "readiness-evidence",
+      "requiringTaskIds": [
+        "T011"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2807-review-escalation-head-progression/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "schema-versioning",
+      "requiringTaskIds": [
+        "T012"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2807-review-escalation-head-progression/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2807-review-escalation-head-progression/analysis.json",
+      "kind": "verification",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2807-review-escalation-head-progression/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "findings": [],
+  "governanceCompatibility": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "readiness": "verificationReady",
+  "nextAction": {
+    "actionId": "verify.next.ship",
+    "command": null,
+    "reason": "Verification readiness is current and ready for ship."
+  }
+}

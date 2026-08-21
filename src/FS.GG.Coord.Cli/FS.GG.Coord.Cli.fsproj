@@ -130,7 +130,18 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.68.0 — exhausted ordinary review survives claim turnover and gains one structured escalation.
+    <PackageReleaseNotes>0.69.0 — exhausted review authorization preserves advancing historical heads.
+
+WHAT MOVED, AND WHY IT IS A MINOR. A real ordinary-exhaustion chain advances the PR head after each
+repair. Fresh-claim escalation now preserves each historical record's exact head and binds only the
+terminal draft, completed round-three wait, legacy exhaustion evidence, and live PR to the final
+round-three head. Readable noncontiguous history and malformed legacy confirmation backlinks still
+refuse before writes, with production-route comment-count fences proving no partial mutation. No
+command, member, destination, or package identity is removed; this is a compatible repair to
+receiver-visible review authorization, so the coherent set advances from 0.68.0 to 0.69.0
+(.github#2807).
+
+0.68.0 — exhausted ordinary review survives claim turnover and gains one structured escalation.
 
 WHAT MOVED, AND WHY IT IS A MINOR. After an ordinary initial review plus three changes-required
 confirmations, the engine now preserves the completed round-three wait across a fresh claim, projects
