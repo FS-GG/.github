@@ -1,0 +1,360 @@
+mutations:
+  - id: focused/freeze-comment-before-hint
+    gate: compiled overlap interleaving control
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --no-restore --filter FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: |-
+      Writes.ensureBodyMarker ctx.Transport cycle.First (overlapFreezeHint cycle.FirstGeneration)
+              |> Result.bind (fun () -> Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody)
+    replace: |-
+      Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody
+              |> Result.bind (fun _ -> Writes.ensureBodyMarker ctx.Transport cycle.First (overlapFreezeHint cycle.FirstGeneration))
+    breaks: a durable freeze comment becomes visible before its generation hint makes production mutations fail closed
+    anchor:
+      pattern: '(?:Passed|Failed)!\s+- Failed:\s+\d+, Passed:\s+\d+, Skipped:\s+\d+, Total:\s+\d+'
+      produced_by: tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs
+
+  - id: overlap/unreadable-state-fails-open
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: |-
+      if not snapshot.Readable then
+                  MutualOverlapRefused "authoritative overlap state is unreadable"
+    replace: |-
+      if false then
+                  MutualOverlapRefused "authoritative overlap state is unreadable"
+    breaks: unreadable authoritative state is treated as a usable receipt set
+    anchor: &test_anchor
+      pattern: '(?:Passed|Failed)!\s+- Failed:\s+\d+, Passed:\s+\d+, Skipped:\s+\d+, Total:\s+\d+'
+      produced_by: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+
+  - id: overlap/self-edge-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'Error "self wait edges are invalid"'
+    replace: 'Ok(normalizedTokens wait.SharedTokens)'
+    breaks: a waiter may point at its own claim generation
+    anchor: *test_anchor
+
+  - id: overlap/stale-claim-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: "| [ fact ] when fact.Live && fact.Generation = generation -> Ok()"
+    replace: "| [ fact ] when fact.Generation = generation -> Ok()"
+    breaks: an expired claim generation is accepted as live authority
+    anchor: *test_anchor
+
+  - id: overlap/changed-generation-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: "| [ fact ] when fact.Live && fact.Generation = generation -> Ok()"
+    replace: "| [ fact ] when fact.Live -> Ok()"
+    breaks: a wait receipt survives replacement by another live claim generation
+    anchor: *test_anchor
+
+  - id: overlap/cleared-overlap-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: '| [] -> Error "the overlap has cleared"'
+    replace: '| [] -> Ok(normalizedTokens wait.SharedTokens)'
+    breaks: a successfully read but empty overlap is authorized
+    anchor: *test_anchor
+
+  - id: overlap/shared-token-drift-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'elif observed <> recorded then Error "the shared reservation tokens changed"'
+    replace: 'elif false then Error "the shared reservation tokens changed"'
+    breaks: a receipt survives a changed shared reservation set
+    anchor: *test_anchor
+
+  - id: overlap/durable-dependency-ignored
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: "elif snapshot.DurableDependencies |> List.exists (fun (a, b) -> samePair wait.Waiter wait.Predecessor a b) then"
+    replace: "elif (snapshot.DurableDependencies |> List.exists (fun (a, b) -> samePair wait.Waiter wait.Predecessor a b)) && false then"
+    breaks: automatic arbitration competes with an authoritative Blocked-by edge
+    anchor: *test_anchor
+
+  - id: precedence/foreign-participant-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: "elif not (participants current) then Error \"precedence winner and loser are not the cycle participants\""
+    replace: "elif false then Error \"precedence winner and loser are not the cycle participants\""
+    occurrences: 2
+    breaks: precedence may nominate an item outside the detected cycle
+    anchor: *test_anchor
+
+  - id: precedence/revision-link-ignored
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: "current.Revision = prior.Revision + 1 && current.PreviousDigest = Some prior.Digest"
+    replace: "true"
+    breaks: a stale or gapped precedence revision becomes current
+    anchor: *test_anchor
+
+  - id: precedence/same-revision-conflict-ignored
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: |-
+      if ordered |> List.groupBy _.Revision |> List.exists (fun (_, sameRevision) -> List.length sameRevision <> 1) then
+                  Error "conflicting same-revision precedence receipts"
+              else
+                  loop None ordered
+    replace: |-
+      loop None (ordered |> List.distinctBy _.Revision)
+    breaks: two host decisions at one revision no longer fail closed
+    anchor: *test_anchor
+
+  - id: precedence/unmeasured-reversal-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: "if current.Winner <> prior.Winner && (current.Reason |> Option.forall String.IsNullOrWhiteSpace) then"
+    replace: "if false then"
+    breaks: host precedence reverses without a measured reason
+    anchor: *test_anchor
+
+  - id: resume/winner-not-landed
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not winnerLanded then "winner has not landed"'
+    replace: 'if false then "winner has not landed"'
+    breaks: loser resumes before the winner lands
+    anchor: *test_anchor
+
+  - id: resume/claim-generation-changed
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not generationCurrent then "loser claim generation changed"'
+    replace: 'if false then "loser claim generation changed"'
+    breaks: a replacement loser claim inherits stale arbitration
+    anchor: *test_anchor
+
+  - id: resume/base-not-fetched
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not fetchedWinnerBase then "winner base was not fetched"'
+    replace: 'if false then "winner base was not fetched"'
+    breaks: loser resumes without fetching the winner's landed base
+    anchor: *test_anchor
+
+  - id: resume/head-not-rebased
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not rebasedHead then "loser head was not rebased"'
+    replace: 'if false then "loser head was not rebased"'
+    breaks: loser resumes on its pre-winner head
+    anchor: *test_anchor
+
+  - id: resume/overlap-not-clear
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not overlapClear then "overlap was not re-run clear"'
+    replace: 'if false then "overlap was not re-run clear"'
+    breaks: loser resumes without a fresh disjoint verdict
+    anchor: *test_anchor
+
+  - id: resume/not-rewidened
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not explicitlyRewidened then "loser reservation was not explicitly re-widened"'
+    replace: 'if false then "loser reservation was not explicitly re-widened"'
+    breaks: loser edits without restoring its explicit reservation
+    anchor: *test_anchor
+
+  - id: resume/stale-review-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if reviewRequired && not exactHeadReviewed then "changed loser head lacks exact-head review"'
+    replace: 'if false then "changed loser head lacks exact-head review"'
+    breaks: a changed loser tree resumes on a stale review head
+    anchor: *test_anchor
+
+  - id: orchestrator/active-a-competed
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: |-
+      elif lease.HolderRepo <> requesterRepo || lease.Holder <> holder then
+                          RouteRequestTo lease
+    replace: |-
+      elif lease.HolderRepo <> requesterRepo || lease.Holder <> holder then
+                          RunBoardOrchestrator(lease, None)
+    breaks: external B is no longer forced to route to live A
+    anchor: *test_anchor
+
+  - id: orchestrator/a-priority-not-promoted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: '|> List.sortBy (fun request -> request.RequestingRepo, request.RequestKey)'
+    replace: '|> List.sortByDescending (fun request -> request.RequestingRepo, request.RequestKey)'
+    breaks: A no longer promotes the deterministic highest-priority external block
+    anchor: *test_anchor
+
+  - id: orchestrator/no-a-takeover-denied
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'AcquireBoardOrchestrator next'
+    replace: 'BoardOrchestratorRefused "takeover disabled"'
+    breaks: authoritative absence or expiry cannot transfer board orchestration
+    anchor: *test_anchor
+
+  - id: orchestrator/stale-a-generation-accepted
+    gate: ClaimOverlapTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not (List.isEmpty staleRequests) then'
+    replace: 'if false then'
+    breaks: a post-lease request bound to stale A is accepted
+    anchor: *test_anchor
+
+  - id: orchestrator/two-b-race-authorized
+    gate: WriteTests
+    discriminator: terminal
+    command: ["dotnet", "test", "tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~2801"]
+    target: src/FS.GG.Coord.GitHub/Writes.fs
+    find: '| Ok(Some winner) when winner.Id = myId -> Ok(LeaseAcquired myId)'
+    replace: '| Ok(Some winner) when true -> Ok(LeaseAcquired myId)'
+    breaks: losing B treats its higher comment id as acquired and leaves two candidates
+    anchor:
+      pattern: '(?:Passed|Failed)!\s+- Failed:\s+\d+, Passed:\s+\d+, Skipped:\s+\d+, Total:\s+\d+'
+      produced_by: tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj
+
+  - id: production/frozen-token-bypasses-resume
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'elif not readdsFrozenToken then Ok()'
+    replace: 'elif true then Ok()'
+    breaks: the production touch-set writer can re-add a frozen shared reservation before winner landing and rebase
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/cycle-freeze-removal-bypassed
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if removesFrozenToken then'
+    replace: 'if false then'
+    breaks: a holder removes a cycle-frozen shared reservation before precedence
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/freeze-hint-bypassed
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not (issueBody.Contains(hint, StringComparison.Ordinal)) then'
+    replace: 'if true then'
+    breaks: a generation-hinted participant skips its durable freeze receipt and mutates the shared reservation away
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/arbitrary-authority-accepted
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'when caller <> configured ->'
+    replace: 'when false ->'
+    breaks: caller-selected issue refs fracture the singleton orchestrator lease domain
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/unreviewed-head-accepted
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'exactHeadReviewFacts ctx held'
+    replace: 'Ok(false, false)'
+    breaks: an open loser PR resumes without a passing review bound to its exact current head
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/stale-base-accepted
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'String.Equals(local, current, StringComparison.OrdinalIgnoreCase)'
+    replace: 'not (String.IsNullOrWhiteSpace current)'
+    breaks: a stale local origin/main ref is treated as the current server base
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/caller-authority-spoofed
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'when requestingRepo <> coordinationRef.Repo || holder <> w.Id ->'
+    replace: 'when false ->'
+    breaks: copied public lease values can nominate a caller other than the current minted worker and request ref
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/priority-write-bypassed
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'match Board.setField ctx.Transport board itemId "Severity" (Board.Set severity) with'
+    replace: 'match Ok() with'
+    breaks: the orchestrator reports promotion without projecting highest-safe priority to the authoritative board
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh

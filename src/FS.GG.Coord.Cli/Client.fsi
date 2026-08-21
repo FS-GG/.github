@@ -872,6 +872,111 @@ module Client =
     /// as one object rather than as prose split across two streams (#1517).
     val setPaths: ctx: Kernel.Context -> opts: Options.Options -> int
 
+    /// A durable wait edge bound to both current claim generations and the exact shared reservations.
+    type OverlapWaitReceipt =
+        { Waiter: FS.GG.Coord.Types.Ref
+          WaiterGeneration: string
+          Predecessor: FS.GG.Coord.Types.Ref
+          PredecessorGeneration: string
+          SharedTokens: string list
+          Host: string
+          Digest: string }
+
+    type OverlapClaimFact =
+        { Item: FS.GG.Coord.Types.Ref
+          Generation: string
+          Live: bool }
+
+    type OverlapRelation =
+        { Left: FS.GG.Coord.Types.Ref
+          Right: FS.GG.Coord.Types.Ref
+          SharedTokens: string list }
+
+    type MutualOverlapSnapshot =
+        { Readable: bool
+          Claims: OverlapClaimFact list
+          Relations: OverlapRelation list
+          Waits: OverlapWaitReceipt list
+          DurableDependencies: (FS.GG.Coord.Types.Ref * FS.GG.Coord.Types.Ref) list
+          RelatedRoomCycleDigests: string list }
+
+    type MutualOverlapCycle =
+        { First: FS.GG.Coord.Types.Ref
+          Second: FS.GG.Coord.Types.Ref
+          FirstGeneration: string
+          SecondGeneration: string
+          SharedTokens: string list
+          Digest: string }
+
+    type MutualOverlapVerdict =
+        | NoMutualOverlapCycle
+        | MutualOverlapCycle of MutualOverlapCycle
+        | MutualOverlapRefused of reason: string
+
+    type OverlapPrecedenceReceipt =
+        { CycleDigest: string
+          Revision: int
+          PreviousDigest: string option
+          Winner: FS.GG.Coord.Types.Ref
+          Loser: FS.GG.Coord.Types.Ref
+          Host: string
+          Reason: string option
+          Digest: string }
+
+    type LoserResumeFacts =
+        { WinnerLanded: bool
+          LoserClaimGenerationCurrent: bool
+          FetchedWinnerBase: bool
+          RebasedHead: bool
+          OverlapClear: bool
+          ExplicitlyRewidened: bool
+          ReviewRequired: bool
+          ExactHeadReviewed: bool }
+
+    /// The checked-in Coordination-board issue that owns the singleton orchestrator lease domain.
+    [<Literal>]
+    val boardOrchestratorAuthority: string = "FS-GG/.github#2801"
+
+    type BoardOrchestratorLease =
+        { Board: string
+          HolderRepo: string
+          Holder: string
+          Generation: int64
+          ExpiresAtUnix: int64
+          CommentId: int64
+          Digest: string }
+
+    type BoardOrchestratorRequest =
+        { Board: string
+          RequestingRepo: string
+          RequestKey: string
+          CoordinationRef: FS.GG.Coord.Types.Ref
+          LeaseGeneration: int64
+          CommentId: int64
+          Digest: string }
+
+    type BoardOrchestratorSnapshot =
+        { Readable: bool
+          NowUnix: int64
+          Board: string
+          Leases: BoardOrchestratorLease list
+          Requests: BoardOrchestratorRequest list }
+
+    type BoardOrchestratorDecision =
+        | RouteRequestTo of BoardOrchestratorLease
+        | RunBoardOrchestrator of lease: BoardOrchestratorLease * highestPriority: BoardOrchestratorRequest option
+        | AcquireBoardOrchestrator of generation: int64
+        | BoardOrchestratorRefused of reason: string
+
+    val waitReceiptDigest: receipt: OverlapWaitReceipt -> string
+    val detectMutualOverlap: snapshot: MutualOverlapSnapshot -> MutualOverlapVerdict
+    val precedenceReceiptDigest: receipt: OverlapPrecedenceReceipt -> string
+    val validateOverlapPrecedence: cycle: MutualOverlapCycle -> receipts: OverlapPrecedenceReceipt list -> Result<OverlapPrecedenceReceipt, string>
+    val validateLoserResume: facts: LoserResumeFacts -> string list
+    val boardOrchestratorLeaseDigest: lease: BoardOrchestratorLease -> string
+    val boardOrchestratorRequestDigest: request: BoardOrchestratorRequest -> string
+    val decideBoardOrchestrator: requesterRepo: string -> holder: string -> snapshot: BoardOrchestratorSnapshot -> BoardOrchestratorDecision
+
     /// #353 — DOES THIS ITEM'S TOUCH-SET COLLIDE WITH ANOTHER'S, and NOTHING outside its own repo counts.
     ///
     /// `Paths:` tokens are repo-relative: `scripts/fsgg-coord` names a file in whichever repo the item lives.

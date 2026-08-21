@@ -251,6 +251,57 @@ module Writes =
     // private CAS primitive; callers here have no capability to edit or remove another protocol marker.
     let postIssueComment transport ref body = postComment transport ref body
 
+    type DurableCommentWrite =
+        | CommentWritten of commentId: int64
+        | CommentAlreadyPresent
+
+    type DurableLeaseWrite =
+        | LeaseAcquired of commentId: int64
+        | LeaseAlreadyHeld of commentId: int64
+        | LeaseContended of winnerCommentId: int64
+
+    let writeDurableComment
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (marker: string)
+        (body: string)
+        : IoResult<DurableCommentWrite> =
+
+        let observe () =
+            Reads.commentBodies transport ref.Owner ref.Repo ref.Number
+            |> Result.bind (fun comments ->
+                let marked = comments |> List.filter (fun candidate -> candidate.Contains(marker, StringComparison.Ordinal))
+                match marked with
+                | [] -> Ok false
+                | [ exact ] when exact = body -> Ok true
+                | [ _ ] -> Error(Malformed(ref.Short, $"durable receipt marker '%s{marker}' conflicts with another body"))
+                | _ -> Error(Malformed(ref.Short, $"durable receipt marker '%s{marker}' occurs more than once")))
+
+        if String.IsNullOrWhiteSpace marker || not (body.Contains(marker, StringComparison.Ordinal)) then
+            Error(Malformed(ref.Short, "a durable receipt body must contain its non-empty marker"))
+        else
+            match observe () with
+            | Error error -> Error error
+            | Ok true -> Ok CommentAlreadyPresent
+            | Ok false ->
+                match postComment transport ref body with
+                | Ok commentId ->
+                    observe ()
+                    |> Result.bind (function
+                        | true -> Ok(CommentWritten commentId)
+                        | false -> Error(Malformed(ref.Short, "the durable receipt POST returned success but the exact body was absent from the authoritative re-read")))
+                | Error writeError ->
+                    match observe () with
+                    | Ok true -> Ok CommentAlreadyPresent
+                    | Ok false -> Error writeError
+                    | Error readError ->
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                $"the durable receipt write failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                            )
+                        )
+
     // Delete a comment. **A 404 IS SUCCESS.**
     //
     // "Already gone" is the goal state. Two workers collecting the same expired marker must not turn the
@@ -294,6 +345,52 @@ module Writes =
               Subject = ref.Short }
 
         transport.Send request |> Result.map ignore
+
+    // Generation-scoped comment CAS for the one board-orchestrator authority. Every contender for one
+    // generation uses the same marker; GitHub's comment id is the total order and a loser removes only
+    // its own candidate. An unreadable census never means an empty lease set.
+    let acquireDurableLease
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (marker: string)
+        (body: string)
+        : IoResult<DurableLeaseWrite> =
+
+        let observe () =
+            Reads.commentsWithIdentity transport ref.Owner ref.Repo ref.Number
+            |> Result.map (fun comments ->
+                comments
+                |> List.filter (fun comment -> comment.Body.Contains(marker, StringComparison.Ordinal))
+                |> List.sortBy _.Id
+                |> List.tryHead)
+
+        if String.IsNullOrWhiteSpace marker || not (body.Contains(marker, StringComparison.Ordinal)) then
+            Error(Malformed(ref.Short, "a durable lease body must contain its non-empty generation marker"))
+        else
+            match observe () with
+            | Error error -> Error error
+            | Ok(Some existing) when existing.Body = body -> Ok(LeaseAlreadyHeld existing.Id)
+            | Ok(Some existing) -> Ok(LeaseContended existing.Id)
+            | Ok None ->
+                match postComment transport ref body with
+                | Ok myId ->
+                    match observe () with
+                    | Ok(Some winner) when winner.Id = myId -> Ok(LeaseAcquired myId)
+                    | Ok(Some winner) ->
+                        deleteComment transport ref myId |> Result.map (fun () -> LeaseContended winner.Id)
+                    | Ok None ->
+                        deleteComment transport ref myId
+                        |> Result.bind (fun () -> Error(Malformed(ref.Short, "the lease POST succeeded but no generation marker survived the authoritative re-read")))
+                    | Error readError ->
+                        deleteComment transport ref myId
+                        |> Result.bind (fun () -> Error(Malformed(ref.Short, $"the post-write lease census was unreadable: %s{Errors.explain readError}")))
+                | Error writeError ->
+                    match observe () with
+                    | Ok(Some existing) when existing.Body = body -> Ok(LeaseAlreadyHeld existing.Id)
+                    | Ok(Some existing) -> Ok(LeaseContended existing.Id)
+                    | Ok None -> Error writeError
+                    | Error readError ->
+                        Error(Malformed(ref.Short, $"the lease write failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"))
 
     // ---- THE CAS ---------------------------------------------------------------------------------
 
@@ -954,6 +1051,47 @@ module Writes =
         // refusal arrives, because the refusal happens before the write is even representable.
         patchBody transport held.Ref rewritten
 
+    type ArbitrationApply =
+        | LoserNarrowed
+        | LoserAlreadyNarrowed
+
+    let applyArbitration
+        (transport: IGitHubTransport)
+        (loser: Held)
+        (receiptRef: Ref)
+        (receiptMarker: string)
+        (receiptBody: string)
+        (narrowed: Rewritten)
+        : IoResult<ArbitrationApply> =
+
+        let observeNarrowed () =
+            Reads.issueBody transport loser.Ref.Owner loser.Ref.Repo loser.Ref.Number
+            |> Result.map (fun body -> body = narrowed.Body)
+
+        writeDurableComment transport receiptRef receiptMarker receiptBody
+        |> Result.bind (fun _ ->
+            observeNarrowed ()
+            |> Result.bind (function
+                | true -> Ok LoserAlreadyNarrowed
+                | false ->
+                    match widen transport loser narrowed with
+                    | Ok() ->
+                        observeNarrowed ()
+                        |> Result.bind (function
+                            | true -> Ok LoserNarrowed
+                            | false -> Error(Malformed(loser.Ref.Short, "the arbitration narrow PATCH returned success but the exact losing path declaration was absent from the authoritative re-read")))
+                    | Error writeError ->
+                        match observeNarrowed () with
+                        | Ok true -> Ok LoserNarrowed
+                        | Ok false -> Error writeError
+                        | Error readError ->
+                            Error(
+                                Malformed(
+                                    loser.Ref.Short,
+                                    $"the arbitration narrow failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                                )
+                            )))
+
     let heartbeat (transport: IGitHubTransport) (leaseMinutes: int) (held: Held) : IoResult<Held> =
         // THE MARKER IS ADDRESSED BY ITS COMMENT ID, never by the worker string. #550 is what happens
         // otherwise: `release` and `heartbeat` picked a marker by WORKER STRING alone, so a twin — the same
@@ -1107,23 +1245,86 @@ module Writes =
 
     let appendRoomLine (body: string) (roomRef: string) : string =
         let declaration = $"Rooms: %s{roomRef}"
-        let out = ResizeArray<string>()
 
-        for line, _ in Markdown.classify body do
-            out.Add line
+        if Markdown.unfenced body |> List.exists (fun line -> line.Trim() = declaration) then
+            body
+        else
+            let out = ResizeArray<string>()
 
-        match Markdown.unterminatedFenceCloser body with
-        | Some closer -> out.Add closer
-        | None -> ()
+            for line, _ in Markdown.classify body do
+                out.Add line
 
-        if out.Count > 0 && not (String.IsNullOrWhiteSpace(out.[out.Count - 1])) then
-            out.Add ""
+            match Markdown.unterminatedFenceCloser body with
+            | Some closer -> out.Add closer
+            | None -> ()
 
-        out.Add declaration
-        String.Join("\n", out)
+            if out.Count > 0 && not (String.IsNullOrWhiteSpace(out.[out.Count - 1])) then
+                out.Add ""
+
+            out.Add declaration
+            String.Join("\n", out)
 
     let writeRoomRef (transport: IGitHubTransport) (ref: Ref) (currentBody: string) (roomRef: string) : IoResult<unit> =
         patchBody transport ref (Rewritten(appendRoomLine currentBody roomRef))
+
+    let ensureRoomRef (transport: IGitHubTransport) (ref: Ref) (roomRef: string) : IoResult<unit> =
+        let containsRoom body = appendRoomLine body roomRef = body
+        let read () = Reads.issueBody transport ref.Owner ref.Repo ref.Number
+
+        match read () with
+        | Error error -> Error error
+        | Ok body when containsRoom body -> Ok()
+        | Ok body ->
+            let written = patchBody transport ref (Rewritten(appendRoomLine body roomRef))
+            match read () with
+            | Ok observed when containsRoom observed -> Ok()
+            | Ok _ ->
+                match written with
+                | Error error -> Error error
+                | Ok() -> Error(Malformed(ref.Short, "the room back-reference PATCH returned success but the reference was absent from the authoritative re-read"))
+            | Error readError ->
+                match written with
+                | Error writeError ->
+                    Error(
+                        Malformed(
+                            ref.Short,
+                            $"the room back-reference write failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                        )
+                    )
+                | Ok() -> Error readError
+
+    let ensureBodyMarker (transport: IGitHubTransport) (ref: Ref) (marker: string) : IoResult<unit> =
+        if String.IsNullOrWhiteSpace marker then
+            Error(Malformed(ref.Short, "an issue-body marker cannot be blank"))
+        else
+            let containsMarker (body: string) = body.Contains(marker, StringComparison.Ordinal)
+            let appendMarker (body: string) =
+                if containsMarker body then body
+                elif String.IsNullOrWhiteSpace body then marker
+                else body.TrimEnd() + "\n\n" + marker
+            let read () = Reads.issueBody transport ref.Owner ref.Repo ref.Number
+
+            match read () with
+            | Error error -> Error error
+            | Ok body when containsMarker body -> Ok()
+            | Ok body ->
+                let written = patchBody transport ref (Rewritten(appendMarker body))
+                match read () with
+                | Ok observed when containsMarker observed -> Ok()
+                | Ok _ ->
+                    match written with
+                    | Error error -> Error error
+                    | Ok() -> Error(Malformed(ref.Short, "the issue-body marker PATCH returned success but the marker was absent from the authoritative re-read"))
+                | Error readError ->
+                    match written with
+                    | Error writeError ->
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                $"the issue-body marker write failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                            )
+                        )
+                    | Ok() -> Error readError
 
     let createRoom (transport: IGitHubTransport) (owner: string) (repo: string) (title: string) (body: string) : IoResult<Ref> =
         let payload =
@@ -1162,6 +1363,77 @@ module Writes =
                     )
             with :? JsonException as e ->
                 Error(Malformed($"%s{owner}/%s{repo}", $"the issue-create response is not JSON: %s{e.Message}"))
+
+    type RoomWrite =
+        | RoomCreated of Ref
+        | RoomAlreadyPresent of Ref
+
+    let ensureRoom
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (marker: string)
+        (title: string)
+        (body: string)
+        : IoResult<RoomWrite> =
+
+        let subject = $"%s{owner}/%s{repo} mutual-overlap room"
+
+        let observe () =
+            Reads.openIssues transport owner repo
+            |> Result.bind (fun issues ->
+                let unreadable =
+                    issues
+                    |> List.choose (fun issue ->
+                        match issue.Body with
+                        | Reads.BodyRead _ -> None
+                        | Reads.BodyUnread reason -> Some($"#%d{issue.Number}: %s{reason}"))
+
+                if not (List.isEmpty unreadable) then
+                    let detail = String.concat "; " unreadable
+                    Error(Malformed(subject, $"open-room census has unreadable bodies: %s{detail}"))
+                else
+                    let matches =
+                        issues
+                        |> List.choose (fun issue ->
+                            match issue.Body with
+                            | Reads.BodyRead candidate when candidate.Contains(marker, StringComparison.Ordinal) ->
+                                Some
+                                    { Owner = owner
+                                      Repo = repo
+                                      Number = issue.Number }
+                            | _ -> None)
+
+                    match matches with
+                    | [] -> Ok None
+                    | [ room ] -> Ok(Some room)
+                    | _ -> Error(Malformed(subject, $"room marker '%s{marker}' occurs on more than one open issue")))
+
+        if String.IsNullOrWhiteSpace marker || not (body.Contains(marker, StringComparison.Ordinal)) then
+            Error(Malformed(subject, "an automatic room body must contain its non-empty cycle marker"))
+        else
+            match observe () with
+            | Error error -> Error error
+            | Ok(Some room) -> Ok(RoomAlreadyPresent room)
+            | Ok None ->
+                match createRoom transport owner repo title body with
+                | Ok created ->
+                    observe ()
+                    |> Result.bind (function
+                        | Some observed when observed = created -> Ok(RoomCreated created)
+                        | Some observed -> Error(Malformed(subject, $"the room create response named %s{created.Short}, but the authoritative marker resolves to %s{observed.Short}"))
+                        | None -> Error(Malformed(subject, "the room create returned success but no marker-bearing room was present on the authoritative re-read")))
+                | Error writeError ->
+                    match observe () with
+                    | Ok(Some room) -> Ok(RoomAlreadyPresent room)
+                    | Ok None -> Error writeError
+                    | Error readError ->
+                        Error(
+                            Malformed(
+                                subject,
+                                $"the room create failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                            )
+                        )
 
     // The first write boundary of #2134: a malformed draft cannot reach issue creation.
     let createIntake (transport: IGitHubTransport) (draft: Intake.Draft) : IoResult<Ref> =

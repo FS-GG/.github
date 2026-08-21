@@ -1,0 +1,2272 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2801-mutual-overlap-arbitration",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2801-mutual-overlap-arbitration/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ccfeb3e86c4300a094c4d3ea100f3bb57c1a5e8381296b3407d722583d48529c"
+      }
+    },
+    {
+      "path": "work/2801-mutual-overlap-arbitration/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "2b176f372fc1dc74393613799f7a8a0e61fc5fb62ea71b4d5e611d303f148da0"
+      }
+    },
+    {
+      "path": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "207f3bbde5029e8b81b547b08f8d099573569d1a4f6d59eea81b66a67682aaae"
+      }
+    },
+    {
+      "path": "work/2801-mutual-overlap-arbitration/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "0d5d60de20094c223d0f05dd56d797e3aace1857f9c987ed838044ad79662862"
+      }
+    },
+    {
+      "path": "work/2801-mutual-overlap-arbitration/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "cd06975eb08f678c5d438ce38cfecada1d98114dc80849eddc69f09c4e028523"
+      }
+    },
+    {
+      "path": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "1d43dba89fef7d36c3011af673cf5357e7d40d744c22b799d71e35802c4248e4"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2801-mutual-overlap-arbitration",
+    "title": "Automatic mutual-overlap arbitration",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The system MUST parse and validate typed durable wait receipts containing waiter item/generation, predecessor item/generation, canonical shared reservation tokens, and host authority; it MUST reject self-edges and any missing, stale, conflicting, non-overlapping, or unreadable authority. (covers AC-001, AC-002)",
+      "text": "The system MUST parse and validate typed durable wait receipts containing waiter item/generation, predecessor item/generation, canonical shared reservation tokens, and host authority; it MUST reject self-edges and any missing, stale, conflicting, non-overlapping, or unreadable authority. (covers AC-001, AC-002)",
+      "acceptanceCriteria": [
+        "AC-001",
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 54,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "The pure detector MUST derive exactly reciprocal A-waits-B plus B-waits-A from the authoritative current receipt set independent of comment order, while one-way waits, cleared overlaps, durable dependencies, and unrelated rooms remain negative controls. (covers AC-001, AC-002)",
+      "text": "The pure detector MUST derive exactly reciprocal A-waits-B plus B-waits-A from the authoritative current receipt set independent of comment order, while one-way waits, cleared overlaps, durable dependencies, and unrelated rooms remain negative controls. (covers AC-001, AC-002)",
+      "acceptanceCriteria": [
+        "AC-001",
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 55,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "A detected cycle MUST freeze shared-token edits and idempotently create or reuse exactly one ADR-0051 room with back-references on both participants. (covers AC-003)",
+      "text": "A detected cycle MUST freeze shared-token edits and idempotently create or reuse exactly one ADR-0051 room with back-references on both participants. (covers AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 56,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Arbitration MUST require one current host-authored precedence receipt naming distinct winner and loser, and MUST bind that host to both the live board-orchestrator lease and the current minted caller rather than a supplied string; same-revision conflicts fail closed, and revision N\u002B1 MUST reference revision N\u0027s digest and state a measured reversal reason. (covers AC-004)",
+      "text": "Arbitration MUST require one current host-authored precedence receipt naming distinct winner and loser, and MUST bind that host to both the live board-orchestrator lease and the current minted caller rather than a supplied string; same-revision conflicts fail closed, and revision N\u002B1 MUST reference revision N\u0027s digest and state a measured reversal reason. (covers AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 57,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Applying precedence MUST narrow the loser\u0027s shared reservations without releasing its claim, retain the winner\u0027s claim and reservations, and expose an observed post-state rather than treating write completion as authority. (covers AC-005)",
+      "text": "Applying precedence MUST narrow the loser\u0027s shared reservations without releasing its claim, retain the winner\u0027s claim and reservations, and expose an observed post-state rather than treating write completion as authority. (covers AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 58,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "Resuming the loser MUST require observed winner landing, fetch/rebase onto the current base, a fresh overlap result, explicit re-widen, and any exact-head review required by the changed tree. (covers AC-006)",
+      "text": "Resuming the loser MUST require observed winner landing, fetch/rebase onto the current base, a fresh overlap result, explicit re-widen, and any exact-head review required by the changed tree. (covers AC-006)",
+      "acceptanceCriteria": [
+        "AC-006"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 59,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    },
+    {
+      "id": "FR-007",
+      "title": "The production writer MUST recover from ambiguous transport failure at every mutation boundary by re-reading live state and MUST make retries idempotent without duplicate rooms, back-references, precedence receipts, or path mutations. (covers AC-003, AC-004, AC-005, AC-006, AC-007)",
+      "text": "The production writer MUST recover from ambiguous transport failure at every mutation boundary by re-reading live state and MUST make retries idempotent without duplicate rooms, back-references, precedence receipts, or path mutations. (covers AC-003, AC-004, AC-005, AC-006, AC-007)",
+      "acceptanceCriteria": [
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 60,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ],
+      "linkedEvidenceIds": [
+        "EV007"
+      ]
+    },
+    {
+      "id": "FR-008",
+      "title": "Pure and compiled production-route tests MUST reproduce the \u0060.github#2772\u0060/\u0060.github#2797\u0060 cycle, assert one room/current precedence, preserve the narrowed losing claim, cover winner-land/loser-resume, inject every writer boundary, and record observed-red inversions for every detector/arbitration predicate. (covers AC-001, AC-002, AC-003, AC-004, AC-005, AC-006, AC-007, AC-008)",
+      "text": "Pure and compiled production-route tests MUST reproduce the \u0060.github#2772\u0060/\u0060.github#2797\u0060 cycle, assert one room/current precedence, preserve the narrowed losing claim, cover winner-land/loser-resume, inject every writer boundary, and record observed-red inversions for every detector/arbitration predicate. (covers AC-001, AC-002, AC-003, AC-004, AC-005, AC-006, AC-007, AC-008)",
+      "acceptanceCriteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 61,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ],
+      "linkedEvidenceIds": [
+        "EV008"
+      ]
+    },
+    {
+      "id": "FR-009",
+      "title": "Policy documentation MUST put automatic detection/arbitration before manual negotiation and state that occurrences fold onto \u0060.github#2801\u0060 unless a separate root cause is adjudicated. (covers AC-003, AC-008)",
+      "text": "Policy documentation MUST put automatic detection/arbitration before manual negotiation and state that occurrences fold onto \u0060.github#2801\u0060 unless a separate root cause is adjudicated. (covers AC-003, AC-008)",
+      "acceptanceCriteria": [
+        "AC-003",
+        "AC-008"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 62,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ],
+      "linkedEvidenceIds": [
+        "EV009"
+      ]
+    },
+    {
+      "id": "FR-010",
+      "title": "A complete authoritative lease census MUST route every external Coordination need to the sole live board-orchestrator generation, bind request repository/holder identity to the request ref and current minted caller, persist the blocking request idempotently against that generation, refuse a competing lane, and make the current orchestrator project the highest external block to board Severity Critical before ordinary board work. (covers AC-009, AC-010)",
+      "text": "A complete authoritative lease census MUST route every external Coordination need to the sole live board-orchestrator generation, bind request repository/holder identity to the request ref and current minted caller, persist the blocking request idempotently against that generation, refuse a competing lane, and make the current orchestrator project the highest external block to board Severity Critical before ordinary board work. (covers AC-009, AC-010)",
+      "acceptanceCriteria": [
+        "AC-009",
+        "AC-010"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 63,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T025"
+      ],
+      "linkedEvidenceIds": [
+        "EV025"
+      ]
+    },
+    {
+      "id": "FR-011",
+      "title": "Only authoritative lease absence/expiry MAY enable takeover; takeover MUST use the next immutable generation and a lowest-comment-id CAS, while stale requests, conflicting/live duplicate generations, unreadable state, and losing contenders fail closed without deleting the winner. (covers AC-011, AC-012, AC-013)",
+      "text": "Only authoritative lease absence/expiry MAY enable takeover; takeover MUST use the next immutable generation and a lowest-comment-id CAS, while stale requests, conflicting/live duplicate generations, unreadable state, and losing contenders fail closed without deleting the winner. (covers AC-011, AC-012, AC-013)",
+      "acceptanceCriteria": [
+        "AC-011",
+        "AC-012",
+        "AC-013"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2801-mutual-overlap-arbitration/spec.md",
+      "sourceLocation": {
+        "line": 64,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T026"
+      ],
+      "linkedEvidenceIds": [
+        "EV026"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "Use additive, versioned records and discriminated unions in \u0060Client.fs/.fsi\u0060; keep I/O in \u0060Writes.fs/.fsi\u0060 and pure validation/detection independent of comment order.",
+      "decision": "Use additive, versioned records and discriminated unions in \u0060Client.fs/.fsi\u0060; keep I/O in \u0060Writes.fs/.fsi\u0060 and pure validation/detection independent of comment order.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2801-mutual-overlap-arbitration/clarifications.md",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T010"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "The room idempotency key is the digest of the canonical participant claim generations plus canonical shared tokens. A retry first searches complete live room/back-reference state; unreadable or conflicting matches fail closed.",
+      "decision": "The room idempotency key is the digest of the canonical participant claim generations plus canonical shared tokens. A retry first searches complete live room/back-reference state; unreadable or conflicting matches fail closed.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2801-mutual-overlap-arbitration/clarifications.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T011"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "A precedence receipt is revisioned and digest-linked. Revision 1 has no prior digest; later revisions must name the exact prior digest and measured reversal reason. Apply/resume outcomes carry observed claim/path/head facts and requested next effects.",
+      "decision": "A precedence receipt is revisioned and digest-linked. Revision 1 has no prior digest; later revisions must name the exact prior digest and measured reversal reason. Apply/resume outcomes carry observed claim/path/head facts and requested next effects.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2801-mutual-overlap-arbitration/clarifications.md",
+      "sourceLocation": {
+        "line": 32,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T012"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "Narrowing the loser is a claim-preserving path replacement. Resumption is a separate guarded transition authorized only after observed winner landing, updated base/head, clean overlap, explicit re-widen, and required review evidence.",
+      "decision": "Narrowing the loser is a claim-preserving path replacement. Resumption is a separate guarded transition authorized only after observed winner landing, updated base/head, clean overlap, explicit re-widen, and required review evidence.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2801-mutual-overlap-arbitration/clarifications.md",
+      "sourceLocation": {
+        "line": 33,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T013"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "The complete lease/request census on \u0060FS-GG/.github#2801\u0060 is the sole board-orchestrator authority. External requests are idempotent and bound to its live generation; stale generation races and alternative authority refs refuse. Same-generation contenders use GitHub comment order and losers delete only their own marker.",
+      "decision": "The complete lease/request census on \u0060FS-GG/.github#2801\u0060 is the sole board-orchestrator authority. External requests are idempotent and bound to its live generation; stale generation races and alternative authority refs refuse. Same-generation contenders use GitHub comment order and losers delete only their own marker.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2801-mutual-overlap-arbitration/clarifications.md",
+      "sourceLocation": {
+        "line": 34,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T027"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-006",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement requirement FR-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-007"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "FR-007",
+        "PD-007"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement requirement FR-008",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-008"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "FR-008",
+        "PD-008"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement requirement FR-009",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-009"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "AC-008",
+        "FR-009",
+        "PD-009"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Implement clarification decision DEC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Implement clarification decision DEC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-002"
+      ],
+      "sourceIds": [
+        "DEC-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Implement clarification decision DEC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-003"
+      ],
+      "sourceIds": [
+        "DEC-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Implement clarification decision DEC-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-004"
+      ],
+      "sourceIds": [
+        "DEC-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Update contract surface PC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "T015",
+      "title": "Update contract surface PC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-003",
+        "PD-005",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV015"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "T016",
+      "title": "Record verification evidence VO-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV016"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "T017",
+      "title": "Record verification evidence VO-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-003",
+        "PD-004",
+        "VO-002"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV017"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "T018",
+      "title": "Record verification evidence VO-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-005",
+        "PD-006",
+        "VO-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV018"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "T019",
+      "title": "Record verification evidence VO-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-007",
+        "VO-004"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV019"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "T020",
+      "title": "Record verification evidence VO-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-008",
+        "VO-005"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV020"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "T021",
+      "title": "Record verification evidence VO-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-008",
+        "VO-006"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV021"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "id": "T022",
+      "title": "Record verification evidence VO-007",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-009",
+        "VO-007"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV022"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "id": "T023",
+      "title": "Handle migration posture PM-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV023"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "id": "T024",
+      "title": "Refresh generated view impact GV-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV024"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "T025",
+      "title": "Implement requirement FR-010",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-010"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-009",
+        "AC-010",
+        "FR-010",
+        "PD-010"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV025"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "T026",
+      "title": "Implement requirement FR-011",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-011"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-011",
+        "AC-012",
+        "AC-013",
+        "FR-011",
+        "PD-011"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV026"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "T027",
+      "title": "Implement clarification decision DEC-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-005"
+      ],
+      "sourceIds": [
+        "DEC-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV027"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      }
+    },
+    {
+      "id": "T028",
+      "title": "Update contract surface PC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-010",
+        "PD-011"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV028"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "id": "T029",
+      "title": "Record verification evidence VO-008",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-010",
+        "PD-011",
+        "VO-008"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV029"
+      ],
+      "source": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [
+        "FR-007"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [
+        "FR-008"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [
+        "FR-009"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV015",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T015",
+      "taskRefs": [
+        "T015"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV016",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T016",
+      "taskRefs": [
+        "T016"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV017",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T017",
+      "taskRefs": [
+        "T017"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV018",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T018",
+      "taskRefs": [
+        "T018"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV019",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T019",
+      "taskRefs": [
+        "T019"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV020",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T020",
+      "taskRefs": [
+        "T020"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV021",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T021",
+      "taskRefs": [
+        "T021"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV022",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T022",
+      "taskRefs": [
+        "T022"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV023",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T023",
+      "taskRefs": [
+        "T023"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV024",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T024",
+      "taskRefs": [
+        "T024"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV025",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T025",
+      "taskRefs": [
+        "T025"
+      ],
+      "requirementRefs": [
+        "FR-010"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV026",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T026",
+      "taskRefs": [
+        "T026"
+      ],
+      "requirementRefs": [
+        "FR-011"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV027",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T027",
+      "taskRefs": [
+        "T027"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV028",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T028",
+      "taskRefs": [
+        "T028"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV029",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T029",
+      "taskRefs": [
+        "T029"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.GitHub/Writes.fs",
+        "tests/FS.GG.Coord.Cli.Tests/ClaimOverlapTests.fs",
+        "tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2801-mutual-overlap-arbitration/mutation-specs.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2801-mutual-overlap-arbitration/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.1.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2801-mutual-overlap-arbitration/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ccfeb3e86c4300a094c4d3ea100f3bb57c1a5e8381296b3407d722583d48529c"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2801-mutual-overlap-arbitration/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "2b176f372fc1dc74393613799f7a8a0e61fc5fb62ea71b4d5e611d303f148da0"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2801-mutual-overlap-arbitration/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "207f3bbde5029e8b81b547b08f8d099573569d1a4f6d59eea81b66a67682aaae"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2801-mutual-overlap-arbitration/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "0d5d60de20094c223d0f05dd56d797e3aace1857f9c987ed838044ad79662862"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2801-mutual-overlap-arbitration/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "cd06975eb08f678c5d438ce38cfecada1d98114dc80849eddc69f09c4e028523"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2801-mutual-overlap-arbitration/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "1d43dba89fef7d36c3011af673cf5357e7d40d744c22b799d71e35802c4248e4"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "c5347a2cb801e2271cd750aceb868b3974d1d170e90df8d86f51a1b5ac218b58"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

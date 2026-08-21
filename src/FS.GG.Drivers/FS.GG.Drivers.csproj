@@ -82,6 +82,9 @@
          fresh-claim ordinary-exhaustion authorization for advancing historical heads and strengthens
          its production refusal fences. Driver members, bytes, and destinations are unchanged; this
          project advances only because all three package versions share the coherent scalar. -->
+    <!-- 0.69.0 -> 0.70.0, a coherent MINOR (.github#2801): the sibling engine and packed kit add
+         executable mutual-overlap arbitration and single-board-orchestrator safety. Driver members,
+         bytes, and destinations are unchanged; this project advances with the coherent scalar. -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>

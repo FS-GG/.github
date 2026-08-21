@@ -51,6 +51,35 @@ module Writes =
     val postIssueComment:
         transport: Transport.IGitHubTransport -> ref: FS.GG.Coord.Types.Ref -> body: string -> Errors.IoResult<int64>
 
+    /// Result of an idempotent durable protocol-comment write. Both cases are authoritative: the exact
+    /// body was observed in a complete post-write comment census. A response alone is never the receipt.
+    type DurableCommentWrite =
+        | CommentWritten of commentId: int64
+        | CommentAlreadyPresent
+
+    type DurableLeaseWrite =
+        | LeaseAcquired of commentId: int64
+        | LeaseAlreadyHeld of commentId: int64
+        | LeaseContended of winnerCommentId: int64
+
+    /// Append one immutable protocol receipt exactly once. `marker` identifies its ledger slot; an
+    /// existing different body at that marker is a conflict. The function re-reads after success and
+    /// after a transport error, so response loss converges and unreadable/conflicting state fails closed.
+    val writeDurableComment:
+        transport: Transport.IGitHubTransport ->
+        ref: FS.GG.Coord.Types.Ref ->
+        marker: string ->
+        body: string ->
+            Errors.IoResult<DurableCommentWrite>
+
+    /// Generation-scoped, lowest-comment-id CAS used only for board-orchestrator authority.
+    val acquireDurableLease:
+        transport: Transport.IGitHubTransport ->
+        ref: FS.GG.Coord.Types.Ref ->
+        marker: string ->
+        body: string ->
+            Errors.IoResult<DurableLeaseWrite>
+
     /// Validate an intake draft before issuing its REST issue-create request. Invalid drafts spend no IO.
     val createIntake: transport: Transport.IGitHubTransport -> draft: FS.GG.Coord.Intake.Draft -> Errors.IoResult<FS.GG.Coord.Types.Ref>
 
@@ -520,6 +549,24 @@ module Writes =
     /// validated and rendered.
     val widen: transport: IGitHubTransport -> held: Held -> rewritten: Rewritten -> IoResult<unit>
 
+    /// Observed result of applying one host precedence receipt to the losing reservation. In both cases
+    /// the exact receipt and exact narrowed body were re-read; the losing `Held` is never released.
+    type ArbitrationApply =
+        | LoserNarrowed
+        | LoserAlreadyNarrowed
+
+    /// Idempotently record precedence, then narrow the loser while preserving its claim. A failure after
+    /// the receipt leaves both holders frozen and is safe to retry; a response-lost PATCH is accepted only
+    /// when the exact narrowed body is observed.
+    val applyArbitration:
+        transport: IGitHubTransport ->
+        loser: Held ->
+        receiptRef: Ref ->
+        receiptMarker: string ->
+        receiptBody: string ->
+        narrowed: Rewritten ->
+            IoResult<ArbitrationApply>
+
     /// RENEW THE LEASE. Takes the `Held`.
     ///
     /// It rewrites the WHOLE marker body, which is why the `Held` carries `PreviousStatus`: the marker is
@@ -654,6 +701,31 @@ module Writes =
     /// `room open` writes onto the items of a contended cluster it need not itself hold, exactly like `say`
     /// and `child`. The caller passes the current body (already read), so the append is pure.
     val writeRoomRef: transport: IGitHubTransport -> ref: Ref -> currentBody: string -> roomRef: string -> IoResult<unit>
+
+    /// Ensure one room back-reference from live state. The write is skipped when already present and is
+    /// re-read after both success and failure, making a response-lost PATCH retry-idempotent.
+    val ensureRoomRef: transport: IGitHubTransport -> ref: Ref -> roomRef: string -> IoResult<unit>
+
+    /// Ensure one exact opaque marker in an issue body. The marker is appended only when absent and the
+    /// result is authoritatively re-read after success or failure, so response-lost retries are idempotent.
+    val ensureBodyMarker: transport: IGitHubTransport -> ref: Ref -> marker: string -> IoResult<unit>
+
+    /// Result of ensuring a single marker-keyed ADR-0051 room.
+    type RoomWrite =
+        | RoomCreated of Ref
+        | RoomAlreadyPresent of Ref
+
+    /// Create or recover exactly one open room whose body carries `marker`. Every open-issue body must be
+    /// readable before absence is believed. Success and failure are both reconciled through a fresh
+    /// complete read; duplicate marker matches fail closed.
+    val ensureRoom:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        marker: string ->
+        title: string ->
+        body: string ->
+            IoResult<RoomWrite>
 
     /// Create the room ISSUE (ADR-0051), returning its `Ref`. A net-new write — no other verb POSTs an
     /// issue. The room is created OFF the board (nothing calls `add`): coordination scaffolding, not
