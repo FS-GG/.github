@@ -6,6 +6,9 @@ open FS.GG.Coord
 module DeliveryTests =
     let review head : Driver.ReviewChain =
         { MarkerValid = true
+          Subject = None
+          ClaimGeneration = None
+          BaseSha = None
           CriticIdentity = Some "kite"
           HeadSha = Some head
           Rounds = [ 1 ]

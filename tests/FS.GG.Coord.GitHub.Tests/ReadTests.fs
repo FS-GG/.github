@@ -20,6 +20,53 @@ let private serving (body: string) =
 let private failing (error: IoError) = Fake.Recorder(fun _ -> Error error)
 
 [<Fact>]
+let ``#2360 effective base reads the live branch tip not the stale PR base snapshot`` () =
+    let staleSnapshot = String.replicate 40 "b"
+    let liveTip = String.replicate 40 "c"
+    let paths = ResizeArray<string>()
+
+    let transport =
+        Fake.Recorder(fun req ->
+            paths.Add req.Path
+
+            let body =
+                if req.Path.EndsWith("pulls/801", System.StringComparison.Ordinal) then
+                    $"""{{"base":{{"ref":"release/next","sha":"%s{staleSnapshot}"}}}}"""
+                elif req.Path.EndsWith("git/ref/heads/release%2Fnext", System.StringComparison.Ordinal) then
+                    $"""{{"ref":"refs/heads/release/next","object":{{"sha":"%s{liveTip}"}}}}"""
+                else
+                    failwith $"unexpected effective-base request: %s{req.Path}"
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+
+    match Reads.prBaseTipSha transport "FS-GG" ".github" 801 with
+    | Ok actual -> Assert.Equal(liveTip, actual)
+    | Error e -> failwith $"the live base tip must resolve: %A{e}"
+
+    Assert.Equal<string list>(
+        [ "repos/FS-GG/.github/pulls/801"
+          "repos/FS-GG/.github/git/ref/heads/release%2Fnext" ],
+        List.ofSeq paths)
+
+[<Fact>]
+let ``#2360 effective base fails closed when the live base ref cannot be read`` () =
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith("pulls/801", System.StringComparison.Ordinal) then
+                Ok
+                    { Status = 200
+                      Body = """{"base":{"ref":"main","sha":"stale-snapshot"}}"""
+                      ETag = None
+                      NextLink = None
+                      Headers = Map.empty }
+            else
+                Error(NotFound "live base branch tip"))
+
+    match Reads.prBaseTipSha transport "FS-GG" ".github" 801 with
+    | Error(NotFound detail) -> Assert.Contains("live base branch tip", detail)
+    | other -> failwith $"an unreadable live base ref must refuse: %A{other}"
+
+[<Fact>]
 let ``#2134 duplicate candidates retain both closed issues and PRs`` () =
     let transport = serving """[{"number":7,"state":"closed","title":"same","body":"x"},{"number":8,"state":"open","title":"same","body":"y","pull_request":{}}]"""
     match Reads.duplicateCandidates transport "FS-GG" ".github" with

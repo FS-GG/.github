@@ -385,6 +385,11 @@ module Reads =
     val prHeadSha: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
     /// Immutable base commit SHA for evidence binding.
     val prBaseSha: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
+    /// Current tip SHA of the PR's declared base branch.
+    ///
+    /// This deliberately resolves `base.ref` through `git/ref/heads/<ref>` instead of trusting the PR
+    /// object's potentially stale `base.sha` snapshot. It fails closed if either read is unavailable.
+    val prBaseTipSha: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
 
     /// UTF-8 file content at an immutable git ref.
     val fileAtRef:

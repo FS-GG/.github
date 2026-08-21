@@ -841,7 +841,25 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/pulls/(\d+)$", path)
         if m:
             pr = int(m.group(1))
-            return self._send(200, {"number": pr, "head": {"ref": "item/44-the-work"}})
+            # The M4 fixture authors two accepted generations. Before the first acceptance the live
+            # head is A; after that accepted record exists, the next generation is on head B. This
+            # lets the owned producer prove it binds the head it read instead of trusting the draft.
+            structured_reviews = sum(
+                "fsgg.coord.review-decision/v2" in comment.get("body", "")
+                for comment in COMMENTS.get(pr, [])
+            )
+            head_sha = "b" * 40 if pr == 42 and structured_reviews >= 3 else "a" * 40
+            return self._send(200, {
+                "number": pr,
+                "head": {"ref": "item/44-the-work", "sha": head_sha},
+                "base": {"ref": "main", "sha": "9" * 40},
+            })
+
+        m = re.match(r"^/repos/[^/]+/[^/]+/git/ref/heads/main$", path)
+        if m:
+            # Deliberately disagree with the PR object's stale `base.sha`: acceptance must bind the
+            # live base branch authority, not whichever merge-base snapshot GitHub last attached.
+            return self._send(200, {"ref": "refs/heads/main", "object": {"sha": "c" * 40}})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/pulls$", path)
         if m:

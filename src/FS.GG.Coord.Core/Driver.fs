@@ -25,7 +25,8 @@ module Driver =
         | NotMeaningful of reason: string
 
     type ReviewChain =
-        { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
+        { MarkerValid: bool; Subject: string option; ClaimGeneration: string option; BaseSha: string option
+          CriticIdentity: string option; HeadSha: string option
           Rounds: int list; RepairPhase: bool; ChecksGreen: bool; HostAccepted: bool
           RuntimeRouteEvidence: RuntimeRouteEvidence option
           DiffAuditRequired: bool; DiffAuditHead: string option }
@@ -122,6 +123,8 @@ module Driver =
                   Revision = number "revision" root
                   PreviousDigest = optionalText "previousDigest" root
                   HeadSha = text "headSha" root
+                  ClaimGeneration = optionalText "claimGeneration" root
+                  BaseSha = optionalText "baseSha" root
                   Critic = text "critic" root
                   Verdict = verdict
                   AcceptedExceptions = texts "acceptedExceptions" root
@@ -164,7 +167,8 @@ module Driver =
                    grantUrl = grant.GrantUrl |})
         JsonSerializer.Serialize
             {| schema = record.Schema; subject = record.Subject; revision = record.Revision
-               previousDigest = record.PreviousDigest; headSha = record.HeadSha; critic = record.Critic
+               previousDigest = record.PreviousDigest; headSha = record.HeadSha
+               claimGeneration = record.ClaimGeneration; baseSha = record.BaseSha; critic = record.Critic
                verdict = verdict; acceptedExceptions = record.AcceptedExceptions
                routeApplicability = record.RouteApplicability; routeEvidence = record.RouteEvidence
                policyVersion = record.PolicyVersion; kind = kind; round = record.Round
@@ -573,6 +577,9 @@ module Driver =
                         generation |> List.tryLast |> Option.map (snd >> _.Critic) |> Option.defaultValue first.Critic
                     Ok
                         { MarkerValid = true
+                          Subject = Some accepted.Subject
+                          ClaimGeneration = accepted.ClaimGeneration
+                          BaseSha = accepted.BaseSha
                           CriticIdentity = Some generationCritic
                           HeadSha = Some latest.HeadSha
                           Rounds = rounds

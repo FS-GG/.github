@@ -37,7 +37,8 @@ module DriverTests =
     [<Fact>]
     let ``#2127 receipts are source-bound complete and fresh`` () =
         let review =
-            { MarkerValid = true; CriticIdentity = Some "shrike"; HeadSha = Some "abc"; Rounds = [1]; RepairPhase = false
+            { MarkerValid = true; Subject = None; ClaimGeneration = None; BaseSha = None
+              CriticIdentity = Some "shrike"; HeadSha = Some "abc"; Rounds = [1]; RepairPhase = false
               ChecksGreen = true; HostAccepted = true
               RuntimeRouteEvidence = Some(NotMeaningful "receipt freshness has no runtime-route subject")
               DiffAuditRequired = false; DiffAuditHead = None }

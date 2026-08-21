@@ -59,6 +59,12 @@ def cr(suite, status, concl, app="github-actions", **extra):
     return c
 
 
+def registry(suite=777):
+    c = cr(suite, "completed", "success")
+    c["name"] = "registry-coherence"
+    return c
+
+
 # Every leg's PR is mergeable; the verdict comes entirely from the runs + checks on its head SHA.
 PULLS = {n: {"number": n, "state": "open", "mergeable": True,
              "head": {"ref": "item/1-x", "sha": f"sha{n}"}}
@@ -99,6 +105,11 @@ CHECKS = {
     "sha808": [cr(111, "completed", "failure")],
     "sha809": [cr(111, "completed", "success", output={"text": PAD})],
 }
+
+# These scoring fixtures model the known critic-free registry bot route. Its named gate is present on
+# every world; red/pending worlds remain red/pending, while otherwise-green worlds use the documented
+# review exemption rather than accidentally testing the ordinary host-review route.
+CHECKS = {sha: checks + ([] if sha == "sha804" else [registry()]) for sha, checks in CHECKS.items()}
 
 
 class H(BaseHTTPRequestHandler):

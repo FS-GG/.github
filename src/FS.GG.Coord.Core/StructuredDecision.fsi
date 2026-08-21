@@ -60,6 +60,8 @@ module StructuredDecision =
           Revision: int
           PreviousDigest: string option
           HeadSha: string
+          ClaimGeneration: string option
+          BaseSha: string option
           Critic: string
           Verdict: ReviewVerdict
           AcceptedExceptions: string list

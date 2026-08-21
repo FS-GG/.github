@@ -35,6 +35,8 @@ module StructuredDecisionTests =
               Revision = revision
               PreviousDigest = previous
               HeadSha = String.replicate 40 "a"
+              ClaimGeneration = if kind = StructuredDecision.Acceptance then Some "claim-1" else None
+              BaseSha = if kind = StructuredDecision.Acceptance then Some(String.replicate 40 "b") else None
               Critic = "tern-42"
               Verdict = verdict
               AcceptedExceptions = []
@@ -131,6 +133,16 @@ module StructuredDecisionTests =
             Assert.False(record.Digest = StructuredDecision.reviewDigest changed)
 
     [<Fact>]
+    let ``#2360 acceptance digest binds claim generation and effective base`` () =
+        let first = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        let accepted = review 2 (Some first.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0 (Some "https://review/1") (Some "https://review/1")
+        let otherClaim = { accepted with ClaimGeneration = Some "claim-2" }
+        let otherBase = { accepted with BaseSha = Some(String.replicate 40 "c") }
+
+        Assert.False(accepted.Digest = StructuredDecision.reviewDigest otherClaim)
+        Assert.False(accepted.Digest = StructuredDecision.reviewDigest otherBase)
+
+    [<Fact>]
     let ``M4 review ledger rejects tamper stale links and non exact SHAs`` () =
         let first = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
         let second = review 2 (Some first.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0 (Some "https://review/1") (Some "https://review/1")
@@ -160,7 +172,8 @@ module StructuredDecisionTests =
                    grantUrl = grant.GrantUrl |})
         JsonSerializer.Serialize
             {| schema = record.Schema; subject = record.Subject; revision = record.Revision
-               previousDigest = record.PreviousDigest; headSha = record.HeadSha; critic = record.Critic
+               previousDigest = record.PreviousDigest; headSha = record.HeadSha
+               claimGeneration = record.ClaimGeneration; baseSha = record.BaseSha; critic = record.Critic
                verdict = verdict; acceptedExceptions = record.AcceptedExceptions
                routeApplicability = record.RouteApplicability; routeEvidence = record.RouteEvidence
                policyVersion = record.PolicyVersion; kind = kind; round = record.Round

@@ -1,0 +1,715 @@
+schemaVersion: 1
+workId: 2360-landable-review-acceptance
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2360-landable-review-acceptance/spec.md
+sourceClarifications: work/2360-landable-review-acceptance/clarifications.md
+sourceChecklist: work/2360-landable-review-acceptance/checklist.md
+sourcePlan: work/2360-landable-review-acceptance/plan.md
+sourceTasks: work/2360-landable-review-acceptance/tasks.yml
+sourceAnalysis: readiness/2360-landable-review-acceptance/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2360-landable-review-acceptance/analysis.json
+    digest: 13653d986de47b12ba4467205ab36740b4008e5720eabda770a82b5d3d85f3b8
+    schemaVersion: 1
+  - label: checklist
+    path: work/2360-landable-review-acceptance/checklist.md
+    digest: 8fd6014a94f7c43b32a3a3b063a9de4a83cc0aaf164a01afb914b1cdf95e65d4
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2360-landable-review-acceptance/clarifications.md
+    digest: 6eaf2393b3b05f08c5244f0c48dac7965143f47f1fac13b4eda16b2d49c1f368
+    schemaVersion: 1
+  - label: plan
+    path: work/2360-landable-review-acceptance/plan.md
+    digest: da6e3669930143d3b0b7c97b2301182fceab0b26e66ba09165cebe7126456a4c
+    schemaVersion: 1
+  - label: spec
+    path: work/2360-landable-review-acceptance/spec.md
+    digest: 4f8eaccfaef25efd1bdaf4c029dfe81e47042a07507b7280f4c100327f1375f9
+    schemaVersion: 1
+  - label: tasks
+    path: work/2360-landable-review-acceptance/tasks.yml
+    digest: 286a842a492c2e84cb80c946e08c240c5de9a2c2c61ae0fda1f77e8ce8e44ee9
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-001, FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV009]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV010]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003]
+    obligationRefs: [EV011]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV012]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV013]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-005]
+    obligationRefs: [EV015]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Focused 14-test gate suite and complete 495-test CLI suite passed; default-predicate inversion produced 7 expected failures before restoration."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: [AC-007]
+    clarificationDecisionRefs: [DEC-003]
+    checklistResultRefs: [CR-005]
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV016]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Core/Driver.fs, src/FS.GG.Coord.Core/StructuredDecision.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Acceptance claim/base fields are appended digest inputs; the live producer derives them from complete current reads."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: [AC-008, AC-010]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-006]
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV017]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: [Focused fixture passed with exact expected/actual base diagnostics and claim-generation invalidation.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: [AC-009]
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: [CR-007]
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV018]
+    artifacts: [src/FS.GG.Coord.Cli/DeliveryApplication.fs, tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Final head/base/claim guard passed; the returned receipt names both checked revisions."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: [AC-010]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-008]
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV019]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["The production-style two-PR fixture holds both reviewed head and stale PR base.sha fixed at b while refs/heads/main moves b->c; the prior cached-base implementation stays green and the live-tip implementation becomes pending."]
+  - id: EV020
+    kind: implementation
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: [AC-007]
+    clarificationDecisionRefs: [DEC-003]
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV020]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.GitHub/Reads.fs]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli/Client.fs
+      - kind: implementation
+        path: src/FS.GG.Coord.GitHub/Reads.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Owned live producer seals the authorization tuple; historical field-absent records remain parseable but cannot authorize landing."]
+  - id: EV021
+    kind: implementation
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: [AC-009]
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV021]
+    artifacts: [src/FS.GG.Coord.Cli/DeliveryApplication.fs]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli/DeliveryApplication.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: [Base is re-read immediately before the existing head-conditional merge write.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: [FR-006, FR-008]
+    acceptanceScenarioRefs: [AC-008, AC-010]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV022]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/LandableNotOpenTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: [Landable recomputes subject/claim/head/base and the focused class passed 14/14.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006, PD-007]
+    obligationRefs: [EV023]
+    artifacts: [tests/coord-engine-parity/run.sh, work/2360-landable-review-acceptance/test-results/cli.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-parity/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["CLI 495/495, Core 884/884, production parity 648/648, and coord-engine e2e 24/24 passed."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: [AC-009]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV024]
+    artifacts: [src/FS.GG.Coord.Cli/DeliveryApplication.fs, tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Mutating base equality to inequality produced 2 focused failures; restoration passed 71/71."]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV025]
+    artifacts: [readiness/2360-landable-review-acceptance/ship-verdict.json, tests/signature-doc-siting/baseline.txt]
+    sourceRefs:
+      - kind: verification
+        path: scripts/check-ship-verdict-provenance.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2360-landable-review-acceptance/test-results/cli.trx
+      digest: "sha256:e384513a53d4e78b54b7b15953ed0a49971ac9295b76312549dc5853f28f8081"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 495
+      failed: 0
+      skipped: 0
+    notes: ["Owned ship-verdict --fix plus verifier passed; signature-doc-siting fixture passed 90/90 against the corrected exact-count baseline."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

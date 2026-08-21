@@ -97,8 +97,8 @@ RUNS = {f"sha{n}": [wf(n)] for n in STATE}
 
 # Everything that REPORTED is green everywhere. 951 additionally carries the required context; every
 # other leg does not — which is the whole point: nothing here is red, and the naive rollup says so.
-CHECKS = {f"sha{n}": [cr("build"), cr("test")] for n in STATE}
-CHECKS["sha951"] = [cr("build"), cr("test"), cr(SUBJECT)]
+CHECKS = {f"sha{n}": [cr("build"), cr("test"), cr("registry-coherence")] for n in STATE}
+CHECKS["sha951"] = [cr("build"), cr("test"), cr("registry-coherence"), cr(SUBJECT)]
 
 # CLASSIC protection, per base branch. A branch absent here 404s — a real answer about THIS store.
 PROTECTION = {"main": [SUBJECT]}
