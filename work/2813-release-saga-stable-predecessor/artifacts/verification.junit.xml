@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="2813-release-saga-stable-predecessor" tests="1" failures="0" errors="0" skipped="0" time="3.2">
+  <testcase classname="release-saga" name="live predecessor authority and forward recovery" time="3.2">
+    <system-out>bash tests/release-saga/run.sh passed: canonical stable SemVer production boundaries rejected +9.8.6, 09.8.6, embedded whitespace, prerelease/build suffixes, and extra/missing segments before artifact enumeration; live predecessor validation, stale retry refusal, dual-feed recovery, and 0.69.0 to 0.71.0 forward promotion passed. Mutations removing previousStableContentId comparison and canonical stable-version validation were observed effective; the latter exited 1 at the exact +9.8.6 production-boundary assertion.</system-out>
+  </testcase>
+</testsuite>

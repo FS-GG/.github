@@ -523,6 +523,10 @@
     <!-- 0.69.0 -> 0.70.0, a coherent MINOR (.github#2801): the packed overlap protocol now teaches
          automatic generation-bound arbitration, claim-preserving loser recovery, and the sole
          board-orchestrator lease/request route. Additive policy and commands; no identity removed. -->
+    <!-- 0.70.0 -> 0.71.0, a coherent MINOR (.github#2813): release preparation now binds the live
+         promoted predecessor version/content identity before packing and refuses stale retries.
+         Kit members and destinations are unchanged; 0.70.0 remains poisoned and unpromoted, so this
+         project advances with the forward-recovery coherent scalar. -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>

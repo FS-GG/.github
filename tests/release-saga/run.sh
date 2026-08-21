@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TOOL="$ROOT/scripts/release-saga.py"
+TOOL="${RELEASE_SAGA_TOOL:-$ROOT/scripts/release-saga.py}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/release-saga.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/artifacts" "$WORK/github" "$WORK/nuget"
@@ -45,10 +45,58 @@ for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
   make_package "$WORK/artifacts/$package.9.8.7.nupkg" "$package" 9.8.7
 done
 
+printf '%s\n' '{"contentId":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","version":"9.8.6","sourceSha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","promotedAt":"2026-08-13T00:00:00Z"}' > "$WORK/previous-stable.json"
+python3 "$TOOL" predecessor --channel "$WORK/previous-stable.json" \
+  --release-tag coherent-set/v9.8.6 --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  | jq -e '.version == "9.8.6" and .contentId == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' >/dev/null
+if python3 "$TOOL" predecessor --channel "$WORK/missing-stable.json" \
+  --release-tag coherent-set/v9.8.6 --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null 2>&1; then
+  echo "expected a missing stable-channel receipt to fail closed" >&2; exit 1
+fi
+# These are production-boundary controls, not parser-unit checks: the receipt and tag repeat the
+# same non-canonical spelling so agreement alone cannot make it authoritative.
+malformed_versions=("+9.8.6" "09.8.6" "9. 8.6" "9.8.6-preview.1" "9.8.6+build.1" "9.8.6.1" "9.8")
+malformed_index=0
+for malformed_version in "${malformed_versions[@]}"; do
+  malformed_index=$((malformed_index + 1))
+  malformed_receipt="$WORK/malformed-version-$malformed_index.json"
+  malformed_log="$WORK/malformed-version-$malformed_index.log"
+  jq --arg version "$malformed_version" '.version = $version' "$WORK/previous-stable.json" > "$malformed_receipt"
+  if python3 "$TOOL" predecessor --channel "$malformed_receipt" \
+    --release-tag "coherent-set/v$malformed_version" \
+    --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >"$malformed_log" 2>&1; then
+    echo "expected non-canonical stable version '$malformed_version' to fail closed" >&2; exit 1
+  fi
+  grep -F "canonical stable SemVer triple" "$malformed_log" >/dev/null
+done
+# prepare reads and validates this authority before it can enumerate or pack any artifact.
+if python3 "$TOOL" prepare --release-id malformed-before-pack --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+  --previous-channel "$WORK/malformed-version-1.json" --artifact-dir "$WORK/does-not-exist" \
+  --expected-package FS.GG.Coord.Cli --output "$WORK/malformed-manifest.json" \
+  >"$WORK/malformed-prepare.log" 2>&1; then
+  echo "expected prepare to reject a non-canonical predecessor before packing" >&2; exit 1
+fi
+grep -F "canonical stable SemVer triple" "$WORK/malformed-prepare.log" >/dev/null
+test ! -e "$WORK/malformed-manifest.json"
+if python3 "$TOOL" predecessor --channel "$WORK/previous-stable.json" \
+  --release-tag coherent-set/v9.8.5 --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null 2>&1; then
+  echo "expected a tag/receipt version contradiction to fail closed" >&2; exit 1
+fi
+if python3 "$TOOL" predecessor --channel "$WORK/previous-stable.json" \
+  --release-tag coherent-set/v9.8.6 --tag-source cccccccccccccccccccccccccccccccccccccccc >/dev/null 2>&1; then
+  echo "expected a tag/receipt source contradiction to fail closed" >&2; exit 1
+fi
+jq '.contentId = "sha256:malformed"' "$WORK/previous-stable.json" > "$WORK/malformed-stable.json"
+if python3 "$TOOL" predecessor --channel "$WORK/malformed-stable.json" \
+  --release-tag coherent-set/v9.8.6 --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null 2>&1; then
+  echo "expected a malformed stable-channel receipt to fail closed" >&2; exit 1
+fi
+
 python3 "$TOOL" prepare \
   --release-id fixture-9.8.7 --version 9.8.7 \
   --source-sha 0123456789012345678901234567890123456789 \
-  --policy-version release-saga/1 --previous-version 9.8.6 --artifact-dir "$WORK/artifacts" \
+  --policy-version release-saga/1 --previous-channel "$WORK/previous-stable.json" --artifact-dir "$WORK/artifacts" \
   --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
   --output "$WORK/manifest.json"
 python3 "$TOOL" preflight --manifest "$WORK/manifest.json" --feed both
@@ -97,16 +145,14 @@ python3 "$TOOL" record-observed --manifest "$WORK/manifest.json" --feed nuget \
   --observed "FS.GG.Coord.Cli=$WORK/nuget/FS.GG.Coord.Cli.9.8.7.nupkg" \
   --observed "FS.GG.Kit=$WORK/nuget/FS.GG.Kit.9.8.7.nupkg" \
   --observed "FS.GG.Drivers=$WORK/nuget/FS.GG.Drivers.9.8.7.nupkg" --detail "fixture public-feed observation"
-printf '%s\n' '{"contentId":"sha256:previous","version":"9.8.6","sourceSha":"previous","promotedAt":"2026-08-13T00:00:00Z"}' > "$WORK/previous-stable.json"
-# First-ever saga channel: no coherent-set receipt exists yet, so the content-bound descriptor's
-# previousStableVersion is the monotonic baseline.
-python3 "$TOOL" promote --manifest "$WORK/manifest.json" --channel-output "$WORK/stable.json"
+python3 "$TOOL" promote --manifest "$WORK/manifest.json" --previous-channel "$WORK/previous-stable.json" \
+  --channel-output "$WORK/stable.json"
 # A queued observer after the first successful publication sees the current release as latest. The
 # already-promoted manifest makes this an exact idempotent replay, not a baseline regression.
 cp "$WORK/stable.json" "$WORK/current-stable.json"
 python3 "$TOOL" promote --manifest "$WORK/manifest.json" --previous-channel "$WORK/current-stable.json" --channel-output "$WORK/stable-replay.json"
 cmp "$WORK/stable.json" "$WORK/stable-replay.json"
-printf '%s\n' '{"contentId":"sha256:newer","version":"9.9.0","sourceSha":"newer","promotedAt":"2026-08-13T00:00:00Z"}' > "$WORK/newer-stable.json"
+printf '%s\n' '{"contentId":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","version":"9.9.0","sourceSha":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","promotedAt":"2026-08-13T00:00:00Z"}' > "$WORK/newer-stable.json"
 if python3 "$TOOL" promote --manifest "$WORK/manifest.json" --previous-channel "$WORK/newer-stable.json" >/dev/null 2>&1; then
   echo "expected an older already-promoted manifest to refuse a newer live channel" >&2; exit 1
 fi
@@ -134,6 +180,8 @@ fi
 
 jq -e '
   .schema == "fsgg.release-saga/1" and
+  .descriptor.previousStableVersion == "9.8.6" and
+  .descriptor.previousStableContentId == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and
   (.descriptor.packages | length) == 3 and
   ([.descriptor.packages[].dependencies[] | select(.id == "FSharp.Core")] | length) == 3 and
   .state.preflight.github.state == "passed" and .state.preflight.nuget.state == "passed" and
@@ -145,7 +193,7 @@ jq -e '
 
 # Promotion fails closed when even one target feed is incomplete.
 python3 "$TOOL" prepare --release-id incomplete --version 9.8.7 \
-  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 --previous-version 9.8.6 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 --previous-channel "$WORK/previous-stable.json" \
   --artifact-dir "$WORK/artifacts" --expected-package FS.GG.Coord.Cli \
   --expected-package FS.GG.Kit --expected-package FS.GG.Drivers --output "$WORK/incomplete.json" >/dev/null
 python3 "$TOOL" preflight --manifest "$WORK/incomplete.json" --feed both >/dev/null
@@ -213,6 +261,19 @@ assert adapter.count('[ "$observed" = true ] ||') == 2
 prepare = (root / ".github/workflows/release-saga-prepare.yml").read_text()
 for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
     assert prepare.count(f"dotnet pack src/{project}/") == 1, project
+authority = prepare.find("release-saga.py predecessor")
+build = prepare.find("dotnet restore src/FS.GG.Coord.Cli")
+pack = prepare.find("dotnet pack src/FS.GG.Coord.Cli")
+revalidation = prepare.find("Revalidate predecessor before draft mutation")
+draft = prepare.find("gh release view \"$tag\"")
+assert 0 <= authority < build < pack < revalidation < draft, (authority, build, pack, revalidation, draft)
+assert prepare.count("release-saga.py predecessor") == 2
+for token in ("--exclude-drafts", "stable-channel.json", "refs/tags/$predecessor_tag^{}",
+              "--previous-channel artifacts/predecessor/stable-channel.json",
+              "stable predecessor moved during preparation"):
+    assert token in prepare, token
+assert "registry/dependencies.yml" not in prepare, "registry projection still selects the predecessor"
+assert "--previous-version" not in prepare, "caller-supplied predecessor remains an authority"
 # The reuse-existing-draft branch decides on re-pack-stable payload, never on the raw archive bytes
 # or the `contentId` computed over them — those differ on every honest re-pack (.github#2664).
 assert "release-saga.py assert-reusable" in prepare, "reuse branch no longer asks for a re-pack-stable verdict"
@@ -301,7 +362,7 @@ grep -Eq '^release edit .*--draft=false' "$WORK/promote-calls.log"
 # same content, different core-properties part — and `divergent` is a real content change.
 REPACK="$WORK/repack"
 mkdir -p "$REPACK/first" "$REPACK/second" "$REPACK/divergent" "$REPACK/other-source" "$REPACK/partial" \
-  "$REPACK/manifest-relationship"
+  "$REPACK/manifest-relationship" "$REPACK/stale-predecessor"
 for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
   make_package "$REPACK/first/$package.9.8.7.nupkg" "$package" 9.8.7 9c6d21a2a7774fb2bbc48858e7e6d136
   make_package "$REPACK/second/$package.9.8.7.nupkg" "$package" 9.8.7 341955db2e8847439fdf05b771ee2c5c
@@ -314,16 +375,19 @@ for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
 done
 cp "$REPACK/second/"*.nupkg "$REPACK/other-source/"
 cp "$REPACK/second/"*.nupkg "$REPACK/partial/"
+cp "$REPACK/second/"*.nupkg "$REPACK/stale-predecessor/"
+printf '%s\n' '{"contentId":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","version":"9.8.6","sourceSha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","promotedAt":"2026-08-13T00:00:00Z"}' > "$WORK/stale-predecessor.json"
 
 prepare_repack_set() {
   python3 "$TOOL" prepare --release-id fixture-9.8.7 --version 9.8.7 \
     --source-sha "${2:-0123456789012345678901234567890123456789}" --policy-version release-saga/1 \
-    --previous-version 9.8.6 --artifact-dir "$1" \
+    --previous-channel "${3:-$WORK/previous-stable.json}" --artifact-dir "$1" \
     --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
     --output "$1/release-manifest.json" >/dev/null
 }
 for set_dir in first second divergent partial manifest-relationship; do prepare_repack_set "$REPACK/$set_dir"; done
 prepare_repack_set "$REPACK/other-source" ffffffffffffffffffffffffffffffffffffffff
+prepare_repack_set "$REPACK/stale-predecessor" 0123456789012345678901234567890123456789 "$WORK/stale-predecessor.json"
 
 kit_payload_sha() {
   jq -r '.descriptor.packages[] | select(.id == "FS.GG.Kit") | .artifact.payloadSha256' "$1"
@@ -352,6 +416,11 @@ if [ "$(kit_payload_sha "$REPACK/first/release-manifest.json")" != "$(kit_payloa
 fi
 python3 "$TOOL" assert-reusable --stored "$REPACK/first/release-manifest.json" \
   --candidate "$REPACK/second/release-manifest.json"
+if python3 "$TOOL" assert-reusable --stored "$REPACK/first/release-manifest.json" \
+  --candidate "$REPACK/stale-predecessor/release-manifest.json" >"$WORK/stale-retry.log" 2>&1; then
+  echo "expected a stale predecessor identity to make draft reuse fail closed" >&2; exit 1
+fi
+diagnosis_names "$WORK/stale-retry.log" "descriptor.previousStableContentId"
 
 # Both directions, because a normalization that waved a materially different package through would be
 # the fail-open .github#2240 and .github#2428 exist to prevent. A real content change is refused, and
@@ -430,4 +499,81 @@ if python3 "$WORK/inverted-release-saga.py" assert-reusable \
 fi
 diagnosis_names "$WORK/inverted.log" "_rels/.rels"
 
-echo "release saga: forced mid-publish recovery, byte drift, dual-feed observation, draft reuse, and promotion passed"
+# GATE INVERSION (.github#2813 AC5). Removing predecessor content identity from the reusable descriptor
+# comparison makes a stale-baseline draft look reusable. The control must demonstrate that exact escape.
+python3 - "$TOOL" "$WORK/inverted-predecessor-release-saga.py" <<'PY'
+import pathlib, sys
+source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+marker = '"previousStableVersion", "previousStableContentId", "channel"'
+assert source.count(marker) == 1, "predecessor inversion marker moved; update tests/release-saga/run.sh"
+pathlib.Path(sys.argv[2]).write_text(source.replace(marker, '"previousStableVersion", "channel"'), encoding="utf-8")
+PY
+python3 "$WORK/inverted-predecessor-release-saga.py" assert-reusable \
+  --stored "$REPACK/first/release-manifest.json" \
+  --candidate "$REPACK/stale-predecessor/release-manifest.json" >/dev/null
+
+# GATE INVERSION (.github#2813 critic repair). Removing the canonical stable SemVer predicate makes
+# the exact +9.8.6 receipt/tag boundary escape again. The focused suite must kill that mutant at its
+# production predecessor command rather than merely exercising an isolated parser.
+if [[ "${RELEASE_SAGA_MUTATION_CHILD:-0}" != 1 ]]; then
+  python3 - "$TOOL" "$WORK/inverted-stable-version-release-saga.py" <<'PY'
+import pathlib, sys
+source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+marker = "if not isinstance(value, str) or STABLE_VERSION.fullmatch(value) is None:"
+assert source.count(marker) == 1, "stable-version inversion marker moved; update tests/release-saga/run.sh"
+pathlib.Path(sys.argv[2]).write_text(source.replace(marker, "if not isinstance(value, str):"), encoding="utf-8")
+PY
+  python3 "$WORK/inverted-stable-version-release-saga.py" predecessor \
+    --channel "$WORK/malformed-version-1.json" --release-tag coherent-set/v+9.8.6 \
+    --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null
+  if RELEASE_SAGA_TOOL="$WORK/inverted-stable-version-release-saga.py" RELEASE_SAGA_MUTATION_CHILD=1 \
+    bash "$ROOT/tests/release-saga/run.sh" >"$WORK/stable-version-mutant.log" 2>&1; then
+    echo "canonical stable-version mutant survived the focused suite" >&2; exit 1
+  fi
+  grep -F "expected non-canonical stable version '+9.8.6' to fail closed" \
+    "$WORK/stable-version-mutant.log" >/dev/null
+fi
+
+# Reproduce the live forward-only recovery: registry 0.68.0 is present as a deliberately stale
+# projection, 0.70.0 is a poisoned identity that must remain byte-for-byte unchanged, and only a new
+# 0.71.0 manifest may advance from the authoritative promoted 0.69.0 receipt.
+FORWARD="$WORK/forward"
+mkdir -p "$FORWARD/artifacts" "$FORWARD/github" "$FORWARD/nuget" "$FORWARD/poisoned-0.70.0"
+printf '%s\n' 'package-version: "0.68.0"' > "$FORWARD/registry-projection.yml"
+printf '%s\n' '{"contentId":"sha256:1111111111111111111111111111111111111111111111111111111111111111","version":"0.69.0","sourceSha":"2222222222222222222222222222222222222222","promotedAt":"2026-08-21T15:05:10Z"}' > "$FORWARD/stable-0.69.0.json"
+printf '%s\n' 'immutable packages/tags/manifest/journals/draft for poisoned 0.70.0' \
+  > "$FORWARD/poisoned-0.70.0/identity"
+poisoned_before="$(sha256sum "$FORWARD/poisoned-0.70.0/identity")"
+for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
+  make_package "$FORWARD/artifacts/$package.0.71.0.nupkg" "$package" 0.71.0
+done
+python3 "$TOOL" prepare --release-id fixture-0.71.0 --version 0.71.0 \
+  --source-sha 3333333333333333333333333333333333333333 --policy-version release-saga/1 \
+  --previous-channel "$FORWARD/stable-0.69.0.json" --artifact-dir "$FORWARD/artifacts" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --output "$FORWARD/manifest.json" >/dev/null
+python3 "$TOOL" preflight --manifest "$FORWARD/manifest.json" --feed both >/dev/null
+github_observations=(); nuget_observations=()
+for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
+  cp "$FORWARD/artifacts/$package.0.71.0.nupkg" "$FORWARD/github/"
+  cp "$FORWARD/artifacts/$package.0.71.0.nupkg" "$FORWARD/nuget/"
+  github_observations+=(--observed "$package=$FORWARD/github/$package.0.71.0.nupkg")
+  nuget_observations+=(--observed "$package=$FORWARD/nuget/$package.0.71.0.nupkg")
+done
+python3 "$TOOL" record-observed --manifest "$FORWARD/manifest.json" --feed github \
+  "${github_observations[@]}" --detail "forward recovery org fixture" >/dev/null
+python3 "$TOOL" record-observed --manifest "$FORWARD/manifest.json" --feed nuget \
+  "${nuget_observations[@]}" --detail "forward recovery public fixture" >/dev/null
+python3 "$TOOL" promote --manifest "$FORWARD/manifest.json" \
+  --previous-channel "$FORWARD/stable-0.69.0.json" --channel-output "$FORWARD/stable-0.71.0.json" >/dev/null
+jq -e '
+  .descriptor.version == "0.71.0" and
+  .descriptor.previousStableVersion == "0.69.0" and
+  .descriptor.previousStableContentId == "sha256:1111111111111111111111111111111111111111111111111111111111111111" and
+  .state.channelPromotion.state == "promoted"
+' "$FORWARD/manifest.json" >/dev/null
+jq -e '.version == "0.71.0"' "$FORWARD/stable-0.71.0.json" >/dev/null
+[ "$(cat "$FORWARD/registry-projection.yml")" = 'package-version: "0.68.0"' ]
+[ "$poisoned_before" = "$(sha256sum "$FORWARD/poisoned-0.70.0/identity")" ]
+
+echo "release saga: live predecessor authority, forced recovery, byte drift, draft reuse, and forward promotion passed"
