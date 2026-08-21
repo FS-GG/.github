@@ -1,0 +1,44 @@
+{
+  "schema": "fsgg.release-verification/1",
+  "releaseId": "github:0.69.0",
+  "version": "0.69.0",
+  "sourceSha": "808d8f23e802b68edd8e4b5dec9998febdaf686b",
+  "contentId": "sha256:33a95104430e150ca00dbd9bf44ea726fd2d2c1006f5096cc5040770f3611729",
+  "release": "https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.69.0",
+  "prepareRun": "https://github.com/FS-GG/.github/actions/runs/32494644660",
+  "promotionRun": "https://github.com/FS-GG/.github/actions/runs/32495651569",
+  "tags": {
+    "kit/v0.69.0": "808d8f23e802b68edd8e4b5dec9998febdaf686b",
+    "drivers/v0.69.0": "808d8f23e802b68edd8e4b5dec9998febdaf686b",
+    "coord-engine/v0.69.0": "808d8f23e802b68edd8e4b5dec9998febdaf686b"
+  },
+  "packages": {
+    "FS.GG.Coord.Cli": {
+      "payloadSha256": "sha256:20813a6130b7c8d768b7813dd3f8c88dde771b55170ef27581754c462ead6ee2",
+      "github": "verified",
+      "nuget": "verified"
+    },
+    "FS.GG.Drivers": {
+      "payloadSha256": "sha256:ae35850f8c3020ac9f428d746a6dd03fbdfa832b7dbcdf65e496f4e50cae0d13",
+      "github": "verified",
+      "nuget": "verified"
+    },
+    "FS.GG.Kit": {
+      "payloadSha256": "sha256:37c0d3c3a5db70ef8622e98436df90a302c4fcc9a52ebf14ad975015ff901ce7",
+      "github": "verified",
+      "nuget": "verified"
+    }
+  },
+  "publicInstall": {
+    "source": "nuget.org only, empty package cache",
+    "toolVersion": "0.69.0.0",
+    "commandContractRows": 52
+  },
+  "consumerHandoff": "https://github.com/EHotwagner/S.I.R./issues/231#issuecomment-5371673376",
+  "recovery": {
+    "initialPublisherRuns": [32494887078, 32494887073, 32494886888],
+    "reason": "nuget.org accepted all pushes but did not serve them within the bounded observation window",
+    "resume": "attempt 2 re-observed immutable versions without repacking or duplicate pushes",
+    "coordAttempt2": "post-promotion immutable journal upload race; publication remained promoted and verified"
+  }
+}

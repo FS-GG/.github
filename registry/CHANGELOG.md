@@ -19,12 +19,28 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
-- **2026-08-21** — **coherent set `github:0.69.0` prepared with a mapped release obligation**
-  (github; [.github#2807](https://github.com/FS-GG/.github/issues/2807)): repairs fresh-claim
-  ordinary-exhaustion authorization for genuine H0/H1/H2/H3 head progression while retaining exact
-  final-head, wait, legacy-backlink, fresh-claim, duplicate, and round-four fences. The claim owner must
-  publish the prepared Kit, Drivers, and Coord.Cli bytes to both feeds, prove payload identity and a
-  clean public installed-tool route for S.I.R., and replace this entry with immutable evidence before Done.
+- **2026-08-21** — **coherent set `github:0.69.0` published; `coord-engine` flipped to `0.69.0`**
+  (github; [.github#2807](https://github.com/FS-GG/.github/issues/2807),
+  [source PR #2810](https://github.com/FS-GG/.github/pull/2810),
+  [release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.69.0)): prepare run
+  [32494644660](https://github.com/FS-GG/.github/actions/runs/32494644660) packed Kit, Drivers, and
+  Coord.Cli once from merge `808d8f23e802b68edd8e4b5dec9998febdaf686b`; the three component tags
+  were pushed atomically at that commit. Initial publishers
+  [Kit 32494887078](https://github.com/FS-GG/.github/actions/runs/32494887078),
+  [Coord.Cli 32494887073](https://github.com/FS-GG/.github/actions/runs/32494887073), and
+  [Drivers 32494886888](https://github.com/FS-GG/.github/actions/runs/32494886888) placed the
+  manifest-bound archives on GitHub Packages and nuget.org. Their bounded public-index waits expired;
+  attempt 2 of the same runs re-observed the immutable versions without repacking or duplicate pushes.
+  Promotion run [32495651569](https://github.com/FS-GG/.github/actions/runs/32495651569) independently
+  read both feeds and sealed content ID
+  `sha256:33a95104430e150ca00dbd9bf44ea726fd2d2c1006f5096cc5040770f3611729`.
+  Both feeds carry identical package payloads: Coord.Cli
+  `sha256:20813a6130b7c8d768b7813dd3f8c88dde771b55170ef27581754c462ead6ee2`, Drivers
+  `sha256:ae35850f8c3020ac9f428d746a6dd03fbdfa832b7dbcdf65e496f4e50cae0d13`, and Kit
+  `sha256:37c0d3c3a5db70ef8622e98436df90a302c4fcc9a52ebf14ad975015ff901ce7`.
+  A clean nuget.org-only install reports `0.69.0.0` and 52 command rows; the public handoff to
+  [S.I.R.#231](https://github.com/EHotwagner/S.I.R./issues/231#issuecomment-5371673376) unblocks its
+  fresh-worker/fresh-critic repair phase without authorizing a fourth ordinary round.
 
 - **2026-08-21** — **coherent set `github:0.68.0` published; `coord-engine` flipped to `0.68.0`**
   (github; [.github#2794](https://github.com/FS-GG/.github/issues/2794),
