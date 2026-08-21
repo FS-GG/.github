@@ -171,7 +171,13 @@ FAIL_FIELD_WRITES = [0]
 FAIL_NEXT_CLAIM_POST = [0]
 LOSE_NEXT_CLAIM_POST_RESPONSE = [0]
 LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT = [0]
+LOSE_NEXT_CLAIM_POST_RESPONSE_WITH_MISMATCH = [0]
 LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE = [0]
+FAIL_NEXT_CLAIM_DELETE = [0]
+FAIL_NEXT_CLAIM_DELETE_AND_CENSUS = [0]
+FAIL_NEXT_CLAIM_DELETE_AND_DROP_ALL = [0]
+RACE_NEXT_CLAIM_DELETE = [0]
+FAIL_NEXT_CLAIM_CENSUS = [0]
 RECONCILE_45_PROJECTION = [0]
 # .github#2157's negative controls.  A mutation acknowledgement is deliberately not convergence:
 # the next scan either sees only the Status half or no row at all.
@@ -630,16 +636,23 @@ class Handler(BaseHTTPRequestHandler):
                     "fsgg:claim" in body
                     and LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT[0] > 0
                 )
+                mismatch = (
+                    "fsgg:claim" in body
+                    and LOSE_NEXT_CLAIM_POST_RESPONSE_WITH_MISMATCH[0] > 0
+                )
                 if lose_response:
                     LOSE_NEXT_CLAIM_POST_RESPONSE[0] -= 1
                 if drop_incumbent:
                     LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT[0] -= 1
                     COMMENTS[n] = [c for c in COMMENTS.get(n, []) if "fsgg:claim" not in c.get("body", "")]
+                if mismatch:
+                    LOSE_NEXT_CLAIM_POST_RESPONSE_WITH_MISMATCH[0] -= 1
+                stored_body = re.sub(r"renewed=[0-9]+", "renewed=0", body) if mismatch else body
                 cid = NEXT_COMMENT_ID[0]
                 NEXT_COMMENT_ID[0] += 1
                 html_url = f"https://github.com/{owner_of(n)}/{repo_of(n)}/pull/{n}#issuecomment-{cid}"
-                COMMENTS.setdefault(n, []).append({"id": cid, "html_url": html_url, "body": body, "updated_at": now_iso()})
-            if lose_response or drop_incumbent:
+                COMMENTS.setdefault(n, []).append({"id": cid, "html_url": html_url, "body": stored_body, "updated_at": now_iso()})
+            if lose_response or drop_incumbent or mismatch:
                 return self._send(503, {"message": "fixture: replacement stored but POST response lost"})
             return self._send(201, {"id": cid, "html_url": html_url, "body": body, "updated_at": now_iso()})
 
@@ -707,6 +720,30 @@ class Handler(BaseHTTPRequestHandler):
                             replacement_id = max(c["id"] for c in replacements)
                             lst[:] = [c for c in lst if c["id"] != replacement_id]
                     return self._send(503, {"message": "fixture: incumbent DELETE response lost"})
+                if FAIL_NEXT_CLAIM_DELETE[0] > 0:
+                    FAIL_NEXT_CLAIM_DELETE[0] -= 1
+                    return self._send(500, {"message": "fixture: incumbent DELETE failed"})
+                if FAIL_NEXT_CLAIM_DELETE_AND_CENSUS[0] > 0:
+                    FAIL_NEXT_CLAIM_DELETE_AND_CENSUS[0] -= 1
+                    FAIL_NEXT_CLAIM_CENSUS[0] += 1
+                    return self._send(500, {"message": "fixture: incumbent DELETE failed before unreadable census"})
+                if FAIL_NEXT_CLAIM_DELETE_AND_DROP_ALL[0] > 0:
+                    FAIL_NEXT_CLAIM_DELETE_AND_DROP_ALL[0] -= 1
+                    for lst in COMMENTS.values():
+                        lst[:] = [c for c in lst if "fsgg:claim" not in c.get("body", "")]
+                    return self._send(500, {"message": "fixture: incumbent DELETE failed after all markers vanished"})
+                if RACE_NEXT_CLAIM_DELETE[0] > 0:
+                    RACE_NEXT_CLAIM_DELETE[0] -= 1
+                    for n, lst in COMMENTS.items():
+                        replacements = [c for c in lst if "fsgg:claim" in c.get("body", "") and c["id"] != cid]
+                        lst[:] = [c for c in lst if c["id"] != cid]
+                        if replacements:
+                            replacement_id = max(c["id"] for c in replacements)
+                            racer_id = replacement_id - 1
+                            racer_body = "<!-- fsgg:claim worker=otter-77 lease=120 renewed=fixture-racer -->"
+                            racer_url = f"https://github.com/{owner_of(n)}/{repo_of(n)}/pull/{n}#issuecomment-{racer_id}"
+                            lst.append({"id": racer_id, "html_url": racer_url, "body": racer_body, "updated_at": now_iso()})
+                    return self._send(204, {})
                 for lst in COMMENTS.values():
                     lst[:] = [c for c in lst if c["id"] != cid]
             return self._send(204, {})
@@ -754,10 +791,44 @@ class Handler(BaseHTTPRequestHandler):
                 LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT[0] += 1
                 return self._send(200, {"failArmed": LOSE_NEXT_CLAIM_POST_RESPONSE_AND_DROP_INCUMBENT[0]})
 
+        if path.rstrip("/") == "/_fixture/lose-next-claim-post-response-with-mismatch":
+            with LOCK:
+                LOSE_NEXT_CLAIM_POST_RESPONSE_WITH_MISMATCH[0] += 1
+                return self._send(200, {"failArmed": LOSE_NEXT_CLAIM_POST_RESPONSE_WITH_MISMATCH[0]})
+
         if path.rstrip("/") == "/_fixture/lose-replacement-on-next-claim-delete":
             with LOCK:
                 LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE[0] += 1
                 return self._send(200, {"failArmed": LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE[0]})
+
+        if path.rstrip("/") == "/_fixture/fail-next-claim-delete":
+            with LOCK:
+                FAIL_NEXT_CLAIM_DELETE[0] += 1
+                return self._send(200, {"failArmed": FAIL_NEXT_CLAIM_DELETE[0]})
+
+        if path.rstrip("/") == "/_fixture/fail-next-claim-delete-and-census":
+            with LOCK:
+                FAIL_NEXT_CLAIM_DELETE_AND_CENSUS[0] += 1
+                return self._send(200, {"failArmed": FAIL_NEXT_CLAIM_DELETE_AND_CENSUS[0]})
+
+        if path.rstrip("/") == "/_fixture/fail-next-claim-delete-and-drop-all":
+            with LOCK:
+                FAIL_NEXT_CLAIM_DELETE_AND_DROP_ALL[0] += 1
+                return self._send(200, {"failArmed": FAIL_NEXT_CLAIM_DELETE_AND_DROP_ALL[0]})
+
+        if path.rstrip("/") == "/_fixture/race-next-claim-delete":
+            with LOCK:
+                RACE_NEXT_CLAIM_DELETE[0] += 1
+                return self._send(200, {"failArmed": RACE_NEXT_CLAIM_DELETE[0]})
+
+        if path.rstrip("/") == "/_fixture/reset-claim-42":
+            with LOCK:
+                COMMENTS[42] = [c for c in COMMENTS.get(42, []) if "fsgg:claim" not in c.get("body", "")]
+                cid = NEXT_COMMENT_ID[0]
+                NEXT_COMMENT_ID[0] += 1
+                body = "<!-- fsgg:claim worker=vole-418 lease=120 renewed=fixture-reset -->"
+                COMMENTS[42].append({"id": cid, "body": body, "updated_at": now_iso()})
+                return self._send(200, {"markerId": cid})
 
         # .github#1779 AC2 — read and RESET the REST request log, so a leg can measure exactly what one
         # command spent. Reset-on-read, because the alternative is every caller remembering a baseline.
@@ -832,6 +903,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
             with LOCK:
+                if FAIL_NEXT_CLAIM_CENSUS[0] > 0:
+                    FAIL_NEXT_CLAIM_CENSUS[0] -= 1
+                    return self._send(503, {"message": "fixture: marker census unreadable"})
                 return self._send(200, comments_for(int(m.group(1))))
 
         # THE OFF-BOARD OPEN-ISSUE SCAN (bash's `active_claims` arm B). `Scan.snapshot` asks each in-scope

@@ -34,6 +34,12 @@ module Writes =
         | RefuseLiveHolder
         | StealLiveHolder
 
+    type private ReplacementDraft =
+        { PreviousStatus: BoardStatus option
+          PathRepo: string option
+          AgentContract: string option
+          Body: string }
+
     type SelfIdentity =
         | Derives of WorkerId
         | DerivesNothing
@@ -385,14 +391,19 @@ module Writes =
         // prior holder untouched, while a later cleanup failure leaves two ordered, recoverable markers
         // instead of zero. The marker is not a second authority — comment-order election remains the only
         // authority, evaluated by `resolvePosted` after cleanup.
-        let postReplacement () : Result<Held, IoError * (BoardStatus option * string option * string option)> =
+        let postReplacement () : Result<Held, IoError * ReplacementDraft> =
             let previousStatus = readPreviousStatus ()
             let pathRepo = readPathRepo ()
             let agentContract = currentAgentContract ()
             let body = markerBody worker session leaseMinutes previousStatus pathRepo agentContract
+            let draft =
+                { PreviousStatus = previousStatus
+                  PathRepo = pathRepo
+                  AgentContract = agentContract
+                  Body = body }
 
             match postComment transport ref body with
-            | Error e -> Error(e, (previousStatus, pathRepo, agentContract))
+            | Error e -> Error(e, draft)
             | Ok myId -> Ok(Held(ref, worker, myId, session, previousStatus, pathRepo, agentContract))
 
         // Re-read and apply the existing comment-order election to a posted marker. `retainOnUnreadable`
@@ -598,7 +609,7 @@ module Writes =
                     | None ->
                         match postReplacement () with
                         | Ok replacement -> evictLive replacement before
-                        | Error(postError, (previousStatus, pathRepo, agentContract)) ->
+                        | Error(postError, draft) ->
                             match
                                 Reads.markerScan transport ref.Owner ref.Repo ref.Number
                                 |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
@@ -615,25 +626,34 @@ module Writes =
                             | Ok after ->
                                 // POST transport failure is ambiguous: GitHub may have committed the comment
                                 // and lost only the response. Identify a newly observed marker carrying the
-                                // exact draft identity, then reconcile it through the same cleanup/election
-                                // path as an acknowledged POST. Lowest id is deterministic if an identical
-                                // caller raced a retry; `evictLive` cleans every other live marker by id.
+                                // exact drafted BYTES, including the opaque per-request renewal token and
+                                // lease, then reconcile it through the same cleanup/election path as an
+                                // acknowledged POST. Parsed equality is insufficient: those fields omit the
+                                // renewal token and lease, so a concurrent same-identity request could
+                                // otherwise authorize deletion of the incumbent. Lowest id is deterministic
+                                // if the exact request was somehow stored twice; `evictLive` cleans every
+                                // other live marker by id.
                                 let beforeIds = before |> List.map _.Id |> Set.ofList
                                 let replacement =
                                     after
                                     |> List.filter (fun marker ->
                                         not (Set.contains marker.Id beforeIds)
-                                        && marker.Worker = worker
-                                        && marker.Session = session
-                                        && marker.PreviousStatus = previousStatus
-                                        && marker.PathRepo = pathRepo
-                                        && marker.AgentContract = agentContract)
+                                        && marker.Raw = draft.Body)
                                     |> List.sortBy _.Id
                                     |> List.tryHead
 
                                 match replacement with
                                 | Some marker ->
-                                    let held = Held(ref, worker, marker.Id, session, previousStatus, pathRepo, agentContract)
+                                    let held =
+                                        Held(
+                                            ref,
+                                            worker,
+                                            marker.Id,
+                                            session,
+                                            draft.PreviousStatus,
+                                            draft.PathRepo,
+                                            draft.AgentContract
+                                        )
                                     evictLive held after
                                 | None ->
                                     match Reads.winner leaseMinutes after with

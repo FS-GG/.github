@@ -5698,6 +5698,34 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             { Before = mapCensus value.Before
                               After = value.After |> Option.map mapCensus }
 
+                        let emitForcedClaimOutcome
+                            (kind: string)
+                            (replacementMarkerId: int64 option)
+                            (standingWorker: WorkerId option)
+                            (standingMarkerId: int64 option)
+                            (removed: WorkerId list)
+                            (failedWorker: WorkerId option)
+                            (failedMarkerId: int64 option)
+                            (reason: string option)
+                            (censuses: Writes.ForcedClaimCensuses) =
+                            match opts.Render with
+                            | Text -> ()
+                            | Json ->
+                                let receipt: ForcedClaimOutcomeReceipt =
+                                    { Ref = ref
+                                      Worker = w.Id
+                                      Kind = kind
+                                      ReplacementMarkerId = replacementMarkerId
+                                      StandingWorker = standingWorker |> Option.map _.Value
+                                      StandingMarkerId = standingMarkerId
+                                      RemovedWorkers = removed |> List.map _.Value
+                                      FailedWorker = failedWorker |> Option.map _.Value
+                                      FailedMarkerId = failedMarkerId
+                                      Reason = reason
+                                      ForcedClaimCensuses = receiptCensuses censuses }
+
+                                printfn "%s" (renderForcedClaimOutcomeJson receipt)
+
                         let emitClaimReceipt
                             (kind: string)
                             (held: Writes.Held)
@@ -5964,37 +5992,89 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // deletion was observed. Report the forced replacement without inventing theft.
                             announceCollected collected
                             emitClaimReceipt "replacement-won" held (Some censuses) (setClaimLifecycle held)
-                        | Ok(Writes.ReplacementPostFailed(holder, holderMarkerId, reason, _)) ->
+                        | Ok(Writes.ReplacementPostFailed(holder, holderMarkerId, reason, censuses)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim replacement POST FAILED before any incumbent deletion (%s{reason}). The complete post-state census proves worker '%s{holder.Value}' marker %d{holderMarkerId} remains authoritative: the OLD HOLDER STANDS and nothing was taken."
                             eprint "  Retry is authorized only after a fresh complete marker census; the non-zero exit alone authorizes nothing."
+                            emitForcedClaimOutcome
+                                "replacement-post-failed"
+                                None
+                                (Some holder)
+                                (Some holderMarkerId)
+                                []
+                                None
+                                None
+                                (Some reason)
+                                censuses
                             ExitRed
-                        | Ok(Writes.CleanupRequired(replacement, removed, failed, failedMarkerId, reason, _)) ->
+                        | Ok(Writes.CleanupRequired(replacement, removed, failed, failedMarkerId, reason, censuses)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim cleanup is INCOMPLETE: replacement marker %d{replacement.MarkerId} was posted before eviction; %d{List.length removed} live marker(s) were removed, but worker '%s{failed.Value}' marker %d{failedMarkerId} still stands (%s{reason})."
                             eprint
                                 $"  The item is not unclaimed: comment-order still makes the older surviving marker authoritative. Re-run this same `claim %s{ref.Short} --force` as worker '%s{w.Id}' to reuse replacement marker %d{replacement.MarkerId} and reconcile cleanup; do not infer retry authority from the exit code alone."
+                            let standingMarkerId = censuses.After |> Option.bind _.WinnerMarkerId
+                            let standingWorker =
+                                censuses.After
+                                |> Option.bind (fun census ->
+                                    standingMarkerId
+                                    |> Option.bind (fun markerId ->
+                                        census.Markers
+                                        |> List.tryFind (fun marker -> marker.MarkerId = markerId)
+                                        |> Option.map _.Worker))
+                            emitForcedClaimOutcome
+                                "cleanup-required"
+                                (Some replacement.MarkerId)
+                                standingWorker
+                                standingMarkerId
+                                removed
+                                (Some failed)
+                                (Some failedMarkerId)
+                                (Some reason)
+                                censuses
                             ExitRed
-                        | Ok(Writes.PostStateUnreadable(replacement, removed, reason, _)) ->
+                        | Ok(Writes.PostStateUnreadable(replacement, removed, reason, censuses)) ->
                             let replacementText = replacement |> Option.map (fun held -> string held.MarkerId) |> Option.defaultValue "not established"
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim post-state is UNREADABLE; replacement marker=%s{replacementText}, observed removals=%d{List.length removed} (%s{reason}). No empty or ownership postcondition is inferred from this failed read."
                             eprint
                                 $"  Re-run this same `claim %s{ref.Short} --force` as worker '%s{w.Id}' only after restoring the census read; no ownership verdict was reached."
+                            emitForcedClaimOutcome
+                                "post-state-unreadable"
+                                (replacement |> Option.map _.MarkerId)
+                                None
+                                None
+                                removed
+                                None
+                                None
+                                (Some reason)
+                                censuses
                             ExitNoVerdict
-                        | Ok(Writes.OldHolderStands(replacementMarkerId, holder, holderMarkerId, removed, _)) ->
+                        | Ok(Writes.OldHolderStands(replacementMarkerId, holder, holderMarkerId, removed, censuses)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim replacement marker %d{replacementMarkerId} is absent in the complete post-state census; worker '%s{holder.Value}' marker %d{holderMarkerId} remains authoritative after %d{List.length removed} observed removal(s). The OLD HOLDER STANDS."
                             eprint "  Nothing in this result authorizes retry; inspect the live marker census before another mutation."
+                            emitForcedClaimOutcome
+                                "old-holder-stands"
+                                (Some replacementMarkerId)
+                                (Some holder)
+                                (Some holderMarkerId)
+                                removed
+                                None
+                                None
+                                None
+                                censuses
                             ExitRed
-                        | Ok(Writes.NoHolderRemaining(replacementMarkerId, removed, _)) ->
+                        | Ok(Writes.NoHolderRemaining(replacementMarkerId, removed, censuses)) ->
                             let replacementText = replacementMarkerId |> Option.map string |> Option.defaultValue "not established"
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim post-state was readable but NO live marker remained: replacement marker=%s{replacementText} after %d{List.length removed} incumbent marker(s) were removed. This is not an ordinary loss and retry is not authorized by this result."
+                            emitForcedClaimOutcome "no-holder-remaining" replacementMarkerId None None removed None None None censuses
                             ExitRed
-                        | Ok(Writes.ForcedClaimLost(winner, _)) ->
+                        | Ok(Writes.ForcedClaimLost(winner, censuses)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim cleanup completed, but the complete post-state census names worker '%s{winner.Value}' as the comment-order winner. The replacement did not win and was withdrawn; retry is not authorized by this result."
+                            let winnerMarkerId = censuses.After |> Option.bind _.WinnerMarkerId
+                            emitForcedClaimOutcome "forced-claim-lost" None (Some winner) winnerMarkerId [] None None None censuses
                             ExitRed
                         | Ok(Writes.Renewed(held, collected)) ->
                             // A live marker already ours — the claim RENEWED it in place rather than posting a

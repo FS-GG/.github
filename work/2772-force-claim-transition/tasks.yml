@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2772-force-claim-transition/spec.md
-    digest: 722173e24b3e5a0da6b0166e61632e7a3a229eaa35a8b2510cada2f82890c117
+    digest: 7540aa88e08e86980b56e5c50f3839c344b0a852ab9e7c9b42864d0d156be672
     schemaVersion: 1
   - label: clarifications
     path: work/2772-force-claim-transition/clarifications.md
-    digest: 808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133
+    digest: 6d11b156370c143e89f12221eeacbf5c44cadde8517c95293a0ca025d175ce45
     schemaVersion: 1
   - label: checklist
     path: work/2772-force-claim-transition/checklist.md
-    digest: 51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a
+    digest: c06f974ea2dfe00cfe6dc9186f608b6d6ed0e4e3d4540a259a27e4bf5d30b17f
     schemaVersion: 1
   - label: plan
     path: work/2772-force-claim-transition/plan.md
-    digest: fd016709bb1ea8761b42710503c6b40cea5d2402e628f634d237f9b5d31bbf0b
+    digest: 66627d29f59f56931a435f06cca754e681d923548e2cf1da2aa91c00d79adfa1
     schemaVersion: 1
 tasks:
   - id: T001
@@ -85,7 +85,7 @@ tasks:
     dependencies: []
     requirements: [FR-006]
     decisions: []
-    sourceIds: [AC-001, AC-002, FR-006, PD-006]
+    sourceIds: [AC-001, AC-002, AC-003, FR-006, PD-006]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV006]
   - id: T007

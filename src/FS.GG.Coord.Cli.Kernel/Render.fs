@@ -112,6 +112,22 @@ module Render =
         { Before: ClaimMarkerCensusReceipt
           After: ClaimMarkerCensusReceipt option }
 
+    /// A terminal non-green `claim --force --json` result. Unlike `ClaimReceipt`, this document does not
+    /// claim that the caller holds a marker or that a board projection was attempted. It reports only the
+    /// typed transition outcome and the authoritative pre/final census that governed it.
+    type ForcedClaimOutcomeReceipt =
+        { Ref: Ref
+          Worker: string
+          Kind: string
+          ReplacementMarkerId: int64 option
+          StandingWorker: string option
+          StandingMarkerId: int64 option
+          RemovedWorkers: string list
+          FailedWorker: string option
+          FailedMarkerId: int64 option
+          Reason: string option
+          ForcedClaimCensuses: ForcedClaimCensusesReceipt }
+
     type ClaimReceipt =
         { Ref: Ref
           Worker: string
@@ -469,6 +485,63 @@ module Render =
             w.WriteEndObject()
 
         w.WriteBoolean("converged", receipt.Converged)
+        w.WriteEndObject()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    let renderForcedClaimOutcomeJson (receipt: ForcedClaimOutcomeReceipt) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        let writeCensus (name: string) (census: ClaimMarkerCensusReceipt) =
+            w.WriteStartObject(name)
+            match census.WinnerMarkerId with
+            | Some markerId -> w.WriteNumber("winnerMarkerId", markerId)
+            | None -> w.WriteNull("winnerMarkerId")
+            w.WriteStartArray("markers")
+            for marker in census.Markers do
+                w.WriteStartObject()
+                w.WriteNumber("markerId", marker.MarkerId)
+                w.WriteString("worker", marker.Worker)
+                w.WriteBoolean("live", marker.Live)
+                w.WriteEndObject()
+            w.WriteEndArray()
+            w.WriteEndObject()
+
+        w.WriteStartObject()
+        w.WriteString("ref", receipt.Ref.Short)
+        w.WriteString("repo", $"%s{receipt.Ref.Owner}/%s{receipt.Ref.Repo}")
+        w.WriteNumber("number", receipt.Ref.Number)
+        w.WriteString("worker", receipt.Worker)
+        w.WriteString("kind", receipt.Kind)
+        match receipt.ReplacementMarkerId with
+        | Some markerId -> w.WriteNumber("replacementMarkerId", markerId)
+        | None -> w.WriteNull("replacementMarkerId")
+        match receipt.StandingWorker with
+        | Some worker -> w.WriteString("standingWorker", worker)
+        | None -> w.WriteNull("standingWorker")
+        match receipt.StandingMarkerId with
+        | Some markerId -> w.WriteNumber("standingMarkerId", markerId)
+        | None -> w.WriteNull("standingMarkerId")
+        w.WriteStartArray("removedWorkers")
+        for worker in receipt.RemovedWorkers do
+            w.WriteStringValue worker
+        w.WriteEndArray()
+        match receipt.FailedWorker with
+        | Some worker -> w.WriteString("failedWorker", worker)
+        | None -> w.WriteNull("failedWorker")
+        match receipt.FailedMarkerId with
+        | Some markerId -> w.WriteNumber("failedMarkerId", markerId)
+        | None -> w.WriteNull("failedMarkerId")
+        match receipt.Reason with
+        | Some reason -> w.WriteString("reason", reason)
+        | None -> w.WriteNull("reason")
+        w.WriteStartObject("forcedClaimCensuses")
+        writeCensus "before" receipt.ForcedClaimCensuses.Before
+        match receipt.ForcedClaimCensuses.After with
+        | Some after -> writeCensus "after" after
+        | None -> w.WriteNull("after")
+        w.WriteEndObject()
         w.WriteEndObject()
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())

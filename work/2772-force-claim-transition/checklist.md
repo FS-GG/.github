@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2772-force-claim-transition/clarifications.md
 
 ## Source Snapshot
-- spec: work/2772-force-claim-transition/spec.md sha256:722173e24b3e5a0da6b0166e61632e7a3a229eaa35a8b2510cada2f82890c117 schemaVersion:1
-- clarifications: work/2772-force-claim-transition/clarifications.md sha256:808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133 schemaVersion:1
+- spec: work/2772-force-claim-transition/spec.md sha256:7540aa88e08e86980b56e5c50f3839c344b0a852ab9e7c9b42864d0d156be672 schemaVersion:1
+- clarifications: work/2772-force-claim-transition/clarifications.md sha256:6d11b156370c143e89f12221eeacbf5c44cadde8517c95293a0ca025d175ce45 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.
@@ -30,7 +30,7 @@ Prose status: checklistReady
 - CHK-003 [FR-003] [AC-003] blocking: Requirement FR-003 is testable and linked to acceptance coverage.
 - CHK-004 [FR-004] [AC-004] blocking: Requirement FR-004 is testable and linked to acceptance coverage.
 - CHK-005 [FR-005] [AC-005] blocking: Requirement FR-005 is testable and linked to acceptance coverage.
-- CHK-006 [FR-006] [AC-001] [AC-002] blocking: Requirement FR-006 is testable and linked to acceptance coverage.
+- CHK-006 [FR-006] [AC-001] [AC-002] [AC-003] blocking: Requirement FR-006 is testable and linked to acceptance coverage.
 
 ## Review Results
 - CR-001 [CHK:CHK-001] [FR-001] [AC-001] pass: Requirement FR-001 is testable and linked to acceptance coverage.
@@ -38,7 +38,7 @@ Prose status: checklistReady
 - CR-003 [CHK:CHK-003] [FR-003] [AC-003] pass: Requirement FR-003 is testable and linked to acceptance coverage.
 - CR-004 [CHK:CHK-004] [FR-004] [AC-004] pass: Requirement FR-004 is testable and linked to acceptance coverage.
 - CR-005 [CHK:CHK-005] [FR-005] [AC-005] pass: Requirement FR-005 is testable and linked to acceptance coverage.
-- CR-006 [CHK:CHK-006] [FR-006] [AC-001] [AC-002] pass: Requirement FR-006 is testable and linked to acceptance coverage.
+- CR-006 [CHK:CHK-006] [FR-006] [AC-001] [AC-002] [AC-003] pass: Requirement FR-006 is testable and linked to acceptance coverage.
 
 ## Accepted Deferrals
 No accepted checklist deferrals recorded.

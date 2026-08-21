@@ -643,32 +643,141 @@ rm -f "$replacement_won_err"
 "$ENGINE" release FS.GG.SDD#42 --worker kite-461 >/dev/null 2>&1
 run claim FS.GG.SDD#42 >/dev/null 2>&1
 
-# .github#2772: replacement creation fails before any destructive write. The compiled command must
-# render the typed, census-backed postcondition, not the raw transport error shared by the later boundary.
-curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-claim-post" >/dev/null
+# A newly observed marker with identical parsed identity but a different opaque renewal token belongs to
+# a different request. It must not authorize incumbent deletion, and its non-green result still emits the
+# typed final census on stdout while the actionable human diagnostic remains on stderr.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/lose-next-claim-post-response-with-mismatch" >/dev/null
+mismatch_err="$(mktemp)"
 # shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
-post_fail="$("$ENGINE" $advice --worker kite-461 2>&1)"; post_fail_rc=$?
-if [ "$post_fail_rc" -ne 0 ] && grep -q 'replacement POST FAILED' <<<"$post_fail" \
-   && grep -q 'OLD HOLDER STANDS' <<<"$post_fail" \
-   && grep -q 'nothing was taken' <<<"$post_fail"; then
-  ok ".github#2772: replacement POST failure renders the typed old-holder-standing postcondition"
+mismatch="$("$ENGINE" $advice --worker kite-461 --json 2>"$mismatch_err")"; mismatch_rc=$?
+mismatch_mutations="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+if [ "$mismatch_rc" -ne 0 ] \
+   && jq -e '.kind == "replacement-post-failed" and .standingWorker == "vole-418"
+      and (.forcedClaimCensuses.after.markers | length) == 2' <<<"$mismatch" >/dev/null \
+   && ! jq -e '.requests | any(.method == "DELETE")' <<<"$mismatch_mutations" >/dev/null \
+   && grep -q 'replacement POST FAILED' "$mismatch_err"; then
+  ok ".github#2772: response-lost recovery rejects a same-fields/different-body marker without deleting the incumbent"
 else
-  bad ".github#2772: replacement POST failure must be distinct and census-backed" "rc=$post_fail_rc: $post_fail"
+  bad ".github#2772: only the exact POST draft may authorize ambiguous-response cleanup" \
+    "rc=$mismatch_rc stdout=$mismatch stderr=$(cat "$mismatch_err") mutations=$mismatch_mutations"
 fi
+rm -f "$mismatch_err"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-claim-42" >/dev/null
 
-# The other failure boundary has a different typed/rendered meaning. Simulate the replacement vanishing
-# while the incumbent DELETE response fails; the complete re-read proves OldHolderStands, but this is NOT
-# a replacement-POST failure and must not use that diagnostic.
-curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/lose-replacement-on-next-claim-delete" >/dev/null
+# Replacement creation fails before any destructive write. The non-green JSON receipt and stderr prose
+# are two projections of the same typed, census-backed old-holder-standing result.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-claim-post" >/dev/null
+post_fail_err="$(mktemp)"
 # shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
-delete_fail="$("$ENGINE" $advice --worker kite-461 2>&1)"; delete_fail_rc=$?
-if [ "$delete_fail_rc" -ne 0 ] && grep -q 'replacement marker' <<<"$delete_fail" \
-   && grep -q 'OLD HOLDER STANDS' <<<"$delete_fail" \
-   && ! grep -q 'replacement POST FAILED' <<<"$delete_fail"; then
-  ok ".github#2772: cleanup-boundary OldHolderStands is rendered apart from replacement POST failure"
+post_fail="$("$ENGINE" $advice --worker kite-461 --json 2>"$post_fail_err")"; post_fail_rc=$?
+if [ "$post_fail_rc" -ne 0 ] \
+   && jq -e '.kind == "replacement-post-failed" and .replacementMarkerId == null
+      and .standingWorker == "vole-418" and .forcedClaimCensuses.after.winnerMarkerId == .standingMarkerId
+      and (.forcedClaimCensuses.after.markers | length) == 1' <<<"$post_fail" >/dev/null \
+   && grep -q 'OLD HOLDER STANDS' "$post_fail_err"; then
+  ok ".github#2772: ReplacementPostFailed emits a typed final-census receipt and human diagnostic"
 else
-  bad ".github#2772: cleanup-boundary OldHolderStands needs its own actionable rendering" "rc=$delete_fail_rc: $delete_fail"
+  bad ".github#2772: ReplacementPostFailed must preserve its census at the CLI boundary" \
+    "rc=$post_fail_rc stdout=$post_fail stderr=$(cat "$post_fail_err")"
 fi
+rm -f "$post_fail_err"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-claim-42" >/dev/null
+
+# Failed cleanup leaves both incumbent and replacement in the final census and authorizes deterministic
+# retry through its retained replacement id.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-claim-delete" >/dev/null
+cleanup_err="$(mktemp)"
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+cleanup="$("$ENGINE" $advice --worker kite-461 --json 2>"$cleanup_err")"; cleanup_rc=$?
+if [ "$cleanup_rc" -ne 0 ] \
+   && jq -e '.kind == "cleanup-required" and .replacementMarkerId != null
+      and .failedWorker == "vole-418" and .failedMarkerId == .standingMarkerId
+      and (.forcedClaimCensuses.after.markers | length) == 2' <<<"$cleanup" >/dev/null \
+   && grep -q 'cleanup is INCOMPLETE' "$cleanup_err"; then
+  ok ".github#2772: CleanupRequired emits its retained replacement and final two-marker census"
+else
+  bad ".github#2772: CleanupRequired must preserve its census at the CLI boundary" \
+    "rc=$cleanup_rc stdout=$cleanup stderr=$(cat "$cleanup_err")"
+fi
+rm -f "$cleanup_err"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-claim-42" >/dev/null
+
+# If cleanup and its authoritative re-read both fail, `after:null` is the typed observation—not absent
+# stdout and not an invented empty census.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-claim-delete-and-census" >/dev/null
+unreadable_err="$(mktemp)"
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+unreadable="$("$ENGINE" $advice --worker kite-461 --json 2>"$unreadable_err")"; unreadable_rc=$?
+if [ "$unreadable_rc" -ne 0 ] \
+   && jq -e '.kind == "post-state-unreadable" and .replacementMarkerId != null
+      and .forcedClaimCensuses.before.winnerMarkerId != null
+      and .forcedClaimCensuses.after == null' <<<"$unreadable" >/dev/null \
+   && grep -q 'post-state is UNREADABLE' "$unreadable_err"; then
+  ok ".github#2772: PostStateUnreadable emits a typed receipt with an explicit null final census"
+else
+  bad ".github#2772: PostStateUnreadable must preserve its census at the CLI boundary" \
+    "rc=$unreadable_rc stdout=$unreadable stderr=$(cat "$unreadable_err")"
+fi
+rm -f "$unreadable_err"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-claim-42" >/dev/null
+
+# Simulate the replacement vanishing while the incumbent DELETE response fails. The complete re-read
+# proves OldHolderStands, distinct from replacement POST failure.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/lose-replacement-on-next-claim-delete" >/dev/null
+old_stands_err="$(mktemp)"
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+old_stands="$("$ENGINE" $advice --worker kite-461 --json 2>"$old_stands_err")"; old_stands_rc=$?
+if [ "$old_stands_rc" -ne 0 ] \
+   && jq -e '.kind == "old-holder-stands" and .replacementMarkerId != null
+      and .standingWorker == "vole-418" and .forcedClaimCensuses.after.winnerMarkerId == .standingMarkerId
+      and (.forcedClaimCensuses.after.markers | length) == 1' <<<"$old_stands" >/dev/null \
+   && grep -q 'OLD HOLDER STANDS' "$old_stands_err" \
+   && ! grep -q 'replacement POST FAILED' "$old_stands_err"; then
+  ok ".github#2772: OldHolderStands emits its distinct typed final-census receipt"
+else
+  bad ".github#2772: OldHolderStands must preserve its census at the CLI boundary" \
+    "rc=$old_stands_rc stdout=$old_stands stderr=$(cat "$old_stands_err")"
+fi
+rm -f "$old_stands_err"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-claim-42" >/dev/null
+
+# A readable empty final census is a typed anomaly, not omitted output.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-claim-delete-and-drop-all" >/dev/null
+no_holder_err="$(mktemp)"
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+no_holder="$("$ENGINE" $advice --worker kite-461 --json 2>"$no_holder_err")"; no_holder_rc=$?
+if [ "$no_holder_rc" -ne 0 ] \
+   && jq -e '.kind == "no-holder-remaining" and .replacementMarkerId != null
+      and .standingWorker == null and .forcedClaimCensuses.after.winnerMarkerId == null
+      and (.forcedClaimCensuses.after.markers | length) == 0' <<<"$no_holder" >/dev/null \
+   && grep -q 'NO live marker remained' "$no_holder_err"; then
+  ok ".github#2772: NoHolderRemaining emits its readable empty final-census receipt"
+else
+  bad ".github#2772: NoHolderRemaining must preserve its census at the CLI boundary" \
+    "rc=$no_holder_rc stdout=$no_holder stderr=$(cat "$no_holder_err")"
+fi
+rm -f "$no_holder_err"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-claim-42" >/dev/null
+
+# A newcomer can win after incumbent cleanup. Withdrawal of our replacement completes before the final
+# receipt census, which must contain only the foreign winner.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/race-next-claim-delete" >/dev/null
+forced_lost_err="$(mktemp)"
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+forced_lost="$("$ENGINE" $advice --worker kite-461 --json 2>"$forced_lost_err")"; forced_lost_rc=$?
+if [ "$forced_lost_rc" -ne 0 ] \
+   && jq -e '.kind == "forced-claim-lost" and .replacementMarkerId == null
+      and .standingWorker == "otter-77" and .forcedClaimCensuses.after.winnerMarkerId == .standingMarkerId
+      and (.forcedClaimCensuses.after.markers | map(.worker)) == ["otter-77"]' <<<"$forced_lost" >/dev/null \
+   && grep -q 'replacement did not win and was withdrawn' "$forced_lost_err"; then
+  ok ".github#2772: ForcedClaimLost emits the post-withdrawal final-census receipt"
+else
+  bad ".github#2772: ForcedClaimLost must preserve its census at the CLI boundary" \
+    "rc=$forced_lost_rc stdout=$forced_lost stderr=$(cat "$forced_lost_err")"
+fi
+rm -f "$forced_lost_err"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-claim-42" >/dev/null
 
 # shellcheck disable=SC2086 # $advice is the tool's OWN argv, split on purpose — that is what "verbatim" means
 steal_err="$(mktemp)"

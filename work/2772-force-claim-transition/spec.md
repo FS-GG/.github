@@ -49,7 +49,8 @@ states whether retry is safe.
   identifies deterministic cleanup as the next action.
 - AC-003 [US-002] [FR-003]: Given any forced-claim completion or interruption, when the command returns,
   then its outcome distinguishes replacement won, old holder stands, deterministic two-marker cleanup,
-  no holder, and unreadable post-state; retry is authorized only by the corresponding observed state.
+  no holder, and unreadable post-state; `--json` emits a typed receipt carrying the final authoritative
+  `ForcedClaimCensuses` even on a non-green exit, and retry is authorized only by that observed state.
 - AC-004 [US-003] [FR-004]: Given replacement election succeeds and old-marker deletion succeeds, when
   cleanup completes, then the displaced-worker notice names the old and new worker and the claim receipt
   reports a steal.
@@ -59,10 +60,10 @@ states whether retry is safe.
 ## Functional Requirements
 - FR-001: Forced claim MUST post the replacement marker before attempting to delete any live foreign marker, then use the unchanged comment-order election after cleanup. (covers AC-001)
 - FR-002: A cleanup failure MUST retain the posted replacement marker and MUST NOT report the operation as an ordinary loss or as though nothing happened. (covers AC-002)
-- FR-003: The result MUST distinguish old holder standing, replacement won, deterministic cleanup required, no holder remaining, and unreadable post-state; retry authorization MUST be derived from that state. (covers AC-003)
+- FR-003: The result MUST distinguish old holder standing, replacement won, deterministic cleanup required, no holder remaining, and unreadable post-state; every terminal `--json` result MUST serialize its final authoritative `ForcedClaimCensuses` (with `After = null` only when unreadable), and retry authorization MUST be derived from that state. (covers AC-003)
 - FR-004: Theft accounting MUST occur only for markers actually removed, and successful forced claim MUST still report the displaced worker and the surviving replacement marker. (covers AC-004)
 - FR-005: The change MUST preserve the one comment-order winner, normal claim and renewal outcomes, identity refusals, admission check ordering, and stale-marker collection. (covers AC-005)
-- FR-006: Focused tests MUST inject failure at replacement creation and old-marker cleanup, assert the complete marker census after each, and demonstrate observed red when safe ordering is inverted. (covers AC-001, AC-002)
+- FR-006: Focused tests MUST inject failure at replacement creation and old-marker cleanup, assert every material terminal census receipt, reject a response-lost marker unless its raw body is byte-identical to the exact request draft (including lease and renewal token), and demonstrate observed red when receipt emission or exact-draft matching is inverted. (covers AC-001, AC-002, AC-003)
 
 ## Ambiguities
 - AMB-001: Whether a replacement that wins the existing comment-order election while the older marker is
@@ -72,7 +73,8 @@ states whether retry is safe.
   shape must preserve enough state for CLI rendering and retry authorization.
 
 ## Public Or Tool-Facing Impact
-- `claim --force` failure wording and machine outcome semantics change.
+- `claim --force` failure wording and machine outcome semantics change; non-green `--json` calls now emit
+  typed terminal receipts on stdout while retaining human diagnostics on stderr.
 - The `Writes.claimScoped` signature/outcome documentation may change to expose the interruption state.
 - No new CLI flag or lock authority is introduced.
 

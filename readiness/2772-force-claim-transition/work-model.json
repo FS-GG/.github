@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a"
+        "value": "c06f974ea2dfe00cfe6dc9186f608b6d6ed0e4e3d4540a259a27e4bf5d30b17f"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133"
+        "value": "6d11b156370c143e89f12221eeacbf5c44cadde8517c95293a0ca025d175ce45"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "90b188bceb72d44d2fa6478e76ff2c0619dd27c8eb406700d7fc4d36f07f1212"
+        "value": "f502ace319d0ef22ff447f2a9c096faaadfbf89c859f8af87650740061faaed1"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "fd016709bb1ea8761b42710503c6b40cea5d2402e628f634d237f9b5d31bbf0b"
+        "value": "66627d29f59f56931a435f06cca754e681d923548e2cf1da2aa91c00d79adfa1"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "722173e24b3e5a0da6b0166e61632e7a3a229eaa35a8b2510cada2f82890c117"
+        "value": "7540aa88e08e86980b56e5c50f3839c344b0a852ab9e7c9b42864d0d156be672"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2f8e978ea9966cbf93ab790fb5f27ca0edff4f735671ada3600829ec4990b4cd"
+        "value": "a09edc9a9b25dfa8c3a2ebba09b26b68acafd6e1de37d9fa1a2a041d983d95f2"
       }
     }
   ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/2772-force-claim-transition/spec.md",
       "sourceLocation": {
-        "line": 60,
+        "line": 61,
         "column": 1
       },
       "linkedTaskIds": [
@@ -158,7 +158,7 @@
       "classification": [],
       "source": "work/2772-force-claim-transition/spec.md",
       "sourceLocation": {
-        "line": 61,
+        "line": 62,
         "column": 1
       },
       "linkedTaskIds": [
@@ -170,8 +170,8 @@
     },
     {
       "id": "FR-003",
-      "title": "The result MUST distinguish old holder standing, replacement won, deterministic cleanup required, no holder remaining, and unreadable post-state; retry authorization MUST be derived from that state. (covers AC-003)",
-      "text": "The result MUST distinguish old holder standing, replacement won, deterministic cleanup required, no holder remaining, and unreadable post-state; retry authorization MUST be derived from that state. (covers AC-003)",
+      "title": "The result MUST distinguish old holder standing, replacement won, deterministic cleanup required, no holder remaining, and unreadable post-state; every terminal \u0060--json\u0060 result MUST serialize its final authoritative \u0060ForcedClaimCensuses\u0060 (with \u0060After = null\u0060 only when unreadable), and retry authorization MUST be derived from that state. (covers AC-003)",
+      "text": "The result MUST distinguish old holder standing, replacement won, deterministic cleanup required, no holder remaining, and unreadable post-state; every terminal \u0060--json\u0060 result MUST serialize its final authoritative \u0060ForcedClaimCensuses\u0060 (with \u0060After = null\u0060 only when unreadable), and retry authorization MUST be derived from that state. (covers AC-003)",
       "acceptanceCriteria": [
         "AC-003"
       ],
@@ -179,7 +179,7 @@
       "classification": [],
       "source": "work/2772-force-claim-transition/spec.md",
       "sourceLocation": {
-        "line": 62,
+        "line": 63,
         "column": 1
       },
       "linkedTaskIds": [
@@ -201,7 +201,7 @@
       "classification": [],
       "source": "work/2772-force-claim-transition/spec.md",
       "sourceLocation": {
-        "line": 63,
+        "line": 64,
         "column": 1
       },
       "linkedTaskIds": [
@@ -222,7 +222,7 @@
       "classification": [],
       "source": "work/2772-force-claim-transition/spec.md",
       "sourceLocation": {
-        "line": 64,
+        "line": 65,
         "column": 1
       },
       "linkedTaskIds": [
@@ -234,17 +234,18 @@
     },
     {
       "id": "FR-006",
-      "title": "Focused tests MUST inject failure at replacement creation and old-marker cleanup, assert the complete marker census after each, and demonstrate observed red when safe ordering is inverted. (covers AC-001, AC-002)",
-      "text": "Focused tests MUST inject failure at replacement creation and old-marker cleanup, assert the complete marker census after each, and demonstrate observed red when safe ordering is inverted. (covers AC-001, AC-002)",
+      "title": "Focused tests MUST inject failure at replacement creation and old-marker cleanup, assert every material terminal census receipt, reject a response-lost marker unless its raw body is byte-identical to the exact request draft (including lease and renewal token), and demonstrate observed red when receipt emission or exact-draft matching is inverted. (covers AC-001, AC-002, AC-003)",
+      "text": "Focused tests MUST inject failure at replacement creation and old-marker cleanup, assert every material terminal census receipt, reject a response-lost marker unless its raw body is byte-identical to the exact request draft (including lease and renewal token), and demonstrate observed red when receipt emission or exact-draft matching is inverted. (covers AC-001, AC-002, AC-003)",
       "acceptanceCriteria": [
         "AC-001",
-        "AC-002"
+        "AC-002",
+        "AC-003"
       ],
       "priority": null,
       "classification": [],
       "source": "work/2772-force-claim-transition/spec.md",
       "sourceLocation": {
-        "line": 65,
+        "line": 66,
         "column": 1
       },
       "linkedTaskIds": [
@@ -265,7 +266,7 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 40,
+        "line": 42,
         "column": 1
       },
       "linkedTaskIds": [
@@ -281,7 +282,7 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 44,
+        "line": 46,
         "column": 1
       },
       "linkedTaskIds": [
@@ -297,7 +298,7 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 49,
+        "line": 51,
         "column": 1
       },
       "linkedTaskIds": [
@@ -313,7 +314,7 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 53,
+        "line": 55,
         "column": 1
       },
       "linkedTaskIds": [
@@ -475,6 +476,7 @@
       "sourceIds": [
         "AC-001",
         "AC-002",
+        "AC-003",
         "FR-006",
         "PD-006"
       ],
@@ -1370,7 +1372,7 @@
           "path": "work/2772-force-claim-transition/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "51a4db3e090a197a7bde7c21032ccdb437456758b5a77b27627c81ef1437458a"
+            "value": "c06f974ea2dfe00cfe6dc9186f608b6d6ed0e4e3d4540a259a27e4bf5d30b17f"
           },
           "schemaVersion": 1
         },
@@ -1378,7 +1380,7 @@
           "path": "work/2772-force-claim-transition/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "808c4557a3764ae0cacf0f94ad6e9ac2510313552592db5e3ddb1ec0591d6133"
+            "value": "6d11b156370c143e89f12221eeacbf5c44cadde8517c95293a0ca025d175ce45"
           },
           "schemaVersion": 1
         },
@@ -1386,7 +1388,7 @@
           "path": "work/2772-force-claim-transition/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "90b188bceb72d44d2fa6478e76ff2c0619dd27c8eb406700d7fc4d36f07f1212"
+            "value": "f502ace319d0ef22ff447f2a9c096faaadfbf89c859f8af87650740061faaed1"
           },
           "schemaVersion": 1
         },
@@ -1394,7 +1396,7 @@
           "path": "work/2772-force-claim-transition/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "fd016709bb1ea8761b42710503c6b40cea5d2402e628f634d237f9b5d31bbf0b"
+            "value": "66627d29f59f56931a435f06cca754e681d923548e2cf1da2aa91c00d79adfa1"
           },
           "schemaVersion": 1
         },
@@ -1402,7 +1404,7 @@
           "path": "work/2772-force-claim-transition/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "722173e24b3e5a0da6b0166e61632e7a3a229eaa35a8b2510cada2f82890c117"
+            "value": "7540aa88e08e86980b56e5c50f3839c344b0a852ab9e7c9b42864d0d156be672"
           },
           "schemaVersion": 1
         },
@@ -1410,14 +1412,14 @@
           "path": "work/2772-force-claim-transition/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "2f8e978ea9966cbf93ab790fb5f27ca0edff4f735671ada3600829ec4990b4cd"
+            "value": "a09edc9a9b25dfa8c3a2ebba09b26b68acafd6e1de37d9fa1a2a041d983d95f2"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "13af7c245765e4c2c8de25607e73a79374c082414368e802584043d3c6eb27fc"
+        "value": "4034e37d87962a949e7ae2253fe18f83048dccd329f2c6d0e1689b7ee4dad16f"
       },
       "currency": "current"
     }

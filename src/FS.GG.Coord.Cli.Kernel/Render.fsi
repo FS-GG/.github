@@ -91,6 +91,21 @@ module Render =
           /// `None` means the post-operation census was unreadable, never empty.
           After: ClaimMarkerCensusReceipt option }
 
+    /// A terminal non-green forced-claim receipt. It deliberately omits successful-claim readbacks and
+    /// carries the authoritative forced-transition census instead.
+    type ForcedClaimOutcomeReceipt =
+        { Ref: Ref
+          Worker: string
+          Kind: string
+          ReplacementMarkerId: int64 option
+          StandingWorker: string option
+          StandingMarkerId: int64 option
+          RemovedWorkers: string list
+          FailedWorker: string option
+          FailedMarkerId: int64 option
+          Reason: string option
+          ForcedClaimCensuses: ForcedClaimCensusesReceipt }
+
     /// The fresh postcondition emitted by `claim --json` and `take --json`. The lock and board column are
     /// separate observations; `Converged` is true only when both were read back successfully.
     type ClaimReceipt =
@@ -232,6 +247,9 @@ module Render =
 
     /// `claim --json` / `take --json` — one typed mutation receipt, safe to gate worker startup on.
     val renderClaimReceiptJson: receipt: ClaimReceipt -> string
+
+    /// `claim --force --json` when the transition reached a terminal non-green typed outcome.
+    val renderForcedClaimOutcomeJson: receipt: ForcedClaimOutcomeReceipt -> string
 
     /// `take --json` when the queue handed out nothing (.github#1525) — the SAME projection's other
     /// outcome, so a caller parses one stream and reads `kind` rather than branching on the exit code to

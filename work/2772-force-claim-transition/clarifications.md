@@ -32,9 +32,11 @@ publicOrToolFacingImpact: true
   failure carries the posted replacement and failed incumbent; unreadable post-state carries no invented
   census. Only the typed observed state authorizes any reconciliation.
 - CQ-003 [AMB:AMB-002] decision: No. A transport error is ambiguous because the response may be lost after
-  GitHub stores the replacement. Re-read authoritatively, identify a newly observed marker by its exact
-  drafted identity, and reconcile it through the same cleanup and election path. Serialize `After` only
-  after every cleanup, withdrawal, and reconciliation mutation has finished.
+  GitHub stores the replacement. Retain the exact generated request body and re-read authoritatively;
+  adopt only a newly observed marker whose raw body is byte-identical, including lease and the opaque
+  request-specific renewal token. Parsed worker/session/status/path/contract equality is insufficient.
+  Reconcile an exact match through the same cleanup and election path. Serialize `After` only after every
+  cleanup, withdrawal, and reconciliation mutation has finished.
 
 ## Decisions
 - DEC-001 [CQ-001] [AMB:AMB-001]: Preserve comment-order authority. The transition is
@@ -51,10 +53,12 @@ publicOrToolFacingImpact: true
   with the replacement retained. The implementation must make this branch explicit and test it or narrow
   the outcome contract to the states it can actually observe safely.
 - DEC-004 [CQ-003] [AMB:AMB-002]: Treat replacement POST transport failure as ambiguous. A matching newly
-  observed replacement is recoverable authority and continues through deterministic cleanup; if the old
-  marker already disappeared and the replacement wins, return `ReplacementWon` without inventing theft.
-  Every terminal forced outcome carries the final complete census taken after all mutations, or explicitly
-  carries no `After` when that final read is unavailable.
+  observed byte-identical replacement is recoverable authority and continues through deterministic cleanup;
+  a merely parse-equivalent marker belongs to another request and authorizes no incumbent deletion. If the
+  old marker already disappeared and the exact replacement wins, return `ReplacementWon` without inventing
+  theft. Every terminal forced outcome carries the final complete census taken after all mutations, or
+  explicitly carries no `After` when that final read is unavailable; every terminal `--json` projection,
+  including non-green results, serializes that typed census instead of discarding it.
 
 ## Accepted Deferrals
 No accepted deferrals recorded.
@@ -67,3 +71,5 @@ No blocking ambiguity remains.
   eviction and keep the existing comment-order winner as the sole authority.
 - Round-2 repair incorporates independent review decision digest
   `387201c40307bdeefb15e8e00196a732df8d39a14045bc7d76096bb4dee9d3ed`.
+- Round-3 repair incorporates independent review decision digest
+  `487e53f3b6ec50213b0f6695f83ed3fe015006a2096a767e2cac7c6075a14352`.

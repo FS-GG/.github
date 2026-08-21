@@ -4062,6 +4062,38 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
             Render.renderClaimReceiptJson receipt
         )
 
+    [<Fact>]
+    let ``#2772 a non-green forced claim has a typed census receipt`` () =
+        let census: Render.ClaimMarkerCensusReceipt =
+            { WinnerMarkerId = Some 901L
+              Markers =
+                [ { MarkerId = 901L
+                    Worker = "vole-418"
+                    Live = true } ] }
+
+        let receipt: Render.ForcedClaimOutcomeReceipt =
+            { Ref =
+                { Owner = "FS-GG"
+                  Repo = ".github"
+                  Number = 2772 }
+              Worker = "kite-461"
+              Kind = "replacement-post-failed"
+              ReplacementMarkerId = None
+              StandingWorker = Some "vole-418"
+              StandingMarkerId = Some 901L
+              RemovedWorkers = []
+              FailedWorker = None
+              FailedMarkerId = None
+              Reason = Some "HTTP 500: post failed"
+              ForcedClaimCensuses =
+                { Before = census
+                  After = Some census } }
+
+        Assert.Equal(
+            """{"ref":".github#2772","repo":"FS-GG/.github","number":2772,"worker":"kite-461","kind":"replacement-post-failed","replacementMarkerId":null,"standingWorker":"vole-418","standingMarkerId":901,"removedWorkers":[],"failedWorker":null,"failedMarkerId":null,"reason":"HTTP 500: post failed","forcedClaimCensuses":{"before":{"winnerMarkerId":901,"markers":[{"markerId":901,"worker":"vole-418","live":true}]},"after":{"winnerMarkerId":901,"markers":[{"markerId":901,"worker":"vole-418","live":true}]}}}""",
+            Render.renderForcedClaimOutcomeJson receipt
+        )
+
     // ---- .github#1688 — THE SIBLING SWEEP: no `Json`-admitting verb leaks prose onto stdout ----------
     //
     // WHAT THIS ITEM ASKED FOR, AND WHAT WAS ALREADY TRUE WHEN IT WAS FILED. #1688's ACs 1-3 and 5 are

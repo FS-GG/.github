@@ -41,6 +41,20 @@ let private staleClaimJson (id: int) (worker: string) (extra: string) =
 /// interpolation hole, so the array is built here rather than spelled inline at every call site.
 let private comments (ms: string list) = "[" + String.concat "," ms + "]"
 
+let private markerWithExactBody (id: int) (body: string) =
+    System.Text.Json.JsonSerializer.Serialize(
+        {| id = id
+           body = body
+           updated_at = now |}
+    )
+
+let private postedCommentBody (request: Request) =
+    match request.Body with
+    | Json payload ->
+        use document = System.Text.Json.JsonDocument.Parse payload
+        document.RootElement.GetProperty("body").GetString()
+    | other -> failwith $"expected a JSON comment POST, got %A{other}"
+
 /// A comment the lock reader cannot classify: its id is readable, but its body is not. It may be a claim
 /// marker, so a decision made from the readable markers beside it would be a decision from a lower bound.
 let private unclassifiableComment (id: int) =
@@ -56,6 +70,15 @@ let private scripted (responses: IoResult<Response> list) =
             failwith "the transport was called more times than the test scripted"
         else
             queue.Dequeue())
+
+let private scriptedSteps (steps: (Request -> IoResult<Response>) list) =
+    let queue = System.Collections.Generic.Queue<Request -> IoResult<Response>>(steps)
+
+    Fake.Recorder(fun request ->
+        if queue.Count = 0 then
+            failwith "the transport was called more times than the test scripted"
+        else
+            queue.Dequeue() request)
 
 let private ok (body: string) =
     Ok
@@ -975,14 +998,17 @@ let ``#2772 a replacement POST failure leaves the incumbent standing and announc
 
 [<Fact>]
 let ``#2772 a response-lost POST that stored the replacement reconciles old plus replacement`` () =
+    let mutable exactDraft = ""
     let transport =
-        scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              Error(Http(503, "POST response lost"))
-              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
-              ok "" // delete incumbent only after census discovers the replacement
-              ok (comments [ marker 902 "vole-418" "" ])
-              ok (comments [ marker 902 "vole-418" "" ]) ]
+        scriptedSteps
+            [ fun _ -> ok (comments [ marker 901 "kite-461" "" ])
+              fun request ->
+                  exactDraft <- postedCommentBody request
+                  Error(Http(503, "POST response lost"))
+              fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ])
+              fun _ -> ok "" // delete incumbent only after census discovers the exact replacement
+              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
+              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(replacement, removed, _, censuses)) ->
@@ -995,13 +1021,16 @@ let ``#2772 a response-lost POST that stored the replacement reconciles old plus
 
 [<Fact>]
 let ``#2772 a response-lost POST whose replacement already wins reports ReplacementWon`` () =
+    let mutable exactDraft = ""
     let transport =
-        scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              Error(Http(503, "POST response lost"))
-              ok (comments [ marker 902 "vole-418" "" ])
-              ok (comments [ marker 902 "vole-418" "" ])
-              ok (comments [ marker 902 "vole-418" "" ]) ]
+        scriptedSteps
+            [ fun _ -> ok (comments [ marker 901 "kite-461" "" ])
+              fun request ->
+                  exactDraft <- postedCommentBody request
+                  Error(Http(503, "POST response lost"))
+              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
+              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
+              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(ReplacementWon(replacement, collected, censuses)) ->
@@ -1016,13 +1045,16 @@ let ``#2772 a response-lost POST whose replacement already wins reports Replacem
 
 [<Fact>]
 let ``#2772 a response-lost POST with failed cleanup retains both markers for deterministic retry`` () =
+    let mutable exactDraft = ""
     let transport =
-        scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              Error(Http(503, "POST response lost"))
-              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
-              Error(Http(500, "cleanup failed"))
-              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) ]
+        scriptedSteps
+            [ fun _ -> ok (comments [ marker 901 "kite-461" "" ])
+              fun request ->
+                  exactDraft <- postedCommentBody request
+                  Error(Http(503, "POST response lost"))
+              fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ])
+              fun _ -> Error(Http(500, "cleanup failed"))
+              fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(CleanupRequired(replacement, removed, failed, failedMarkerId, reason, censuses)) ->
@@ -1033,6 +1065,28 @@ let ``#2772 a response-lost POST with failed cleanup retains both markers for de
         Assert.Contains("cleanup failed", reason)
         Assert.Equal<int64 list>([ 901L; 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
     | other -> failwith $"ambiguous POST cleanup failure must retain its discovered replacement — got %A{other}"
+
+[<Fact>]
+let ``#2772 response-lost POST rejects a same-fields marker whose exact renewal token differs`` () =
+    let mutable differentDraft = ""
+    let transport =
+        scriptedSteps
+            [ fun _ -> ok (comments [ marker 901 "kite-461" "" ])
+              fun request ->
+                  differentDraft <-
+                      postedCommentBody request
+                      |> fun body -> System.Text.RegularExpressions.Regex.Replace(body, "renewed=[0-9]+", "renewed=0")
+                  Error(Http(503, "POST response lost"))
+              fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 differentDraft ]) ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(ReplacementPostFailed(holder, holderMarkerId, _, censuses)) ->
+        Assert.Equal(them, holder)
+        Assert.Equal(901L, holderMarkerId)
+        Assert.Equal<int64 list>([ 901L; 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
+    | other -> failwith $"a different request's marker must not authorize incumbent deletion — got %A{other}"
+
+    Assert.Equal(0, transport.Count "comment-delete")
 
 [<Fact>]
 let ``#1620 a steal that LOSES the fresh race still announces the eviction it performed`` () =
