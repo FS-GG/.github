@@ -271,6 +271,18 @@ mutations:
       pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
       produced_by: tests/coord-engine-e2e/writes.sh
 
+  - id: production/freeze-hint-bypassed
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "-c", "dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore >/dev/null && bash tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not (issueBody.Contains(hint, StringComparison.Ordinal)) then'
+    replace: 'if true then'
+    breaks: a generation-hinted participant skips its durable freeze receipt and mutates the shared reservation away
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
   - id: production/arbitrary-authority-accepted
     gate: compiled writer route
     discriminator: terminal

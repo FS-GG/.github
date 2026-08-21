@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2801-mutual-overlap-arbitration/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2801-mutual-overlap-arbitration/analysis.json
-    digest: 2329c47c331d1cd3a4c68c025be1d322d886fcbfa2d1223b6ff483e809e324ff
+    digest: 9ac58813e7d26c5d03bec34c40c6c6ea95f02be513d7cebb0891d066b7dec1c3
     schemaVersion: 1
   - label: checklist
     path: work/2801-mutual-overlap-arbitration/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2801-mutual-overlap-arbitration/plan.md
-    digest: 2be793a0bdee8da07f9ad0b1ef5747d0ab28008ef56b742c12afa69d43a8816a
+    digest: 3e36c1ab1ce2ee581dd622eb9a6be4e3f096c4ff5c83bda811a0762f9a68ff05
     schemaVersion: 1
   - label: spec
     path: work/2801-mutual-overlap-arbitration/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2801-mutual-overlap-arbitration/tasks.yml
-    digest: c951557b75f37115036dc5a61d8ba0f04532a375fe5b4f09d67b790cdf8219da
+    digest: 31cc9c09e86e2b4ce9ed38514609d2a47b00cf8f2ebae6b0a95f70b46cfbcb9f
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV002
     kind: verification
     subject:
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV003
     kind: verification
     subject:
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV004
     kind: verification
     subject:
@@ -135,13 +135,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV005
     kind: verification
     subject:
@@ -162,13 +162,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV006
     kind: verification
     subject:
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV007
     kind: verification
     subject:
@@ -216,13 +216,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV008
     kind: verification
     subject:
@@ -243,13 +243,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV009
     kind: verification
     subject:
@@ -270,13 +270,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV010
     kind: verification
     subject:
@@ -297,13 +297,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV011
     kind: verification
     subject:
@@ -324,13 +324,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV012
     kind: verification
     subject:
@@ -351,13 +351,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV013
     kind: verification
     subject:
@@ -378,13 +378,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV014
     kind: verification
     subject:
@@ -405,13 +405,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV015
     kind: verification
     subject:
@@ -432,13 +432,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV016
     kind: verification
     subject:
@@ -459,13 +459,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV017
     kind: verification
     subject:
@@ -486,13 +486,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV018
     kind: verification
     subject:
@@ -513,13 +513,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV019
     kind: verification
     subject:
@@ -540,13 +540,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV020
     kind: verification
     subject:
@@ -567,13 +567,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV021
     kind: verification
     subject:
@@ -594,13 +594,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV022
     kind: verification
     subject:
@@ -621,13 +621,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV023
     kind: verification
     subject:
@@ -648,13 +648,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV024
     kind: verification
     subject:
@@ -675,13 +675,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV025
     kind: verification
     subject:
@@ -702,13 +702,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV026
     kind: verification
     subject:
@@ -729,13 +729,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV027
     kind: verification
     subject:
@@ -756,13 +756,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV028
     kind: verification
     subject:
@@ -783,13 +783,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
   - id: EV029
     kind: verification
     subject:
@@ -810,12 +810,12 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
-      digest: "sha256:edfd387627333017ea1ea9389105a00e2b654ae75528dd63dde583ed89093e52"
+      digest: "sha256:84594b8749be387e2c59a8ea0eee5eadc356b257af4f5de2149ab3590a10598e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 511
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 4/4 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted fsgg-sdd 1.0.0 writer harness 186/186; bounded repair mutation controls 5/5 JUSTIFIED."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

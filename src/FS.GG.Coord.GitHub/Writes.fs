@@ -1293,6 +1293,39 @@ module Writes =
                     )
                 | Ok() -> Error readError
 
+    let ensureBodyMarker (transport: IGitHubTransport) (ref: Ref) (marker: string) : IoResult<unit> =
+        if String.IsNullOrWhiteSpace marker then
+            Error(Malformed(ref.Short, "an issue-body marker cannot be blank"))
+        else
+            let containsMarker (body: string) = body.Contains(marker, StringComparison.Ordinal)
+            let appendMarker (body: string) =
+                if containsMarker body then body
+                elif String.IsNullOrWhiteSpace body then marker
+                else body.TrimEnd() + "\n\n" + marker
+            let read () = Reads.issueBody transport ref.Owner ref.Repo ref.Number
+
+            match read () with
+            | Error error -> Error error
+            | Ok body when containsMarker body -> Ok()
+            | Ok body ->
+                let written = patchBody transport ref (Rewritten(appendMarker body))
+                match read () with
+                | Ok observed when containsMarker observed -> Ok()
+                | Ok _ ->
+                    match written with
+                    | Error error -> Error error
+                    | Ok() -> Error(Malformed(ref.Short, "the issue-body marker PATCH returned success but the marker was absent from the authoritative re-read"))
+                | Error readError ->
+                    match written with
+                    | Error writeError ->
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                $"the issue-body marker write failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                            )
+                        )
+                    | Ok() -> Error readError
+
     let createRoom (transport: IGitHubTransport) (owner: string) (repo: string) (title: string) (body: string) : IoResult<Ref> =
         let payload =
             let o = Nodes.JsonObject()

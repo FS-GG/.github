@@ -706,6 +706,10 @@ module Writes =
     /// re-read after both success and failure, making a response-lost PATCH retry-idempotent.
     val ensureRoomRef: transport: IGitHubTransport -> ref: Ref -> roomRef: string -> IoResult<unit>
 
+    /// Ensure one exact opaque marker in an issue body. The marker is appended only when absent and the
+    /// result is authoritatively re-read after success or failure, so response-lost retries are idempotent.
+    val ensureBodyMarker: transport: IGitHubTransport -> ref: Ref -> marker: string -> IoResult<unit>
+
     /// Result of ensuring a single marker-keyed ADR-0051 room.
     type RoomWrite =
         | RoomCreated of Ref

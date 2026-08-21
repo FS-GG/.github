@@ -691,6 +691,8 @@ module ClaimOverlapTests =
         Assert.Equal(1, thread.RoomCreates)
         Assert.Contains(thread.Bodies 42, fun body -> body.Contains "fsgg.coord.overlap-freeze/v1")
         Assert.Contains(thread.Bodies 43, fun body -> body.Contains "fsgg.coord.overlap-freeze/v1")
+        Assert.Contains("fsgg:overlap-freeze-present/v1 generation=8001", thread.Body 42)
+        Assert.Contains("fsgg:overlap-freeze-present/v1 generation=8070", thread.Body 43)
 
     [<Fact>]
     let ``#2801 compiled arbitration route records precedence and narrows loser while its claim remains held`` () =

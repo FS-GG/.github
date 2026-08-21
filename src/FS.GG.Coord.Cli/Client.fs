@@ -7501,6 +7501,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     [<Literal>]
     let private OverlapFreezeMarker = "<!-- fsgg:overlap-freeze/v1 -->"
 
+    let private overlapFreezeHint generation =
+        $"<!-- fsgg:overlap-freeze-present/v1 generation=%s{generation} -->"
+
     let private parseOverlapFreeze owner repo (body: string) =
         if not (body.Contains(OverlapFreezeMarker, StringComparison.Ordinal)) then Ok None
         else
@@ -7565,19 +7568,26 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | _, _, Error error -> Error error
         | Ok _ -> Ok(false, false)
 
-    let private overlapFreezeFor (ctx: Context) (held: Writes.Held) =
-        Reads.commentBodies ctx.Transport held.Ref.Owner held.Ref.Repo held.Ref.Number
-        |> Result.bind (fun comments ->
-            let rec collect acc remaining =
-                match remaining with
-                | [] -> Ok(List.tryLast (List.rev acc))
-                | body :: rest ->
-                    match parseOverlapFreeze held.Ref.Owner held.Ref.Repo body with
-                    | Error detail -> Error(Errors.Malformed(held.Ref.Short, detail))
-                    | Ok None -> collect acc rest
-                    | Ok(Some freeze) when freeze.LoserGeneration = string held.MarkerId -> collect (freeze :: acc) rest
-                    | Ok(Some _) -> collect acc rest
-            collect [] comments)
+    let private overlapFreezeFor (ctx: Context) (held: Writes.Held) (issueBody: string) =
+        let hint = overlapFreezeHint (string held.MarkerId)
+        if not (issueBody.Contains(hint, StringComparison.Ordinal)) then
+            Ok None
+        else
+            Reads.commentBodies ctx.Transport held.Ref.Owner held.Ref.Repo held.Ref.Number
+            |> Result.bind (fun comments ->
+                let rec collect acc remaining =
+                    match remaining with
+                    | [] ->
+                        match List.tryLast (List.rev acc) with
+                        | Some freeze -> Ok(Some freeze)
+                        | None -> Error(Errors.Malformed(held.Ref.Short, "overlap-freeze hint has no matching durable receipt for the current claim generation"))
+                    | body :: rest ->
+                        match parseOverlapFreeze held.Ref.Owner held.Ref.Repo body with
+                        | Error detail -> Error(Errors.Malformed(held.Ref.Short, detail))
+                        | Ok None -> collect acc rest
+                        | Ok(Some freeze) when freeze.LoserGeneration = string held.MarkerId -> collect (freeze :: acc) rest
+                        | Ok(Some _) -> collect acc rest
+                collect [] comments)
 
     let private declaredPathTokens (touchSet: TouchSet) : string list =
         match touchSet with
@@ -7812,7 +7822,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         // current head, overlap is clear, and this call is the explicit re-widen.
                                         // Any unreadable or false predicate refuses before the PATCH.
                                         let resumeGate =
-                                            overlapFreezeFor ctx held
+                                            overlapFreezeFor ctx held body
                                             |> Result.bind (function
                                                 | None -> Ok()
                                                 | Some freeze ->
@@ -8633,7 +8643,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         let firstKey, firstBody = overlapFreezeBody cycle cycle.FirstGeneration cycle.Second cycle.SharedTokens "cycle"
         let secondKey, secondBody = overlapFreezeBody cycle cycle.SecondGeneration cycle.First cycle.SharedTokens "cycle"
         Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody
-        |> Result.bind (fun _ -> Writes.writeDurableComment ctx.Transport cycle.Second secondKey secondBody)
+        |> Result.bind (fun _ -> Writes.ensureBodyMarker ctx.Transport cycle.First (overlapFreezeHint cycle.FirstGeneration))
+        |> Result.bind (fun () -> Writes.writeDurableComment ctx.Transport cycle.Second secondKey secondBody)
+        |> Result.bind (fun _ -> Writes.ensureBodyMarker ctx.Transport cycle.Second (overlapFreezeHint cycle.SecondGeneration))
         |> Result.map ignore
 
     let private overlapWait (ctx: Context) (opts: Options) waiterArg predecessorArg host =
