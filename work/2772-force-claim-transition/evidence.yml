@@ -1,0 +1,585 @@
+schemaVersion: 1
+workId: 2772-force-claim-transition
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2772-force-claim-transition/spec.md
+sourceClarifications: work/2772-force-claim-transition/clarifications.md
+sourceChecklist: work/2772-force-claim-transition/checklist.md
+sourcePlan: work/2772-force-claim-transition/plan.md
+sourceTasks: work/2772-force-claim-transition/tasks.yml
+sourceAnalysis: readiness/2772-force-claim-transition/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2772-force-claim-transition/analysis.json
+    digest: 7b1f9d0589d2174d55c8c3197dc8a7136037c1784a3e5a1ee12fc13465efd21d
+    schemaVersion: 1
+  - label: checklist
+    path: work/2772-force-claim-transition/checklist.md
+    digest: c06f974ea2dfe00cfe6dc9186f608b6d6ed0e4e3d4540a259a27e4bf5d30b17f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2772-force-claim-transition/clarifications.md
+    digest: 6d11b156370c143e89f12221eeacbf5c44cadde8517c95293a0ca025d175ce45
+    schemaVersion: 1
+  - label: plan
+    path: work/2772-force-claim-transition/plan.md
+    digest: 66627d29f59f56931a435f06cca754e681d923548e2cf1da2aa91c00d79adfa1
+    schemaVersion: 1
+  - label: spec
+    path: work/2772-force-claim-transition/spec.md
+    digest: 7540aa88e08e86980b56e5c50f3839c344b0a852ab9e7c9b42864d0d156be672
+    schemaVersion: 1
+  - label: tasks
+    path: work/2772-force-claim-transition/tasks.yml
+    digest: a09edc9a9b25dfa8c3a2ebba09b26b68acafd6e1de37d9fa1a2a041d983d95f2
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+      - kind: verification
+        path: tests/signature-doc-siting/run.sh
+      - kind: verification
+        path: tests/signature-doc-siting/mutants.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["Observed 645-test run passed; compiled engine e2e passed 174/174 with typed receipts for all six non-green forced outcomes. Suppressing terminal receipt stdout red-lit all seven receipt-dependent production assertions", "Round-4 repair moved the public ForcedClaimOutcomeReceipt contract to Render.fsi and restored Render.fs to the sanctioned 159 implementation XML-doc lines without changing the baseline; signature-doc-siting passed 90/90 and its full AST-derived sweep killed 434/434 mutants with the one uncompileable site explicitly justified.", Substituting parsed-field equality for raw-body equality red-lit the exact-draft negative control before incumbent deletion.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["Observed 645-test run passed; removing TAKEN from the displaced-worker production notice historically red-lit exactly the standing inbox assertion (166/167)", and the restored current production suite passed 174/174.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: [Implemented and verified by the observed test run bound below.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["Response-lost POST reconciliation passed focused and compiled-engine coverage; replacing raw-body equality with parsed-field equality made the same-fields/different-renewal test attempt incumbent deletion and red before its scripted boundary."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: [AC-003]
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2772-force-claim-transition/github-tests.trx
+      digest: "sha256:450d1742ca13ce0d839b2a1138ac611c08cb63c208c7d48b2e88dc886bcff3c7"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["Terminal censuses are read after cleanup and withdrawal and serialized for every non-green JSON result; suppressing the renderer red-lit seven production assertions with empty stdout, while the earlier pre-cleanup-census mutation red-lit marker ids 700 and 902 instead of 902 alone."]
+lifecycleNotes:
+  - "Round-4 critic record 6253063fa047937c63805809a4105326ebe5aa9ba8b31e0247617eab38ead296 identified three discarded Render.fs XML-doc lines. The repair retained the caller-visible contract in Render.fsi, removed the implementation duplicates, and left the exact-count baseline unchanged at its correct value of 159."
+  - "Next lifecycle action: verify."
