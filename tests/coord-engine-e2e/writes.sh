@@ -43,11 +43,11 @@ mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
-SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"; ROUTE_RECEIPT="$(mktemp)"; SDD_ROOT="$(mktemp -d)"
+SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"; ROUTE_RECEIPT="$(mktemp)"; SDD_ROOT="$(mktemp -d)"; RESUME_GIT="$(mktemp -d)"
 FORCE_BUDGET_CACHE="$(mktemp -d)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT" "$ROUTE_RECEIPT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS" "$SDD_ROOT"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT" "$ROUTE_RECEIPT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS" "$SDD_ROOT" "$RESUME_GIT"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -2497,7 +2497,15 @@ fi
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$wait43_gen" >/dev/null
 curl -fsS -X PATCH -H 'Content-Type: application/json' -d '{"state":"closed"}' \
   "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43" >/dev/null
-resumed="$($ENGINE widen FS.GG.SDD#42 --paths src/Mutual.fs --worker vole-418 2>&1)"; resumed_rc=$?
+# The production resume predicate reads the checkout, so give this positive leg an isolated repository
+# whose fetched base is contained by HEAD. CI's checkout intentionally does not promise an origin/main
+# ref, and mutating the real checkout's remote-tracking ref would make the fixture alter its caller.
+git -C "$RESUME_GIT" init -q
+git -C "$RESUME_GIT" config user.email fixture@example.invalid
+git -C "$RESUME_GIT" config user.name fixture
+git -C "$RESUME_GIT" commit --allow-empty -qm fixture-base
+git -C "$RESUME_GIT" update-ref refs/remotes/origin/main HEAD
+resumed="$(cd "$RESUME_GIT" && "$ENGINE" widen FS.GG.SDD#42 --paths src/Mutual.fs --worker vole-418 2>&1)"; resumed_rc=$?
 resumed_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
 if [ "$resumed_rc" -eq 0 ] && grep -qF 'src/Mutual.fs' <<<"$resumed_body"; then
   ok ".github#2801: production resume gates winner-land, rebase, clear overlap and explicit re-widen"
