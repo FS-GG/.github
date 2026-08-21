@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
-ARTIFACT="${1:-$ROOT/work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx}"
-EXPECTED_SHA="367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+ARTIFACT="${1:-$ROOT/work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml}"
+EXPECTED_SHA="713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
 
 if [ ! -f "$ARTIFACT" ]; then
   echo "reviewwait evidence: missing artifact: $ARTIFACT" >&2

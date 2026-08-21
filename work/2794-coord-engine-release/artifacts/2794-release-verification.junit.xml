@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="coord-engine-0.68.0-release" tests="13" failures="0" errors="0" skipped="0">
+  <testcase classname="release-2794" name="receipt-schema" />
+  <testcase classname="release-2794" name="version-source" />
+  <testcase classname="release-2794" name="prepared-content-id" />
+  <testcase classname="release-2794" name="atomic-tags" />
+  <testcase classname="release-2794" name="published-release" />
+  <testcase classname="release-2794" name="manifest-digest" />
+  <testcase classname="release-2794" name="promoted-state" />
+  <testcase classname="release-2794" name="github-feed" />
+  <testcase classname="release-2794" name="nuget-feed" />
+  <testcase classname="release-2794" name="payload-identity" />
+  <testcase classname="release-2794" name="public-archive" />
+  <testcase classname="release-2794" name="public-install" />
+  <testcase classname="release-2794" name="cleared-freshness" />
+</testsuite>

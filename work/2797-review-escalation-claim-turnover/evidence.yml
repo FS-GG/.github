@@ -46,15 +46,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -73,15 +73,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -100,15 +100,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -127,15 +127,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -154,15 +154,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -210,15 +210,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV007]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -237,15 +237,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV008]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -264,15 +264,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV009]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -291,15 +291,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV010]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -318,15 +318,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV011]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -345,15 +345,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002]
     obligationRefs: [EV012]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli/Client.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -372,15 +372,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
     obligationRefs: [EV013]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -399,15 +399,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV014]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -426,15 +426,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV015]
-    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/ReviewApplication.fs, src/FS.GG.Coord.Core/ReviewWait.fs, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml, work/2797-review-escalation-claim-turnover/verify-reviewwait-evidence.sh]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.trx
-      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
+      source: work/2797-review-escalation-claim-turnover/artifacts/2797-reviewwait.xml
+      digest: "sha256:713860372ba9ae1a3dfb4cda5f40e12562ea0cc3db7c63edee7c29475ab6cecc"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19

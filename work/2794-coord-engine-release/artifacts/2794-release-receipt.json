@@ -1,0 +1,70 @@
+{
+  "schema": "fsgg.coord-engine-release-evidence/1",
+  "workId": "2794-coord-engine-release",
+  "version": "0.68.0",
+  "sourceSha": "1d5f8e246a0db64e87f8b98204cf5b09f5f156dd",
+  "sourcePr": 2803,
+  "releaseUrl": "https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.68.0",
+  "prepared": {
+    "run": 32474831515,
+    "manifestSha256": "0de907fe34cc9c5821a7596f066e9958bab2d9e5be5b4e64182992db5da8f7b1",
+    "contentId": "sha256:d289364236b4987aaa445ce913a6bf4dbebcc4921a49bb9a8071d135834ed7a4",
+    "previousStableVersion": "0.67.0"
+  },
+  "tags": {
+    "kit/v0.68.0": "1d5f8e246a0db64e87f8b98204cf5b09f5f156dd",
+    "drivers/v0.68.0": "1d5f8e246a0db64e87f8b98204cf5b09f5f156dd",
+    "coord-engine/v0.68.0": "1d5f8e246a0db64e87f8b98204cf5b09f5f156dd"
+  },
+  "publishers": {
+    "initial": [32474984283, 32474984664, 32474984533],
+    "initialDisposition": "all three pushed, then timed out after 120 seconds waiting for nuget.org indexing",
+    "manifestBoundRecovery": [32475532330, 32475534727, 32475530019],
+    "recoveryDisposition": "all three observed the existing immutable versions and completed without duplicate pushes",
+    "promotionRun": 32475579256,
+    "promotedAt": "2026-08-21T11:06:12Z"
+  },
+  "packages": {
+    "FS.GG.Coord.Cli": {
+      "preparedAndGitHubSha256": "cc68030f614cb63e727d0f0e05b6babef845733ee72a9f6fe7790c57d33a6df2",
+      "nugetSha256": "3be1a52532f3b6b11c6108d34f435b4c9726dd6e472c06ca5dbbd65b15b6cddb",
+      "payloadSha256": "sha256:4facee6cadcd9f48caf5efaa87fdb38a0325d342d90b5a65011962429546ba3a"
+    },
+    "FS.GG.Drivers": {
+      "preparedAndGitHubSha256": "346555a24af2ae534befe8f4561aff66e636463533fb28d5381056c623b68f00",
+      "nugetSha256": "7f3ca40205168748983f0c3481c023fb807522e0abd5d3ba1b4a07d95a116712",
+      "payloadSha256": "sha256:d1ac4b47cc90a537ad7285cd38f51f96c10f49b5861a5d2fcefe74a4bd1cbd7a"
+    },
+    "FS.GG.Kit": {
+      "preparedAndGitHubSha256": "8b9fd29876e8867575bb36dc7a222f5b02974f7bbbd0aebb566b95e01ec0c720",
+      "nugetSha256": "da539d4ca5808801ee5b95772702072a4ad685bdf7c42ac473740ee4e77d73fa",
+      "payloadSha256": "sha256:e4ce99521725685a943ba5c9feb8af670b79e058c9d5414741f17bb184e48261"
+    }
+  },
+  "publicInstall": {
+    "source": "https://api.nuget.org/v3/index.json",
+    "toolVersion": "0.68.0.0",
+    "commandCount": 52,
+    "repositoryCommit": "1d5f8e246a0db64e87f8b98204cf5b09f5f156dd",
+    "reviewRoute": "installed binary inspected FS-GG/.github#2794 PR 2803 and returned completed repair-confirmation wait with the accepted merged chain"
+  },
+  "regression": {
+    "reviewWait": "19/19",
+    "reviewApplication": "7/7",
+    "hosted2797Writes": "166/166",
+    "hosted2772Writes": "175/175",
+    "hosted2772Cli": "496/496",
+    "hosted2772BoardOps": "230/230",
+    "hosted2772Kernel": "179/179",
+    "hosted2772GitHub": "645/645"
+  },
+  "freshness": {
+    "feedVersion": "0.68.0",
+    "tag": "coord-engine/v0.68.0",
+    "unreleasedCount": 0,
+    "wireCount": 0,
+    "defectCount": 0,
+    "releaseOwed": false,
+    "red": false
+  }
+}
