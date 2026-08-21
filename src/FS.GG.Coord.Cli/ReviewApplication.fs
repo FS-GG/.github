@@ -299,19 +299,21 @@ module ReviewApplication =
            expiresAt = receipt.ExpiresAt
            evidenceRef = receipt.EvidenceRef |}
 
-    let private waitAuthority (action: Review.NextAction) (waitState: ReviewWait.State option) =
-        let dispatchKind =
+    let private waitAuthority (binding: Review.Binding) (action: Review.NextAction) (waitState: ReviewWait.State option) =
+        let dispatchAuthority =
             match action with
-            | Review.DispatchCritic -> Some ReviewWait.InitialReview
-            | Review.DispatchSuccessor _ -> Some ReviewWait.RepairConfirmation
+            | Review.DispatchCritic -> Some(ReviewWait.InitialReview, ReviewWait.generationToken binding.HeadSha ReviewWait.InitialReview 0)
+            | Review.DispatchSuccessor _ ->
+                Some(ReviewWait.RepairConfirmation, ReviewWait.generationToken binding.HeadSha ReviewWait.RepairConfirmation binding.Round)
             | _ -> None
-        match waitState, dispatchKind with
+        match waitState, dispatchAuthority with
         | None, _ -> Ok () // offline snapshots predate the live durable-wait projection
         | Some (ReviewWait.Invalid errors), _ -> Error errors
         | Some (ReviewWait.Recoverable (_, reason)), _ -> Error [ reason ]
-        | Some (ReviewWait.Waiting receipt), Some expected when receipt.Kind = expected -> Ok ()
-        | Some (ReviewWait.Waiting receipt), Some _ ->
-            Error [ $"the durable review wait kind does not authorize %s{actionName action}: %A{receipt.Kind}" ]
+        | Some (ReviewWait.Waiting receipt), Some(expectedKind, expectedGeneration)
+            when receipt.Kind = expectedKind && receipt.ReviewGeneration = expectedGeneration -> Ok ()
+        | Some (ReviewWait.Waiting receipt), Some(_, expectedGeneration) ->
+            Error [ $"the durable review wait does not authorize %s{actionName action}: expected generation '%s{expectedGeneration}', got '%s{receipt.ReviewGeneration}' / %A{receipt.Kind}" ]
         | Some (ReviewWait.Waiting receipt), None ->
             Error [ $"review generation '%s{receipt.ReviewGeneration}' remains unconsumed; record its completion, cancellation, or timeout before advancing" ]
         | Some ReviewWait.NoReceipt, Some _ ->
@@ -349,7 +351,7 @@ module ReviewApplication =
             ExitCode.toInt ExitCode.NoVerdict
         | Ok verdict ->
             let waitStatus, waitReceipt, waitReason = waitProjection waitState
-            match waitAuthority verdict.NextAction waitState, opts.Render with
+            match waitAuthority binding verdict.NextAction waitState, opts.Render with
             | Error reasons, Json ->
                 printfn
                     "%s"

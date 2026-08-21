@@ -226,6 +226,46 @@ if [ "$review_no_wait_rc" -ne 0 ] && [ "$review_malformed_wait_rc" -ne 0 ] \
 else
   bad "#2756 wait authority must gate the live dispatch route" "absent=$review_no_wait_rc:$review_no_wait_out malformed=$review_malformed_wait_rc:$review_malformed_wait_out"
 fi
+review_dispatch_wait="$(mktemp)"
+write_dispatch_wait() {
+  local event="$1" generation="$2"
+  python3 - "$review_dispatch_wait" "$event" "$review_claim_id" "$generation" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+path, event, claim, generation = sys.argv[1:]
+now = datetime.now(timezone.utc).replace(microsecond=0)
+if event == "enter":
+    record = {"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#42",
+              "claimGeneration":claim,"reviewGeneration":generation,"kind":"initial-review",
+              "enteredAt":now.isoformat().replace("+00:00", "Z"),
+              "expiresAt":(now + timedelta(hours=4)).isoformat().replace("+00:00", "Z"),
+              "evidenceRef":"https://fixture.invalid/review-dispatch"}
+else:
+    record = {"schema":"fsgg.coord.review-wait/v1","event":"cancel","reviewGeneration":generation,
+              "at":now.isoformat().replace("+00:00", "Z"),"evidenceRef":"fixture cleanup"}
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(record, stream, separators=(",", ":"))
+PY
+}
+write_dispatch_wait enter wrong-head:initial-review:0
+"$ENGINE" review wait FS.GG.SDD#42 "$review_dispatch_wait" --pr 42 --json >/dev/null 2>&1; review_wrong_head_enter_rc=$?
+review_wrong_head_out="$("$ENGINE" review FS.GG.SDD#42 --pr 42 --worker vole-418 --json 2>&1)"; review_wrong_head_rc=$?
+write_dispatch_wait cancel wrong-head:initial-review:0
+"$ENGINE" review wait FS.GG.SDD#42 "$review_dispatch_wait" --pr 42 --json >/dev/null 2>&1; review_wrong_head_cancel_rc=$?
+write_dispatch_wait enter aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:9
+"$ENGINE" review wait FS.GG.SDD#42 "$review_dispatch_wait" --pr 42 --json >/dev/null 2>&1; review_wrong_round_enter_rc=$?
+review_wrong_round_out="$("$ENGINE" review FS.GG.SDD#42 --pr 42 --worker vole-418 --json 2>&1)"; review_wrong_round_rc=$?
+write_dispatch_wait cancel aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:9
+"$ENGINE" review wait FS.GG.SDD#42 "$review_dispatch_wait" --pr 42 --json >/dev/null 2>&1; review_wrong_round_cancel_rc=$?
+if [ "$review_wrong_head_enter_rc" -eq 0 ] && [ "$review_wrong_head_rc" -ne 0 ] && [ "$review_wrong_head_cancel_rc" -eq 0 ] \
+   && [ "$review_wrong_round_enter_rc" -eq 0 ] && [ "$review_wrong_round_rc" -ne 0 ] && [ "$review_wrong_round_cancel_rc" -eq 0 ] \
+   && printf '%s' "$review_wrong_head_out" | jq -e '.verdict == "noVerdict" and .waitStatus == "waiting" and (.action == null) and (.reasons[0] | contains("expected generation"))' >/dev/null \
+   && printf '%s' "$review_wrong_round_out" | jq -e '.verdict == "noVerdict" and .waitStatus == "waiting" and (.action == null) and (.reasons[0] | contains("expected generation"))' >/dev/null; then
+  ok "#2756 dispatch requires the exact canonical wait head and round"
+else
+  bad "#2756 same-kind waits with a wrong head or round must not dispatch" "wrong-head=$review_wrong_head_enter_rc/$review_wrong_head_rc/$review_wrong_head_cancel_rc:$review_wrong_head_out wrong-round=$review_wrong_round_enter_rc/$review_wrong_round_rc/$review_wrong_round_cancel_rc:$review_wrong_round_out"
+fi
+rm -f "$review_dispatch_wait"
 write_review_draft() {
   local kind="$1" verdict="$2" round="$3" initial="$4" preceding="$5" head="${6:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}" critic="${7:-critic-heron-42}"
   python3 - "$review_draft" "$kind" "$verdict" "$round" "$initial" "$preceding" "$head" "$critic" <<'PY'
