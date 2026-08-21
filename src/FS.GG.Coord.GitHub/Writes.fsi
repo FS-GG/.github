@@ -536,6 +536,24 @@ module Writes =
     /// validated and rendered.
     val widen: transport: IGitHubTransport -> held: Held -> rewritten: Rewritten -> IoResult<unit>
 
+    /// Observed result of applying one host precedence receipt to the losing reservation. In both cases
+    /// the exact receipt and exact narrowed body were re-read; the losing `Held` is never released.
+    type ArbitrationApply =
+        | LoserNarrowed
+        | LoserAlreadyNarrowed
+
+    /// Idempotently record precedence, then narrow the loser while preserving its claim. A failure after
+    /// the receipt leaves both holders frozen and is safe to retry; a response-lost PATCH is accepted only
+    /// when the exact narrowed body is observed.
+    val applyArbitration:
+        transport: IGitHubTransport ->
+        loser: Held ->
+        receiptRef: Ref ->
+        receiptMarker: string ->
+        receiptBody: string ->
+        narrowed: Rewritten ->
+            IoResult<ArbitrationApply>
+
     /// RENEW THE LEASE. Takes the `Held`.
     ///
     /// It rewrites the WHOLE marker body, which is why the `Held` carries `PreviousStatus`: the marker is

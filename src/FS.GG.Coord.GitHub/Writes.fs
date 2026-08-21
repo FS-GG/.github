@@ -1000,6 +1000,47 @@ module Writes =
         // refusal arrives, because the refusal happens before the write is even representable.
         patchBody transport held.Ref rewritten
 
+    type ArbitrationApply =
+        | LoserNarrowed
+        | LoserAlreadyNarrowed
+
+    let applyArbitration
+        (transport: IGitHubTransport)
+        (loser: Held)
+        (receiptRef: Ref)
+        (receiptMarker: string)
+        (receiptBody: string)
+        (narrowed: Rewritten)
+        : IoResult<ArbitrationApply> =
+
+        let observeNarrowed () =
+            Reads.issueBody transport loser.Ref.Owner loser.Ref.Repo loser.Ref.Number
+            |> Result.map (fun body -> body = narrowed.Body)
+
+        writeDurableComment transport receiptRef receiptMarker receiptBody
+        |> Result.bind (fun _ ->
+            observeNarrowed ()
+            |> Result.bind (function
+                | true -> Ok LoserAlreadyNarrowed
+                | false ->
+                    match widen transport loser narrowed with
+                    | Ok() ->
+                        observeNarrowed ()
+                        |> Result.bind (function
+                            | true -> Ok LoserNarrowed
+                            | false -> Error(Malformed(loser.Ref.Short, "the arbitration narrow PATCH returned success but the exact losing path declaration was absent from the authoritative re-read")))
+                    | Error writeError ->
+                        match observeNarrowed () with
+                        | Ok true -> Ok LoserNarrowed
+                        | Ok false -> Error writeError
+                        | Error readError ->
+                            Error(
+                                Malformed(
+                                    loser.Ref.Short,
+                                    $"the arbitration narrow failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                                )
+                            )))
+
     let heartbeat (transport: IGitHubTransport) (leaseMinutes: int) (held: Held) : IoResult<Held> =
         // THE MARKER IS ADDRESSED BY ITS COMMENT ID, never by the worker string. #550 is what happens
         // otherwise: `release` and `heartbeat` picked a marker by WORKER STRING alone, so a twin — the same

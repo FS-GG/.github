@@ -2381,3 +2381,48 @@ let ``#2801 response-lost room back-reference PATCH is accepted only after readb
     match ensureRoomRef transport aRef "#220" with
     | Ok() -> Assert.Equal(3, transport.RestCalls)
     | other -> failwith $"response-lost back-reference must reconcile from the issue body, got %A{other}"
+
+[<Fact>]
+let ``#2801 precedence narrows the loser without releasing its held claim`` () =
+    let receiptMarker = "<!-- fsgg:overlap-precedence/v1 cycle=abc revision=1 -->"
+    let receiptBody = receiptMarker + "\n{\"winner\":43,\"loser\":42}"
+    let narrowedBody = "Paths: tests/loser-only.fs"
+    let narrowed = validate [ "tests/loser-only.fs" ] |> Result.map (rewrite "Paths: src/shared.fs tests/loser-only.fs") |> Result.defaultWith failwith
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "vole-418" "" ]) // acquire losing claim
+              ok "[]" // precedence pre-census
+              ok "{\"id\":902}" // precedence post
+              ok (comments [ markerWithExactBody 902 receiptBody ]) // precedence post-census
+              ok "{\"body\":\"Paths: src/shared.fs tests/loser-only.fs\"}" // path pre-census
+              ok "{}" // narrow PATCH
+              ok (System.Text.Json.JsonSerializer.Serialize {| body = narrowedBody |}) ] // path post-census
+
+    let held = acquire transport
+    match applyArbitration transport held aRef receiptMarker receiptBody narrowed with
+    | Ok LoserNarrowed ->
+        Assert.True(transport.Logged "issue-patch FS-GG/FS.GG.SDD 42")
+        Assert.False(transport.Logged "comment-delete")
+    | other -> failwith $"precedence must preserve the losing claim while narrowing, got %A{other}"
+
+[<Fact>]
+let ``#2801 response-lost loser narrow converges without a second precedence receipt`` () =
+    let receiptMarker = "<!-- fsgg:overlap-precedence/v1 cycle=abc revision=1 -->"
+    let receiptBody = receiptMarker + "\n{\"winner\":43,\"loser\":42}"
+    let narrowedBody = "Paths: tests/loser-only.fs"
+    let narrowed = validate [ "tests/loser-only.fs" ] |> Result.map (rewrite "Paths: src/shared.fs tests/loser-only.fs") |> Result.defaultWith failwith
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "vole-418" "" ])
+              ok (comments [ markerWithExactBody 902 receiptBody ]) // receipt already durable
+              ok "{\"body\":\"Paths: src/shared.fs tests/loser-only.fs\"}"
+              Error(Transport "response lost after PATCH")
+              ok (System.Text.Json.JsonSerializer.Serialize {| body = narrowedBody |}) ]
+
+    let held = acquire transport
+    match applyArbitration transport held aRef receiptMarker receiptBody narrowed with
+    | Ok LoserNarrowed ->
+        Assert.Equal(1, transport.Count "issue-patch")
+        Assert.False(transport.Logged "comment-post")
+        Assert.False(transport.Logged "comment-delete")
+    | other -> failwith $"response-lost narrow must reconcile from the exact body, got %A{other}"
