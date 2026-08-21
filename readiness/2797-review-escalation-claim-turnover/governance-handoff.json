@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2797-review-escalation-claim-turnover/ship.json",
-      "digest": "sha256:3088ea5b881fc1f01e4442d618475a781acf543307cc859174cd53f454f4e5ab",
+      "digest": "sha256:a5f0d78f1b9cbf26f6240a2726f8ef53231ac581b75df54e499f0fe655364035",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2797-review-escalation-claim-turnover/verify.json",
-      "digest": "sha256:79bdbc651f7f8243b3f787c8c431410ddba6628db5c336d945318224e45ead0f",
+      "digest": "sha256:ce21ae6e479595fd367f685d5addbb92f0b2d9be9df79095bc882e6ebc89f4b7",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2797-review-escalation-claim-turnover/work-model.json",
-      "digest": "sha256:7ce539c54083ab38558523ca4a2660f2e917bb6300e93235773c68e646f3e2b6",
+      "digest": "sha256:16d4e5fd918d45e20b77c261af8f9bdde95d96eddcbf4e6c972d20f64969a22b",
       "schemaVersion": 1
     }
   ],
