@@ -80,7 +80,7 @@ tasks:
     requiredEvidence: [EV005]
   - id: T006
     title: Implement requirement FR-006
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-006]

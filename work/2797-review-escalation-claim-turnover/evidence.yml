@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 2797-review-escalation-claim-turnover
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/2797-review-escalation-claim-turnover/spec.md
 sourceClarifications: work/2797-review-escalation-claim-turnover/clarifications.md
 sourceChecklist: work/2797-review-escalation-claim-turnover/checklist.md
@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2797-review-escalation-claim-turnover/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2797-review-escalation-claim-turnover/analysis.json
-    digest: f1f9ce4e3d63af4876a8204e401338457e999e1d57d29d943c716c77d876718d
+    digest: 89bbb83021100c03f97116d130bf3c2de6b157690f5a79a3c824b5e936fb1f34
     schemaVersion: 1
   - label: checklist
     path: work/2797-review-escalation-claim-turnover/checklist.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2797-review-escalation-claim-turnover/tasks.yml
-    digest: 33cd16820d5c9457c4b8a3daa9da9dbecce44af5def087f7190c7264099c86dd
+    digest: 7a6c72e602c0df55516d1cf499b172ff33dcdd0dc17aa30433f374ad67bde133
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -170,7 +170,7 @@ evidence:
       skipped: 0
     notes: ["Focused pure and compiled production-writer evidence covers this obligation; exact-head receipts are refreshed after the required predecessor rebase."]
   - id: EV006
-    kind: missing
+    kind: deferral
     subject:
       type: task
       id: T006
@@ -181,13 +181,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
-    result: missing
+    artifacts: [scripts/check-engine-freshness.py]
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    notes: [Post-merge engine freshness and coherent release/install disposition are required before this obligation can pass.]
+    rationale: "FR-006 is deliberately post-merge: merged origin/main is the only honest subject for engine freshness, release-debt deduplication, and the S.I.R. install handoff. The source item will discharge this before Done; pre-merge verify records the boundary instead of fabricating a merged-main result."
+    owner: FS-GG/.github
+    scope: merged-main engine freshness plus coherent release/install disposition for S.I.R.
+    laterLifecycleVisibility: "Immediately after guarded merge, run scripts/check-engine-freshness.py against origin/main, replace this deferral with the resulting real verification evidence, and only then stamp the item Done."
+    notes: ["Accepted only across the PR review boundary; it is not a waiver of the post-merge pnext-item obligation."]
   - id: EV007
     kind: verification
     subject:
@@ -208,7 +210,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -235,7 +237,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -262,7 +264,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -289,7 +291,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -316,7 +318,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -343,7 +345,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -370,7 +372,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -397,7 +399,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19
@@ -424,7 +426,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2797-review-escalation-claim-turnover/test-results/2797-reviewwait.trx
-      digest: "sha256:4926d546eec23a227ae9b10bdef1cbd03405bd7c92141a9dd1d93eca8fdc0a6a"
+      digest: "sha256:367a33dbc4c8cd89b1b52c43c8a5d1e172ff992b69012d4fabb4ea0d6b55b42e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 19

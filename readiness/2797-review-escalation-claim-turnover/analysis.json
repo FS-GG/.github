@@ -4,7 +4,7 @@
   "workId": "2797-review-escalation-claim-turnover",
   "stage": "analyze",
   "status": "implementationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -32,6 +32,16 @@
       "digest": {
         "algorithm": "sha256",
         "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2797-review-escalation-claim-turnover/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "58c740f29b8c891f549d0e865b2f09b42c97c0cc513b297f4cd3b712504060c6"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "92c0af44b5763e587fc27abae18cfe239c1cfc4cfb35ba8e76944da292b4320b"
+        "value": "7a6c72e602c0df55516d1cf499b172ff33dcdd0dc17aa30433f374ad67bde133"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -566,7 +576,7 @@
     {
       "path": "readiness/2797-review-escalation-claim-turnover/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

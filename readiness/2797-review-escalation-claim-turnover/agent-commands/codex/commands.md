@@ -30,7 +30,7 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 
 ## T006 — Implement requirement FR-006
 - Stage: specify
-- Purpose: Carry out lifecycle task T006 (pending) covering AC-006, FR-006, PD-006.
+- Purpose: Carry out lifecycle task T006 (done) covering AC-006, FR-006, PD-006.
 - Related: AC-006, FR-006, PD-006
 
 ## T007 — Implement clarification decision DEC-001
