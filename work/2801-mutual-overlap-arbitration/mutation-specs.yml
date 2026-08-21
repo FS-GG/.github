@@ -246,3 +246,39 @@ mutations:
     anchor:
       pattern: '(?:Passed|Failed)!\s+- Failed:\s+\d+, Passed:\s+\d+, Skipped:\s+\d+, Total:\s+\d+'
       produced_by: tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj
+
+  - id: production/frozen-token-bypasses-resume
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'if not readdsFrozenToken then Ok()'
+    replace: 'if true then Ok()'
+    breaks: the production touch-set writer can re-add a frozen shared reservation before winner landing and rebase
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/caller-authority-spoofed
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'when requestingRepo <> coordinationRef.Repo || holder <> w.Id ->'
+    replace: 'when false ->'
+    breaks: copied public lease values can nominate a caller other than the current minted worker and request ref
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh
+
+  - id: production/priority-write-bypassed
+    gate: compiled writer route
+    discriminator: terminal
+    command: ["bash", "tests/coord-engine-e2e/writes.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: 'match Board.setField ctx.Transport board itemId "Severity" (Board.Set severity) with'
+    replace: 'match Ok() with'
+    breaks: the orchestrator reports promotion without projecting highest-safe priority to the authoritative board
+    anchor:
+      pattern: 'coord-engine writes:\s+\d+ assertion\(s\),\s+\d+ passed,\s+\d+ failed'
+      produced_by: tests/coord-engine-e2e/writes.sh

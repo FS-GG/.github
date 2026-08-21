@@ -2435,13 +2435,16 @@ else
   bad ".github#2801: active-A authority must bind the current caller, not supplied strings" "rc=$spoof_rc: $spoof"
 fi
 routed="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD external-block FS.GG.SDD#42 smew-e1d9 --worker smew-e1d9 2>&1)"; routed_rc=$?
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 promoted="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD run-priority FS.GG.SDD#42 vole-418 --worker vole-418 2>&1)"; promoted_rc=$?
+promotion_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
 if [ "$routed_rc" -eq 0 ] && grep -qF 'ROUTED' <<<"$routed" \
-   && [ "$promoted_rc" -eq 0 ] && grep -qF 'promoted blocking request' <<<"$promoted"; then
+   && [ "$promoted_rc" -eq 0 ] && grep -qF 'promoted blocking request' <<<"$promoted" \
+   && printf '%s' "$promotion_ledger" | jq -e '.count == 1 and .requests[0].kind == "graphql-mutation"' >/dev/null 2>&1; then
   ok ".github#2801: active A performs the highest-safe board priority mutation before ordinary work"
 else
   bad ".github#2801: request priority must be projected, not merely printed" \
-      "route=$routed_rc:$routed promote=$promoted_rc:$promoted"
+      "route=$routed_rc:$routed promote=$promoted_rc:$promoted ledger=$promotion_ledger"
 fi
 wait42_gen="$(curl -fsS -X POST -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:claim worker=vole-418 lease=120 -->\nheld"}' \
