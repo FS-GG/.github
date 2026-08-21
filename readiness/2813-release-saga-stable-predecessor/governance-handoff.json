@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/2813-release-saga-stable-predecessor/ship.json",
-      "digest": "sha256:f7e68e4aeed66a475c611a5ce13f78ded5658e4dc296532bc6b60b0f24907087",
+      "digest": "sha256:93bee190e95c538076b27249e0a192eb355f8be97b054f577b4d961f99d8be67",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2813-release-saga-stable-predecessor/verify.json",
-      "digest": "sha256:f1616525e81b2a3c4f5dd36dcde7d3a44a4f7461062fa0053a6353b576816819",
+      "digest": "sha256:b35fd22b07be647a9e667bf4d5b842285fb3bec743670a940dceaa1e59811e68",
       "schemaVersion": 1
     },
     {

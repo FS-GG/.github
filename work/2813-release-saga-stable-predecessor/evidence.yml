@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2813-release-saga-stable-predecessor/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2813-release-saga-stable-predecessor/analysis.json
-    digest: 5924e38524f25b15c776b38b01e177484b5a5b1096414c8e92ecd7a3d630d89f
+    digest: 748e20a9b886aeb2e1e330a0431c37494d1e6930994cc32e3f8d3f77bef1ac52
     schemaVersion: 1
   - label: checklist
     path: work/2813-release-saga-stable-predecessor/checklist.md
