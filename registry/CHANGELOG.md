@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-21** — **coherent set `github:0.68.0` prepared with a post-merge release obligation**
+  (github; [.github#2794](https://github.com/FS-GG/.github/issues/2794), producer
+  [.github#2797](https://github.com/FS-GG/.github/issues/2797)): packages the three merged commits that
+  preserve ordinary review exhaustion across claim turnover, project the exhausted phase, and authorize
+  one exact structured escalation for the fresh claimant. The release source explicitly excludes unmerged
+  `.github#2772`. The claim owner must publish the prepared coherent bytes to both feeds, prove payload
+  identity and a public installed-tool route, then replace this entry with immutable evidence before Done.
+
 - **2026-08-21** — **coherent set `github:0.67.0` published; `coord-engine` flipped to `0.67.0`**
   (github; [.github#2756](https://github.com/FS-GG/.github/issues/2756),
   [PR #2792](https://github.com/FS-GG/.github/pull/2792),

@@ -1,0 +1,389 @@
+schemaVersion: 1
+workId: 2794-coord-engine-release
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2794-coord-engine-release/spec.md
+sourceClarifications: work/2794-coord-engine-release/clarifications.md
+sourceChecklist: work/2794-coord-engine-release/checklist.md
+sourcePlan: work/2794-coord-engine-release/plan.md
+sourceTasks: work/2794-coord-engine-release/tasks.yml
+sourceAnalysis: readiness/2794-coord-engine-release/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2794-coord-engine-release/analysis.json
+    digest: a31fbcc326124d00e736c5214ad085ffc180e14464019304fdafd3ce64e430d5
+    schemaVersion: 1
+  - label: checklist
+    path: work/2794-coord-engine-release/checklist.md
+    digest: bfb79b1a437cdf362e8dff383a795f5a97a81ccb6ddf061dffe7806c849cb31d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2794-coord-engine-release/clarifications.md
+    digest: 8f4784f211adb78a024899a9105686eacaba39bb9636928530a25dfa9298fbc0
+    schemaVersion: 1
+  - label: plan
+    path: work/2794-coord-engine-release/plan.md
+    digest: 380eba3c69f481edb96be544ab304901b60cb5117b5a1374133907ea0420a4c2
+    schemaVersion: 1
+  - label: spec
+    path: work/2794-coord-engine-release/spec.md
+    digest: 5ac40528a4e9cbcbf6b02aedc2cfb7261e5d152e945ff8949c2401b03e912f2e
+    schemaVersion: 1
+  - label: tasks
+    path: work/2794-coord-engine-release/tasks.yml
+    digest: ff571da177fde574c18d8d460caa42c5eb8ecb681ee69a2b7dc7b3fc1f83ea4b
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-001]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-002]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-003]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-005]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV010]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV011]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV013]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2794-coord-engine-release/artifacts/2794-reviewwait.trx
+      digest: "sha256:14fd0e3305e2dac3ad08e899eeb8ab645cdf96bfcdadc6759c852e80ca25f129"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 19
+      failed: 0
+      skipped: 0
+    notes: ["Prepared release source and focused route evidence are current; served-feed and public-install facts remain post-merge delivery obligations of this claim."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

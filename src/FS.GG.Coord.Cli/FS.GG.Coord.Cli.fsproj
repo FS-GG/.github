@@ -130,7 +130,18 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.67.0 — review queues become durable, bounded state and fresh successors become ordinary.
+    <PackageReleaseNotes>0.68.0 — exhausted ordinary review survives claim turnover and gains one structured escalation.
+
+WHAT MOVED, AND WHY IT IS A MINOR. After an ordinary initial review plus three changes-required
+confirmations, the engine now preserves the completed round-three wait across a fresh claim, projects
+the exhausted phase without ever offering round four, and authorizes exactly one escalation only after
+validating the old claim's exact structured chain, legacy exhaustion marker, completed wait, current PR
+head, and fresh claimant. Malformed, stale, duplicate, replacement-acceptance, and unmerged states refuse
+before writes. `Protocol.fs` is byte-identical to 0.67.0 and no command, member, destination, or identity
+is removed; this is additive receiver-visible review behavior, so the coherent set advances to 0.68.0
+(.github#2797/#2794). Unmerged .github#2772 behavior is not included.
+
+0.67.0 — review queues become durable, bounded state and fresh successors become ordinary.
 
 WHAT MOVED, AND WHY IT IS A MINOR. The engine adds the `fsgg.coord.review-wait/v1` append-only marker,
 the `review wait` writer, live wait-state projection, and an ordinary `dispatchSuccessor` review action.
