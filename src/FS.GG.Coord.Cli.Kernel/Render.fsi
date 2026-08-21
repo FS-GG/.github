@@ -91,8 +91,9 @@ module Render =
           /// `None` means the post-operation census was unreadable, never empty.
           After: ClaimMarkerCensusReceipt option }
 
-    /// A terminal non-green forced-claim receipt. It deliberately omits successful-claim readbacks and
-    /// carries the authoritative forced-transition census instead.
+    /// A terminal non-green `claim --force --json` result. Unlike `ClaimReceipt`, this document does not
+    /// claim that the caller holds a marker or that a board projection was attempted. It reports only the
+    /// typed transition outcome and the authoritative pre/final census that governed it.
     type ForcedClaimOutcomeReceipt =
         { Ref: Ref
           Worker: string

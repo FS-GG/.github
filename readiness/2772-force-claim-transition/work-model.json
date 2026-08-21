@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f502ace319d0ef22ff447f2a9c096faaadfbf89c859f8af87650740061faaed1"
+        "value": "a99021b7e886c564915cb4105cfceb22ed91292241c2fb8f948f2b8769514474"
       }
     },
     {
@@ -1388,7 +1388,7 @@
           "path": "work/2772-force-claim-transition/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "f502ace319d0ef22ff447f2a9c096faaadfbf89c859f8af87650740061faaed1"
+            "value": "a99021b7e886c564915cb4105cfceb22ed91292241c2fb8f948f2b8769514474"
           },
           "schemaVersion": 1
         },
@@ -1419,7 +1419,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "4034e37d87962a949e7ae2253fe18f83048dccd329f2c6d0e1689b7ee4dad16f"
+        "value": "203bd2f84a1f2bcf0a2984dc95d24394593d621b6ca8972f26a41d083014eff3"
       },
       "currency": "current"
     }
