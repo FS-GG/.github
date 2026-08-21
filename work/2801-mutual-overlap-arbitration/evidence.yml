@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2801-mutual-overlap-arbitration/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2801-mutual-overlap-arbitration/analysis.json
-    digest: e8980e4aa6a9a81573f6eea60900e56f00ff5372c1b2a438f72cec9eadc6f438
+    digest: 69720fa26bc787aea12e40aaf6f51cd54b376c7b79ca17871b02095ff71853e2
     schemaVersion: 1
   - label: checklist
     path: work/2801-mutual-overlap-arbitration/checklist.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2801-mutual-overlap-arbitration/plan.md
-    digest: d4582bbcb260416c7e2278d10d32b9fe18acff7b3ad3d2c915e86ecc459d4906
+    digest: 33fa22ee99136a5d390ed8272a79853f995ee8b3da16c62934fbcf065ff54e24
     schemaVersion: 1
   - label: spec
     path: work/2801-mutual-overlap-arbitration/spec.md
-    digest: 4a858708b0c8636b9a3377fa6cc805433ca995b9b4227284b7f2a6ba11d4283c
+    digest: cd06975eb08f678c5d438ce38cfecada1d98114dc80849eddc69f09c4e028523
     schemaVersion: 1
   - label: tasks
     path: work/2801-mutual-overlap-arbitration/tasks.yml
-    digest: c108a3de608c8cd35e6a611c2b3bf3a5bea12574a93ae2cf58a8df75b1d38e4c
+    digest: 1b8d7ca78017212038ceef312a07be42ba88f1c91fd363072bdb297ef8922921
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -60,7 +60,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV002
     kind: verification
     subject:
@@ -87,7 +87,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV003
     kind: verification
     subject:
@@ -114,7 +114,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV004
     kind: verification
     subject:
@@ -141,7 +141,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV005
     kind: verification
     subject:
@@ -168,7 +168,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV006
     kind: verification
     subject:
@@ -195,7 +195,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV007
     kind: verification
     subject:
@@ -222,7 +222,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV008
     kind: verification
     subject:
@@ -249,7 +249,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV009
     kind: verification
     subject:
@@ -276,7 +276,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV010
     kind: verification
     subject:
@@ -303,7 +303,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV011
     kind: verification
     subject:
@@ -330,7 +330,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV012
     kind: verification
     subject:
@@ -357,7 +357,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV013
     kind: verification
     subject:
@@ -384,7 +384,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV014
     kind: verification
     subject:
@@ -411,7 +411,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV015
     kind: verification
     subject:
@@ -438,7 +438,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV016
     kind: verification
     subject:
@@ -465,7 +465,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV017
     kind: verification
     subject:
@@ -492,7 +492,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV018
     kind: verification
     subject:
@@ -519,7 +519,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV019
     kind: verification
     subject:
@@ -546,7 +546,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV020
     kind: verification
     subject:
@@ -573,7 +573,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV021
     kind: verification
     subject:
@@ -600,7 +600,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV022
     kind: verification
     subject:
@@ -627,7 +627,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV023
     kind: verification
     subject:
@@ -654,7 +654,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV024
     kind: verification
     subject:
@@ -681,7 +681,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV025
     kind: verification
     subject:
@@ -708,7 +708,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV026
     kind: verification
     subject:
@@ -735,7 +735,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV027
     kind: verification
     subject:
@@ -762,7 +762,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV028
     kind: verification
     subject:
@@ -789,7 +789,7 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
   - id: EV029
     kind: verification
     subject:
@@ -816,6 +816,6 @@ evidence:
       passed: 21
       failed: 0
       skipped: 0
-    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 177/177; mutation ledger 23/23 JUSTIFIED."]
+    notes: ["Release build; CLI 511/511; GitHub 659/659; vetted writer harness 181/181; mutation ledger 26/26 JUSTIFIED."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

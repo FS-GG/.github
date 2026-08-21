@@ -16,7 +16,7 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2801-mutual-overlap-arbitration/spec.md sha256:4a858708b0c8636b9a3377fa6cc805433ca995b9b4227284b7f2a6ba11d4283c schemaVersion:1
+- spec: work/2801-mutual-overlap-arbitration/spec.md sha256:cd06975eb08f678c5d438ce38cfecada1d98114dc80849eddc69f09c4e028523 schemaVersion:1
 - clarifications: work/2801-mutual-overlap-arbitration/clarifications.md sha256:d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a schemaVersion:1
 - checklist: work/2801-mutual-overlap-arbitration/checklist.md sha256:ccfeb3e86c4300a094c4d3ea100f3bb57c1a5e8381296b3407d722583d48529c schemaVersion:1
 

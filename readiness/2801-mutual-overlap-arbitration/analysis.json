@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2801-mutual-overlap-arbitration/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "247c9f3b943e55c7d9a84d8c2ef0ef2d8bea6156914fb0ac7ec4c4b5d9e60298"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2801-mutual-overlap-arbitration/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "d4582bbcb260416c7e2278d10d32b9fe18acff7b3ad3d2c915e86ecc459d4906"
+        "value": "33fa22ee99136a5d390ed8272a79853f995ee8b3da16c62934fbcf065ff54e24"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "4a858708b0c8636b9a3377fa6cc805433ca995b9b4227284b7f2a6ba11d4283c"
+        "value": "cd06975eb08f678c5d438ce38cfecada1d98114dc80849eddc69f09c4e028523"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "c108a3de608c8cd35e6a611c2b3bf3a5bea12574a93ae2cf58a8df75b1d38e4c"
+        "value": "1b8d7ca78017212038ceef312a07be42ba88f1c91fd363072bdb297ef8922921"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -916,7 +926,7 @@
     {
       "path": "readiness/2801-mutual-overlap-arbitration/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
