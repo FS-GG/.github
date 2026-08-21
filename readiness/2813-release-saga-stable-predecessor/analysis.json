@@ -37,11 +37,21 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2813-release-saga-stable-predecessor/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "0af679e58dafe35abed6c13fec2e9cb7dc7a24c969728f05e3965cd1fa12cbca"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2813-release-saga-stable-predecessor/checklist.md",
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "201dc12c3dbb9fcea3c31247070b0c423e32c2e2bcd5688b5ce3b34d2619fc6f"
+        "value": "48c10f259872c057a8e017bafa0da1a524f0cb1248764c7565503981d2c0e989"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "72268170d2e12918dc75feda0a9db9e8a37e12abedcb1f4941d4cb75bf718d37"
+        "value": "12b35e24290d0d28eb8ab99586f181a670bbcb4651afeecd9d4f4b88f1c7a3dc"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "7d07b24862d11dcee46a63c60fb2a6a9de09a6db7b1f101675b53a0cc89b599f"
+        "value": "ab3f432dae2bec802d9f8056c2f2993e372646943875a4b5c40f222531044073"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "f2ba19c6d3addb193d6d5c8ee0b9fd85102038c8e3d630093c0c4eb850f87537"
+        "value": "7ab79c20aee5e32f6987322faeeb9827ccac3b80e8b84af6e3bef7a39dc419be"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "a84876b8037d181ad2ba4d29640d89e5020ad3126f6b6a6ab3b64b08dd4bb801"
+        "value": "b39d6b1c86ae3c441ea30e1cef144461423b5d7804bf1b08dd76676e7b9c0688"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -161,6 +171,16 @@
     {
       "id": "AR008",
       "sourcePath": "work/2813-release-saga-stable-predecessor/clarifications.md",
+      "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
+      "sourceId": "DEC-005",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/2813-release-saga-stable-predecessor/clarifications.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/plan.md",
       "sourceId": null,
       "targetId": null,
@@ -169,7 +189,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR009",
+      "id": "AR010",
       "sourcePath": "work/2813-release-saga-stable-predecessor/clarifications.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": null,
@@ -179,7 +199,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR010",
+      "id": "AR011",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PC-001",
@@ -189,7 +209,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR012",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PC-002",
@@ -199,7 +219,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR013",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PC-003",
@@ -209,7 +229,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR014",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PC-004",
@@ -219,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR015",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "GV-001",
@@ -229,7 +249,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR016",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PM-001",
@@ -239,7 +259,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR017",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PD-001",
@@ -249,7 +269,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR018",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PD-002",
@@ -259,7 +279,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR019",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PD-003",
@@ -269,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR020",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PD-004",
@@ -279,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR021",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PD-005",
@@ -289,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR022",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "PD-006",
@@ -299,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR023",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": null,
@@ -309,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR024",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "VO-001",
@@ -319,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR025",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "VO-002",
@@ -329,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR026",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "VO-003",
@@ -339,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR027",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "VO-004",
@@ -349,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR028",
       "sourcePath": "work/2813-release-saga-stable-predecessor/plan.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "VO-005",
@@ -359,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR029",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "AC-001",
@@ -369,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR030",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "AC-002",
@@ -379,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR031",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "AC-003",
@@ -389,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR032",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "AC-004",
@@ -399,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR033",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "AC-005",
@@ -409,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR034",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/checklist.md",
       "sourceId": null,
@@ -419,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR035",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/plan.md",
       "sourceId": null,
@@ -429,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR036",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "FR-001",
@@ -439,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR037",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "FR-002",
@@ -449,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR038",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "FR-003",
@@ -459,7 +479,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR039",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "FR-004",
@@ -469,7 +489,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR039",
+      "id": "AR040",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/clarifications.md",
       "sourceId": null,
@@ -479,7 +499,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR040",
+      "id": "AR041",
       "sourcePath": "work/2813-release-saga-stable-predecessor/spec.md",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": null,
@@ -489,7 +509,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR041",
+      "id": "AR042",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T005",
@@ -499,7 +519,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR042",
+      "id": "AR043",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T006",
@@ -509,7 +529,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR043",
+      "id": "AR044",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T007",
@@ -519,7 +539,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR044",
+      "id": "AR045",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T008",
@@ -529,7 +549,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR045",
+      "id": "AR046",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T009",
@@ -539,7 +559,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR046",
+      "id": "AR047",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T010",
@@ -549,7 +569,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR047",
+      "id": "AR048",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T011",
@@ -559,7 +579,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR048",
+      "id": "AR049",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T012",
@@ -569,7 +589,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR049",
+      "id": "AR050",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T013",
@@ -579,7 +599,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR050",
+      "id": "AR051",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T014",
@@ -589,7 +609,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR051",
+      "id": "AR052",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T015",
@@ -599,7 +619,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR052",
+      "id": "AR053",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T016",
@@ -609,7 +629,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR053",
+      "id": "AR054",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T017",
@@ -619,7 +639,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR054",
+      "id": "AR055",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T018",
@@ -629,7 +649,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR055",
+      "id": "AR056",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T019",
@@ -639,10 +659,20 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR056",
+      "id": "AR057",
       "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceId": "T020",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR058",
+      "sourcePath": "work/2813-release-saga-stable-predecessor/tasks.yml",
+      "targetPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
+      "sourceId": "T021",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -651,7 +681,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 56,
+    "readyCount": 58,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,
@@ -666,7 +696,7 @@
     {
       "path": "readiness/2813-release-saga-stable-predecessor/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

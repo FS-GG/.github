@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2813-release-saga-stable-predecessor/spec.md sha256:f2ba19c6d3addb193d6d5c8ee0b9fd85102038c8e3d630093c0c4eb850f87537 schemaVersion:1
-- clarifications: work/2813-release-saga-stable-predecessor/clarifications.md sha256:72268170d2e12918dc75feda0a9db9e8a37e12abedcb1f4941d4cb75bf718d37 schemaVersion:1
-- checklist: work/2813-release-saga-stable-predecessor/checklist.md sha256:201dc12c3dbb9fcea3c31247070b0c423e32c2e2bcd5688b5ce3b34d2619fc6f schemaVersion:1
+- spec: work/2813-release-saga-stable-predecessor/spec.md sha256:7ab79c20aee5e32f6987322faeeb9827ccac3b80e8b84af6e3bef7a39dc419be schemaVersion:1
+- clarifications: work/2813-release-saga-stable-predecessor/clarifications.md sha256:12b35e24290d0d28eb8ab99586f181a670bbcb4651afeecd9d4f4b88f1c7a3dc schemaVersion:1
+- checklist: work/2813-release-saga-stable-predecessor/checklist.md sha256:48c10f259872c057a8e017bafa0da1a524f0cb1248764c7565503981d2c0e989 schemaVersion:1
 
 ## Plan Scope
 - Work item 2813-release-saga-stable-predecessor is planned from the current specification, clarification, and checklist facts.
@@ -29,7 +29,8 @@ Prose status: planned
 ## Plan Decisions
 - PD-001 [AC-001] [AC-002] [FR-001] complete: Add a `predecessor` decision command to
   `scripts/release-saga.py` that validates one stable-channel receipt against its published coherent-set
-  tag and peeled tag source, then emits its canonical identity. Preparation consumes the receipt itself
+  tag and peeled tag source, rejecting every non-canonical stable SemVer spelling before it emits identity.
+  Preparation consumes the receipt itself
   and records `previousStableVersion` plus new `previousStableContentId`; the old caller-supplied
   `--previous-version` authority is removed.
 - PD-002 [AC-001] [AC-002] [FR-001] complete: Reorder `release-saga-prepare.yml` so its first
@@ -66,7 +67,8 @@ Prose status: planned
 - VO-002 [PD-002] [PC-003] staticGate: The focused suite parses the production workflow and proves live receipt
   resolution/validation precedes every build and pack token and that registry predecessor selection is absent.
 - VO-003 [PD-004] [PD-006] mutationTest: Run the focused suite against a temporary source mutation that drops
-  predecessor content identity or substitutes the stale registry; expect non-zero and the named failed assertion.
+  predecessor content identity or removes the canonical stable-version predicate; expect non-zero at the named
+  stale-retry or exact `+9.8.6` production-boundary assertion.
 - VO-004 [PD-005] [PC-004] package: Build and pack all three coherent projects at `0.71.0`, inspect nuspec versions
   and release notes, and run existing release/coherence, projection, registry, and workflow gates affected by paths.
 - VO-005 [PD-005] remoteInvariant: Before and after implementation, read `coherent-set/v0.70.0` release metadata,

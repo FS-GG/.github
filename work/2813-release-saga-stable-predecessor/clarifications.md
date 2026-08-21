@@ -19,6 +19,7 @@ publicOrToolFacingImpact: true
 - CQ-002 [AMB:identity-width]: Which predecessor fields are part of prepared/retry identity?
 - CQ-003 [AMB:recovery-version]: Can the already-published `0.70.0` identity be repaired in place?
 - CQ-004 [AMB:validation-order]: At which workflow boundary must live-channel validation complete?
+- CQ-005 [AMB:stable-version-spelling]: Which textual stable version spellings are authoritative?
 
 ## Answers
 - CQ-001: The latest published `coherent-set/v*` release's `stable-channel.json` is authoritative.
@@ -29,6 +30,9 @@ publicOrToolFacingImpact: true
   draft, and unpromoted; forward recovery uses unused stable coherent version `0.71.0`.
 - CQ-004: Validation completes before build/test/pack. Consequently a failed read or contradiction occurs
   before any packed bytes or GitHub release mutation exists.
+- CQ-005: Only the canonical three-component stable SemVer spelling is authoritative: each component is
+  unsigned decimal, zero is written exactly `0`, and prerelease/build suffixes, whitespace, leading plus,
+  multi-digit leading zeroes, and extra/missing segments are rejected before packing.
 
 ## Decisions
 - DEC-001 [CQ-001] [FR-001]: Live promoted stable-channel receipt outranks registry projection.
@@ -38,6 +42,8 @@ publicOrToolFacingImpact: true
   advance source to `0.71.0`; actual preparation/publication/promotion remains post-merge work.
 - DEC-004 [CQ-004] [FR-001]: Workflow order is resolve/validate predecessor, then build/test/pack,
   then manifest/preflight/draft. No fallback to registry or caller-provided predecessor is permitted.
+- DEC-005 [CQ-005] [FR-001]: Receipt parsing and coherent tag comparison share the receipt's exact canonical
+  stable SemVer triple; textual agreement cannot legalize a non-canonical spelling.
 
 ## Accepted Deferrals
 No accepted deferrals recorded.

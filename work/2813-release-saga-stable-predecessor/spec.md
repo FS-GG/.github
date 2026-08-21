@@ -37,9 +37,10 @@ Release operators can prepare a coherent set only against the live promoted stab
 - AC-001 [US-001] [FR-001]: Given registry `package-version: 0.68.0` and the latest published
   coherent-set receipt `0.69.0`, when preparation resolves its predecessor, then it selects and binds
   the receipt's version `0.69.0` and content ID before any build or pack step.
-- AC-002 [US-001] [FR-001]: Given a missing, unreadable, prerelease, malformed, tag/receipt-contradictory,
-  or source/receipt-contradictory live channel, when preparation starts, then it refuses before packing,
-  drafting, tagging, or publishing.
+- AC-002 [US-001] [FR-001]: Given a missing, unreadable, or non-canonical live channel version (including
+  a leading plus, multi-digit leading zero, embedded whitespace, prerelease/build suffix, or extra/missing
+  segment), or a tag/receipt or source/receipt contradiction, when preparation starts, then it refuses
+  before packing, drafting, tagging, or publishing.
 - AC-003 [US-002] [FR-002]: Given an existing draft, when preparation retries, then equivalent package
   payloads are reusable only if stored and candidate descriptors bind the same predecessor version and content ID.
 - AC-004 [US-003] [FR-003]: Given published packages and immutable tags for `0.70.0`, when recovery is
@@ -49,7 +50,7 @@ Release operators can prepare a coherent set only against the live promoted stab
   authority or retry-identity guard is inverted, then the focused suite fails on the reproduced stale-registry escape.
 
 ## Functional Requirements
-- FR-001: Before any pack, draft, tag, or publication write, preparation MUST read the latest published coherent-set release's `stable-channel.json`; validate stable SemVer, content ID, exact source SHA, coherent tag/version agreement, and tag/source agreement; bind both predecessor version and content ID into the candidate manifest; and never use registry metadata to select or validate this identity. (covers AC-001, AC-002)
+- FR-001: Before any pack, draft, tag, or publication write, preparation MUST read the latest published coherent-set release's `stable-channel.json`; require its version to be a canonical stable SemVer triple of three unsigned decimal components without multi-digit leading zeroes or any suffix; validate content ID, exact source SHA, coherent tag/version agreement, and tag/source agreement; bind both predecessor version and content ID into the candidate manifest; and never use registry metadata to select or validate this identity. (covers AC-001, AC-002)
 - FR-002: Retry MUST accept an existing draft only when stored and candidate descriptors bind the same predecessor version and content ID, in addition to the existing release, source, policy, channel, package, and payload identity checks. (covers AC-003)
 - FR-003: Tests MUST reproduce registry `0.68.0` versus stable receipt `0.69.0`, stale/malformed/missing receipts, poisoned `0.70.0` preservation, retry, and successful forward promotion under `0.71.0`; an inverted authority gate MUST fail. (covers AC-004, AC-005)
 - FR-004: Documentation MUST declare live stable receipt > prepared manifest > registry projection authority and specify that poisoned versions remain unpromoted while recovery advances to a new unused coherent version. (covers AC-004)

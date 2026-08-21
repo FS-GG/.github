@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2813-release-saga-stable-predecessor/ship.json",
-      "digest": "sha256:c286f4a6ac5a48fcd4fe4764cf2d186cf251eeee03cdb0086764f7f2d709a20b",
+      "digest": "sha256:f7e68e4aeed66a475c611a5ce13f78ded5658e4dc296532bc6b60b0f24907087",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2813-release-saga-stable-predecessor/verify.json",
-      "digest": "sha256:b3e87b12a73855eecf2740b9c760b79e7389931137dbf48a2c4f8c9849f216cb",
+      "digest": "sha256:f1616525e81b2a3c4f5dd36dcde7d3a44a4f7461062fa0053a6353b576816819",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2813-release-saga-stable-predecessor/work-model.json",
-      "digest": "sha256:627564fb750b853450bf712260dde9a35eb6228730c205da624693c36db418a4",
+      "digest": "sha256:4ccfbd277ddf8f9070c518acd8a78bbf4728ba484c03d631d208c8f93cf0f518",
       "schemaVersion": 1
     }
   ],
@@ -123,103 +123,113 @@
         "rationale": null
       },
       {
+        "id": "evidence:EV021",
+        "state": "real",
+        "rationale": null
+      },
+      {
         "id": "task:T001",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T002",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T003",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T004",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T005",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T006",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T007",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T008",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T009",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T010",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T011",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T012",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T013",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T014",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T015",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T016",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T017",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T018",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T019",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T020",
-        "state": "pending",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T021",
+        "state": "real",
         "rationale": null
       }
     ],
@@ -303,6 +313,10 @@
       {
         "dependent": "evidence:EV020",
         "dependency": "task:T020"
+      },
+      {
+        "dependent": "evidence:EV021",
+        "dependency": "task:T021"
       },
       {
         "dependent": "task:T001",
@@ -446,6 +460,14 @@
       },
       {
         "dependent": "task:T020",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T021",
+        "dependency": "evidence:EV021"
+      },
+      {
+        "dependent": "task:T021",
         "dependency": "task:T001"
       }
     ]

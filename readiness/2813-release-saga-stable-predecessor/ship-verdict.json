@@ -7,9 +7,9 @@
   "generator": "FS.GG.SDD.Artifacts/1.1.0",
   "verificationReadiness": {
     "status": "verificationReady",
-    "evidenceSupportedCount": 20,
+    "evidenceSupportedCount": 21,
     "evidenceSelfAttestedCount": 0,
-    "evidenceObservedCount": 20
+    "evidenceObservedCount": 21
   },
   "disposition": {
     "state": "shipReady",

@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2813-release-saga-stable-predecessor/clarifications.md
 
 ## Source Snapshot
-- spec: work/2813-release-saga-stable-predecessor/spec.md sha256:f2ba19c6d3addb193d6d5c8ee0b9fd85102038c8e3d630093c0c4eb850f87537 schemaVersion:1
-- clarifications: work/2813-release-saga-stable-predecessor/clarifications.md sha256:72268170d2e12918dc75feda0a9db9e8a37e12abedcb1f4941d4cb75bf718d37 schemaVersion:1
+- spec: work/2813-release-saga-stable-predecessor/spec.md sha256:7ab79c20aee5e32f6987322faeeb9827ccac3b80e8b84af6e3bef7a39dc419be schemaVersion:1
+- clarifications: work/2813-release-saga-stable-predecessor/clarifications.md sha256:12b35e24290d0d28eb8ab99586f181a670bbcb4651afeecd9d4f4b88f1c7a3dc schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] [AC-002] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

@@ -23,6 +23,7 @@ SCHEMA = "fsgg.release-saga/1"
 FEEDS = ("github", "nuget")
 CONTENT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 SOURCE_SHA = re.compile(r"[0-9a-f]{40}\Z")
+STABLE_VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 
 
 def now() -> str:
@@ -199,15 +200,9 @@ def package_map(data: dict) -> dict[str, dict]:
 
 
 def stable_parts(value: str) -> tuple[int, ...]:
-    if not isinstance(value, str) or not value or "-" in value:
-        raise ValueError(f"stable channel version is prerelease or empty: {value}")
-    try:
-        parts = tuple(int(part) for part in value.split("."))
-    except ValueError as error:
-        raise ValueError(f"stable channel version is malformed: {value}") from error
-    if len(parts) != 3:
-        raise ValueError(f"stable channel version must have three numeric parts: {value}")
-    return parts
+    if not isinstance(value, str) or STABLE_VERSION.fullmatch(value) is None:
+        raise ValueError(f"stable channel version is not a canonical stable SemVer triple: {value}")
+    return tuple(int(part) for part in value.split("."))
 
 
 def stable_channel_identity(path: pathlib.Path) -> dict[str, str]:

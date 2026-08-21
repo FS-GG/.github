@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TOOL="$ROOT/scripts/release-saga.py"
+TOOL="${RELEASE_SAGA_TOOL:-$ROOT/scripts/release-saga.py}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/release-saga.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/artifacts" "$WORK/github" "$WORK/nuget"
@@ -53,11 +53,32 @@ if python3 "$TOOL" predecessor --channel "$WORK/missing-stable.json" \
   --release-tag coherent-set/v9.8.6 --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null 2>&1; then
   echo "expected a missing stable-channel receipt to fail closed" >&2; exit 1
 fi
-jq '.version = "9.8.6-preview.1"' "$WORK/previous-stable.json" > "$WORK/prerelease-stable.json"
-if python3 "$TOOL" predecessor --channel "$WORK/prerelease-stable.json" \
-  --release-tag coherent-set/v9.8.6-preview.1 --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null 2>&1; then
-  echo "expected a prerelease stable-channel receipt to fail closed" >&2; exit 1
+# These are production-boundary controls, not parser-unit checks: the receipt and tag repeat the
+# same non-canonical spelling so agreement alone cannot make it authoritative.
+malformed_versions=("+9.8.6" "09.8.6" "9. 8.6" "9.8.6-preview.1" "9.8.6+build.1" "9.8.6.1" "9.8")
+malformed_index=0
+for malformed_version in "${malformed_versions[@]}"; do
+  malformed_index=$((malformed_index + 1))
+  malformed_receipt="$WORK/malformed-version-$malformed_index.json"
+  malformed_log="$WORK/malformed-version-$malformed_index.log"
+  jq --arg version "$malformed_version" '.version = $version' "$WORK/previous-stable.json" > "$malformed_receipt"
+  if python3 "$TOOL" predecessor --channel "$malformed_receipt" \
+    --release-tag "coherent-set/v$malformed_version" \
+    --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >"$malformed_log" 2>&1; then
+    echo "expected non-canonical stable version '$malformed_version' to fail closed" >&2; exit 1
+  fi
+  grep -F "canonical stable SemVer triple" "$malformed_log" >/dev/null
+done
+# prepare reads and validates this authority before it can enumerate or pack any artifact.
+if python3 "$TOOL" prepare --release-id malformed-before-pack --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+  --previous-channel "$WORK/malformed-version-1.json" --artifact-dir "$WORK/does-not-exist" \
+  --expected-package FS.GG.Coord.Cli --output "$WORK/malformed-manifest.json" \
+  >"$WORK/malformed-prepare.log" 2>&1; then
+  echo "expected prepare to reject a non-canonical predecessor before packing" >&2; exit 1
 fi
+grep -F "canonical stable SemVer triple" "$WORK/malformed-prepare.log" >/dev/null
+test ! -e "$WORK/malformed-manifest.json"
 if python3 "$TOOL" predecessor --channel "$WORK/previous-stable.json" \
   --release-tag coherent-set/v9.8.5 --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null 2>&1; then
   echo "expected a tag/receipt version contradiction to fail closed" >&2; exit 1
@@ -490,6 +511,28 @@ PY
 python3 "$WORK/inverted-predecessor-release-saga.py" assert-reusable \
   --stored "$REPACK/first/release-manifest.json" \
   --candidate "$REPACK/stale-predecessor/release-manifest.json" >/dev/null
+
+# GATE INVERSION (.github#2813 critic repair). Removing the canonical stable SemVer predicate makes
+# the exact +9.8.6 receipt/tag boundary escape again. The focused suite must kill that mutant at its
+# production predecessor command rather than merely exercising an isolated parser.
+if [[ "${RELEASE_SAGA_MUTATION_CHILD:-0}" != 1 ]]; then
+  python3 - "$TOOL" "$WORK/inverted-stable-version-release-saga.py" <<'PY'
+import pathlib, sys
+source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+marker = "if not isinstance(value, str) or STABLE_VERSION.fullmatch(value) is None:"
+assert source.count(marker) == 1, "stable-version inversion marker moved; update tests/release-saga/run.sh"
+pathlib.Path(sys.argv[2]).write_text(source.replace(marker, "if not isinstance(value, str):"), encoding="utf-8")
+PY
+  python3 "$WORK/inverted-stable-version-release-saga.py" predecessor \
+    --channel "$WORK/malformed-version-1.json" --release-tag coherent-set/v+9.8.6 \
+    --tag-source bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null
+  if RELEASE_SAGA_TOOL="$WORK/inverted-stable-version-release-saga.py" RELEASE_SAGA_MUTATION_CHILD=1 \
+    bash "$ROOT/tests/release-saga/run.sh" >"$WORK/stable-version-mutant.log" 2>&1; then
+    echo "canonical stable-version mutant survived the focused suite" >&2; exit 1
+  fi
+  grep -F "expected non-canonical stable version '+9.8.6' to fail closed" \
+    "$WORK/stable-version-mutant.log" >/dev/null
+fi
 
 # Reproduce the live forward-only recovery: registry 0.68.0 is present as a deliberately stale
 # projection, 0.70.0 is a poisoned identity that must remain byte-for-byte unchanged, and only a new

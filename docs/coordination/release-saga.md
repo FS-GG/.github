@@ -9,7 +9,9 @@ truth is the content-addressed `release-manifest.json` attached to `coherent-set
 Run `release-saga-prepare` at the exact merged source SHA. Before build or pack, it finds the latest
 published `coherent-set/v*` release, downloads that release's `stable-channel.json`, and validates the
 receipt's stable version and content identity against the coherent tag and its exact source SHA. That
-live promoted receipt is predecessor authority. A prepared manifest is the immutable identity for the
+live promoted receipt is predecessor authority. Its version must be the canonical stable SemVer triple
+`major.minor.patch`: unsigned decimal components, no multi-digit leading zeroes, whitespace, prerelease,
+build metadata, or extra/missing component. A prepared manifest is the immutable identity for the
 candidate release; `registry/dependencies.yml` is a downstream projection and never selects or validates
 the predecessor. Missing, unreadable, prerelease, malformed, stale, or contradictory receipt state
 refuses before any package bytes or draft release are created.

@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "201dc12c3dbb9fcea3c31247070b0c423e32c2e2bcd5688b5ce3b34d2619fc6f"
+        "value": "48c10f259872c057a8e017bafa0da1a524f0cb1248764c7565503981d2c0e989"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "72268170d2e12918dc75feda0a9db9e8a37e12abedcb1f4941d4cb75bf718d37"
+        "value": "12b35e24290d0d28eb8ab99586f181a670bbcb4651afeecd9d4f4b88f1c7a3dc"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "63b82f7869d3afd2b952075c75ac51eefe8cde0d0ebd065e61dbec24fab4b21b"
+        "value": "a5bbf58d0104a44362720120defe01be3d74bfb7f37a70d7661f376b7f295f17"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "7d07b24862d11dcee46a63c60fb2a6a9de09a6db7b1f101675b53a0cc89b599f"
+        "value": "ab3f432dae2bec802d9f8056c2f2993e372646943875a4b5c40f222531044073"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f2ba19c6d3addb193d6d5c8ee0b9fd85102038c8e3d630093c0c4eb850f87537"
+        "value": "7ab79c20aee5e32f6987322faeeb9827ccac3b80e8b84af6e3bef7a39dc419be"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a84876b8037d181ad2ba4d29640d89e5020ad3126f6b6a6ab3b64b08dd4bb801"
+        "value": "b39d6b1c86ae3c441ea30e1cef144461423b5d7804bf1b08dd76676e7b9c0688"
       }
     }
   ],
@@ -128,8 +128,8 @@
   "requirements": [
     {
       "id": "FR-001",
-      "title": "Before any pack, draft, tag, or publication write, preparation MUST read the latest published coherent-set release\u0027s \u0060stable-channel.json\u0060; validate stable SemVer, content ID, exact source SHA, coherent tag/version agreement, and tag/source agreement; bind both predecessor version and content ID into the candidate manifest; and never use registry metadata to select or validate this identity. (covers AC-001, AC-002)",
-      "text": "Before any pack, draft, tag, or publication write, preparation MUST read the latest published coherent-set release\u0027s \u0060stable-channel.json\u0060; validate stable SemVer, content ID, exact source SHA, coherent tag/version agreement, and tag/source agreement; bind both predecessor version and content ID into the candidate manifest; and never use registry metadata to select or validate this identity. (covers AC-001, AC-002)",
+      "title": "Before any pack, draft, tag, or publication write, preparation MUST read the latest published coherent-set release\u0027s \u0060stable-channel.json\u0060; require its version to be a canonical stable SemVer triple of three unsigned decimal components without multi-digit leading zeroes or any suffix; validate content ID, exact source SHA, coherent tag/version agreement, and tag/source agreement; bind both predecessor version and content ID into the candidate manifest; and never use registry metadata to select or validate this identity. (covers AC-001, AC-002)",
+      "text": "Before any pack, draft, tag, or publication write, preparation MUST read the latest published coherent-set release\u0027s \u0060stable-channel.json\u0060; require its version to be a canonical stable SemVer triple of three unsigned decimal components without multi-digit leading zeroes or any suffix; validate content ID, exact source SHA, coherent tag/version agreement, and tag/source agreement; bind both predecessor version and content ID into the candidate manifest; and never use registry metadata to select or validate this identity. (covers AC-001, AC-002)",
       "acceptanceCriteria": [
         "AC-001",
         "AC-002"
@@ -138,14 +138,15 @@
       "classification": [],
       "source": "work/2813-release-saga-stable-predecessor/spec.md",
       "sourceLocation": {
-        "line": 52,
+        "line": 53,
         "column": 1
       },
       "linkedTaskIds": [
         "T001"
       ],
       "linkedEvidenceIds": [
-        "EV001"
+        "EV001",
+        "EV021"
       ]
     },
     {
@@ -159,7 +160,7 @@
       "classification": [],
       "source": "work/2813-release-saga-stable-predecessor/spec.md",
       "sourceLocation": {
-        "line": 53,
+        "line": 54,
         "column": 1
       },
       "linkedTaskIds": [
@@ -181,7 +182,7 @@
       "classification": [],
       "source": "work/2813-release-saga-stable-predecessor/spec.md",
       "sourceLocation": {
-        "line": 54,
+        "line": 55,
         "column": 1
       },
       "linkedTaskIds": [
@@ -203,7 +204,7 @@
       "classification": [],
       "source": "work/2813-release-saga-stable-predecessor/spec.md",
       "sourceLocation": {
-        "line": 55,
+        "line": 56,
         "column": 1
       },
       "linkedTaskIds": [
@@ -227,7 +228,7 @@
       "acceptanceRefs": [],
       "source": "work/2813-release-saga-stable-predecessor/clarifications.md",
       "sourceLocation": {
-        "line": 34,
+        "line": 38,
         "column": 1
       },
       "linkedTaskIds": [
@@ -246,7 +247,7 @@
       "acceptanceRefs": [],
       "source": "work/2813-release-saga-stable-predecessor/clarifications.md",
       "sourceLocation": {
-        "line": 35,
+        "line": 39,
         "column": 1
       },
       "linkedTaskIds": [
@@ -265,7 +266,7 @@
       "acceptanceRefs": [],
       "source": "work/2813-release-saga-stable-predecessor/clarifications.md",
       "sourceLocation": {
-        "line": 37,
+        "line": 41,
         "column": 1
       },
       "linkedTaskIds": [
@@ -283,11 +284,29 @@
       "acceptanceRefs": [],
       "source": "work/2813-release-saga-stable-predecessor/clarifications.md",
       "sourceLocation": {
-        "line": 39,
+        "line": 43,
         "column": 1
       },
       "linkedTaskIds": [
         "T008"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "Receipt parsing and coherent tag comparison share the receipt\u0027s exact canonical",
+      "decision": "Receipt parsing and coherent tag comparison share the receipt\u0027s exact canonical",
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2813-release-saga-stable-predecessor/clarifications.md",
+      "sourceLocation": {
+        "line": 45,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T021"
       ]
     }
   ],
@@ -295,7 +314,7 @@
     {
       "id": "T001",
       "title": "Implement requirement FR-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -325,7 +344,7 @@
     {
       "id": "T002",
       "title": "Implement requirement FR-002",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -353,7 +372,7 @@
     {
       "id": "T003",
       "title": "Implement requirement FR-003",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -383,7 +402,7 @@
     {
       "id": "T004",
       "title": "Implement requirement FR-004",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -410,7 +429,7 @@
     {
       "id": "T005",
       "title": "Implement clarification decision DEC-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -438,7 +457,7 @@
     {
       "id": "T006",
       "title": "Implement clarification decision DEC-002",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -466,7 +485,7 @@
     {
       "id": "T007",
       "title": "Implement clarification decision DEC-003",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -494,7 +513,7 @@
     {
       "id": "T008",
       "title": "Implement clarification decision DEC-004",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -522,7 +541,7 @@
     {
       "id": "T009",
       "title": "Implement plan decision PD-005",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -551,7 +570,7 @@
     {
       "id": "T010",
       "title": "Update contract surface PC-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -577,7 +596,7 @@
     {
       "id": "T011",
       "title": "Update contract surface PC-002",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -604,7 +623,7 @@
     {
       "id": "T012",
       "title": "Update contract surface PC-003",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -630,7 +649,7 @@
     {
       "id": "T013",
       "title": "Update contract surface PC-004",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -656,7 +675,7 @@
     {
       "id": "T014",
       "title": "Record verification evidence VO-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -686,7 +705,7 @@
     {
       "id": "T015",
       "title": "Record verification evidence VO-002",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -714,7 +733,7 @@
     {
       "id": "T016",
       "title": "Record verification evidence VO-003",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -742,7 +761,7 @@
     {
       "id": "T017",
       "title": "Record verification evidence VO-004",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -770,7 +789,7 @@
     {
       "id": "T018",
       "title": "Record verification evidence VO-005",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -797,7 +816,7 @@
     {
       "id": "T019",
       "title": "Handle migration posture PM-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -824,7 +843,7 @@
     {
       "id": "T020",
       "title": "Refresh generated view impact GV-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -844,6 +863,34 @@
       "source": "work/2813-release-saga-stable-predecessor/tasks.yml",
       "sourceLocation": {
         "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "T021",
+      "title": "Implement clarification decision DEC-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-005"
+      ],
+      "sourceIds": [
+        "DEC-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV021"
+      ],
+      "source": "work/2813-release-saga-stable-predecessor/tasks.yml",
+      "sourceLocation": {
+        "line": 21,
         "column": 1
       }
     }
@@ -1339,6 +1386,32 @@
         "line": 20,
         "column": 1
       }
+    },
+    {
+      "id": "EV021",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T021",
+      "taskRefs": [
+        "T021"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "work/2813-release-saga-stable-predecessor/artifacts/verification.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2813-release-saga-stable-predecessor/evidence.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
     }
   ],
   "generatedViews": [
@@ -1379,7 +1452,7 @@
           "path": "work/2813-release-saga-stable-predecessor/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "201dc12c3dbb9fcea3c31247070b0c423e32c2e2bcd5688b5ce3b34d2619fc6f"
+            "value": "48c10f259872c057a8e017bafa0da1a524f0cb1248764c7565503981d2c0e989"
           },
           "schemaVersion": 1
         },
@@ -1387,7 +1460,7 @@
           "path": "work/2813-release-saga-stable-predecessor/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "72268170d2e12918dc75feda0a9db9e8a37e12abedcb1f4941d4cb75bf718d37"
+            "value": "12b35e24290d0d28eb8ab99586f181a670bbcb4651afeecd9d4f4b88f1c7a3dc"
           },
           "schemaVersion": 1
         },
@@ -1395,7 +1468,7 @@
           "path": "work/2813-release-saga-stable-predecessor/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "63b82f7869d3afd2b952075c75ac51eefe8cde0d0ebd065e61dbec24fab4b21b"
+            "value": "a5bbf58d0104a44362720120defe01be3d74bfb7f37a70d7661f376b7f295f17"
           },
           "schemaVersion": 1
         },
@@ -1403,7 +1476,7 @@
           "path": "work/2813-release-saga-stable-predecessor/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "7d07b24862d11dcee46a63c60fb2a6a9de09a6db7b1f101675b53a0cc89b599f"
+            "value": "ab3f432dae2bec802d9f8056c2f2993e372646943875a4b5c40f222531044073"
           },
           "schemaVersion": 1
         },
@@ -1411,7 +1484,7 @@
           "path": "work/2813-release-saga-stable-predecessor/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "f2ba19c6d3addb193d6d5c8ee0b9fd85102038c8e3d630093c0c4eb850f87537"
+            "value": "7ab79c20aee5e32f6987322faeeb9827ccac3b80e8b84af6e3bef7a39dc419be"
           },
           "schemaVersion": 1
         },
@@ -1419,14 +1492,14 @@
           "path": "work/2813-release-saga-stable-predecessor/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "a84876b8037d181ad2ba4d29640d89e5020ad3126f6b6a6ab3b64b08dd4bb801"
+            "value": "b39d6b1c86ae3c441ea30e1cef144461423b5d7804bf1b08dd76676e7b9c0688"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "cbccb2e6b58783162be0f6667dcb5336470c27080734ee944b4dd302dd6dbfbd"
+        "value": "90ec6c436d0a01a664b569d96ab16bfc31d1ec1ed12812608a26761073be32b6"
       },
       "currency": "current"
     }

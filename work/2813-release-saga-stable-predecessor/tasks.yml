@@ -13,24 +13,24 @@ work:
 sources:
   - label: spec
     path: work/2813-release-saga-stable-predecessor/spec.md
-    digest: f2ba19c6d3addb193d6d5c8ee0b9fd85102038c8e3d630093c0c4eb850f87537
+    digest: 7ab79c20aee5e32f6987322faeeb9827ccac3b80e8b84af6e3bef7a39dc419be
     schemaVersion: 1
   - label: clarifications
     path: work/2813-release-saga-stable-predecessor/clarifications.md
-    digest: 72268170d2e12918dc75feda0a9db9e8a37e12abedcb1f4941d4cb75bf718d37
+    digest: 12b35e24290d0d28eb8ab99586f181a670bbcb4651afeecd9d4f4b88f1c7a3dc
     schemaVersion: 1
   - label: checklist
     path: work/2813-release-saga-stable-predecessor/checklist.md
-    digest: 201dc12c3dbb9fcea3c31247070b0c423e32c2e2bcd5688b5ce3b34d2619fc6f
+    digest: 48c10f259872c057a8e017bafa0da1a524f0cb1248764c7565503981d2c0e989
     schemaVersion: 1
   - label: plan
     path: work/2813-release-saga-stable-predecessor/plan.md
-    digest: 7d07b24862d11dcee46a63c60fb2a6a9de09a6db7b1f101675b53a0cc89b599f
+    digest: ab3f432dae2bec802d9f8056c2f2993e372646943875a4b5c40f222531044073
     schemaVersion: 1
 tasks:
   - id: T001
     title: Implement requirement FR-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-001]
@@ -40,7 +40,7 @@ tasks:
     requiredEvidence: [EV001]
   - id: T002
     title: Implement requirement FR-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-002]
@@ -50,7 +50,7 @@ tasks:
     requiredEvidence: [EV002]
   - id: T003
     title: Implement requirement FR-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-003]
@@ -60,7 +60,7 @@ tasks:
     requiredEvidence: [EV003]
   - id: T004
     title: Implement requirement FR-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-004]
@@ -70,7 +70,7 @@ tasks:
     requiredEvidence: [EV004]
   - id: T005
     title: Implement clarification decision DEC-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -80,7 +80,7 @@ tasks:
     requiredEvidence: [EV005]
   - id: T006
     title: Implement clarification decision DEC-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -90,7 +90,7 @@ tasks:
     requiredEvidence: [EV006]
   - id: T007
     title: Implement clarification decision DEC-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -100,7 +100,7 @@ tasks:
     requiredEvidence: [EV007]
   - id: T008
     title: Implement clarification decision DEC-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -110,7 +110,7 @@ tasks:
     requiredEvidence: [EV008]
   - id: T009
     title: Implement plan decision PD-005
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -120,7 +120,7 @@ tasks:
     requiredEvidence: [EV009]
   - id: T010
     title: Update contract surface PC-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -130,7 +130,7 @@ tasks:
     requiredEvidence: [EV010]
   - id: T011
     title: Update contract surface PC-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -140,7 +140,7 @@ tasks:
     requiredEvidence: [EV011]
   - id: T012
     title: Update contract surface PC-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -150,7 +150,7 @@ tasks:
     requiredEvidence: [EV012]
   - id: T013
     title: Update contract surface PC-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -160,7 +160,7 @@ tasks:
     requiredEvidence: [EV013]
   - id: T014
     title: Record verification evidence VO-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -170,7 +170,7 @@ tasks:
     requiredEvidence: [EV014]
   - id: T015
     title: Record verification evidence VO-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -180,7 +180,7 @@ tasks:
     requiredEvidence: [EV015]
   - id: T016
     title: Record verification evidence VO-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -190,7 +190,7 @@ tasks:
     requiredEvidence: [EV016]
   - id: T017
     title: Record verification evidence VO-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -200,7 +200,7 @@ tasks:
     requiredEvidence: [EV017]
   - id: T018
     title: Record verification evidence VO-005
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -210,7 +210,7 @@ tasks:
     requiredEvidence: [EV018]
   - id: T019
     title: Handle migration posture PM-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -220,7 +220,7 @@ tasks:
     requiredEvidence: [EV019]
   - id: T020
     title: Refresh generated view impact GV-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -228,6 +228,16 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV020]
+  - id: T021
+    title: Implement clarification decision DEC-005
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-005]
+    sourceIds: [DEC-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV021]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

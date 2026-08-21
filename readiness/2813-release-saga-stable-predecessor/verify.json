@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "d1cc22708e9252a4d5d0130c47441dfa75d046252d0735f1cafea9c5e93d7c58"
+        "value": "5924e38524f25b15c776b38b01e177484b5a5b1096414c8e92ecd7a3d630d89f"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "627564fb750b853450bf712260dde9a35eb6228730c205da624693c36db418a4"
+        "value": "4ccfbd277ddf8f9070c518acd8a78bbf4728ba484c03d631d208c8f93cf0f518"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "201dc12c3dbb9fcea3c31247070b0c423e32c2e2bcd5688b5ce3b34d2619fc6f"
+        "value": "48c10f259872c057a8e017bafa0da1a524f0cb1248764c7565503981d2c0e989"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "72268170d2e12918dc75feda0a9db9e8a37e12abedcb1f4941d4cb75bf718d37"
+        "value": "12b35e24290d0d28eb8ab99586f181a670bbcb4651afeecd9d4f4b88f1c7a3dc"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "43e269ade5253a89250d01faad6edc9e772abac37f2f7dcfa0fd91f2af1f7665"
+        "value": "06fac52ef9c5beaf4330257b79a945450d48679cbd65cbb5109b5c26e6440bdf"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "7d07b24862d11dcee46a63c60fb2a6a9de09a6db7b1f101675b53a0cc89b599f"
+        "value": "ab3f432dae2bec802d9f8056c2f2993e372646943875a4b5c40f222531044073"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "f2ba19c6d3addb193d6d5c8ee0b9fd85102038c8e3d630093c0c4eb850f87537"
+        "value": "7ab79c20aee5e32f6987322faeeb9827ccac3b80e8b84af6e3bef7a39dc419be"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "a84876b8037d181ad2ba4d29640d89e5020ad3126f6b6a6ab3b64b08dd4bb801"
+        "value": "b39d6b1c86ae3c441ea30e1cef144461423b5d7804bf1b08dd76676e7b9c0688"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -151,8 +151,8 @@
     ]
   },
   "taskGraph": {
-    "taskCount": 20,
-    "dependencyCount": 16,
+    "taskCount": 21,
+    "dependencyCount": 17,
     "dependenciesValid": true,
     "statusesValid": true,
     "findingIds": []
@@ -610,6 +610,27 @@
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
+    },
+    {
+      "id": "ED-EV021",
+      "obligationId": "EV021",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV021"
+      ],
+      "affectedTaskIds": [
+        "T021"
+      ],
+      "affectedSourceIds": [
+        "DEC-005"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
     }
   ],
   "testDispositions": [
@@ -960,6 +981,23 @@
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
+    },
+    {
+      "id": "TD-EV021",
+      "obligationId": "EV021",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV021"
+      ],
+      "affectedTaskIds": [
+        "T021"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
     }
   ],
   "skillVisibility": [
@@ -1004,7 +1042,8 @@
         "T010",
         "T011",
         "T012",
-        "T013"
+        "T013",
+        "T021"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
@@ -1023,7 +1062,8 @@
         "T006",
         "T007",
         "T008",
-        "T009"
+        "T009",
+        "T021"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2813-release-saga-stable-predecessor/tasks.yml",
@@ -1069,24 +1109,10 @@
       "path": "readiness/2813-release-saga-stable-predecessor/work-model.json",
       "kind": "workModel",
       "currency": "current",
-      "diagnosticIds": [
-        "staleGeneratedView"
-      ]
+      "diagnosticIds": []
     }
   ],
-  "findings": [
-    {
-      "id": "VF001",
-      "severity": "warning",
-      "category": "warning",
-      "path": "readiness/2813-release-saga-stable-predecessor/work-model.json",
-      "relatedIds": [
-        "readiness/2813-release-saga-stable-predecessor/work-model.json"
-      ],
-      "message": "Generated view \u0027readiness/2813-release-saga-stable-predecessor/work-model.json\u0027 is stale.",
-      "correction": "Regenerate readiness/\u003Cid\u003E/work-model.json from current lifecycle sources."
-    }
-  ],
+  "findings": [],
   "governanceCompatibility": [
     {
       "path": ".fsgg/policy.yml",
@@ -1110,18 +1136,7 @@
       "diagnosticIds": []
     }
   ],
-  "diagnostics": [
-    {
-      "id": "staleGeneratedView",
-      "severity": "warning",
-      "artifact": "readiness/2813-release-saga-stable-predecessor/work-model.json",
-      "message": "Generated view \u0027readiness/2813-release-saga-stable-predecessor/work-model.json\u0027 is stale.",
-      "correction": "Regenerate readiness/\u003Cid\u003E/work-model.json from current lifecycle sources.",
-      "relatedIds": [
-        "readiness/2813-release-saga-stable-predecessor/work-model.json"
-      ]
-    }
-  ],
+  "diagnostics": [],
   "readiness": "verificationReady",
   "nextAction": {
     "actionId": "verify.next.ship",
