@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2794-coord-engine-release/ship.json",
-      "digest": "sha256:a4db168b6255a3586af76c47f2e54d5ca01ccbc3445f257a5e01f41857567d71",
+      "digest": "sha256:6eb45755baefe00666e3f8e17813910f9beca261af1296d7fb7df9d32b48e3ab",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2794-coord-engine-release/verify.json",
-      "digest": "sha256:02677dba9e4044b95a18175f30ca3b7db8ae01ce7ca4f827d6dbe2d1099807b7",
+      "digest": "sha256:3542d2ca97e308a0fb489b49fbf118e106f14a4164c293dae39a28f06e6889df",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2794-coord-engine-release/work-model.json",
-      "digest": "sha256:b308d575f683e969373f7be992c0a1010f7ee60d7058f1f208ab9ed646165e77",
+      "digest": "sha256:2a9ce933e730adc1de61c0c2c03aeca594bb325f7f062a9e1cb591c10591ae54",
       "schemaVersion": 1
     }
   ],
@@ -24,68 +24,68 @@
     "nodes": [
       {
         "id": "evidence:EV001",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "FR-001 is complete at the prepared-source boundary: freshness measured exactly three merged engine commits after 0.67.0, zero Protocol.fs commits, and no unmerged #2772 bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence."
       },
       {
         "id": "evidence:EV002",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "FR-002 cannot execute before this prepared source merges: tags must identify the immutable merge and the release saga must then publish the once-packed payloads to both feeds before promotion. No tag, feed, or manifest success is claimed by the ReviewWait TRX."
       },
       {
         "id": "evidence:EV003",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "FR-003 requires an independently downloaded public 0.68.0 tool. The local source-pack install reports 0.68.0.0 and focused source tests pass, but it is deliberately not substituted for nuget.org consumption or the installed #2797 route."
       },
       {
         "id": "evidence:EV004",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports three unreleased commits."
       },
       {
         "id": "evidence:EV005",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "DEC-001\u0027s 0.68.0 classification is directly supported by freshness, version/coherent-set gates, and the release-note mismatch inversion, but those checks do not emit one durable observed-run receipt for this decision."
       },
       {
         "id": "evidence:EV006",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "DEC-002\u0027s prepared-source boundary is satisfied through the current frozen PR and excludes unmerged #2772, but its immutable merge/tag half necessarily remains after merge."
       },
       {
         "id": "evidence:EV007",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "DEC-003 is an unexecuted release transaction by design. The prepared source names release-saga/1, but no prepare/tag/publisher/promotion event is claimed before the source merge exists."
       },
       {
         "id": "evidence:EV008",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "DEC-004 identifies manifest/journal/feed/install facts as acceptance authority; none exist for 0.68.0 yet. Hosted source CI and a local source-pack install are diagnostics, not substitutes for those future immutable facts."
       },
       {
         "id": "evidence:EV009",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "DEC-005\u0027s source behavior preflight passed (ReviewWait 19/19, ReviewApplication 7/7, and hosted #2797 E2E 166/166), but the decision explicitly requires the installed public 0.68.0 tool; that final leg is outstanding."
       },
       {
         "id": "evidence:EV010",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "PC-001\u0027s three projects evaluate to 0.68.0 and release-note/version gates pass, but those direct checks are not the ReviewWait TRX previously attached here. Publication must still prove that the package contract\u0027s served bytes use this scalar."
       },
       {
         "id": "evidence:EV011",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "VO-001 intentionally spans pre-merge and post-merge gates. Its pre-merge release/version/focused-test/pack/install/inversion checks passed, while promotion, both-feed identity, public install, registry gates, and clear freshness remain unexecuted."
       },
       {
         "id": "evidence:EV012",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "PM-001 is a documented additive migration posture rather than a test-run subject. S.I.R. remains deliberately blocked on the future 0.68.0 public install, so no receiver migration is claimed complete."
       },
       {
         "id": "evidence:EV013",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "GV-001 is a generated-view currency subject, not ReviewWait behavior. The SDD generator establishes current pre-merge readiness views; final registry projections cannot be generated until promoted release facts exist."
       },
       {
         "id": "task:T001",

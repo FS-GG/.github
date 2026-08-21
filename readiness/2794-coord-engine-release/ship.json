@@ -51,7 +51,7 @@
       "kind": "source",
       "digest": {
         "algorithm": "sha256",
-        "value": "02677dba9e4044b95a18175f30ca3b7db8ae01ce7ca4f827d6dbe2d1099807b7"
+        "value": "3542d2ca97e308a0fb489b49fbf118e106f14a4164c293dae39a28f06e6889df"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "b308d575f683e969373f7be992c0a1010f7ee60d7058f1f208ab9ed646165e77"
+        "value": "2a9ce933e730adc1de61c0c2c03aeca594bb325f7f062a9e1cb591c10591ae54"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "108ef570f1e9b20fe0fe3c618367edd2ec53673f614e4ff5f7d4a9d06d557fbf"
+        "value": "645c19cf3fca1961dddd212fe7881e23ccf1f733b5d1fced9e393419ada32ef5"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -167,10 +167,10 @@
   "verificationReadiness": {
     "status": "verificationReady",
     "blockingFindingIds": [],
-    "evidenceSupportedCount": 13,
+    "evidenceSupportedCount": 0,
     "evidenceSelfAttestedCount": 0,
-    "evidenceObservedCount": 13,
-    "evidenceDeferredCount": 0,
+    "evidenceObservedCount": 0,
+    "evidenceDeferredCount": 13,
     "evidenceMissingCount": 0,
     "evidenceStaleCount": 0,
     "evidenceSyntheticCount": 0,
@@ -180,105 +180,105 @@
     {
       "id": "ED-EV001",
       "obligationId": "EV001",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV002",
       "obligationId": "EV002",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV003",
       "obligationId": "EV003",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV004",
       "obligationId": "EV004",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV005",
       "obligationId": "EV005",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV006",
       "obligationId": "EV006",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV007",
       "obligationId": "EV007",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV008",
       "obligationId": "EV008",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV009",
       "obligationId": "EV009",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV010",
       "obligationId": "EV010",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV011",
       "obligationId": "EV011",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV012",
       "obligationId": "EV012",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     },
     {
       "id": "ED-EV013",
       "obligationId": "EV013",
-      "state": "supported",
-      "observed": true,
-      "severity": "ready",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
       "diagnosticIds": []
     }
   ],
