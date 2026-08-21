@@ -209,6 +209,27 @@ module Writes =
         /// because a lock can be destroyed on executions that never reach here.
         | Stolen of held: Held * from: WorkerId list * collected: WorkerId list
 
+        /// The replacement marker was posted before destructive cleanup began, but deleting one incumbent
+        /// failed. `replacement` remains on the item; `removed` names only deletions observed successful;
+        /// `failed`/`failedMarkerId` name the marker that still stands. Re-running `claim --force` with the
+        /// same identity reconciles this deterministic two-marker state instead of posting another marker.
+        | CleanupRequired of replacement: Held * removed: WorkerId list * failed: WorkerId * failedMarkerId: int64 * reason: string
+
+        /// Incumbent cleanup completed, but the complete post-operation census could not be read. The
+        /// replacement is deliberately retained: withdrawing it after destructive cleanup could create the
+        /// zero-marker state this transition forbids. Retry is authorized only to re-read/reconcile.
+        | PostStateUnreadable of replacement: Held * removed: WorkerId list * reason: string
+
+        /// The post-operation census is complete, the replacement marker is absent, and a foreign live
+        /// holder remains authoritative. The caller may report that the old holder stands; it may not infer
+        /// that retry is safe merely from a transport error.
+        | OldHolderStands of replacementMarkerId: int64 * holder: WorkerId * holderMarkerId: int64 * removed: WorkerId list
+
+        /// The complete post-census was readable and contained no live marker, including no replacement.
+        /// This is an observed anomaly rather than an ordinary loss; the marker id names the capability that
+        /// vanished so the caller can report the exact failed transition.
+        | NoHolderRemaining of replacementMarkerId: int64 * removed: WorkerId list
+
         /// Another worker holds it, and their lock is live. Their id, so the worker can `say` to them.
         ///
         /// Under `StealLiveHolder` this outcome still happens — it just means a DIFFERENT thing: not "the
@@ -273,23 +294,19 @@ module Writes =
     /// claim is the hottest path on the scarcest budget in the org (#418), so paying this read on every
     /// losing attempt would be the exact regression #481 is careful not to introduce.
     /// `force` decides ONE arm of the match below — the one where another worker's marker is live. Under
-    /// `StealLiveHolder` that arm evicts every live foreign marker and then runs the protocol above
-    /// UNCHANGED, so a steal is not a second lock protocol racing the first: it clears the way, posts, and
-    /// is resolved by the same comment order as everybody else. A worker that arrives between the eviction
-    /// and our post can still win, and should.
+    /// `StealLiveHolder` posts a replacement before deleting foreign live markers, then runs the unchanged
+    /// comment-order election. A failed post leaves the incumbent untouched; a failed cleanup retains the
+    /// replacement; a retry reuses it rather than posting marker debris. Force grants no election priority.
     ///
-    /// `onEvict` is called with the workers whose LIVE claim was just deleted, the moment it is deleted and
-    /// BEFORE the marker post that may fail — a thunk for `readPreviousStatus`'s reason (the caller owns the
-    /// courtesy; this function owns the lock). It is never called on the ordinary path, and never with an
-    /// empty list.
+    /// `onEvict` is called with exactly the workers whose LIVE marker deletion was confirmed, after the
+    /// replacement post and before the final election result. It is never called on the ordinary path, and
+    /// never with an empty list.
     ///
     /// **IT IS NOT THE SAME EVENT AS THE `Stolen` OUTCOME, AND THAT IS THE POINT.** `Stolen` says "we
     /// evicted somebody AND got the item"; `onEvict` says "somebody's live lock is gone", which is true of
-    /// strictly more executions — the post can fail, the re-read can fail, a newcomer can win the open race,
-    /// and each of those returns `Lost`/`Undecided`/`Error` over an item whose holder has already been
-    /// deleted. Announcing only on `Stolen` would leave that worker uninformed in exactly the cases where it
-    /// most needs to stop, and its next `heartbeat` would find the empty item and report an EXPIRED LEASE —
-    /// a lock destroyed silently, and then misdescribed.
+    /// strictly more executions — cleanup can stop after one of several deletions, the post-census can be
+    /// unreadable, or a newcomer can win. A replacement-post failure invokes no callback because no
+    /// incumbent was touched.
     val claimScoped:
         transport: IGitHubTransport ->
         leaseMinutes: int ->

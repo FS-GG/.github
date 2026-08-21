@@ -697,8 +697,8 @@ let ``#1620 --force TAKES a live claim held by another worker, and names who it 
     let transport =
         scripted
             [ ok (comments [ marker 901 "kite-461" "" ]) // 1. read: kite-461 holds a LIVE lock
-              ok "" // 2. EVICT: delete their marker
-              ok """{"id":902}""" // 3. post ours
+              ok """{"id":902}""" // 2. post replacement
+              ok "" // 3. evict their marker
               ok (comments [ marker 902 "vole-418" "" ]) ] // 4. re-read: the way is clear, we win
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
@@ -764,22 +764,57 @@ let ``#1620 a steal does NOT override an UNPARSEABLE marker - a lock held by nob
     Assert.Equal(0, transport.Count "comment-post")
 
 [<Fact>]
-let ``#1620 an eviction we could NOT complete takes nothing, and never posts our marker`` () =
-    // THE ONE ORDERING RULE OF THE STEAL. Posting our marker over a marker we could not delete is two live
-    // locks on one item — the exact thing the CAS exists to prevent, introduced by the recovery tool. So a
-    // failed DELETE stops the whole operation: their lock stands, and we say so.
+let ``#2772 failed cleanup retains the posted replacement and reports the standing incumbent`` () =
+    // The replacement is posted before cleanup. A failed DELETE response is classified only after this
+    // complete census proves both markers remain and the older incumbent is still authoritative.
     let transport =
         scripted
             [ ok (comments [ marker 901 "kite-461" "" ])
-              Error(Http(500, "delete failed")) ]
+              ok """{"id":902}"""
+              Error(Http(500, "delete failed"))
+              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
-    | Error(Transport detail) ->
-        Assert.Contains("could not evict", detail)
-        Assert.Contains("STANDS", detail)
-    | other -> failwith $"a failed eviction must take nothing — got %A{other}"
+    | Ok(CleanupRequired(replacement, removed, failed, failedMarkerId, reason)) ->
+        Assert.Equal(902L, replacement.MarkerId)
+        Assert.Empty removed
+        Assert.Equal(them, failed)
+        Assert.Equal(901L, failedMarkerId)
+        Assert.Contains("delete failed", reason)
+    | other -> failwith $"failed cleanup must retain the replacement — got %A{other}"
 
+    Assert.Equal(1, transport.Count "comment-post")
+
+[<Fact>]
+let ``#2772 retry reuses the retained replacement and completes cleanup without posting debris`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
+              ok ""
+              ok (comments [ marker 902 "vole-418" "" ]) ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(Stolen(replacement, removed, _)) ->
+        Assert.Equal(902L, replacement.MarkerId)
+        Assert.Equal<WorkerId list>([ them ], removed)
+    | other -> failwith $"retry must reconcile the retained replacement — got %A{other}"
     Assert.Equal(0, transport.Count "comment-post")
+
+[<Fact>]
+let ``#2772 an ambiguous DELETE response is resolved from the complete census before classification`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" "" ])
+              ok """{"id":902}"""
+              Error(Http(503, "response lost"))
+              ok (comments [ marker 902 "vole-418" "" ])
+              ok (comments [ marker 902 "vole-418" "" ]) ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(Stolen(replacement, removed, _)) ->
+        Assert.Equal(902L, replacement.MarkerId)
+        Assert.Equal<WorkerId list>([ them ], removed)
+    | other -> failwith $"complete census must settle ambiguous delete — got %A{other}"
 
 [<Fact>]
 let ``#1620 a steal that loses the FRESH race backs off cleanly - it does not force its way past`` () =
@@ -789,8 +824,8 @@ let ``#1620 a steal that loses the FRESH race backs off cleanly - it does not fo
     let transport =
         scripted
             [ ok (comments [ marker 901 "kite-461" "" ]) // 1. read: kite-461 holds it
-              ok "" // 2. evict 901
-              ok """{"id":903}""" // 3. post ours
+              ok """{"id":903}""" // 2. post ours
+              ok "" // 3. evict 901
               ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // 4. a newcomer beat us
               ok "" ] // 5. withdraw ours
 
@@ -808,8 +843,8 @@ let ``#1620 a steal still COLLECTS stale debris, and reports it apart from who i
     let transport =
         scripted
             [ ok (comments [ marker 901 "kite-461" ""; staleClaimJson 700 "ghost-111" "" ]) // live holder + stale debris
-              ok "" // evict the LIVE marker 901
               ok """{"id":902}"""
+              ok "" // evict the LIVE marker 901
               ok (comments [ staleClaimJson 700 "ghost-111" ""; marker 902 "vole-418" "" ])
               ok "" ] // collect the stale 700
 
@@ -826,27 +861,24 @@ let ``#1620 a steal still COLLECTS stale debris, and reports it apart from who i
 // The eviction and the acquisition are two events, and only the first destroys anything. Reporting the
 // theft through the `Stolen` OUTCOME alone would report it only when both succeeded — leaving the worker
 // whose live lock we deleted uninformed on exactly the executions where the deletion bought us nothing.
-// Their next `heartbeat` would then read an item with no marker and tell them their LEASE EXPIRED, which
-// is a lock destroyed silently and then misdescribed. `onEvict` fires between the delete and the post, so
-// every execution that took a lock says so.
+// Replacement POST happens first. Confirmed deletions are announced even if final election later fails;
+// a failed POST touches no incumbent and announces no theft.
 
 [<Fact>]
-let ``#1620 a steal whose POST fails still announces the eviction - the lock is already gone`` () =
+let ``#2772 a replacement POST failure leaves the incumbent standing and announces no eviction`` () =
     let evicted = ResizeArray<WorkerId>()
 
     let transport =
         scripted
             [ ok (comments [ marker 901 "kite-461" "" ]) // read: kite-461 holds it
-              ok "" // EVICT — their lock is destroyed HERE
-              Error(Http(500, "post failed")) ] // and the post fails, so no `Stolen` is ever returned
+              Error(Http(500, "post failed")) ]
 
     match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
     | Error _ -> ()
     | other -> failwith $"a failed post after an eviction is an error — got %A{other}"
 
-    // THE ASSERTION. Before this callback existed, this list was empty and kite-461 was never told that
-    // the lock it was working behind had been deleted.
-    Assert.Equal<WorkerId list>([ them ], List.ofSeq evicted)
+    Assert.Empty evicted
+    Assert.Equal(0, transport.Count "comment-delete")
 
 [<Fact>]
 let ``#1620 a steal that LOSES the fresh race still announces the eviction it performed`` () =
@@ -857,8 +889,8 @@ let ``#1620 a steal that LOSES the fresh race still announces the eviction it pe
     let transport =
         scripted
             [ ok (comments [ marker 901 "kite-461" "" ])
-              ok "" // evict 901
               ok """{"id":903}"""
+              ok "" // evict 901
               ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // a newcomer beat us
               ok "" ] // withdraw ours
 

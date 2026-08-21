@@ -5889,7 +5889,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         let mutable displaced: WorkerId list = []
 
                         let announceTheft (victims: WorkerId list) =
-                            displaced <- victims
+                            displaced <- displaced @ victims
 
                             for victim in victims do
                                 match opts.Render with
@@ -5901,7 +5901,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     (WorkerId w.Id)
                                     victim
                                     ref
-                                    $"worker '%s{w.Id}' has TAKEN %s{ref.Short} from you with `claim --force` — your claim was live and its marker has been deleted. STOP working this item: you no longer hold it, `heartbeat` will refuse, and anything you push against it now races a second worker. If this was wrong, say so here."
+                                    $"worker '%s{w.Id}' began an interruption-safe `claim --force` transition on %s{ref.Short} — your live marker was deleted only after a replacement marker was posted. STOP working this item: you no longer hold it, and the replacement is being resolved by the existing comment-order election. If this was wrong, say so here."
                                 |> ignore
 
                         match
@@ -5941,6 +5941,27 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // steal as a steal so a scripted caller can tell it from an ordinary win.
                             announceCollected collected
                             emitClaimReceipt "stolen" held (setClaimLifecycle held)
+                        | Ok(Writes.CleanupRequired(replacement, removed, failed, failedMarkerId, reason)) ->
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} forced-claim cleanup is INCOMPLETE: replacement marker %d{replacement.MarkerId} was posted before eviction; %d{List.length removed} live marker(s) were removed, but worker '%s{failed.Value}' marker %d{failedMarkerId} still stands (%s{reason})."
+                            eprint
+                                $"  The item is not unclaimed: comment-order still makes the older surviving marker authoritative. Re-run this same `claim %s{ref.Short} --force` as worker '%s{w.Id}' to reuse replacement marker %d{replacement.MarkerId} and reconcile cleanup; do not infer retry authority from the exit code alone."
+                            ExitRed
+                        | Ok(Writes.PostStateUnreadable(replacement, removed, reason)) ->
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} forced-claim post-state is UNREADABLE after replacement marker %d{replacement.MarkerId} was posted and %d{List.length removed} incumbent marker(s) were removed (%s{reason}). The replacement was retained so cleanup cannot create a zero-marker row."
+                            eprint
+                                $"  Re-run this same `claim %s{ref.Short} --force` as worker '%s{w.Id}' only to re-read/reconcile the retained replacement; no ownership verdict was reached."
+                            ExitNoVerdict
+                        | Ok(Writes.OldHolderStands(replacementMarkerId, holder, holderMarkerId, removed)) ->
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} forced-claim replacement marker %d{replacementMarkerId} is absent in the complete post-state census; worker '%s{holder.Value}' marker %d{holderMarkerId} remains authoritative after %d{List.length removed} observed removal(s). The OLD HOLDER STANDS."
+                            eprint "  Nothing in this result authorizes retry; inspect the live marker census before another mutation."
+                            ExitRed
+                        | Ok(Writes.NoHolderRemaining(replacementMarkerId, removed)) ->
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} forced-claim post-state was readable but NO live marker remained: replacement marker %d{replacementMarkerId} vanished after %d{List.length removed} incumbent marker(s) were removed. This is not an ordinary loss and retry is not authorized by this result."
+                            ExitRed
                         | Ok(Writes.Renewed(held, collected)) ->
                             // A live marker already ours — the claim RENEWED it in place rather than posting a
                             // second (a `take` retry, or a worker beating its own lease). Any stale debris it
