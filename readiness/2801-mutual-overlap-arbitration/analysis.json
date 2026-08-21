@@ -4,7 +4,7 @@
   "workId": "2801-mutual-overlap-arbitration",
   "stage": "analyze",
   "status": "implementationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -41,7 +41,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "f975e64cdb78d3e9e62945d5f9292b2e8c1ac4c462386062f26762d7ad7661fe"
+        "value": "ccfeb3e86c4300a094c4d3ea100f3bb57c1a5e8381296b3407d722583d48529c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "4a1a4493d365c0797a04e9e171d20ed83a845b34a1d995f5b2612324c62a1c36"
+        "value": "d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "7c99575ae8d9be6ba0769c5707cfa0dc239974b3841d9d44368836bcf8dd8b45"
+        "value": "d4582bbcb260416c7e2278d10d32b9fe18acff7b3ad3d2c915e86ecc459d4906"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "87d4eabcd6dfefd3770fbef5153a4d33cfc15dda9465807aac23b0e7337d3e01"
+        "value": "4a858708b0c8636b9a3377fa6cc805433ca995b9b4227284b7f2a6ba11d4283c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "e41bc24439cbe67198440c8af6998ff545e7e48afc5214dce904ff7212a2cfd1"
+        "value": "c108a3de608c8cd35e6a611c2b3bf3a5bea12574a93ae2cf58a8df75b1d38e4c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -161,6 +161,16 @@
     {
       "id": "AR008",
       "sourcePath": "work/2801-mutual-overlap-arbitration/clarifications.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "DEC-005",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/clarifications.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/plan.md",
       "sourceId": null,
       "targetId": null,
@@ -169,7 +179,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR009",
+      "id": "AR010",
       "sourcePath": "work/2801-mutual-overlap-arbitration/clarifications.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": null,
@@ -179,7 +189,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR010",
+      "id": "AR011",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PC-001",
@@ -189,7 +199,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR012",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PC-002",
@@ -199,7 +209,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR013",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "PC-003",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "GV-001",
@@ -209,7 +229,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR015",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PM-001",
@@ -219,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR016",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-001",
@@ -229,7 +249,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR017",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-002",
@@ -239,7 +259,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR018",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-003",
@@ -249,7 +269,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR019",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-004",
@@ -259,7 +279,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR020",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-005",
@@ -269,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR021",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-006",
@@ -279,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR022",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-007",
@@ -289,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR023",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-008",
@@ -299,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR024",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "PD-009",
@@ -309,7 +329,27 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR025",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "PD-010",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "PD-011",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR027",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": null,
@@ -319,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR028",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "VO-001",
@@ -329,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR029",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "VO-002",
@@ -339,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR030",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "VO-003",
@@ -349,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR031",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "VO-004",
@@ -359,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR032",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "VO-005",
@@ -369,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR033",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "VO-006",
@@ -379,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR034",
       "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "VO-007",
@@ -389,7 +429,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR035",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/plan.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "VO-008",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR036",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "AC-001",
@@ -399,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR037",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "AC-002",
@@ -409,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR038",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "AC-003",
@@ -419,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR039",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "AC-004",
@@ -429,7 +479,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR040",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "AC-005",
@@ -439,7 +489,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR041",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "AC-006",
@@ -449,7 +499,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR042",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "AC-007",
@@ -459,7 +509,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR043",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "AC-008",
@@ -469,7 +519,57 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR039",
+      "id": "AR044",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "AC-009",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR045",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "AC-010",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR046",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "AC-011",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR047",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "AC-012",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR048",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "AC-013",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR049",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/checklist.md",
       "sourceId": null,
@@ -479,7 +579,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR040",
+      "id": "AR050",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/plan.md",
       "sourceId": null,
@@ -489,7 +589,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR041",
+      "id": "AR051",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-001",
@@ -499,7 +599,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR042",
+      "id": "AR052",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-002",
@@ -509,7 +609,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR043",
+      "id": "AR053",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-003",
@@ -519,7 +619,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR044",
+      "id": "AR054",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-004",
@@ -529,7 +629,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR045",
+      "id": "AR055",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-005",
@@ -539,7 +639,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR046",
+      "id": "AR056",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-006",
@@ -549,7 +649,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR047",
+      "id": "AR057",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-007",
@@ -559,7 +659,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR048",
+      "id": "AR058",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-008",
@@ -569,7 +669,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR049",
+      "id": "AR059",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "FR-009",
@@ -579,7 +679,27 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR050",
+      "id": "AR060",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "FR-010",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR061",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "FR-011",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR062",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/clarifications.md",
       "sourceId": null,
@@ -589,7 +709,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR051",
+      "id": "AR063",
       "sourcePath": "work/2801-mutual-overlap-arbitration/spec.md",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": null,
@@ -599,7 +719,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR052",
+      "id": "AR064",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T010",
@@ -609,7 +729,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR053",
+      "id": "AR065",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T011",
@@ -619,7 +739,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR054",
+      "id": "AR066",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T012",
@@ -629,7 +749,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR055",
+      "id": "AR067",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T013",
@@ -639,7 +759,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR056",
+      "id": "AR068",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T014",
@@ -649,7 +769,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR057",
+      "id": "AR069",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T015",
@@ -659,7 +779,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR058",
+      "id": "AR070",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T016",
@@ -669,7 +789,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR059",
+      "id": "AR071",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T017",
@@ -679,7 +799,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR060",
+      "id": "AR072",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T018",
@@ -689,7 +809,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR061",
+      "id": "AR073",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T019",
@@ -699,7 +819,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR062",
+      "id": "AR074",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T020",
@@ -709,7 +829,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR063",
+      "id": "AR075",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T021",
@@ -719,7 +839,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR064",
+      "id": "AR076",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T022",
@@ -729,7 +849,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR065",
+      "id": "AR077",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T023",
@@ -739,10 +859,40 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR066",
+      "id": "AR078",
       "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
       "sourceId": "T024",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR079",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "T027",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR080",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "T028",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR081",
+      "sourcePath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "targetPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceId": "T029",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -751,7 +901,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 66,
+    "readyCount": 81,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,

@@ -933,11 +933,45 @@ module Client =
           ReviewRequired: bool
           ExactHeadReviewed: bool }
 
+    type BoardOrchestratorLease =
+        { Board: string
+          HolderRepo: string
+          Holder: string
+          Generation: int64
+          ExpiresAtUnix: int64
+          CommentId: int64
+          Digest: string }
+
+    type BoardOrchestratorRequest =
+        { Board: string
+          RequestingRepo: string
+          RequestKey: string
+          CoordinationRef: FS.GG.Coord.Types.Ref
+          LeaseGeneration: int64
+          CommentId: int64
+          Digest: string }
+
+    type BoardOrchestratorSnapshot =
+        { Readable: bool
+          NowUnix: int64
+          Board: string
+          Leases: BoardOrchestratorLease list
+          Requests: BoardOrchestratorRequest list }
+
+    type BoardOrchestratorDecision =
+        | RouteRequestTo of BoardOrchestratorLease
+        | RunBoardOrchestrator of lease: BoardOrchestratorLease * highestPriority: BoardOrchestratorRequest option
+        | AcquireBoardOrchestrator of generation: int64
+        | BoardOrchestratorRefused of reason: string
+
     val waitReceiptDigest: receipt: OverlapWaitReceipt -> string
     val detectMutualOverlap: snapshot: MutualOverlapSnapshot -> MutualOverlapVerdict
     val precedenceReceiptDigest: receipt: OverlapPrecedenceReceipt -> string
     val validateOverlapPrecedence: cycle: MutualOverlapCycle -> receipts: OverlapPrecedenceReceipt list -> Result<OverlapPrecedenceReceipt, string>
     val validateLoserResume: facts: LoserResumeFacts -> string list
+    val boardOrchestratorLeaseDigest: lease: BoardOrchestratorLease -> string
+    val boardOrchestratorRequestDigest: request: BoardOrchestratorRequest -> string
+    val decideBoardOrchestrator: requesterRepo: string -> holder: string -> snapshot: BoardOrchestratorSnapshot -> BoardOrchestratorDecision
 
     /// #353 — DOES THIS ITEM'S TOUCH-SET COLLIDE WITH ANOTHER'S, and NOTHING outside its own repo counts.
     ///

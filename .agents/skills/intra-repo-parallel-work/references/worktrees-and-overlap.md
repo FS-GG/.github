@@ -3,6 +3,20 @@
 Start from fetched `origin/main`; never share a mutable checkout between workers. A worktree is
 disposable isolation, not ownership—the claim marker owns the item.
 
+There is one authoritative Coordination-board orchestrator at a time. Before an orchestrator in an
+external repository starts or routes a Coordination fix, use the production orchestrator route against
+the board authority: `overlap orchestrate <authority-ref> <requesting-repo> <idempotence-key>
+<coordination-ref> <holder>`. Every board driver uses the same configured authority ref. If a live
+generation exists, the external orchestrator must durably route one
+generation-bound, idempotent blocking request to that holder and must not start a competing
+Coordination implementation or orchestration lane. The board orchestrator preserves in-flight safety,
+then promotes that request ahead of ordinary board work to minimize the external repository's wait. If
+the complete authority census proves no live generation exists, the external orchestrator acquires the
+next immutable generation and runs the standard board protocol itself. Unreadable/conflicting leases,
+stale-generation requests, and acquisition races fail closed; takeover is permitted only after absence
+or expiry, and the lowest GitHub comment id wins a same-generation race while losers withdraw only
+their own candidates.
+
 Treat touch-set tokens as the scheduler does. `none` is an intentional file-less item; missing or
 unmatchable declarations are not equivalent. Before adding a path, run `widen` or `set-paths`; the
 engine performs the live overlap check and notifies affected holders. A transient collision should be

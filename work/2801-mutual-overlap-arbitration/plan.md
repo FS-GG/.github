@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2801-mutual-overlap-arbitration/spec.md sha256:87d4eabcd6dfefd3770fbef5153a4d33cfc15dda9465807aac23b0e7337d3e01 schemaVersion:1
-- clarifications: work/2801-mutual-overlap-arbitration/clarifications.md sha256:4a1a4493d365c0797a04e9e171d20ed83a845b34a1d995f5b2612324c62a1c36 schemaVersion:1
-- checklist: work/2801-mutual-overlap-arbitration/checklist.md sha256:f975e64cdb78d3e9e62945d5f9292b2e8c1ac4c462386062f26762d7ad7661fe schemaVersion:1
+- spec: work/2801-mutual-overlap-arbitration/spec.md sha256:4a858708b0c8636b9a3377fa6cc805433ca995b9b4227284b7f2a6ba11d4283c schemaVersion:1
+- clarifications: work/2801-mutual-overlap-arbitration/clarifications.md sha256:d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a schemaVersion:1
+- checklist: work/2801-mutual-overlap-arbitration/checklist.md sha256:ccfeb3e86c4300a094c4d3ea100f3bb57c1a5e8381296b3407d722583d48529c schemaVersion:1
 
 ## Plan Scope
 - Define narrow versioned receipt/outcome types in `Client.fs/.fsi`, pure validation and update decisions in `Client.fs`, and interpret requested GitHub effects in `Writes.fs/.fsi`.
@@ -36,10 +36,13 @@ Prose status: planned
 - PD-007 [AC-003] [AC-004] [AC-005] [AC-006] [AC-007] [FR-007] complete: Give every effect a deterministic key and reconcile ambiguous errors from a complete live re-read. Return applied, already-applied, conflict, stale, unreadable, or retryable states; never infer success from transport completion.
 - PD-008 [AC-001] [AC-002] [AC-003] [AC-004] [AC-005] [AC-006] [AC-007] [AC-008] [FR-008] complete: Test every pure predicate and writer boundary, run through the compiled client, and capture bounded independent source inversions that make the focused gate red before restoration.
 - PD-009 [AC-003] [AC-008] [FR-009] complete: Add one decision-changing automatic-first paragraph and one class-granularity sentence to the existing overlap reference; avoid generic guidance or per-example child policy.
+- PD-010 [AC-009] [AC-010] [FR-010] complete: Project a complete authority-issue comment census into one live immutable lease and its generation-bound, idempotent external requests. A foreign holder can only append the request; the current holder surfaces the deterministic first external block before ordinary board work.
+- PD-011 [AC-011] [AC-012] [AC-013] [FR-011] complete: When no lease is live, derive max-generation plus one and acquire it with a lowest-comment-id CAS. Re-read after every boundary; losing contenders remove only their own comments, while stale generations, duplicate live authority, malformed receipts, and incomplete reads refuse.
 
 ## Contract Impact
 - PC-001 [PD-001] [PD-004] additive typed contract: `Client.fsi` exposes schema-versioned wait/precedence receipts and closed inspection/arbitration outcomes; existing claim and overlap entry points remain compatible.
 - PC-002 [PD-003] [PD-005] [PD-006] additive writer contract: `Writes.fsi` exposes room/precedence/narrow/resume effect application with typed observed post-state and idempotency keys.
+- PC-003 [PD-010] [PD-011] additive authority contract: `Client.fsi` exposes lease/request snapshots and closed route/acquire/refuse decisions; `Writes.fsi` exposes only the generation CAS needed to elect one authority.
 
 ## Verification Obligations
 - VO-001 [PD-001] [PD-002] [PC-001] semanticTest: `ClaimOverlapTests` covers valid reciprocal order independence and inversions/negative controls for schema, generations, overlap, direction, shared tokens, dependency, and room predicates.
@@ -49,6 +52,7 @@ Prose status: planned
 - VO-005 [PD-008] productionRoute: build the CLI and run `tests/coord-engine-e2e/writes.sh` over the `.github#2772`/`.github#2797` seeded cycle and recovery route.
 - VO-006 [PD-008] mutation: independently invert every detector/arbitration predicate in a bounded worktree, observe the targeted gate red, restore, and rerun green.
 - VO-007 [PD-009] policy: verify the automatic route precedes manual negotiation and the class-row folding sentence is present in the shipped skill reference.
+- VO-008 [PD-010] [PD-011] [PC-003] semanticTest: pure, writer, and compiled-route tests plus five surgical mutations prove active-A refusal, A priority promotion, no-A takeover, stale-A refusal, and one-winner two-B acquisition.
 
 ## Performance Intent
 No performance intent is declared for this work item.

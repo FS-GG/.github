@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2801-mutual-overlap-arbitration/spec.md
-    digest: 87d4eabcd6dfefd3770fbef5153a4d33cfc15dda9465807aac23b0e7337d3e01
+    digest: 4a858708b0c8636b9a3377fa6cc805433ca995b9b4227284b7f2a6ba11d4283c
     schemaVersion: 1
   - label: clarifications
     path: work/2801-mutual-overlap-arbitration/clarifications.md
-    digest: 4a1a4493d365c0797a04e9e171d20ed83a845b34a1d995f5b2612324c62a1c36
+    digest: d396c7277621bf445bc96f157a952cc0e0a6ad16274406c9355440a9c94c4f1a
     schemaVersion: 1
   - label: checklist
     path: work/2801-mutual-overlap-arbitration/checklist.md
-    digest: f975e64cdb78d3e9e62945d5f9292b2e8c1ac4c462386062f26762d7ad7661fe
+    digest: ccfeb3e86c4300a094c4d3ea100f3bb57c1a5e8381296b3407d722583d48529c
     schemaVersion: 1
   - label: plan
     path: work/2801-mutual-overlap-arbitration/plan.md
-    digest: 7c99575ae8d9be6ba0769c5707cfa0dc239974b3841d9d44368836bcf8dd8b45
+    digest: d4582bbcb260416c7e2278d10d32b9fe18acff7b3ad3d2c915e86ecc459d4906
     schemaVersion: 1
 tasks:
   - id: T001
@@ -268,6 +268,56 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV024]
+  - id: T025
+    title: Implement requirement FR-010
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-010]
+    decisions: []
+    sourceIds: [AC-009, AC-010, FR-010, PD-010]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV025]
+  - id: T026
+    title: Implement requirement FR-011
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-011]
+    decisions: []
+    sourceIds: [AC-011, AC-012, AC-013, FR-011, PD-011]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV026]
+  - id: T027
+    title: Implement clarification decision DEC-005
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-005]
+    sourceIds: [DEC-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV027]
+  - id: T028
+    title: Update contract surface PC-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-003, PD-010, PD-011]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV028]
+  - id: T029
+    title: Record verification evidence VO-008
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-003, PD-010, PD-011, VO-008]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV029]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

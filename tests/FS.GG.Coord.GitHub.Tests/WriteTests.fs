@@ -48,6 +48,13 @@ let private markerWithExactBody (id: int) (body: string) =
            updated_at = now |}
     )
 
+let private durableLeaseComment (id: int) (body: string) =
+    System.Text.Json.JsonSerializer.Serialize(
+        {| id = id
+           html_url = $"https://example.invalid/comments/%d{id}"
+           body = body |}
+    )
+
 let private postedCommentBody (request: Request) =
     match request.Body with
     | Json payload ->
@@ -2357,6 +2364,37 @@ let ``#2801 exact existing wait receipt is an idempotent no-write`` () =
         Assert.Equal(1, transport.RestCalls)
         Assert.False(transport.Logged "comment-post")
     | other -> failwith $"exact durable receipt retry must be a no-write, got %A{other}"
+
+[<Fact>]
+let ``#2801 first board-orchestrator contender wins its immutable generation`` () =
+    let marker = "<!-- fsgg:board-orchestrator-lease-key/v1 board=coord generation=3 -->"
+    let body = marker + "\n<!-- fsgg:board-orchestrator-lease/v1 -->\n{}"
+    let transport =
+        scripted
+            [ ok "[]"
+              ok "{\"id\":901}"
+              ok (comments [ durableLeaseComment 901 body ]) ]
+    match acquireDurableLease transport aRef marker body with
+    | Ok(LeaseAcquired 901L) -> Assert.Equal(3, transport.RestCalls)
+    | other -> failwith $"first contender should acquire the generation, got %A{other}"
+
+[<Fact>]
+let ``#2801 losing board-orchestrator race removes only its own candidate`` () =
+    let marker = "<!-- fsgg:board-orchestrator-lease-key/v1 board=coord generation=3 -->"
+    let winner = marker + "\n<!-- fsgg:board-orchestrator-lease/v1 -->\n{\"holder\":\"B1\"}"
+    let mine = marker + "\n<!-- fsgg:board-orchestrator-lease/v1 -->\n{\"holder\":\"B2\"}"
+    let transport =
+        scripted
+            [ ok "[]"
+              ok "{\"id\":902}"
+              ok (comments [ durableLeaseComment 901 winner; durableLeaseComment 902 mine ])
+              ok "{}" ]
+    match acquireDurableLease transport aRef marker mine with
+    | Ok(LeaseContended 901L) ->
+        Assert.Equal(4, transport.RestCalls)
+        Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 902")
+        Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 901")
+    | other -> failwith $"losing contender should withdraw itself, got %A{other}"
 
 [<Fact>]
 let ``#2801 automatic room is created once and confirmed by cycle marker`` () =

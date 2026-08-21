@@ -57,6 +57,11 @@ module Writes =
         | CommentWritten of commentId: int64
         | CommentAlreadyPresent
 
+    type DurableLeaseWrite =
+        | LeaseAcquired of commentId: int64
+        | LeaseAlreadyHeld of commentId: int64
+        | LeaseContended of winnerCommentId: int64
+
     /// Append one immutable protocol receipt exactly once. `marker` identifies its ledger slot; an
     /// existing different body at that marker is a conflict. The function re-reads after success and
     /// after a transport error, so response loss converges and unreadable/conflicting state fails closed.
@@ -66,6 +71,14 @@ module Writes =
         marker: string ->
         body: string ->
             Errors.IoResult<DurableCommentWrite>
+
+    /// Generation-scoped, lowest-comment-id CAS used only for board-orchestrator authority.
+    val acquireDurableLease:
+        transport: Transport.IGitHubTransport ->
+        ref: FS.GG.Coord.Types.Ref ->
+        marker: string ->
+        body: string ->
+            Errors.IoResult<DurableLeaseWrite>
 
     /// Validate an intake draft before issuing its REST issue-create request. Invalid drafts spend no IO.
     val createIntake: transport: Transport.IGitHubTransport -> draft: FS.GG.Coord.Intake.Draft -> Errors.IoResult<FS.GG.Coord.Types.Ref>

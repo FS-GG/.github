@@ -7930,6 +7930,39 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
           ReviewRequired: bool
           ExactHeadReviewed: bool }
 
+    /// One immutable generation of the Coordination board's sole orchestrator authority. Expiry, rather
+    /// than a mutable heartbeat body, makes takeover races a generation-scoped CAS and leaves an audit trail.
+    type BoardOrchestratorLease =
+        { Board: string
+          HolderRepo: string
+          Holder: string
+          Generation: int64
+          ExpiresAtUnix: int64
+          CommentId: int64
+          Digest: string }
+
+    type BoardOrchestratorRequest =
+        { Board: string
+          RequestingRepo: string
+          RequestKey: string
+          CoordinationRef: Ref
+          LeaseGeneration: int64
+          CommentId: int64
+          Digest: string }
+
+    type BoardOrchestratorSnapshot =
+        { Readable: bool
+          NowUnix: int64
+          Board: string
+          Leases: BoardOrchestratorLease list
+          Requests: BoardOrchestratorRequest list }
+
+    type BoardOrchestratorDecision =
+        | RouteRequestTo of BoardOrchestratorLease
+        | RunBoardOrchestrator of lease: BoardOrchestratorLease * highestPriority: BoardOrchestratorRequest option
+        | AcquireBoardOrchestrator of generation: int64
+        | BoardOrchestratorRefused of reason: string
+
     let private sha256 (value: string) =
         SHA256.HashData(Encoding.UTF8.GetBytes value)
         |> Convert.ToHexString
@@ -7975,6 +8008,85 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
               receipt.Host
               Option.defaultValue "" receipt.Reason ]
         |> sha256
+
+    let boardOrchestratorLeaseDigest (lease: BoardOrchestratorLease) =
+        String.concat
+            "\n"
+            [ "fsgg.coord.board-orchestrator-lease/v1"
+              lease.Board
+              lease.HolderRepo
+              lease.Holder
+              string lease.Generation
+              string lease.ExpiresAtUnix ]
+        |> sha256
+
+    let boardOrchestratorRequestDigest (request: BoardOrchestratorRequest) =
+        String.concat
+            "\n"
+            [ "fsgg.coord.board-orchestrator-request/v1"
+              request.Board
+              request.RequestingRepo
+              request.RequestKey
+              request.CoordinationRef.Canonical
+              string request.LeaseGeneration ]
+        |> sha256
+
+    /// Decide from a complete lease/request census. An external repository can only route to the live
+    /// authority; only an absent/expired authority permits the next immutable generation to be acquired.
+    let decideBoardOrchestrator requesterRepo holder (snapshot: BoardOrchestratorSnapshot) =
+        let invalidLease (lease: BoardOrchestratorLease) =
+            lease.Board <> snapshot.Board
+            || lease.Generation < 1L
+            || lease.CommentId < 1L
+            || String.IsNullOrWhiteSpace lease.HolderRepo
+            || String.IsNullOrWhiteSpace lease.Holder
+            || lease.Digest <> boardOrchestratorLeaseDigest { lease with Digest = "" }
+
+        let invalidRequest (request: BoardOrchestratorRequest) =
+            request.Board <> snapshot.Board
+            || String.IsNullOrWhiteSpace request.RequestingRepo
+            || String.IsNullOrWhiteSpace request.RequestKey
+            || request.CommentId < 1L
+            || request.Digest <> boardOrchestratorRequestDigest { request with Digest = "" }
+
+        if not snapshot.Readable then
+            BoardOrchestratorRefused "authoritative board-orchestrator state is unreadable"
+        elif snapshot.Leases |> List.exists invalidLease then
+            BoardOrchestratorRefused "board-orchestrator lease is malformed or has an invalid digest"
+        elif snapshot.Requests |> List.exists invalidRequest then
+            BoardOrchestratorRefused "board-orchestrator request is malformed or has an invalid digest"
+        elif snapshot.Leases |> List.groupBy _.Generation |> List.exists (fun (_, xs) -> xs |> List.map _.Digest |> List.distinct |> List.length > 1) then
+            BoardOrchestratorRefused "board-orchestrator generation conflicts"
+        else
+            let active = snapshot.Leases |> List.filter (fun lease -> lease.ExpiresAtUnix > snapshot.NowUnix)
+            match active with
+            | [] ->
+                let next = snapshot.Leases |> List.map _.Generation |> List.fold max 0L |> (+) 1L
+                AcquireBoardOrchestrator next
+            | [ lease ] ->
+                // Requests preceding the current lease comment belong to historical generations. A request
+                // written after this lease but naming another generation is a stale-authority race.
+                let relevantRequests = snapshot.Requests |> List.filter (fun request -> request.CommentId > lease.CommentId)
+                let currentRequests = relevantRequests |> List.filter (fun request -> request.LeaseGeneration = lease.Generation)
+                let staleRequests = relevantRequests |> List.filter (fun request -> request.LeaseGeneration <> lease.Generation)
+                let requestConflicts =
+                    currentRequests
+                    |> List.groupBy (fun request -> request.RequestingRepo, request.RequestKey)
+                    |> List.exists (fun (_, xs) -> xs |> List.map _.Digest |> List.distinct |> List.length > 1)
+                if not (List.isEmpty staleRequests) then
+                    BoardOrchestratorRefused "a request names a stale board-orchestrator generation"
+                elif requestConflicts then
+                    BoardOrchestratorRefused "idempotence key has conflicting board-orchestrator requests"
+                elif lease.HolderRepo <> requesterRepo || lease.Holder <> holder then
+                    RouteRequestTo lease
+                else
+                    let priority =
+                        currentRequests
+                        |> List.distinctBy (fun request -> request.RequestingRepo, request.RequestKey, request.Digest)
+                        |> List.sortBy (fun request -> request.RequestingRepo, request.RequestKey)
+                        |> List.tryHead
+                    RunBoardOrchestrator(lease, priority)
+            | _ -> BoardOrchestratorRefused "more than one live board-orchestrator lease exists"
 
     /// Decide only from one authoritative snapshot.  Every missing/stale/conflicting fact refuses; a
     /// one-way wait is the sole honest no-cycle result.  Comment order cannot affect the result.
@@ -8118,6 +8230,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     [<Literal>]
     let private PrecedenceMarker = "<!-- fsgg:overlap-precedence/v1 -->"
 
+    [<Literal>]
+    let private BoardLeaseMarker = "<!-- fsgg:board-orchestrator-lease/v1 -->"
+
+    [<Literal>]
+    let private BoardRequestMarker = "<!-- fsgg:board-orchestrator-request/v1 -->"
+
     let private waitReceiptBody (receipt: OverlapWaitReceipt) =
         WaitMarker
         + "\n"
@@ -8145,7 +8263,72 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                reason = receipt.Reason |> Option.toObj
                digest = receipt.Digest |}
 
+    let private boardLeaseBody marker (lease: BoardOrchestratorLease) =
+        marker
+        + "\n"
+        + BoardLeaseMarker
+        + "\n"
+        + JsonSerializer.Serialize
+            {| schema = "fsgg.coord.board-orchestrator-lease/v1"
+               board = lease.Board
+               holderRepo = lease.HolderRepo
+               holder = lease.Holder
+               generation = lease.Generation
+               expiresAtUnix = lease.ExpiresAtUnix
+               digest = lease.Digest |}
+
+    let private boardRequestBody marker (request: BoardOrchestratorRequest) =
+        marker
+        + "\n"
+        + BoardRequestMarker
+        + "\n"
+        + JsonSerializer.Serialize
+            {| schema = "fsgg.coord.board-orchestrator-request/v1"
+               board = request.Board
+               requestingRepo = request.RequestingRepo
+               requestKey = request.RequestKey
+               coordinationRef = request.CoordinationRef.Canonical
+               leaseGeneration = request.LeaseGeneration
+               digest = request.Digest |}
+
     let private parseStructuredRef owner repo (raw: string) = parseRefIn owner (Some repo) raw
+
+    let private parseBoardLease commentId (body: string) : Result<BoardOrchestratorLease option, string> =
+        if not (body.Contains(BoardLeaseMarker, StringComparison.Ordinal)) then Ok None
+        else
+            try
+                let markerAt = body.IndexOf(BoardLeaseMarker, StringComparison.Ordinal)
+                use doc = JsonDocument.Parse(body.Substring(markerAt + BoardLeaseMarker.Length).TrimStart())
+                let root = doc.RootElement
+                Ok(Some
+                    { Board = root.GetProperty("board").GetString()
+                      HolderRepo = root.GetProperty("holderRepo").GetString()
+                      Holder = root.GetProperty("holder").GetString()
+                      Generation = root.GetProperty("generation").GetInt64()
+                      ExpiresAtUnix = root.GetProperty("expiresAtUnix").GetInt64()
+                      CommentId = commentId
+                      Digest = root.GetProperty("digest").GetString() })
+            with error -> Error $"board-orchestrator lease is malformed: %s{error.Message}"
+
+    let private parseBoardRequest owner repo commentId (body: string) : Result<BoardOrchestratorRequest option, string> =
+        if not (body.Contains(BoardRequestMarker, StringComparison.Ordinal)) then Ok None
+        else
+            try
+                let markerAt = body.IndexOf(BoardRequestMarker, StringComparison.Ordinal)
+                use doc = JsonDocument.Parse(body.Substring(markerAt + BoardRequestMarker.Length).TrimStart())
+                let root = doc.RootElement
+                match parseStructuredRef owner repo (root.GetProperty("coordinationRef").GetString()) with
+                | Error _ -> Error "board-orchestrator request contains an invalid coordination ref"
+                | Ok coordinationRef ->
+                    Ok(Some
+                        { Board = root.GetProperty("board").GetString()
+                          RequestingRepo = root.GetProperty("requestingRepo").GetString()
+                          RequestKey = root.GetProperty("requestKey").GetString()
+                          CoordinationRef = coordinationRef
+                          LeaseGeneration = root.GetProperty("leaseGeneration").GetInt64()
+                          CommentId = commentId
+                          Digest = root.GetProperty("digest").GetString() })
+            with error -> Error $"board-orchestrator request is malformed: %s{error.Message}"
 
     let private parseWaitReceipt owner repo (body: string) : Result<OverlapWaitReceipt option, string> =
         if not (body.Contains(WaitMarker, StringComparison.Ordinal)) then Ok None
@@ -8419,6 +8602,111 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     | Ok(Writes.TwinHolds theirs) -> twinRefusal "overlap arbitrate" w.Id loser theirs
                                     | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "overlap arbitrate" loser derived named
 
+    let private boardOrchestratorFacts (ctx: Context) (authority: Ref) =
+        Reads.commentsWithIdentity ctx.Transport authority.Owner authority.Repo authority.Number
+        |> Result.bind (fun comments ->
+            let rec collect (leases: BoardOrchestratorLease list) (requests: BoardOrchestratorRequest list) (remaining: Reads.CommentBody list) =
+                match remaining with
+                | [] ->
+                    Ok
+                        { Readable = true
+                          NowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                          Board = authority.Canonical
+                          Leases = List.rev leases
+                          Requests = List.rev requests }
+                | comment :: rest ->
+                    match parseBoardLease comment.Id comment.Body, parseBoardRequest authority.Owner authority.Repo comment.Id comment.Body with
+                    | Error detail, _
+                    | _, Error detail -> Error(Errors.Malformed(authority.Short, detail))
+                    | Ok lease, Ok request -> collect (Option.toList lease @ leases) (Option.toList request @ requests) rest
+            collect [] [] comments)
+
+    /// Standard route for an external repository needing Coordination-board work. A live authority receives
+    /// one generation-bound blocking request; only absence/expiry opens the next generation's comment CAS.
+    let private overlapOrchestrate (ctx: Context) (opts: Options) authorityText requestingRepo requestKey coordinationText holder =
+        match parseRef ctx authorityText, parseRef ctx coordinationText with
+        | Error detail, _
+        | _, Error detail ->
+            eprint $"fsgg-coord-engine: %s{detail}"
+            ExitError
+        | Ok _, Ok _ when String.IsNullOrWhiteSpace requestingRepo || String.IsNullOrWhiteSpace requestKey || String.IsNullOrWhiteSpace holder ->
+            eprint "fsgg-coord-engine: orchestrator route requires non-empty requesting repo, request key, and holder identity."
+            ExitError
+        | Ok authority, Ok coordinationRef ->
+            let decide snapshot = decideBoardOrchestrator requestingRepo holder snapshot
+            match boardOrchestratorFacts ctx authority with
+            | Error error -> fail error
+            | Ok snapshot ->
+                match decide snapshot with
+                | BoardOrchestratorRefused reason ->
+                    eprint $"fsgg-coord-engine: board-orchestrator route refused: %s{reason}."
+                    ExitError
+                | RunBoardOrchestrator(lease, priority) ->
+                    match priority with
+                    | Some request ->
+                        printfn "BOARD ORCHESTRATOR ACTIVE generation=%d — highest-priority blocking request is %s from %s; preserve in-flight safety, then route it before ordinary board work." lease.Generation request.CoordinationRef.Short request.RequestingRepo
+                    | None -> printfn "BOARD ORCHESTRATOR ACTIVE generation=%d — no external blocking request is pending." lease.Generation
+                    ExitGreen
+                | RouteRequestTo lease ->
+                    let marker = $"<!-- fsgg:board-orchestrator-request-key/v1 generation=%d{lease.Generation} repo=%s{requestingRepo} key=%s{requestKey} -->"
+                    let draft: BoardOrchestratorRequest =
+                        { Board = authority.Canonical
+                          RequestingRepo = requestingRepo
+                          RequestKey = requestKey
+                          CoordinationRef = coordinationRef
+                          LeaseGeneration = lease.Generation
+                          CommentId = 1L
+                          Digest = "" }
+                    let request = { draft with Digest = boardOrchestratorRequestDigest draft }
+                    match Writes.writeDurableComment ctx.Transport authority marker (boardRequestBody marker request) with
+                    | Error error -> fail error
+                    | Ok _ ->
+                        match boardOrchestratorFacts ctx authority with
+                        | Error error -> fail error
+                        | Ok current ->
+                            match decide current with
+                            | RouteRequestTo currentLease when currentLease.Generation = lease.Generation ->
+                                printfn "ROUTED — %s must not start a competing Coordination lane; generation %d holder %s/%s now owns blocking request %s (%s)." requestingRepo lease.Generation lease.HolderRepo lease.Holder coordinationRef.Short requestKey
+                                ExitGreen
+                            | BoardOrchestratorRefused reason ->
+                                eprint $"fsgg-coord-engine: request write raced stale authority and is refused: %s{reason}."
+                                ExitError
+                            | _ ->
+                                eprint "fsgg-coord-engine: board-orchestrator generation changed while routing the request; re-read and retry."
+                                ExitError
+                | AcquireBoardOrchestrator generation ->
+                    let expires = DateTimeOffset.UtcNow.AddMinutes(float opts.LeaseMinutes).ToUnixTimeSeconds()
+                    let marker = $"<!-- fsgg:board-orchestrator-lease-key/v1 board=%s{authority.Canonical} generation=%d{generation} -->"
+                    let draft: BoardOrchestratorLease =
+                        { Board = authority.Canonical
+                          HolderRepo = requestingRepo
+                          Holder = holder
+                          Generation = generation
+                          ExpiresAtUnix = expires
+                          CommentId = 1L
+                          Digest = "" }
+                    let lease = { draft with Digest = boardOrchestratorLeaseDigest draft }
+                    match Writes.acquireDurableLease ctx.Transport authority marker (boardLeaseBody marker lease) with
+                    | Error error -> fail error
+                    | Ok(Writes.LeaseContended winnerId) ->
+                        eprint $"fsgg-coord-engine: board-orchestrator generation %d{generation} was won by comment %d{winnerId}; this repository must route to that authority."
+                        ExitContended
+                    | Ok(Writes.LeaseAcquired _)
+                    | Ok(Writes.LeaseAlreadyHeld _) ->
+                        match boardOrchestratorFacts ctx authority with
+                        | Error error -> fail error
+                        | Ok current ->
+                            match decide current with
+                            | RunBoardOrchestrator(currentLease, _) when currentLease.Generation = generation ->
+                                printfn "ACQUIRED — %s/%s is the sole board orchestrator for generation %d and must execute the standard board protocol." requestingRepo holder generation
+                                ExitGreen
+                            | BoardOrchestratorRefused reason ->
+                                eprint $"fsgg-coord-engine: acquired lease could not be authorized on re-read: %s{reason}."
+                                ExitError
+                            | _ ->
+                                eprint "fsgg-coord-engine: acquired lease lost authoritative precedence on re-read."
+                                ExitContended
+
     /// `paths_of` FAILS CLOSED (#494 leg k). A touch-set read FOR SCHEDULING that we could not complete is
     /// NOT an empty touch-set: an empty set reads as "disjoint from everything", so a failed body read would
     /// let the scheduler hand out work overlapping a held item (#266's fail-open, one subtree down). So a
@@ -8449,6 +8737,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             |> Result.map TouchSet.parse
 
         match opts.Args with
+        | [ "orchestrate"; authority; requestingRepo; requestKey; coordinationRef; holder ] when not opts.Active ->
+            overlapOrchestrate ctx opts authority requestingRepo requestKey coordinationRef holder
+
         | [ "wait"; waiter; predecessor; host ] when not opts.Active ->
             overlapWait ctx opts waiter predecessor host
 

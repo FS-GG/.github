@@ -255,6 +255,11 @@ module Writes =
         | CommentWritten of commentId: int64
         | CommentAlreadyPresent
 
+    type DurableLeaseWrite =
+        | LeaseAcquired of commentId: int64
+        | LeaseAlreadyHeld of commentId: int64
+        | LeaseContended of winnerCommentId: int64
+
     let writeDurableComment
         (transport: IGitHubTransport)
         (ref: Ref)
@@ -340,6 +345,52 @@ module Writes =
               Subject = ref.Short }
 
         transport.Send request |> Result.map ignore
+
+    /// Generation-scoped comment CAS for the one board-orchestrator authority. Every contender for one
+    /// generation uses the same marker; GitHub's comment id is the total order and a loser removes only
+    /// its own candidate. An unreadable census never means an empty lease set.
+    let acquireDurableLease
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (marker: string)
+        (body: string)
+        : IoResult<DurableLeaseWrite> =
+
+        let observe () =
+            Reads.commentsWithIdentity transport ref.Owner ref.Repo ref.Number
+            |> Result.map (fun comments ->
+                comments
+                |> List.filter (fun comment -> comment.Body.Contains(marker, StringComparison.Ordinal))
+                |> List.sortBy _.Id
+                |> List.tryHead)
+
+        if String.IsNullOrWhiteSpace marker || not (body.Contains(marker, StringComparison.Ordinal)) then
+            Error(Malformed(ref.Short, "a durable lease body must contain its non-empty generation marker"))
+        else
+            match observe () with
+            | Error error -> Error error
+            | Ok(Some existing) when existing.Body = body -> Ok(LeaseAlreadyHeld existing.Id)
+            | Ok(Some existing) -> Ok(LeaseContended existing.Id)
+            | Ok None ->
+                match postComment transport ref body with
+                | Ok myId ->
+                    match observe () with
+                    | Ok(Some winner) when winner.Id = myId -> Ok(LeaseAcquired myId)
+                    | Ok(Some winner) ->
+                        deleteComment transport ref myId |> Result.map (fun () -> LeaseContended winner.Id)
+                    | Ok None ->
+                        deleteComment transport ref myId
+                        |> Result.bind (fun () -> Error(Malformed(ref.Short, "the lease POST succeeded but no generation marker survived the authoritative re-read")))
+                    | Error readError ->
+                        deleteComment transport ref myId
+                        |> Result.bind (fun () -> Error(Malformed(ref.Short, $"the post-write lease census was unreadable: %s{Errors.explain readError}")))
+                | Error writeError ->
+                    match observe () with
+                    | Ok(Some existing) when existing.Body = body -> Ok(LeaseAlreadyHeld existing.Id)
+                    | Ok(Some existing) -> Ok(LeaseContended existing.Id)
+                    | Ok None -> Error writeError
+                    | Error readError ->
+                        Error(Malformed(ref.Short, $"the lease write failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"))
 
     // ---- THE CAS ---------------------------------------------------------------------------------
 

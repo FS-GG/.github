@@ -99,19 +99,19 @@ module ClaimOverlapTests =
         let conflicting = wait a "5365000001" (item 2801) "5365000003" [ "src/FS.GG.Coord.Cli/Client.fs" ] "host/root"
         let badDigest = { aWait with Digest = "tampered" }
         let cases =
-            [ "unreadable", { snapshot with Readable = false }
-              "self", { snapshot with Waits = [ selfDraft ] }
-              "stale", { snapshot with Claims = { snapshot.Claims.Head with Live = false } :: snapshot.Claims.Tail }
-              "missing", { snapshot with Claims = [ snapshot.Claims.Head ] }
-              "generation", { snapshot with Claims = { snapshot.Claims.Head with Generation = "5365999999" } :: snapshot.Claims.Tail }
-              "cleared", { snapshot with Relations = [] }
-              "changed tokens", { snapshot with Relations = [ { Left = a; Right = b; SharedTokens = [ "tests/other" ] } ] }
-              "dependency", { snapshot with DurableDependencies = [ a, b ] }
-              "bad digest", { snapshot with Waits = [ badDigest; bWait ] }
-              "conflicting edge", { snapshot with Waits = [ aWait; bWait; conflicting ] } ]
-        for name, candidate in cases do
+            [ "unreadable", "unreadable", { snapshot with Readable = false }
+              "self", "self wait", { snapshot with Waits = [ selfDraft ] }
+              "stale", "stale", { snapshot with Claims = { snapshot.Claims.Head with Live = false } :: snapshot.Claims.Tail }
+              "missing", "missing", { snapshot with Claims = [ snapshot.Claims.Head ] }
+              "generation", "generation", { snapshot with Claims = { snapshot.Claims.Head with Generation = "5365999999" } :: snapshot.Claims.Tail }
+              "cleared", "cleared", { snapshot with Relations = [] }
+              "changed tokens", "tokens changed", { snapshot with Relations = [ { Left = a; Right = b; SharedTokens = [ "tests/other" ] } ] }
+              "dependency", "Blocked-by", { snapshot with DurableDependencies = [ a, b ] }
+              "bad digest", "digest", { snapshot with Waits = [ badDigest; bWait ] }
+              "conflicting edge", "conflict", { snapshot with Waits = [ aWait; bWait; conflicting ] } ]
+        for name, expected, candidate in cases do
             match Client.detectMutualOverlap candidate with
-            | Client.MutualOverlapRefused _ -> ()
+            | Client.MutualOverlapRefused reason -> Assert.Contains(expected, reason, StringComparison.OrdinalIgnoreCase)
             | other -> failwithf "%s should refuse, got %A" name other
 
     let private precedence (cycle: Client.MutualOverlapCycle) revision previous winner loser reason =
@@ -180,6 +180,73 @@ module ClaimOverlapTests =
         for mutation in mutations do
             Assert.Single(Client.validateLoserResume mutation) |> ignore
         Assert.Empty(Client.validateLoserResume { green with ReviewRequired = false; ExactHeadReviewed = false })
+
+    let private orchestratorLease repo holder generation expires commentId =
+        let draft: Client.BoardOrchestratorLease =
+            { Board = "FS-GG/.github#2801"
+              HolderRepo = repo
+              Holder = holder
+              Generation = generation
+              ExpiresAtUnix = expires
+              CommentId = commentId
+              Digest = "" }
+        { draft with Digest = Client.boardOrchestratorLeaseDigest draft }
+
+    let private orchestratorRequest repo key generation commentId workRef =
+        let draft: Client.BoardOrchestratorRequest =
+            { Board = "FS-GG/.github#2801"
+              RequestingRepo = repo
+              RequestKey = key
+              CoordinationRef = workRef
+              LeaseGeneration = generation
+              CommentId = commentId
+              Digest = "" }
+        { draft with Digest = Client.boardOrchestratorRequestDigest draft }
+
+    let private orchestratorSnapshot leases requests : Client.BoardOrchestratorSnapshot =
+        { Readable = true
+          NowUnix = 1000L
+          Board = "FS-GG/.github#2801"
+          Leases = leases
+          Requests = requests }
+
+    [<Fact>]
+    let ``#2801 live board orchestrator makes external repo route instead of competing`` () =
+        let active = orchestratorLease ".github" "host-a" 7L 2000L 100L
+        Assert.Equal(Client.RouteRequestTo active, Client.decideBoardOrchestrator "FS.GG.SDD" "host-b" (orchestratorSnapshot [ active ] []))
+
+    [<Fact>]
+    let ``#2801 board orchestrator promotes an idempotent external block ahead of ordinary work`` () =
+        let active = orchestratorLease ".github" "host-a" 7L 2000L 100L
+        let later = orchestratorRequest "z-repo" "block-z" 7L 102L (item 2797)
+        let highest = orchestratorRequest "a-repo" "block-a" 7L 101L (item 2801)
+        match Client.decideBoardOrchestrator ".github" "host-a" (orchestratorSnapshot [ active ] [ later; highest; highest ]) with
+        | Client.RunBoardOrchestrator(actual, Some priority) ->
+            Assert.Equal(active, actual)
+            Assert.Equal(highest, priority)
+        | other -> failwithf "expected active A with promoted request, got %A" other
+
+    [<Fact>]
+    let ``#2801 absent or expired authority permits only the next generation takeover`` () =
+        Assert.Equal(Client.AcquireBoardOrchestrator 1L, Client.decideBoardOrchestrator "B" "host-b" (orchestratorSnapshot [] []))
+        let stale = orchestratorLease ".github" "host-a" 4L 999L 100L
+        Assert.Equal(Client.AcquireBoardOrchestrator 5L, Client.decideBoardOrchestrator "B" "host-b" (orchestratorSnapshot [ stale ] []))
+
+    [<Fact>]
+    let ``#2801 request written under a stale A generation fails closed`` () =
+        let active = orchestratorLease ".github" "host-a" 8L 2000L 110L
+        let staleRequest = orchestratorRequest "B" "block" 7L 111L (item 2801)
+        match Client.decideBoardOrchestrator "B" "host-b" (orchestratorSnapshot [ active ] [ staleRequest ]) with
+        | Client.BoardOrchestratorRefused reason -> Assert.Contains("stale", reason)
+        | other -> failwithf "expected stale-generation refusal, got %A" other
+
+    [<Fact>]
+    let ``#2801 two-B generation race never authorizes two live orchestrators`` () =
+        let b1 = orchestratorLease "B1" "host-b1" 9L 2000L 120L
+        let b2 = orchestratorLease "B2" "host-b2" 9L 2000L 121L
+        match Client.decideBoardOrchestrator "B1" "host-b1" (orchestratorSnapshot [ b1; b2 ] []) with
+        | Client.BoardOrchestratorRefused reason -> Assert.Contains("conflict", reason)
+        | other -> failwithf "expected generation-race refusal, got %A" other
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
@@ -445,6 +512,7 @@ module ClaimOverlapTests =
         do
             comments.[42] <- ResizeArray [ "<!-- fsgg:claim worker=vole-418 lease=120 -->\nheld" ]
             comments.[43] <- ResizeArray [ "<!-- fsgg:claim worker=smew-e1d9 lease=120 -->\nheld" ]
+            comments.[99] <- ResizeArray()
             issueBodies.[42] <- "Paths: src/Thing.fs"
             issueBodies.[43] <- "Paths: src/Thing.fs"
 
@@ -465,7 +533,8 @@ module ClaimOverlapTests =
             let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
             this.Bodies number
             |> List.mapi (fun index body ->
-                {| id = (if index = 0 then (if number = 42 then 8001L else 8070L) else 9100L + int64 index)
+                {| id = (if number = 99 then 9101L + int64 index elif index = 0 then (if number = 42 then 8001L else 8070L) else 9100L + int64 index)
+                   html_url = $"https://example.invalid/comments/%d{9100 + index}"
                    body = body
                    user = {| login = "EHotwagner" |}
                    created_at = timestamp
@@ -550,6 +619,19 @@ module ClaimOverlapTests =
 
     let private runOverlapArbitrate transport =
         runOverlapCommand transport [ "overlap"; "arbitrate"; "FS.GG.SDD#43"; "FS.GG.SDD#42"; "host/root"; "--worker"; "vole-418" ]
+
+    let private runOverlapOrchestrate transport =
+        runOverlapCommand transport [ "overlap"; "orchestrate"; "FS.GG.SDD#99"; "FS.GG.SDD"; "coord-fix-42"; "FS.GG.SDD#42"; "host-b" ]
+
+    [<Fact>]
+    let ``#2801 compiled no-A route acquires one authoritative board-orchestrator generation`` () =
+        let thread = WaitThread()
+        let code, output, errors = runOverlapOrchestrate (waitWorld thread)
+        Assert.Equal(0, code)
+        Assert.Empty(errors)
+        Assert.Contains("ACQUIRED", output)
+        Assert.Single(thread.Bodies 99) |> ignore
+        Assert.Contains("fsgg.coord.board-orchestrator-lease/v1", thread.Bodies(99).Head)
 
     [<Fact>]
     let ``#2801 compiled overlap wait route writes one generation-bound receipt and is retry-idempotent`` () =
