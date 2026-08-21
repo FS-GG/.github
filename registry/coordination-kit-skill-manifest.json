@@ -78,7 +78,7 @@
     {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
-      "tree-sha256": "50e48cc662917102ad5aa15e7d07d3a5784a2f68dca37752bf36b18a0aa08f24",
+      "tree-sha256": "9f32dad0c6de46c0202416ad6c28241513aff4b63569662d2e8886e4a2a126f8",
       "files": [
         {
           "path": "SKILL.md",
@@ -102,7 +102,7 @@
         },
         {
           "path": "references/worktrees-and-overlap.md",
-          "sha256": "1b7b1d46ff7a76f3fd6028b78fd119c2bb440f0516578681f63a25b0ee3d956a",
+          "sha256": "43e0ee19d40a8585678e419f034ed5c5e8b862d93a5dd167e3ce28b721fe6d5d",
           "executable": false
         }
       ]
