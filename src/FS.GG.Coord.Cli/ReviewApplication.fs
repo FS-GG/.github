@@ -299,6 +299,18 @@ module ReviewApplication =
            expiresAt = receipt.ExpiresAt
            evidenceRef = receipt.EvidenceRef |}
 
+    let private isCompletedOrdinaryExhaustion (binding: Review.Binding) (waitState: ReviewWait.State option) =
+        match binding.Phase, waitState with
+        | Review.Ordinary, Some (ReviewWait.Completed (receipt, _)) ->
+            receipt.Kind = ReviewWait.RepairConfirmation
+            && receipt.ClaimGeneration <> binding.ClaimGeneration
+            && receipt.ReviewGeneration =
+                ReviewWait.generationToken
+                    binding.HeadSha
+                    ReviewWait.RepairConfirmation
+                    Protocol.reviewPolicy.MaxAutomatedRepairRounds
+        | _ -> false
+
     let private waitAuthority (binding: Review.Binding) (state: Review.State) (action: Review.NextAction) (waitState: ReviewWait.State option) =
         let dispatchAuthority =
             match action with
@@ -308,6 +320,10 @@ module ReviewApplication =
                 Some(ReviewWait.RepairConfirmation, ReviewWait.generationToken binding.HeadSha ReviewWait.RepairConfirmation round)
             | _ -> None
         match waitState, dispatchAuthority with
+        | _ when isCompletedOrdinaryExhaustion binding waitState ->
+            Error
+                [ "the ordinary review chain is exhausted after its completed round-three wait; "
+                  + "record exactly one structured escalation for repair-phase entry — never dispatch or resume ordinary round four" ]
         | None, _ -> Ok () // offline snapshots predate the live durable-wait projection
         | Some (ReviewWait.Invalid errors), _ -> Error errors
         | Some (ReviewWait.Recoverable (_, reason)), _ -> Error [ reason ]
@@ -352,6 +368,9 @@ module ReviewApplication =
             ExitCode.toInt ExitCode.NoVerdict
         | Ok verdict ->
             let waitStatus, waitReceipt, waitReason = waitProjection waitState
+            let waitStatus =
+                if isCompletedOrdinaryExhaustion binding waitState then Some "ordinaryExhaustion"
+                else waitStatus
             match waitAuthority binding verdict.State verdict.NextAction waitState, opts.Render with
             | Error reasons, Json ->
                 printfn

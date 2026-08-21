@@ -57,6 +57,13 @@ module ReviewWait =
 
     let private kindName = function InitialReview -> "initial-review" | RepairConfirmation -> "repair-confirmation"
     let generationToken head kind round = $"%s{head}:%s{kindName kind}:%d{round}"
+    let private isOrdinaryExhaustionReceipt (receipt: WaitReceipt) =
+        let suffix = ":repair-confirmation:3"
+        if receipt.Kind <> RepairConfirmation || not (receipt.ReviewGeneration.EndsWith(suffix, StringComparison.Ordinal)) then
+            false
+        else
+            let head = receipt.ReviewGeneration.Substring(0, receipt.ReviewGeneration.Length - suffix.Length)
+            head.Length = 40 && head |> Seq.forall Uri.IsHexDigit
     let private instant (value: DateTimeOffset) = value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
 
     let encode event =
@@ -164,6 +171,17 @@ module ReviewWait =
                     | Timeout (g, at, evidence) when g = receipt.ReviewGeneration -> Some(2, at, evidence)
                     | _ -> None)
             match currentClaimGeneration, terminal with
+            // A completed ordinary round-three wait is historical exhaustion evidence, not an active
+            // mutation capability. Preserve that exact terminal fact across the required claim turnover;
+            // the live writer separately proves the fresh current claimant and grants only one
+            // `escalation` record. Every other changed-claim wait remains recoverable and therefore
+            // authorizes no mutation (.github#2797).
+            | generation, Some (0, at, evidence)
+                when generation <> Some receipt.ClaimGeneration
+                     && isOrdinaryExhaustionReceipt receipt
+                     && at >= receipt.EnteredAt
+                     && at <= receipt.ExpiresAt ->
+                Completed(receipt, evidence)
             | generation, _ when generation <> Some receipt.ClaimGeneration ->
                 Recoverable(receipt, "claim generation changed; reacquire before mutation")
             | _, Some (0, at, _) when at < receipt.EnteredAt -> Invalid [ "completion predates queue entry" ]

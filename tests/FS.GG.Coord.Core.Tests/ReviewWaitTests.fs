@@ -116,3 +116,27 @@ module ReviewWaitTests =
                   [ ReviewWait.Enter receipt; completed; ReviewWait.Enter second ] with
         | ReviewWait.Waiting active -> Assert.Equal(second.ReviewGeneration, active.ReviewGeneration)
         | other -> failwithf "the consumed predecessor blocked the next generation: %A" other
+
+    [<Fact>]
+    let ``2797 completed ordinary round three survives claim turnover as exhaustion evidence`` () =
+        let exhaustedHead = "847fa413d013df600c1dde084b66154ba86ece28"
+        let ordinaryRoundThree =
+            { receipt with
+                Item = "EHotwagner/S.I.R.#231"
+                ClaimGeneration = "5365192535"
+                ReviewGeneration = ReviewWait.generationToken exhaustedHead ReviewWait.RepairConfirmation 3
+                EvidenceRef = "https://github.com/EHotwagner/S.I.R./pull/238#issuecomment-5366363585" }
+        let completed =
+            ReviewWait.Complete(
+                ordinaryRoundThree.ReviewGeneration,
+                ordinaryRoundThree.EnteredAt.AddMinutes 1.0,
+                ordinaryRoundThree.EvidenceRef)
+
+        match
+            ReviewWait.project ordinaryRoundThree.Item (Some "5366404068") false (entered.AddHours 1.0)
+                [ ReviewWait.Enter ordinaryRoundThree; completed ]
+        with
+        | ReviewWait.Completed (preserved, evidence) ->
+            Assert.Equal(ordinaryRoundThree, preserved)
+            Assert.Equal(ordinaryRoundThree.EvidenceRef, evidence)
+        | other -> failwithf "completed round-three exhaustion evidence was hidden by claim turnover: %A" other
