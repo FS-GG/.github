@@ -2237,8 +2237,12 @@ module Client =
                                 && roundOne.Kind = StructuredDecision.Confirmation && roundOne.Round = 1
                                 && roundTwo.Kind = StructuredDecision.Confirmation && roundTwo.Round = 2
                                 && roundThree.Kind = StructuredDecision.Confirmation && roundThree.Round = 3
-                                && ([ initial; roundOne; roundTwo; roundThree ]
-                                    |> List.forall (fun record -> record.HeadSha = draft.HeadSha))
+                            // `.github#2807`: repairs advance the pull-request head. The structured-ledger
+                            // validator above already exact-binds every record to its own 40-hex head and
+                            // preserves the ordered revision/digest/backlink/round chain. Requiring every
+                            // historical head to equal the terminal draft therefore rejects the ordinary
+                            // multi-round shape. Terminal authority remains exact below: round three, the
+                            // escalation draft, completed wait, legacy marker, and live PR all bind one head.
                             let unresolved =
                                 [ initial; roundOne; roundTwo; roundThree ]
                                 |> List.forall (fun record -> record.Verdict = StructuredDecision.ChangesRequired)

@@ -492,7 +492,15 @@ rm -f "$review_wait_draft"
 turnover_draft="$(mktemp)"
 turnover_wait="$(mktemp)"
 turnover_comment_ids=()
-turnover_head="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+# .github#2807: real repair rounds review new commits. Keep every record exact-head-bound while
+# making the history advance; only round three equals the fixture PR's live terminal head.
+turnover_heads=(
+  "1111111111111111111111111111111111111111"
+  "2222222222222222222222222222222222222222"
+  "3333333333333333333333333333333333333333"
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+)
+turnover_head="${turnover_heads[3]}"
 turnover_critic="critic-turnover-2797"
 turnover_old_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:claim worker=fixture-turnover-old lease=120 -->\nheld"}' \
@@ -543,16 +551,17 @@ PY
 
 turnover_initial_url=""; turnover_preceding_url=""; turnover_previous_digest=""
 for turnover_round in 0 1 2 3; do
+  turnover_round_head="${turnover_heads[$turnover_round]}"
   if [ "$turnover_round" -eq 0 ]; then
-    turnover_kind="initial"; turnover_generation="$turnover_head:initial-review:0"
+    turnover_kind="initial"; turnover_generation="$turnover_round_head:initial-review:0"
   else
-    turnover_kind="confirmation"; turnover_generation="$turnover_head:repair-confirmation:$turnover_round"
+    turnover_kind="confirmation"; turnover_generation="$turnover_round_head:repair-confirmation:$turnover_round"
   fi
   write_turnover_wait enter "$turnover_generation" ""
   turnover_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 43 --json 2>&1)"; turnover_wait_rc=$?
   turnover_wait_id="$(printf '%s' "$turnover_wait_out" | jq -r '.commentId // empty')"
   [ -n "$turnover_wait_id" ] && turnover_comment_ids+=("$turnover_wait_id")
-  write_turnover_draft "$turnover_kind" "$turnover_round" "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url"
+  write_turnover_draft "$turnover_kind" "$turnover_round" "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url" "$turnover_round_head"
   turnover_record_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json 2>&1)"; turnover_record_rc=$?
   turnover_record_id="$(printf '%s' "$turnover_record_out" | jq -r '.commentId // empty')"
   turnover_record_url="$(printf '%s' "$turnover_record_out" | jq -r '.commentUrl // empty')"
