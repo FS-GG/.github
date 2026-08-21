@@ -139,7 +139,9 @@ validating the old claim's exact structured chain, legacy exhaustion marker, com
 head, and fresh claimant. Malformed, stale, duplicate, replacement-acceptance, and unmerged states refuse
 before writes. `Protocol.fs` is byte-identical to 0.67.0 and no command, member, destination, or identity
 is removed; this is additive receiver-visible review behavior, so the coherent set advances to 0.68.0
-(.github#2797/#2794). Unmerged .github#2772 behavior is not included.
+(.github#2797/#2794). The same cut includes merged .github#2772: forced-claim repair-phase transitions now
+preserve the latest-review and initial-review backlinks the structured ledger validators require, closing
+the cross-claim acceptance defect without changing `Protocol.fs` or adding a second repair phase.
 
 0.67.0 — review queues become durable, bounded state and fresh successors become ordinary.
 

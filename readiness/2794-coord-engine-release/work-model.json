@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bfb79b1a437cdf362e8dff383a795f5a97a81ccb6ddf061dffe7806c849cb31d"
+        "value": "2c33ce5848f861f911e5486c84190428d42503e3fc78401a20fc689e768e6a2d"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "8f4784f211adb78a024899a9105686eacaba39bb9636928530a25dfa9298fbc0"
+        "value": "02b9bb7728fac60cb68710dfc35bbe39b8f195dfc3989627ec523a3f5b3c421c"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "645c19cf3fca1961dddd212fe7881e23ccf1f733b5d1fced9e393419ada32ef5"
+        "value": "9323af5bf9588e60ff6b18522a39a8d2aa379d2085dc34d7c4afa1900f83a8bf"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "380eba3c69f481edb96be544ab304901b60cb5117b5a1374133907ea0420a4c2"
+        "value": "5efac2350abb0285064874244a3885c94855fb87126d9a5c98f6ade4fe6708f5"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "5ac40528a4e9cbcbf6b02aedc2cfb7261e5d152e945ff8949c2401b03e912f2e"
+        "value": "ad93a46b5d1ab65dc8e5360a70810fd126c2f44fee2df14c5e1b119db1e66b3b"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "ff571da177fde574c18d8d460caa42c5eb8ecb681ee69a2b7dc7b3fc1f83ea4b"
+        "value": "11ccc901a29ed7725b26d69321c2a94a32745113ec9b10b6c0458cd7c5ee7655"
       }
     }
   ],
@@ -214,8 +214,8 @@
   "decisions": [
     {
       "id": "DEC-001",
-      "title": "Cut coherent set \u00600.68.0\u0060. The 0.67.0 frontier lacks three merged engine commits that preserve completed review exhaustion across claim turnover, project the exhausted repair phase, and authorize one structured cross-claim escalation. Those are additive receiver-observable semantics, with no removal and zero \u0060Protocol.fs\u0060 wire commits; MINOR matches the repository\u0027s coherent-set convention.",
-      "decision": "Cut coherent set \u00600.68.0\u0060. The 0.67.0 frontier lacks three merged engine commits that preserve completed review exhaustion across claim turnover, project the exhausted repair phase, and authorize one structured cross-claim escalation. Those are additive receiver-observable semantics, with no removal and zero \u0060Protocol.fs\u0060 wire commits; MINOR matches the repository\u0027s coherent-set convention.",
+      "title": "Cut coherent set \u00600.68.0\u0060. The 0.67.0 frontier lacks four merged engine commits: three preserve/project/authorize the exhausted cross-claim review route, and \u00607cef7301\u0060 repairs its forced-claim repair-phase latest-review/backlink transition. The set remains additive/compatible, with no removal and zero \u0060Protocol.fs\u0060 wire commits; MINOR matches the repository\u0027s coherent-set convention.",
+      "decision": "Cut coherent set \u00600.68.0\u0060. The 0.67.0 frontier lacks four merged engine commits: three preserve/project/authorize the exhausted cross-claim review route, and \u00607cef7301\u0060 repairs its forced-claim repair-phase latest-review/backlink transition. The set remains additive/compatible, with no removal and zero \u0060Protocol.fs\u0060 wire commits; MINOR matches the repository\u0027s coherent-set convention.",
       "requirementRefs": [],
       "storyRefs": [],
       "acceptanceRefs": [],
@@ -230,8 +230,8 @@
     },
     {
       "id": "DEC-002",
-      "title": "Prepare from the latest merged main, merge the version/release-note/SDD source PR, and tag only that merge commit. Recompute freshness immediately before freeze. Unmerged #2772 bytes and claims are neither packaged nor announced.",
-      "decision": "Prepare from the latest merged main, merge the version/release-note/SDD source PR, and tag only that merge commit. Recompute freshness immediately before freeze. Unmerged #2772 bytes and claims are neither packaged nor announced.",
+      "title": "Prepare from the latest merged main, including merged #2772, merge the version/release-note/SDD source PR, and tag only that merge commit. Recompute freshness immediately before freeze; no unmerged behavior is packaged or announced.",
+      "decision": "Prepare from the latest merged main, including merged #2772, merge the version/release-note/SDD source PR, and tag only that merge commit. Recompute freshness immediately before freeze; no unmerged behavior is packaged or announced.",
       "requirementRefs": [],
       "storyRefs": [],
       "acceptanceRefs": [],
@@ -683,7 +683,7 @@
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "FR-001 is complete at the prepared-source boundary: freshness measured exactly three merged engine commits after 0.67.0, zero Protocol.fs commits, and no unmerged #2772 bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence.",
+      "rationale": "FR-001 is complete at the prepared-source boundary: freshness measured exactly four merged engine commits after 0.67.0, including #2772 commit 7cef7301, zero Protocol.fs commits, and no unmerged bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence.",
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 1,
@@ -776,7 +776,7 @@
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports three unreleased commits.",
+      "rationale": "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports four unreleased commits.",
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 4,
@@ -834,7 +834,7 @@
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": "DEC-002\u0027s prepared-source boundary is satisfied through the current frozen PR and excludes unmerged #2772, but its immutable merge/tag half necessarily remains after merge.",
+      "rationale": "DEC-002\u0027s prepared-source boundary is satisfied through the current frozen PR and includes merged #2772 commit 7cef7301 while excluding unmerged work, but its immutable merge/tag half necessarily remains after merge.",
       "source": "work/2794-coord-engine-release/evidence.yml",
       "sourceLocation": {
         "line": 6,
@@ -1083,7 +1083,7 @@
           "path": "work/2794-coord-engine-release/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "bfb79b1a437cdf362e8dff383a795f5a97a81ccb6ddf061dffe7806c849cb31d"
+            "value": "2c33ce5848f861f911e5486c84190428d42503e3fc78401a20fc689e768e6a2d"
           },
           "schemaVersion": 1
         },
@@ -1091,7 +1091,7 @@
           "path": "work/2794-coord-engine-release/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "8f4784f211adb78a024899a9105686eacaba39bb9636928530a25dfa9298fbc0"
+            "value": "02b9bb7728fac60cb68710dfc35bbe39b8f195dfc3989627ec523a3f5b3c421c"
           },
           "schemaVersion": 1
         },
@@ -1099,7 +1099,7 @@
           "path": "work/2794-coord-engine-release/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "645c19cf3fca1961dddd212fe7881e23ccf1f733b5d1fced9e393419ada32ef5"
+            "value": "9323af5bf9588e60ff6b18522a39a8d2aa379d2085dc34d7c4afa1900f83a8bf"
           },
           "schemaVersion": 1
         },
@@ -1107,7 +1107,7 @@
           "path": "work/2794-coord-engine-release/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "380eba3c69f481edb96be544ab304901b60cb5117b5a1374133907ea0420a4c2"
+            "value": "5efac2350abb0285064874244a3885c94855fb87126d9a5c98f6ade4fe6708f5"
           },
           "schemaVersion": 1
         },
@@ -1115,7 +1115,7 @@
           "path": "work/2794-coord-engine-release/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "5ac40528a4e9cbcbf6b02aedc2cfb7261e5d152e945ff8949c2401b03e912f2e"
+            "value": "ad93a46b5d1ab65dc8e5360a70810fd126c2f44fee2df14c5e1b119db1e66b3b"
           },
           "schemaVersion": 1
         },
@@ -1123,14 +1123,14 @@
           "path": "work/2794-coord-engine-release/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "ff571da177fde574c18d8d460caa42c5eb8ecb681ee69a2b7dc7b3fc1f83ea4b"
+            "value": "11ccc901a29ed7725b26d69321c2a94a32745113ec9b10b6c0458cd7c5ee7655"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "973d524a8d0dc1ea4dc36b9eb4e08cced62a33bfc9c707eafd746ef7070a8180"
+        "value": "31afe2df17be4a810c909f29fe5d6aca3f019efe22e66be544c87bb2a3152281"
       },
       "currency": "current"
     }

@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2794-coord-engine-release/ship.json",
-      "digest": "sha256:6eb45755baefe00666e3f8e17813910f9beca261af1296d7fb7df9d32b48e3ab",
+      "digest": "sha256:dbec92c1dfa69ec0d7988756b1c8bff4a9b2de0503aa0e3488d58c8ef7e2c709",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2794-coord-engine-release/verify.json",
-      "digest": "sha256:3542d2ca97e308a0fb489b49fbf118e106f14a4164c293dae39a28f06e6889df",
+      "digest": "sha256:fc939dca837e05c533aa1308f781b1b39002dbe1efa64607c82c6c8052649a82",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2794-coord-engine-release/work-model.json",
-      "digest": "sha256:2a9ce933e730adc1de61c0c2c03aeca594bb325f7f062a9e1cb591c10591ae54",
+      "digest": "sha256:29995fad258efae4ee683d895c6f18b7d17d2d7b20308f71584410f42e5bf9b1",
       "schemaVersion": 1
     }
   ],
@@ -25,7 +25,7 @@
       {
         "id": "evidence:EV001",
         "state": "skipped",
-        "rationale": "FR-001 is complete at the prepared-source boundary: freshness measured exactly three merged engine commits after 0.67.0, zero Protocol.fs commits, and no unmerged #2772 bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence."
+        "rationale": "FR-001 is complete at the prepared-source boundary: freshness measured exactly four merged engine commits after 0.67.0, including #2772 commit 7cef7301, zero Protocol.fs commits, and no unmerged bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence."
       },
       {
         "id": "evidence:EV002",
@@ -40,7 +40,7 @@
       {
         "id": "evidence:EV004",
         "state": "skipped",
-        "rationale": "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports three unreleased commits."
+        "rationale": "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports four unreleased commits."
       },
       {
         "id": "evidence:EV005",
@@ -50,7 +50,7 @@
       {
         "id": "evidence:EV006",
         "state": "skipped",
-        "rationale": "DEC-002\u0027s prepared-source boundary is satisfied through the current frozen PR and excludes unmerged #2772, but its immutable merge/tag half necessarily remains after merge."
+        "rationale": "DEC-002\u0027s prepared-source boundary is satisfied through the current frozen PR and includes merged #2772 commit 7cef7301 while excluding unmerged work, but its immutable merge/tag half necessarily remains after merge."
       },
       {
         "id": "evidence:EV007",

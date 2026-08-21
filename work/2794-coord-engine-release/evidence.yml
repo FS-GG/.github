@@ -11,27 +11,27 @@ sourceAnalysis: readiness/2794-coord-engine-release/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2794-coord-engine-release/analysis.json
-    digest: a31fbcc326124d00e736c5214ad085ffc180e14464019304fdafd3ce64e430d5
+    digest: 440f628109e51671fb0bfb1f56703941c083bd57763bd6a6ded5025134009739
     schemaVersion: 1
   - label: checklist
     path: work/2794-coord-engine-release/checklist.md
-    digest: bfb79b1a437cdf362e8dff383a795f5a97a81ccb6ddf061dffe7806c849cb31d
+    digest: 2c33ce5848f861f911e5486c84190428d42503e3fc78401a20fc689e768e6a2d
     schemaVersion: 1
   - label: clarifications
     path: work/2794-coord-engine-release/clarifications.md
-    digest: 8f4784f211adb78a024899a9105686eacaba39bb9636928530a25dfa9298fbc0
+    digest: 02b9bb7728fac60cb68710dfc35bbe39b8f195dfc3989627ec523a3f5b3c421c
     schemaVersion: 1
   - label: plan
     path: work/2794-coord-engine-release/plan.md
-    digest: 380eba3c69f481edb96be544ab304901b60cb5117b5a1374133907ea0420a4c2
+    digest: 5efac2350abb0285064874244a3885c94855fb87126d9a5c98f6ade4fe6708f5
     schemaVersion: 1
   - label: spec
     path: work/2794-coord-engine-release/spec.md
-    digest: 5ac40528a4e9cbcbf6b02aedc2cfb7261e5d152e945ff8949c2401b03e912f2e
+    digest: ad93a46b5d1ab65dc8e5360a70810fd126c2f44fee2df14c5e1b119db1e66b3b
     schemaVersion: 1
   - label: tasks
     path: work/2794-coord-engine-release/tasks.yml
-    digest: ff571da177fde574c18d8d460caa42c5eb8ecb681ee69a2b7dc7b3fc1f83ea4b
+    digest: 11ccc901a29ed7725b26d69321c2a94a32745113ec9b10b6c0458cd7c5ee7655
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -50,7 +50,7 @@ evidence:
     sourceRefs: []
     result: deferred
     synthetic: false
-    rationale: "FR-001 is complete at the prepared-source boundary: freshness measured exactly three merged engine commits after 0.67.0, zero Protocol.fs commits, and no unmerged #2772 bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence."
+    rationale: "FR-001 is complete at the prepared-source boundary: freshness measured exactly four merged engine commits after 0.67.0, including #2772 commit 7cef7301, zero Protocol.fs commits, and no unmerged bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence."
     owner: heron-dd53
     scope: "FR-001 release inventory, semantic classification, and prepared-source boundary only."
     laterLifecycleVisibility: "Replace this deferral in the same work package after merge with the immutable source/tag/manifest inventory and post-release freshness receipt before #2794 is stamped Done."
@@ -113,7 +113,7 @@ evidence:
     sourceRefs: []
     result: deferred
     synthetic: false
-    rationale: "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports three unreleased commits."
+    rationale: "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports four unreleased commits."
     owner: heron-dd53
     scope: "Final registry, changelog, compatibility, release-asset, install, and clear-freshness record for 0.68.0."
     laterLifecycleVisibility: "A post-publication registry PR under the same #2794 claim replaces the prepared entry and this deferral with immutable evidence, then reruns freshness before Done."
@@ -155,9 +155,9 @@ evidence:
     sourceRefs: []
     result: deferred
     synthetic: false
-    rationale: "DEC-002's prepared-source boundary is satisfied through the current frozen PR and excludes unmerged #2772, but its immutable merge/tag half necessarily remains after merge."
+    rationale: "DEC-002's prepared-source boundary is satisfied through the current frozen PR and includes merged #2772 commit 7cef7301 while excluding unmerged work, but its immutable merge/tag half necessarily remains after merge."
     owner: heron-dd53
-    scope: "Latest merged-main source selection, #2772 exclusion, immutable merge, and tag target."
+    scope: "Latest merged-main source selection, merged #2772 inclusion, unmerged-work exclusion, immutable merge, and tag target."
     laterLifecycleVisibility: Record the actual merge SHA and prove every 0.68.0 member tag names it before finalization.
     notes: ["The current PR head is preparation evidence, not the future immutable merge commit."]
   - id: EV007

@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2794-coord-engine-release/clarifications.md
 
 ## Source Snapshot
-- spec: work/2794-coord-engine-release/spec.md sha256:5ac40528a4e9cbcbf6b02aedc2cfb7261e5d152e945ff8949c2401b03e912f2e schemaVersion:1
-- clarifications: work/2794-coord-engine-release/clarifications.md sha256:c592555e062945ba523a1ab11251f5b3b1db695741e3f60907788ec0e092c963 schemaVersion:1
+- spec: work/2794-coord-engine-release/spec.md sha256:ad93a46b5d1ab65dc8e5360a70810fd126c2f44fee2df14c5e1b119db1e66b3b schemaVersion:1
+- clarifications: work/2794-coord-engine-release/clarifications.md sha256:02b9bb7728fac60cb68710dfc35bbe39b8f195dfc3989627ec523a3f5b3c421c schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

@@ -21,7 +21,7 @@ policyPointers:
 - Status: chartered
 
 ## Principles
-- Release only merged `origin/main`; unmerged `.github#2772` behavior is explicitly excluded.
+- Release only merged `origin/main`; the cut now includes the merged `.github#2772` repair at `7cef7301`.
 - Treat the coherent-set scalar, three package tags, prepared package bytes, two feeds, registry metadata,
   and downstream install as one release transaction whose evidence binds to one immutable source commit.
 - Feed reads and isolated installs establish publication; a workflow conclusion alone does not.
@@ -32,7 +32,7 @@ policyPointers:
   prepare and merge the coherent source version and release notes; publish the three coherent-set packages;
   verify byte-identical payloads on GitHub Packages and nuget.org; record registry/compatibility evidence;
   and prove a clean downstream install executes the cross-claim structured escalation route from `.github#2797`.
-- Out: any source or behavior from unmerged `.github#2772`; redesign of release workflows; unrelated receiver
+- Out: any source or behavior not merged on the frozen `origin/main`; redesign of release workflows; unrelated receiver
   upgrades; and changes to command/wire behavior beyond the already-merged engine commits being released.
 
 ## Policy Pointers
