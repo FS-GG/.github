@@ -592,13 +592,51 @@ else
   bad ".github#1620: adopt must refuse a live claim and name a remedy" "rc=$adrc advice='$advice': $adoptout"
 fi
 
-# shellcheck disable=SC2086 # $advice is the tool's OWN argv, split on purpose — that is what "verbatim" means
-steal="$("$ENGINE" $advice --worker kite-461 2>&1)"; strc=$?
-if [ "$strc" -eq 0 ] && printf '%s' "$steal" | grep -q 'STOLE FS.GG.SDD#42'; then
-  ok ".github#1620: ...and running it VERBATIM takes the item — the advertised route is real"
+# .github#2772: replacement creation fails before any destructive write. The compiled command must
+# render the typed, census-backed postcondition, not the raw transport error shared by the later boundary.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-claim-post" >/dev/null
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+post_fail="$("$ENGINE" $advice --worker kite-461 2>&1)"; post_fail_rc=$?
+if [ "$post_fail_rc" -ne 0 ] && grep -q 'replacement POST FAILED' <<<"$post_fail" \
+   && grep -q 'OLD HOLDER STANDS' <<<"$post_fail" \
+   && grep -q 'nothing was taken' <<<"$post_fail"; then
+  ok ".github#2772: replacement POST failure renders the typed old-holder-standing postcondition"
 else
-  bad ".github#1620: adopt's remedy must work when followed" "rc=$strc: $steal"
+  bad ".github#2772: replacement POST failure must be distinct and census-backed" "rc=$post_fail_rc: $post_fail"
 fi
+
+# The other failure boundary has a different typed/rendered meaning. Simulate the replacement vanishing
+# while the incumbent DELETE response fails; the complete re-read proves OldHolderStands, but this is NOT
+# a replacement-POST failure and must not use that diagnostic.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/lose-replacement-on-next-claim-delete" >/dev/null
+# shellcheck disable=SC2086 # exercising the tool-authored remedy argv verbatim.
+delete_fail="$("$ENGINE" $advice --worker kite-461 2>&1)"; delete_fail_rc=$?
+if [ "$delete_fail_rc" -ne 0 ] && grep -q 'replacement marker' <<<"$delete_fail" \
+   && grep -q 'OLD HOLDER STANDS' <<<"$delete_fail" \
+   && ! grep -q 'replacement POST FAILED' <<<"$delete_fail"; then
+  ok ".github#2772: cleanup-boundary OldHolderStands is rendered apart from replacement POST failure"
+else
+  bad ".github#2772: cleanup-boundary OldHolderStands needs its own actionable rendering" "rc=$delete_fail_rc: $delete_fail"
+fi
+
+# shellcheck disable=SC2086 # $advice is the tool's OWN argv, split on purpose — that is what "verbatim" means
+steal_err="$(mktemp)"
+steal="$("$ENGINE" $advice --worker kite-461 --json 2>"$steal_err")"; strc=$?
+steal_notice=false
+grep -q 'STOLE FS.GG.SDD#42' "$steal_err" && steal_notice=true
+steal_census=false
+jq -e \
+      '.markerId as $markerId
+       | .kind == "stolen" and .forcedClaimCensuses.before.winnerMarkerId != null
+       and .forcedClaimCensuses.after.winnerMarkerId == $markerId
+       and (.forcedClaimCensuses.before.markers | length) >= 1
+       and (.forcedClaimCensuses.after.markers | length) == 1' <<<"$steal" >/dev/null && steal_census=true
+if [ "$strc" -eq 0 ] && [ "$steal_notice" = true ] && [ "$steal_census" = true ]; then
+  ok ".github#1620/#2772: running the remedy takes the item and its receipt carries pre/post censuses"
+else
+  bad ".github#1620/#2772: adopt's remedy must work and return census evidence" "rc=$strc stdout=$steal stderr=$(cat "$steal_err")"
+fi
+rm -f "$steal_err"
 
 # THE DISPLACED WORKER MUST FIND OUT. It is still running — that is the whole difference between a steal
 # and a stale collection — so a heartbeat that quietly succeeded would leave two workers on one item.

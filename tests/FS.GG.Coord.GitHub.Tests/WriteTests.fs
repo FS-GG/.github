@@ -702,7 +702,7 @@ let ``#1620 --force TAKES a live claim held by another worker, and names who it 
               ok (comments [ marker 902 "vole-418" "" ]) ] // 4. re-read: the way is clear, we win
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
-    | Ok(Stolen(held, from, _)) ->
+    | Ok(Stolen(held, from, _, _)) ->
         Assert.Equal(902L, held.MarkerId)
         Assert.Equal(me, held.Worker)
         // WHO WE TOOK IT FROM IS PART OF THE OUTCOME, not a detail the caller reconstructs. It is what the
@@ -775,12 +775,15 @@ let ``#2772 failed cleanup retains the posted replacement and reports the standi
               ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
-    | Ok(CleanupRequired(replacement, removed, failed, failedMarkerId, reason)) ->
+    | Ok(CleanupRequired(replacement, removed, failed, failedMarkerId, reason, censuses)) ->
         Assert.Equal(902L, replacement.MarkerId)
         Assert.Empty removed
         Assert.Equal(them, failed)
         Assert.Equal(901L, failedMarkerId)
         Assert.Contains("delete failed", reason)
+        Assert.Equal(Some 901L, censuses.Before.WinnerMarkerId)
+        Assert.Equal(Some 901L, censuses.After |> Option.bind _.WinnerMarkerId)
+        Assert.Equal<int64 list>([ 901L; 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
     | other -> failwith $"failed cleanup must retain the replacement — got %A{other}"
 
     Assert.Equal(1, transport.Count "comment-post")
@@ -794,9 +797,11 @@ let ``#2772 retry reuses the retained replacement and completes cleanup without 
               ok (comments [ marker 902 "vole-418" "" ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
-    | Ok(Stolen(replacement, removed, _)) ->
+    | Ok(Stolen(replacement, removed, _, censuses)) ->
         Assert.Equal(902L, replacement.MarkerId)
         Assert.Equal<WorkerId list>([ them ], removed)
+        Assert.Equal<int64 list>([ 901L; 902L ], censuses.Before.Markers |> List.map _.MarkerId)
+        Assert.Equal<int64 list>([ 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
     | other -> failwith $"retry must reconcile the retained replacement — got %A{other}"
     Assert.Equal(0, transport.Count "comment-post")
 
@@ -811,10 +816,83 @@ let ``#2772 an ambiguous DELETE response is resolved from the complete census be
               ok (comments [ marker 902 "vole-418" "" ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
-    | Ok(Stolen(replacement, removed, _)) ->
+    | Ok(Stolen(replacement, removed, _, censuses)) ->
         Assert.Equal(902L, replacement.MarkerId)
         Assert.Equal<WorkerId list>([ them ], removed)
+        Assert.Equal(Some 902L, censuses.After |> Option.bind _.WinnerMarkerId)
     | other -> failwith $"complete census must settle ambiguous delete — got %A{other}"
+
+[<Fact>]
+let ``#2772 a vanished replacement and surviving incumbent returns census-backed OldHolderStands`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" "" ])
+              ok """{"id":902}"""
+              Error(Http(503, "delete response lost"))
+              ok (comments [ marker 901 "kite-461" "" ]) ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(OldHolderStands(replacementMarkerId, holder, holderMarkerId, removed, censuses)) ->
+        Assert.Equal(902L, replacementMarkerId)
+        Assert.Equal(them, holder)
+        Assert.Equal(901L, holderMarkerId)
+        Assert.Empty removed
+        Assert.Equal(Some 901L, censuses.Before.WinnerMarkerId)
+        Assert.Equal(Some 901L, censuses.After |> Option.bind _.WinnerMarkerId)
+    | other -> failwith $"a complete surviving-incumbent census must govern the result — got %A{other}"
+
+[<Fact>]
+let ``#2772 a readable empty post-census is a typed no-holder anomaly`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" "" ])
+              ok """{"id":902}"""
+              Error(Http(503, "delete response lost"))
+              ok "[]" ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(NoHolderRemaining(Some replacementMarkerId, removed, censuses)) ->
+        Assert.Equal(902L, replacementMarkerId)
+        Assert.Empty removed
+        Assert.Equal(Some 901L, censuses.Before.WinnerMarkerId)
+        Assert.Equal(None, censuses.After |> Option.bind _.WinnerMarkerId)
+        Assert.Empty censuses.After.Value.Markers
+    | other -> failwith $"a complete empty census must not collapse into a transport error — got %A{other}"
+
+[<Fact>]
+let ``#2772 an unreadable census after replacement POST failure returns no ownership verdict`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" "" ])
+              Error(Http(500, "post failed"))
+              Error(Http(503, "census failed")) ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(PostStateUnreadable(None, removed, reason, censuses)) ->
+        Assert.Empty removed
+        Assert.Contains("replacement POST failed", reason)
+        Assert.Contains("post failed", reason)
+        Assert.Contains("census failed", reason)
+        Assert.Equal(Some 901L, censuses.Before.WinnerMarkerId)
+        Assert.True(Option.isNone censuses.After)
+    | other -> failwith $"an unreadable post-failure census must authorize nothing — got %A{other}"
+
+[<Fact>]
+let ``#2772 a fresh winner after cleanup is distinct from an ordinary incumbent refusal`` () =
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "kite-461" "" ])
+              ok """{"id":903}"""
+              ok ""
+              ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ])
+              ok "" ]
+
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(ForcedClaimLost(winner, censuses)) ->
+        Assert.Equal(WorkerId "otter-77", winner)
+        Assert.Equal(Some 901L, censuses.Before.WinnerMarkerId)
+        Assert.Equal(Some 902L, censuses.After |> Option.bind _.WinnerMarkerId)
+    | other -> failwith $"a fresh post-cleanup winner needs a forced-transition result — got %A{other}"
 
 [<Fact>]
 let ``#1620 a steal that loses the FRESH race backs off cleanly - it does not force its way past`` () =
@@ -830,7 +908,7 @@ let ``#1620 a steal that loses the FRESH race backs off cleanly - it does not fo
               ok "" ] // 5. withdraw ours
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
-    | Ok(Lost w) -> Assert.Equal(WorkerId "otter-77", w)
+    | Ok(ForcedClaimLost(w, _)) -> Assert.Equal(WorkerId "otter-77", w)
     | other -> failwith $"a steal that loses the fresh race is a LOSS — got %A{other}"
 
     Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 903")
@@ -849,7 +927,7 @@ let ``#1620 a steal still COLLECTS stale debris, and reports it apart from who i
               ok "" ] // collect the stale 700
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
-    | Ok(Stolen(_, from, collected)) ->
+    | Ok(Stolen(_, from, collected, _)) ->
         Assert.Equal<WorkerId list>([ them ], from)
         Assert.Equal<WorkerId list>([ WorkerId "ghost-111" ], collected)
     | other -> failwith $"a steal collects stale debris too — got %A{other}"
@@ -871,11 +949,18 @@ let ``#2772 a replacement POST failure leaves the incumbent standing and announc
     let transport =
         scripted
             [ ok (comments [ marker 901 "kite-461" "" ]) // read: kite-461 holds it
-              Error(Http(500, "post failed")) ]
+              Error(Http(500, "post failed"))
+              ok (comments [ marker 901 "kite-461" "" ]) ] // authoritative post-failure census
 
     match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
-    | Error _ -> ()
-    | other -> failwith $"a failed post after an eviction is an error — got %A{other}"
+    | Ok(ReplacementPostFailed(holder, holderMarkerId, reason, censuses)) ->
+        Assert.Equal(them, holder)
+        Assert.Equal(901L, holderMarkerId)
+        Assert.Contains("post failed", reason)
+        Assert.Equal(Some 901L, censuses.Before.WinnerMarkerId)
+        Assert.Equal(Some 901L, censuses.After |> Option.bind _.WinnerMarkerId)
+        Assert.Equal<int64 list>([ 901L ], censuses.After.Value.Markers |> List.map _.MarkerId)
+    | other -> failwith $"a failed replacement post must prove the old holder stands — got %A{other}"
 
     Assert.Empty evicted
     Assert.Equal(0, transport.Count "comment-delete")
@@ -895,7 +980,7 @@ let ``#1620 a steal that LOSES the fresh race still announces the eviction it pe
               ok "" ] // withdraw ours
 
     match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
-    | Ok(Lost w) -> Assert.Equal(WorkerId "otter-77", w)
+    | Ok(ForcedClaimLost(w, _)) -> Assert.Equal(WorkerId "otter-77", w)
     | other -> failwith $"a steal that loses the fresh race is a LOSS — got %A{other}"
 
     Assert.Equal<WorkerId list>([ them ], List.ofSeq evicted)

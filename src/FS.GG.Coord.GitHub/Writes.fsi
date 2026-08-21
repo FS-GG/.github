@@ -164,6 +164,23 @@ module Writes =
         /// first lands here, and the tool cannot tell it from the operator this case exists for.
         | DerivesNothing
 
+    /// One marker in a complete authoritative census surrounding a forced-claim transition.
+    type ClaimMarkerObservation =
+        { MarkerId: int64
+          Worker: WorkerId
+          Live: bool }
+
+    /// The complete ordered marker set and its existing comment-order winner.
+    type ClaimMarkerCensus =
+        { WinnerMarkerId: int64 option
+          Markers: ClaimMarkerObservation list }
+
+    /// The authoritative observations governing a forced-claim result. `After = None` means the
+    /// post-operation census was unreadable; it never means the item was empty.
+    type ForcedClaimCensuses =
+        { Before: ClaimMarkerCensus
+          After: ClaimMarkerCensus option }
+
     /// What happened when we went for the lock.
     ///
     /// NOT A BOOL, AND NOT AN OPTION. Each case is a different instruction to the worker, and collapsing
@@ -207,28 +224,36 @@ module Writes =
         ///
         /// The DUTY to announce the theft does not ride on this case, though: it rides on `onEvict` below,
         /// because a lock can be destroyed on executions that never reach here.
-        | Stolen of held: Held * from: WorkerId list * collected: WorkerId list
+        | Stolen of held: Held * from: WorkerId list * collected: WorkerId list * censuses: ForcedClaimCensuses
+
+        /// Replacement creation failed, a complete post-census proves the incumbent still wins, and no
+        /// incumbent deletion was attempted. This is a typed old-holder-standing result, not raw transport.
+        | ReplacementPostFailed of holder: WorkerId * holderMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
 
         /// The replacement marker was posted before destructive cleanup began, but deleting one incumbent
         /// failed. `replacement` remains on the item; `removed` names only deletions observed successful;
         /// `failed`/`failedMarkerId` name the marker that still stands. Re-running `claim --force` with the
         /// same identity reconciles this deterministic two-marker state instead of posting another marker.
-        | CleanupRequired of replacement: Held * removed: WorkerId list * failed: WorkerId * failedMarkerId: int64 * reason: string
+        | CleanupRequired of replacement: Held * removed: WorkerId list * failed: WorkerId * failedMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
 
         /// Incumbent cleanup completed, but the complete post-operation census could not be read. The
         /// replacement is deliberately retained: withdrawing it after destructive cleanup could create the
         /// zero-marker state this transition forbids. Retry is authorized only to re-read/reconcile.
-        | PostStateUnreadable of replacement: Held * removed: WorkerId list * reason: string
+        | PostStateUnreadable of replacement: Held option * removed: WorkerId list * reason: string * censuses: ForcedClaimCensuses
 
         /// The post-operation census is complete, the replacement marker is absent, and a foreign live
         /// holder remains authoritative. The caller may report that the old holder stands; it may not infer
         /// that retry is safe merely from a transport error.
-        | OldHolderStands of replacementMarkerId: int64 * holder: WorkerId * holderMarkerId: int64 * removed: WorkerId list
+        | OldHolderStands of replacementMarkerId: int64 * holder: WorkerId * holderMarkerId: int64 * removed: WorkerId list * censuses: ForcedClaimCensuses
 
         /// The complete post-census was readable and contained no live marker, including no replacement.
         /// This is an observed anomaly rather than an ordinary loss; the marker id names the capability that
         /// vanished so the caller can report the exact failed transition.
-        | NoHolderRemaining of replacementMarkerId: int64 * removed: WorkerId list
+        | NoHolderRemaining of replacementMarkerId: int64 option * removed: WorkerId list * censuses: ForcedClaimCensuses
+
+        /// Cleanup completed, but a fresh foreign marker won the unchanged comment-order election. The
+        /// complete pre/post census makes this distinct from an ordinary refusal by the original holder.
+        | ForcedClaimLost of winner: WorkerId * censuses: ForcedClaimCensuses
 
         /// Another worker holds it, and their lock is live. Their id, so the worker can `say` to them.
         ///

@@ -18,24 +18,28 @@ publicOrToolFacingImpact: true
 - CQ-001 [AMB:AMB-001] blocking answered: Can the replacement be elected before deleting the
   lower-comment-id incumbent while preserving comment-order authority?
 - CQ-002 [AMB:AMB-002] blocking answered: How must a cleanup failure be represented so the caller can
-  determine the observed post-state and retry authority?
+  determine the observed post-state and retry authority, including failure before replacement creation?
 
 ## Answers
 - CQ-001 [AMB:AMB-001] decision: No. Create the replacement capability first, then delete the foreign
   live markers, then evaluate the unchanged comment-order election from a fresh complete census. Until
   an older marker is removed, that older marker remains authoritative.
-- CQ-002 [AMB:AMB-002] decision: Return a distinct typed cleanup-required outcome carrying the posted
-  replacement, the workers already removed, and the marker whose removal failed. The CLI renders this
-  observed state separately from a pre-post transport failure and authorizes a re-run to reconcile it.
+- CQ-002 [AMB:AMB-002] decision: Every forced transition returns a typed outcome governed by its complete
+  pre-census and, when readable, complete post-census. Replacement POST failure is therefore a typed
+  `ReplacementPostFailed` result proving the incumbent still wins, not a raw transport error. Cleanup
+  failure carries the posted replacement and failed incumbent; unreadable post-state carries no invented
+  census. Only the typed observed state authorizes any reconciliation.
 
 ## Decisions
 - DEC-001 [CQ-001] [AMB:AMB-001]: Preserve comment-order authority. The transition is
   `complete pre-census → admit → post replacement → delete foreign live markers → complete post-census
   → existing winner election`. A replacement marker is a recoverable capability before it is the winner;
   no new authority predicate is introduced.
-- DEC-002 [CQ-002] [AMB:AMB-002]: Add a closed cleanup-required claim outcome. A replacement-post failure
-  remains an `IoError` because no mutation landed and the incumbent stands. A delete failure after the
-  post is not an `IoError` stripped of state: it reports the surviving replacement and failed cleanup.
+- DEC-002 [CQ-002] [AMB:AMB-002]: Add closed forced-transition outcomes carrying `ForcedClaimCensuses`.
+  Replacement-post failure performs an authoritative re-read and returns `ReplacementPostFailed` when
+  the incumbent still wins. A delete failure after the post reports cleanup-required, old-holder-standing,
+  no-holder, or unreadable post-state from the same census authority. Successful steal receipts serialize
+  the pre/post censuses, so the machine result and diagnostic are grounded in the same observations.
 - DEC-003 [CQ-001] [AMB:AMB-001]: If cleanup completes but the post-census is unreadable, withdraw the
   replacement only when doing so cannot create zero markers; otherwise report an unreadable post-state
   with the replacement retained. The implementation must make this branch explicit and test it or narrow

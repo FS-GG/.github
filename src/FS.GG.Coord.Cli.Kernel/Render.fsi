@@ -76,6 +76,21 @@ module Render =
           /// Why the notice failed; `None` when it landed.
           NotifyError: string option }
 
+    /// One marker in a complete authoritative forced-claim census.
+    type ClaimMarkerReceipt =
+        { MarkerId: int64
+          Worker: string
+          Live: bool }
+
+    type ClaimMarkerCensusReceipt =
+        { WinnerMarkerId: int64 option
+          Markers: ClaimMarkerReceipt list }
+
+    type ForcedClaimCensusesReceipt =
+        { Before: ClaimMarkerCensusReceipt
+          /// `None` means the post-operation census was unreadable, never empty.
+          After: ClaimMarkerCensusReceipt option }
+
     /// The fresh postcondition emitted by `claim --json` and `take --json`. The lock and board column are
     /// separate observations; `Converged` is true only when both were read back successfully.
     type ClaimReceipt =
@@ -103,6 +118,9 @@ module Render =
           /// Purely advisory: it never participates in `Converged`, which is about THIS item's own lock
           /// and board state, not about other items this claim happens to overlap.
           Collisions: PathCollision list
+          /// Present for a successful `claim --force` transition, naming the governing pre/post marker
+          /// observations. Ordinary claims preserve their existing wire shape by carrying `None`.
+          ForcedClaimCensuses: ForcedClaimCensusesReceipt option
           Converged: bool }
 
     /// The OTHER outcome of `take --json`: it looked, and it claimed nothing (.github#1525). A LOOK THAT

@@ -99,6 +99,19 @@ module Render =
           Notified: bool
           NotifyError: string option }
 
+    type ClaimMarkerReceipt =
+        { MarkerId: int64
+          Worker: string
+          Live: bool }
+
+    type ClaimMarkerCensusReceipt =
+        { WinnerMarkerId: int64 option
+          Markers: ClaimMarkerReceipt list }
+
+    type ForcedClaimCensusesReceipt =
+        { Before: ClaimMarkerCensusReceipt
+          After: ClaimMarkerCensusReceipt option }
+
     type ClaimReceipt =
         { Ref: Ref
           Worker: string
@@ -111,6 +124,7 @@ module Render =
           StatusWrite: string
           PendingBoardWrites: int option
           Collisions: PathCollision list
+          ForcedClaimCensuses: ForcedClaimCensusesReceipt option
           Converged: bool }
 
     /// `take --json`'s other outcome (.github#1525) — see the `.fsi` for why it is not a `ClaimReceipt`
@@ -428,6 +442,31 @@ module Render =
             w.WriteEndObject()
 
         w.WriteEndArray()
+
+        let writeCensus (name: string) (census: ClaimMarkerCensusReceipt) =
+            w.WriteStartObject(name)
+            match census.WinnerMarkerId with
+            | Some markerId -> w.WriteNumber("winnerMarkerId", markerId)
+            | None -> w.WriteNull("winnerMarkerId")
+            w.WriteStartArray("markers")
+            for marker in census.Markers do
+                w.WriteStartObject()
+                w.WriteNumber("markerId", marker.MarkerId)
+                w.WriteString("worker", marker.Worker)
+                w.WriteBoolean("live", marker.Live)
+                w.WriteEndObject()
+            w.WriteEndArray()
+            w.WriteEndObject()
+
+        match receipt.ForcedClaimCensuses with
+        | None -> ()
+        | Some censuses ->
+            w.WriteStartObject("forcedClaimCensuses")
+            writeCensus "before" censuses.Before
+            match censuses.After with
+            | Some after -> writeCensus "after" after
+            | None -> w.WriteNull("after")
+            w.WriteEndObject()
 
         w.WriteBoolean("converged", receipt.Converged)
         w.WriteEndObject()

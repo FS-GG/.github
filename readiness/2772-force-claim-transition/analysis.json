@@ -37,11 +37,21 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2772-force-claim-transition/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "0563f5eb8fdb56dcd29c32bc668a7ef8a39aaeb943ccc62dc1ee574631234165"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2772-force-claim-transition/checklist.md",
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "230a62d2ae861515dcb88aadcfa3c8733b2bdcdfb27972096e3b03ee456b496c"
+        "value": "a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "cad8f8c4c9bba2ed7f29335ae8bb3b504d777541ff69f8a4e3a2ec58b6ca507f"
+        "value": "1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "bc4d5e931d78ad90ff4a390b5851dcea047d4cdf0fd06cd81745050e72d8bf1a"
+        "value": "2bd4e0e70d1576f49cda11a3c7fa5e02c6690b6871bd8f803e8f600091ef84d2"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "3178c613c362c94943cb578c81f2f0d9933b535300ca48c98f1f5a30d31bb68d"
+        "value": "92ba36acf314c39eb0afb50f8e9caa473bd36fbadf6fb7c07ebbc014b9bca505"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -616,7 +626,7 @@
     {
       "path": "readiness/2772-force-claim-transition/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

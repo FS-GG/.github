@@ -17,8 +17,8 @@ Prose status: planned
 
 ## Source Snapshot
 - spec: work/2772-force-claim-transition/spec.md sha256:722173e24b3e5a0da6b0166e61632e7a3a229eaa35a8b2510cada2f82890c117 schemaVersion:1
-- clarifications: work/2772-force-claim-transition/clarifications.md sha256:cad8f8c4c9bba2ed7f29335ae8bb3b504d777541ff69f8a4e3a2ec58b6ca507f schemaVersion:1
-- checklist: work/2772-force-claim-transition/checklist.md sha256:230a62d2ae861515dcb88aadcfa3c8733b2bdcdfb27972096e3b03ee456b496c schemaVersion:1
+- clarifications: work/2772-force-claim-transition/clarifications.md sha256:1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8 schemaVersion:1
+- checklist: work/2772-force-claim-transition/checklist.md sha256:a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d schemaVersion:1
 
 ## Plan Scope
 - Refactor only the forced-live-holder arm of `Writes.claimScoped`; keep ordinary claim and renewal
@@ -34,9 +34,10 @@ Prose status: planned
 - PD-002 [AC-002] [FR-002] complete: When cleanup stops on a non-404 delete failure, retain the posted
   replacement and return `CleanupRequired` with its `Held` capability, removed worker ids, and the failed
   incumbent marker. Never withdraw the replacement in that arm.
-- PD-003 [AC-003] [FR-003] complete: Map pre-post failure to the existing transport error (old holder
-  stands); map cleanup-required to a distinct non-green CLI diagnostic that names the retained marker,
-  failed marker, and sanctioned re-run; preserve successful `Stolen` receipt wire shape.
+- PD-003 [AC-003] [FR-003] complete: Capture complete typed pre/post censuses for every forced transition.
+  Map replacement POST failure to `ReplacementPostFailed` only after the post-census proves the incumbent
+  still wins; map cleanup interruptions to their distinct typed postconditions. Render each actionable
+  state distinctly and add the governing censuses to successful `Stolen` machine receipts.
 - PD-004 [AC-004] [FR-004] complete: Move theft callback invocation after each successful foreign-marker
   deletion. This makes every named victim an observed removal and keeps a partial cleanup accurately
   accounted.
@@ -47,8 +48,9 @@ Prose status: planned
   mutation and observe the POST-failure leg red because the incumbent vanishes.
 
 ## Contract Impact
-- PC-001 [PD-001] [PD-002] additive union: `ClaimOutcome` gains a cleanup-required case; existing cases
-  and successful claim receipt JSON remain compatible.
+- PC-001 [PD-001] [PD-002] additive union: `ClaimOutcome` gains census-backed forced-transition cases;
+  successful `stolen` receipt JSON adds `forcedClaimCensuses`, while ordinary claim receipts remain
+  byte-compatible.
 - PC-002 [PD-003] command diagnostic: `claim --force` distinguishes failed replacement creation from
   incomplete cleanup; the latter explicitly reports that a replacement marker exists and retry is a
   reconciliation action.
@@ -58,8 +60,9 @@ Prose status: planned
   incumbent marker remains and no delete occurred.
 - VO-002 [PD-002] [PC-001] semanticTest: `WriteTests` injects failure on incumbent DELETE and proves both
   incumbent and replacement markers remain, with `CleanupRequired` carrying their identities.
-- VO-003 [PD-003] [PC-002] semanticTest: focused CLI/client tests or a direct rendering seam prove the two
-  failures have distinct actionable text without touching #2753's active test directory.
+- VO-003 [PD-003] [PC-002] semanticTest: the compiled engine e2e route proves replacement POST failure and
+  cleanup-boundary `OldHolderStands` have distinct actionable text, the standing `TAKEN` notice remains,
+  and a successful steal receipt carries its pre/post censuses.
 - VO-004 [PD-005] regression: run `FS.GG.Coord.GitHub.Tests`, the relevant CLI test project, formatting,
   signature surface, and repository gate subset.
 - VO-005 [PD-006] mutation: temporarily restore delete-before-post ordering, run the bounded focused test,
@@ -69,8 +72,9 @@ Prose status: planned
 No performance intent is declared for this work item.
 
 ## Migration Posture
-- PM-001 [PC-001] additive: internal F# callers must exhaustively handle `CleanupRequired`; no persisted
-  marker grammar or existing successful JSON receipt changes.
+- PM-001 [PC-001] additive: internal F# callers must exhaustively handle the forced-transition cases;
+  no persisted marker grammar changes, and the successful stolen JSON receipt gains one additive census
+  object.
 
 ## Generated View Impact
 - GV-001 [PD-001] workModel: readiness artifacts record implementation and gate evidence; they do not
@@ -87,4 +91,6 @@ No blocking planning findings recorded.
   the root-cause transition into `FS.GG.Coord.GitHub.Writes`.
 
 ## Lifecycle Notes
+- Round-1 repair incorporates independent review decision digest
+  `1251c73621e6d00d05cb75d38041a9b123d1ae43504ab9f1a787da69b7eaa8ee`.
 - Next lifecycle action: `fsgg-sdd tasks --work 2772-force-claim-transition`.

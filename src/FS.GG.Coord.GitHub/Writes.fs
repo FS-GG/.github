@@ -38,14 +38,29 @@ module Writes =
         | Derives of WorkerId
         | DerivesNothing
 
+    type ClaimMarkerObservation =
+        { MarkerId: int64
+          Worker: WorkerId
+          Live: bool }
+
+    type ClaimMarkerCensus =
+        { WinnerMarkerId: int64 option
+          Markers: ClaimMarkerObservation list }
+
+    type ForcedClaimCensuses =
+        { Before: ClaimMarkerCensus
+          After: ClaimMarkerCensus option }
+
     type ClaimOutcome =
         | Won of held: Held * collected: WorkerId list
         | Renewed of held: Held * collected: WorkerId list
-        | Stolen of held: Held * from: WorkerId list * collected: WorkerId list
-        | CleanupRequired of replacement: Held * removed: WorkerId list * failed: WorkerId * failedMarkerId: int64 * reason: string
-        | PostStateUnreadable of replacement: Held * removed: WorkerId list * reason: string
-        | OldHolderStands of replacementMarkerId: int64 * holder: WorkerId * holderMarkerId: int64 * removed: WorkerId list
-        | NoHolderRemaining of replacementMarkerId: int64 * removed: WorkerId list
+        | Stolen of held: Held * from: WorkerId list * collected: WorkerId list * censuses: ForcedClaimCensuses
+        | ReplacementPostFailed of holder: WorkerId * holderMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
+        | CleanupRequired of replacement: Held * removed: WorkerId list * failed: WorkerId * failedMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
+        | PostStateUnreadable of replacement: Held option * removed: WorkerId list * reason: string * censuses: ForcedClaimCensuses
+        | OldHolderStands of replacementMarkerId: int64 * holder: WorkerId * holderMarkerId: int64 * removed: WorkerId list * censuses: ForcedClaimCensuses
+        | NoHolderRemaining of replacementMarkerId: int64 option * removed: WorkerId list * censuses: ForcedClaimCensuses
+        | ForcedClaimLost of winner: WorkerId * censuses: ForcedClaimCensuses
         | Lost of WorkerId
         | Twin of theirs: SessionId
         | Impersonates of derived: WorkerId * named: WorkerId
@@ -332,6 +347,18 @@ module Writes =
 
         let liveBefore = Reads.winner leaseMinutes before
 
+        let census (markers: Reads.Marker list) : ClaimMarkerCensus =
+            { WinnerMarkerId = Reads.winner leaseMinutes markers |> Option.map _.Id
+              Markers =
+                markers
+                |> List.map (fun marker ->
+                    { MarkerId = marker.Id
+                      Worker = marker.Worker
+                      Live = not (Reads.isStale leaseMinutes marker) }) }
+
+        let beforeCensus = census before
+        let forcedCensuses after = { Before = beforeCensus; After = after |> Option.map census }
+
         // COLLECT THE STALE DEBRIS ON AN ITEM WE HAVE WON. A stale marker is a lapsed lease, and the next
         // claimant must COLLECT it, never merely out-order it: an ignored stale marker is exactly what
         // `heartbeat` resurrects underneath the new holder — two live markers, one item. So once our live
@@ -390,7 +417,7 @@ module Writes =
                 Reads.markerScan transport ref.Owner ref.Repo ref.Number
                 |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
             with
-            | Error e when retainOnUnreadable -> Ok(PostStateUnreadable(held, evicted, explain e))
+            | Error e when retainOnUnreadable -> Ok(PostStateUnreadable(Some held, evicted, explain e, forcedCensuses None))
             | Error e -> withdraw $"the re-read failed (%s{explain e})"
             | Ok after ->
 
@@ -398,7 +425,7 @@ module Writes =
             // OUR MARKER IS NOT IN THE RE-READ AT ALL. We cannot tell who holds this, and **"we cannot
             // tell" is a LOSS**. Reading it as a win would be a lock granted on the strength of an
             // observation we did not make.
-            | None when retainOnUnreadable -> Ok(NoHolderRemaining(myId, evicted))
+            | None when retainOnUnreadable -> Ok(NoHolderRemaining(Some myId, evicted, forcedCensuses (Some after)))
             | None -> withdraw "our marker vanished from the re-read"
 
             | Some w when w.Id = myId ->
@@ -411,7 +438,16 @@ module Writes =
 
                 match evicted with
                 | [] -> Ok(Won(held, collected))
-                | _ -> Ok(Stolen(held, evicted, collected))
+                | _ -> Ok(Stolen(held, evicted, collected, forcedCensuses (Some after)))
+
+            | Some w when retainOnUnreadable ->
+                match deleteComment transport ref myId with
+                | Ok() -> Ok(ForcedClaimLost(w.Worker, forcedCensuses (Some after)))
+                | Error e ->
+                    Error(
+                        Transport
+                            $"lost the forced claim race on %s{ref.Short} to %s{w.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
+                    )
 
             | Some w ->
                 // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
@@ -457,7 +493,7 @@ module Writes =
                         with
                         | Error readError ->
                             if not (List.isEmpty removed) then onEvict removed
-                            Ok(PostStateUnreadable(replacement, removed, $"cleanup failed (%s{explain e}); post-state read failed (%s{explain readError})"))
+                            Ok(PostStateUnreadable(Some replacement, removed, $"cleanup failed (%s{explain e}); post-state read failed (%s{explain readError})", forcedCensuses None))
                         | Ok after ->
                             let liveAfter = after |> List.filter (fun x -> not (Reads.isStale leaseMinutes x))
                             let replacementPresent = liveAfter |> List.exists (fun x -> x.Id = replacement.MarkerId)
@@ -465,13 +501,13 @@ module Writes =
                             match replacementPresent, failedPresent with
                             | true, true ->
                                 if not (List.isEmpty removed) then onEvict removed
-                                Ok(CleanupRequired(replacement, removed, m.Worker, m.Id, explain e))
+                                Ok(CleanupRequired(replacement, removed, m.Worker, m.Id, explain e, forcedCensuses (Some after)))
                             | true, false -> go (m.Worker :: acc) tail
                             | false, _ ->
                                 if not (List.isEmpty removed) then onEvict removed
                                 match Reads.winner leaseMinutes liveAfter with
-                                | Some holder -> Ok(OldHolderStands(replacement.MarkerId, holder.Worker, holder.Id, removed))
-                                | None -> Ok(NoHolderRemaining(replacement.MarkerId, removed))
+                                | Some holder -> Ok(OldHolderStands(replacement.MarkerId, holder.Worker, holder.Id, removed, forcedCensuses (Some after)))
+                                | None -> Ok(NoHolderRemaining(Some replacement.MarkerId, removed, forcedCensuses (Some after)))
 
             markers
             |> List.filter (fun m -> not (Reads.isStale leaseMinutes m) && m.Worker <> worker)
@@ -527,7 +563,27 @@ module Writes =
                             Held(ref, worker, ours.Id, session, ours.PreviousStatus, ours.PathRepo, ours.AgentContract)
                         evictLive replacement before
                     | None ->
-                        postReplacement () |> Result.bind (fun replacement -> evictLive replacement before))
+                        match postReplacement () with
+                        | Ok replacement -> evictLive replacement before
+                        | Error postError ->
+                            match
+                                Reads.markerScan transport ref.Owner ref.Repo ref.Number
+                                |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                            with
+                            | Error readError ->
+                                Ok(
+                                    PostStateUnreadable(
+                                        None,
+                                        [],
+                                        $"replacement POST failed (%s{explain postError}); post-state read failed (%s{explain readError})",
+                                        forcedCensuses None
+                                    )
+                                )
+                            | Ok after ->
+                                match Reads.winner leaseMinutes after with
+                                | Some holder ->
+                                    Ok(ReplacementPostFailed(holder.Worker, holder.Id, explain postError, forcedCensuses (Some after)))
+                                | None -> Ok(NoHolderRemaining(None, [], forcedCensuses (Some after))))
 
         // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
         // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.

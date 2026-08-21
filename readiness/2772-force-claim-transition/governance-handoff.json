@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2772-force-claim-transition/ship.json",
-      "digest": "sha256:17acac576a29a7f67a98523df7da2dd380652a173fc1b3146196fbb67e65afdc",
+      "digest": "sha256:d800b7efe03ad3e4ad8e5814591131bf0cb52e987f3304af0aa753d12dd9eb74",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2772-force-claim-transition/verify.json",
-      "digest": "sha256:52831bb9d41cb994fb2872fa8db38534aa0c9ea6e32ad988a1cd3aeffabfd617",
+      "digest": "sha256:d9891cb266d8d92dd78db6f69c89518fa7249b32d277bfdf5657b7616bb28e17",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2772-force-claim-transition/work-model.json",
-      "digest": "sha256:7a22811cc229affba5a7ed14706f5eea358c741a960125240c00d353722fee9d",
+      "digest": "sha256:2b60254ca9970f090401b1d636adfe43bc4b260525786e9409cb19df2b0cd65f",
       "schemaVersion": 1
     }
   ],

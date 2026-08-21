@@ -165,6 +165,11 @@ DEFER_FIELD_WRITES = [0]
 # without that assertion "failed" and "deferred" are indistinguishable from the outside, and the leg would
 # be re-testing the deferral queue while claiming to test the case the queue cannot reach.
 FAIL_FIELD_WRITES = [0]
+# .github#2772 — fault the two non-atomic force-claim boundaries independently. The POST fault leaves
+# the incumbent untouched. The DELETE fault models a lost replacement plus a failed incumbent deletion,
+# so the authoritative re-read proves `OldHolderStands` rather than confusing it with POST failure.
+FAIL_NEXT_CLAIM_POST = [0]
+LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE = [0]
 RECONCILE_45_PROJECTION = [0]
 # .github#2157's negative controls.  A mutation acknowledgement is deliberately not convergence:
 # the next scan either sees only the Status half or no row at all.
@@ -614,6 +619,10 @@ class Handler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 body = ""
             with LOCK:
+                if "fsgg:claim" in body and FAIL_NEXT_CLAIM_POST[0] > 0:
+                    FAIL_NEXT_CLAIM_POST[0] -= 1
+                    return self._send(500, {"message": "fixture: replacement POST failed"})
+            with LOCK:
                 cid = NEXT_COMMENT_ID[0]
                 NEXT_COMMENT_ID[0] += 1
                 html_url = f"https://github.com/{owner_of(n)}/{repo_of(n)}/pull/{n}#issuecomment-{cid}"
@@ -676,6 +685,14 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             cid = int(m.group(1))
             with LOCK:
+                if LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE[0] > 0:
+                    LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE[0] -= 1
+                    for lst in COMMENTS.values():
+                        replacements = [c for c in lst if "fsgg:claim" in c.get("body", "") and c["id"] != cid]
+                        if replacements:
+                            replacement_id = max(c["id"] for c in replacements)
+                            lst[:] = [c for c in lst if c["id"] != replacement_id]
+                    return self._send(503, {"message": "fixture: incumbent DELETE response lost"})
                 for lst in COMMENTS.values():
                     lst[:] = [c for c in lst if c["id"] != cid]
             return self._send(204, {})
@@ -707,6 +724,16 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 FAIL_FIELD_WRITES[0] += 1
                 return self._send(200, {"failArmed": FAIL_FIELD_WRITES[0]})
+
+        if path.rstrip("/") == "/_fixture/fail-next-claim-post":
+            with LOCK:
+                FAIL_NEXT_CLAIM_POST[0] += 1
+                return self._send(200, {"failArmed": FAIL_NEXT_CLAIM_POST[0]})
+
+        if path.rstrip("/") == "/_fixture/lose-replacement-on-next-claim-delete":
+            with LOCK:
+                LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE[0] += 1
+                return self._send(200, {"failArmed": LOSE_REPLACEMENT_ON_NEXT_CLAIM_DELETE[0]})
 
         # .github#1779 AC2 — read and RESET the REST request log, so a leg can measure exactly what one
         # command spent. Reset-on-read, because the alternative is every caller remembering a baseline.

@@ -4054,6 +4054,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
               // .github#2459 adds this key to the wire shape; the empty case is what every claim before
               // #2459 would have reported had the key existed, so it is the byte-identical baseline here.
               Collisions = []
+              ForcedClaimCensuses = None
               Converged = true }
 
         Assert.Equal(

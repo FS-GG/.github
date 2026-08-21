@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "230a62d2ae861515dcb88aadcfa3c8733b2bdcdfb27972096e3b03ee456b496c"
+        "value": "a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "cad8f8c4c9bba2ed7f29335ae8bb3b504d777541ff69f8a4e3a2ec58b6ca507f"
+        "value": "1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bdbf619c843b4e4524b27238ee780a2e60d2f9c6590b6d75a7831087a104f225"
+        "value": "4fe6e0d5a7f7e2a1ca7b29539afeb305005b02e3955f4a9783caeb3cf9f2a967"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bc4d5e931d78ad90ff4a390b5851dcea047d4cdf0fd06cd81745050e72d8bf1a"
+        "value": "2bd4e0e70d1576f49cda11a3c7fa5e02c6690b6871bd8f803e8f600091ef84d2"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "14f50b0957615b1577501078a01f14ed15b6e92fb4b97adca78ad7f5a9e6a19f"
+        "value": "92ba36acf314c39eb0afb50f8e9caa473bd36fbadf6fb7c07ebbc014b9bca505"
       }
     }
   ],
@@ -264,7 +264,7 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 32,
+        "line": 34,
         "column": 1
       },
       "linkedTaskIds": [
@@ -273,14 +273,14 @@
     },
     {
       "id": "DEC-002",
-      "title": "Add a closed cleanup-required claim outcome. A replacement-post failure",
-      "decision": "Add a closed cleanup-required claim outcome. A replacement-post failure",
+      "title": "Add closed forced-transition outcomes carrying \u0060ForcedClaimCensuses\u0060.",
+      "decision": "Add closed forced-transition outcomes carrying \u0060ForcedClaimCensuses\u0060.",
       "requirementRefs": [],
       "storyRefs": [],
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 36,
+        "line": 38,
         "column": 1
       },
       "linkedTaskIds": [
@@ -296,7 +296,7 @@
       "acceptanceRefs": [],
       "source": "work/2772-force-claim-transition/clarifications.md",
       "sourceLocation": {
-        "line": 39,
+        "line": 43,
         "column": 1
       },
       "linkedTaskIds": [
@@ -1250,7 +1250,7 @@
           "path": "work/2772-force-claim-transition/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "230a62d2ae861515dcb88aadcfa3c8733b2bdcdfb27972096e3b03ee456b496c"
+            "value": "a6ec061ec308af2e930deb552ea44f701212285780394b250281333e7c57585d"
           },
           "schemaVersion": 1
         },
@@ -1258,7 +1258,7 @@
           "path": "work/2772-force-claim-transition/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "cad8f8c4c9bba2ed7f29335ae8bb3b504d777541ff69f8a4e3a2ec58b6ca507f"
+            "value": "1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8"
           },
           "schemaVersion": 1
         },
@@ -1266,7 +1266,7 @@
           "path": "work/2772-force-claim-transition/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "bdbf619c843b4e4524b27238ee780a2e60d2f9c6590b6d75a7831087a104f225"
+            "value": "4fe6e0d5a7f7e2a1ca7b29539afeb305005b02e3955f4a9783caeb3cf9f2a967"
           },
           "schemaVersion": 1
         },
@@ -1274,7 +1274,7 @@
           "path": "work/2772-force-claim-transition/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "bc4d5e931d78ad90ff4a390b5851dcea047d4cdf0fd06cd81745050e72d8bf1a"
+            "value": "2bd4e0e70d1576f49cda11a3c7fa5e02c6690b6871bd8f803e8f600091ef84d2"
           },
           "schemaVersion": 1
         },
@@ -1290,14 +1290,14 @@
           "path": "work/2772-force-claim-transition/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "14f50b0957615b1577501078a01f14ed15b6e92fb4b97adca78ad7f5a9e6a19f"
+            "value": "92ba36acf314c39eb0afb50f8e9caa473bd36fbadf6fb7c07ebbc014b9bca505"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "8b00d1688a3f6c338dd301c79e0046e330a1a28d2692a463e35a2799c3a2231c"
+        "value": "5ba36b6ae87f59248d85294b43f819fa067cab31c4265ae96c9170eef63e0323"
       },
       "currency": "current"
     }

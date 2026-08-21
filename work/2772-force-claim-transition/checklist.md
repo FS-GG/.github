@@ -22,7 +22,7 @@ Prose status: checklistReady
 
 ## Source Snapshot
 - spec: work/2772-force-claim-transition/spec.md sha256:722173e24b3e5a0da6b0166e61632e7a3a229eaa35a8b2510cada2f82890c117 schemaVersion:1
-- clarifications: work/2772-force-claim-transition/clarifications.md sha256:cad8f8c4c9bba2ed7f29335ae8bb3b504d777541ff69f8a4e3a2ec58b6ca507f schemaVersion:1
+- clarifications: work/2772-force-claim-transition/clarifications.md sha256:1bcaf14ddfc8dfeb83101a6a92ed03f5ea6cfa0b88ebb8237b97faa2c974dfd8 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.
