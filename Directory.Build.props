@@ -406,8 +406,15 @@
        and the ordinary fresh-successor action. These are additive receiver-visible protocol and
        command behaviors; legacy structured succession records remain readable and no command,
        package member, destination, or identity is removed. -->
+  <!-- 0.67.0 -> 0.68.0 (.github#2794, producers .github#2797/.github#2772): MINOR on the stable 0.x line.
+       The coordination engine preserves an exhausted ordinary round-three review across claim turnover,
+       projects that exhausted phase explicitly, and authorizes exactly one structured escalation for a
+       fresh claimant after validating the old claim's complete chain and wait evidence. It also repairs the
+       forced-claim transition so repair-phase latest-review/backlink validation remains coherent after that
+       escalation. These four merged engine commits add or repair receiver-visible review behavior;
+       Protocol.fs is unchanged and no command, member, destination, or package identity is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.67.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.68.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

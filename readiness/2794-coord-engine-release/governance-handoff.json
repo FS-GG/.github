@@ -1,0 +1,333 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "2.0.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.0.0",
+  "workId": "2794-coord-engine-release",
+  "sources": [
+    {
+      "path": "readiness/2794-coord-engine-release/ship.json",
+      "digest": "sha256:dbec92c1dfa69ec0d7988756b1c8bff4a9b2de0503aa0e3488d58c8ef7e2c709",
+      "schemaVersion": 1
+    },
+    {
+      "path": "readiness/2794-coord-engine-release/verify.json",
+      "digest": "sha256:fc939dca837e05c533aa1308f781b1b39002dbe1efa64607c82c6c8052649a82",
+      "schemaVersion": 1
+    },
+    {
+      "path": "readiness/2794-coord-engine-release/work-model.json",
+      "digest": "sha256:29995fad258efae4ee683d895c6f18b7d17d2d7b20308f71584410f42e5bf9b1",
+      "schemaVersion": 1
+    }
+  ],
+  "evidence": {
+    "nodes": [
+      {
+        "id": "evidence:EV001",
+        "state": "skipped",
+        "rationale": "FR-001 is complete at the prepared-source boundary: freshness measured exactly four merged engine commits after 0.67.0, including #2772 commit 7cef7301, zero Protocol.fs commits, and no unmerged bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence."
+      },
+      {
+        "id": "evidence:EV002",
+        "state": "skipped",
+        "rationale": "FR-002 cannot execute before this prepared source merges: tags must identify the immutable merge and the release saga must then publish the once-packed payloads to both feeds before promotion. No tag, feed, or manifest success is claimed by the ReviewWait TRX."
+      },
+      {
+        "id": "evidence:EV003",
+        "state": "skipped",
+        "rationale": "FR-003 requires an independently downloaded public 0.68.0 tool. The local source-pack install reports 0.68.0.0 and focused source tests pass, but it is deliberately not substituted for nuget.org consumption or the installed #2797 route."
+      },
+      {
+        "id": "evidence:EV004",
+        "state": "skipped",
+        "rationale": "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports four unreleased commits."
+      },
+      {
+        "id": "evidence:EV005",
+        "state": "skipped",
+        "rationale": "DEC-001\u0027s 0.68.0 classification is directly supported by freshness, version/coherent-set gates, and the release-note mismatch inversion, but those checks do not emit one durable observed-run receipt for this decision."
+      },
+      {
+        "id": "evidence:EV006",
+        "state": "skipped",
+        "rationale": "DEC-002\u0027s prepared-source boundary is satisfied through the current frozen PR and includes merged #2772 commit 7cef7301 while excluding unmerged work, but its immutable merge/tag half necessarily remains after merge."
+      },
+      {
+        "id": "evidence:EV007",
+        "state": "skipped",
+        "rationale": "DEC-003 is an unexecuted release transaction by design. The prepared source names release-saga/1, but no prepare/tag/publisher/promotion event is claimed before the source merge exists."
+      },
+      {
+        "id": "evidence:EV008",
+        "state": "skipped",
+        "rationale": "DEC-004 identifies manifest/journal/feed/install facts as acceptance authority; none exist for 0.68.0 yet. Hosted source CI and a local source-pack install are diagnostics, not substitutes for those future immutable facts."
+      },
+      {
+        "id": "evidence:EV009",
+        "state": "skipped",
+        "rationale": "DEC-005\u0027s source behavior preflight passed (ReviewWait 19/19, ReviewApplication 7/7, and hosted #2797 E2E 166/166), but the decision explicitly requires the installed public 0.68.0 tool; that final leg is outstanding."
+      },
+      {
+        "id": "evidence:EV010",
+        "state": "skipped",
+        "rationale": "PC-001\u0027s three projects evaluate to 0.68.0 and release-note/version gates pass, but those direct checks are not the ReviewWait TRX previously attached here. Publication must still prove that the package contract\u0027s served bytes use this scalar."
+      },
+      {
+        "id": "evidence:EV011",
+        "state": "skipped",
+        "rationale": "VO-001 intentionally spans pre-merge and post-merge gates. Its pre-merge release/version/focused-test/pack/install/inversion checks passed, while promotion, both-feed identity, public install, registry gates, and clear freshness remain unexecuted."
+      },
+      {
+        "id": "evidence:EV012",
+        "state": "skipped",
+        "rationale": "PM-001 is a documented additive migration posture rather than a test-run subject. S.I.R. remains deliberately blocked on the future 0.68.0 public install, so no receiver migration is claimed complete."
+      },
+      {
+        "id": "evidence:EV013",
+        "state": "skipped",
+        "rationale": "GV-001 is a generated-view currency subject, not ReviewWait behavior. The SDD generator establishes current pre-merge readiness views; final registry projections cannot be generated until promoted release facts exist."
+      },
+      {
+        "id": "task:T001",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T002",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T003",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T004",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T005",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T006",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T007",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T008",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T009",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T010",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T011",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T012",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T013",
+        "state": "real",
+        "rationale": null
+      }
+    ],
+    "dependencies": [
+      {
+        "dependent": "evidence:EV001",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "evidence:EV002",
+        "dependency": "task:T002"
+      },
+      {
+        "dependent": "evidence:EV003",
+        "dependency": "task:T003"
+      },
+      {
+        "dependent": "evidence:EV004",
+        "dependency": "task:T004"
+      },
+      {
+        "dependent": "evidence:EV005",
+        "dependency": "task:T005"
+      },
+      {
+        "dependent": "evidence:EV006",
+        "dependency": "task:T006"
+      },
+      {
+        "dependent": "evidence:EV007",
+        "dependency": "task:T007"
+      },
+      {
+        "dependent": "evidence:EV008",
+        "dependency": "task:T008"
+      },
+      {
+        "dependent": "evidence:EV009",
+        "dependency": "task:T009"
+      },
+      {
+        "dependent": "evidence:EV010",
+        "dependency": "task:T010"
+      },
+      {
+        "dependent": "evidence:EV011",
+        "dependency": "task:T011"
+      },
+      {
+        "dependent": "evidence:EV012",
+        "dependency": "task:T012"
+      },
+      {
+        "dependent": "evidence:EV013",
+        "dependency": "task:T013"
+      },
+      {
+        "dependent": "task:T001",
+        "dependency": "evidence:EV001"
+      },
+      {
+        "dependent": "task:T002",
+        "dependency": "evidence:EV002"
+      },
+      {
+        "dependent": "task:T003",
+        "dependency": "evidence:EV003"
+      },
+      {
+        "dependent": "task:T004",
+        "dependency": "evidence:EV004"
+      },
+      {
+        "dependent": "task:T005",
+        "dependency": "evidence:EV005"
+      },
+      {
+        "dependent": "task:T005",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T006",
+        "dependency": "evidence:EV006"
+      },
+      {
+        "dependent": "task:T006",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T007",
+        "dependency": "evidence:EV007"
+      },
+      {
+        "dependent": "task:T007",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T008",
+        "dependency": "evidence:EV008"
+      },
+      {
+        "dependent": "task:T008",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T009",
+        "dependency": "evidence:EV009"
+      },
+      {
+        "dependent": "task:T009",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T010",
+        "dependency": "evidence:EV010"
+      },
+      {
+        "dependent": "task:T010",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T011",
+        "dependency": "evidence:EV011"
+      },
+      {
+        "dependent": "task:T011",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T012",
+        "dependency": "evidence:EV012"
+      },
+      {
+        "dependent": "task:T012",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T013",
+        "dependency": "evidence:EV013"
+      },
+      {
+        "dependent": "task:T013",
+        "dependency": "task:T001"
+      }
+    ]
+  },
+  "performanceEvidence": [],
+  "governedReferences": [],
+  "governanceConfig": {
+    "policyPresent": false,
+    "capabilitiesPresent": false,
+    "toolingPresent": false
+  },
+  "readiness": {
+    "shipDisposition": "shipReady",
+    "verificationReadiness": "verificationReady",
+    "counts": {
+      "advisory": 0,
+      "warning": 0,
+      "blocking": 0,
+      "classifiedObligationsUnmet": 0,
+      "journeyObligationsUnmet": 0
+    },
+    "blockingDiagnosticIds": [],
+    "perViewState": [
+      {
+        "view": "ship.json",
+        "state": "current"
+      },
+      {
+        "view": "verify.json",
+        "state": "current"
+      },
+      {
+        "view": "work-model.json",
+        "state": "current"
+      }
+    ]
+  },
+  "diagnostics": []
+}

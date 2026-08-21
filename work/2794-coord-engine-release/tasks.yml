@@ -1,0 +1,166 @@
+schemaVersion: 1
+work:
+  id: 2794-coord-engine-release
+  title: "Coord Engine Release"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2794-coord-engine-release/spec.md
+  sourceClarifications: work/2794-coord-engine-release/clarifications.md
+  sourceChecklist: work/2794-coord-engine-release/checklist.md
+  sourcePlan: work/2794-coord-engine-release/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2794-coord-engine-release/spec.md
+    digest: ad93a46b5d1ab65dc8e5360a70810fd126c2f44fee2df14c5e1b119db1e66b3b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2794-coord-engine-release/clarifications.md
+    digest: 02b9bb7728fac60cb68710dfc35bbe39b8f195dfc3989627ec523a3f5b3c421c
+    schemaVersion: 1
+  - label: checklist
+    path: work/2794-coord-engine-release/checklist.md
+    digest: 2c33ce5848f861f911e5486c84190428d42503e3fc78401a20fc689e768e6a2d
+    schemaVersion: 1
+  - label: plan
+    path: work/2794-coord-engine-release/plan.md
+    digest: 5efac2350abb0285064874244a3885c94855fb87126d9a5c98f6ade4fe6708f5
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: heron-dd53
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: heron-dd53
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: heron-dd53
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: heron-dd53
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement clarification decision DEC-001
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement clarification decision DEC-002
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement clarification decision DEC-003
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-003]
+    sourceIds: [DEC-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement clarification decision DEC-004
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-004]
+    sourceIds: [DEC-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Implement clarification decision DEC-005
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-005]
+    sourceIds: [DEC-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Update contract surface PC-001
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Record verification evidence VO-001
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Handle migration posture PM-001
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: heron-dd53
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-004]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV013]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2794-coord-engine-release."

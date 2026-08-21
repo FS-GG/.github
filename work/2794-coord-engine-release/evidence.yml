@@ -1,0 +1,313 @@
+schemaVersion: 1
+workId: 2794-coord-engine-release
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2794-coord-engine-release/spec.md
+sourceClarifications: work/2794-coord-engine-release/clarifications.md
+sourceChecklist: work/2794-coord-engine-release/checklist.md
+sourcePlan: work/2794-coord-engine-release/plan.md
+sourceTasks: work/2794-coord-engine-release/tasks.yml
+sourceAnalysis: readiness/2794-coord-engine-release/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2794-coord-engine-release/analysis.json
+    digest: 440f628109e51671fb0bfb1f56703941c083bd57763bd6a6ded5025134009739
+    schemaVersion: 1
+  - label: checklist
+    path: work/2794-coord-engine-release/checklist.md
+    digest: 2c33ce5848f861f911e5486c84190428d42503e3fc78401a20fc689e768e6a2d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2794-coord-engine-release/clarifications.md
+    digest: 02b9bb7728fac60cb68710dfc35bbe39b8f195dfc3989627ec523a3f5b3c421c
+    schemaVersion: 1
+  - label: plan
+    path: work/2794-coord-engine-release/plan.md
+    digest: 5efac2350abb0285064874244a3885c94855fb87126d9a5c98f6ade4fe6708f5
+    schemaVersion: 1
+  - label: spec
+    path: work/2794-coord-engine-release/spec.md
+    digest: ad93a46b5d1ab65dc8e5360a70810fd126c2f44fee2df14c5e1b119db1e66b3b
+    schemaVersion: 1
+  - label: tasks
+    path: work/2794-coord-engine-release/tasks.yml
+    digest: 11ccc901a29ed7725b26d69321c2a94a32745113ec9b10b6c0458cd7c5ee7655
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: deferral
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "FR-001 is complete at the prepared-source boundary: freshness measured exactly four merged engine commits after 0.67.0, including #2772 commit 7cef7301, zero Protocol.fs commits, and no unmerged bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence."
+    owner: heron-dd53
+    scope: "FR-001 release inventory, semantic classification, and prepared-source boundary only."
+    laterLifecycleVisibility: "Replace this deferral in the same work package after merge with the immutable source/tag/manifest inventory and post-release freshness receipt before #2794 is stamped Done."
+    notes: ["Pre-merge checks passed, but no single observed run covers this compound subject."]
+  - id: EV002
+    kind: deferral
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "FR-002 cannot execute before this prepared source merges: tags must identify the immutable merge and the release saga must then publish the once-packed payloads to both feeds before promotion. No tag, feed, or manifest success is claimed by the ReviewWait TRX."
+    owner: heron-dd53
+    scope: "The 0.68.0 three-package prepare, atomic member tags, manifest-bound publishers, served-payload comparison, and promotion."
+    laterLifecycleVisibility: "The live #2794 claim and PR delivery obligation remain open through publication; replace this deferral with manifest, journal, tag, feed-hash, and workflow receipts before Done."
+    notes: ["Outstanding post-merge release transaction; no package has been publicly published by this PR."]
+  - id: EV003
+    kind: deferral
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "FR-003 requires an independently downloaded public 0.68.0 tool. The local source-pack install reports 0.68.0.0 and focused source tests pass, but it is deliberately not substituted for nuget.org consumption or the installed #2797 route."
+    owner: heron-dd53
+    scope: "Public FS.GG.Coord.Cli 0.68.0 install, exact cross-claim exhausted-review route, and review-wire regression proof."
+    laterLifecycleVisibility: "After nuget.org indexing, record the clean install path, downloaded package digest, executable route receipt, and regression results in this work package before Done."
+    notes: ["Local pack/install is a preflight only; public consumability remains outstanding."]
+  - id: EV004
+    kind: deferral
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports four unreleased commits."
+    owner: heron-dd53
+    scope: "Final registry, changelog, compatibility, release-asset, install, and clear-freshness record for 0.68.0."
+    laterLifecycleVisibility: "A post-publication registry PR under the same #2794 claim replaces the prepared entry and this deferral with immutable evidence, then reruns freshness before Done."
+    notes: [Prepared registry prose is not final publication evidence.]
+  - id: EV005
+    kind: deferral
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-001]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-001's 0.68.0 classification is directly supported by freshness, version/coherent-set gates, and the release-note mismatch inversion, but those checks do not emit one durable observed-run receipt for this decision."
+    owner: heron-dd53
+    scope: The 0.67.0 to 0.68.0 MINOR decision and its zero-removal/zero-Protocol boundary.
+    laterLifecycleVisibility: "Bind the decision to the immutable merge and promoted release manifest in the final #2794 evidence update."
+    notes: ["Direct gates passed; recorded as a deferral rather than borrowing an unrelated TRX."]
+  - id: EV006
+    kind: deferral
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-002]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-002's prepared-source boundary is satisfied through the current frozen PR and includes merged #2772 commit 7cef7301 while excluding unmerged work, but its immutable merge/tag half necessarily remains after merge."
+    owner: heron-dd53
+    scope: "Latest merged-main source selection, merged #2772 inclusion, unmerged-work exclusion, immutable merge, and tag target."
+    laterLifecycleVisibility: Record the actual merge SHA and prove every 0.68.0 member tag names it before finalization.
+    notes: ["The current PR head is preparation evidence, not the future immutable merge commit."]
+  - id: EV007
+    kind: deferral
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-003]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-003 is an unexecuted release transaction by design. The prepared source names release-saga/1, but no prepare/tag/publisher/promotion event is claimed before the source merge exists."
+    owner: heron-dd53
+    scope: "One-time release-saga preparation, atomic tags, manifest-bound resume, and promotion ordering."
+    laterLifecycleVisibility: "Attach prepare, publisher, promotion, and recovery journal receipts to this declaration after the public cut."
+    notes: ["No repack, duplicate push, or premature promotion has occurred."]
+  - id: EV008
+    kind: deferral
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-004 identifies manifest/journal/feed/install facts as acceptance authority; none exist for 0.68.0 yet. Hosted source CI and a local source-pack install are diagnostics, not substitutes for those future immutable facts."
+    owner: heron-dd53
+    scope: "Promoted manifest, package journals, served feed bytes, and independent public install authority."
+    laterLifecycleVisibility: "Replace after publication with content IDs, hashes, journal/run references, and clean-install evidence."
+    notes: [No workflow conclusion is treated as publication authority.]
+  - id: EV009
+    kind: deferral
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-005]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "DEC-005's source behavior preflight passed (ReviewWait 19/19, ReviewApplication 7/7, and hosted #2797 E2E 166/166), but the decision explicitly requires the installed public 0.68.0 tool; that final leg is outstanding."
+    owner: heron-dd53
+    scope: Exact installed 0.68.0 exhausted-review escalation route plus review-wire/defect regression comparison.
+    laterLifecycleVisibility: "Record the public tool path, package digest, structured output, and regression results after feed indexing."
+    notes: ["The committed ReviewWait TRX supports only the source preflight, not public installation."]
+  - id: EV010
+    kind: deferral
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV010]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "PC-001's three projects evaluate to 0.68.0 and release-note/version gates pass, but those direct checks are not the ReviewWait TRX previously attached here. Publication must still prove that the package contract's served bytes use this scalar."
+    owner: heron-dd53
+    scope: "Shared 0.68.0 coherent-set scalar, package metadata, retained identities, and served package contract."
+    laterLifecycleVisibility: Join evaluated source properties to the promoted manifest and downloaded package metadata in final evidence.
+    notes: ["Prepared package contract is green locally; served contract remains post-merge."]
+  - id: EV011
+    kind: deferral
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV011]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "VO-001 intentionally spans pre-merge and post-merge gates. Its pre-merge release/version/focused-test/pack/install/inversion checks passed, while promotion, both-feed identity, public install, registry gates, and clear freshness remain unexecuted."
+    owner: heron-dd53
+    scope: "The complete release proof listed by VO-001, without allowing a partial preflight to satisfy the compound obligation."
+    laterLifecycleVisibility: Replace this deferral only after every post-merge VO-001 leg has an immutable receipt and the final registry PR is green.
+    notes: [This compound obligation is explicitly not satisfied by the 19-test ReviewWait TRX.]
+  - id: EV012
+    kind: deferral
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "PM-001 is a documented additive migration posture rather than a test-run subject. S.I.R. remains deliberately blocked on the future 0.68.0 public install, so no receiver migration is claimed complete."
+    owner: heron-dd53
+    scope: "Receiver opt-in posture and S.I.R.'s explicit 0.68.0 unblock boundary."
+    laterLifecycleVisibility: "Record the public install and downstream/local version verification before clearing S.I.R.'s producer blocker."
+    notes: [No schema migration or forced fleet update is introduced.]
+  - id: EV013
+    kind: generated-view
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV013]
+    artifacts: [Directory.Build.props, scripts/check-engine-release-notes.py, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs, tests/coord-engine-e2e/writes.sh, work/2794-coord-engine-release/artifacts/2794-reviewwait.trx]
+    sourceRefs:
+      - kind: deferral
+        path: readiness/2794-coord-engine-release/work-model.json
+    result: deferred
+    synthetic: false
+    rationale: "GV-001 is a generated-view currency subject, not ReviewWait behavior. The SDD generator establishes current pre-merge readiness views; final registry projections cannot be generated until promoted release facts exist."
+    owner: heron-dd53
+    scope: SDD readiness views now and registry/compatibility projections after 0.68.0 promotion.
+    laterLifecycleVisibility: Regenerate SDD views after every evidence edit and regenerate registry projections from final promoted facts before Done.
+    notes: [Generated-view currency is kept visible as a deferral rather than fabricated test evidence.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

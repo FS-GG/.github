@@ -1,0 +1,1140 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2794-coord-engine-release",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2794-coord-engine-release/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "2c33ce5848f861f911e5486c84190428d42503e3fc78401a20fc689e768e6a2d"
+      }
+    },
+    {
+      "path": "work/2794-coord-engine-release/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "02b9bb7728fac60cb68710dfc35bbe39b8f195dfc3989627ec523a3f5b3c421c"
+      }
+    },
+    {
+      "path": "work/2794-coord-engine-release/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "9323af5bf9588e60ff6b18522a39a8d2aa379d2085dc34d7c4afa1900f83a8bf"
+      }
+    },
+    {
+      "path": "work/2794-coord-engine-release/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "5efac2350abb0285064874244a3885c94855fb87126d9a5c98f6ade4fe6708f5"
+      }
+    },
+    {
+      "path": "work/2794-coord-engine-release/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ad93a46b5d1ab65dc8e5360a70810fd126c2f44fee2df14c5e1b119db1e66b3b"
+      }
+    },
+    {
+      "path": "work/2794-coord-engine-release/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "11ccc901a29ed7725b26d69321c2a94a32745113ec9b10b6c0458cd7c5ee7655"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2794-coord-engine-release",
+    "title": "Coord Engine Release",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The work records the exact release-base/head inventory, confirms zero wire-surface removals or defect drift, and chooses the next coherent SemVer from receiver-observable behavior; only merged-main content is included. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The work records the exact release-base/head inventory, confirms zero wire-surface removals or defect drift, and chooses the next coherent SemVer from receiver-observable behavior; only merged-main content is included. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2794-coord-engine-release/spec.md",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "FS.GG.Kit, FS.GG.Drivers, and FS.GG.Coord.Cli are packed once from one merged source, tagged coherently, published to GitHub Packages and nuget.org without repacking, and promoted only after served payload identity is verified. (Stories: US-002; Acceptance: AC-002)",
+      "text": "FS.GG.Kit, FS.GG.Drivers, and FS.GG.Coord.Cli are packed once from one merged source, tagged coherently, published to GitHub Packages and nuget.org without repacking, and promoted only after served payload identity is verified. (Stories: US-002; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2794-coord-engine-release/spec.md",
+      "sourceLocation": {
+        "line": 40,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "A clean public \u0060dotnet tool install\u0060 of the released FS.GG.Coord.Cli reports the new version and passes an executable cross-claim exhausted-review escalation fixture covering #2797\u0027s structured route; legacy review-wire regression gates remain green. (Stories: US-001; Acceptance: AC-003)",
+      "text": "A clean public \u0060dotnet tool install\u0060 of the released FS.GG.Coord.Cli reports the new version and passes an executable cross-claim exhausted-review escalation fixture covering #2797\u0027s structured route; legacy review-wire regression gates remain green. (Stories: US-001; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2794-coord-engine-release/spec.md",
+      "sourceLocation": {
+        "line": 41,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Registry, changelog, compatibility metadata, release assets, and the post-release freshness report name the same immutable version/source/content facts, and the item remains claimed until those post-merge obligations complete. (Stories: US-002; Acceptance: AC-004)",
+      "text": "Registry, changelog, compatibility metadata, release assets, and the post-release freshness report name the same immutable version/source/content facts, and the item remains claimed until those post-merge obligations complete. (Stories: US-002; Acceptance: AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2794-coord-engine-release/spec.md",
+      "sourceLocation": {
+        "line": 42,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "Cut coherent set \u00600.68.0\u0060. The 0.67.0 frontier lacks four merged engine commits: three preserve/project/authorize the exhausted cross-claim review route, and \u00607cef7301\u0060 repairs its forced-claim repair-phase latest-review/backlink transition. The set remains additive/compatible, with no removal and zero \u0060Protocol.fs\u0060 wire commits; MINOR matches the repository\u0027s coherent-set convention.",
+      "decision": "Cut coherent set \u00600.68.0\u0060. The 0.67.0 frontier lacks four merged engine commits: three preserve/project/authorize the exhausted cross-claim review route, and \u00607cef7301\u0060 repairs its forced-claim repair-phase latest-review/backlink transition. The set remains additive/compatible, with no removal and zero \u0060Protocol.fs\u0060 wire commits; MINOR matches the repository\u0027s coherent-set convention.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2794-coord-engine-release/clarifications.md",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "Prepare from the latest merged main, including merged #2772, merge the version/release-note/SDD source PR, and tag only that merge commit. Recompute freshness immediately before freeze; no unmerged behavior is packaged or announced.",
+      "decision": "Prepare from the latest merged main, including merged #2772, merge the version/release-note/SDD source PR, and tag only that merge commit. Recompute freshness immediately before freeze; no unmerged behavior is packaged or announced.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2794-coord-engine-release/clarifications.md",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "Use the established \u0060release-saga/1\u0060: prepare the three packages once, atomically push the existing \u0060kit/v0.68.0\u0060, \u0060drivers/v0.68.0\u0060, and \u0060coord-engine/v0.68.0\u0060 tags at one commit, resume manifest-bound publishers without repacking or duplicate push, then promote only after both feeds are observed.",
+      "decision": "Use the established \u0060release-saga/1\u0060: prepare the three packages once, atomically push the existing \u0060kit/v0.68.0\u0060, \u0060drivers/v0.68.0\u0060, and \u0060coord-engine/v0.68.0\u0060 tags at one commit, resume manifest-bound publishers without repacking or duplicate push, then promote only after both feeds are observed.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2794-coord-engine-release/clarifications.md",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "The promoted release manifest and package journals establish source/content/feed identity; an independently downloaded public package and isolated install establish consumability. Workflow status is diagnostic, not publication authority.",
+      "decision": "The promoted release manifest and package journals establish source/content/feed identity; an independently downloaded public package and isolated install establish consumability. Workflow status is diagnostic, not publication authority.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2794-coord-engine-release/clarifications.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "Drive the installed 0.68.0 tool through the exact #2797 cross-claim exhausted-review route and run the existing review-wire/defect gates. A version print or source-built test alone is insufficient.",
+      "decision": "Drive the installed 0.68.0 tool through the exact #2797 cross-claim exhausted-review route and run the existing review-wire/defect gates. A version print or source-built test alone is insufficient.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2794-coord-engine-release/clarifications.md",
+      "sourceLocation": {
+        "line": 32,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement clarification decision DEC-001",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement clarification decision DEC-002",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-002"
+      ],
+      "sourceIds": [
+        "DEC-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement clarification decision DEC-003",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-003"
+      ],
+      "sourceIds": [
+        "DEC-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement clarification decision DEC-004",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-004"
+      ],
+      "sourceIds": [
+        "DEC-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement clarification decision DEC-005",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-005"
+      ],
+      "sourceIds": [
+        "DEC-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002",
+        "PD-003",
+        "PD-004",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "heron-dd53",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/2794-coord-engine-release/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "FR-001 is complete at the prepared-source boundary: freshness measured exactly four merged engine commits after 0.67.0, including #2772 commit 7cef7301, zero Protocol.fs commits, and no unmerged bytes; the version, coherent-set, focused ReviewWait 19/19, ReviewApplication 7/7, local pack/install, and stale-token inversion checks passed. Those are direct worker/hosted checks plus the limited ReviewWait TRX, not one digest-tracked run that proves the whole inventory-and-SemVer subject, so this declaration does not mislabel that TRX as complete observed evidence.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "FR-002 cannot execute before this prepared source merges: tags must identify the immutable merge and the release saga must then publish the once-packed payloads to both feeds before promotion. No tag, feed, or manifest success is claimed by the ReviewWait TRX.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "FR-003 requires an independently downloaded public 0.68.0 tool. The local source-pack install reports 0.68.0.0 and focused source tests pass, but it is deliberately not substituted for nuget.org consumption or the installed #2797 route.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "FR-004 is intentionally unfinished: registry/dependencies.yml and compatibility projections may only move from promoted release facts, the prepared changelog still says publication is owed, and freshness correctly reports four unreleased commits.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "DEC-001\u0027s 0.68.0 classification is directly supported by freshness, version/coherent-set gates, and the release-note mismatch inversion, but those checks do not emit one durable observed-run receipt for this decision.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "DEC-002\u0027s prepared-source boundary is satisfied through the current frozen PR and includes merged #2772 commit 7cef7301 while excluding unmerged work, but its immutable merge/tag half necessarily remains after merge.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "DEC-003 is an unexecuted release transaction by design. The prepared source names release-saga/1, but no prepare/tag/publisher/promotion event is claimed before the source merge exists.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "DEC-004 identifies manifest/journal/feed/install facts as acceptance authority; none exist for 0.68.0 yet. Hosted source CI and a local source-pack install are diagnostics, not substitutes for those future immutable facts.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "DEC-005\u0027s source behavior preflight passed (ReviewWait 19/19, ReviewApplication 7/7, and hosted #2797 E2E 166/166), but the decision explicitly requires the installed public 0.68.0 tool; that final leg is outstanding.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "PC-001\u0027s three projects evaluate to 0.68.0 and release-note/version gates pass, but those direct checks are not the ReviewWait TRX previously attached here. Publication must still prove that the package contract\u0027s served bytes use this scalar.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "VO-001 intentionally spans pre-merge and post-merge gates. Its pre-merge release/version/focused-test/pack/install/inversion checks passed, while promotion, both-feed identity, public install, registry gates, and clear freshness remain unexecuted.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "PM-001 is a documented additive migration posture rather than a test-run subject. S.I.R. remains deliberately blocked on the future 0.68.0 public install, so no receiver migration is claimed complete.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "generated-view",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "Directory.Build.props",
+        "scripts/check-engine-release-notes.py",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+        "tests/FS.GG.Coord.Core.Tests/ReviewWaitTests.fs",
+        "tests/coord-engine-e2e/writes.sh",
+        "work/2794-coord-engine-release/artifacts/2794-reviewwait.trx"
+      ],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "GV-001 is a generated-view currency subject, not ReviewWait behavior. The SDD generator establishes current pre-merge readiness views; final registry projections cannot be generated until promoted release facts exist.",
+      "source": "work/2794-coord-engine-release/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2794-coord-engine-release/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2794-coord-engine-release/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "2c33ce5848f861f911e5486c84190428d42503e3fc78401a20fc689e768e6a2d"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2794-coord-engine-release/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "02b9bb7728fac60cb68710dfc35bbe39b8f195dfc3989627ec523a3f5b3c421c"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2794-coord-engine-release/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "9323af5bf9588e60ff6b18522a39a8d2aa379d2085dc34d7c4afa1900f83a8bf"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2794-coord-engine-release/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "5efac2350abb0285064874244a3885c94855fb87126d9a5c98f6ade4fe6708f5"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2794-coord-engine-release/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ad93a46b5d1ab65dc8e5360a70810fd126c2f44fee2df14c5e1b119db1e66b3b"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2794-coord-engine-release/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "11ccc901a29ed7725b26d69321c2a94a32745113ec9b10b6c0458cd7c5ee7655"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "31afe2df17be4a810c909f29fe5d6aca3f019efe22e66be544c87bb2a3152281"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}
